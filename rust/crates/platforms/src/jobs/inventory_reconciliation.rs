@@ -71,13 +71,18 @@ async fn collect_swarm_inventory(
     cancellation: &CancellationToken,
 ) -> Result<Option<RuntimeSwarmInventory>, RuntimeCapabilityError> {
     if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
-        let (nodes, services, tasks, configs, secrets) = tokio::try_join!(
+        let (nodes, mut services, mut tasks, configs, secrets) = tokio::try_join!(
             runtime.list_swarm_nodes(cancellation),
             runtime.list_swarm_services(cancellation),
             runtime.list_swarm_tasks(cancellation),
             runtime.list_swarm_configs(cancellation),
             runtime.list_swarm_secrets(cancellation),
         )?;
+        reconcile_running_counts(&mut services, &tasks);
+        // Match the .NET active Task projection limit. Services/nodes remain
+        // complete so absence and replica-count reconciliation stay authoritative.
+        tasks.sort_by_key(|task| std::cmp::Reverse(task.status_timestamp));
+        tasks.truncate(500);
         Ok(Some(RuntimeSwarmInventory {
             nodes,
             services,
@@ -87,6 +92,38 @@ async fn collect_swarm_inventory(
         }))
     } else {
         Ok(None)
+    }
+}
+
+/// Some Engines include retired-but-still-running tasks in ServiceStatus.
+/// Correct only when the task response contains the entire desired service set;
+/// a bounded Agent response must never lower counts merely because it is partial.
+fn reconcile_running_counts(
+    services: &mut [crate::RuntimeSwarmService],
+    tasks: &[crate::RuntimeSwarmTask],
+) {
+    for service in services {
+        if service.desired_task_count <= 0
+            || !matches!(
+                service.mode.to_ascii_lowercase().as_str(),
+                "replicated" | "global"
+            )
+        {
+            continue;
+        }
+        let mut desired = 0_i32;
+        let mut running = 0_i32;
+        for task in tasks.iter().filter(|task| {
+            task.service_id == service.id && task.desired_state.eq_ignore_ascii_case("running")
+        }) {
+            desired = desired.saturating_add(1);
+            if task.state.eq_ignore_ascii_case("running") {
+                running = running.saturating_add(1);
+            }
+        }
+        if desired >= service.desired_task_count {
+            service.running_task_count = service.running_task_count.min(running);
+        }
     }
 }
 
@@ -124,9 +161,51 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert!(snapshot.swarm.is_some());
+        let swarm = snapshot.swarm.unwrap();
+        assert_eq!(
+            swarm.tasks.len(),
+            500,
+            "active task projection stays bounded"
+        );
+        assert_eq!(swarm.tasks.first().unwrap().id, "599");
+        assert_eq!(
+            swarm.tasks.last().unwrap().id,
+            "100",
+            "newest task observations survive the bound"
+        );
         assert_eq!(runtime.common.load(Ordering::Relaxed), 5);
         assert_eq!(runtime.swarm.load(Ordering::Relaxed), 5);
+    }
+
+    #[test]
+    fn retired_running_tasks_do_not_hide_pending_replacements_and_partial_lists_preserve_counts() {
+        let mut services = vec![RuntimeSwarmService {
+            id: "web".into(),
+            mode: "Replicated".into(),
+            desired_task_count: 2,
+            running_task_count: 2,
+            ..Default::default()
+        }];
+        let task = |state: &str, desired: &str| RuntimeSwarmTask {
+            service_id: "web".into(),
+            state: state.into(),
+            desired_state: desired.into(),
+            ..Default::default()
+        };
+        reconcile_running_counts(&mut services, &[task("running", "running")]);
+        assert_eq!(
+            services[0].running_task_count, 2,
+            "partial Agent result cannot prove a lower count"
+        );
+        reconcile_running_counts(
+            &mut services,
+            &[
+                task("running", "running"),
+                task("running", "shutdown"),
+                task("pending", "running"),
+            ],
+        );
+        assert_eq!(services[0].running_task_count, 1);
     }
 
     fn target(platform_type: &str) -> InventoryCollectionTarget {
@@ -204,7 +283,21 @@ mod tests {
         counted_list!(list_volumes, RuntimeVolumeSummary, common);
         counted_list!(list_swarm_nodes, RuntimeSwarmNode, swarm);
         counted_list!(list_swarm_services, RuntimeSwarmService, swarm);
-        counted_list!(list_swarm_tasks, RuntimeSwarmTask, swarm);
+        fn list_swarm_tasks<'a>(
+            &'a self,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmTask>, RuntimeCapabilityError>> {
+            self.swarm.fetch_add(1, Ordering::Relaxed);
+            Box::pin(async {
+                Ok((0..600)
+                    .map(|index| RuntimeSwarmTask {
+                        id: index.to_string(),
+                        status_timestamp: chrono::DateTime::from_timestamp(index, 0),
+                        ..Default::default()
+                    })
+                    .collect())
+            })
+        }
         counted_list!(list_swarm_configs, RuntimeSwarmConfig, swarm);
         counted_list!(list_swarm_secrets, RuntimeSwarmSecret, swarm);
 

@@ -61,10 +61,21 @@ struct NodeReconnect {
 #[derive(Clone)]
 pub struct PostgresEdgeStore {
     pool: PgPool,
+    node_policy: crate::node_agent_reconciliation::NodeAgentReconciliationPolicy,
 }
 impl PostgresEdgeStore {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            node_policy: Default::default(),
+        }
+    }
+    pub fn with_node_policy(
+        mut self,
+        policy: crate::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    ) -> Self {
+        self.node_policy = policy;
+        self
     }
 
     pub async fn status(&self, target: &EdgeTarget) -> Result<EdgeStatus, EdgeStoreError> {
@@ -366,8 +377,7 @@ impl PostgresEdgeStore {
             if let Some(node) = node {
                 mark_node_stale(&mut tx, platform, &node).await?;
             } else {
-                sqlx::query("UPDATE platforms SET status='Offline' WHERE id=$1 AND connectortype='EdgeAgent'")
-                    .bind(platform).execute(&mut *tx).await?;
+                crate::resource_status_store::platform_offline_in(&mut tx, platform).await?;
             }
         }
         tx.commit().await?;
@@ -384,7 +394,7 @@ impl PostgresEdgeStore {
         }
         let daemon: Option<String>=sqlx::query_scalar("SELECT dockerdaemonid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND dockernodeid IS NOT DISTINCT FROM $4 AND resourcetype='Platform' FOR SHARE")
             .bind(session.agent_id).bind(snapshot.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;
-        if daemon.as_deref() != Some(snapshot.info.daemon_id.as_str()) {
+        if session.is_closed() || daemon.as_deref() != Some(snapshot.info.daemon_id.as_str()) {
             return Err(EdgeStoreError::Unauthorized);
         }
         if let Some(node_id) = &session.target.node_id {
@@ -400,12 +410,55 @@ impl PostgresEdgeStore {
                 .await
                 .map_err(|_| EdgeStoreError::Invalid("Node inventory persistence failed."))?;
         } else {
-            crate::inventory_projection_store::persist_snapshot(&mut tx, snapshot)
-                .await
-                .map_err(|_| EdgeStoreError::Invalid("Edge inventory persistence failed."))?;
+            crate::inventory_projection_store::persist_snapshot(
+                &mut tx,
+                snapshot,
+                Some(&self.node_policy),
+            )
+            .await
+            .map_err(|_| EdgeStoreError::Invalid("Edge inventory persistence failed."))?;
         }
         tx.commit().await?;
         Ok(())
+    }
+    /// Use the same session fence as inventory and metrics for targeted daemon updates.
+    pub async fn persist_container_event(&self, session: &super::EdgeSession, event: &crate::agent::AgentDaemonEvent) -> Result<bool, EdgeStoreError> {
+        let Some(id) = event.container_id.as_deref() else { return Ok(false); };
+        if event.action != "destroy" && event.container_state.is_none() { return Ok(false); }
+        let mut tx = self.pool.begin().await?;
+        let current: Option<Uuid> = sqlx::query_scalar("SELECT agentid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND resourcetype='Platform' AND dockernodeid IS NOT DISTINCT FROM $4 FOR SHARE")
+            .bind(session.agent_id).bind(session.target.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;
+        if session.is_closed() || current.is_none() {
+            return Err(EdgeStoreError::Unauthorized);
+        }
+        if event.action != "destroy"
+            && let Some(container) = &event.container
+        {
+            crate::resource_status_store::container_metadata_in(
+                &mut tx,
+                session.target.platform_id,
+                session.target.node_id.as_deref(),
+                container,
+                chrono::Utc::now().timestamp(),
+            )
+            .await?;
+        }
+        let changed = crate::resource_status_store::container_event_in(
+            &mut tx,
+            session.target.platform_id,
+            session.target.node_id.as_deref(),
+            id,
+            if event.action == "destroy" {
+                None
+            } else {
+                event.container_state.as_deref()
+            },
+            event.container_name.as_deref(),
+            chrono::Utc::now().timestamp(),
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(changed)
     }
     pub async fn persist_stats(
         &self,
@@ -421,11 +474,47 @@ impl PostgresEdgeStore {
         stats: &[citadel_platforms::RuntimeContainerStat],
         disk: Option<citadel_platforms::HostDiskUsage>,
     ) -> Result<usize, EdgeStoreError> {
+        self.persist_stats_sample(session, stats, disk, None).await
+    }
+
+    pub async fn persist_stats_with_platform_stats(
+        &self,
+        session: &super::EdgeSession,
+        stats: &[citadel_platforms::RuntimeContainerStat],
+        sample: Option<&citadel_platforms::RuntimePlatformStats>,
+    ) -> Result<usize, EdgeStoreError> {
+        self.persist_stats_sample(
+            session,
+            stats,
+            sample.and_then(citadel_platforms::RuntimePlatformStats::disk),
+            sample,
+        )
+        .await
+    }
+
+    async fn persist_stats_sample(
+        &self,
+        session: &super::EdgeSession,
+        stats: &[citadel_platforms::RuntimeContainerStat],
+        disk: Option<citadel_platforms::HostDiskUsage>,
+        sample: Option<&citadel_platforms::RuntimePlatformStats>,
+    ) -> Result<usize, EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
         let current: Option<Uuid> = sqlx::query_scalar("SELECT agentid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND resourcetype='Platform' AND dockernodeid IS NOT DISTINCT FROM $4 FOR SHARE")
             .bind(session.agent_id).bind(session.target.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;
-        if current.is_none() {
+        if session.is_closed() || current.is_none() {
             return Err(EdgeStoreError::Unauthorized);
+        }
+        if session.target.node_id.is_none()
+            && let Some(sample) = sample
+        {
+            crate::container_stats_store::persist_platform_metadata(
+                &mut tx,
+                session.target.platform_id,
+                sample,
+            )
+            .await
+            .map_err(|error| EdgeStoreError::Storage(sqlx::Error::Protocol(error.to_string())))?;
         }
         let inserted = crate::container_stats_store::persist_scoped_with_disk(
             &mut tx,
@@ -435,7 +524,7 @@ impl PostgresEdgeStore {
             disk,
         )
         .await
-        .map_err(|_| EdgeStoreError::Invalid("Edge statistics persistence failed."))?;
+        .map_err(|error| EdgeStoreError::Storage(sqlx::Error::Protocol(error.to_string())))?;
         tx.commit().await?;
         Ok(inserted)
     }

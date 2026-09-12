@@ -29,6 +29,7 @@ pub struct SwarmServiceRuntimeRouter {
     docker: DockerClient,
     agent: Option<AgentClient>,
     edge: crate::edge::EdgeRegistry,
+    image_cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
 }
 
 impl SwarmServiceRuntimeRouter {
@@ -108,7 +109,16 @@ impl SwarmServiceRuntimeRouter {
             docker,
             agent,
             edge: crate::edge::EdgeRegistry::default(),
+            image_cache: Default::default(),
         }
+    }
+
+    pub fn with_image_cache(
+        mut self,
+        cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
+    ) -> Self {
+        self.image_cache = cache;
+        self
     }
 
     #[must_use]
@@ -169,6 +179,24 @@ impl SwarmServiceRuntimeRouter {
         row.try_get("connectortype").map_err(storage)
     }
 
+    async fn record_target(
+        &self,
+        claim: &ServiceOperationClaim,
+        spec: &Value,
+    ) -> Result<String, SwarmServiceError> {
+        let hash = crate::swarm_service_inspection::runtime_hash(spec);
+        let changed = sqlx::query("UPDATE swarmservices SET targetruntimehash=$3,expectedforceupdate=$4 WHERE id=$1 AND operationid=$2 AND operationstate='PendingAcceptance'")
+            .bind(claim.id).bind(claim.operation_id).bind(&hash)
+            .bind(spec.pointer("/TaskTemplate/ForceUpdate").and_then(Value::as_i64))
+            .execute(&self.pool).await.map_err(storage)?.rows_affected();
+        if changed != 1 {
+            return Err(SwarmServiceError::Conflict(
+                "The operation changed before dispatch.".into(),
+            ));
+        }
+        Ok(hash)
+    }
+
     async fn mutate_local(
         &self,
         claim: &ServiceOperationClaim,
@@ -192,6 +220,7 @@ impl SwarmServiceRuntimeRouter {
             force_increment,
             existing.as_ref().map(|value| &value.spec),
         );
+        let target_hash = self.record_target(claim, &spec).await?;
         let response = if let Some(existing) = &existing {
             tokio::select!{biased;()=cancellation.cancelled()=>return Err(SwarmServiceError::Cancelled),result=self.docker.update_swarm_service(&existing.id,i64::try_from(existing.version.index).unwrap_or(i64::MAX),&spec)=>result}.map_err(runtime)?
         } else {
@@ -220,7 +249,9 @@ impl SwarmServiceRuntimeRouter {
             .map(str::to_owned)
             .collect();
         let observed=tokio::select!{biased;()=cancellation.cancelled()=>return Err(SwarmServiceError::Cancelled),result=self.docker.inspect_swarm_service(&service_id)=>result}.map_err(runtime)?;
-        Ok(observed_result(observed, warnings, true))
+        let mut result = observed_result(observed, warnings, true);
+        result.rollout_complete &= result.runtime_hash == target_hash;
+        Ok(result)
     }
 
     async fn mutate_agent(
@@ -233,6 +264,24 @@ impl SwarmServiceRuntimeRouter {
         let image = claim.spec.image.source_reference().ok_or_else(|| {
             SwarmServiceError::Validation("The Service image has not been resolved.".to_owned())
         })?;
+        let current = if let Some(id) = &claim.docker_service_id {
+            let service = self
+                .inspect_service(claim.platform_id, id, cancellation)
+                .await?;
+            Some(json!({"TaskTemplate":{"ForceUpdate":service.force_update}}))
+        } else {
+            None
+        };
+        let target_spec = docker_spec(
+            &claim.spec,
+            &claim.docker_name,
+            claim.id,
+            claim.operation_id,
+            image,
+            i64::from(force_increment),
+            current.as_ref(),
+        );
+        let target_hash = self.record_target(claim, &target_spec).await?;
         let mut labels = std::collections::HashMap::from([
             (MANAGED_LABEL.to_owned(), "true".to_owned()),
             (SERVICE_LABEL.to_owned(), claim.id.to_string()),
@@ -278,7 +327,7 @@ impl SwarmServiceRuntimeRouter {
             .map_err(agent_runtime)?;
         Ok(observed_agent_result(
             observed,
-            claim.desired_hash.clone(),
+            target_hash,
             response.warnings,
             true,
         ))
@@ -377,26 +426,25 @@ impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
             let Some(id) = &claim.docker_service_id else {
                 return Ok(None);
             };
-            match self.connector(claim.platform_id).await?.as_str() {
-                "Local" => {
-                    let observed=tokio::select!{biased;()=cancellation.cancelled()=>return Err(SwarmServiceError::Cancelled),result=self.docker.inspect_swarm_service(id)=>result}.map_err(runtime)?;
-                    Ok(Some(observed_result(observed, Vec::new(), true)))
-                }
-                "Agent" | "EdgeAgent" => {
-                    let agent = self.agent_for(claim.platform_id).await?;
-                    let observed = agent
-                        .inspect_managed_swarm_service(id, cancellation)
-                        .await
-                        .map_err(agent_runtime)?;
-                    Ok(Some(observed_agent_result(
-                        observed,
-                        claim.desired_hash.clone(),
-                        Vec::new(),
-                        true,
-                    )))
-                }
-                _ => Err(edge_unavailable()),
+            let observed = self
+                .inspect_service(claim.platform_id, id, cancellation)
+                .await?;
+            let expected: Option<(Option<String>, Option<i64>, Option<i64>)> = sqlx::query_as("SELECT targetruntimehash,basedockerversion,expectedforceupdate FROM swarmservices WHERE id=$1 AND operationid=$2 AND operationstate IN ('PendingAcceptance','Accepted')")
+                .bind(claim.id).bind(claim.operation_id).fetch_optional(&self.pool).await.map_err(storage)?;
+            let Some((Some(hash), base, force)) = expected else {
+                return Ok(None);
+            };
+            let accepted = observed
+                .labels
+                .get(OPERATION_LABEL)
+                .and_then(|id| Uuid::parse_str(id).ok())
+                == Some(claim.operation_id)
+                && base.is_none_or(|base| observed.version_index > base as u64)
+                && force.is_none_or(|force| observed.force_update >= force);
+            if !accepted || hash != observed.runtime_hash {
+                return Ok(None);
             }
+            Ok(Some(observed_agent_result(observed, hash, vec![], true)))
         })
     }
 }
@@ -596,7 +644,9 @@ fn observed_result(
         docker_service_id: service.id,
         version_index: i64::try_from(service.version.index).unwrap_or(i64::MAX),
         accepted,
-        rollout_complete: rollout_error.is_none() && running >= desired,
+        rollout_complete: rollout_error.is_none()
+            && citadel_platforms::jobs::rollout_complete_state(update_state)
+            && running >= desired,
         rollout_error,
         runtime_hash: crate::swarm_service_inspection::runtime_hash(&service.spec),
         applied_digest: service
@@ -629,13 +679,12 @@ fn observed_agent_result(
         version_index: i64::try_from(service.version_index).unwrap_or(i64::MAX),
         accepted,
         rollout_complete: rollout_error.is_none()
-            && service.running_task_count >= service.desired_task_count,
+            && citadel_platforms::jobs::rollout_complete_state(&service.update_state)
+            && service.running_task_count >= service.desired_task_count
+            && !runtime_hash.is_empty()
+            && service.runtime_hash == runtime_hash,
         rollout_error,
-        runtime_hash: if service.runtime_hash.is_empty() {
-            runtime_hash
-        } else {
-            service.runtime_hash
-        },
+        runtime_hash: service.runtime_hash,
         applied_digest: extract_digest(&service.image),
         warnings,
     }

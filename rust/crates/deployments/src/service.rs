@@ -208,6 +208,19 @@ pub trait DeploymentStore: Send + Sync {
 }
 
 pub trait DeploymentRuntimePort: Send + Sync {
+    fn cached_image_digest<'a>(
+        &'a self,
+        platform: Uuid,
+        registry: Uuid,
+        reference: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<String>, DeploymentError>> {
+        Box::pin(async move {
+            self.remote_image_digest(platform, registry, reference, cancellation)
+                .await
+                .map(Some)
+        })
+    }
     fn remote_image_digest<'a>(
         &'a self,
         platform: Uuid,

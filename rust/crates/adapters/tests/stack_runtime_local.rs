@@ -1,6 +1,5 @@
 #![cfg(unix)]
 
-use std::path::Path;
 use std::time::Duration;
 
 use citadel_adapters::docker::DockerClient;
@@ -134,9 +133,37 @@ impl Fixture {
         .execute(&pool)
         .await
         .unwrap();
-        let docker =
-            DockerClient::new(Path::new("/var/run/docker.sock"), Duration::from_secs(15)).unwrap();
+        let docker = DockerClient::new(
+            std::env::var("CITADEL_PHASE6_DOCKER_SOCKET")
+                .unwrap_or_else(|_| "/var/run/docker.sock".into()),
+            Duration::from_secs(15),
+        )
+        .unwrap();
         let runtime = StackRuntimeRouter::new(pool.clone(), docker.clone(), None);
+        if platform_type == "DockerSwarm" {
+            use citadel_platforms::InventoryProjectionStore;
+            let snapshot = citadel_platforms::jobs::collect_inventory(
+                &docker,
+                &citadel_platforms::jobs::InventoryCollectionTarget {
+                    platform_id,
+                    platform_type: platform_type.into(),
+                },
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+                pool.clone(),
+            )
+            .persist(&snapshot)
+            .await
+            .unwrap();
+        }
+        let release_id = Uuid::now_v7();
+        sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate,currentstackreleaseid,controlstate,rowversion) VALUES($1,$2,$3,'WebEditor','{}','{}',$4,'Processing',1)")
+            .bind(stack_id).bind(&project_name).bind(Uuid::from_u128(1)).bind(release_id).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO stackreleases(id,createdbyactorid,platformid,spec,stackid,status,version) VALUES($1,$2,$3,'{}',$4,'Applying','1')")
+            .bind(release_id).bind(Uuid::from_u128(1)).bind(platform_id).bind(stack_id).execute(&pool).await.unwrap();
         Self {
             pool,
             docker,
@@ -144,7 +171,7 @@ impl Fixture {
             cancellation: CancellationToken::new(),
             platform_id,
             stack_id,
-            release_id: Uuid::now_v7(),
+            release_id,
             project_name,
             platform_type,
             image,
@@ -211,6 +238,11 @@ impl Fixture {
     }
 
     async fn dispose(self) {
+        sqlx::query("DELETE FROM stacks WHERE id=$1")
+            .bind(self.stack_id)
+            .execute(&self.pool)
+            .await
+            .unwrap();
         sqlx::query("DELETE FROM platforms WHERE id=$1")
             .bind(self.platform_id)
             .execute(&self.pool)
@@ -218,4 +250,232 @@ impl Fixture {
             .unwrap();
         self.pool.close().await;
     }
+}
+
+#[tokio::test]
+#[ignore = "requires an isolated two-node Swarm, CITADEL_PHASE6_DOCKER_SOCKET and disposable CITADEL_PHASE6_DATABASE_URL"]
+async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recovers_interrupted_release()
+ {
+    use citadel_platforms::InventoryProjectionStore;
+    let f = Fixture::new("DockerSwarm").await;
+    let compose = format!(
+        "version: '3.8'\nservices:\n  web:\n    image: {}\n    command: ['sh', '-c', 'sleep 600']\n    configs:\n      - source: settings\n        target: /etc/settings\n    secrets:\n      - source: token\n        target: auth-token\n    deploy:\n      replicas: 2\n      placement:\n        max_replicas_per_node: 1\nconfigs:\n  settings:\n    file: ./settings.txt\nsecrets:\n  token:\n    file: ./token.txt\n",
+        f.image
+    );
+    let labels = create_ownership_labels_override(
+        std::slice::from_ref(&compose),
+        f.stack_id,
+        f.release_id,
+        true,
+    )
+    .unwrap();
+    let source = StackApplySource {
+        files: vec![
+            StackSourceFile {
+                relative_path: "compose.yml".into(),
+                content: compose.into_bytes(),
+            },
+            StackSourceFile {
+                relative_path: "labels.yml".into(),
+                content: labels.into_bytes(),
+            },
+            StackSourceFile {
+                relative_path: "settings.txt".into(),
+                content: b"test-settings".to_vec(),
+            },
+            StackSourceFile {
+                relative_path: "token.txt".into(),
+                content: b"test-only-secret-value".to_vec(),
+            },
+        ],
+        compose_paths: vec!["compose.yml".into()],
+        env_file_paths: vec![],
+        working_directory: ".".into(),
+        labels_override_path: Some("labels.yml".into()),
+        resolved_commit_sha: None,
+    };
+    let claim = f.claim();
+    let result = f
+        .runtime
+        .apply(&claim, &source, &[], &f.cancellation, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        result.status,
+        citadel_stacks::StackReleaseStatus::Healthy,
+        "{:?}",
+        result.messages
+    );
+    let rows: Vec<(String,String,String,serde_json::Value)> = sqlx::query_as("SELECT kind,dockerresourceid,composeresourcename,mounts FROM stackreleaseswarmresources WHERE stackreleaseid=$1 ORDER BY kind").bind(f.release_id).fetch_all(&f.pool).await.unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].0, "Config");
+    assert_eq!(rows[0].2, "settings");
+    assert_eq!(
+        rows[0].3,
+        serde_json::json!([{"ServiceName":"web","TargetName":"/etc/settings"}])
+    );
+    assert_eq!(rows[1].0, "Secret");
+    assert_eq!(rows[1].2, "token");
+    assert_eq!(
+        rows[1].3,
+        serde_json::json!([{"ServiceName":"web","TargetName":"auth-token"}])
+    );
+    assert!(
+        !serde_json::to_string(&rows)
+            .unwrap()
+            .contains("test-only-secret-value")
+    );
+    let mut late = claim.clone();
+    late.row_version += 1;
+    assert!(
+        f.runtime
+            .apply(&late, &source, &[], &f.cancellation, None)
+            .await
+            .is_err()
+    );
+    let after: Vec<(String,String,String,serde_json::Value)> = sqlx::query_as("SELECT kind,dockerresourceid,composeresourcename,mounts FROM stackreleaseswarmresources WHERE stackreleaseid=$1 ORDER BY kind").bind(f.release_id).fetch_all(&f.pool).await.unwrap();
+    assert_eq!(
+        after, rows,
+        "a late operation must not replace retained metadata"
+    );
+    // Crash after resource capture, before healthy completion: periodic inventory
+    // can now recover using the exact immutable resource records.
+    sqlx::query("UPDATE stacks SET controlstate='Idle' WHERE id=$1")
+        .bind(f.stack_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE stackreleases SET status='TimedOut' WHERE id=$1")
+        .bind(f.release_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let snapshot = citadel_platforms::jobs::collect_inventory(
+        &f.docker,
+        &citadel_platforms::jobs::InventoryCollectionTarget {
+            platform_id: f.platform_id,
+            platform_type: "DockerSwarm".into(),
+        },
+        &f.cancellation,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        snapshot.swarm.as_ref().unwrap().nodes.len(),
+        2,
+        "fixture must exercise two real Swarm nodes"
+    );
+    let nodes: std::collections::BTreeSet<_> = snapshot
+        .swarm
+        .as_ref()
+        .unwrap()
+        .tasks
+        .iter()
+        .filter(|t| t.state.eq_ignore_ascii_case("running"))
+        .map(|t| &t.node_id)
+        .collect();
+    assert_eq!(nodes.len(), 2, "both nodes must run a task");
+    citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+        f.pool.clone(),
+    )
+    .persist(&snapshot)
+    .await
+    .unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
+        .bind(f.release_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "Healthy");
+    // Stop only the explicitly supplied, labelled disposable outer DinD worker.
+    // No event is delivered to Core here: periodic reconciliation must repair it.
+    let worker = std::env::var("CITADEL_PHASE6_SWARM_WORKER").expect("disposable worker required");
+    let label = tokio::process::Command::new("docker")
+        .env_remove("DOCKER_HOST")
+        .args([
+            "inspect",
+            "--format",
+            "{{index .Config.Labels \"citadel.test\"}}",
+            &worker,
+        ])
+        .output()
+        .await
+        .unwrap();
+    assert!(label.status.success());
+    assert_eq!(String::from_utf8_lossy(&label.stdout).trim(), "jobs-live");
+    let stopped = tokio::process::Command::new("docker")
+        .env_remove("DOCKER_HOST")
+        .args(["stop", "--time", "2", &worker])
+        .output()
+        .await
+        .unwrap();
+    assert!(stopped.status.success());
+    let degraded = wait_for_live_stack_status(&f, "Degraded").await;
+    // Always restart this fixture before asserting, including a failed observation.
+    let restarted = tokio::process::Command::new("docker")
+        .env_remove("DOCKER_HOST")
+        .args(["start", &worker])
+        .output()
+        .await
+        .unwrap();
+    assert!(restarted.status.success());
+    assert!(
+        degraded,
+        "lost worker must degrade the Stack without a daemon event"
+    );
+    assert!(
+        wait_for_live_stack_status(&f, "Healthy").await,
+        "worker rejoin must restore healthy status"
+    );
+    for service in f
+        .docker
+        .list_swarm_services()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|s| {
+            s.spec
+                .pointer("/Labels/com.citadel.stack-id")
+                .and_then(serde_json::Value::as_str)
+                == Some(&f.stack_id.to_string())
+        })
+    {
+        f.docker.delete_swarm_service(&service.id).await.unwrap();
+    }
+    f.dispose().await;
+}
+
+async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
+    use citadel_platforms::InventoryProjectionStore;
+    tokio::time::timeout(Duration::from_secs(90), async {
+        loop {
+            let snapshot = citadel_platforms::jobs::collect_inventory(
+                &f.docker,
+                &citadel_platforms::jobs::InventoryCollectionTarget {
+                    platform_id: f.platform_id,
+                    platform_type: "DockerSwarm".into(),
+                },
+                &f.cancellation,
+            )
+            .await
+            .unwrap();
+            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+                f.pool.clone(),
+            )
+            .persist(&snapshot)
+            .await
+            .unwrap();
+            let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
+                .bind(f.release_id)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+            if status == expected {
+                return;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+    .await
+    .is_ok()
 }

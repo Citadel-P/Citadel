@@ -1,26 +1,27 @@
-//! Keep one recent host disk sample alongside each container statistics stream.
-use citadel_platforms::{HostDiskUsage, PlatformRuntimePort};
+//! Keep one recent platform statistics sample alongside each container statistics stream.
+use citadel_platforms::{PlatformRuntimePort, RuntimePlatformStats};
 use futures_util::{Stream, StreamExt};
 use std::{pin::Pin, time::Duration};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-pub(super) struct LatestDisk {
-    sample: Option<(Instant, HostDiskUsage)>,
+pub(super) struct LatestPlatformStats {
+    sample: Option<(Instant, RuntimePlatformStats)>,
     max_age: Duration,
 }
-impl LatestDisk {
+impl LatestPlatformStats {
     pub fn new(interval: Duration) -> Self {
         Self {
             sample: None,
             max_age: interval.saturating_mul(3),
         }
     }
-    pub fn record(&mut self, sample: Option<HostDiskUsage>) {
+    pub fn record(&mut self, sample: Option<RuntimePlatformStats>) {
         self.sample = sample.map(|s| (Instant::now(), s));
     }
-    pub fn get(&self) -> Option<HostDiskUsage> {
+    pub fn get(&self) -> Option<&RuntimePlatformStats> {
         self.sample
+            .as_ref()
             .filter(|(at, _)| at.elapsed() <= self.max_age)
             .map(|(_, s)| s)
     }
@@ -31,7 +32,7 @@ pub(super) fn samples<R: PlatformRuntimePort + Send + Sync + 'static>(
     runtime: R,
     interval: Duration,
     cancel: CancellationToken,
-) -> Pin<Box<dyn Stream<Item = Option<HostDiskUsage>> + Send>> {
+) -> Pin<Box<dyn Stream<Item = Option<RuntimePlatformStats>> + Send>> {
     Box::pin(async_stream::stream! {
         loop {
             let stream = tokio::select! {
@@ -42,7 +43,7 @@ pub(super) fn samples<R: PlatformRuntimePort + Send + Sync + 'static>(
                 loop {
                     let next = tokio::select! { () = cancel.cancelled() => return, next = stream.next() => next };
                     match next {
-                        Some(Ok(stat)) => yield stat.disk(),
+                        Some(Ok(stat)) => yield Some(stat),
                         _ => break,
                     }
                 }
@@ -58,13 +59,20 @@ mod tests {
     use super::*;
     #[tokio::test(start_paused = true)]
     async fn unavailable_and_stale_samples_do_not_reuse_last_disk_value() {
-        let mut latest = LatestDisk::new(Duration::from_secs(10));
-        let disk = HostDiskUsage::new(95, 100, 95.0).unwrap();
-        latest.record(Some(disk));
-        assert_eq!(latest.get(), Some(disk));
+        let mut latest = LatestPlatformStats::new(Duration::from_secs(10));
+        let sample = RuntimePlatformStats {
+            disk_used_bytes: Some(95),
+            disk_total_bytes: Some(100),
+            disk_usage: Some(95.0),
+            image_used_bytes: Some(2048),
+            volume_used_bytes: Some(4096),
+            ..Default::default()
+        };
+        latest.record(Some(sample.clone()));
+        assert_eq!(latest.get(), Some(&sample));
         tokio::time::advance(Duration::from_secs(31)).await;
         assert_eq!(latest.get(), None);
-        latest.record(Some(disk));
+        latest.record(Some(sample));
         latest.record(None);
         assert_eq!(latest.get(), None);
     }

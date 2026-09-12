@@ -16,6 +16,26 @@ async fn startup_registers_routes_starts_workers_and_shuts_down_both_listeners()
         let mut server = fixture.start_with_realtime(true, false, realtime);
         assert_eq!(fixture.ready(&mut server).await["requiresSetup"], false);
         fixture.login(&server).await;
+        // Startup recovery must never interrupt another Core's live jobs.
+        let mut contender = fixture.start(false, false);
+        let rejected = tokio::time::timeout(Duration::from_secs(10), contender.child.wait())
+            .await
+            .unwrap()
+            .unwrap();
+        let rejection = format!(
+            "{}{}",
+            contender.output.await.unwrap(),
+            contender.errors.await.unwrap()
+        );
+        assert!(
+            !rejected.success(),
+            "a second Core must not acquire the job lease"
+        );
+        assert!(
+            rejection.contains("Another Citadel Core owns"),
+            "{rejection}"
+        );
+        assert!(server.child.try_wait().unwrap().is_none());
         assert!(
             tokio::net::TcpStream::connect(("127.0.0.1", server.edge_port))
                 .await
@@ -212,6 +232,15 @@ async fn startup_registers_routes_starts_workers_and_shuts_down_both_listeners()
             status.success(),
             "Core must join workers and close its pool: {status}\n{output}"
         );
+        let mut connection = PgConnection::connect(&fixture.database_url).await.unwrap();
+        assert!(
+            sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock(4848495441444547)")
+                .fetch_one(&mut connection)
+                .await
+                .unwrap(),
+            "shutdown must release the Core job lease"
+        );
+        connection.close().await.unwrap();
         let migration = output
             .lines()
             .filter_map(|line| serde_json::from_str::<Value>(line).ok())

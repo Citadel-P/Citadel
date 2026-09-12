@@ -30,6 +30,7 @@ impl PostgresGitRepositoryExecutionStore {
         id: Uuid,
         branch: Option<&'a str>,
         expected: Option<&'a GitRepositoryWebhook>,
+        trigger: &'a str,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
@@ -60,6 +61,9 @@ impl PostgresGitRepositoryExecutionStore {
             .await
             .map_err(storage)?;
             if currently_syncing {
+                sqlx::query("UPDATE gitrepositoryrefs SET synctrigger=$3 WHERE gitrepositoryid=$1 AND branch=$2")
+                    .bind(id).bind(branch).bind(trigger)
+                    .execute(&mut *transaction).await.map_err(storage)?;
                 sqlx::query(
                     "UPDATE gitrepositories SET status='Pending', controlstate='Queued', controltriggeredby=$2, rowversion=rowversion+1 WHERE id=$1",
                 )
@@ -69,7 +73,7 @@ impl PostgresGitRepositoryExecutionStore {
                 .await
                 .map_err(storage)?;
             } else {
-                upsert_pending_ref(&mut transaction, id, branch).await?;
+                upsert_pending_ref(&mut transaction, id, branch, trigger).await?;
                 sqlx::query(
                     "UPDATE gitrepositories SET status='Pending', controlstate='Queued', controltriggeredby=$2, controlstartedat=NULL, rowversion=rowversion+1 WHERE id=$1",
                 )
@@ -97,7 +101,15 @@ impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
         id: Uuid,
         branch: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
-        self.enqueue(actor_id, id, branch, None)
+        self.enqueue(actor_id, id, branch, None, "Manual")
+    }
+    fn enqueue_apply<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
+        self.enqueue(actor_id, id, Some(branch), None, "Apply")
     }
     fn enqueue_webhook<'a>(
         &'a self,
@@ -106,7 +118,7 @@ impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
         branch: &'a str,
         expected: &'a GitRepositoryWebhook,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
-        self.enqueue(actor_id, id, Some(branch), Some(expected))
+        self.enqueue(actor_id, id, Some(branch), Some(expected), "Webhook")
     }
 
     fn enqueue_due<'a>(
@@ -117,16 +129,24 @@ impl GitRepositoryExecutionStore for PostgresGitRepositoryExecutionStore {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let rows = sqlx::query(
                 r#"
-SELECT repository.id, repository.defaultbranch, repository.createdbyactorid
+SELECT repository.id, branches.branch, repository.createdbyactorid
 FROM gitrepositories repository
+CROSS JOIN LATERAL (
+    SELECT repository.defaultbranch AS branch
+    UNION
+    SELECT COALESCE(NULLIF(release.spec->>'Branch',''),repository.defaultbranch)
+    FROM stacks stack JOIN stackreleases release ON release.id=stack.currentstackreleaseid
+    WHERE stack.stacksource='Git' AND release.spec->>'GitRepoId'=repository.id::text
+      AND COALESCE(release.spec->>'CommitSha','')=''
+) branches
 LEFT JOIN gitrepositoryrefs reference
   ON reference.gitrepositoryid=repository.id
- AND reference.branch=repository.defaultbranch
-WHERE repository.syncmode='PullInterval'
+ AND reference.branch=branches.branch
+WHERE branches.branch<>'' AND repository.syncmode='PullInterval'
   AND repository.controlstate='Idle'
   AND (
     reference.id IS NULL OR
-    reference.lastsyncedat <= CURRENT_TIMESTAMP - make_interval(mins => repository.syncintervalminutes)
+    reference.lastsyncedat <= CURRENT_TIMESTAMP - make_interval(mins => COALESCE(repository.syncintervalminutes,5))
   )
 ORDER BY COALESCE(reference.lastsyncedat, repository.createdat), repository.id
 FOR UPDATE OF repository SKIP LOCKED
@@ -139,9 +159,9 @@ LIMIT $1
             .map_err(storage)?;
             for row in &rows {
                 let id: Uuid = row.try_get("id").map_err(storage)?;
-                let branch: String = row.try_get("defaultbranch").map_err(storage)?;
+                let branch: String = row.try_get("branch").map_err(storage)?;
                 let actor_id: Uuid = row.try_get("createdbyactorid").map_err(storage)?;
-                upsert_pending_ref(&mut transaction, id, &branch).await?;
+                upsert_pending_ref(&mut transaction, id, &branch, "Poll").await?;
                 sqlx::query(
                     "UPDATE gitrepositories SET status='Pending', controlstate='Queued', controltriggeredby=$2, controlstartedat=NULL, rowversion=rowversion+1 WHERE id=$1",
                 )
@@ -181,7 +201,7 @@ WHERE id IN (SELECT gitrepositoryid FROM stale)
             .map_err(storage)?;
             let row = sqlx::query(
                 r#"
-SELECT reference.id AS referenceid, reference.branch,
+SELECT reference.id AS referenceid, reference.branch, reference.synctrigger, reference.resolvedcommitsha, reference.lasterror,
        repository.id, repository.name, repository.url, repository.defaultbranch,
        repository.gitaccountid, repository.syncmode, repository.syncintervalminutes,
        COALESCE(repository.controltriggeredby, repository.createdbyactorid) AS actorid
@@ -208,7 +228,7 @@ LIMIT 1
             let repository_id: Uuid = row.try_get("id").map_err(storage)?;
             let started_at = Utc::now();
             sqlx::query(
-                "UPDATE gitrepositoryrefs SET status='Syncing', lasterror=NULL, lastsyncedat=$2 WHERE id=$1",
+                "UPDATE gitrepositoryrefs SET status='Syncing', lastsyncedat=$2 WHERE id=$1",
             )
             .bind(reference_id)
             .bind(started_at)
@@ -224,6 +244,9 @@ LIMIT 1
             .await
             .map_err(storage)?;
             let claim = GitSyncClaim {
+                trigger: row.try_get("synctrigger").map_err(storage)?,
+                previous_commit: row.try_get("resolvedcommitsha").map_err(storage)?,
+                previous_error: row.try_get("lasterror").map_err(storage)?,
                 repository: map_source(&row)?,
                 reference_id,
                 branch: row.try_get("branch").map_err(storage)?,
@@ -416,18 +439,20 @@ async fn upsert_pending_ref(
     transaction: &mut Transaction<'_, Postgres>,
     repository_id: Uuid,
     branch: &str,
+    trigger: &str,
 ) -> Result<(), GitRepositoryExecutionError> {
     sqlx::query(
         r#"
-INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat)
-VALUES($1,$2,$3,NULL,'Pending',NULL,CURRENT_TIMESTAMP)
+INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat,synctrigger)
+VALUES($1,$2,$3,NULL,'Pending',NULL,CURRENT_TIMESTAMP,$4)
 ON CONFLICT(gitrepositoryid,branch) DO UPDATE
-SET status='Pending', lasterror=NULL
+SET status='Pending', synctrigger=EXCLUDED.synctrigger
 "#,
     )
     .bind(Uuid::now_v7())
     .bind(repository_id)
     .bind(branch)
+    .bind(trigger)
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
@@ -468,7 +493,7 @@ async fn finish_sync(
     .await
     .map_err(storage)?;
     if rerun_requested {
-        sqlx::query("UPDATE gitrepositoryrefs SET status='Pending',lasterror=NULL WHERE id=$1")
+        sqlx::query("UPDATE gitrepositoryrefs SET status='Pending' WHERE id=$1")
             .bind(claim.reference_id)
             .execute(&mut *transaction)
             .await
@@ -481,38 +506,102 @@ async fn finish_sync(
     .fetch_one(&mut *transaction)
     .await
     .map_err(storage)?;
+    let primary = claim.trigger != "Poll"
+        || claim
+            .branch
+            .eq_ignore_ascii_case(&claim.repository.default_branch);
+    let repository_status = if !primary && !pending {
+        sqlx::query_scalar::<_, String>(
+            "SELECT status FROM gitrepositoryrefs WHERE gitrepositoryid=$1 AND branch=$2",
+        )
+        .bind(claim.repository.id)
+        .bind(&claim.repository.default_branch)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(storage)?
+        .unwrap_or_else(|| "Unknown".into())
+    } else {
+        status.to_owned()
+    };
     sqlx::query(
         "UPDATE gitrepositories SET status=$2,controlstate=$3,controlstartedat=NULL,controltriggeredby=CASE WHEN $4 THEN controltriggeredby ELSE NULL END,rowversion=rowversion+1 WHERE id=$1",
     )
     .bind(claim.repository.id)
-    .bind(if pending { "Pending" } else { status })
+    .bind(if pending { "Pending" } else { &repository_status })
     .bind(if pending { "Queued" } else { "Idle" })
     .bind(pending)
     .execute(&mut *transaction)
     .await
     .map_err(storage)?;
-    let activity_result = GitRepositorySyncActivitySnapshot {
-        commit_sha: commit.map(str::to_owned),
-        message: error.map(str::to_owned),
+    let record_activity = if claim.trigger != "Poll" {
+        true
+    } else if let Some(result) = result {
+        result.cloned
+            || !claim
+                .previous_commit
+                .as_deref()
+                .is_some_and(|previous| previous.eq_ignore_ascii_case(&result.commit))
+    } else {
+        claim.previous_error.as_deref() != error
     };
-    let snapshot = repository_snapshot(&mut transaction, &claim.repository, commit).await?;
-    let info = ActivityEventInfo::git_repo_synchronized(
-        snapshot,
-        activity_result,
-        result.is_some_and(|result| result.cloned),
-    );
-    let activity = ActivityEvent::new_git_repository_sync_event(
-        claim.repository.id,
-        claim.repository.name.clone(),
-        claim.actor_id,
-        info,
-        result.is_some(),
-        Utc::now(),
-    )
-    .map_err(|error| GitRepositoryExecutionError::Storage(error.to_string()))?;
-    insert_activity(&mut transaction, &activity)
-        .await
+    if record_activity {
+        let activity_result = GitRepositorySyncActivitySnapshot {
+            commit_sha: commit.map(str::to_owned),
+            message: error.map(str::to_owned),
+        };
+        let snapshot = repository_snapshot(&mut transaction, &claim.repository, commit).await?;
+        let info = ActivityEventInfo::git_repo_synchronized(
+            snapshot,
+            activity_result,
+            result.is_some_and(|result| result.cloned),
+        );
+        let activity = ActivityEvent::new_git_repository_sync_event(
+            claim.repository.id,
+            claim.repository.name.clone(),
+            claim.actor_id,
+            info,
+            result.is_some(),
+            Utc::now(),
+        )
         .map_err(|error| GitRepositoryExecutionError::Storage(error.to_string()))?;
+        insert_activity(&mut transaction, &activity)
+            .await
+            .map_err(|error| GitRepositoryExecutionError::Storage(error.to_string()))?;
+    }
+    if claim.trigger == "Webhook"
+        && let Some(error) = error
+    {
+        let reason = error
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(256)
+            .collect::<String>();
+        let branch = claim
+            .branch
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(100)
+            .collect::<String>();
+        let observation = citadel_alerts::AlertObservation {
+            alert_type: "WebhookGitRepoSyncFailed".into(),
+            info: serde_json::json!({"GitRepositoryName":claim.repository.name,"Reason":reason,"Branch":branch,"HumanMessage":format!("Webhook-triggered sync failed for Git repository '{}' on branch '{}': {}",claim.repository.name,branch,reason)}),
+            resource_id: claim.repository.id,
+            resource_name: claim.repository.name.clone(),
+            resource_type: "Webhook".into(),
+            deduplication_component: format!("{branch}:{reason}"),
+            observed_at: Utc::now(),
+            value: None,
+            matched: true,
+        };
+        sqlx::query("SELECT pg_notify('citadel_job_alerts',$1)")
+            .bind(
+                serde_json::to_string(&observation)
+                    .map_err(|error| GitRepositoryExecutionError::Storage(error.to_string()))?,
+            )
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
+    }
     transaction.commit().await.map_err(storage)
 }
 

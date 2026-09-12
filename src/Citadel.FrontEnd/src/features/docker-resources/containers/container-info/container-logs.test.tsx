@@ -1,13 +1,16 @@
 import { renderCitadel } from '@/test/render-citadel';
-import { screen } from '@testing-library/react';
-import { StackLogs } from './container-logs';
+import { act, screen } from '@testing-library/react';
+import { DeploymentLogs, StackLogs } from './container-logs';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import type { RealtimeConnection } from '@/lib/realtime-connection';
 
-const { logViewerMock } = vi.hoisted(() => ({
+const { logViewerMock, groupMock } = vi.hoisted(() => ({
   logViewerMock: vi.fn(),
+  groupMock: vi.fn(() => ({ isLoading: false })),
 }));
 
 vi.mock('@/hooks/useRealtimeGroup', () => ({
-  useRealtimeGroup: vi.fn(() => ({ isLoading: false })),
+  useRealtimeGroup: groupMock,
 }));
 
 vi.mock('@/components/custom/common', () => ({
@@ -42,5 +45,38 @@ describe('StackLogs', () => {
         enableContainerFilter: true,
       }),
     );
+  });
+});
+
+describe('DeploymentLogs', () => {
+  beforeEach(() => {
+    logViewerMock.mockClear();
+    groupMock.mockClear();
+  });
+
+  it('reports missing containers instead of waiting for a stream that cannot start', () => {
+    renderCitadel(<DeploymentLogs deploymentId="deployment-1" containerId={undefined} />);
+    expect(logViewerMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        emptyMessage: 'No container available for logs.',
+      }),
+    );
+  });
+
+  it('displays stream startup failures instead of waiting indefinitely', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderCitadel(<DeploymentLogs deploymentId="deployment-1" containerId="abcdef123456" />);
+    const options = vi.mocked(useRealtimeGroup).mock.lastCall![0];
+    await act(async () =>
+      options.onJoinedGroup?.({
+        invoke: vi.fn().mockRejectedValue(new Error('Unavailable')),
+      } as unknown as RealtimeConnection),
+    );
+    expect(logViewerMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        emptyMessage: expect.stringContaining('Unable to load container logs.'),
+      }),
+    );
+    consoleError.mockRestore();
   });
 });

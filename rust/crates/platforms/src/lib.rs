@@ -109,9 +109,15 @@ pub struct RuntimeContainerSummary {
     pub is_swarm_task: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimePlatformStats {
+    pub image_used_bytes: Option<i64>,
+    pub volume_used_bytes: Option<i64>,
+    pub image_count: i64,
+    pub volume_count: i32,
+    pub network_count: i32,
+    pub mem_total: i64,
     pub disk_used_bytes: Option<i64>,
     pub disk_total_bytes: Option<i64>,
     pub disk_usage: Option<f64>,

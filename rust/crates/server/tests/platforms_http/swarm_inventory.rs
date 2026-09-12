@@ -214,7 +214,8 @@ async fn cleanup(f: Fixture) {
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn native_swarm_mutations_persist_nodes_materials_and_restarted_services() {
     let (f, runtime) = fixture_swarm().await;
-    let older_snapshot = snapshot(f.platform_id);
+    let mut older_snapshot = snapshot(f.platform_id);
+    older_snapshot.info.swarm.as_mut().unwrap().node_id = "node-1".into();
     assert_status(
         send_json(
             &f,

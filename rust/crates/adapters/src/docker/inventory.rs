@@ -345,6 +345,24 @@ fn swarm_node_enum(value: String) -> String {
     }
 }
 
+fn resource_mounts(
+    spec: &Value,
+    kind: &str,
+    id_key: &str,
+) -> Vec<citadel_platforms::RuntimeSwarmResourceMount> {
+    spec.pointer(&format!("/TaskTemplate/ContainerSpec/{kind}"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|reference| {
+            Some(citadel_platforms::RuntimeSwarmResourceMount {
+                resource_id: reference.get(id_key)?.as_str()?.to_owned(),
+                target_name: reference.pointer("/File/Name")?.as_str()?.to_owned(),
+            })
+        })
+        .collect()
+}
+
 fn map_service(value: SwarmService) -> RuntimeSwarmService {
     let mode = value
         .spec
@@ -375,6 +393,8 @@ fn map_service(value: SwarmService) -> RuntimeSwarmService {
             &["TaskTemplate", "ContainerSpec", "Configs"],
             "ConfigID",
         ),
+        secret_mounts: resource_mounts(&value.spec, "Secrets", "SecretID"),
+        config_mounts: resource_mounts(&value.spec, "Configs", "ConfigID"),
         labels: object_map(&value.spec, &["Labels"]),
         stack_namespace: string(&value.spec, &["Labels", "com.docker.stack.namespace"]),
         ownership: Default::default(),
@@ -383,6 +403,7 @@ fn map_service(value: SwarmService) -> RuntimeSwarmService {
         stack_id: None,
         force_update: signed(&value.spec, &["TaskTemplate", "ForceUpdate"]),
         runtime_hash: crate::swarm_service_inspection::runtime_hash(&value.spec),
+        legacy_runtime_hash: Some(crate::swarm_runtime_hash::legacy_hash(&value.spec)),
         created_at: timestamp(&value.created_at),
         updated_at: timestamp(&value.updated_at),
     }

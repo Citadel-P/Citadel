@@ -118,6 +118,7 @@ pub struct AppState {
     pub role_mutations: Arc<RoleMutationService>,
     pub builds: Arc<BuildService>,
     pub deployments: Arc<DeploymentService>,
+    pub image_scanner: Arc<citadel_adapters::image_scanner::ImageScanner>,
     pub swarm_services: Arc<ManagedSwarmServiceService>,
     pub stacks: Arc<StackService>,
     pub platform_state: platforms_http::PlatformsHttpState,
@@ -276,15 +277,22 @@ impl AppState {
             !citadel_server::config::agent_allows_insecure()?,
         ));
         let agent = if let Some(agent) = &config.agent {
-            Some(
-                AgentClient::connect(
-                    &agent.address,
-                    agent_signer.clone(),
-                    agent.operation_timeout,
-                    agent.allow_insecure,
-                )
-                .await?,
-            )
+            Some(AgentClient::lazy(
+                &agent.address,
+                agent_signer.clone(),
+                agent.operation_timeout,
+                agent.allow_insecure,
+            )?)
+        } else if citadel_server::config::agent_allows_insecure()? {
+            // Persisted Platforms supply the actual endpoint. No job probes
+            // this signing context's placeholder address. Direct TLS is not
+            // supported yet, so keep Direct transport disabled when h2c is off.
+            Some(AgentClient::lazy(
+                "http://localhost",
+                agent_signer.clone(),
+                config.docker_request_timeout,
+                true,
+            )?)
         } else {
             None
         };
@@ -484,11 +492,22 @@ impl AppState {
                 agent.clone(),
             )),
         ));
+        let image_cache =
+            Arc::new(citadel_adapters::image_digest_cache::ImageDigestCache::default());
+        let image_scanner = Arc::new(citadel_adapters::image_scanner::ImageScanner::new(
+            pool.clone(),
+            Arc::new(
+                DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_edge(edge_registry.clone()),
+            ),
+            image_cache.clone(),
+        ));
         let deployments = Arc::new(
             DeploymentService::new(
                 Arc::new(PostgresDeploymentStore::new(pool.clone())),
                 Arc::new(
                     DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                        .with_image_cache(image_cache.clone())
                         .with_edge(edge_registry.clone()),
                 ),
                 entitlements.clone(),
@@ -521,18 +540,21 @@ impl AppState {
                 Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
                 Arc::new(
                     SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                        .with_image_cache(image_cache.clone())
                         .with_edge(edge_registry.clone()),
                 ),
                 cancellation.clone(),
             )
             .with_image_digests(Arc::new(
                 SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                    .with_image_cache(image_cache.clone())
                     .with_edge(edge_registry.clone()),
             ))
             .with_adoption(Arc::new(
                 citadel_adapters::swarm_service_store::PostgresSwarmServiceAdoption::new(
                     pool.clone(),
                     SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                        .with_image_cache(image_cache.clone())
                         .with_edge(edge_registry.clone()),
                     config.identity.secret_encryption_key.expose(),
                 ),
@@ -552,6 +574,7 @@ impl AppState {
                 Arc::new(PostgresStackStore::new(pool.clone())),
                 Arc::new(
                     StackRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                        .with_image_cache(image_cache.clone())
                         .with_edge(edge_registry.clone()),
                 ),
                 Arc::new(PostgresStackBindingResolver::new(
@@ -570,6 +593,7 @@ impl AppState {
             .with_update_scanner(Arc::new(
                 citadel_adapters::stack_runtime::StackUpdateRuntime::new(
                     StackRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
+                        .with_image_cache(image_cache.clone())
                         .with_edge(edge_registry.clone()),
                     git_execution.clone(),
                 ),
@@ -747,6 +771,7 @@ impl AppState {
                 role_mutations,
                 builds,
                 deployments,
+                image_scanner,
                 swarm_services,
                 stacks,
                 platform_state,

@@ -5,8 +5,7 @@ use citadel_platforms::{
     PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
 };
 use citadel_platforms::{
-    RuntimeContainerSummary, RuntimePlatformInfo, RuntimePlatformStats, RuntimeSwarmInfo,
-    RuntimeSwarmPeer,
+    RuntimeContainerSummary, RuntimePlatformInfo, RuntimeSwarmInfo, RuntimeSwarmPeer,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use reqwest::StatusCode;
@@ -131,20 +130,11 @@ impl PlatformRuntimePort for DockerClient {
                     };
                     match result {
                         Ok(info) => {
-                            let disk = client.read_host_disk(&info.docker_root_dir).await;
-                            yield Ok(RuntimePlatformStats {
-                                disk_used_bytes: disk.map(|d| d.used_bytes),
-                                disk_total_bytes: disk.map(|d| d.total_bytes),
-                                disk_usage: disk.map(|d| d.usage_percent),
-                                memory_usage: 0.0,
-                                cpu_usage: 0.0,
-                                receive_bytes: 0.0,
-                                transmit_bytes: 0.0,
-                                container_count: bounded_i64(info.containers),
-                                containers_running: bounded_i64(info.containers_running),
-                                containers_paused: bounded_i64(info.containers_paused),
-                                containers_stopped: bounded_i64(info.containers_stopped),
-                            });
+                            let sample = tokio::select! {
+                                () = cancellation.cancelled() => break,
+                                sample = client.platform_stats_from_info(info) => sample,
+                            };
+                            yield sample;
                         },
                         Err(error) => {
                             yield Err(normalize_docker_error(error));
@@ -252,7 +242,10 @@ pub(crate) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityErr
 }
 
 impl DockerClient {
-    async fn read_host_disk(&self, docker_root: &str) -> Option<citadel_platforms::HostDiskUsage> {
+    pub(super) async fn read_host_disk(
+        &self,
+        docker_root: &str,
+    ) -> Option<citadel_platforms::HostDiskUsage> {
         let provider = self.host_disk.clone();
         let docker_root = docker_root.to_owned();
         tokio::task::spawn_blocking(move || provider.read(&docker_root))
@@ -330,4 +323,30 @@ mod tests {
 
         assert!(container.has_citadel_ownership_labels);
     }
+}
+
+/// Keep event inspection metadata equivalent to a normal container snapshot.
+pub fn container_observation(
+    document: serde_json::Value,
+) -> Result<RuntimeContainerSummary, serde_json::Error> {
+    let inspected: super::generated::ContainerInspect = serde_json::from_value(document.clone())?;
+    Ok(map_container(ContainerSummary {
+        id: inspected.id,
+        names: vec![inspected.name],
+        image_id: if inspected.image.is_empty() {
+            inspected.config.image.clone()
+        } else {
+            inspected.image
+        },
+        image: inspected.config.image,
+        created: chrono::DateTime::parse_from_rfc3339(&inspected.created)
+            .map_or(0, |time| time.timestamp()),
+        labels: inspected.config.labels,
+        state: inspected.state.status,
+        status: String::new(),
+        ports: document
+            .pointer("/NetworkSettings/Ports")
+            .cloned()
+            .unwrap_or_default(),
+    }))
 }

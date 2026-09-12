@@ -63,7 +63,33 @@ pub struct Config {
     pub transport: TransportConfig,
     pub identity: IdentityConfig,
     pub automation: citadel_automation::AutomationOptions,
+    pub node_agent_policy:
+        citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    pub stats_flush_interval: Duration,
+    pub stats_batch_size: usize,
+    pub build_parallel_runs: usize,
+    pub build_retention_days: Option<i32>,
+    pub backup_workers: BackupWorkerConfig,
     database_source: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct BackupWorkerConfig {
+    pub enabled: bool,
+    pub parallel_runs: usize,
+    pub poll_interval: Duration,
+    pub schedule_interval: Duration,
+}
+
+fn positive_usize(name: &'static str, default: usize) -> Result<usize, ConfigError> {
+    let value = parse_env(name, default)?;
+    if value == 0 {
+        return Err(ConfigError::Invalid {
+            name,
+            message: "must be positive".into(),
+        });
+    }
+    Ok(value)
 }
 
 #[derive(Clone)]
@@ -270,6 +296,48 @@ impl Config {
             transport,
             identity,
             automation: automation_options()?,
+            node_agent_policy:
+                citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy {
+                    removal_grace: Duration::from_secs(
+                        positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
+                    ),
+                    supported_architectures: {
+                        let configured: Vec<_> = (0..32)
+                            .filter_map(|index| {
+                                env::var(format!("EdgeAgent__SupportedNodeArchitectures__{index}"))
+                                    .ok()
+                            })
+                            .collect();
+                        if configured.is_empty() {
+                            vec!["amd64".into(), "arm64".into()]
+                        } else {
+                            configured
+                        }
+                    },
+                },
+            stats_flush_interval: Duration::from_secs(positive_usize(
+                "JobConfiguration__FlashInterval",
+                60,
+            )? as u64),
+            stats_batch_size: positive_usize("JobConfiguration__BatchSize", 500)?,
+            build_parallel_runs: positive_usize("Builds__MaxParallelRuns", 4)?,
+            build_retention_days: if parse_env("Builds__RunCleanupEnabled", true)? {
+                Some(parse_env("Builds__RunRetentionDays", 90)?)
+            } else {
+                None
+            },
+            backup_workers: BackupWorkerConfig {
+                enabled: parse_env("Backups__Enabled", true)?,
+                parallel_runs: positive_usize("Backups__MaxParallelRuns", 2)?,
+                poll_interval: Duration::from_secs(positive_usize(
+                    "Backups__PollIntervalSeconds",
+                    2,
+                )? as u64),
+                schedule_interval: Duration::from_secs(positive_usize(
+                    "Backups__SchedulePollIntervalSeconds",
+                    30,
+                )? as u64),
+            },
             database_source,
         })
     }

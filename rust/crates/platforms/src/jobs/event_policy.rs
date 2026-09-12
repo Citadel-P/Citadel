@@ -13,7 +13,6 @@ pub fn triggers_inventory_reconciliation(resource_type: &str, action: &str) -> b
             | "task"
             | "secret"
             | "config"
-            | "builder"
     ) && !action.is_empty()
 }
 
@@ -33,10 +32,10 @@ mod tests {
             "task",
             "secret",
             "config",
-            "builder",
         ] {
             assert!(triggers_inventory_reconciliation(resource_type, "update"));
         }
+        assert!(!triggers_inventory_reconciliation("builder", "prune"));
         assert!(!triggers_inventory_reconciliation("plugin", "enable"));
         assert!(!triggers_inventory_reconciliation("service", ""));
     }

@@ -155,9 +155,36 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         .persist_stats(&session, std::slice::from_ref(&sample))
         .await
         .unwrap();
-    // Same Docker ID on a different node must not be attributed to this Task.
-    sqlx::query("UPDATE containers SET dockernodeid='other-node' WHERE id=$1")
+    // A delayed sample still belongs to the managed task after its container
+    // projection has been deleted (ContainerStatsWriterJobTests parity).
+    sqlx::query("DELETE FROM containers WHERE id=$1")
         .bind(container)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sample.created = bucket + 25;
+    sample.cpu_usage = 20.0;
+    sample.memory_active = 20.0;
+    assert_eq!(
+        writer
+            .persist_stats(&session, std::slice::from_ref(&sample))
+            .await
+            .unwrap(),
+        0,
+        "no container row is resurrected for a delayed service sample"
+    );
+    let retained: (f64, f64) = sqlx::query_as(
+        "SELECT cpuusage,memoryactive FROM swarmservicestats WHERE platformid=$1 AND created=$2",
+    )
+    .bind(f.platform_id)
+    .bind(sample.created)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(retained, (20.0, 20.0));
+    // Same Docker ID on a different node must not be attributed to this Task.
+    sqlx::query("UPDATE swarmtaskprojections SET dockernodeid='other-node' WHERE platformid=$1")
+        .bind(f.platform_id)
         .execute(&f.pool)
         .await
         .unwrap();
@@ -632,6 +659,9 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
     use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat, RuntimeSwarmInfo};
     let f = fixture().await;
+    // This case models the connected manager, matching the fake daemon.
+    sqlx::query("UPDATE platforms SET platformdescriptor=jsonb_set(platformdescriptor::jsonb, '{nodeID}', '\"node-1\"') WHERE id=$1")
+        .bind(f.platform_id).execute(&f.pool).await.unwrap();
     let container: Uuid =
         sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
             .bind(f.platform_id)
@@ -643,9 +673,11 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
         node_id: "node-1".into(),
         control_available: true,
         local_node_state: "active".into(),
+        cluster_id: Some(format!("cluster-{}", f.platform_id)),
         ..Default::default()
     });
     observed.containers[0].is_swarm_task = true;
+    observed.swarm.as_mut().unwrap().tasks[0].node_id = "node-1".into();
     observed.swarm.as_mut().unwrap().tasks[0].container_id = Some("container-1".into());
     observed.swarm.as_mut().unwrap().tasks[0].slot = Some(1);
     let inventory = PostgresInventoryProjectionStore::new(f.pool.clone());
@@ -676,19 +708,12 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
     );
     let body = json_body(send(&f, &task_path, Some(f.administrator.clone())).await).await;
     assert_eq!(body["containerProjectionId"], container.to_string());
+    // A changed or absent manager identity must be rejected before overwriting
+    // the accepted projection or attributing samples to another daemon.
     observed.info.swarm.as_mut().unwrap().node_id = "different-manager".into();
-    inventory.persist(&observed).await.unwrap();
-    let body = json_body(send(&f, &service_path, Some(f.administrator.clone())).await).await;
-    assert_eq!(body["complete"], false);
-    assert_eq!(body["observedContainerProjectionIds"], json!([]));
-    assert_eq!(
-        send(&f, &task_path, Some(f.administrator.clone()))
-            .await
-            .status(),
-        StatusCode::CONFLICT
-    );
+    assert!(inventory.persist(&observed).await.is_err());
     observed.info.swarm = None;
-    inventory.persist(&observed).await.unwrap();
+    assert!(inventory.persist(&observed).await.is_err());
     let node: Option<String> = sqlx::query_scalar(
         "SELECT platformdescriptor::jsonb->>'nodeID' FROM platforms WHERE id=$1",
     )
@@ -696,15 +721,16 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
     .fetch_one(&f.pool)
     .await
     .unwrap();
-    assert_eq!(
-        node, None,
-        "a missing daemon identity must clear the previous manager identity"
-    );
+    assert_eq!(node.as_deref(), Some("node-1"));
+    let body = json_body(send(&f, &service_path, Some(f.administrator.clone())).await).await;
+    assert_eq!(body["complete"], true);
+    assert_eq!(body["observedContainerProjectionIds"], json!([container]));
     // Coexisting legacy and explicit node projections must not count one Task twice.
     observed.info.swarm = Some(RuntimeSwarmInfo {
         node_id: "node-1".into(),
         control_available: true,
         local_node_state: "active".into(),
+        cluster_id: Some(format!("cluster-{}", f.platform_id)),
         ..Default::default()
     });
     sqlx::query("UPDATE containers SET dockernodeid='node-1' WHERE id=$1")

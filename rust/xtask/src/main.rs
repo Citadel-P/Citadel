@@ -989,7 +989,7 @@ pub struct ContainerSummary {{
     #[serde(rename = "Image", default)] pub image: String,
     #[serde(rename = "ImageID", default)] pub image_id: String,
     #[serde(rename = "Created", default)] pub created: i64,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
     #[serde(rename = "State", default)] pub state: String,
     #[serde(rename = "Status", default)] pub status: String,
     #[serde(rename = "Ports", default)] pub ports: Value,
@@ -1032,7 +1032,7 @@ pub struct ContainerHealth {{
 pub struct ContainerConfig {{
     #[serde(rename = "Env", default)] pub environment: Vec<String>,
     #[serde(rename = "Image", default)] pub image: String,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
 }}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1119,11 +1119,11 @@ pub struct JoinTokens {{
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ImageSummary {{
     #[serde(rename = "Id", default)] pub id: String,
-    #[serde(rename = "RepoTags", default)] pub repo_tags: Vec<String>,
-    #[serde(rename = "RepoDigests", default)] pub repo_digests: Vec<String>,
+    #[serde(rename = "RepoTags", default, deserialize_with = "deserialize_null_default")] pub repo_tags: Vec<String>,
+    #[serde(rename = "RepoDigests", default, deserialize_with = "deserialize_null_default")] pub repo_digests: Vec<String>,
     #[serde(rename = "Created", default)] pub created: i64,
     #[serde(rename = "Size", default)] pub size: i64,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
     #[serde(rename = "Containers", default)] pub containers: i64,
 }}
 
@@ -1203,7 +1203,7 @@ pub struct VolumeCreateOptions {{
     #[serde(rename = "Name", default)] pub name: String,
     #[serde(rename = "Driver", default)] pub driver: String,
     #[serde(rename = "DriverOpts", default)] pub driver_options: HashMap<String, String>,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
 }}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1224,7 +1224,7 @@ pub struct DockerNetwork {{
     #[serde(rename = "Containers", default, deserialize_with = "deserialize_null_default")] pub containers: HashMap<String, Value>,
     #[serde(rename = "Peers", default, deserialize_with = "deserialize_null_default")] pub peers: Vec<Value>,
     #[serde(rename = "Options", default)] pub options: HashMap<String, String>,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
 }}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1240,7 +1240,7 @@ pub struct NetworkCreateRequest {{
     #[serde(rename = "ConfigOnly", skip_serializing_if = "Option::is_none")] pub config_only: Option<bool>,
     #[serde(rename = "IPAM", skip_serializing_if = "Option::is_none")] pub ipam: Option<Value>,
     #[serde(rename = "ConfigFrom", skip_serializing_if = "Option::is_none")] pub config_from: Option<Value>,
-    #[serde(rename = "Labels", default)] pub labels: HashMap<String, String>,
+    #[serde(rename = "Labels", default, deserialize_with = "deserialize_null_default")] pub labels: HashMap<String, String>,
     #[serde(rename = "Options", default)] pub options: HashMap<String, String>,
 }}
 

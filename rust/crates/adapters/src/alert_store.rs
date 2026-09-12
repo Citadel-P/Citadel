@@ -174,7 +174,7 @@ impl PostgresAlertStore {
             return Ok(None);
         }
         sqlx::query(
-            "UPDATE alertrulestates SET lasttriggeredat=$3 WHERE alertruleid=$1 AND resourceid=$2",
+            "UPDATE alertrulestates SET lasttriggeredat=$3,consecutivematches=0 WHERE alertruleid=$1 AND resourceid=$2",
         )
         .bind(rule.id)
         .bind(observation.resource_id)

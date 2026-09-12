@@ -475,3 +475,123 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_and_severity() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = ActorId::new(Uuid::now_v7());
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+        citadel_adapters::identity_store::StaticEntitlementService::new(true),
+    ));
+    let builtins:Vec<Uuid>=sqlx::query_scalar("UPDATE alertrules SET status='Disabled' WHERE type='PlatformCpuHigh' AND status='Enabled' RETURNING id").fetch_all(&pool).await.unwrap();
+    for case in [
+        "matches", "broken", "below", "disabled", "scope", "quiet", "severity",
+    ] {
+        let resource = Uuid::now_v7();
+        let rule=store.create_rule(actor,&AlertRuleInput {
+            name:format!("parity-{case}-{resource}"),description:None,alert_type:"PlatformCpuHigh".into(),severity:"Warning".into(),cooldown_seconds:Some(60),required_matches:Some(if case=="severity" {1} else {3}),threshold:Some(80.0),status:if case=="disabled" {"Disabled"} else {"Enabled"}.into(),channel_ids:vec![],
+            limited_to:vec![json!({"resourceId":if case=="scope" {Uuid::now_v7()} else {resource},"resourceType":"Platform"})],
+            quiet_hours:if case=="quiet" {vec![json!({"$type":"Daily","timezone":"UTC","startTime":"00:00:00","endTime":"23:59:59"})]} else {vec![]},
+        }).await.unwrap();
+        let critical = if case == "severity" {
+            Some(
+                store
+                    .create_rule(
+                        actor,
+                        &AlertRuleInput {
+                            name: format!("critical-{resource}"),
+                            description: None,
+                            alert_type: "PlatformCpuHigh".into(),
+                            severity: "Critical".into(),
+                            cooldown_seconds: Some(60),
+                            required_matches: Some(1),
+                            threshold: Some(95.0),
+                            status: "Enabled".into(),
+                            channel_ids: vec![],
+                            limited_to: vec![
+                                json!({"resourceId":resource,"resourceType":"Platform"}),
+                            ],
+                            quiet_hours: vec![],
+                        },
+                    )
+                    .await
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
+        let values: Vec<f64> = match case {
+            "broken" => vec![90., 90., 10., 90., 90.],
+            "below" => vec![10., 20., 30.],
+            "severity" => vec![85., 99.],
+            _ => vec![90., 90., 90., 90.],
+        };
+        let mut events = vec![];
+        for (index, value) in values.into_iter().enumerate() {
+            let observation = AlertObservation {
+                alert_type: "PlatformCpuHigh".into(),
+                info: json!({"HumanMessage":"threshold fixture"}),
+                resource_id: resource,
+                resource_name: case.into(),
+                resource_type: "Platform".into(),
+                deduplication_component: "utilization".into(),
+                observed_at: Utc::now() + Duration::seconds(index as i64),
+                value: Some(value),
+                matched: true,
+            };
+            if let Some(event) = store.process_event(&observation).await.unwrap() {
+                events.push(event.alert_rule_id);
+            }
+            if case == "matches" && index == 2 {
+                let consecutive:i32=sqlx::query_scalar("SELECT consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2").bind(rule.id).bind(resource).fetch_one(&pool).await.unwrap();
+                assert_eq!(consecutive, 0, "a trigger consumes its consecutive matches");
+            }
+        }
+        match case {
+            "matches" => assert_eq!(
+                events,
+                vec![rule.id],
+                "three high samples trigger; cooldown suppresses repeat"
+            ),
+            "severity" => assert_eq!(
+                events,
+                vec![rule.id, critical.as_ref().unwrap().id],
+                "lower severity fires when higher threshold does not match; only critical fires when both match"
+            ),
+            _ => assert!(events.is_empty(), "unexpected alert for {case}"),
+        }
+        let mut ids = vec![rule.id];
+        if let Some(critical) = critical {
+            ids.push(critical.id);
+        }
+        store.delete_rules(&ids).await.unwrap();
+    }
+    sqlx::query("UPDATE alertrules SET status='Enabled' WHERE id=ANY($1)")
+        .bind(builtins)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+}

@@ -32,11 +32,18 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     startup::migrate(&config).await?;
+    let job_lease = std::sync::Arc::new(tokio::sync::Mutex::new(
+        startup::acquire_job_lease(&config).await?,
+    ));
     let (state, pending_jobs) = AppState::build(&config).await?;
     startup::run(&state).await?;
     let cancellation = state.cancellation.clone();
     let pool = state.pool.clone();
-    let mut supervisor = jobs::spawn_all(&state, pending_jobs, &config);
+    let mut supervisor = jobs::spawn_all(&state, pending_jobs, &config).await?;
+    supervisor.spawn(
+        "core-job-lease",
+        startup::watch_job_lease(job_lease.clone(), cancellation.clone()),
+    );
     let api::Routers {
         http: app,
         edge: edge_app,

@@ -687,6 +687,22 @@ ORDER BY s.createdat DESC,s.name,s.id"#
         })
     }
 
+    fn record_apply_source<'a>(
+        &'a self,
+        claim: &'a StackOperationClaim,
+        source: &'a StackReleaseSource,
+    ) -> BoxFuture<'a, Result<(), StackError>> {
+        Box::pin(async move {
+            let changed=sqlx::query("UPDATE stackreleases r SET source=$4 FROM stacks s WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.rowversion=$3 AND s.controlstate='Processing' AND r.id=$2 AND r.stackid=s.id AND r.status='Applying'")
+                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).bind(source.to_storage_value()?).execute(&self.pool).await.map_err(storage)?.rows_affected();
+            if changed != 1 {
+                return Err(StackError::Conflict(
+                    "The Stack changed before its source could be recorded.".into(),
+                ));
+            }
+            Ok(())
+        })
+    }
     fn complete_apply<'a>(
         &'a self,
         actor: ActorId,

@@ -21,6 +21,8 @@ use uuid::Uuid;
 
 use crate::agent::{AgentClient, AgentContainerAction, AgentStackRegistry};
 use crate::docker::DockerClient;
+#[path = "stack_release_resources.rs"]
+mod release_resources;
 #[path = "stack_update_scanner.rs"]
 mod update_scanner;
 pub use update_scanner::StackUpdateRuntime;
@@ -34,6 +36,7 @@ pub struct StackRuntimeRouter {
     docker: DockerClient,
     agent: Option<AgentClient>,
     edge: crate::edge::EdgeRegistry,
+    image_cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
 }
 
 impl StackRuntimeRouter {
@@ -44,7 +47,16 @@ impl StackRuntimeRouter {
             docker,
             agent,
             edge: crate::edge::EdgeRegistry::default(),
+            image_cache: Default::default(),
         }
+    }
+
+    pub fn with_image_cache(
+        mut self,
+        cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
+    ) -> Self {
+        self.image_cache = cache;
+        self
     }
 
     #[must_use]
@@ -411,13 +423,26 @@ impl StackRuntimePort for StackRuntimeRouter {
             validate_stack_execution(claim)?;
             let target = self.platform(claim.platform_id).await?;
             let registry = self.stack_registry(claim.spec.common().registry_id).await?;
-            if target.connector.eq_ignore_ascii_case("Local") {
+            let result = if target.connector.eq_ignore_ascii_case("Local") {
                 self.apply_local(claim, source, environment, registry.as_ref(), cancellation, progress).await
             } else if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
                 self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation, progress).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
+            }?;
+            if claim.platform_type == "DockerSwarm" && result.status == StackReleaseStatus::Healthy {
+                let runtime: Box<dyn PlatformInventoryPort> = if target.connector == "Local" {
+                    Box::new(self.docker.clone())
+                } else {
+                    match self.agent_for(&target)? {
+                        crate::agent_execution::AgentExecutionClient::Direct(agent) => Box::new((*agent).clone()),
+                        crate::agent_execution::AgentExecutionClient::Edge(session) => Box::new(crate::edge::EdgeRuntime { session }),
+                    }
+                };
+                tokio::time::timeout(std::time::Duration::from_secs(30), release_resources::capture(&self.pool, claim, runtime.as_ref(), cancellation))
+                    .await.map_err(|_| StackError::Runtime("Timed out recording immutable Swarm release resources.".into()))??;
             }
+            Ok(result)
         }.boxed()
     }
 

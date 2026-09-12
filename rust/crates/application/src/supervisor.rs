@@ -62,21 +62,22 @@ impl TaskSupervisor {
         self.cancellation.cancel();
 
         let drain = async {
+            let mut failure = None;
             while let Some(result) = self.tasks.join_next().await {
                 match result {
                     Ok((_name, Ok(()))) => {}
                     Ok((name, Err(message))) => {
-                        return Err(SupervisedTaskError::Failed { name, message });
+                        failure.get_or_insert(SupervisedTaskError::Failed { name, message });
                     }
                     Err(source) => {
-                        return Err(SupervisedTaskError::Join {
+                        failure.get_or_insert(SupervisedTaskError::Join {
                             name: "unknown",
                             source,
                         });
                     }
                 }
             }
-            Ok(())
+            failure.map_or(Ok(()), Err)
         };
 
         match tokio::time::timeout(timeout, drain).await {
@@ -114,6 +115,43 @@ mod tests {
             .expect("owned task should stop");
 
         assert!(observed.load(Ordering::Acquire));
+    }
+
+    // TrackedBackgroundTasks.DrainAsync waits for all executions, even when one fails.
+    #[tokio::test]
+    async fn shutdown_drains_cleanup_after_another_worker_fails() {
+        let cancellation = CancellationToken::new();
+        let mut supervisor = TaskSupervisor::new(cancellation.clone());
+        let cleaned = Arc::new(AtomicBool::new(false));
+        let observed = cleaned.clone();
+        supervisor.spawn("failed", async { Err::<(), _>("failure") });
+        supervisor.spawn("cleanup", async move {
+            cancellation.cancelled().await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            observed.store(true, Ordering::Release);
+            Ok::<_, std::convert::Infallible>(())
+        });
+        assert!(matches!(
+            supervisor.shutdown(Duration::from_secs(1)).await,
+            Err(SupervisedTaskError::Failed { name: "failed", .. })
+        ));
+        assert!(cleaned.load(Ordering::Acquire));
+    }
+
+    // Port: TrackedBackgroundTasksTests.DrainAsync_ShouldRespectShutdownDeadline.
+    #[tokio::test]
+    async fn shutdown_respects_deadline_for_an_unresponsive_worker() {
+        let mut supervisor = TaskSupervisor::new(CancellationToken::new());
+        supervisor.spawn(
+            "never",
+            std::future::pending::<Result<(), std::convert::Infallible>>(),
+        );
+        let started = tokio::time::Instant::now();
+        assert!(matches!(
+            supervisor.shutdown(Duration::from_millis(20)).await,
+            Err(SupervisedTaskError::ShutdownTimeout(_))
+        ));
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[tokio::test]

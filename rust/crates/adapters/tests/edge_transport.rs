@@ -510,6 +510,21 @@ async fn verify_node_projection_isolation(
             .is_err()
     );
     assert!(store.persist_inventory(&session, &newer).await.is_err());
+    let stale_event = citadel_adapters::agent::AgentDaemonEvent {
+        container: None,
+        resource_type: "container",
+        action: "destroy".into(),
+        container_id: Some("new-container".into()),
+        container_state: None,
+        container_name: None,
+    };
+    assert!(
+        store
+            .persist_container_event(&session, &stale_event)
+            .await
+            .is_err()
+    );
+
     sqlx::query("INSERT INTO containers(id,platformid,dockernodeid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,'worker','new-container','image','new',1,1,'Running','[]')")
         .bind(Uuid::now_v7()).bind(platform).execute(pool).await.unwrap();
     store
@@ -865,6 +880,16 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
     };
     assert_eq!(accepted.platform_id, target.platform_id.to_string());
     let previous = registry.get(&target).unwrap();
+    let mut old_events = previous
+        .command(
+            EdgeCommandKind::PlatformDaemonEventsStream,
+            vec![],
+            Duration::from_secs(60),
+            true,
+        )
+        .unwrap();
+    let old_request = response.message().await.unwrap().unwrap();
+    assert_eq!(old_request.command_id, old_events.id().to_string());
     let hex: String = Sha256::digest(key.verifying_key().as_bytes())
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -951,6 +976,94 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
     let current = registry.get(&target).unwrap();
     assert!(!Arc::ptr_eq(&previous, &current));
     assert!(current.connected_at > previous.connected_at);
+    assert!(
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            old_events.next(&CancellationToken::new())
+        )
+        .await
+        .unwrap()
+        .is_err(),
+        "replacement must terminate the old daemon subscription"
+    );
+    let mut new_events = current
+        .command(
+            EdgeCommandKind::PlatformDaemonEventsStream,
+            vec![],
+            Duration::from_secs(60),
+            true,
+        )
+        .unwrap();
+    let new_request = response2.message().await.unwrap().unwrap();
+    assert_eq!(new_request.command_id, new_events.id().to_string());
+    use citadel_contracts::citadel::platforms::v1::{
+        DaemonContainerEventResponse, DaemonEventResponse, daemon_event_response,
+    };
+    use prost::Message;
+    let event = DaemonEventResponse {
+        kind: Some(daemon_event_response::Kind::DaemonContainerEventResponse(
+            DaemonContainerEventResponse {
+                action: "die".into(),
+                container_id: "container-after-reconnect".into(),
+                container: None,
+            },
+        )),
+        ..Default::default()
+    };
+    send2
+        .send(AgentEnvelope {
+            session_id: accepted2.session_id.clone(),
+            command_id: new_request.command_id.clone(),
+            body: Some(agent_envelope::Body::CommandOutput(
+                citadel_contracts::citadel::edge::v1::CommandOutput {
+                    payload: event.encode_to_vec(),
+                },
+            )),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(2),
+        new_events.next(&CancellationToken::new()),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    let decoded = citadel_adapters::agent::decode_daemon_event(&bytes)
+        .unwrap()
+        .unwrap();
+    assert_eq!(decoded.action, "die");
+    assert_eq!(
+        decoded.container_id.as_deref(),
+        Some("container-after-reconnect")
+    );
+    // Storage uses the same session fence as commands: old samples cannot alter
+    // the replacement's platform descriptor, even after successful re-enrollment.
+    let sample = citadel_platforms::RuntimePlatformStats {
+        image_used_bytes: Some(2048),
+        volume_used_bytes: Some(4096),
+        ..Default::default()
+    };
+    assert!(
+        store
+            .persist_stats_with_platform_stats(&previous, &[], Some(&sample))
+            .await
+            .is_err()
+    );
+    store
+        .persist_stats_with_platform_stats(&current, &[], Some(&sample))
+        .await
+        .unwrap();
+    let descriptor: serde_json::Value =
+        sqlx::query_scalar("SELECT platformdescriptor::jsonb FROM platforms WHERE id=$1")
+            .bind(target.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(descriptor["imageUsedBytes"], 2048);
+    assert_eq!(descriptor["volumeUsedBytes"], 4096);
     // An old stream's late heartbeat/disconnect must not touch its replacement.
     store
         .disconnected(previous.agent_id, previous.connected_at)

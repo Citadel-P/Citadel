@@ -34,14 +34,39 @@ pub async fn pool_health(
 pub async fn build_runs(
     cancellation: CancellationToken,
     service: Arc<BuildService>,
+    parallel_runs: usize,
 ) -> Result<(), BuildError> {
-    while !cancellation.is_cancelled() {
-        match service.process_one(&cancellation).await {
-            Ok(true) => continue,
-            Ok(false) => {}
-            Err(error) => tracing::error!(%error,"Build worker iteration failed"),
-        }
-        tokio::select! {()=cancellation.cancelled()=>break,()=tokio::time::sleep(Duration::from_secs(2))=>{}}
+    for result in futures_util::future::join_all(
+        (0..parallel_runs).map(|_| run_worker(cancellation.clone(), service.clone())),
+    )
+    .await
+    {
+        result?;
     }
     Ok(())
 }
+
+async fn run_worker(
+    cancellation: CancellationToken,
+    service: Arc<BuildService>,
+) -> Result<(), BuildError> {
+    let minimum = Duration::from_secs(2);
+    let mut delay = minimum;
+    while !cancellation.is_cancelled() {
+        match service.process_one(&cancellation).await {
+            Ok(true) => {
+                delay = citadel_application::worker_poll_delay(delay, minimum, true);
+                continue;
+            }
+            Ok(false) => {}
+            Err(error) => tracing::error!(%error,"Build worker iteration failed"),
+        }
+        delay = citadel_application::worker_poll_delay(delay, minimum, false);
+        tokio::select! {()=cancellation.cancelled()=>break,()=tokio::time::sleep(delay)=>{}}
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "build_tests.rs"]
+mod tests;

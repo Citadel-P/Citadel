@@ -356,7 +356,13 @@ mod tests {
     #[test]
     fn embedded_manifest_and_baseline_are_consistent() {
         let manifest = validate_manifest().expect("embedded catalog should be valid");
-        assert_eq!(manifest.len(), 1);
+        assert_eq!(
+            manifest.len(),
+            1,
+            "the unreleased database has one baseline"
+        );
+        assert_eq!(manifest.len(), MIGRATIONS.len());
+        assert_eq!(MIGRATIONS[0].id, "0001");
         assert!(!MIGRATIONS[0].sql.contains("__EFMigrationsHistory"));
         assert!(!MIGRATIONS[0].sql.contains("START TRANSACTION"));
         let tables = |sql: &str| {

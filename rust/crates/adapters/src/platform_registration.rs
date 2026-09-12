@@ -193,7 +193,7 @@ impl PlatformRegistrationStore for PostgresPlatformRegistrationStore {
             reject_existing(&mut transaction, registration).await?;
             validate_tags(&mut transaction, &registration.tag_ids).await?;
             insert_platform(&mut transaction, registration).await?;
-            persist_snapshot(&mut transaction, &registration.snapshot)
+            persist_snapshot(&mut transaction, &registration.snapshot, None)
                 .await
                 .map_err(|error| PlatformRegistrationError::Storage(error.message))?;
             insert_tags(&mut transaction, actor_id, registration).await?;

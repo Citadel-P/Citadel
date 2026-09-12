@@ -15,7 +15,7 @@ pub async fn run(
     registry: EdgeRegistry,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
+    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
     let mut tasks = JoinSet::new();
@@ -39,12 +39,12 @@ pub async fn run(
                 for session in registry.current_sessions().into_iter().filter(|session| session.target.resource_type==0) {
                     if active.values().any(|id| *id == session.id) { continue; }
                     let session_id = session.id;
-                    let pool=pool.clone(); let realtime=realtime.clone(); let alerts=alerts.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
+                    let pool=pool.clone(); let realtime=realtime.clone(); let node_policy=node_policy.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
                     let task = tasks.spawn(async move {
                         tokio::select! {
                             ()=cancellation.cancelled()=>{},
                             ()=session.closed()=>{},
-                            result=monitor(session.clone(),pool,realtime,scans,alerts,&cancellation)=>{
+                            result=monitor(session.clone(),pool,realtime,node_policy,scans,&cancellation)=>{
                                 if let Err(error)=result { tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge inventory synchronization interrupted"); }
                             }
                         }
@@ -63,8 +63,8 @@ async fn monitor(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
+    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
     scans: Arc<Semaphore>,
-    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::try_join!(
@@ -73,9 +73,10 @@ async fn monitor(
             pool.clone(),
             realtime.clone(),
             scans,
+            node_policy,
             cancellation
         ),
-        observe_stats(session, pool, realtime, alerts, cancellation),
+        observe_stats(session, pool, realtime, cancellation),
     )?;
     Ok(())
 }
@@ -84,7 +85,6 @@ async fn observe_stats(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = EdgeRuntime {
@@ -93,7 +93,7 @@ async fn observe_stats(
     let store = PostgresEdgeStore::new(pool.clone());
     let mut stream = runtime.stream_container_stats(Duration::from_secs(10), cancellation)?;
     let interval = Duration::from_secs(10);
-    let mut disk = super::disk::LatestDisk::new(interval);
+    let mut disk = super::disk::LatestPlatformStats::new(interval);
     let mut disk_updates = if session.target.node_id.is_none() {
         super::disk::samples(runtime, interval, cancellation.clone())
     } else {
@@ -109,17 +109,23 @@ async fn observe_stats(
             break;
         };
         let stats = stats?;
-        let persisted = store
-            .persist_stats_with_disk(&session, &stats, disk.get())
-            .await?;
-        if session.target.node_id.is_none() && (persisted > 0 || stats.is_empty()) {
-            super::platforms::observe_platform_metrics(
-                &pool,
-                alerts.as_ref(),
-                session.target.platform_id,
-            )
-            .await;
-        }
+        let sample_disk = disk.get();
+        let mut delay = Duration::from_secs(2);
+        let persisted = loop {
+            let result = tokio::select! {
+                ()=cancellation.cancelled()=>return Ok(()),
+                result=store.persist_stats_with_platform_stats(&session,&stats,sample_disk)=>result,
+            };
+            match result {
+                Ok(inserted) => break inserted,
+                Err(citadel_adapters::edge::EdgeStoreError::Storage(error)) => {
+                    tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge statistics persistence failed; retaining batch for retry");
+                    tokio::select! {()=cancellation.cancelled()=>return Ok(()),_=tokio::time::sleep(delay)=>{}}
+                    delay = (delay * 2).min(Duration::from_secs(30));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
         if (persisted > 0 || (session.target.node_id.is_none() && stats.is_empty()))
             && let Some(hub) = &realtime
         {
@@ -138,6 +144,7 @@ async fn observe(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     scans: Arc<Semaphore>,
+    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
@@ -153,7 +160,7 @@ async fn observe(
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let store = PostgresEdgeStore::new(pool);
+    let store = PostgresEdgeStore::new(pool.clone()).with_node_policy(node_policy.clone());
     let mut events = session.command(
         EdgeCommandKind::PlatformDaemonEventsStream,
         vec![],
@@ -163,7 +170,17 @@ async fn observe(
     loop {
         {
             let _permit = scans.acquire().await?;
-            let snapshot = collect_inventory(&runtime, &target, cancellation).await?;
+            let started = chrono::Utc::now();
+            let snapshot = match collect_inventory(&runtime, &target, cancellation).await {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    if target.platform_type == "DockerSwarm" && !cancellation.is_cancelled() {
+                        citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(pool.clone())
+                            .mark_swarm_stale(platform_id,started).await?;
+                    }
+                    return Err(error.into());
+                }
+            };
             // Enrollment binds a daemon; reject transport identity changes before
             // they can overwrite another daemon's persisted inventory.
             if expected_daemon.is_empty() || snapshot.info.daemon_id != expected_daemon {
@@ -179,11 +196,34 @@ async fn observe(
                 );
             }
         }
-        tokio::select! {
-            ()=cancellation.cancelled()=>return Ok(()),
-            ()=session.closed()=>return Ok(()),
-            ()=tokio::time::sleep(Duration::from_secs(1800))=>{},
-            event=events.next(cancellation)=>{ if event?.is_none() { return Ok(()); } }
+        // Stay on the event path after a targeted update. Only discovery, other
+        // resource events, or the periodic deadline require a full scan.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1800);
+        loop {
+            let bytes = tokio::select! {
+                ()=cancellation.cancelled()=>return Ok(()),
+                ()=session.closed()=>return Ok(()),
+                ()=tokio::time::sleep_until(deadline)=>break,
+                event=events.next(cancellation)=>{ let Some(bytes)=event? else { return Ok(()); }; bytes }
+            };
+            let Some(event) = citadel_adapters::agent::decode_daemon_event(bytes.as_slice())?
+            else {
+                continue;
+            };
+            if event.resource_type == "container"
+                && store.persist_container_event(&session, &event).await?
+            {
+                if let Some(hub) = &realtime {
+                    hub.publish_runtime_change(
+                        platform_id,
+                        "container",
+                        &event.action,
+                        event.container_id.unwrap_or_default(),
+                    );
+                }
+            } else {
+                break;
+            }
         }
         // Bound scan frequency under daemon event bursts without making the
         // source queue unbounded. Overflow terminates/reopens with a full scan.

@@ -12,7 +12,11 @@ pub struct Jobs {
     pub license_realtime_hub: license_realtime::LicenseRealtimeHub,
 }
 
-pub fn spawn_all(state: &AppState, jobs: Jobs, config: &Config) -> TaskSupervisor {
+pub async fn spawn_all(
+    state: &AppState,
+    jobs: Jobs,
+    config: &Config,
+) -> Result<TaskSupervisor, sqlx::Error> {
     let AppState {
         cancellation,
         edge_registry,
@@ -40,16 +44,6 @@ pub fn spawn_all(state: &AppState, jobs: Jobs, config: &Config) -> TaskSuperviso
         license_realtime_hub,
     } = jobs;
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
-    supervisor.spawn(
-        "edge-platform-inventory",
-        workers::edge::run(
-            cancellation.child_token(),
-            edge_registry.clone(),
-            pool.clone(),
-            realtime_hub.clone(),
-            alert_store.clone(),
-        ),
-    );
     supervisor.spawn(
         "service-account-last-used",
         last_used_worker.run(cancellation.child_token()),
@@ -86,6 +80,12 @@ pub fn spawn_all(state: &AppState, jobs: Jobs, config: &Config) -> TaskSuperviso
             alert_deliveries: alert_deliveries.clone(),
         },
         workers::WorkerSettings {
+            node_agent_policy: config.node_agent_policy.clone(),
+            stats_flush_interval: config.stats_flush_interval,
+            stats_batch_size: config.stats_batch_size,
+            build_parallel_runs: config.build_parallel_runs,
+            build_retention_days: config.build_retention_days,
+            backup_workers: config.backup_workers.clone(),
             queue_capacity: config.event_queue_capacity,
             probe_interval: config.probe_interval,
             reconciliation_interval: config.reconciliation_interval,
@@ -94,7 +94,28 @@ pub fn spawn_all(state: &AppState, jobs: Jobs, config: &Config) -> TaskSuperviso
                 .as_ref()
                 .map_or(Duration::from_secs(10), |agent| agent.reconnect_delay),
         },
-    );
+    )
+    .await?;
 
-    supervisor
+    supervisor.spawn(
+        "edge-platform-inventory",
+        workers::edge::run(
+            cancellation.child_token(),
+            edge_registry.clone(),
+            pool.clone(),
+            realtime_hub.clone(),
+            config.node_agent_policy.clone(),
+        ),
+    );
+    supervisor.spawn(
+        "image-scanner",
+        workers::image_scanning::run(
+            cancellation.child_token(),
+            state.image_scanner.clone(),
+            deployments.clone(),
+            stacks.clone(),
+            swarm_services.clone(),
+        ),
+    );
+    Ok(supervisor)
 }

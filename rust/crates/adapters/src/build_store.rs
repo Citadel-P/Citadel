@@ -666,7 +666,7 @@ ORDER BY project.name,project.id"#
                 }
                 sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND currentrunid=$2").bind(claim.project.id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
                 sqlx::query(
-                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns b WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=b.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE d.spec->'Image'->>'ResolvedBuildRunId'=b.id::text OR d.spec->'Image'->>'AppliedBuildRunId'=b.id::text) AND NOT EXISTS(SELECT 1 FROM stackreleases r, jsonb_array_elements(COALESCE(r.spec::jsonb->'BuildImageBindings','[]'::jsonb)) binding WHERE binding->>'ResolvedBuildRunId'=b.id::text OR binding->>'AppliedBuildRunId'=b.id::text)",
+                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns b WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=b.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases r WHERE jsonb_path_exists(r.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text)))",
                 )
                 .bind(claim.project.id)
                 .bind(i64::from(claim.project.retention_run_count.max(1)))
@@ -896,18 +896,27 @@ async fn record_run_activity(
         .map_err(storage)
 }
 
-async fn recover(
+pub(crate) async fn recover(
     tx: &mut Transaction<'_, Postgres>,
     stale_before: DateTime<Utc>,
-) -> Result<(), BuildError> {
-    let rows=sqlx::query("UPDATE buildruns SET status='Interrupted',completedat=CURRENT_TIMESTAMP,errorcode='build.interrupted',errormessage='Build interrupted by Core restart.' WHERE status IN ('Preparing','Running') AND startedat<$1 AND startedat+make_interval(secs=>timeoutseconds+300)<CURRENT_TIMESTAMP RETURNING id,buildprojectid").bind(stale_before).fetch_all(&mut **tx).await.map_err(storage)?;
+) -> Result<u64, BuildError> {
+    recover_with_mode(tx, stale_before, false).await
+}
+
+pub(crate) async fn recover_with_mode(
+    tx: &mut Transaction<'_, Postgres>,
+    stale_before: DateTime<Utc>,
+    startup: bool,
+) -> Result<u64, BuildError> {
+    let rows=sqlx::query("UPDATE buildruns SET status='Interrupted',completedat=CURRENT_TIMESTAMP,errorcode='build.interrupted',errormessage='Build interrupted by Core restart.' WHERE status IN ('Preparing','Running') AND ($2 OR startedat<$1) AND ($2 OR startedat+make_interval(secs=>timeoutseconds+300)<CURRENT_TIMESTAMP) RETURNING id,buildprojectid").bind(stale_before).bind(startup).fetch_all(&mut **tx).await.map_err(storage)?;
+    let changed = rows.len() as u64;
     for row in rows {
         let id: Uuid = row.try_get("id").map_err(storage)?;
         let project: Uuid = row.try_get("buildprojectid").map_err(storage)?;
         record_run_activity(tx, id).await?;
         sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project).bind(id).execute(&mut **tx).await.map_err(storage)?;
     }
-    Ok(())
+    Ok(changed)
 }
 
 async fn exists_run(pool: &PgPool, id: Uuid) -> Result<bool, BuildError> {

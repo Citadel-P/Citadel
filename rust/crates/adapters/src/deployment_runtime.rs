@@ -29,6 +29,7 @@ pub struct DeploymentRuntimeRouter {
     docker: DockerClient,
     agent: Option<AgentClient>,
     edge: crate::edge::EdgeRegistry,
+    image_cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
 }
 
 impl DeploymentRuntimeRouter {
@@ -39,7 +40,16 @@ impl DeploymentRuntimeRouter {
             docker,
             agent,
             edge: crate::edge::EdgeRegistry::default(),
+            image_cache: Default::default(),
         }
+    }
+
+    pub fn with_image_cache(
+        mut self,
+        cache: std::sync::Arc<crate::image_digest_cache::ImageDigestCache>,
+    ) -> Self {
+        self.image_cache = cache;
+        self
     }
 
     #[must_use]
@@ -354,6 +364,23 @@ fn observed_container_state(
 }
 
 impl DeploymentRuntimePort for DeploymentRuntimeRouter {
+    fn cached_image_digest<'a>(
+        &'a self,
+        _platform: Uuid,
+        registry: Uuid,
+        reference: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<String>, DeploymentError>> {
+        Box::pin(async move {
+            if !self.image_cache.wait_ready(cancel).await {
+                return Err(DeploymentError::Cancelled);
+            }
+            Ok(self
+                .image_cache
+                .get(registry, reference)
+                .map(|entry| entry.digest))
+        })
+    }
     fn remote_image_digest<'a>(
         &'a self,
         platform: Uuid,

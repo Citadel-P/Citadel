@@ -33,6 +33,19 @@ pub struct ServiceUpdateCheck {
 }
 
 pub trait ServiceImageDigestPort: Send + Sync {
+    fn cached_digest<'a>(
+        &'a self,
+        platform: Uuid,
+        registry: Uuid,
+        reference: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<String>, SwarmServiceError>> {
+        Box::pin(async move {
+            self.digest(platform, registry, reference, cancellation)
+                .await
+                .map(Some)
+        })
+    }
     fn digest<'a>(
         &'a self,
         platform: Uuid,
@@ -115,6 +128,15 @@ impl ManagedSwarmServiceService {
         snapshot: ManagedSwarmServiceView,
         cancellation: &CancellationToken,
     ) -> Result<ServiceUpdateOutcome, SwarmServiceError> {
+        self.check_automated_updates_mode(snapshot, false, cancellation)
+            .await
+    }
+    pub(crate) async fn check_automated_updates_mode(
+        &self,
+        snapshot: ManagedSwarmServiceView,
+        scheduled: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<ServiceUpdateOutcome, SwarmServiceError> {
         use crate::{ServiceOperationKind, ServiceOperationRequest, UpdateBehavior};
         use citadel_domain::LicenseCapability;
         if snapshot.spec.update_behavior == UpdateBehavior::Disabled {
@@ -122,22 +144,43 @@ impl ManagedSwarmServiceService {
                 "Service image updates are disabled.",
             ));
         }
-        let Some(entitlements) = &self.entitlements else {
-            return Ok(ServiceUpdateOutcome::Noop(
-                "Automated operations require an active license entitlement.",
-            ));
-        };
-        if !entitlements
-            .enabled(LicenseCapability::AutomatedOperations)
-            .await?
-        {
-            return Ok(ServiceUpdateOutcome::Noop(
-                "Automated operations require an active license entitlement.",
-            ));
+        // Webhook-triggered checks require automation entitlement before registry
+        // I/O. Scheduled Notify checks consume the shared cache in Community too.
+        if !scheduled {
+            let Some(entitlements) = &self.entitlements else {
+                return Ok(ServiceUpdateOutcome::Noop(
+                    "Automated operations require an active license entitlement.",
+                ));
+            };
+            if !entitlements
+                .enabled(LicenseCapability::AutomatedOperations)
+                .await?
+            {
+                return Ok(ServiceUpdateOutcome::Noop(
+                    "Automated operations require an active license entitlement.",
+                ));
+            }
         }
         let actor = ActorId::new(Uuid::from_u128(1));
+        let cached = if scheduled {
+            let (registry, reference) = checkable_image(&snapshot)?;
+            let Some(digests) = &self.image_digests else {
+                return Ok(ServiceUpdateOutcome::Noop("Image scanner is unavailable."));
+            };
+            let Some(digest) = digests
+                .cached_digest(snapshot.platform_id, registry, reference, cancellation)
+                .await?
+            else {
+                return Ok(ServiceUpdateOutcome::Noop(
+                    "No recent registry observation is available.",
+                ));
+            };
+            Some(digest)
+        } else {
+            None
+        };
         let checked = self
-            .check_updates_snapshot(actor, true, snapshot.clone(), cancellation)
+            .check_updates_snapshot(actor, true, snapshot.clone(), cached, cancellation)
             .await?;
         if checked.spec != snapshot.spec
             || checked.platform_id != snapshot.platform_id
@@ -152,6 +195,19 @@ impl ManagedSwarmServiceService {
         }
         if checked.spec.update_behavior == UpdateBehavior::Notify {
             return Ok(ServiceUpdateOutcome::UpdateAvailable);
+        }
+        let Some(entitlements) = &self.entitlements else {
+            return Ok(ServiceUpdateOutcome::Noop(
+                "Automated operations require an active license entitlement.",
+            ));
+        };
+        if !entitlements
+            .enabled(LicenseCapability::AutomatedOperations)
+            .await?
+        {
+            return Ok(ServiceUpdateOutcome::Noop(
+                "Automated operations require an active license entitlement.",
+            ));
         }
         // Re-evaluate before mutation; a license can change while registry I/O runs.
         if !entitlements
@@ -198,7 +254,7 @@ impl ManagedSwarmServiceService {
         cancellation: &CancellationToken,
     ) -> Result<ManagedSwarmServiceView, SwarmServiceError> {
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
-        self.check_updates_snapshot(actor, administrator, snapshot, cancellation)
+        self.check_updates_snapshot(actor, administrator, snapshot, None, cancellation)
             .await
     }
 
@@ -207,6 +263,7 @@ impl ManagedSwarmServiceService {
         actor: ActorId,
         administrator: bool,
         snapshot: ManagedSwarmServiceView,
+        cached_digest: Option<String>,
         cancellation: &CancellationToken,
     ) -> Result<ManagedSwarmServiceView, SwarmServiceError> {
         let id = snapshot.id;
@@ -230,12 +287,16 @@ impl ManagedSwarmServiceService {
                 .begin_update_check(actor, administrator, &snapshot)
                 .await?;
             service.notifier.changed(id, "update");
-            let scan = tokio::select! {
-                biased;
-                () = cancel.cancelled() => Err(SwarmServiceError::Cancelled),
-                () = service.shutdown.cancelled() => Err(SwarmServiceError::Cancelled),
-                result = tokio::time::timeout(Duration::from_secs(30), digests.digest(snapshot.platform_id, registry, &reference, &cancel)) =>
-                    result.unwrap_or_else(|_| Err(SwarmServiceError::Runtime("Registry update check timed out.".into()))),
+            let scan = if let Some(digest) = cached_digest {
+                Ok(digest)
+            } else {
+                tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => Err(SwarmServiceError::Cancelled),
+                    () = service.shutdown.cancelled() => Err(SwarmServiceError::Cancelled),
+                    result = tokio::time::timeout(Duration::from_secs(30), digests.digest(snapshot.platform_id, registry, &reference, &cancel)) =>
+                        result.unwrap_or_else(|_| Err(SwarmServiceError::Runtime("Registry update check timed out.".into()))),
+                }
             };
             let update = match &scan {
                 Ok(remote) => Some(evaluate_digest(snapshot.applied_image_digest.as_deref().unwrap(), remote)),

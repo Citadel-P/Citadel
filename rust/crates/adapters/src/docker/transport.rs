@@ -150,6 +150,7 @@ pub struct DockerClient {
     request_timeout: Duration,
     version: std::sync::Arc<RwLock<Option<ApiVersion>>>,
     negotiation: std::sync::Arc<Mutex<()>>,
+    pub(super) storage_usage: std::sync::Arc<Mutex<super::storage_usage::UsageCache>>,
 }
 
 impl DockerClient {
@@ -170,6 +171,7 @@ impl DockerClient {
             request_timeout,
             version: std::sync::Arc::new(RwLock::new(None)),
             negotiation: std::sync::Arc::new(Mutex::new(())),
+            storage_usage: Default::default(),
         })
     }
 
@@ -946,7 +948,7 @@ impl DockerClient {
             .await
     }
 
-    async fn get_json<T: DeserializeOwned>(
+    pub(super) async fn get_json<T: DeserializeOwned>(
         &self,
         endpoint: &Endpoint,
         path: &str,

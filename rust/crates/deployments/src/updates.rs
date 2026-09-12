@@ -68,7 +68,7 @@ impl DeploymentService {
         cancellation: &CancellationToken,
     ) -> Result<DeploymentView, DeploymentError> {
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
-        self.check_update_snapshot(actor, administrator, snapshot, cancellation)
+        self.check_update_snapshot(actor, administrator, snapshot, None, cancellation)
             .await
     }
 
@@ -77,6 +77,7 @@ impl DeploymentService {
         actor: ActorId,
         administrator: bool,
         snapshot: DeploymentView,
+        cached_digest: Option<String>,
         cancellation: &CancellationToken,
     ) -> Result<DeploymentView, DeploymentError> {
         let (registry, reference, current) = checkable_deployment_image(&snapshot)?;
@@ -93,13 +94,13 @@ impl DeploymentService {
             let _permit = permit;
             let claim = service.store.begin_update_check(actor, administrator, &snapshot).await?;
             service.notifier.changed(snapshot.id, "updated");
-            let scan = tokio::select! {
+            let scan = if let Some(digest) = cached_digest { Ok(digest) } else { tokio::select! {
                 biased;
                 () = cancel.cancelled() => Err(DeploymentError::Cancelled),
                 () = service.shutdown.cancelled() => Err(DeploymentError::Cancelled),
                 result = tokio::time::timeout(Duration::from_secs(30), service.runtime.remote_image_digest(snapshot.platform_id, registry, &reference, &cancel)) =>
                     result.unwrap_or_else(|_| Err(DeploymentError::Runtime("Registry update check timed out.".into()))),
-            };
+            } };
             let update = match &scan {
                 Ok(remote) => Some(evaluate_deployment_digest(&current, remote)),
                 Err(DeploymentError::Cancelled) => None,
@@ -151,8 +152,22 @@ impl DeploymentService {
                 }
                 let result = async {
                     let before = self.store.get_authorized(actor, true, id).await?;
+                    let (registry, reference, _) = checkable_deployment_image(&before)?;
+                    let Some(digest) = self
+                        .runtime
+                        .cached_image_digest(before.platform_id, registry, reference, cancellation)
+                        .await?
+                    else {
+                        return Ok(());
+                    };
                     let checked = self
-                        .check_update_snapshot(actor, true, before.clone(), cancellation)
+                        .check_update_snapshot(
+                            actor,
+                            true,
+                            before.clone(),
+                            Some(digest),
+                            cancellation,
+                        )
                         .await?;
                     if checked.spec != before.spec || checked.platform_id != before.platform_id {
                         return Ok(());

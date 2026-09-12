@@ -727,6 +727,7 @@ pub struct ServiceOperationClaim {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDeletionClaim {
+    pub operation_id: Uuid,
     pub id: Uuid,
     pub platform_id: Uuid,
     pub docker_service_id: Option<String>,

@@ -20,15 +20,21 @@ async fn run_worker(
     cancellation: CancellationToken,
     service: Arc<AutomationService>,
 ) -> Result<(), AutomationError> {
+    let minimum = service.options().poll_interval;
+    let mut delay = minimum;
     while !cancellation.is_cancelled() {
         match service.process_one(&cancellation).await {
-            Ok(true) => continue,
+            Ok(true) => {
+                delay = citadel_application::worker_poll_delay(delay, minimum, true);
+                continue;
+            }
             Ok(false) => {}
             Err(error) => tracing::error!(%error, "automation worker iteration failed"),
         }
+        delay = citadel_application::worker_poll_delay(delay, minimum, false);
         tokio::select! {
             () = cancellation.cancelled() => break,
-            () = tokio::time::sleep(service.options().poll_interval) => {}
+            () = tokio::time::sleep(delay) => {}
         }
     }
     Ok(())

@@ -226,20 +226,13 @@ impl ApplicationGroupReader {
                     .get_authorized(p.actor_id, p.is_administrator(), id)
                     .await
                     .map_err(failure)?;
-                let containers = self
-                    .platforms
-                    .list_containers(deployment.platform_id)
-                    .await
-                    .map_err(failure)?;
-                containers
-                    .into_iter()
-                    .find(|c| {
-                        c.deployment_id == Some(id) && c.state.eq_ignore_ascii_case("running")
-                    })
-                    .and_then(|c| {
-                        let reference = c.container_id.get(..12)?;
-                        Group::parse(&format!("container-log:{}", reference.to_ascii_lowercase()))
-                    })
+                // Match the container selected by the Deployment read model, including
+                // stopped containers: Docker retains their historical logs.
+                let reference = deployment.docker_container_id.as_deref().ok_or_else(|| {
+                    failure("The Deployment has no container available for logs.")
+                })?;
+                let reference = reference.get(..12).unwrap_or(reference);
+                Group::parse(&format!("container-log:{}", reference.to_ascii_lowercase()))
             }
             _ => return Ok(None),
         };

@@ -138,7 +138,12 @@ async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initial
         assert_eq!(status, StatusCode::OK, "{body}");
         body
     };
-    assert_eq!(get().await["state"], "Complete");
+    let (first, concurrent) = tokio::join!(get(), get());
+    assert_eq!(first["state"], "Complete");
+    assert_eq!(
+        concurrent["state"], "Complete",
+        "concurrent initialization shares one bounded Docker enumeration"
+    );
     tokio::time::timeout(StdDuration::from_secs(5), server)
         .await
         .unwrap()
