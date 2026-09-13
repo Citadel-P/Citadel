@@ -461,3 +461,37 @@ component tags, release jobs, installation, and rollback. The Contracts
 submodule remains authoritative only for active .NET compatibility; the final
 Rust workspace will own the language-neutral contract sources and verify every
 affected binary on contract changes.
+
+## Container build and Compose
+
+Build the Rust server and frontend image from the repository root:
+
+```bash
+docker build -f rust/Dockerfile -t citadel-rust:local .
+```
+
+For a persistent local Compose installation:
+
+```bash
+cd rust
+cp -n .env.example .env
+# Fill the blank credentials and DOCKER_GID in .env (instructions are in the file).
+docker compose config --quiet
+docker compose up -d --build
+```
+
+The ignored `.env` holds database credentials, the JWT key, the persistent secret
+encryption key, Docker socket group, image/version, and transport settings.
+Keep the encryption key with your backups. The defaults bind HTTP to
+`127.0.0.1:18000` and Edge gRPC to `127.0.0.1:18001`, leaving the WSL development
+ports available. The image serves the frontend and API from the same HTTP port.
+
+The server runs as UID 65532 with the Docker socket's supplementary group.
+`citadel_data` persists `/app/data`; `postgres_data` persists PostgreSQL data.
+These belong to the separate `citadel-rust` Compose project. Existing WSL and
+measurement databases are not automatically reused or migrated. Use
+`docker compose down` to stop it while retaining volumes.
+
+`compose.measurement.yml` is exclusively the legacy, isolated Phase 0 test
+fixture, including its 100 MiB memory cap and disposable database. Measurement
+scripts use that file, not the persistent Compose installation.

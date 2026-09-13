@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   rust-openapi:
-    name: Rust OpenAPI freshness
+    name: Rust validation
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -40,8 +40,17 @@ jobs:
           toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
           rustup toolchain install "$toolchain" --profile minimal
 
+      - name: Verify generated Docker client
+        run: cargo run --locked -p xtask -- docker --check
+
+      - name: Verify database schema
+        run: cargo run --locked -p xtask -- database verify
+
       - name: Verify committed OpenAPI artifacts
         run: cargo run --locked -p xtask -- openapi --check
+
+      - name: Run Rust workspace tests
+        run: cargo test --locked --workspace
 
   backend-tests:
     name: Backend unit and integration tests

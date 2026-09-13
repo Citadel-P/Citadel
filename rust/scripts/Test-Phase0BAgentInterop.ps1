@@ -19,7 +19,7 @@ $serverContainer = "citadel-rust-phase0b-server-$runSuffix"
 New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
 
 if (-not $SkipBuild) {
-    & docker build --file (Join-Path $repoRoot 'rust\Dockerfile.phase0a') --tag $CoreImage $repoRoot
+    & docker build --file (Join-Path $repoRoot 'rust\Dockerfile') --tag $CoreImage $repoRoot
     if ($LASTEXITCODE -ne 0) { throw 'Phase 0B Rust image build failed.' }
     & docker build --file (Join-Path $agentRoot 'Dockerfile') --tag $AgentImage $agentRoot
     if ($LASTEXITCODE -ne 0) { throw 'Active .NET Agent image build failed.' }

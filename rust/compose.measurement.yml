@@ -1,3 +1,4 @@
+# Isolated legacy measurement fixture; never use for persistent deployments.
 name: citadel-phase0a
 
 services:
@@ -23,7 +24,7 @@ services:
     image: ${CITADEL_PHASE0_IMAGE:-citadel-phase0a:local}
     build:
       context: ..
-      dockerfile: rust/Dockerfile.phase0a
+      dockerfile: rust/Dockerfile
     container_name: citadel-rust-phase0a
     depends_on:
       phase0-postgres:

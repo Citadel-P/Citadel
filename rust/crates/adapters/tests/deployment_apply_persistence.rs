@@ -318,6 +318,19 @@ async fn assert_activity(
     .await
     .unwrap();
     let info: Value = serde_json::from_str(&info).unwrap();
+    let detail = PostgresDeploymentStore::new(pool.clone())
+        .get_authorized(ActorId::new(SYSTEM_ACTOR_ID), true, deployment_id)
+        .await
+        .unwrap();
+    let latest = detail.latest_activity_view.unwrap();
+    assert_eq!(latest["status"], expected_status);
+    assert_eq!(
+        latest
+            .pointer("/info/result/message")
+            .and_then(Value::as_str),
+        expected_message
+    );
+    assert!(latest["info"].get("Result").is_none());
     assert_eq!(status, expected_status);
     assert_eq!(
         info.pointer("/Result/Message").and_then(Value::as_str),

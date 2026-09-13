@@ -8,7 +8,7 @@ $artifactDirectory = Join-Path $repoRoot 'rust\artifacts'
 New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
 
 $watch = [System.Diagnostics.Stopwatch]::StartNew()
-& docker build --file (Join-Path $repoRoot 'rust\Dockerfile.phase0a') --tag $Image $repoRoot
+& docker build --file (Join-Path $repoRoot 'rust\Dockerfile') --tag $Image $repoRoot
 $watch.Stop()
 if ($LASTEXITCODE -ne 0) { throw 'Phase 0A release image build failed.' }
 

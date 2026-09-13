@@ -1124,7 +1124,9 @@ fn map_git_repository(row: PgRow) -> Result<GitRepositoryView, ResourceMetadataE
             .try_get::<Option<String>, _>("controlstate")
             .map_err(storage)?
             .unwrap_or_else(|| "Idle".to_owned()),
-        latest_activity_view: row.try_get("latest_activity").map_err(storage)?,
+        latest_activity_view: citadel_application::public_latest_activity(
+            row.try_get("latest_activity").map_err(storage)?,
+        ),
         tags: serde_json::from_value(row.try_get("tags").map_err(storage)?).map_err(storage)?,
     })
 }
