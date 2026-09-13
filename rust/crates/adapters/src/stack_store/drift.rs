@@ -49,27 +49,3 @@ pub(super) async fn record(
     tx.commit().await.map_err(storage)?;
     Ok(true)
 }
-
-// Activity persistence follows .NET PascalCase; Stack detail embeds public JSON.
-pub(super) fn public_activity(mut activity: Option<Value>) -> Option<Value> {
-    if let Some(info) = activity
-        .as_mut()
-        .and_then(|value| value.get_mut("info"))
-        .and_then(Value::as_object_mut)
-        && matches!(
-            info.get("$type").and_then(Value::as_str),
-            Some("StackDriftDetected" | "StackDriftResolved")
-        )
-    {
-        for (stored, public) in [
-            ("Reason", "reason"),
-            ("Fingerprint", "fingerprint"),
-            ("PreviousFingerprint", "previousFingerprint"),
-        ] {
-            if let Some(value) = info.remove(stored) {
-                info.insert(public.into(), value);
-            }
-        }
-    }
-    activity
-}

@@ -1470,7 +1470,9 @@ fn map_deployment(row: PgRow) -> Result<DeploymentView, DeploymentError> {
         docker_container_id: row.try_get("dockercontainerid").map_err(storage)?,
         docker_image_id: row.try_get("dockerimageid").map_err(storage)?,
         tags,
-        latest_activity_view: row.try_get("latest_activity").map_err(storage)?,
+        latest_activity_view: citadel_application::public_latest_activity(
+            row.try_get("latest_activity").map_err(storage)?,
+        ),
         capabilities: Some(capabilities(permission)),
     })
 }

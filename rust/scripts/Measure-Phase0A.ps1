@@ -83,7 +83,7 @@ if ($SampleSeconds -lt 1) { throw 'SampleSeconds must be at least one.' }
 if ($WorkloadSeconds -lt $SampleSeconds) { throw 'WorkloadSeconds must not be shorter than SampleSeconds.' }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$compose = Join-Path $repoRoot 'rust\compose.phase0a.yml'
+$compose = Join-Path $repoRoot 'rust\compose.measurement.yml'
 $artifactDirectory = Join-Path $repoRoot 'rust\artifacts'
 $samplesPath = Join-Path $artifactDirectory 'soak.csv'
 $summaryPath = Join-Path $artifactDirectory 'soak-summary.json'
@@ -101,7 +101,7 @@ $nextWorkload = $started
 $samples = [System.Collections.Generic.List[object]]::new()
 
 try {
-    & docker compose --file $compose up --detach --wait --no-build
+    & docker compose --project-name citadel-phase0a --file $compose up --detach --wait --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Phase 0A environment failed to start.' }
 
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -205,7 +205,7 @@ try {
 }
 finally {
     if (-not $KeepRunning) {
-        & docker compose --file $compose down
+        & docker compose --project-name citadel-phase0a --file $compose down
     }
     Remove-Item Env:CITADEL_PHASE0_IMAGE -ErrorAction SilentlyContinue
 }

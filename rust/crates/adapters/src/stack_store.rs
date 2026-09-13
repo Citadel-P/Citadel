@@ -1345,7 +1345,9 @@ fn map_stack(row: PgRow) -> Result<StackView, StackError> {
         platform_name: Some(row.try_get("platform_name").map_err(storage)?),
         tags: serde_json::from_value::<Vec<TagSummary>>(row.try_get("tags").map_err(storage)?)
             .map_err(|error| StackError::Storage(error.to_string()))?,
-        latest_activity_view: drift::public_activity(row.try_get("latest_activity").map_err(storage)?),
+        latest_activity_view: citadel_application::public_latest_activity(
+            row.try_get("latest_activity").map_err(storage)?,
+        ),
         capabilities: Some(citadel_stacks::StackCapabilities {
             can_read: level >= READ,
             can_write: level >= WRITE,

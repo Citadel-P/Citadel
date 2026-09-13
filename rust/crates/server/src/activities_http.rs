@@ -11,7 +11,7 @@ use citadel_application::{ActivityFilter, ActivityRecord, ActivityService, Paged
 use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
 use citadel_identity::{ActorPrincipal, IdentityError};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::identity_http::{identity_error_response, no_store};
@@ -186,40 +186,16 @@ pub(crate) fn map_activity(record: ActivityRecord) -> Result<ActivityView, Ident
         event_type: record.event_type,
         status: record.status,
         created_at: record.created_at,
-        info: camel_case_json_keys(info),
+        info: citadel_application::public_activity_info(info),
         actor_id: record.actor_id,
         actor_name: record.actor_name,
         actor_type: record.actor_type,
     })
 }
 
-fn camel_case_json_keys(value: Value) -> Value {
-    match value {
-        Value::Object(object) => Value::Object(
-            object
-                .into_iter()
-                .map(|(key, value)| (camel_case_key(key), camel_case_json_keys(value)))
-                .collect::<Map<_, _>>(),
-        ),
-        Value::Array(items) => Value::Array(items.into_iter().map(camel_case_json_keys).collect()),
-        value => value,
-    }
-}
-
-fn camel_case_key(mut key: String) -> String {
-    if key.starts_with('$') {
-        return key;
-    }
-    let Some(first) = key.get_mut(0..1) else {
-        return key;
-    };
-    first.make_ascii_lowercase();
-    key
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use citadel_application::public_activity_info;
     use serde_json::json;
 
     #[test]
@@ -234,7 +210,7 @@ mod tests {
         });
 
         assert_eq!(
-            camel_case_json_keys(value),
+            public_activity_info(value),
             json!({
                 "$type": "UserProfileUpdated",
                 "changes": [{

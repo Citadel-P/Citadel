@@ -3,11 +3,11 @@ $ErrorActionPreference = 'Stop'
 $buildCacheVolume = New-CitadelBuildCacheName
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$compose = Join-Path $repoRoot 'rust\compose.phase0a.yml'
+$compose = Join-Path $repoRoot 'rust\compose.measurement.yml'
 $mount = "type=bind,source=$repoRoot,target=/repo"
 
 try {
-    & docker compose --file $compose up --detach --wait phase0-postgres
+    & docker compose --project-name citadel-phase0a --file $compose up --detach --wait phase0-postgres
     if ($LASTEXITCODE -ne 0) { throw 'Phase 0A PostgreSQL did not start.' }
 
     & docker run --rm `
@@ -23,6 +23,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Actor-authorized PostgreSQL fixture failed.' }
 }
 finally {
-    & docker compose --file $compose down --volumes
+    & docker compose --project-name citadel-phase0a --file $compose down --volumes
     Remove-CitadelBuildCache -Name $buildCacheVolume
 }
