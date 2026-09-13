@@ -1,4 +1,5 @@
 use super::*;
+use crate::realtime::topic::Topic;
 use citadel_platforms::{ContainerView, logs::ContainerLogPort};
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -11,8 +12,8 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
     ) -> Result<Vec<ContainerView>, RealtimeReadError> {
-        if g.kind == "stack-log" {
-            let id = g.id.ok_or(RealtimeReadError::Authorization)?;
+        if matches!(g.topic(), Topic::StackLog(..)) {
+            let id = g.id().ok_or(RealtimeReadError::Authorization)?;
             self.permission(
                 p,
                 ResourceType::Stack,
@@ -47,7 +48,7 @@ impl ApplicationGroupReader {
         }
         let container = self
             .platforms
-            .get_container_by_reference(g.reference.as_deref().unwrap_or_default())
+            .get_container_by_reference(g.reference().unwrap_or_default())
             .await
             .map_err(failure)?
             .ok_or(RealtimeReadError::Authorization)?;
@@ -73,19 +74,19 @@ impl ApplicationGroupReader {
         g: &Group,
         cancel: &CancellationToken,
     ) -> Result<Option<GroupStream>, RealtimeReadError> {
-        if !g.kind.ends_with("-log") {
+        if !matches!(g.topic(), Topic::ContainerLog(..) | Topic::StackLog(..)) {
             return Ok(None);
         }
         // Subscribe before reading the projection so changes during initialization
         // are not lost. Only new/replaced containers open a new daemon stream.
         let mut changes = self.docker.realtime.as_ref().map(|hub| hub.subscribe());
         let targets = self.log_targets(p, g).await?;
-        let platform_id = if g.kind == "stack-log" {
+        let platform_id = if matches!(g.topic(), Topic::StackLog(..)) {
             self.stacks
                 .get_authorized(
                     p.actor_id,
                     p.is_administrator(),
-                    g.id.ok_or(RealtimeReadError::Authorization)?,
+                    g.id().ok_or(RealtimeReadError::Authorization)?,
                 )
                 .await
                 .map_err(failure)?
@@ -98,7 +99,8 @@ impl ApplicationGroupReader {
         for target in &targets {
             streams.insert(
                 target.id,
-                self.open_log(target, g.kind == "stack-log", cancel).await?,
+                self.open_log(target, matches!(g.topic(), Topic::StackLog(..)), cancel)
+                    .await?,
             );
             identities.insert(target.id, log_identity(target));
         }
@@ -142,7 +144,7 @@ impl ApplicationGroupReader {
                             if identities.get(&target.id)!=Some(&identity) || (!streams.contains_key(&target.id) && target.state.eq_ignore_ascii_case("running")) {
                                 // Release the previous command/slot before opening its replacement.
                                 streams.remove(&target.id);
-                                streams.insert(target.id,reader.open_log(&target,group.kind=="stack-log",&cancel).await?);
+                                streams.insert(target.id,reader.open_log(&target,matches!(group.topic(), Topic::StackLog(..)),&cancel).await?);
                                 identities.insert(target.id,identity);
                             }
                         }

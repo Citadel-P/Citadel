@@ -416,6 +416,7 @@ fn snapshot(platform_id: Uuid, include_task: bool) -> RuntimeInventorySnapshot {
             ..RuntimeVolumeSummary::default()
         }],
         swarm: Some(RuntimeSwarmInventory {
+            running_task_count: usize::from(include_task),
             nodes: vec![RuntimeSwarmNode {
                 id: "node-1".into(),
                 version_index: 1,

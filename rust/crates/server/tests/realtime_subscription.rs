@@ -721,3 +721,179 @@ impl RealtimeReadPort for FakeReader {
         })
     }
 }
+
+#[tokio::test]
+async fn split_writer_answers_idle_ping_and_cleans_up_after_peer_close() {
+    let platform_id = Uuid::now_v7();
+    let shutdown = CancellationToken::new();
+    let metrics = Arc::new(Metrics::default());
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(FakeReader {
+            platform: platform(platform_id),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        metrics.clone(),
+        shutdown.clone(),
+    );
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    subscribe(&mut socket, platform_id, 0).await;
+    receive_json(&mut socket).await;
+    socket
+        .send(Message::Ping(vec![1, 2, 3].into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(1), socket.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap(),
+        Message::Pong(vec![1, 2, 3].into())
+    );
+    socket.close(None).await.unwrap();
+    // Receiving the close reply also ensures no duplicate Pong was queued.
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), socket.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(_))) | None
+    ));
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while metrics.realtime_active_connections() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let revision = hub.current_revision();
+    assert_eq!(
+        hub.publish_resource_change("Platform", platform_id, "updated"),
+        revision
+    );
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn shutdown_cancels_a_pending_initial_authorization_and_joins_writer() {
+    struct PendingReader(Arc<tokio::sync::Notify>);
+    impl RealtimeReadPort for PendingReader {
+        fn authenticate<'a>(
+            &'a self,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+            Box::pin(async move {
+                self.0.notify_one();
+                std::future::pending().await
+            })
+        }
+        fn authorize_platform<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            _: Uuid,
+        ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+            Box::pin(async { unreachable!() })
+        }
+        fn list_containers(
+            &self,
+            _: Uuid,
+        ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+            Box::pin(async { unreachable!() })
+        }
+    }
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let shutdown = CancellationToken::new();
+    let metrics = Arc::new(Metrics::default());
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(PendingReader(entered.clone())),
+        metrics.clone(),
+        shutdown.clone(),
+    );
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    subscribe(&mut socket, Uuid::now_v7(), 0).await;
+    tokio::time::timeout(Duration::from_secs(1), entered.notified())
+        .await
+        .unwrap();
+    shutdown.cancel();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), socket.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(_))) | None
+    ));
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while metrics.realtime_active_connections() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn broadcasts_reach_each_subscriber_and_survive_one_peer_disconnecting() {
+    let shutdown = CancellationToken::new();
+    let metrics = Arc::new(Metrics::default());
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(FakeReader {
+            platform: platform(Uuid::now_v7()),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        metrics.clone(),
+        shutdown.clone(),
+    );
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let mut clients = Vec::new();
+    for _ in 0..2 {
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        socket
+            .send(Message::Text(
+                json!({"protocolVersion":1,"kind":"subscribe","accessToken":TOKEN})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+        clients.push(socket);
+    }
+    hub.publish_resource_change("Deployment", Uuid::now_v7(), "updated");
+    let first = receive_json(&mut clients[0]).await;
+    let second = receive_json(&mut clients[1]).await;
+    assert_eq!(first["eventKind"], "updated");
+    assert_eq!(first["resourceRevision"], second["resourceRevision"]);
+    assert_ne!(first["connectionId"], second["connectionId"]);
+    clients[0].close(None).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while metrics.realtime_active_connections() != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    hub.publish_resource_change("Deployment", Uuid::now_v7(), "deleted");
+    let next = receive_json(&mut clients[1]).await;
+    assert_eq!(next["eventKind"], "deleted");
+    assert_eq!(next["connectionId"], second["connectionId"]);
+    assert_eq!(next["sequence"], 2);
+    clients[1].close(None).await.unwrap();
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}

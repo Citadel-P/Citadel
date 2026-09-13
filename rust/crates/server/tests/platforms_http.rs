@@ -790,6 +790,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             ..Default::default()
         }],
         swarm: Some(RuntimeSwarmInventory {
+            running_task_count: 1,
             nodes: vec![RuntimeSwarmNode {
                 id: "node-1".into(),
                 version_index: 1,

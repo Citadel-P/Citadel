@@ -322,13 +322,7 @@ async fn persist_platform(
         );
         object.insert(
             "runningTaskCount".into(),
-            serde_json::json!(
-                swarm
-                    .tasks
-                    .iter()
-                    .filter(|task| task.state.eq_ignore_ascii_case("running"))
-                    .count()
-            ),
+            serde_json::json!(swarm.running_task_count),
         );
     }
     sqlx::query(

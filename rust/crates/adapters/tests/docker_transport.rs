@@ -900,3 +900,127 @@ async fn read_terminal_request(socket: &mut tokio::net::UnixStream) -> (String, 
     socket.read_exact(&mut body).await.unwrap();
     (headers, body)
 }
+
+#[tokio::test]
+async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
+    use citadel_platforms::PlatformRuntimePort;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use tokio_util::sync::CancellationToken;
+
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let phase = Arc::new(AtomicUsize::new(0));
+    let server_phase = phase.clone();
+    let stop = CancellationToken::new();
+    let server_stop = stop.clone();
+    let server = tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = tokio::select! {
+                () = server_stop.cancelled() => break,
+                socket = listener.accept() => socket.unwrap(),
+            };
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 2048];
+            while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 8192);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            let route = request.split_whitespace().nth(1).unwrap();
+            let mut status = "200 OK";
+            let body = match route {
+                "/version" => r#"{"Version":"fixture","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#.to_owned(),
+                "/v1.49/info" => r#"{"ID":"desktop","Images":33,"Containers":57,"ContainersRunning":47,"ContainersPaused":0,"ContainersStopped":10}"#.to_owned(),
+                "/v1.49/containers/json?all=true" => match server_phase.load(Ordering::Acquire) {
+                    0 => serde_json::to_string(&[
+                        "running", "running", "running", "running", "running", "running", "running", "running",
+                        "exited", "exited", "exited", "exited", "exited", "exited", "exited", "exited", "exited",
+                        "paused", "created", "restarting",
+                    ].iter().map(|state| serde_json::json!({"State":state})).collect::<Vec<_>>()).unwrap(),
+                    2 => { status = "500 Internal Server Error"; r#"{"message":"inventory unavailable"}"#.to_owned() },
+                    _ => "[]".to_owned(),
+                },
+                "/v1.49/images/json?all=true" => match server_phase.load(Ordering::Acquire) {
+                    0 => serde_json::to_string(&(0..32).map(|id| serde_json::json!({
+                        "Id": format!("image-{id}"),
+                        "RepoTags": if id == 0 { vec!["app:latest", "app:stable"] } else { vec![] },
+                    })).collect::<Vec<_>>()).unwrap(),
+                    3 => { status = "500 Internal Server Error"; r#"{"message":"images unavailable"}"#.to_owned() },
+                    _ => "[]".to_owned(),
+                },
+                "/v1.49/networks" => if server_phase.load(Ordering::Acquire) == 0 { r#"[{"Id":"bridge"},{"Id":"app"}]"# } else { "[]" }.to_owned(),
+                "/v1.49/volumes" => if server_phase.load(Ordering::Acquire) == 0 { r#"{"Volumes":[{"Name":"data"},{"Name":"anonymous"},{"Name":"unused"}]}"# } else { r#"{"Volumes":[]}"# }.to_owned(),
+                "/v1.49/system/df?type=image&type=volume" => r#"{"LayersSize":0,"Volumes":[]}"#.to_owned(),
+                other => panic!("unexpected request {other}"),
+            };
+            socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let info = PlatformRuntimePort::get_info(&client, &stop).await.unwrap();
+    assert_eq!(
+        (
+            info.container_count,
+            info.containers_running,
+            info.containers_paused,
+            info.containers_stopped
+        ),
+        (20, 8, 1, 9)
+    );
+    let stats = client.platform_stats().await.unwrap();
+    assert_eq!((stats.network_count, stats.volume_count), (2, 3));
+    assert_eq!(
+        stats.image_count, 32,
+        "count image identities, including untagged images, not /info totals or tags"
+    );
+    assert_eq!(
+        (
+            stats.container_count,
+            stats.containers_running,
+            stats.containers_paused,
+            stats.containers_stopped
+        ),
+        (20, 8, 1, 9)
+    );
+    phase.store(1, Ordering::Release);
+    let mut stream = PlatformRuntimePort::stream_stats(&client, Duration::from_millis(10), &stop)
+        .await
+        .unwrap();
+    let stats = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (
+            stats.container_count,
+            stats.containers_running,
+            stats.containers_paused,
+            stats.containers_stopped
+        ),
+        (0, 0, 0, 0)
+    );
+    assert_eq!(
+        stats.image_count, 0,
+        "an empty image list must clear the previous count"
+    );
+    assert_eq!((stats.network_count, stats.volume_count), (0, 0));
+    drop(stream);
+    phase.store(2, Ordering::Release);
+    assert!(
+        client.platform_stats().await.is_err(),
+        "failed listing must not publish fabricated counts or fall back to /info"
+    );
+    phase.store(3, Ordering::Release);
+    assert!(
+        client.platform_stats().await.is_err(),
+        "failed image listing must not fall back to /info or publish zero"
+    );
+    stop.cancel();
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}

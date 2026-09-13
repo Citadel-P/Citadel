@@ -1,4 +1,5 @@
 use super::*;
+use crate::realtime::topic::Topic;
 use citadel_application::{ActivityFilter, ActivityService};
 use citadel_automation::AutomationStore;
 use citadel_backups::BackupStore;
@@ -100,37 +101,46 @@ impl ApplicationGroupReader {
         g: &Group,
         e: Option<&PublishedRuntimeEvent>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
-        if g.kind.ends_with("-exec") {
+        if matches!(
+            g.topic(),
+            Topic::ContainerExec { .. } | Topic::SwarmTaskExec { .. }
+        ) {
             self.terminal_target(p, g).await?;
             return Ok(GroupSnapshot::default());
         }
-        if g.kind.ends_with("-log") {
+        if matches!(g.topic(), Topic::ContainerLog(..) | Topic::StackLog(..)) {
             self.log_targets(p, g).await?;
             return Ok(GroupSnapshot::default());
         }
         use ResourceType::*;
-        let id = g.id;
+        let id = g.id();
         let actor = p.actor_id;
         let admin = p.is_administrator();
-        let kind = match g.kind.as_str() {
-            "platforms" | "containers" | "images" | "docker-daemon" => Platform,
-            "deployment" | "deployments" => Deployment,
-            "stack" | "stacks" | "stack-info" => Stack,
-            "swarm-service" | "swarm-services" => SwarmService,
-            "git-repo" | "git-repositories" => GitRepository,
-            "automation-action" | "automation-actions" => AutomationAction,
-            "backup-repository" | "backup-repositories" => BackupRepository,
-            "backup-policy"
-            | "backup-policies"
-            | "backup-runs"
-            | "backup-run"
-            | "backup-restore-runs"
-            | "backup-restore-run" => BackupPolicy,
-            "build-project" | "build-projects" | "build-runs" | "build-run" => Build,
-            "build-agent-pool" | "build-agent-pools" => BuildAgentPool,
-            "container-info" => Platform, // resolved through its actual owner below
-            "activity" => return self.activities(p, g).await,
-            "alert-events" => {
+        let kind = match g.topic() {
+            Topic::Platforms
+            | Topic::Containers(..)
+            | Topic::Images(..)
+            | Topic::DockerDaemon(..) => Platform,
+            Topic::Deployment(..) | Topic::Deployments => Deployment,
+            Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => Stack,
+            Topic::SwarmService(..) | Topic::SwarmServices(..) => SwarmService,
+            Topic::GitRepo(..) | Topic::GitRepositories => GitRepository,
+            Topic::AutomationAction(..) | Topic::AutomationActions => AutomationAction,
+            Topic::BackupRepository(..) | Topic::BackupRepositories => BackupRepository,
+            Topic::BackupPolicy(..)
+            | Topic::BackupPolicies
+            | Topic::BackupRuns(..)
+            | Topic::BackupRun(..)
+            | Topic::BackupRestoreRuns(..)
+            | Topic::BackupRestoreRun(..) => BackupPolicy,
+            Topic::BuildProject(..)
+            | Topic::BuildProjects
+            | Topic::BuildRuns(..)
+            | Topic::BuildRun(..) => Build,
+            Topic::BuildAgentPool(..) | Topic::BuildAgentPools => BuildAgentPool,
+            Topic::ContainerInfo(..) => Platform, // resolved through its actual owner below
+            Topic::Activity { .. } => return self.activities(p, g).await,
+            Topic::AlertEvents => {
                 let filter = citadel_alerts::AlertEventFilter {
                     page: 1,
                     page_size: 100,
@@ -171,16 +181,16 @@ impl ApplicationGroupReader {
             }
             _ => return Err(RealtimeReadError::Authorization),
         };
-        let permission_id = match g.kind.as_str() {
-            "swarm-services" => None,
-            "backup-run" => Some(
+        let permission_id = match g.topic() {
+            Topic::SwarmServices(..) => None,
+            Topic::BackupRun(..) => Some(
                 self.backups
                     .get_run(id.unwrap())
                     .await
                     .map_err(failure)?
                     .backup_policy_id,
             ),
-            "backup-restore-run" => {
+            Topic::BackupRestoreRun(..) => {
                 let restore = self
                     .backups
                     .get_restore(id.unwrap())
@@ -194,34 +204,36 @@ impl ApplicationGroupReader {
                         .backup_policy_id,
                 )
             }
-            "build-run" => Some(
+            Topic::BuildRun(..) => Some(
                 self.builds
                     .get_run(id.unwrap())
                     .await
                     .map_err(failure)?
                     .build_project_id,
             ),
-            "container-info" => return self.container_info(p, g, e).await,
+            Topic::ContainerInfo(..) => return self.container_info(p, g, e).await,
             _ => id,
         };
         self.permission(
             p,
             kind,
             permission_id,
-            g.kind
-                .starts_with("backup-restore")
-                .then_some(SpecificPermission::Restore),
+            matches!(
+                g.topic(),
+                Topic::BackupRestoreRun(..) | Topic::BackupRestoreRuns(..)
+            )
+            .then_some(SpecificPermission::Restore),
         )
         .await?;
-        if g.kind == "swarm-services" {
+        if matches!(g.topic(), Topic::SwarmServices(..)) {
             self.permission(p, Platform, id, None).await?;
         }
-        if g.kind == "docker-daemon"
+        if matches!(g.topic(), Topic::DockerDaemon(..))
             && e.is_some_and(|event| event.payload["dockerResourceType"] == "nodeAgentCoverage")
         {
             return event("SwarmNodeAgentCoverageChanged", id.unwrap());
         }
-        if g.kind == "build-run"
+        if matches!(g.topic(), Topic::BuildRun(..))
             && let Some(event) =
                 e.filter(|event| event.event_kind == "buildLogs" && Some(event.resource_id) == id)
         {
@@ -233,7 +245,7 @@ impl ApplicationGroupReader {
                 )],
             });
         }
-        if g.kind == "swarm-service" {
+        if matches!(g.topic(), Topic::SwarmService(..)) {
             let service = self
                 .services
                 .get_authorized(actor, admin, id.unwrap())
@@ -243,8 +255,8 @@ impl ApplicationGroupReader {
                 .await?;
         }
         let sample = e.is_some_and(|e| e.payload["dockerResourceType"] == "containerStats");
-        match g.kind.as_str() {
-            "platforms" => {
+        match g.topic() {
+            Topic::Platforms => {
                 if sample {
                     let platform = self
                         .platforms
@@ -277,7 +289,7 @@ impl ApplicationGroupReader {
                     RowStyle::Platforms,
                 )
             }
-            "containers" => {
+            Topic::Containers(..) => {
                 let containers = self
                     .platforms
                     .list_containers(id.unwrap())
@@ -289,7 +301,7 @@ impl ApplicationGroupReader {
                 }
                 event("ContainersInfoUpdated", json!({"containers":containers}))
             }
-            "images" => {
+            Topic::Images(..) => {
                 if sample {
                     return Ok(GroupSnapshot::default());
                 }
@@ -298,7 +310,7 @@ impl ApplicationGroupReader {
                     json!({"images":self.platforms.list_images(id.unwrap()).await.map_err(failure)?}),
                 )
             }
-            "docker-daemon" => {
+            Topic::DockerDaemon(..) => {
                 if sample {
                     return Ok(GroupSnapshot::default());
                 }
@@ -338,7 +350,7 @@ impl ApplicationGroupReader {
                 })]));
                 Ok(result)
             }
-            "deployments" => rows(
+            Topic::Deployments => rows(
                 "DeploymentInfoUpdated",
                 self.deployments
                     .list_authorized(actor, admin, &Default::default())
@@ -346,7 +358,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "deployment" => rows(
+            Topic::Deployment(..) => rows(
                 "DeploymentInfoUpdated",
                 vec![
                     self.deployments
@@ -356,7 +368,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "stacks" => rows(
+            Topic::Stacks => rows(
                 "StackInfoUpdated",
                 self.stacks
                     .list_authorized(actor, admin, &Default::default())
@@ -364,7 +376,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "stack" => rows(
+            Topic::Stack(..) => rows(
                 "StackInfoUpdated",
                 vec![
                     self.stacks
@@ -374,7 +386,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "stack-info" => {
+            Topic::StackInfo(..) => {
                 let stack = self
                     .stacks
                     .get_authorized(actor, admin, id.unwrap())
@@ -397,7 +409,7 @@ impl ApplicationGroupReader {
                     .collect::<Vec<_>>();
                 event("ReceiveStackContainersInfo", containers)
             }
-            "swarm-service" => rows(
+            Topic::SwarmService(..) => rows(
                 "SwarmServiceInfoUpdated",
                 vec![
                     self.services
@@ -407,7 +419,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "swarm-services" => rows(
+            Topic::SwarmServices(..) => rows(
                 "SwarmServiceInfoUpdated",
                 self.services
                     .list_authorized(
@@ -422,7 +434,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "git-repositories" => rows(
+            Topic::GitRepositories => rows(
                 "GitRepositoryInfoUpdated",
                 self.resources
                     .list_git_repositories(actor, admin)
@@ -430,7 +442,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "git-repo" => rows(
+            Topic::GitRepo(..) => rows(
                 "GitRepositoryInfoUpdated",
                 vec![
                     self.resources
@@ -440,7 +452,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "automation-actions" => rows(
+            Topic::AutomationActions => rows(
                 "AutomationActionInfoUpdated",
                 crate::automation_http::authorized_actions(
                     self.automation.as_ref(),
@@ -451,7 +463,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "automation-action" => rows(
+            Topic::AutomationAction(..) => rows(
                 "AutomationActionInfoUpdated",
                 crate::automation_http::authorized_actions(
                     self.automation.as_ref(),
@@ -462,7 +474,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "backup-repositories" => rows(
+            Topic::BackupRepositories => rows(
                 "BackupRepositoryInfoUpdated",
                 self.backups
                     .list_repositories(actor, admin)
@@ -470,7 +482,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "backup-repository" => rows(
+            Topic::BackupRepository(..) => rows(
                 "BackupRepositoryInfoUpdated",
                 vec![
                     self.backups
@@ -480,7 +492,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "backup-policies" => rows(
+            Topic::BackupPolicies => rows(
                 "BackupPolicyInfoUpdated",
                 self.backups
                     .list_policies(actor, admin)
@@ -488,7 +500,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "backup-policy" => rows(
+            Topic::BackupPolicy(..) => rows(
                 "BackupPolicyInfoUpdated",
                 vec![
                     self.backups
@@ -498,7 +510,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "backup-runs" => rows(
+            Topic::BackupRuns(..) => rows(
                 "BackupRunInfoUpdated",
                 self.backups
                     .list_runs(actor, admin, id, 100)
@@ -506,12 +518,12 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "backup-run" => rows(
+            Topic::BackupRun(..) => rows(
                 "BackupRunInfoUpdated",
                 vec![self.backups.get_run(id.unwrap()).await.map_err(failure)?],
                 RowStyle::Update,
             ),
-            "backup-restore-runs" => rows(
+            Topic::BackupRestoreRuns(..) => rows(
                 "BackupRestoreRunInfoUpdated",
                 self.backups
                     .list_restores(actor, admin, None, id, 100)
@@ -519,7 +531,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "backup-restore-run" => rows(
+            Topic::BackupRestoreRun(..) => rows(
                 "BackupRestoreRunInfoUpdated",
                 vec![
                     self.backups
@@ -529,7 +541,7 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
-            "build-projects" => rows(
+            Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
                 crate::builds_http::authorized_projects(
                     self.builds.as_ref(),
@@ -540,7 +552,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "build-project" => rows(
+            Topic::BuildProject(..) => rows(
                 "BuildProjectInfoUpdated",
                 crate::builds_http::authorized_projects(
                     self.builds.as_ref(),
@@ -551,7 +563,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "build-agent-pools" => rows(
+            Topic::BuildAgentPools => rows(
                 "BuildAgentPoolInfoUpdated",
                 crate::builds_http::authorized_pools(
                     self.builds.as_ref(),
@@ -565,7 +577,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "build-agent-pool" => rows(
+            Topic::BuildAgentPool(..) => rows(
                 "BuildAgentPoolInfoUpdated",
                 crate::builds_http::authorized_pools(
                     self.builds.as_ref(),
@@ -576,7 +588,7 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "build-runs" => rows(
+            Topic::BuildRuns(..) => rows(
                 "BuildRunInfoUpdated",
                 self.builds
                     .list_runs(actor, admin, id, 100)
@@ -584,7 +596,7 @@ impl ApplicationGroupReader {
                     .map_err(failure)?,
                 RowStyle::Update,
             ),
-            "build-run" => rows(
+            Topic::BuildRun(..) => rows(
                 "BuildRunInfoUpdated",
                 vec![self.builds.get_run(id.unwrap()).await.map_err(failure)?],
                 RowStyle::Update,
@@ -599,7 +611,7 @@ impl ApplicationGroupReader {
         g: &Group,
         e: Option<&PublishedRuntimeEvent>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
-        let id = Uuid::parse_str(g.reference.as_deref().unwrap())
+        let id = Uuid::parse_str(g.reference().unwrap())
             .map_err(|_| RealtimeReadError::Authorization)?;
         let container = self
             .platforms
@@ -634,8 +646,9 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
-        let kind: citadel_domain::ActivityResourceType = serde_json::from_value(json!(g.reference))
-            .map_err(|_| RealtimeReadError::Authorization)?;
+        let kind: citadel_domain::ActivityResourceType =
+            serde_json::from_value(json!(g.reference()))
+                .map_err(|_| RealtimeReadError::Authorization)?;
         use citadel_domain::ActivityResourceType as A;
         if matches!(
             kind,
@@ -647,14 +660,14 @@ impl ApplicationGroupReader {
         } else {
             let resource = serde_json::from_value(serde_json::to_value(kind).map_err(failure)?)
                 .map_err(|_| RealtimeReadError::Authorization)?;
-            self.permission(p, resource, g.id, None).await?;
+            self.permission(p, resource, g.id(), None).await?;
         }
         let records = self
             .activities
             .list(
                 p,
                 ActivityFilter {
-                    resource_id: g.id,
+                    resource_id: g.id(),
                     resource_type: Some(kind),
                     page: Some(1),
                     page_size: Some(10),

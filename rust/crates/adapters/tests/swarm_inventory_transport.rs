@@ -10,7 +10,7 @@ use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     swarm::v1::*,
 };
-use citadel_platforms::{RuntimeErrorKind, swarm_mutations::*};
+use citadel_platforms::{PlatformInventoryPort, RuntimeErrorKind, swarm_mutations::*};
 use prost::Message;
 use std::{
     collections::BTreeMap,
@@ -111,7 +111,7 @@ async fn edge_inventory_uses_canonical_requests_and_exact_manager_session() {
         session: session.clone(),
     };
     let responder = tokio::spawn(async move {
-        for _ in 0..12 {
+        for _ in 0..13 {
             let envelope = tokio::time::timeout(Duration::from_secs(5), commands.recv())
                 .await
                 .unwrap()
@@ -121,6 +121,18 @@ async fn edge_inventory_uses_canonical_requests_and_exact_manager_session() {
             };
             let kind = EdgeCommandKind::try_from(command.kind).unwrap();
             let data = match kind {
+                EdgeCommandKind::SwarmTaskList => {
+                    let input = ListSwarmTasksRequest::decode(command.payload.as_slice()).unwrap();
+                    assert_eq!(
+                        input.max_items,
+                        i32::MAX,
+                        "Agent otherwise caps the response at 500"
+                    );
+                    ListSwarmTasksResponse {
+                        tasks: vec![SwarmTaskMessage::default(); 501],
+                    }
+                    .encode_to_vec()
+                }
                 EdgeCommandKind::SwarmNodeInspect => {
                     assert_eq!(
                         InspectSwarmNodeRequest::decode(command.payload.as_slice())
@@ -187,6 +199,14 @@ async fn edge_inventory_uses_canonical_requests_and_exact_manager_session() {
         }
     });
     exercise(&SwarmInventoryClient::Edge(&runtime)).await;
+    assert_eq!(
+        runtime
+            .list_swarm_tasks(&CancellationToken::new())
+            .await
+            .unwrap()
+            .len(),
+        501
+    );
     responder.await.unwrap();
     assert!(other.try_recv().is_err());
 }
@@ -333,9 +353,17 @@ impl SwarmService for Fixture {
     }
     async fn list_tasks(
         &self,
-        _: Request<ListSwarmTasksRequest>,
+        request: Request<ListSwarmTasksRequest>,
     ) -> Result<Response<ListSwarmTasksResponse>, Status> {
-        Err(Status::unimplemented("not exercised"))
+        let input = self.checked(request)?;
+        assert_eq!(
+            input.max_items,
+            i32::MAX,
+            "Agent otherwise caps the response at 500"
+        );
+        Ok(Response::new(ListSwarmTasksResponse {
+            tasks: vec![SwarmTaskMessage::default(); 501],
+        }))
     }
     async fn inspect_task(
         &self,
@@ -442,7 +470,15 @@ async fn direct_agent_inventory_preserves_wire_contract_and_does_not_retry_write
             assert_eq!(calls.load(Ordering::SeqCst), 1);
         } else {
             exercise(&client).await;
-            assert_eq!(calls.load(Ordering::SeqCst), 12);
+            assert_eq!(
+                agent
+                    .list_swarm_tasks(&CancellationToken::new())
+                    .await
+                    .unwrap()
+                    .len(),
+                501
+            );
+            assert_eq!(calls.load(Ordering::SeqCst), 13);
         }
         cancel.cancel();
         server.await.unwrap();

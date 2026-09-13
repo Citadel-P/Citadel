@@ -250,6 +250,8 @@ pub struct RuntimeSwarmSecret {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeSwarmInventory {
+    /// Current running tasks counted before bounding the retained task projections.
+    pub running_task_count: usize,
     pub nodes: Vec<RuntimeSwarmNode>,
     pub services: Vec<RuntimeSwarmService>,
     pub tasks: Vec<RuntimeSwarmTask>,
