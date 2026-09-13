@@ -1,5 +1,6 @@
 use super::*;
 use crate::platforms_http::{RuntimeRef, runtime_for_node};
+use crate::realtime::topic::Topic;
 use citadel_platforms::{ContainerView, StatisticsReadStore, SwarmTaskRuntimePort, terminal::*};
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -26,8 +27,8 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
     ) -> Result<ContainerView, RealtimeReadError> {
-        let container = if g.kind == "swarm-task-exec" {
-            let platform = g.id.ok_or(RealtimeReadError::Authorization)?;
+        let container = if matches!(g.topic(), Topic::SwarmTaskExec { .. }) {
+            let platform = g.id().ok_or(RealtimeReadError::Authorization)?;
             self.permission(
                 p,
                 ResourceType::Platform,
@@ -35,10 +36,7 @@ impl ApplicationGroupReader {
                 Some(SpecificPermission::Terminal),
             )
             .await?;
-            let task = g
-                .reference
-                .as_deref()
-                .ok_or(RealtimeReadError::Authorization)?;
+            let task = g.reference().ok_or(RealtimeReadError::Authorization)?;
             let projection = self
                 .platforms
                 .get_swarm_task(platform, task)
@@ -73,7 +71,7 @@ impl ApplicationGroupReader {
         } else {
             let c = self
                 .platforms
-                .get_container_by_reference(g.reference.as_deref().unwrap_or_default())
+                .get_container_by_reference(g.reference().unwrap_or_default())
                 .await
                 .map_err(failure)?
                 .ok_or(RealtimeReadError::Authorization)?;

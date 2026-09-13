@@ -1,3 +1,4 @@
+use crate::realtime::topic::Topic;
 mod reader;
 pub use reader::ApplicationGroupReader;
 
@@ -13,184 +14,122 @@ pub const MAX_GROUPS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Group {
+    // Preserve the client's spelling for idempotent joins/leaves, including
+    // accepted alternate UUID spellings. Never canonicalize a subscription key.
     pub name: String,
-    pub kind: String,
-    pub id: Option<Uuid>,
-    pub reference: Option<String>,
+    topic: crate::realtime::topic::Topic,
 }
-
 impl Group {
     pub fn parse(name: &str) -> Option<Self> {
-        if name.is_empty()
-            || name.len() > 256
-            || name.trim() != name
-            || name.chars().any(char::is_control)
-        {
-            return None;
-        }
-        let parts: Vec<_> = name.split(':').collect();
-        let mut group = Self {
+        Some(Self {
             name: name.into(),
-            kind: parts[0].into(),
-            id: None,
-            reference: None,
-        };
-        match parts.as_slice() {
-            [
-                "platforms"
-                | "deployments"
-                | "stacks"
-                | "git-repositories"
-                | "automation-actions"
-                | "backup-repositories"
-                | "backup-policies"
-                | "build-projects"
-                | "build-agent-pools"
-                | "alert-events",
-            ] => {}
-            [
-                "containers"
-                | "images"
-                | "docker-daemon"
-                | "deployment"
-                | "stack"
-                | "stack-info"
-                | "swarm-service"
-                | "swarm-services"
-                | "git-repo"
-                | "automation-action"
-                | "backup-policy"
-                | "backup-repository"
-                | "backup-runs"
-                | "backup-run"
-                | "backup-restore-runs"
-                | "backup-restore-run"
-                | "build-project"
-                | "build-agent-pool"
-                | "build-runs"
-                | "build-run",
-                id,
-            ] => {
-                group.id = Some(Uuid::parse_str(id).ok()?);
-            }
-            ["container-info", reference] if !reference.is_empty() && reference.len() <= 128 => {
-                group.reference = Some((*reference).into());
-            }
-            ["container-log", reference]
-                if Uuid::parse_str(reference).is_ok_and(|id| !id.is_nil())
-                    || (matches!(reference.len(), 12 | 64)
-                        && reference.bytes().all(|b| b.is_ascii_hexdigit())) =>
-            {
-                group.reference = Some((*reference).into());
-            }
-            ["stack-log", id] => {
-                group.id = Some(Uuid::parse_str(id).ok()?);
-            }
-            ["container-exec", reference, session] if valid_session(session) => {
-                Group::parse(&format!("container-log:{reference}"))?;
-                group.reference = Some((*reference).into());
-            }
-            ["swarm-task-exec", platform, task, session]
-                if valid_session(session) && !task.is_empty() && task.len() <= 128 =>
-            {
-                group.id = Some(Uuid::parse_str(platform).ok()?);
-                group.reference = Some((*task).into());
-            }
-            ["activity", kind, id] => {
-                group.id = Some(Uuid::parse_str(id).ok()?);
-                group.reference = Some((*kind).into());
-            }
-            _ => return None,
-        }
-        if group.id.is_some_and(|id| id.is_nil()) {
-            return None;
-        }
-        Some(group)
+            topic: crate::realtime::topic::Topic::parse(name)?,
+        })
     }
-
+    pub fn topic(&self) -> &crate::realtime::topic::Topic {
+        &self.topic
+    }
+    pub fn id(&self) -> Option<Uuid> {
+        self.topic.id()
+    }
+    pub fn reference(&self) -> Option<&str> {
+        self.topic.reference()
+    }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
-        if self.kind.ends_with("-log") || self.kind.ends_with("-exec") {
+        if matches!(self.topic(), Topic::ContainerLog(..) | Topic::StackLog(..))
+            || matches!(
+                self.topic(),
+                Topic::ContainerExec { .. } | Topic::SwarmTaskExec { .. }
+            )
+        {
             return false;
         }
         if event.event_kind == "buildLogs" {
-            return self.kind == "build-run" && self.id == Some(event.resource_id);
+            return matches!(self.topic(), Topic::BuildRun(..))
+                && self.id() == Some(event.resource_id);
         }
-        if self.kind == "activity"
+        if matches!(self.topic(), Topic::Activity { .. })
             && event.event_kind == "runtimeChanged"
             && event.payload["dockerResourceType"] != "containerStats"
             && matches!(
-                self.reference.as_deref(),
+                self.reference(),
                 Some("Deployment" | "Stack" | "SwarmService")
             )
         {
             return true;
         }
-        if self.kind == "activity" {
+        if matches!(self.topic(), Topic::Activity { .. }) {
             // The existing Alert router publishes a coarse Alert invalidation
             // for Rule mutations too. Reload through the authorized activity
             // reader; never broadcast audit payloads directly to subscribers.
-            let resource_matches = self.reference.as_deref() == Some(event.resource_type)
-                || (self.reference.as_deref() == Some("AlertRule")
-                    && event.resource_type == "Alert");
+            let resource_matches = self.reference() == Some(event.resource_type)
+                || (self.reference() == Some("AlertRule") && event.resource_type == "Alert");
             return event.payload["dockerResourceType"] != "containerStats"
                 && resource_matches
-                && (event.resource_id.is_nil() || self.id == Some(event.resource_id));
+                && (event.resource_id.is_nil() || self.id() == Some(event.resource_id));
         }
         if let Some(platform) = event.platform_id {
             if event.payload["dockerResourceType"] == "containerStats" {
                 return matches!(
-                    self.kind.as_str(),
-                    "platforms" | "container-info" | "stack-info"
-                ) || (self.kind == "containers" && self.id == Some(platform));
+                    self.topic(),
+                    Topic::Platforms | Topic::ContainerInfo(..) | Topic::StackInfo(..)
+                ) || (matches!(self.topic(), Topic::Containers(..))
+                    && self.id() == Some(platform));
             }
-            return match self.kind.as_str() {
-                "platforms" | "container-info" | "stack-info" | "deployment" | "deployments"
-                | "stack" | "stacks" | "swarm-service" => true,
-                "containers" | "docker-daemon" | "images" | "swarm-services" => {
-                    self.id == Some(platform)
-                }
+            return match self.topic() {
+                Topic::Platforms
+                | Topic::ContainerInfo(..)
+                | Topic::StackInfo(..)
+                | Topic::Deployment(..)
+                | Topic::Deployments
+                | Topic::Stack(..)
+                | Topic::Stacks
+                | Topic::SwarmService(..) => true,
+                Topic::Containers(..)
+                | Topic::DockerDaemon(..)
+                | Topic::Images(..)
+                | Topic::SwarmServices(..) => self.id() == Some(platform),
                 _ => false,
             };
         }
-        match self.kind.as_str() {
-            "platforms" => matches!(
+        match self.topic() {
+            Topic::Platforms => matches!(
                 event.resource_type,
                 "Platform" | "Deployment" | "Stack" | "SwarmService" | "ResourceTags"
             ),
-            "deployment" | "deployments" => {
+            Topic::Deployment(..) | Topic::Deployments => {
                 matches!(event.resource_type, "Deployment" | "ResourceTags")
             }
-            "stack" | "stacks" | "stack-info" => {
+            Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => {
                 matches!(event.resource_type, "Stack" | "ResourceTags")
             }
-            "swarm-service" | "swarm-services" => event.resource_type == "SwarmService",
-            "git-repo" | "git-repositories" => event.resource_type == "GitRepository",
-            "automation-action" | "automation-actions" => event.resource_type == "AutomationAction",
-            "backup-policy"
-            | "backup-policies"
-            | "backup-runs"
-            | "backup-run"
-            | "backup-restore-runs"
-            | "backup-restore-run" => event.resource_type == "BackupPolicy",
-            "backup-repository" | "backup-repositories" => {
+            Topic::SwarmService(..) | Topic::SwarmServices(..) => {
+                event.resource_type == "SwarmService"
+            }
+            Topic::GitRepo(..) | Topic::GitRepositories => event.resource_type == "GitRepository",
+            Topic::AutomationAction(..) | Topic::AutomationActions => {
+                event.resource_type == "AutomationAction"
+            }
+            Topic::BackupPolicy(..)
+            | Topic::BackupPolicies
+            | Topic::BackupRuns(..)
+            | Topic::BackupRun(..)
+            | Topic::BackupRestoreRuns(..)
+            | Topic::BackupRestoreRun(..) => event.resource_type == "BackupPolicy",
+            Topic::BackupRepository(..) | Topic::BackupRepositories => {
                 event.resource_type == "BackupRepository"
             }
-            "build-project" | "build-projects" | "build-runs" | "build-run" => {
-                event.resource_type == "Build"
+            Topic::BuildProject(..)
+            | Topic::BuildProjects
+            | Topic::BuildRuns(..)
+            | Topic::BuildRun(..) => event.resource_type == "Build",
+            Topic::BuildAgentPool(..) | Topic::BuildAgentPools => {
+                event.resource_type == "BuildAgentPool"
             }
-            "build-agent-pool" | "build-agent-pools" => event.resource_type == "BuildAgentPool",
-            "alert-events" => event.resource_type == "Alert",
+            Topic::AlertEvents => event.resource_type == "Alert",
             _ => false,
         }
     }
-}
-
-fn valid_session(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
 }
 
 pub struct TerminalInvocation {

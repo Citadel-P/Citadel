@@ -27,10 +27,11 @@ impl PlatformRuntimePort for DockerClient {
                     let version = self.version().await?;
                     let negotiated = self.negotiated_version().await?;
                     let info = self.info().await?;
-                    Ok::<_, DockerError>((version, negotiated, info))
+                    let containers = self.list_containers(true).await?;
+                    Ok::<_, DockerError>((version, negotiated, info, ContainerCounts::from_list(&containers)))
                 } => value.map_err(normalize_docker_error)?,
             };
-            let (version, negotiated, info) = value;
+            let (version, negotiated, info, counts) = value;
             let swarm = info.swarm.map(|swarm| RuntimeSwarmInfo {
                 node_id: swarm.node_id,
                 node_addr: swarm.node_addr,
@@ -66,10 +67,10 @@ impl PlatformRuntimePort for DockerClient {
                 architecture: info.architecture,
                 cpu_count: i64::from(info.cpu_count),
                 memory_total: bounded_i64(info.memory_total),
-                container_count: bounded_i64(info.containers),
-                containers_running: bounded_i64(info.containers_running),
-                containers_paused: bounded_i64(info.containers_paused),
-                containers_stopped: bounded_i64(info.containers_stopped),
+                container_count: counts.total,
+                containers_running: counts.running,
+                containers_paused: counts.paused,
+                containers_stopped: counts.stopped,
                 api_version: negotiated.to_string(),
                 minimum_api_version: version.min_api_version,
                 agent_version: None,
@@ -349,4 +350,31 @@ pub fn container_observation(
             .cloned()
             .unwrap_or_default(),
     }))
+}
+
+/// Match .NET PlatformService.GetSystemStats: count the containers exposed by
+/// ContainerList; Docker Desktop /info totals can disagree with this visible list.
+#[derive(Default)]
+pub(super) struct ContainerCounts {
+    pub(super) total: i64,
+    pub(super) running: i64,
+    pub(super) paused: i64,
+    pub(super) stopped: i64,
+}
+impl ContainerCounts {
+    pub(super) fn from_list(containers: &[ContainerSummary]) -> Self {
+        let mut counts = Self {
+            total: i64::try_from(containers.len()).unwrap_or(i64::MAX),
+            ..Self::default()
+        };
+        for container in containers {
+            match container.state.as_str() {
+                "running" => counts.running += 1,
+                "paused" => counts.paused += 1,
+                "exited" => counts.stopped += 1,
+                _ => {}
+            }
+        }
+        counts
+    }
 }

@@ -319,7 +319,9 @@ impl PlatformInventoryPort for EdgeRuntime {
         list_swarm_tasks,
         RuntimeSwarmTask,
         SwarmTaskList,
-        ListSwarmTasksRequest { max_items: 10000 },
+        ListSwarmTasksRequest {
+            max_items: i32::MAX
+        },
         ListSwarmTasksResponse,
         tasks,
         map_swarm_task

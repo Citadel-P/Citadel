@@ -87,7 +87,9 @@ impl DockerClient {
         info: DockerInfo,
     ) -> Result<RuntimePlatformStats, RuntimeCapabilityError> {
         // Counts are cheap; volume sizes come from the cached /system/df response.
-        let (networks, volumes, usage, disk) = tokio::join!(
+        let (containers, images, networks, volumes, usage, disk) = tokio::join!(
+            self.list_containers(true),
+            self.list_images(),
             self.list_networks(),
             self.get_json::<super::generated::VolumeListResponse>(
                 &super::generated::VOLUME_LIST,
@@ -97,10 +99,17 @@ impl DockerClient {
             self.storage_totals(),
             self.read_host_disk(&info.docker_root_dir),
         );
+        let containers = containers.map_err(super::runtime::normalize_docker_error)?;
+        let counts = super::runtime::ContainerCounts::from_list(&containers);
         Ok(RuntimePlatformStats {
             image_used_bytes: usage.images,
             volume_used_bytes: usage.volumes,
-            image_count: i64::try_from(info.images).unwrap_or(i64::MAX),
+            image_count: i64::try_from(
+                images
+                    .map_err(super::runtime::normalize_docker_error)?
+                    .len(),
+            )
+            .unwrap_or(i64::MAX),
             network_count: i32::try_from(
                 networks
                     .map_err(super::runtime::normalize_docker_error)?
@@ -115,10 +124,10 @@ impl DockerClient {
             )
             .unwrap_or(i32::MAX),
             mem_total: i64::try_from(info.memory_total).unwrap_or(i64::MAX),
-            container_count: i64::try_from(info.containers).unwrap_or(i64::MAX),
-            containers_running: i64::try_from(info.containers_running).unwrap_or(i64::MAX),
-            containers_paused: i64::try_from(info.containers_paused).unwrap_or(i64::MAX),
-            containers_stopped: i64::try_from(info.containers_stopped).unwrap_or(i64::MAX),
+            container_count: counts.total,
+            containers_running: counts.running,
+            containers_paused: counts.paused,
+            containers_stopped: counts.stopped,
             disk_used_bytes: disk.map(|d| d.used_bytes),
             disk_total_bytes: disk.map(|d| d.total_bytes),
             disk_usage: disk.map(|d| d.usage_percent),

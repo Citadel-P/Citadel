@@ -79,11 +79,19 @@ async fn collect_swarm_inventory(
             runtime.list_swarm_secrets(cancellation),
         )?;
         reconcile_running_counts(&mut services, &tasks);
+        let running_task_count = tasks
+            .iter()
+            .filter(|task| {
+                task.desired_state.eq_ignore_ascii_case("running")
+                    && task.state.eq_ignore_ascii_case("running")
+            })
+            .count();
         // Match the .NET active Task projection limit. Services/nodes remain
         // complete so absence and replica-count reconciliation stay authoritative.
         tasks.sort_by_key(|task| std::cmp::Reverse(task.status_timestamp));
         tasks.truncate(500);
         Ok(Some(RuntimeSwarmInventory {
+            running_task_count,
             nodes,
             services,
             tasks,
@@ -166,6 +174,10 @@ mod tests {
             swarm.tasks.len(),
             500,
             "active task projection stays bounded"
+        );
+        assert_eq!(
+            swarm.running_task_count, 598,
+            "count before truncation, excluding retired and pending tasks"
         );
         assert_eq!(swarm.tasks.first().unwrap().id, "599");
         assert_eq!(
@@ -292,6 +304,8 @@ mod tests {
                 Ok((0..600)
                     .map(|index| RuntimeSwarmTask {
                         id: index.to_string(),
+                        desired_state: if index == 0 { "shutdown" } else { "RUNNING" }.into(),
+                        state: if index == 1 { "pending" } else { "Running" }.into(),
                         status_timestamp: chrono::DateTime::from_timestamp(index, 0),
                         ..Default::default()
                     })

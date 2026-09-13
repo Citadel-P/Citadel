@@ -401,13 +401,12 @@ fn descriptor(
         );
         object.insert(
             "runningTaskCount".to_owned(),
-            json!(snapshot.swarm.as_ref().map_or(0, |value| {
-                value
-                    .tasks
-                    .iter()
-                    .filter(|task| task.state.eq_ignore_ascii_case("running"))
-                    .count()
-            })),
+            json!(
+                snapshot
+                    .swarm
+                    .as_ref()
+                    .map_or(0, |value| value.running_task_count)
+            ),
         );
     }
     value

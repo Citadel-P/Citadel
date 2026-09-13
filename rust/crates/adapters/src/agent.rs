@@ -1898,7 +1898,9 @@ impl PlatformInventoryPort for AgentClient {
             let response = self
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
-                        ListSwarmTasksRequest { max_items: 10_000 },
+                        ListSwarmTasksRequest {
+                            max_items: i32::MAX,
+                        },
                         LIST_SWARM_TASKS_METHOD,
                         Some(self.operation_timeout),
                     )?;
