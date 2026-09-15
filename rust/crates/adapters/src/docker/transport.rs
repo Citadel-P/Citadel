@@ -944,7 +944,7 @@ impl DockerClient {
             streaming: false,
             ..CONTAINER_STATS
         };
-        self.get_json(&endpoint, &path, Some("stream=false&one-shot=true"))
+        self.get_json(&endpoint, &path, Some("stream=false&one-shot=false"))
             .await
     }
 
