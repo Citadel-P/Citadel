@@ -5,20 +5,20 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use chrono::Duration;
 use citadel_adapters::alert_store::PostgresAlertStore;
-use citadel_adapters::backup_store::PostgresBackupStore;
-use citadel_adapters::build_store::PostgresBuildStore;
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::backups::PostgresBackupPersistence;
+use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_alerts::{AlertChannelView, AlertDelivery, AlertError, AlertEventView};
 use citadel_backups::{
-    BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog,
-    BackupRepositoryView, BackupRunAuthorizer, BackupService, BackupSourcePlan,
-    BackupSourcePlanner, RestoreClaim, RestoreExecutionResult,
+    BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog, BackupRepository,
+    BackupRunAuthorizer, BackupService, BackupSourcePlan, BackupSourcePlanner, RestoreClaim,
+    RestoreExecutionResult,
 };
 use citadel_builds::{
-    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildService, BuildStore,
+    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildRepository, BuildService,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, ResourceType};
@@ -27,8 +27,8 @@ use citadel_identity::{
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_server::alerts_http::{self, AlertsHttpState};
-use citadel_server::backups_http::{self, BackupsHttpState};
-use citadel_server::builds_http::{self, BuildsHttpState};
+use citadel_server::api::backups::handlers::{self as backups_http, BackupsHttpState};
+use citadel_server::api::builds::handlers::{self as builds_http, BuildsHttpState};
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{RealtimeHub, change_callback};
 use futures_util::future::BoxFuture;
@@ -94,9 +94,9 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let build_store = Arc::new(PostgresBuildStore::new(pool.clone()));
+    let build_store = Arc::new(PostgresBuildRepository::new(pool.clone()));
     let build_entitlement = Arc::new(build_webhooks::Entitlement::default());
-    let backup_store = Arc::new(PostgresBackupStore::new(pool.clone()));
+    let backup_store = Arc::new(PostgresBackupPersistence::new(pool.clone()));
     let backup_entitlement = Arc::new(backup_webhooks::Entitlement::default());
     let backup_planner = Arc::new(FakeBackupPlanner::default());
     let alert_entitlement = Arc::new(alert_rule_create::Entitlement::default());
@@ -106,8 +106,14 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
     let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let cancellation = CancellationToken::new();
+    let build_tasks = citadel_application::DynamicTasks::new(cancellation.clone());
     let builds = Arc::new(
         BuildService::new(
+            Arc::new(citadel_server::api::builds::TrackedBuildTasks::new(
+                build_tasks.clone(),
+            )),
+            cancellation.clone(),
             build_store.clone(),
             Arc::new(FakeBuildExecutor { pool: pool.clone() }),
             Duration::minutes(5),
@@ -136,7 +142,6 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy"))
         .with_entitlements(backup_entitlement.clone()),
     );
-    let cancellation = CancellationToken::new();
     let (stacks, stack_entitlement) = stack_webhooks::service(pool.clone());
     let webhook_router = backup_webhooks::router(
         pool.clone(),
@@ -153,7 +158,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .merge(backups_http::router(BackupsHttpState {
         identity: Arc::clone(&identity),
         backups: backups.clone(),
-        cancellation,
+        cancellation: cancellation.clone(),
     }))
     .merge(alerts_http::router(AlertsHttpState {
         identity: identity.clone(),
@@ -1049,6 +1054,11 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .await
         .unwrap();
     assert_eq!(status, "Failed");
+    cancellation.cancel();
+    build_tasks
+        .drain(std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 struct FixtureIds {
@@ -1251,19 +1261,21 @@ struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
     fn preview<'a>(
         &'a self,
-        _: citadel_backups::source_preview::BackupPreviewKind,
+        _: citadel_backups::policies::read_models::BackupPreviewKind,
         _: Uuid,
         _: ActorId,
         _: bool,
         _: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<citadel_backups::source_preview::BackupSourcePreview, BackupError>>
-    {
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_backups::policies::read_models::BackupSourcePreview, BackupError>,
+    > {
         Box::pin(async { Err(BackupError::NotFound) })
     }
     fn validate_source<'a>(
         &'a self,
         _: &'a Value,
-        _: &'a citadel_backups::BackupRepositoryView,
+        _: &'a citadel_backups::BackupRepository,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async { Ok(()) })
@@ -1309,7 +1321,7 @@ impl BackupRunAuthorizer for AllowBackupExecution {
 impl BackupExecutor for FakeBackupExecutor {
     fn repository<'a>(
         &'a self,
-        _: &'a BackupRepositoryView,
+        _: &'a BackupRepository,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,

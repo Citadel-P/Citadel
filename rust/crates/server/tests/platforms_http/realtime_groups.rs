@@ -1,8 +1,8 @@
 use super::*;
 use citadel_adapters::{
     activity_store::PostgresActivityStore, alert_store::PostgresAlertStore,
-    automation_store::PostgresAutomationStore, backup_store::PostgresBackupStore,
-    build_store::PostgresBuildStore, postgres::deployments::PostgresDeploymentRepository,
+    automation_store::PostgresAutomationStore, postgres::backups::PostgresBackupPersistence,
+    postgres::builds::PostgresBuildRepository, postgres::deployments::PostgresDeploymentRepository,
     postgres::stacks::PostgresStackRepository,
     postgres::swarm_services::PostgresSwarmServiceRepository,
 };
@@ -25,8 +25,8 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
         resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
         automation: Arc::new(PostgresAutomationStore::new(f.pool.clone())),
-        builds: Arc::new(PostgresBuildStore::new(f.pool.clone())),
-        backups: Arc::new(PostgresBackupStore::new(f.pool.clone())),
+        builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
+        backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
         activities: Arc::new(citadel_application::ActivityService::new(Arc::new(
             PostgresActivityStore::new(f.pool.clone()),
         ))),

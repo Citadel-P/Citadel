@@ -3,7 +3,7 @@ use crate::{
     edge::{EdgeRegistry, EdgeTarget},
 };
 use citadel_builds::{
-    BuildAgentPoolView, BuildError, BuildPoolCheck, BuildPoolChecker, BuildPoolTarget, pool_target,
+    BuildAgentPool, BuildError, BuildPoolCheck, BuildPoolChecker, BuildPoolTarget, pool_target,
 };
 use citadel_contracts::citadel::{edge::v1::EdgeCommandKind, images::v1::CheckBuildHostResponse};
 use futures_util::future::BoxFuture;
@@ -17,7 +17,7 @@ pub struct AgentBuildPoolChecker {
 impl BuildPoolChecker for AgentBuildPoolChecker {
     fn check<'a>(
         &'a self,
-        pool: &'a BuildAgentPoolView,
+        pool: &'a BuildAgentPool,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<BuildPoolCheck, BuildError>> {
         Box::pin(async move {

@@ -183,7 +183,7 @@ impl RealtimeHub {
             "Build",
             run_id,
             "buildLogs",
-            json!({"entries":[entry]}),
+            json!({"entries":[crate::api::builds::views::BuildLogEntry::from(entry)]}),
         )
     }
 

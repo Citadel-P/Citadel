@@ -26,3 +26,11 @@ impl From<Option<PermissionGrant>> for ResourceCapabilities {
         permission.map_or_else(Self::default, Self::from)
     }
 }
+
+#[derive(Debug, Default, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCapabilitiesView {
+    pub can_read: bool,
+    pub can_write: bool,
+    pub can_execute: bool,
+}

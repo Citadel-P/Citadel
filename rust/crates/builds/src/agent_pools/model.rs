@@ -1,0 +1,32 @@
+use crate::*;
+
+#[derive(Debug, Clone)]
+pub struct BuildAgentPool {
+    pub tags: Vec<citadel_resources::TagSummary>,
+    pub id: Uuid,
+    pub name: String,
+    pub normalized_name: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub provider: String,
+    pub provider_spec: Value,
+    pub max_active_builders: i32,
+    pub queue_timeout_seconds: i32,
+    pub provisioning_timeout_seconds: i32,
+    pub registration_timeout_seconds: i32,
+    pub heartbeat_timeout_seconds: i32,
+    pub cleanup_timeout_seconds: i32,
+    pub maximum_instance_lifetime_seconds: i32,
+    pub failure_retention_minutes: i32,
+    pub last_validation_status: String,
+    pub last_validation_message: Option<String>,
+    pub last_validated_at: Option<DateTime<Utc>>,
+    pub control_state: String,
+    pub control_triggered_by: Option<Uuid>,
+    pub control_started_at: Option<i64>,
+    pub created_by_actor_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub row_version: i64,
+}

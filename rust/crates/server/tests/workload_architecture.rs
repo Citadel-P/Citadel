@@ -44,7 +44,7 @@ fn workload_features_own_business_models_and_ports_without_transport_or_detached
         );
         for slot in [
             "commands.rs",
-            "queries.rs",
+            "read_models.rs",
             "repository.rs",
             "runtime.rs",
             "tasks.rs",

@@ -11,7 +11,7 @@ struct Store {
     queued: Mutex<VecDeque<BuildConsumerClaim>>,
     messages: Mutex<Vec<String>>,
 }
-impl BuildCompletionStore for Store {
+impl BuildCompletionRepository for Store {
     fn claim_next(&self) -> BoxFuture<'_, Result<Option<BuildConsumerClaim>, BuildError>> {
         Box::pin(async { Ok(self.queued.lock().unwrap().pop_front()) })
     }

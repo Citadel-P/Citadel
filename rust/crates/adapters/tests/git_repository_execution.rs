@@ -5,13 +5,13 @@ use std::time::Duration;
 
 use chrono::Utc;
 use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::git_account_store::PostgresGitAccountStore;
-use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
+use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_git::{
-    GitAccountService, GitCli, GitRepositoryExecutionService, GitRepositoryExecutionStore,
+    GitAccountService, GitCli, GitRepositoryExecutionPersistence, GitRepositoryExecutionService,
     SyncResult,
 };
 use citadel_stacks::{
@@ -41,7 +41,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .execute(&pool)
         .await
         .unwrap();
-    let store = Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone()));
+    let store = Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone()));
 
     let race_id = Uuid::now_v7();
     insert_repository(&pool, actor, race_id, "file:///unused", "race").await;
@@ -139,7 +139,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     )
     .await;
     let accounts = Arc::new(GitAccountService::new(
-        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        Arc::new(PostgresGitAccountRepository::new(pool.clone())),
         Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap()),
     ));
     let notifications = Arc::new(AtomicUsize::new(0));
@@ -413,7 +413,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         .await
         .unwrap();
     insert_repository(&pool, actor, id, "file:///unused", "poll-policy").await;
-    let store = PostgresGitRepositoryExecutionStore::new(pool.clone());
+    let store = PostgresGitRepositoryExecutionPersistence::new(pool.clone());
     let claim = store
         .claim_next(Utc::now() - chrono::Duration::minutes(10))
         .await
@@ -437,7 +437,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
             .unwrap()
     }
     async fn poll(
-        store: &PostgresGitRepositoryExecutionStore,
+        store: &PostgresGitRepositoryExecutionPersistence,
         pool: &sqlx::PgPool,
         actor: Uuid,
         id: Uuid,
@@ -713,10 +713,10 @@ async fn invalid_credentials_and_unresolvable_remote_release_claim_without_runni
     sqlx::query("INSERT INTO gitaccounts(id,authtype,configuration,createdbyactorid,domain,name,transport) VALUES($1,'Token','{}',$2,'github.com',$1::text,'Https')")
         .bind(account).bind(actor).execute(&pool).await.unwrap();
     let accounts = Arc::new(GitAccountService::new(
-        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        Arc::new(PostgresGitAccountRepository::new(pool.clone())),
         Arc::new(AesGcmSecretProtector::new(&[91; 32]).unwrap()),
     ));
-    let store = Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone()));
+    let store = Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone()));
     let service = GitRepositoryExecutionService::new(
         store.clone(),
         accounts,

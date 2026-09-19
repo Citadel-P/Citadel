@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
+
 use serde::{Deserialize, Serialize};
+
 use serde_json::Value;
+
 use uuid::Uuid;
 
 use crate::{ResourceMetadataError, TagSummary};
@@ -41,37 +44,6 @@ pub enum RegistryStatus {
     Active,
     Disabled,
     Deprecated,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = resources::catalog::GitRepositorySyncMode)]
-pub enum GitRepositorySyncMode {
-    Manual,
-    #[default]
-    PullInterval,
-}
-
-impl GitRepositorySyncMode {
-    #[must_use]
-    pub const fn as_database_str(self) -> &'static str {
-        match self {
-            Self::Manual => "Manual",
-            Self::PullInterval => "PullInterval",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RepoCommand {
-    #[serde(default)]
-    pub commands: Vec<String>,
-    #[serde(default = "default_repo_command_path")]
-    pub path: String,
-}
-
-fn default_repo_command_path() -> String {
-    "./".to_owned()
 }
 
 impl RegistryStatus {
@@ -146,83 +118,6 @@ pub struct RegistryPatch {
     #[schema(value_type = Option<String>, required = false)]
     pub description: MetadataPatch<String>,
     pub tag_ids: Option<Vec<Uuid>>,
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GitRepositoryView {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub url: String,
-    pub default_branch: String,
-    pub git_account_id: Option<Uuid>,
-    pub sync_mode: GitRepositorySyncMode,
-    pub sync_interval_minutes: Option<i32>,
-    pub webhook: Option<Value>,
-    pub on_clone: Option<RepoCommand>,
-    pub on_pull: Option<RepoCommand>,
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub created_by_actor_id: Uuid,
-    pub control_state: String,
-    pub latest_activity_view: Option<Value>,
-    pub tags: Vec<TagSummary>,
-}
-
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct NewGitRepository {
-    pub name: String,
-    pub description: Option<String>,
-    pub url: String,
-    pub default_branch: String,
-    pub git_account_id: Option<Uuid>,
-    #[serde(default)]
-    pub sync_mode: GitRepositorySyncMode,
-    #[serde(default = "default_sync_interval")]
-    pub sync_interval_minutes: Option<i32>,
-    pub webhook: Option<Value>,
-    pub on_clone: Option<RepoCommand>,
-    pub on_pull: Option<RepoCommand>,
-    #[serde(default)]
-    pub tag_ids: Vec<Uuid>,
-}
-
-impl NewGitRepository {
-    pub fn validate(&mut self) -> Result<(), ResourceMetadataError> {
-        validate_name_identifier(&self.name, "Git repository")?;
-        validate_description(self.description.as_deref())?;
-        if self.url.trim().is_empty() || self.url.len() > 2048 {
-            return Err(ResourceMetadataError::Validation(
-                "Git repository URL is required and cannot exceed 2048 characters.".to_owned(),
-            ));
-        }
-        if self.default_branch.trim().is_empty() {
-            return Err(ResourceMetadataError::Validation(
-                "Default branch is required.".to_owned(),
-            ));
-        }
-        self.sync_interval_minutes = match self.sync_mode {
-            GitRepositorySyncMode::Manual => None,
-            GitRepositorySyncMode::PullInterval => Some(
-                self.sync_interval_minutes
-                    .filter(|interval| *interval >= 1)
-                    .ok_or_else(|| {
-                        ResourceMetadataError::Validation(
-                            "Pull interval must be at least one minute.".to_owned(),
-                        )
-                    })?,
-            ),
-        };
-        validate_repo_command(self.on_clone.as_ref())?;
-        validate_repo_command(self.on_pull.as_ref())?;
-        validate_webhook(self.webhook.as_ref())?;
-        self.name = self.name.trim().to_owned();
-        self.url = normalize_git_url(&self.url);
-        self.default_branch = self.default_branch.trim().to_owned();
-        Ok(())
-    }
 }
 
 pub fn validate_name_identifier(name: &str, resource: &str) -> Result<(), ResourceMetadataError> {
@@ -332,92 +227,10 @@ fn configuration_value<'a>(configuration: &'a Value, name: &str) -> Option<&'a V
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
 }
 
+/// Compatibility facade; webhook validation is owned by Git.
 pub fn validate_webhook(webhook: Option<&Value>) -> Result<(), ResourceMetadataError> {
-    let Some(webhook) = webhook else {
-        return Ok(());
-    };
-    let enabled = configuration_value(webhook, "enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let provider = configuration_value(webhook, "provider")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHub");
-    let scheme = configuration_value(webhook, "authScheme")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHubHmacSha256");
-    let secret = configuration_value(webhook, "secret").and_then(Value::as_str);
-    let branch = configuration_value(webhook, "branchFilter").and_then(Value::as_str);
-    if secret.is_some_and(|value| value.len() > 256)
-        || branch.is_some_and(|value| value.len() > 256)
-    {
-        return Err(ResourceMetadataError::Validation(
-            "Webhook Secret and branch filter cannot exceed 256 characters.".to_owned(),
-        ));
-    }
-    let valid_authentication = !enabled
-        || matches!(
-            (provider, scheme),
-            ("GitHub", "GitHubHmacSha256") | ("GitLab", "GitLabSignedToken" | "GitLabLegacyToken")
-        )
-        || (provider == "Generic"
-            && scheme == "BearerToken"
-            && secret.is_some_and(|value| !value.trim().is_empty()));
-    if valid_authentication {
-        Ok(())
-    } else {
-        Err(ResourceMetadataError::Validation(
-            "Webhook provider and authentication scheme are not compatible.".to_owned(),
-        ))
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GitRepositoryPatch {
-    pub name: Option<String>,
-    #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    pub description: MetadataPatch<String>,
-    pub url: Option<String>,
-    pub default_branch: Option<String>,
-    #[serde(default)]
-    #[schema(value_type = Option<Uuid>, required = false)]
-    pub git_account_id: MetadataPatch<Uuid>,
-    pub sync_mode: Option<GitRepositorySyncMode>,
-    #[serde(default)]
-    #[schema(value_type = Option<i32>, required = false)]
-    pub sync_interval_minutes: MetadataPatch<i32>,
-    #[serde(default)]
-    #[schema(value_type = Option<Value>, required = false)]
-    pub webhook: MetadataPatch<Value>,
-    #[serde(default)]
-    #[schema(value_type = Option<RepoCommand>, required = false)]
-    pub on_clone: MetadataPatch<RepoCommand>,
-    #[serde(default)]
-    #[schema(value_type = Option<RepoCommand>, required = false)]
-    pub on_pull: MetadataPatch<RepoCommand>,
-    pub tag_ids: Option<Vec<Uuid>>,
-}
-
-const fn default_sync_interval() -> Option<i32> {
-    Some(5)
-}
-
-fn validate_repo_command(command: Option<&RepoCommand>) -> Result<(), ResourceMetadataError> {
-    if command.is_some_and(|command| {
-        command.commands.len() > 100
-            || command
-                .commands
-                .iter()
-                .any(|value| value.is_empty() || value.len() > 4096)
-            || command.path.is_empty()
-            || command.path.len() > 1024
-    }) {
-        return Err(ResourceMetadataError::Validation(
-            "Git repository commands exceed the supported limits.".to_owned(),
-        ));
-    }
-    Ok(())
+    citadel_git::repositories::webhooks::validate_webhook(webhook)
+        .map_err(|error| ResourceMetadataError::Validation(error.to_string()))
 }
 
 pub fn registry_type(configuration: &Value) -> Result<String, ResourceMetadataError> {
@@ -448,16 +261,6 @@ pub fn validate_description(description: Option<&str>) -> Result<(), ResourceMet
     Ok(())
 }
 
-#[must_use]
-pub fn normalize_git_url(url: &str) -> String {
-    let normalized = url.trim().trim_end_matches('/');
-    normalized
-        .strip_suffix(".git")
-        .or_else(|| normalized.strip_suffix(".GIT"))
-        .unwrap_or(normalized)
-        .to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,17 +285,5 @@ mod tests {
 
         docker_hub.configuration = serde_json::json!({"Username":"user"});
         assert!(docker_hub.validate().is_err());
-    }
-
-    #[test]
-    fn git_urls_are_normalized_without_changing_the_repository_path() {
-        assert_eq!(
-            normalize_git_url(" https://git.example/team/repo.git/ "),
-            "https://git.example/team/repo"
-        );
-        assert_eq!(
-            normalize_git_url("https://git.example/team/repo.git"),
-            "https://git.example/team/repo"
-        );
     }
 }

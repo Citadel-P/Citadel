@@ -4,7 +4,7 @@
 use citadel_adapters::{
     agent::{AgentClient, AgentRequestSigner},
     build_executor::{AgentDockerBuildExecutor, PostgresBuildRegistryCredentialResolver},
-    build_store::PostgresBuildStore,
+    postgres::builds::PostgresBuildRepository,
 };
 use citadel_builds::*;
 use citadel_domain::ActorId;
@@ -26,7 +26,7 @@ impl BuildSecretResolver for NoSecrets {
     }
 }
 struct Logs {
-    store: Arc<PostgresBuildStore>,
+    store: Arc<PostgresBuildRepository>,
     id: Uuid,
 }
 impl BuildLogSink for Logs {
@@ -164,9 +164,9 @@ async fn signed_agent_builds_committed_source_pushes_digest_and_persists_progres
         command("git",&["-C",checkout,"update-ref","refs/remotes/origin/main",&commit]).await;
         // Uncommitted data must never enter an Agent build archive.
         tokio::fs::write(format!("{checkout}/marker"),"uncommitted-must-not-be-built").await.unwrap();
-        let mut input:BuildProjectInput=serde_json::from_value(json!({"name":format!("project-{suffix}"),"enabled":true,"gitRepositoryId":repository,"branch":"main","platformId":platform,"registryId":registry,"imageRepository":format!("citadel-acceptance-{suffix}"),"tagTemplates":["{shortSha}"],"timeoutSeconds":120,"retentionRunCount":2})).unwrap();
+        let mut input:BuildProjectConfiguration=serde_json::from_value(json!({"name":format!("project-{suffix}"),"enabled":true,"gitRepositoryId":repository,"branch":"main","platformId":platform,"registryId":registry,"imageRepository":format!("citadel-acceptance-{suffix}"),"tagTemplates":["{shortSha}"],"timeoutSeconds":120,"retentionRunCount":2})).unwrap();
         input.validate().unwrap();
-        let store=Arc::new(PostgresBuildStore::new(pool.clone()));let project=store.create(actor,&input).await.unwrap();
+        let store=Arc::new(PostgresBuildRepository::new(pool.clone()));let project=store.create(actor,&input).await.unwrap();
         let queued=store.enqueue(actor,project.id,"Manual").await.unwrap();let claim=store.claim_next(chrono::Utc::now()-chrono::Duration::minutes(5)).await.unwrap().unwrap();
         assert_eq!(claim.run.id,queued.id);
         let credentials=Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));

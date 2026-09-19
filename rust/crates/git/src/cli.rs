@@ -7,7 +7,6 @@ use citadel_execution::{
     OutputLimitPolicy, ProcessError, ProcessLimits, ProcessOutput, ProcessRequest, run,
 };
 use futures_util::future::BoxFuture;
-use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -47,7 +46,7 @@ pub struct SyncResult {
     pub cloned: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitEntryType {
     Directory,
     File,
@@ -77,7 +76,7 @@ pub struct GitBlob {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitChangedPathStatus {
     Added,
     Modified,
@@ -87,8 +86,7 @@ pub enum GitChangedPathStatus {
     TypeChanged,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitChangedPath {
     pub status: GitChangedPathStatus,
     pub path: String,

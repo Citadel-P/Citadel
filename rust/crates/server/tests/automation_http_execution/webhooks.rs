@@ -16,14 +16,14 @@ impl AutomationEntitlements for Entitlement {
 
 pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
     use citadel_adapters::{
-        crypto::AesGcmSecretProtector, git_account_store::PostgresGitAccountStore,
-        git_repository_execution_store::PostgresGitRepositoryExecutionStore,
+        crypto::AesGcmSecretProtector, postgres::git::accounts::PostgresGitAccountRepository,
+        postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
     };
     use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
     let git = Arc::new(GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::new(GitAccountService::new(
-            Arc::new(PostgresGitAccountStore::new(pool)),
+            Arc::new(PostgresGitAccountRepository::new(pool)),
             Arc::new(AesGcmSecretProtector::new(&[33; 32]).unwrap()),
         )),
         Arc::new(GitCli::new(Duration::from_secs(5))),

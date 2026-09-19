@@ -1,7 +1,8 @@
 use super::*;
-use citadel_adapters::build_store::PostgresBuildStore;
+use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_builds::{
-    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLogSink, BuildProjectInput, BuildStore,
+    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLogSink, BuildProjectConfiguration,
+    BuildRepository,
 };
 use citadel_domain::ActorId;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -44,12 +45,16 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
         runs.push(store.enqueue(actor, project.id, "Manual").await.unwrap().id);
     }
     let executor = Arc::new(BlockingExecutor(AtomicUsize::new(0)));
+    let token = CancellationToken::new();
     let service = Arc::new(BuildService::new(
+        Arc::new(crate::api::builds::TrackedBuildTasks::new(
+            citadel_application::DynamicTasks::new(token.clone()),
+        )),
+        token.clone(),
         store.clone(),
         executor.clone(),
         chrono::Duration::minutes(5),
     ));
-    let token = CancellationToken::new();
     let worker = tokio::spawn(build_runs(
         token.clone(),
         service,
@@ -78,8 +83,8 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
 async fn fixture() -> (
     sqlx::PgPool,
     ActorId,
-    Arc<PostgresBuildStore>,
-    BuildProjectInput,
+    Arc<PostgresBuildRepository>,
+    BuildProjectConfiguration,
 ) {
     let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
@@ -110,8 +115,8 @@ async fn fixture() -> (
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}'::json,$2,$3,'docker.io','Enabled')").bind(registry).bind(actor.value()).bind(format!("build-registry-{}",registry.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repo.git','Idle')").bind(repository).bind(actor.value()).bind(format!("build-repo-{}",repository.simple())).execute(&pool).await.unwrap();
-    let store = Arc::new(PostgresBuildStore::new(pool.clone()));
-    let input = BuildProjectInput {
+    let store = Arc::new(PostgresBuildRepository::new(pool.clone()));
+    let input = BuildProjectConfiguration {
         name: format!("build-{}", Uuid::now_v7().simple()),
         description: None,
         enabled: true,
@@ -240,7 +245,12 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
     let project = store.create(actor, &input).await.unwrap();
     let notifications = Arc::new(AtomicUsize::new(0));
     let observed = notifications.clone();
+    let token = CancellationToken::new();
     let service = BuildService::new(
+        Arc::new(crate::api::builds::TrackedBuildTasks::new(
+            citadel_application::DynamicTasks::new(token.clone()),
+        )),
+        token.clone(),
         store.clone(),
         Arc::new(FailedExecutor),
         chrono::Duration::minutes(5),
@@ -248,7 +258,6 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
     .with_change_notifier(Arc::new(move || {
         observed.fetch_add(1, Ordering::SeqCst);
     }));
-    let token = CancellationToken::new();
     let mut runs = Vec::new();
     for index in 0..6 {
         let run = store.enqueue(actor, project.id, "Manual").await.unwrap();

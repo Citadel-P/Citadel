@@ -30,7 +30,7 @@ pub struct BuildConsumerClaim {
     pub redeploy: bool,
     pub service_names: Vec<String>,
 }
-pub trait BuildCompletionStore: Send + Sync {
+pub trait BuildCompletionRepository: Send + Sync {
     fn claim_next(&self) -> BoxFuture<'_, Result<Option<BuildConsumerClaim>, BuildError>>;
     fn complete<'a>(
         &'a self,
@@ -45,13 +45,13 @@ pub trait BuildConsumerRuntime: Send + Sync {
     fn log(&self, _entry: BuildLogEntry) {}
 }
 pub struct BuildCompletionService {
-    store: Arc<dyn BuildCompletionStore>,
+    store: Arc<dyn BuildCompletionRepository>,
     runtime: Arc<dyn BuildConsumerRuntime>,
     entitlements: Arc<dyn BuildEntitlements>,
 }
 impl BuildCompletionService {
     pub fn new(
-        store: Arc<dyn BuildCompletionStore>,
+        store: Arc<dyn BuildCompletionRepository>,
         runtime: Arc<dyn BuildConsumerRuntime>,
         entitlements: Arc<dyn BuildEntitlements>,
     ) -> Self {

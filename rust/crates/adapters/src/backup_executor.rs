@@ -126,7 +126,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
     }
     fn repository<'a>(
         &'a self,
-        repository: &'a BackupRepositoryView,
+        repository: &'a BackupRepository,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
@@ -297,7 +297,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
 impl DockerResticBackupExecutor {
     async fn run_direct_repository_operation(
         &self,
-        repository: &BackupRepositoryView,
+        repository: &BackupRepository,
         operation: &str,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
@@ -691,7 +691,7 @@ impl DockerResticBackupExecutor {
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
-        repository: &BackupRepositoryView,
+        repository: &BackupRepository,
         arguments: Vec<String>,
         timeout: Duration,
         cancellation: &CancellationToken,
@@ -1231,7 +1231,7 @@ impl DockerResticBackupExecutor {
 
     async fn agent_repository_environment(
         &self,
-        repository: &BackupRepositoryView,
+        repository: &BackupRepository,
     ) -> Result<std::collections::HashMap<String, String>, String> {
         if repository.repository_type != "S3Compatible" {
             return Err(
@@ -1296,7 +1296,7 @@ impl DockerResticBackupExecutor {
     async fn base_args(
         &self,
         name: &str,
-        repo: &BackupRepositoryView,
+        repo: &BackupRepository,
     ) -> Result<(Vec<OsString>, Vec<(OsString, OsString)>), String> {
         let password = self
             .secrets
@@ -1369,7 +1369,7 @@ impl DockerResticBackupExecutor {
 
     async fn direct_repository_environment(
         &self,
-        repository: &BackupRepositoryView,
+        repository: &BackupRepository,
     ) -> Result<(OsString, Vec<(OsString, OsString)>), String> {
         let password = self
             .secrets
@@ -1432,7 +1432,7 @@ impl DockerResticBackupExecutor {
 
     async fn validate_repository_target(
         &self,
-        repository: &BackupRepositoryView,
+        repository: &BackupRepository,
         location: &str,
         platform_id: Option<Uuid>,
     ) -> Result<(), String> {

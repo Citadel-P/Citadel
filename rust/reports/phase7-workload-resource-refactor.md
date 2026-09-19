@@ -5,7 +5,7 @@ Scope: Stack, StackRelease, SwarmService and SwarmServiceOperation. Phase 8 is n
 ## Files and ownership
 
 - Replaced `stacks/src/model.rs` and `swarm-services/src/model.rs` with `model/`,
-  `commands.rs` and `queries.rs`. Added `permissions.rs` and `tasks.rs`; extracted
+  `commands.rs` and `read_models.rs`. Added `permissions.rs` and `tasks.rs`; extracted
   `repository.rs` and `runtime.rs`. Public crate façades export named contracts.
 - Replaced both feature `service.rs` files with operation-specific `service/`
   modules. Moved update-check/image-update execution under those services.

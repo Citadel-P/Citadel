@@ -31,7 +31,7 @@ pub fn router(state: ResourcesHttpState) -> Router {
         .merge(bindings::router(state))
 }
 
-fn require_actor(
+pub(crate) fn require_actor(
     principal: Option<Extension<ActorPrincipal>>,
 ) -> Result<ActorPrincipal, IdentityError> {
     principal
@@ -39,7 +39,7 @@ fn require_actor(
         .ok_or(IdentityError::Unauthenticated)
 }
 
-async fn authorize_global(
+pub(crate) async fn authorize_global(
     state: &ResourcesHttpState,
     principal: &ActorPrincipal,
     resource_type: ResourceType,
@@ -47,16 +47,38 @@ async fn authorize_global(
     headers: &HeaderMap,
 ) -> IdentityHttpResult<()> {
     identity_result(
-        state
-            .identity
-            .authorize(principal, resource_type, level, None)
-            .await,
+        match (resource_type, level) {
+            (ResourceType::GitRepository, PermissionLevel::Read) => {
+                state
+                    .identity
+                    .require_scope::<citadel_git::permissions::ReadGitRepository>(principal)
+                    .await
+            }
+            (ResourceType::GitRepository, PermissionLevel::Write) => {
+                state
+                    .identity
+                    .require_scope::<citadel_git::permissions::WriteGitRepository>(principal)
+                    .await
+            }
+            (ResourceType::GitRepository, PermissionLevel::Execute) => {
+                state
+                    .identity
+                    .require_scope::<citadel_git::permissions::ExecuteGitRepository>(principal)
+                    .await
+            }
+            _ => {
+                state
+                    .identity
+                    .authorize(principal, resource_type, level, None)
+                    .await
+            }
+        },
         headers,
     )?;
     Ok(())
 }
 
-async fn authorize_resource(
+pub(crate) async fn authorize_resource(
     state: &ResourcesHttpState,
     principal: &ActorPrincipal,
     resource_type: ResourceType,
@@ -65,6 +87,44 @@ async fn authorize_resource(
     specific: Option<SpecificPermission>,
     headers: &HeaderMap,
 ) -> IdentityHttpResult<()> {
+    let id = resource_id;
+    if resource_type == ResourceType::GitRepository && specific.is_none() {
+        return identity_result(
+            match (resource_type, level) {
+                (ResourceType::GitRepository, PermissionLevel::Read) => {
+                    state
+                        .identity
+                        .require_resource::<citadel_git::permissions::ReadGitRepository>(
+                            principal, id,
+                        )
+                        .await
+                }
+                (ResourceType::GitRepository, PermissionLevel::Write) => {
+                    state
+                        .identity
+                        .require_resource::<citadel_git::permissions::WriteGitRepository>(
+                            principal, id,
+                        )
+                        .await
+                }
+                (ResourceType::GitRepository, PermissionLevel::Execute) => {
+                    state
+                        .identity
+                        .require_resource::<citadel_git::permissions::ExecuteGitRepository>(
+                            principal, id,
+                        )
+                        .await
+                }
+                _ => {
+                    state
+                        .identity
+                        .authorize_resource(principal, resource_type, id, level, None)
+                        .await
+                }
+            },
+            headers,
+        );
+    }
     // Workload metadata uses the owning feature's named policies.
     let result = match (resource_type, level, specific) {
         (ResourceType::Stack, PermissionLevel::Read, None) => Some(
@@ -164,7 +224,7 @@ async fn authorize_resource(
     Ok(())
 }
 
-async fn capabilities(
+pub(crate) async fn capabilities(
     state: &ResourcesHttpState,
     principal: &ActorPrincipal,
     resource_type: ResourceType,
@@ -197,8 +257,8 @@ async fn capabilities(
     )
 }
 
-fn metadata_error(error: ResourceMetadataError) -> IdentityError {
-    match error {
+pub(crate) fn metadata_error(error: impl Into<ResourceMetadataError>) -> IdentityError {
+    match error.into() {
         ResourceMetadataError::Validation(message) => {
             crate::request_validation::validation_error(message)
         }
@@ -209,7 +269,7 @@ fn metadata_error(error: ResourceMetadataError) -> IdentityError {
     }
 }
 
-fn publish_resource_change(
+pub(crate) fn publish_resource_change(
     state: &ResourcesHttpState,
     resource_type: &'static str,
     event_kind: &'static str,

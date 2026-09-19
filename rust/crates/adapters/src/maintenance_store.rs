@@ -14,14 +14,14 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     {
         changed.extend(["AutomationAction"]);
     }
-    if crate::build_store::recover(&mut tx, before)
+    if crate::postgres::builds::recover(&mut tx, before)
         .await
         .map_err(protocol)?
         > 0
     {
         changed.extend(["BuildProject", "BuildRun"]);
     }
-    if crate::backup_store::recover_stale(&mut tx, before)
+    if crate::postgres::backups::recover_stale(&mut tx, before)
         .await
         .map_err(protocol)?
         > 0
@@ -123,10 +123,10 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
     crate::automation_store::recover_interrupted_with_mode(&mut tx, before, true)
         .await
         .map_err(protocol)?;
-    crate::backup_store::recover_stale_with_mode(&mut tx, before, true)
+    crate::postgres::backups::recover_stale_with_mode(&mut tx, before, true)
         .await
         .map_err(protocol)?;
-    crate::build_store::recover_with_mode(&mut tx, before, true)
+    crate::postgres::builds::recover_with_mode(&mut tx, before, true)
         .await
         .map_err(protocol)?;
     tx.commit().await

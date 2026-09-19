@@ -145,7 +145,7 @@ pub(super) async fn verify_previews(
         citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner::new(pool.clone()),
     );
     let backups = Arc::new(BackupService::new(
-        Arc::new(PostgresBackupStore::new(pool.clone())),
+        Arc::new(PostgresBackupPersistence::new(pool.clone())),
         Arc::new(FakeBackupExecutor),
         planner,
         Duration::minutes(5),

@@ -349,13 +349,13 @@ fn router(
     use citadel_adapters::{
         automation_store::PostgresAutomationStore,
         automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
-        git_account_store::PostgresGitAccountStore,
-        git_repository_execution_store::PostgresGitRepositoryExecutionStore,
+        postgres::git::accounts::PostgresGitAccountRepository,
+        postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
     };
     let git = Arc::new(citadel_git::GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::new(citadel_git::GitAccountService::new(
-            Arc::new(PostgresGitAccountStore::new(pool.clone())),
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             Arc::new(AesGcmSecretProtector::new(&[59; 32]).unwrap()),
         )),
         Arc::new(citadel_git::GitCli::new(std::time::Duration::from_secs(5))),

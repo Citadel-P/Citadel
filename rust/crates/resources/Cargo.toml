@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-git = { path = "../git" }
 utoipa.workspace = true
 base64.workspace = true
 hmac.workspace = true

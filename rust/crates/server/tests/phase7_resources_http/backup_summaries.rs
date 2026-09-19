@@ -1,5 +1,5 @@
 use super::*;
-use citadel_backups::BackupStore;
+use citadel_backups::BackupPersistence;
 
 pub(super) async fn verify(
     app: &Router,
@@ -89,7 +89,7 @@ pub(super) async fn verify(
             .unwrap()["policyCount"],
         0
     );
-    let store = PostgresBackupStore::new(pool.clone());
+    let store = PostgresBackupPersistence::new(pool.clone());
     assert_eq!(
         store
             .platform_summaries(reader.actor_id, false, &[platform])
