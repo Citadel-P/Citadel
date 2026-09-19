@@ -6,7 +6,7 @@ use citadel_server::api::stacks as stacks_http;
 use citadel_server::api::swarm_services as swarm_services_http;
 use citadel_server::config::Config;
 use citadel_server::{
-    activities_http, alerts_http, application_info_http, automation_http, identity_http,
+    activities_http, api::alerts, api::automation, application_info_http, identity_http,
     license_http, oidc_http, platforms_http, profile_http, resources_http, roles_http,
     service_accounts_http, teams_http, transport, users_http, webhooks_http,
 };
@@ -139,12 +139,10 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         audit: Some(audit),
         alerts: Some(alert_store.clone()),
     }))
-    .merge(automation_http::router(
-        automation_http::AutomationHttpState {
-            identity: Arc::clone(&identity),
-            automation,
-        },
-    ))
+    .merge(automation::router(automation::AutomationHttpState {
+        identity: Arc::clone(&identity),
+        automation,
+    }))
     .merge(citadel_server::api::builds::handlers::router(
         citadel_server::api::builds::handlers::BuildsHttpState {
             identity: Arc::clone(&identity),
@@ -158,7 +156,7 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
             cancellation: cancellation.clone(),
         },
     ))
-    .merge(alerts_http::router(alerts_http::AlertsHttpState {
+    .merge(alerts::router(alerts::AlertsHttpState {
         identity: Arc::clone(&identity),
         store: alert_store,
         delivery: alert_delivery,

@@ -5,7 +5,7 @@ pub(super) async fn verify(
     pool: &sqlx::PgPool,
     admin: &ActorPrincipal,
     rule: &Value,
-    store: &PostgresAlertStore,
+    store: &PostgresAlertRepository,
 ) {
     let id = rule["id"].as_str().unwrap();
     let cfg = format!("/api/v1/alertRules/{id}/_cfg");

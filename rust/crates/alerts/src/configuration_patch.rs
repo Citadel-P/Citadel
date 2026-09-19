@@ -1,9 +1,14 @@
-use crate::{AlertChannelInput, AlertChannelView, AlertError, AlertRuleInput, AlertRuleView};
+use crate::{
+    AlertChannel, AlertChannelConfiguration, AlertError, AlertRule, AlertRuleConfiguration,
+};
 use serde_json::Value;
 
-pub fn apply_rule(current: &AlertRuleView, patch: &Value) -> Result<AlertRuleInput, AlertError> {
-    let mut value =
-        serde_json::to_value(current).map_err(|e| AlertError::Storage(e.to_string()))?;
+pub fn apply_rule(
+    current: &AlertRule,
+    patch: &Value,
+) -> Result<AlertRuleConfiguration, AlertError> {
+    let mut value = serde_json::to_value(AlertRuleConfiguration::from(current))
+        .map_err(|e| AlertError::Storage(e.to_string()))?;
     // Name/description belong to rename/metadata, as in PatchAlertRuleHandler.
     apply_fields(
         &mut value,
@@ -26,24 +31,24 @@ pub fn apply_rule(current: &AlertRuleView, patch: &Value) -> Result<AlertRuleInp
             value[field] = Value::Array(Vec::new());
         }
     }
-    let mut input: AlertRuleInput = serde_path_to_error::deserialize(value)
+    let mut input: AlertRuleConfiguration = serde_path_to_error::deserialize(value)
         .map_err(|error| AlertError::Validation(format!("Invalid Alert Rule patch: {error}")))?;
     input.validate()?;
     Ok(input)
 }
 
 pub fn apply_channel(
-    current: &AlertChannelView,
+    current: &AlertChannel,
     patch: &Value,
-) -> Result<AlertChannelInput, AlertError> {
-    let mut value =
-        serde_json::to_value(current).map_err(|e| AlertError::Storage(e.to_string()))?;
+) -> Result<AlertChannelConfiguration, AlertError> {
+    let mut value = serde_json::to_value(AlertChannelConfiguration::from(current))
+        .map_err(|e| AlertError::Storage(e.to_string()))?;
     apply_fields(
         &mut value,
         patch,
         &["name", "alertDestination", "url", "isActive"],
     )?;
-    let mut input: AlertChannelInput = serde_path_to_error::deserialize(value)
+    let mut input: AlertChannelConfiguration = serde_path_to_error::deserialize(value)
         .map_err(|error| AlertError::Validation(format!("Invalid Alert Channel patch: {error}")))?;
     input.validate()?;
     Ok(input)
@@ -63,7 +68,7 @@ fn apply_fields(current: &mut Value, patch: &Value, fields: &[&str]) -> Result<(
 
 /// Free installations may disable a custom Rule or remove Channels. Built-in
 /// Rules may also be enabled and have Channels assigned without an upgrade.
-pub fn requires_advanced_alerting(current: &AlertRuleView, next: &AlertRuleInput) -> bool {
+pub fn requires_advanced_alerting(current: &AlertRule, next: &AlertRuleConfiguration) -> bool {
     let custom = current.created_by_actor_id != uuid::Uuid::from_u128(1);
     current.alert_type != next.alert_type
         || current.severity != next.severity
@@ -86,8 +91,8 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
-    fn rule() -> AlertRuleView {
-        AlertRuleView {
+    fn rule() -> AlertRule {
+        AlertRule {
             id: Uuid::now_v7(),
             name: "rule".into(),
             description: Some("description".into()),
@@ -188,7 +193,7 @@ mod tests {
 
     #[test]
     fn channel_patch_preserves_omissions_and_rejects_invalid_required_fields() {
-        let current = AlertChannelView {
+        let current = AlertChannel {
             id: Uuid::now_v7(),
             name: "channel".into(),
             alert_destination: "Generic".into(),

@@ -1,6 +1,9 @@
+mod automation_support;
 use chrono::{Duration, Timelike, Utc};
-use citadel_adapters::automation_store::PostgresAutomationStore;
-use citadel_automation::{AutomationActionInput, AutomationRunResult, AutomationStore};
+use citadel_adapters::postgres::automation::PostgresAutomationRepository;
+use citadel_automation::{
+    AutomationActionConfiguration, AutomationRepository, AutomationRunResult,
+};
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use serde_json::json;
@@ -24,8 +27,8 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .execute(&pool)
         .await
         .unwrap();
-    let store = PostgresAutomationStore::new(pool.clone());
-    let mut input = AutomationActionInput {
+    let store = PostgresAutomationRepository::new(pool.clone());
+    let mut input = AutomationActionConfiguration {
         name: format!("phase7-{}", Uuid::now_v7().simple()),
         description: None,
         code: "console.log('ok')".to_owned(),
@@ -343,8 +346,13 @@ impl citadel_automation::AutomationEntitlements for SchedulerDependencies {
 }
 fn scheduler(pool: sqlx::PgPool) -> citadel_automation::AutomationService {
     use std::sync::Arc;
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
     citadel_automation::AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool)),
+        Arc::new(automation_support::Tasks(automation_tasks.clone())),
+        automation_shutdown,
+        Arc::new(PostgresAutomationRepository::new(pool)),
         Arc::new(SchedulerDependencies),
         citadel_automation::AutomationRuntimeConfig {
             deno_path: "must-not-execute".into(),

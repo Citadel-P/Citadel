@@ -1,6 +1,6 @@
 use super::platforms::observe_platform_metrics;
 use citadel_adapters::{
-    alert_store::PostgresAlertStore, container_stats_store::PostgresContainerStatsStore,
+    container_stats_store::PostgresContainerStatsStore, postgres::alerts::PostgresAlertRepository,
 };
 use citadel_platforms::{HostDiskUsage, StatisticsReadStore};
 use sqlx::{Connection, PgConnection, PgPool};
@@ -25,7 +25,7 @@ async fn persisted_disk_samples_drive_builtin_alert_and_history_without_containe
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///fixture','Local',2,0,1024,'Disk fixture',0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).execute(&pool).await.unwrap();
     let store = PostgresContainerStatsStore::new(pool.clone());
-    let alerts = PostgresAlertStore::new(pool.clone()); // Built-in rules work without paid entitlements.
+    let alerts = PostgresAlertRepository::new(pool.clone()); // Built-in rules work without paid entitlements.
     let rule = Uuid::parse_str("019d0000-0001-7000-8001-000000000024").unwrap();
     let configuration: (String, f64, i32, i32) = sqlx::query_as(
         "SELECT status,threshold,requiredmatches,cooldownseconds FROM alertrules WHERE id=$1",
@@ -147,7 +147,7 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
             observation: &'a AlertObservation,
         ) -> futures_util::future::BoxFuture<
             'a,
-            Result<Option<citadel_alerts::AlertEventView>, citadel_alerts::AlertError>,
+            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
         > {
             self.0.lock().unwrap().push(observation.clone());
             Box::pin(async { Ok(None) })
@@ -176,7 +176,7 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
             _: &'a AlertObservation,
         ) -> futures_util::future::BoxFuture<
             'a,
-            Result<Option<citadel_alerts::AlertEventView>, citadel_alerts::AlertError>,
+            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
         > {
             Box::pin(async {
                 Err(citadel_alerts::AlertError::Storage(

@@ -4,14 +4,14 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use chrono::Duration;
-use citadel_adapters::alert_store::PostgresAlertStore;
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::alerts::PostgresAlertRepository;
 use citadel_adapters::postgres::backups::PostgresBackupPersistence;
 use citadel_adapters::postgres::builds::PostgresBuildRepository;
-use citadel_alerts::{AlertChannelView, AlertDelivery, AlertError, AlertEventView};
+use citadel_alerts::{AlertChannel, AlertDelivery, AlertError, AlertEvent};
 use citadel_backups::{
     BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog, BackupRepository,
     BackupRunAuthorizer, BackupService, BackupSourcePlan, BackupSourcePlanner, RestoreClaim,
@@ -26,7 +26,7 @@ use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::alerts_http::{self, AlertsHttpState};
+use citadel_server::api::alerts::{self as alerts_http, AlertsHttpState};
 use citadel_server::api::backups::handlers::{self as backups_http, BackupsHttpState};
 use citadel_server::api::builds::handlers::{self as builds_http, BuildsHttpState};
 use citadel_server::metrics::Metrics;
@@ -101,7 +101,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let backup_planner = Arc::new(FakeBackupPlanner::default());
     let alert_entitlement = Arc::new(alert_rule_create::Entitlement::default());
     let alert_store = Arc::new(
-        PostgresAlertStore::new(pool.clone()).with_entitlements(alert_entitlement.clone()),
+        PostgresAlertRepository::new(pool.clone()).with_entitlements(alert_entitlement.clone()),
     );
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
@@ -1389,8 +1389,8 @@ struct FakeAlertDelivery;
 impl AlertDelivery for FakeAlertDelivery {
     fn send<'a>(
         &'a self,
-        _: &'a AlertChannelView,
-        _: &'a AlertEventView,
+        _: &'a AlertChannel,
+        _: &'a AlertEvent,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), AlertError>> {
         Box::pin(async { Ok(()) })

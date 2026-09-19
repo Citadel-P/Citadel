@@ -9,3 +9,6 @@ pub mod swarm_services;
 pub mod backups;
 pub mod builds;
 pub mod git;
+
+pub mod alerts;
+pub mod automation;

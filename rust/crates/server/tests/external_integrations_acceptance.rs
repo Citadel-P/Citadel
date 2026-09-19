@@ -5,8 +5,8 @@ use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_adapters::{
-    activity_store::PostgresActivityStore, automation_store::PostgresAutomationStore,
-    crypto::AesGcmSecretProtector, docker::DockerClient,
+    activity_store::PostgresActivityStore, crypto::AesGcmSecretProtector, docker::DockerClient,
+    postgres::automation::PostgresAutomationRepository,
     postgres::git::accounts::PostgresGitAccountRepository,
     postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
     postgres::stacks::PostgresStackRepository,
@@ -222,7 +222,12 @@ Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_application
         assert_runtime(&docker,stack.id,"one").await;
         inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "one").await;
 
-        let automation=Arc::new(AutomationService::new(Arc::new(PostgresAutomationStore::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
+        let automation=Arc::new(AutomationService::new(
+        Arc::new(citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone())),
+        automation_shutdown.clone(),Arc::new(PostgresAutomationRepository::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
             deno_path:"deno".into(),work_root:root.join("automation"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
         let app=webhooks_http::router(WebhooksHttpState{git:git.clone(),automation,backups:None,builds:None,stacks:Some(stacks.clone()),services:None,alerts:None,audit:Some(Arc::new(PostgresActivityStore::new(pool.clone())))});
         let listener=tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();

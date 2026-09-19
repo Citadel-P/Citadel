@@ -1,6 +1,7 @@
 //! Real Deno and Shoutrrr execution with PostgreSQL and a local HTTP receiver.
 //! Ports the process/result/alert cases of AutomationActionIntegrationTests;
 //! unlike the .NET process mock, this gate executes the packaged tools.
+mod automation_support;
 use axum::{
     Json, Router,
     extract::State,
@@ -8,15 +9,16 @@ use axum::{
     routing::{get, post},
 };
 use citadel_adapters::{
-    alert_store::{PostgresAlertStore, ShoutrrrAlertDelivery},
-    automation_store::PostgresAutomationStore,
+    alert_delivery::ShoutrrrAlertDelivery, postgres::alerts::PostgresAlertRepository,
+    postgres::automation::PostgresAutomationRepository,
 };
 use citadel_alerts::{
-    AlertChannelInput, AlertDeliveryService, AlertEventFilter, AlertRuleInput, AlertStore,
+    AlertChannelConfiguration, AlertDeliveryService, AlertEventFilter, AlertRepository,
+    AlertRuleConfiguration,
 };
 use citadel_automation::{
-    AutomationActionInput, AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig,
-    AutomationService, AutomationStore,
+    AutomationActionConfiguration, AutomationError, AutomationRepository, AutomationRunTokenIssuer,
+    AutomationRuntimeConfig, AutomationService,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
@@ -79,6 +81,11 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         .connect(&database)
         .await
         .unwrap();
+    // Delivery assertions target this fixture's channel. The seeded Critical
+    // rule otherwise wins severity selection over the custom Warning rule.
+    let builtin_rules: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE alertrules SET status='Disabled' WHERE type='AutomationActionRunFailed' AND status='Enabled' AND createdbyactorid=$1 RETURNING id",
+    ).bind(Uuid::from_u128(1)).fetch_all(&db).await.unwrap();
     let actor = ActorId::new(Uuid::now_v7());
     sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
         .bind(actor.value())
@@ -105,14 +112,19 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
             .unwrap();
     });
     let root = std::env::temp_dir().join(format!("citadel-deno-{}", Uuid::now_v7()));
-    let store = Arc::new(PostgresAutomationStore::new(db.clone()));
+    let store = Arc::new(PostgresAutomationRepository::new(db.clone()));
     let alerts = Arc::new(
-        PostgresAlertStore::new(db.clone()).with_entitlements(Arc::new(
+        PostgresAlertRepository::new(db.clone()).with_entitlements(Arc::new(
             citadel_adapters::identity_store::StaticEntitlementService::new(true),
         )),
     );
+    let automation_shutdown = shutdown.clone();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
     let service = Arc::new(
         AutomationService::new(
+            Arc::new(automation_support::Tasks(automation_tasks.clone())),
+            automation_shutdown,
             store.clone(),
             Arc::new(Tokens(actor)),
             AutomationRuntimeConfig {
@@ -130,7 +142,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     let channel = alerts
         .create_channel(
             actor,
-            &AlertChannelInput {
+            &AlertChannelConfiguration {
                 name: format!("receiver-{actor:?}"),
                 alert_destination: "Generic".into(),
                 url: format!("generic://{address}/notifications?disabletls=yes"),
@@ -139,7 +151,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         )
         .await
         .unwrap();
-    let mut rule_input = AlertRuleInput {
+    let mut rule_input = AlertRuleConfiguration {
         name: format!("failure-{actor:?}"),
         description: None,
         alert_type: "AutomationActionRunFailed".into(),
@@ -179,7 +191,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         ("Deno.env.get('DATABASE_URL');", "Failed", 10),
         ("await fetch('http://denied.example.test');", "Failed", 10),
     ] {
-        let mut input = AutomationActionInput {
+        let mut input = AutomationActionConfiguration {
             name: format!("real-deno-{}", Uuid::now_v7()),
             description: None,
             code: code.into(),
@@ -320,7 +332,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     }
 
     // Cancellation must kill/reap real Deno and release the durable claim.
-    let mut input: AutomationActionInput = serde_json::from_value(json!({
+    let mut input: AutomationActionConfiguration = serde_json::from_value(json!({
         "name":format!("cancel-deno-{}",Uuid::now_v7()), "code":"await new Promise(() => setInterval(() => {}, 1000));",
         "enabled":true,"scheduleEnabled":false,"alertOnFailure":false,"timeoutSeconds":30
     })).unwrap();
@@ -405,7 +417,16 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
             .unwrap();
     assert_eq!(remaining, 0, "successful delivery removes the outbox entry");
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+    sqlx::query("UPDATE alertrules SET status='Enabled' WHERE id=ANY($1)")
+        .bind(&builtin_rules)
+        .execute(&db)
+        .await
+        .unwrap();
     shutdown.cancel();
+    automation_tasks
+        .drain(Duration::from_secs(10))
+        .await
+        .unwrap();
     http.await.unwrap();
     std::fs::remove_dir_all(&root).unwrap();
 }

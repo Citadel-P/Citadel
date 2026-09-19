@@ -9,7 +9,7 @@ pub(super) async fn verify(
     rule: &Value,
     channel: &Value,
     hub: &RealtimeHub,
-    store: &PostgresAlertStore,
+    store: &PostgresAlertRepository,
 ) {
     let mut changes = hub.subscribe();
     let id = rule["id"].as_str().unwrap();

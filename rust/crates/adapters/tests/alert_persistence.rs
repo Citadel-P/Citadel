@@ -1,8 +1,8 @@
 use chrono::{Duration, Utc};
-use citadel_adapters::alert_store::PostgresAlertStore;
+use citadel_adapters::postgres::alerts::PostgresAlertRepository;
 use citadel_alerts::{
-    AlertChannelInput, AlertError, AlertEventFilter, AlertObservation, AlertRuleInput, AlertStore,
-    NewAlertEvent,
+    AlertChannelConfiguration, AlertError, AlertEventFilter, AlertObservation, AlertRepository,
+    AlertRuleConfiguration, NewAlertEvent,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
@@ -36,7 +36,7 @@ async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
         .execute(&pool)
         .await
         .unwrap();
-    let store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+    let store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
         citadel_adapters::identity_store::StaticEntitlementService::new(true),
     ));
     let resource = Uuid::now_v7();
@@ -45,7 +45,7 @@ async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
         let rule = store
             .create_rule(
                 actor,
-                &AlertRuleInput {
+                &AlertRuleConfiguration {
                     name: format!("severity-{severity}-{resource}"),
                     description: None,
                     alert_type: "BuildRunFailed".into(),
@@ -144,7 +144,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .unwrap();
     let notifications = Arc::new(AtomicUsize::new(0));
     let changes = notifications.clone();
-    let store = PostgresAlertStore::new(pool.clone())
+    let store = PostgresAlertRepository::new(pool.clone())
         .with_entitlements(Arc::new(
             citadel_adapters::identity_store::StaticEntitlementService::new(true),
         ))
@@ -154,7 +154,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let channel = store
         .create_channel(
             actor,
-            &AlertChannelInput {
+            &AlertChannelConfiguration {
                 name: format!("phase7-channel-{}", Uuid::now_v7().simple()),
                 alert_destination: "Generic".into(),
                 url: "https://alerts.example.test/hook".into(),
@@ -164,7 +164,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .await
         .unwrap();
 
-    let input = |channel_ids| AlertRuleInput {
+    let input = |channel_ids| AlertRuleConfiguration {
         name: format!("phase7-rule-{}", Uuid::now_v7().simple()),
         description: None,
         alert_type: "BuildRunFailed".into(),
@@ -242,7 +242,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let evaluated_rule = store
         .create_rule(
             actor,
-            &AlertRuleInput {
+            &AlertRuleConfiguration {
                 name: format!("phase7-evaluated-rule-{}", Uuid::now_v7().simple()),
                 description: None,
                 alert_type: "Phase7EvaluationProbe".into(),
@@ -304,7 +304,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let threshold_rule = store
         .create_rule(
             actor,
-            &AlertRuleInput {
+            &AlertRuleConfiguration {
                 name: format!("phase7-threshold-rule-{}", Uuid::now_v7().simple()),
                 description: None,
                 alert_type: "PlatformCpuHigh".into(),
@@ -393,7 +393,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
 
     // AlertService.ProcessAsync: a license downgrade skips custom rules, but
     // built-in rules continue. Reconstruct the store to exercise persisted state.
-    let free_store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+    let free_store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
         citadel_adapters::identity_store::StaticEntitlementService::new(false),
     ));
     let after_downgrade = AlertObservation {
@@ -492,7 +492,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
         .execute(&pool)
         .await
         .unwrap();
-    let store = PostgresAlertStore::new(pool.clone()).with_entitlements(Arc::new(
+    let store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
         citadel_adapters::identity_store::StaticEntitlementService::new(true),
     ));
     let builtins:Vec<Uuid>=sqlx::query_scalar("UPDATE alertrules SET status='Disabled' WHERE type='PlatformCpuHigh' AND status='Enabled' RETURNING id").fetch_all(&pool).await.unwrap();
@@ -500,7 +500,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
         "matches", "broken", "below", "disabled", "scope", "quiet", "severity",
     ] {
         let resource = Uuid::now_v7();
-        let rule=store.create_rule(actor,&AlertRuleInput {
+        let rule=store.create_rule(actor,&AlertRuleConfiguration {
             name:format!("parity-{case}-{resource}"),description:None,alert_type:"PlatformCpuHigh".into(),severity:"Warning".into(),cooldown_seconds:Some(60),required_matches:Some(if case=="severity" {1} else {3}),threshold:Some(80.0),status:if case=="disabled" {"Disabled"} else {"Enabled"}.into(),channel_ids:vec![],
             limited_to:vec![json!({"resourceId":if case=="scope" {Uuid::now_v7()} else {resource},"resourceType":"Platform"})],
             quiet_hours:if case=="quiet" {vec![json!({"$type":"Daily","timezone":"UTC","startTime":"00:00:00","endTime":"23:59:59"})]} else {vec![]},
@@ -510,7 +510,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
                 store
                     .create_rule(
                         actor,
-                        &AlertRuleInput {
+                        &AlertRuleConfiguration {
                             name: format!("critical-{resource}"),
                             description: None,
                             alert_type: "PlatformCpuHigh".into(),

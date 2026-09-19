@@ -3,9 +3,8 @@ pub mod api;
 
 pub mod activities_http;
 pub mod actors_http;
-pub mod alerts_http;
+
 pub mod application_info_http;
-pub mod automation_http;
 
 pub mod bootstrap;
 

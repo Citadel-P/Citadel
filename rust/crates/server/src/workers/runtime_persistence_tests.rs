@@ -105,7 +105,7 @@ async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upsert
             _: &'a AlertObservation,
         ) -> futures_util::future::BoxFuture<
             'a,
-            Result<Option<citadel_alerts::AlertEventView>, citadel_alerts::AlertError>,
+            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
         > {
             Box::pin(async move {
                 if !self.first.swap(true, std::sync::atomic::Ordering::SeqCst) {

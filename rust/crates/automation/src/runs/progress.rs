@@ -1,12 +1,10 @@
-use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{AutomationRunResult, AutomationRunView};
+use crate::{AutomationRun, AutomationRunResult};
 
-#[derive(Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default)]
 pub struct AutomationProgress {
     pub run_id: Option<Uuid>,
     pub status: Option<String>,
@@ -16,14 +14,14 @@ pub struct AutomationProgress {
     pub error: Option<AutomationProgressError>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct AutomationProgressError {
     pub code: i32,
     pub message: String,
 }
 
 impl AutomationProgress {
-    pub fn state(run: &AutomationRunView, status: &str) -> Self {
+    pub fn state(run: &AutomationRun, status: &str) -> Self {
         Self {
             run_id: Some(run.id),
             status: Some(status.into()),
@@ -36,7 +34,7 @@ impl AutomationProgress {
         }
     }
 
-    pub fn completed(run: &AutomationRunView, result: &AutomationRunResult) -> Self {
+    pub fn completed(run: &AutomationRun, result: &AutomationRunResult) -> Self {
         let mut item = Self::state(run, result.status);
         if let Some(message) = &result.error {
             item.error_message = Some(message.clone());

@@ -15,12 +15,17 @@ fn sources(path: &Path) -> Vec<PathBuf> {
         .collect()
 }
 #[test]
-fn phase8_resources_keep_transport_and_detached_tasks_out_of_features() {
+fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    for feature in ["builds", "git", "backups"] {
+    for feature in ["builds", "git", "backups", "automation", "alerts"] {
         for path in sources(&crates.join(feature).join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
+                "AutomationActionView",
+                "AutomationRunView",
+                "AlertChannelView",
+                "AlertRuleView",
+                "AlertEventView",
                 "utoipa",
                 "axum::",
                 "tokio::spawn",
@@ -49,6 +54,8 @@ fn phase8_resources_keep_transport_and_detached_tasks_out_of_features() {
         );
     }
     for (feature, resources) in [
+        ("automation", &["actions", "runs"][..]),
+        ("alerts", &["channels", "rules", "events"][..]),
         ("builds", &["projects", "runs", "agent_pools"][..]),
         ("git", &["accounts", "repositories"][..]),
         (
@@ -69,12 +76,17 @@ fn phase8_resources_keep_transport_and_detached_tasks_out_of_features() {
     }
 }
 #[test]
-fn phase8_postgres_maps_semantic_data_without_http_projection() {
+fn migrated_postgres_maps_semantic_data_without_http_projection() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    for feature in ["builds", "git", "backups"] {
+    for feature in ["builds", "git", "backups", "automation", "alerts"] {
         for path in sources(&crates.join("adapters/src/postgres").join(feature)) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
+                "AutomationActionView",
+                "AutomationRunView",
+                "AlertChannelView",
+                "AlertRuleView",
+                "AlertEventView",
                 "GitRepositoryView",
                 "BuildProjectView",
                 "BackupRunView",

@@ -6,12 +6,12 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-utoipa.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 citadel-alerts = { path = "../alerts" }
 citadel-domain = { path = "../domain" }
 citadel-execution = { path = "../execution" }
+citadel-git = { path = "../git" }
 citadel-resources = { path = "../resources" }
 futures-util.workspace = true
 serde.workspace = true

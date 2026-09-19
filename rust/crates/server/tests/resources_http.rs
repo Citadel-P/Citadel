@@ -4,17 +4,17 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use chrono::{Duration, Utc};
-use citadel_adapters::automation_store::PostgresAutomationStore;
 use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::automation::PostgresAutomationRepository;
 use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
-use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
+use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
@@ -23,13 +23,13 @@ use citadel_identity::{
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_resources::ResourceMetadataService;
+use citadel_server::api::automation::{self as automation_http, AutomationHttpState};
 use citadel_server::api::git::accounts::handlers::{
     self as git_accounts_http, GitAccountsHttpState,
 };
 use citadel_server::api::git::repositories::handlers::{
     self as git_repositories_http, GitRepositoriesHttpState,
 };
-use citadel_server::automation_http::{self, AutomationHttpState};
 use citadel_server::resources_http::{self, ResourcesHttpState};
 use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use serde_json::{Value, json};
@@ -91,8 +91,15 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         std::time::Duration::from_secs(60),
     ));
     let cancellation = tokio_util::sync::CancellationToken::new();
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
     let automation = Arc::new(AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        Arc::new(
+            citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
+        ),
+        automation_shutdown.clone(),
+        Arc::new(PostgresAutomationRepository::new(pool.clone())),
         Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
         AutomationRuntimeConfig {
             deno_path: "deno".into(),
@@ -357,7 +364,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(unsupported_update.status(), StatusCode::BAD_REQUEST);
     // Keep this fixture's run queued for the cancellation endpoint. Actual HTTP
     // execution/progress is covered with real Deno by automation_http_execution.
-    let queued = PostgresAutomationStore::new(pool.clone())
+    let queued = PostgresAutomationRepository::new(pool.clone())
         .enqueue(
             administrator.actor_id,
             automation_uuid,

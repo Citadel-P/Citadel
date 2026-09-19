@@ -4,7 +4,7 @@ pub(super) async fn verify(
     app: &Router,
     db: &PgPool,
     admin: &ActorPrincipal,
-    store: &PostgresAutomationStore,
+    store: &PostgresAutomationRepository,
     action: &Value,
 ) {
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();

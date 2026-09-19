@@ -531,7 +531,6 @@ dependencies = [
  "serde_path_to_error",
  "thiserror",
  "tokio-util",
- "utoipa",
  "uuid",
 ]
 
@@ -562,6 +561,7 @@ dependencies = [
  "citadel-alerts",
  "citadel-domain",
  "citadel-execution",
+ "citadel-git",
  "citadel-resources",
  "futures-util",
  "serde",
@@ -571,7 +571,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "utoipa",
  "uuid",
 ]
 
