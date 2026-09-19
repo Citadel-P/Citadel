@@ -1,26 +1,23 @@
-use crate::{ManagedSwarmServiceView, SwarmServiceError, SwarmServiceSpec};
+use crate::{SwarmServiceDetails, SwarmServiceError, SwarmServiceSpec};
 use citadel_domain::ActorId;
 use futures_util::future::BoxFuture;
-use serde::{Deserialize, Serialize};
+
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct SwarmServiceAdoptionSource {
     pub docker_service_id: String,
     pub name: String,
     pub platform_id: Uuid,
     pub platform_name: String,
 }
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct SwarmServiceAdoptionIssue {
     pub code: String,
     pub message: String,
 }
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct SwarmServiceAdoptionDraft {
     pub source: SwarmServiceAdoptionSource,
     pub name: String,
@@ -29,15 +26,12 @@ pub struct SwarmServiceAdoptionDraft {
     pub issues: Vec<SwarmServiceAdoptionIssue>,
     pub preview_fingerprint: String,
 }
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AdoptSwarmServiceInput {
+#[derive(Debug)]
+pub struct AdoptSwarmService {
     pub name: String,
     pub description: Option<String>,
     pub spec: SwarmServiceSpec,
     pub preview_fingerprint: String,
-    #[serde(default, deserialize_with = "crate::model::deserialize_null_default")]
-    #[schema(nullable)]
     pub tag_ids: Vec<Uuid>,
 }
 pub trait SwarmServiceAdoptionPort: Send + Sync {
@@ -55,7 +49,7 @@ pub trait SwarmServiceAdoptionPort: Send + Sync {
         administrator: bool,
         platform: Uuid,
         id: &'a str,
-        input: &'a AdoptSwarmServiceInput,
+        input: &'a AdoptSwarmService,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<ManagedSwarmServiceView, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
 }

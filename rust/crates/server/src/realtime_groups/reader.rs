@@ -9,8 +9,8 @@ use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::IdentityService;
 use citadel_platforms::PlatformReadService;
 use citadel_resources::ResourceMetadataStore;
-use citadel_stacks::StackStore;
-use citadel_swarm_services::SwarmServiceStore;
+use citadel_stacks::StackRepository;
+use citadel_swarm_services::SwarmServiceRepository;
 use std::sync::Arc;
 
 #[path = "logs.rs"]
@@ -28,8 +28,8 @@ pub struct ApplicationGroupReader {
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
     pub deployments: Arc<dyn DeploymentRepository>,
-    pub stacks: Arc<dyn StackStore>,
-    pub services: Arc<dyn SwarmServiceStore>,
+    pub stacks: Arc<dyn StackRepository>,
+    pub services: Arc<dyn SwarmServiceRepository>,
     pub resources: Arc<dyn ResourceMetadataStore>,
     pub automation: Arc<dyn AutomationStore>,
     pub builds: Arc<dyn BuildStore>,
@@ -95,13 +95,47 @@ impl ApplicationGroupReader {
         if p.is_administrator() {
             return Ok(());
         }
+        use citadel_domain::PermissionPolicy;
+        let workload_requirement = match (kind, specific) {
+            (ResourceType::Stack, None) => {
+                Some(citadel_stacks::permissions::ReadStack::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Logs)) => {
+                Some(citadel_stacks::permissions::ViewStackLogs::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Inspect)) => {
+                Some(citadel_stacks::permissions::InspectStack::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Terminal)) => {
+                Some(citadel_stacks::permissions::OpenStackTerminal::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, None) => {
+                Some(citadel_swarm_services::permissions::ReadSwarmService::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, Some(SpecificPermission::Logs)) => {
+                Some(citadel_swarm_services::permissions::ViewSwarmServiceLogs::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, Some(SpecificPermission::Inspect)) => {
+                Some(citadel_swarm_services::permissions::InspectSwarmService::REQUIREMENT)
+            }
+            _ => None,
+        };
         let grant = match id {
             Some(id) => self.identity.permission_for_resource(p, kind, id).await,
             None => self.identity.global_permission(p, kind).await,
         }
         .map_err(failure)?;
         if grant.is_some_and(|g| {
-            g.level.grants(PermissionLevel::Read) && specific.is_none_or(|s| g.has_specific(s))
+            workload_requirement.map_or_else(
+                || {
+                    g.level.grants(PermissionLevel::Read)
+                        && specific.is_none_or(|s| g.has_specific(s))
+                },
+                |requirement| {
+                    g.level.grants(requirement.level)
+                        && requirement.specific.is_none_or(|s| g.has_specific(s))
+                },
+            )
         }) {
             Ok(())
         } else {
@@ -390,17 +424,20 @@ impl ApplicationGroupReader {
                 self.stacks
                     .list_authorized(actor, admin, &Default::default())
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::stacks::views::StackView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::Stack(..) => rows(
                 "StackInfoUpdated",
-                vec![
+                vec![crate::api::stacks::views::StackView::from(
                     self.stacks
                         .get_authorized(actor, admin, id.unwrap())
                         .await
                         .map_err(failure)?,
-                ],
+                )],
                 RowStyle::Update,
             ),
             Topic::StackInfo(..) => {
@@ -429,10 +466,12 @@ impl ApplicationGroupReader {
             Topic::SwarmService(..) => rows(
                 "SwarmServiceInfoUpdated",
                 vec![
-                    self.services
-                        .get_authorized(actor, admin, id.unwrap())
-                        .await
-                        .map_err(failure)?,
+                    crate::api::swarm_services::views::ManagedSwarmServiceView::from(
+                        self.services
+                            .get_authorized(actor, admin, id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ),
                 ],
                 RowStyle::Update,
             ),
@@ -448,7 +487,10 @@ impl ApplicationGroupReader {
                         },
                     )
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::swarm_services::views::ManagedSwarmServiceView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::GitRepositories => rows(

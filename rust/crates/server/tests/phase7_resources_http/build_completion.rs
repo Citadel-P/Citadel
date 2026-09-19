@@ -3,14 +3,14 @@
 use super::*;
 use citadel_adapters::{
     build_completion_store::PostgresBuildCompletionStore,
-    postgres::deployments::PostgresDeploymentRepository, stack_store::PostgresStackStore,
+    postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
 };
 use citadel_builds::{
     BuildCompletionService, BuildCompletionStore, BuildConsumerClaim, BuildConsumerRuntime,
     BuildConsumerType, BuildEntitlements, BuildError,
 };
 use citadel_deployments::DeploymentRepository;
-use citadel_stacks::StackStore;
+use citadel_stacks::StackRepository;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},
@@ -44,10 +44,10 @@ pub async fn create(pool: &sqlx::PgPool, fixture: &FixtureIds, project: Uuid) ->
             .bind(resource.id).execute(pool).await.unwrap();
         ids.push(resource.id);
     }
-    let input=serde_json::from_value(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
+    let input=serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
         "spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx\n  worker:\n    image: nginx\n","registryId":fixture.registry,"updateBehavior":"Disabled",
-            "buildImageBindings":[{"serviceName":"web","buildProjectId":project,"redeployOnBuild":true,"appliedImageReference":"old-image"},{"serviceName":"worker","buildProjectId":project,"redeployOnBuild":false,"appliedImageReference":"old-image"}]}})).unwrap();
-    let stack = PostgresStackStore::new(pool.clone())
+            "buildImageBindings":[{"serviceName":"web","buildProjectId":project,"redeployOnBuild":true,"appliedImageReference":"old-image"},{"serviceName":"worker","buildProjectId":project,"redeployOnBuild":false,"appliedImageReference":"old-image"}]}})).unwrap().try_into().unwrap();
+    let stack = PostgresStackRepository::new(pool.clone())
         .create(ActorId::new(SYSTEM_ACTOR_ID), true, &input)
         .await
         .unwrap();

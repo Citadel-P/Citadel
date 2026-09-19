@@ -3,8 +3,8 @@
 use crate::image_digest_cache::ImageDigestCache;
 use citadel_deployments::{DeploymentRepository, DeploymentRuntime};
 use citadel_domain::ActorId;
-use citadel_stacks::StackStore;
-use citadel_swarm_services::SwarmServiceStore;
+use citadel_stacks::StackRepository;
+use citadel_swarm_services::SwarmServiceRepository;
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
@@ -69,9 +69,9 @@ impl ImageScanner {
         let actor = ActorId::new(Uuid::from_u128(1));
         let deployments =
             crate::postgres::deployments::PostgresDeploymentRepository::new(self.pool.clone());
-        let stacks = crate::stack_store::PostgresStackStore::new(self.pool.clone());
+        let stacks = crate::postgres::stacks::PostgresStackRepository::new(self.pool.clone());
         let services =
-            crate::swarm_service_store::PostgresSwarmServiceStore::new(self.pool.clone());
+            crate::postgres::swarm_services::PostgresSwarmServiceRepository::new(self.pool.clone());
         let mut tasks = Vec::new();
         for kind in ["Deployment", "Stack", "SwarmService"] {
             let mut after = Uuid::nil();

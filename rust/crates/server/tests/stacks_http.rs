@@ -1,3 +1,4 @@
+use citadel_server::api::stacks as stacks_http;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -9,18 +10,18 @@ use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::stack_store::PostgresStackStore;
+use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::stacks_http::{self, StacksHttpState};
+use citadel_server::api::stacks::StacksHttpState;
 use citadel_stacks::{
     ComposeProjectRuntimeService, NoopStackChangeNotifier, ResolvedStackBindings, StackApplySource,
     StackBindingResolverPort, StackDeletionClaim, StackError, StackImportClaim, StackImportKind,
-    StackOperationClaim, StackOrchestrationMode, StackReleaseStatus, StackRuntimePort,
+    StackOperationClaim, StackOrchestrationMode, StackReleaseStatus, StackRuntime,
     StackRuntimeResult, StackRuntimeSnapshot, StackService,
 };
 use futures_util::future::BoxFuture;
@@ -60,7 +61,7 @@ struct CompletingStackRuntime {
     release_apply: tokio::sync::Notify,
 }
 
-impl StackRuntimePort for CompletingStackRuntime {
+impl StackRuntime for CompletingStackRuntime {
     fn apply<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
@@ -102,7 +103,10 @@ impl StackRuntimePort for CompletingStackRuntime {
                 }
             }
             if self.hold_apply.swap(0, Ordering::Relaxed) != 0 {
-                self.release_apply.notified().await;
+                tokio::select! {
+                    () = self.release_apply.notified() => {},
+                    () = _cancellation.cancelled() => return Err(StackError::Cancelled),
+                }
             }
             Ok(result)
         })
@@ -238,13 +242,16 @@ impl StackBindingResolverPort for FixtureBindings {
 }
 
 fn healthy() -> StackRuntimeResult {
-    let mut progress = citadel_stacks::StackStreamItem::system("Container web Started");
+    let mut progress = citadel_stacks::StackProgressItem::system("Container web Started");
     progress.event_type = citadel_stacks::StackApplyEventType::StdErr;
     StackRuntimeResult {
         status: StackReleaseStatus::Healthy,
         messages: vec![progress],
     }
 }
+
+#[path = "stacks_http/task_ownership.rs"]
+mod task_ownership;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
@@ -274,7 +281,10 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let scanner = Arc::new(updates::Scanner::new(pool.clone()));
     let stacks = Arc::new(
         StackService::new(
-            Arc::new(PostgresStackStore::new(pool.clone())),
+            Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            )),
+            Arc::new(PostgresStackRepository::new(pool.clone())),
             runtime.clone(),
             Arc::new(FixtureBindings),
             Arc::new(NoopStackChangeNotifier),
@@ -862,6 +872,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     );
 
     releases::verify(&app, &pool, &admin, platform_id, &runtime).await;
+    task_ownership::verify(&pool, admin.actor_id, platform_id).await;
 
     assert_eq!(
         request(

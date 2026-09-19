@@ -2,12 +2,14 @@
 use crate::state::AppState;
 use axum::{Router, middleware};
 use citadel_server::api::deployments;
+use citadel_server::api::stacks as stacks_http;
+use citadel_server::api::swarm_services as swarm_services_http;
 use citadel_server::config::Config;
 use citadel_server::{
     activities_http, alerts_http, application_info_http, automation_http, backups_http,
     builds_http, git_accounts_http, git_repositories_http, identity_http, license_http, oidc_http,
-    platforms_http, profile_http, resources_http, roles_http, service_accounts_http, stacks_http,
-    swarm_services_http, teams_http, transport, users_http, webhooks_http,
+    platforms_http, profile_http, resources_http, roles_http, service_accounts_http, teams_http,
+    transport, users_http, webhooks_http,
 };
 use std::sync::Arc;
 use tower_http::{catch_panic::CatchPanicLayer, trace::TraceLayer};

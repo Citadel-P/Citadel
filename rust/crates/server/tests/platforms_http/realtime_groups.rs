@@ -3,7 +3,8 @@ use citadel_adapters::{
     activity_store::PostgresActivityStore, alert_store::PostgresAlertStore,
     automation_store::PostgresAutomationStore, backup_store::PostgresBackupStore,
     build_store::PostgresBuildStore, postgres::deployments::PostgresDeploymentRepository,
-    stack_store::PostgresStackStore, swarm_service_store::PostgresSwarmServiceStore,
+    postgres::stacks::PostgresStackRepository,
+    postgres::swarm_services::PostgresSwarmServiceRepository,
 };
 use citadel_domain::ResourceType;
 use citadel_identity::{AccessTokenClaims, SessionTokenCodec};
@@ -20,8 +21,8 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         identity: f.lookup_state.platforms.identity.clone(),
         platforms: f.lookup_state.platforms.platforms.clone(),
         deployments: Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
-        stacks: Arc::new(PostgresStackStore::new(f.pool.clone())),
-        services: Arc::new(PostgresSwarmServiceStore::new(f.pool.clone())),
+        stacks: Arc::new(PostgresStackRepository::new(f.pool.clone())),
+        services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
         resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
         automation: Arc::new(PostgresAutomationStore::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildStore::new(f.pool.clone())),

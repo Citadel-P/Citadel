@@ -267,7 +267,9 @@ mod tests {
 
     #[tokio::test]
     async fn stack_patch_reports_unknown_field() {
-        let body = problem::<citadel_stacks::PatchStackInput>(br#"{"unexpected":true}"#).await;
+        let body =
+            problem::<crate::api::stacks::requests::PatchStackInput>(br#"{"unexpected":true}"#)
+                .await;
         assert!(
             body["errors"]
                 .to_string()
@@ -288,7 +290,8 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_json_reports_parser_location() {
-        let body = problem::<citadel_stacks::PatchStackInput>(br#"{"platformId":"#).await;
+        let body =
+            problem::<crate::api::stacks::requests::PatchStackInput>(br#"{"platformId":"#).await;
         let errors = body["errors"].to_string();
         assert!(errors.contains("EOF"), "{body}");
         assert!(errors.contains("line 1"), "{body}");

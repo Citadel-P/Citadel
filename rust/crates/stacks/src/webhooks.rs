@@ -5,7 +5,7 @@ use futures_util::future::BoxFuture;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::{StackError, StackService, StackSpec, StackUpdateBehavior, StackView};
+use crate::{StackDetails, StackError, StackService, StackSpec, StackUpdateBehavior};
 
 pub trait StackEntitlements: Send + Sync {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, StackError>>;
@@ -138,7 +138,7 @@ impl StackService {
 
     pub async fn queue_webhook(
         &self,
-        expected: &StackView,
+        expected: &StackDetails,
         commit: Option<&str>,
     ) -> Result<(), StackError> {
         if !self.automated_operations_enabled().await? {

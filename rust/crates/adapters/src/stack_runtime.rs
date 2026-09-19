@@ -6,9 +6,9 @@ use citadel_platforms::{PlatformInventoryPort, PlatformResourceMutationPort};
 use citadel_stacks::{
     ComposeProjectRuntimeService, StackAction, StackApplyEventType, StackApplySource, StackCommand,
     StackDeletionClaim, StackDrift, StackDriftPolicy, StackError, StackImportClaim,
-    StackImportKind, StackOperationClaim, StackOrchestrationMode, StackReconciliationAction,
-    StackReconciliationActionType, StackReleaseStatus, StackRuntimeContainer, StackRuntimePort,
-    StackRuntimeResult, StackRuntimeService, StackRuntimeSnapshot, StackStreamItem,
+    StackImportKind, StackOperationClaim, StackOrchestrationMode, StackProgressItem,
+    StackReconciliationAction, StackReconciliationActionType, StackReleaseStatus, StackRuntime,
+    StackRuntimeContainer, StackRuntimeResult, StackRuntimeService, StackRuntimeSnapshot,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::Value;
@@ -21,8 +21,7 @@ use uuid::Uuid;
 
 use crate::agent::{AgentClient, AgentContainerAction, AgentStackRegistry};
 use crate::docker::DockerClient;
-#[path = "stack_release_resources.rs"]
-mod release_resources;
+use crate::postgres::stacks::release_resources;
 #[path = "stack_update_scanner.rs"]
 mod update_scanner;
 pub use update_scanner::StackUpdateRuntime;
@@ -417,7 +416,7 @@ impl StackRuntimeRouter {
     }
 }
 
-impl StackRuntimePort for StackRuntimeRouter {
+impl StackRuntime for StackRuntimeRouter {
     fn apply<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
@@ -505,7 +504,7 @@ impl StackRuntimePort for StackRuntimeRouter {
                     .services
                     .iter()
                     .filter_map(|service| service.update_message.as_ref())
-                    .map(|message| StackStreamItem::system(message.clone()))
+                    .map(|message| StackProgressItem::system(message.clone()))
                     .collect()
             } else {
                 Vec::new()
@@ -1033,7 +1032,7 @@ async fn run_stack_commands(
         .await
         .map_err(runtime_io)?
     {
-        let item = StackStreamItem {
+        let item = StackProgressItem {
             event_type: StackApplyEventType::StdErr,
             message: Some(format!("Command path '{}' does not exist.", command.path)),
             exit_code: None,
@@ -1079,7 +1078,7 @@ async fn run_stack_commands(
     })
 }
 
-fn append_messages_bounded(target: &mut Vec<StackStreamItem>, source: Vec<StackStreamItem>) {
+fn append_messages_bounded(target: &mut Vec<StackProgressItem>, source: Vec<StackProgressItem>) {
     let mut remaining = MAX_STACK_MESSAGES_BYTES.saturating_sub(
         target
             .iter()
@@ -1171,7 +1170,7 @@ async fn collect_process(
     };
     let mut messages = stdout;
     append_messages_bounded(&mut messages, stderr);
-    let completed = StackStreamItem {
+    let completed = StackProgressItem {
         event_type: StackApplyEventType::CommandCompleted,
         message: None,
         exit_code: status.code(),
@@ -1211,7 +1210,7 @@ async fn read_process_output(
     mut reader: impl tokio::io::AsyncRead + Unpin,
     event_type: StackApplyEventType,
     progress: Option<&citadel_stacks::StackProgress>,
-) -> Result<Vec<StackStreamItem>, StackError> {
+) -> Result<Vec<StackProgressItem>, StackError> {
     let mut messages = Vec::new();
     let mut retained = 0usize;
     let mut pending = Vec::new();
@@ -1251,14 +1250,14 @@ async fn emit_process_line(
     bytes: &[u8],
     event_type: StackApplyEventType,
     progress: Option<&citadel_stacks::StackProgress>,
-    messages: &mut Vec<StackStreamItem>,
+    messages: &mut Vec<StackProgressItem>,
     retained: &mut usize,
 ) {
     let line = String::from_utf8_lossy(bytes);
     if line.trim().is_empty() {
         return;
     }
-    let item = StackStreamItem {
+    let item = StackProgressItem {
         event_type,
         message: Some(line.into_owned()),
         exit_code: None,

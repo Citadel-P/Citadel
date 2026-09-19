@@ -22,36 +22,34 @@ pub(super) async fn inspect_managed_service(
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
-    use citadel_swarm_services::SwarmServiceStore;
+    use citadel_swarm_services::SwarmServiceRepository;
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
     if !principal.is_administrator() {
         identity_result(
             state
                 .identity
-                .authorize_resource(
-                    &principal,
-                    ResourceType::SwarmService,
-                    id,
-                    PermissionLevel::Read,
-                    Some(SpecificPermission::Inspect),
+                .require_resource::<citadel_swarm_services::permissions::InspectSwarmService>(
+                    &principal, id,
                 )
                 .await,
             &headers,
         )?;
     }
-    let store =
-        citadel_adapters::swarm_service_store::PostgresSwarmServiceStore::new(state.pool.clone());
+    let store = citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository::new(
+        state.pool.clone(),
+    );
     let service = identity_result(
         store
             .get_authorized(principal.actor_id, principal.is_administrator(), id)
             .await
-            .map_err(crate::swarm_services_http::service_error),
+            .map_err(crate::api::swarm_services::service_error),
         &headers,
     )?;
     let docker_id = identity_result(
         service
             .docker_service_id
+            .as_ref()
             .ok_or_else(|| IdentityError::Conflict("The Service has not been applied.".into())),
         &headers,
     )?;
@@ -66,11 +64,11 @@ pub(super) async fn inspect_managed_service(
     let client = swarm_inventory::client(&runtime);
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(30),
-        client.inspect_service(&docker_id, &cancel),
+        client.inspect_service(docker_id, &cancel),
     )
     .await;
     let service = match result {
-        Ok(Ok(service)) if service.id == docker_id => service,
+        Ok(Ok(service)) if service.id == *docker_id => service,
         Ok(Err(error)) => return Ok(runtime_error_response(error, &headers)),
         _ => {
             return identity_result(
@@ -118,13 +116,7 @@ pub(super) async fn stack_data(
         identity_result(
             state
                 .identity
-                .authorize_resource(
-                    &principal,
-                    ResourceType::Stack,
-                    stack_id,
-                    PermissionLevel::Read,
-                    None,
-                )
+                .require_resource::<citadel_stacks::permissions::ReadStack>(&principal, stack_id)
                 .await,
             &headers,
         )?;
@@ -407,13 +399,7 @@ pub(super) async fn inspect_stack(
         identity_result(
             state
                 .identity
-                .authorize_resource(
-                    &principal,
-                    ResourceType::Stack,
-                    stack_id,
-                    PermissionLevel::Read,
-                    Some(SpecificPermission::Inspect),
-                )
+                .require_resource::<citadel_stacks::permissions::InspectStack>(&principal, stack_id)
                 .await,
             &headers,
         )?;

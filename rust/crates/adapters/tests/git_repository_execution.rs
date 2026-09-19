@@ -556,9 +556,14 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
     );
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///'||$2,'Local',1,0,1024,$2,0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).bind(format!("poll-{platform}")).execute(&pool).await.unwrap();
-    let input=serde_json::from_value(serde_json::json!({"name":format!("poll-stack-{platform}"),"platformId":platform,"stackSource":"Git","spec":{"$type":"Git","gitRepoId":id,"branch":"feature","composePaths":["compose.yaml"],"updateBehavior":"Notify"}})).unwrap();
-    let stack = citadel_stacks::StackStore::create(
-        &citadel_adapters::stack_store::PostgresStackStore::new(pool.clone()),
+    let input = citadel_stacks::CreateStack {
+        name: format!("poll-stack-{platform}"), platform_id: platform,
+        stack_source: citadel_stacks::StackSource::Git,
+        spec: serde_json::from_value(serde_json::json!({"$type":"Git","gitRepoId":id,"branch":"feature","composePaths":["compose.yaml"],"updateBehavior":"Notify"})).unwrap(),
+        description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
+    };
+    let stack = citadel_stacks::StackRepository::create(
+        &citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone()),
         ActorId::new(actor),
         true,
         &input,

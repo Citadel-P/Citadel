@@ -79,16 +79,15 @@ The feature has no HTTP schemas; the architectural guard has no Deployment legac
 exemption. The Platform projection retains one explicit typed-set-to-legacy-mask bridge,
 removed in Phase 10.
 
-Other feature authorization declarations remain unchanged: Stacks/Swarm (7),
-Builds/Git/Backups (8), Automation/Alerts (9), Platforms/Identity/shared resources (10),
+Other feature authorization declarations remain unchanged: Builds/Git/Backups (8), Automation/Alerts (9), Platforms/Identity/shared resources (10),
 activities/umbrella ownership (11). Shared container/realtime fallback checks, binding
 and tag permissions remain explicit; they are not replaced by Deployment-only policies.
 
 Existing SQL mask sites to migrate in their owning phase: `build_store`, `backup_store`,
 `backup_source_planner/preview`, `backup_platform_summaries.sql`, `git_account_store` (8);
 `automation_store`, `alert_store` (9); `platform_read_store`, `resource_metadata_store`,
-`lookup_store` (10); `activity_store` (11). Stacks/Swarm also retain their legacy
-capability integer representations (7). No broad exemption was added to the guard.
+`lookup_store` (10); `activity_store` (11). Workload projections now use typed
+effective permissions. No broad exemption was added to the guard.
 
 The Rust `deployment_authorization_conventions` test prevents raw tuple declarations
 returning to the migrated Deployment handler family, including scoped Deployment
@@ -122,3 +121,47 @@ the source change keeps only Rust implementation/tests and these human-readable 
 
 Current Phase 6 validation and compatibility results are recorded in
 [the Deployment refactor report](reports/phase6-deployment-resource-refactor.md).
+
+
+## Stacks and Swarm Services (v13 Phase 7)
+
+Both features own named operation policies in `permissions.rs`. HTTP calls those
+policies, transactional mutations recheck them under the existing SQL authorization
+resolver, and server capability mapping consumes typed effective permissions.
+Collection queries retain their ACL CTEs and batched metadata; there is no per-row
+HTTP authorization loop. Shared Stack/Service inspection, statistics, logs,
+realtime and metadata entry points use the workload policy requirements while
+unrelated resource checks retain their existing ownership.
+
+| Operation | Stack | Swarm Service |
+| --- | --- | --- |
+| Read | R | R |
+| Create scope / configure / metadata | W | W |
+| Delete | X | X |
+| Apply | X + Apply | R + Apply |
+| Rollback / Force update | X + Apply | R + Apply |
+| Scale | Not applicable | W + Apply |
+| Runtime state / reconcile | X | Not applicable |
+| Read / write bindings | R / W + ResourceBindings | R / W + ResourceBindings |
+| Release history | R + Releases | Not applicable |
+| Runtime logs / inspection | R + Logs / Inspect | R + Logs / Inspect |
+| Stack terminal | R + Terminal | Existing task/platform checks |
+
+Two existing differences are retained deliberately. Stack Apply/rollback requires
+Execute + Apply in both the endpoint and transaction, although the generic identity
+matrix describes Read + Apply. Phase 7 preserves that resource contract. Swarm's
+public `canViewLogs`/`canInspect` fields remain read-based legacy UI hints; runtime
+endpoints still require the corresponding specific permissions and Platform access.
+The mapper and policy tests make this discrepancy explicit without expanding access
+or changing existing JSON capability values. A separate compatibility decision is
+needed to change those public hints.
+
+Stack state actions previously admitted Write at HTTP and required Execute in the
+transaction. The HTTP precheck now uses `ChangeStackState` (Execute), matching the
+transaction; effective authorization is unchanged. Administrator projections no
+longer fabricate integer grants. Unknown persisted hierarchy values fail decoding;
+unknown specific bits remain representable without granting known operations.
+
+The `workload_architecture` guard covers both migrated feature/persistence families.
+No temporary exemption is added. Validation is recorded in
+[the workload refactor report](reports/phase7-workload-resource-refactor.md).

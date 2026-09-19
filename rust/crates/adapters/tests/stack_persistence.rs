@@ -1,16 +1,16 @@
 use std::time::Duration;
 
 use citadel_adapters::docker::DockerClient;
+use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
-use citadel_adapters::stack_store::PostgresStackStore;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_stacks::{
-    ComposeProjectRuntimeService, CreateStackInput, ImportComposeProjectInput, PatchStackInput,
-    StackDriftPolicy, StackFilter, StackImportClaim, StackImportKind, StackReleaseSource,
-    StackReleaseStatus, StackRuntimePort, StackRuntimeResult, StackSource, StackSpec,
-    StackSpecCommon, StackStore, StackUpdateBehavior,
+    ComposeProjectRuntimeService, CreateStack, ImportComposeProject, StackDriftPolicy, StackFilter,
+    StackImportClaim, StackImportKind, StackReleaseSource, StackReleaseStatus, StackRepository,
+    StackRuntime, StackRuntimeResult, StackSource, StackSpec, StackSpecCommon, StackUpdateBehavior,
+    UpdateStack,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -27,7 +27,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .connect(&database_url)
         .await
         .unwrap();
-    let store = PostgresStackStore::new(pool.clone());
+    let store = PostgresStackRepository::new(pool.clone());
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();
     let platform_id = Uuid::now_v7();
@@ -45,7 +45,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateStackInput {
+            &CreateStack {
                 name: format!("stack-{suffix}"),
                 platform_id,
                 description: Some("created".to_owned()),
@@ -107,9 +107,17 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .get_authorized(ActorId::new(reader), false, created.id)
         .await
         .unwrap();
-    let capabilities = readable.capabilities.as_ref().unwrap();
-    assert!(capabilities.can_read);
-    assert!(!capabilities.can_write);
+    use citadel_domain::PermissionPolicy;
+    assert!(
+        readable
+            .effective_permission
+            .allows(citadel_stacks::permissions::ReadStack::REQUIREMENT)
+    );
+    assert!(
+        !readable
+            .effective_permission
+            .allows(citadel_stacks::permissions::WriteStack::REQUIREMENT)
+    );
 
     let first_claim = store
         .claim_apply(actor, true, created.id, None, None)
@@ -179,7 +187,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             true,
             created.id,
             current.row_version,
-            &PatchStackInput {
+            &UpdateStack {
                 name: None,
                 platform_id: None,
                 description: None,
@@ -193,6 +201,31 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .await
         .unwrap();
     assert_eq!(updated.status, StackReleaseStatus::Healthy);
+    assert!(
+        store
+            .releases(actor, true, created.id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "editing preserves the current version until the next apply"
+    );
+    let second_claim = store
+        .claim_apply(actor, true, created.id, None, None)
+        .await
+        .unwrap();
+    store
+        .complete_apply(
+            actor,
+            &second_claim,
+            &StackRuntimeResult {
+                status: StackReleaseStatus::Healthy,
+                messages: Vec::new(),
+            },
+            &[],
+            None,
+        )
+        .await
+        .unwrap();
     let releases = store.releases(actor, true, created.id).await.unwrap();
     assert_eq!(releases.len(), 1);
     assert!(
@@ -283,7 +316,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .import(
             actor,
             true,
-            &ImportComposeProjectInput {
+            &ImportComposeProject {
                 name: failed_import_name.clone(),
                 platform_id,
                 project_name: format!("missing-project-{suffix}"),
@@ -393,7 +426,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .import(
             actor,
             true,
-            &ImportComposeProjectInput {
+            &ImportComposeProject {
                 name: format!("imported-{suffix}"),
                 platform_id: swarm_platform_id,
                 project_name: namespace.clone(),
@@ -468,7 +501,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateStackInput {
+            &CreateStack {
                 name: format!("git-stack-{suffix}"),
                 platform_id,
                 description: None,
@@ -532,7 +565,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     let citadel_stacks::StackUpdateState::Git {
         recreate_stack_on_new_commit_state,
         ..
-    } = applied_git_stack.stack_update_state
+    } = applied_git_stack.stack.stack_update_state
     else {
         panic!("Git Stack must retain Git update state");
     };

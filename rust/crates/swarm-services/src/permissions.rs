@@ -1,0 +1,64 @@
+//! Named requirements shared by inbound and transactional workload checks.
+use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
+permission_policy!(
+    ReadSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Read
+);
+permission_policy!(
+    CreateSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Write
+);
+permission_policy!(
+    WriteSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Write
+);
+permission_policy!(
+    DeleteSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Execute
+);
+permission_policy!(
+    ApplySwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Read,
+    SpecificPermission::Apply
+);
+permission_policy!(
+    ReadSwarmServiceBindings,
+    ResourceType::SwarmService,
+    PermissionLevel::Read,
+    SpecificPermission::ResourceBindings
+);
+permission_policy!(
+    WriteSwarmServiceBindings,
+    ResourceType::SwarmService,
+    PermissionLevel::Write,
+    SpecificPermission::ResourceBindings
+);
+permission_policy!(
+    ScaleSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Write,
+    SpecificPermission::Apply
+);
+permission_policy!(
+    ForceUpdateSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Read,
+    SpecificPermission::Apply
+);
+permission_policy!(
+    ViewSwarmServiceLogs,
+    ResourceType::SwarmService,
+    PermissionLevel::Read,
+    SpecificPermission::Logs
+);
+permission_policy!(
+    InspectSwarmService,
+    ResourceType::SwarmService,
+    PermissionLevel::Read,
+    SpecificPermission::Inspect
+);

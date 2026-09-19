@@ -3,7 +3,7 @@ use citadel_platforms::{
     SwarmTaskRuntimePort,
     logs::{LogReadPort, LogResource},
 };
-use citadel_swarm_services::SwarmServiceStore;
+use citadel_swarm_services::SwarmServiceRepository;
 
 #[derive(Deserialize)]
 pub(super) struct Tail {
@@ -40,6 +40,29 @@ async fn authorize_logs(
 ) -> IdentityHttpResult<()> {
     if principal.is_administrator() {
         return Ok(());
+    }
+    match kind {
+        ResourceType::Stack => {
+            return identity_result(
+                state
+                    .identity
+                    .require_resource::<citadel_stacks::permissions::ViewStackLogs>(principal, id)
+                    .await,
+                headers,
+            );
+        }
+        ResourceType::SwarmService => {
+            return identity_result(
+                state
+                    .identity
+                    .require_resource::<citadel_swarm_services::permissions::ViewSwarmServiceLogs>(
+                        principal, id,
+                    )
+                    .await,
+                headers,
+            );
+        }
+        _ => {}
     }
     identity_result(
         state
@@ -176,16 +199,17 @@ pub(super) async fn managed_service(
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
     let tail = tail(query, &headers)?;
     authorize_logs(&state, &principal, ResourceType::SwarmService, id, &headers).await?;
-    let store =
-        citadel_adapters::swarm_service_store::PostgresSwarmServiceStore::new(state.pool.clone());
+    let store = citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository::new(
+        state.pool.clone(),
+    );
     let service = identity_result(
         store
             .get_authorized(principal.actor_id, principal.is_administrator(), id)
             .await
-            .map_err(crate::swarm_services_http::service_error),
+            .map_err(crate::api::swarm_services::service_error),
         &headers,
     )?;
-    let Some(docker_id) = service.docker_service_id else {
+    let Some(docker_id) = service.docker_service_id.as_ref() else {
         return identity_result(
             Err(IdentityError::Conflict(
                 "The Service has not been applied.".into(),
@@ -206,7 +230,7 @@ pub(super) async fn managed_service(
     {
         return identity_result(Err(IdentityError::NotFound), &headers);
     }
-    service_logs(&state, service.platform_id, &docker_id, tail, &headers).await
+    service_logs(&state, service.platform_id, docker_id, tail, &headers).await
 }
 
 #[utoipa::path(

@@ -10,7 +10,7 @@ use crate::{StackBuildImageBinding, StackError, validation};
 const MAX_COMPOSE_FILES: usize = 16;
 const MAX_COMPOSE_BYTES: usize = 4 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmStackCompatibilityIssue {
     pub severity: SwarmStackCompatibilitySeverity,
@@ -19,13 +19,13 @@ pub struct SwarmStackCompatibilityIssue {
     pub field_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SwarmStackCompatibilitySeverity {
     Warning,
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmStackCompatibilityReport {
     pub is_compatible: bool,

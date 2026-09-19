@@ -228,7 +228,7 @@ pub(crate) async fn reconcile(
                     .bind(id).bind(&live.id).bind(live.version_index).execute(&mut **tx).await.map_err(storage)?;
             }
             Outcome::Complete if kind == "Delete" => {
-                let service = crate::swarm_service_store::activity_snapshot(&row)?;
+                let service = crate::postgres::swarm_services::activity_snapshot(&row)?;
                 activity = Some((
                     ActivityEventInfo::swarm_service_deleted(service),
                     ActivityStatus::Success,
@@ -289,7 +289,7 @@ pub(crate) async fn reconcile(
             }
         }
         if let Some((info, status)) = activity {
-            crate::swarm_service_store::insert_swarm_activity(
+            crate::postgres::swarm_services::insert_swarm_activity(
                 tx,
                 id,
                 &row.try_get::<String, _>("name").map_err(storage)?,

@@ -6,7 +6,7 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_stacks::{
-    StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntimePort, StackSourceFile,
+    StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntime, StackSourceFile,
     StackSpec, StackSpecCommon, StackUpdateBehavior, create_ownership_labels_override,
 };
 use sqlx::postgres::PgPoolOptions;
@@ -23,7 +23,12 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
         .apply(&fixture.claim(), &source, &[], &fixture.cancellation, None)
         .await
         .unwrap();
-    assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);
+    assert_eq!(
+        applied.status,
+        citadel_stacks::StackReleaseStatus::Healthy,
+        "{:?}",
+        applied.messages
+    );
 
     let containers = fixture.docker.list_containers(true).await.unwrap();
     let owned = containers
@@ -33,6 +38,32 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
         })
         .collect::<Vec<_>>();
     assert_eq!(owned.len(), 1);
+    let first_container = owned[0].id.clone();
+    let mut replacement = fixture.claim();
+    replacement.spec.common_mut().destroy_before_deploy = true;
+    let reapplied = fixture
+        .runtime
+        .apply(&replacement, &source, &[], &fixture.cancellation, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        reapplied.status,
+        citadel_stacks::StackReleaseStatus::Healthy,
+        "{:?}",
+        reapplied.messages
+    );
+    let containers = fixture.docker.list_containers(true).await.unwrap();
+    let owned = containers
+        .iter()
+        .filter(|container| {
+            container.labels.get("com.citadel.stack-id") == Some(&fixture.stack_id.to_string())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(owned.len(), 1);
+    assert_ne!(
+        owned[0].id, first_container,
+        "DestroyBeforeDeploy replaces the previous container"
+    );
     for container in owned {
         fixture
             .docker
@@ -68,13 +99,55 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
         .apply(&fixture.claim(), &source, &[], &fixture.cancellation, None)
         .await
         .unwrap();
-    assert_eq!(applied.status, citadel_stacks::StackReleaseStatus::Healthy);
+    assert_eq!(
+        applied.status,
+        citadel_stacks::StackReleaseStatus::Healthy,
+        "{:?}",
+        applied.messages
+    );
 
     let services = fixture.docker.list_swarm_services().await.unwrap();
     assert!(services.iter().any(|service| {
         service.spec.get("Name").and_then(serde_json::Value::as_str)
             == Some(&format!("{}_web", fixture.project_name))
     }));
+
+    use citadel_platforms::InventoryProjectionStore;
+    let snapshot = citadel_platforms::jobs::collect_inventory(
+        &fixture.docker,
+        &citadel_platforms::jobs::InventoryCollectionTarget {
+            platform_id: fixture.platform_id,
+            platform_type: "DockerSwarm".into(),
+        },
+        &fixture.cancellation,
+    )
+    .await
+    .unwrap();
+    citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+        fixture.pool.clone(),
+    )
+    .persist(&snapshot)
+    .await
+    .unwrap();
+    // A failed deployment that rolled back to healthy tasks is still a failed
+    // release. Exercise the runtime observation boundary with Docker's states.
+    for state in ["rollback_completed", "rollback_paused"] {
+        let updated = sqlx::query("UPDATE swarmserviceprojections SET updatestate=$3 WHERE platformid=$1 AND dockerstacknamespace=$2")
+            .bind(fixture.platform_id)
+            .bind(&fixture.project_name)
+            .bind(state)
+            .execute(&fixture.pool)
+            .await
+            .unwrap();
+        assert_eq!(updated.rows_affected(), 1);
+        let observed = fixture
+            .runtime
+            .observe(&fixture.claim(), &fixture.cancellation)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed.status, citadel_stacks::StackReleaseStatus::Failed);
+    }
 
     fixture
         .runtime

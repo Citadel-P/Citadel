@@ -2,7 +2,7 @@ use super::*;
 use citadel_domain::LicenseCapability;
 use citadel_swarm_services::{
     ServiceAutomationEntitlements, ServiceImageDigestPort, SwarmServiceWebhookConfig,
-    UpdateBehavior, UpdateSwarmServiceInput,
+    UpdateBehavior, UpdateSwarmService,
 };
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -61,8 +61,15 @@ pub(super) async fn verify(
     let entitlements = Arc::new(Entitlements::default());
     let digests = Arc::new(Digests::default());
     let services = Arc::new(
-        ManagedSwarmServiceService::new(
-            Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+        SwarmServiceService::new(
+            Arc::new(
+                citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                    citadel_application::DynamicTasks::new(
+                        tokio_util::sync::CancellationToken::new(),
+                    ),
+                ),
+            ),
+            Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(CompletingRuntime),
             CancellationToken::new(),
         )
@@ -76,8 +83,8 @@ pub(super) async fn verify(
         Arc::new(citadel_adapters::activity_store::PostgresActivityStore::new(pool.clone())),
     );
     let mut current = services.get(admin.actor_id, true, id).await.unwrap();
-    current.spec.update_behavior = UpdateBehavior::Notify;
-    current.spec.webhook = Some(SwarmServiceWebhookConfig {
+    current.service.spec.update_behavior = UpdateBehavior::Notify;
+    current.service.spec.webhook = Some(SwarmServiceWebhookConfig {
         enabled: true,
         provider: "Generic".into(),
         auth_scheme: "BearerToken".into(),
@@ -89,9 +96,9 @@ pub(super) async fn verify(
             admin.actor_id,
             true,
             id,
-            UpdateSwarmServiceInput {
-                spec: current.spec,
-                row_version: current.row_version,
+            UpdateSwarmService {
+                spec: current.service.spec,
+                row_version: current.service.row_version,
             },
         )
         .await
@@ -126,16 +133,16 @@ pub(super) async fn verify(
         operation,
         "Notify never applies"
     );
-    let mut spec = current.spec;
+    let mut spec = current.service.spec;
     spec.update_behavior = UpdateBehavior::AutoDeploy;
     services
         .update(
             admin.actor_id,
             true,
             id,
-            UpdateSwarmServiceInput {
+            UpdateSwarmService {
                 spec,
-                row_version: current.row_version,
+                row_version: current.service.row_version,
             },
         )
         .await
@@ -178,7 +185,7 @@ pub(super) async fn verify(
             admin.actor_id,
             true,
             id,
-            UpdateSwarmServiceInput {
+            UpdateSwarmService {
                 spec,
                 row_version: old.row_version,
             },
@@ -186,9 +193,9 @@ pub(super) async fn verify(
         .await
         .unwrap();
     let scans = digests.calls.load(Ordering::Relaxed);
-    use citadel_swarm_services::SwarmServiceStore;
+    use citadel_swarm_services::SwarmServiceRepository;
     assert!(matches!(
-        PostgresSwarmServiceStore::new(pool.clone())
+        PostgresSwarmServiceRepository::new(pool.clone())
             .claim_operation(
                 admin.actor_id,
                 true,
@@ -226,21 +233,21 @@ pub(super) async fn verify(
     assert!(!format!("{events:?}").contains("disposable-service-webhook"));
 
     let current = services.get(admin.actor_id, true, id).await.unwrap();
-    let mut spec = current.spec;
+    let mut spec = current.service.spec;
     spec.update_behavior = UpdateBehavior::Notify;
     services
         .update(
             admin.actor_id,
             true,
             id,
-            UpdateSwarmServiceInput {
+            UpdateSwarmService {
                 spec,
-                row_version: current.row_version,
+                row_version: current.service.row_version,
             },
         )
         .await
         .unwrap();
-    let store = PostgresSwarmServiceStore::new(pool.clone());
+    let store = PostgresSwarmServiceRepository::new(pool.clone());
     assert_eq!(
         store.update_check_candidates(None, 1).await.unwrap(),
         vec![id]
@@ -275,16 +282,16 @@ pub(super) async fn verify(
     );
     assert_eq!(body["status"], "queued");
     let current = services.get(admin.actor_id, true, id).await.unwrap();
-    let mut spec = current.spec;
+    let mut spec = current.service.spec;
     spec.update_behavior = UpdateBehavior::Disabled;
     services
         .update(
             admin.actor_id,
             true,
             id,
-            UpdateSwarmServiceInput {
+            UpdateSwarmService {
                 spec,
-                row_version: current.row_version,
+                row_version: current.service.row_version,
             },
         )
         .await
@@ -336,7 +343,7 @@ async fn send(app: &Router, id: Uuid, secret: &str) -> (StatusCode, Value) {
 fn router(
     pool: sqlx::PgPool,
     identity: Arc<IdentityService>,
-    services: Arc<ManagedSwarmServiceService>,
+    services: Arc<SwarmServiceService>,
     audit: Arc<dyn citadel_application::WebhookActivitySink>,
 ) -> Router {
     use citadel_adapters::{

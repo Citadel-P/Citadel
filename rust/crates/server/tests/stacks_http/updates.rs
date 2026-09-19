@@ -1,7 +1,7 @@
 //! HTTP/PostgreSQL ports of CheckStackUpdates: access, persisted update state,
 //! read failures and edit/Apply races, without introducing a frontend workaround.
 use super::*;
-use citadel_stacks::{StackUpdateScanner, StackUpdateState, StackView};
+use citadel_stacks::{StackDetails, StackUpdateScanner, StackUpdateState};
 
 pub(super) struct Scanner {
     pool: sqlx::PgPool,
@@ -18,7 +18,7 @@ impl Scanner {
 impl StackUpdateScanner for Scanner {
     fn scan<'a>(
         &'a self,
-        stack: &'a StackView,
+        stack: &'a StackDetails,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         Box::pin(async move {
@@ -149,8 +149,8 @@ impl citadel_stacks::StackSourceMaterializerPort for GitSource {
 }
 
 async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal, existing: Uuid) {
-    use citadel_stacks::{StackSpec, StackStore};
-    let store = Arc::new(PostgresStackStore::new(pool.clone()));
+    use citadel_stacks::{StackRepository, StackSpec};
+    let store = Arc::new(PostgresStackRepository::new(pool.clone()));
     let platform = store
         .get_authorized(admin.actor_id, true, existing)
         .await
@@ -161,12 +161,15 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         .bind(repo).bind(admin.actor_id.value()).bind(repo.to_string()).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositoryrefs(id,branch,gitrepositoryid,lastsyncedat,status,resolvedcommitsha) VALUES($1,'main',$2,now(),'Healthy',$3)")
         .bind(Uuid::now_v7()).bind(repo).bind("b".repeat(40)).execute(pool).await.unwrap();
-    let input = serde_json::from_value(json!({"name":format!("git-updates-{repo}"),"platformId":platform,"stackSource":"Git",
-        "spec":{"$type":"Git","gitRepoId":repo,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"Notify"}})).unwrap();
+    let input: citadel_stacks::CreateStack = serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("git-updates-{repo}"),"platformId":platform,"stackSource":"Git",
+        "spec":{"$type":"Git","gitRepoId":repo,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"Notify"}})).unwrap().try_into().unwrap();
     let stack = store.create(admin.actor_id, true, &input).await.unwrap();
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let service = StackService::new(
+        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        )),
         store.clone(),
         runtime.clone(),
         Arc::new(FixtureBindings),
@@ -258,7 +261,10 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
         guardrails: std::sync::atomic::AtomicBool::new(true),
     });
     let service = StackService::new(
-        Arc::new(PostgresStackStore::new(pool.clone())),
+        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        )),
+        Arc::new(PostgresStackRepository::new(pool.clone())),
         runtime.clone(),
         Arc::new(FixtureBindings),
         Arc::new(NoopStackChangeNotifier),
@@ -327,10 +333,13 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
 }
 
 async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: Uuid) {
-    use citadel_stacks::{StackApplyOptions, StackStore};
-    let store = Arc::new(PostgresStackStore::new(pool.clone()));
+    use citadel_stacks::{StackApplyOptions, StackRepository};
+    let store = Arc::new(PostgresStackRepository::new(pool.clone()));
     let runtime = Arc::new(CompletingStackRuntime::default());
     let service = StackService::new(
+        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        )),
         store.clone(),
         runtime.clone(),
         Arc::new(FixtureBindings),

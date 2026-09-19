@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::{
-    ImageUpdateState, RecreateStackOnNewImageState, StackError, StackReleaseStatus, StackSpec,
-    StackUpdateBehavior, StackUpdateState, StackView, parse_compose, validation,
+    ImageUpdateState, RecreateStackOnNewImageState, StackDetails, StackError, StackReleaseStatus,
+    StackSpec, StackUpdateBehavior, StackUpdateState, parse_compose, validation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -39,7 +39,7 @@ pub struct ManualStackUpdateEvaluation {
 }
 
 pub fn build_manual_stack_checks(
-    stack: &StackView,
+    stack: &StackDetails,
     scheduled: bool,
 ) -> Result<Vec<ManualStackImageCheck>, StackError> {
     if stack.control_state == "Processing" {
@@ -271,7 +271,7 @@ mod tests {
         assert!(repeated.newly_detected_updates.is_empty());
     }
 
-    fn stack(update_behavior: StackUpdateBehavior, compose: &str, build_api: bool) -> StackView {
+    fn stack(update_behavior: StackUpdateBehavior, compose: &str, build_api: bool) -> StackDetails {
         let id = Uuid::now_v7();
         let registry_id = Uuid::now_v7();
         let spec = StackSpec::WebEditor {
@@ -299,18 +299,21 @@ mod tests {
                 ..Default::default()
             },
         };
-        StackView {
-            id,
-            name: "stack".to_owned(),
-            description: None,
-            stack_source: StackSource::WebEditor,
-            stack_update_state: StackUpdateState::new(&spec),
-            drift_policy: StackDriftPolicy::default(),
+        StackDetails {
+            stack: crate::Stack {
+                id,
+                name: "stack".to_owned(),
+                description: None,
+                stack_source: StackSource::WebEditor,
+                stack_update_state: StackUpdateState::new(&spec),
+                drift_policy: StackDriftPolicy::default(),
+                created_at: Utc::now(),
+                created_by_actor_id: Uuid::now_v7(),
+                control_state: "Idle".to_owned(),
+                current_stack_release_id: Uuid::now_v7(),
+                row_version: 0,
+            },
             status: StackReleaseStatus::Healthy,
-            created_at: Utc::now(),
-            created_by_actor_id: Uuid::now_v7(),
-            control_state: "Idle".to_owned(),
-            current_stack_release_id: Uuid::now_v7(),
             platform_type: "Docker".to_owned(),
             platform_id: Some(Uuid::now_v7()),
             version: Some("1".to_owned()),
@@ -320,9 +323,8 @@ mod tests {
             platform_status: "Online".to_owned(),
             platform_name: Some("local".to_owned()),
             tags: Vec::<TagSummary>::new(),
-            latest_activity_view: None,
-            capabilities: Some(crate::StackCapabilities::default()),
-            row_version: 0,
+            latest_activity: None,
+            effective_permission: citadel_domain::EffectivePermission::Administrator,
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 use citadel_domain::ActorId;
 use citadel_stacks::{
-    StackSpec, StackUpdateScanner, StackUpdateState, StackView, build_manual_stack_checks,
+    StackDetails, StackSpec, StackUpdateScanner, StackUpdateState, build_manual_stack_checks,
     evaluate_manual_stack_updates, stack_git_path_matches, state_key,
 };
 use std::{
@@ -24,14 +24,14 @@ impl StackUpdateRuntime {
 impl StackUpdateScanner for StackUpdateRuntime {
     fn scan<'a>(
         &'a self,
-        stack: &'a StackView,
+        stack: &'a StackDetails,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         self.scan_mode(stack, false, cancel)
     }
     fn scan_cached<'a>(
         &'a self,
-        stack: &'a StackView,
+        stack: &'a StackDetails,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         self.scan_mode(stack, true, cancel)
@@ -40,7 +40,7 @@ impl StackUpdateScanner for StackUpdateRuntime {
 impl StackUpdateRuntime {
     fn scan_mode<'a>(
         &'a self,
-        stack: &'a StackView,
+        stack: &'a StackDetails,
         scheduled: bool,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
