@@ -5,7 +5,7 @@ use citadel_platforms::{
 use futures_util::{FutureExt, future::BoxFuture};
 use tokio_util::sync::CancellationToken;
 
-use super::generated::{NetworkCreateRequest, VolumeCreateOptions};
+use super::projection::{NetworkCreateRequest, VolumeCreateOptions};
 use super::{DockerClient, DockerError};
 use crate::docker::inventory::map_volume;
 

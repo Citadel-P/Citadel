@@ -94,9 +94,16 @@ impl DeploymentRuntimeRouter {
                     )
                 });
         }
-        let agent=self.agent.as_ref().filter(|_|target.connector.eq_ignore_ascii_case("Agent"))
-            .ok_or_else(||DeploymentError::Runtime("The configured Agent transport is unavailable.".into()))?;
-        let agent=agent.at_address(&target.address).map_err(|error|DeploymentError::Runtime(error.message))?;
+        let agent = self
+            .agent
+            .as_ref()
+            .filter(|_| target.connector.eq_ignore_ascii_case("Agent"))
+            .ok_or_else(|| {
+                DeploymentError::Runtime("The configured Agent transport is unavailable.".into())
+            })?;
+        let agent = agent
+            .at_address(&target.address)
+            .map_err(|error| DeploymentError::Runtime(error.message))?;
         Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
     }
 
@@ -344,7 +351,7 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
 }
 
 fn observed_container_state(
-    state: &crate::docker::generated::ContainerState,
+    state: &crate::docker::projection::ContainerState,
 ) -> Option<RuntimeContainerState> {
     if let Some(health) = &state.health {
         if health.status.eq_ignore_ascii_case("starting") {
@@ -1006,9 +1013,9 @@ mod tests {
 
     #[test]
     fn container_health_takes_precedence_over_the_running_flag() {
-        let mut state = crate::docker::generated::ContainerState {
+        let mut state = crate::docker::projection::ContainerState {
             running: true,
-            health: Some(crate::docker::generated::ContainerHealth {
+            health: Some(crate::docker::projection::ContainerHealth {
                 status: "starting".to_owned(),
             }),
             ..Default::default()

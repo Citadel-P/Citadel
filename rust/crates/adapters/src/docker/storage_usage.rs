@@ -1,8 +1,5 @@
 //! Docker storage totals are expensive; share one refresh per minute per daemon client.
-use super::{
-    DockerClient,
-    generated::{DockerInfo, SYSTEM_DATA_USAGE},
-};
+use super::{DockerClient, projection::DockerInfo};
 use citadel_platforms::{RuntimeCapabilityError, RuntimePlatformStats};
 use serde::Deserialize;
 use std::time::Duration;
@@ -36,6 +33,20 @@ struct VolumeUsage {
 struct VolumeSize {
     size: Option<i64>,
 }
+impl From<citadel_docker_api::models::SystemDataUsageResponse> for DataUsage {
+    fn from(v: citadel_docker_api::models::SystemDataUsageResponse) -> Self {
+        Self {
+            layers_size: v.layers_size,
+            volumes: v.volumes.map(|vs| {
+                vs.into_iter()
+                    .map(|v| VolumeUsage {
+                        usage_data: v.usage_data.flatten().map(|u| VolumeSize { size: u.size }),
+                    })
+                    .collect()
+            }),
+        }
+    }
+}
 impl DataUsage {
     fn totals(self) -> Usage {
         Usage {
@@ -59,14 +70,10 @@ impl DockerClient {
             // Preserve last successful totals on a transient error, as the .NET provider does.
             // Cancellation drops this future before advancing the retry deadline.
             match self
-                .get_json::<DataUsage>(
-                    &SYSTEM_DATA_USAGE,
-                    SYSTEM_DATA_USAGE.path,
-                    Some("type=image&type=volume"),
-                )
+                .system_data_usage(vec!["image".into(), "volume".into()])
                 .await
             {
-                Ok(usage) => cache.usage = usage.totals(),
+                Ok(usage) => cache.usage = DataUsage::from(usage).totals(),
                 Err(error) => tracing::debug!(%error, "Docker storage usage unavailable"),
             }
             cache.refreshed = Some(Instant::now());
@@ -86,21 +93,28 @@ impl DockerClient {
         &self,
         info: DockerInfo,
     ) -> Result<RuntimePlatformStats, RuntimeCapabilityError> {
-        // Counts are cheap; volume sizes come from the cached /system/df response.
-        let (containers, images, networks, volumes, usage, disk) = tokio::join!(
-            self.list_containers(true),
-            self.list_images(),
-            self.list_networks(),
-            self.get_json::<super::generated::VolumeListResponse>(
-                &super::generated::VOLUME_LIST,
-                super::generated::VOLUME_LIST.path,
-                None
-            ),
-            self.storage_totals(),
-            self.read_host_disk(&info.docker_root_dir),
-        );
-        let containers = containers.map_err(super::runtime::normalize_docker_error)?;
-        let counts = super::runtime::ContainerCounts::from_list(&containers);
+        let containers = self
+            .list_containers(true)
+            .await
+            .map_err(super::runtime::normalize_docker_error)?;
+        self.platform_stats_with_counts(
+            info,
+            super::runtime::ContainerCounts::from_list(&containers),
+        )
+        .await
+    }
+
+    pub(super) async fn platform_stats_with_counts(
+        &self,
+        info: DockerInfo,
+        counts: super::runtime::ContainerCounts,
+    ) -> Result<RuntimePlatformStats, RuntimeCapabilityError> {
+        // Slow metadata is sequential: one external request at a time, independent of stats fan-out.
+        let images = self.list_images().await;
+        let networks = self.list_networks().await;
+        let volumes = self.volumes().await;
+        let usage = self.storage_totals().await;
+        let disk = self.read_host_disk(&info.docker_root_dir).await;
         Ok(RuntimePlatformStats {
             image_used_bytes: usage.images,
             volume_used_bytes: usage.volumes,
@@ -179,10 +193,11 @@ mod tests {
     }
     #[test]
     fn docker_image_inventory_accepts_null_optional_collections() {
-        let image: super::super::generated::ImageSummary = serde_json::from_str(
+        let wire: citadel_docker_api::models::ImageSummary = serde_json::from_str(
             r#"{"Id":"sha256:alpine","Labels":null,"RepoTags":null,"RepoDigests":null}"#,
         )
         .unwrap();
+        let image: super::super::projection::ImageSummary = wire.try_into().unwrap();
         assert!(image.labels.is_empty());
         assert!(image.repo_tags.is_empty());
         assert!(image.repo_digests.is_empty());
@@ -208,7 +223,7 @@ mod cache_tests {
                 (
                     "GET /v1.49/system/df?type=image&type=volume ",
                     "200 OK",
-                    r#"{"LayersSize":2048,"Volumes":[{"UsageData":{"Size":4096}}]}"#,
+                    r#"{"LayersSize":2048,"Volumes":[{"Name":"data","UsageData":{"Size":4096}}]}"#,
                 ),
                 (
                     "GET /v1.49/system/df?type=image&type=volume ",

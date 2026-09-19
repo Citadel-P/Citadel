@@ -31,6 +31,8 @@ use uuid::Uuid;
 
 #[path = "fixtures/alert_sink.rs"]
 mod alert_sink;
+#[path = "deployments_http/authorization.rs"]
+mod authorization;
 #[path = "deployments_http/updates.rs"]
 mod updates;
 
@@ -158,7 +160,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .with_alerts(alerts.clone()),
     );
     let app = deployments_http::router(DeploymentsHttpState {
-        identity,
+        identity: identity.clone(),
         deployments: service.clone(),
     });
 
@@ -762,6 +764,16 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .status(),
         StatusCode::FORBIDDEN
     );
+    authorization::verify(
+        &app,
+        &pool,
+        &identity,
+        &admin,
+        &reader,
+        deployment_id,
+        &applied,
+    )
+    .await;
     sqlx::query("UPDATE resourceaccesses SET permissionlevel=2 WHERE actorid=$1 AND resourceid=$2")
         .bind(reader_actor_id)
         .bind(deployment_id)
@@ -846,7 +858,8 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     assert_eq!(deleted_response.status(), StatusCode::NO_CONTENT);
     assert_eq!(
         &*deleted.lock().unwrap(),
-        &["docker-container", "older-container"]
+        // The authorization regression also successfully applied this Deployment.
+        &["docker-applied", "docker-container", "older-container"]
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM deployments WHERE id=$1")
@@ -956,6 +969,11 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .unwrap();
     sqlx::query("DELETE FROM actors WHERE id=$1")
         .bind(team_creator_actor_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(reader_actor_id)
         .execute(&pool)
         .await
         .unwrap();

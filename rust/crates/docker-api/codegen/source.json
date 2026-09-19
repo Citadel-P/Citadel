@@ -1,0 +1,10 @@
+{
+  "schema_path": "../src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/v1.49.yaml",
+  "schema_reference": "Citadel-P/Citadel.Contracts@d81e3d8ce5e8102a5feb0a87014bffcaa8ef6d5d",
+  "historical_dotnet_reference": "Citadel-P/Citadel.Contracts@07156064f7c104b6a8ec5a3ad1c5b7e165303f49",
+  "schema_sha256": "1d54f6c4ab950646d97d1256a0a4cdcecbb963cc6c7c3312b885540a9b49694c",
+  "api_version": "1.49",
+  "generator_version": "7.25.0",
+  "generator_url": "https://repo.maven.apache.org/maven2/org/openapitools/openapi-generator-cli/7.25.0/openapi-generator-cli-7.25.0.jar",
+  "generator_sha256": "41ce4f6b07f196676439d710759fa1ced7a08066d06ff1bf314681470289efae"
+}

@@ -9,12 +9,15 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Json, Router};
+use citadel_deployments::permissions::{
+    ApplyDeployment, CreateDeployment, ReadDeployment, WriteDeployment,
+};
 use citadel_deployments::{
     ApplyDeploymentInput, CreateDeploymentInput, DeploymentChangeNotifier, DeploymentError,
     DeploymentFilter, DeploymentService, PatchDeploymentInput, PatchDeploymentMetadataInput,
     RenameDeploymentInput, ResourceCapabilities,
 };
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use uuid::Uuid;
 
@@ -90,15 +93,13 @@ async fn check_deployment_updates(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Write,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<WriteDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let cancellation = tokio_util::sync::CancellationToken::new();
     let _cancel_on_drop = cancellation.clone().drop_guard();
     let checked = identity_result(
@@ -142,15 +143,13 @@ async fn apply_deployment(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        input.id,
-        PermissionLevel::Execute,
-        Some(SpecificPermission::Apply),
+    identity_result(
+        state
+            .identity
+            .require_resource::<ApplyDeployment>(&principal, input.id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let mut receiver = identity_result(
         state
             .deployments
@@ -257,15 +256,13 @@ async fn get_deployment(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Read,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<ReadDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let deployment = identity_result(
         state
             .deployments
@@ -299,15 +296,13 @@ async fn get_deployment_config(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Read,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<ReadDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let config = identity_result(
         state
             .deployments
@@ -341,15 +336,13 @@ async fn get_deployment_duplicate_draft(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Read,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<ReadDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let draft = identity_result(
         state
             .deployments
@@ -385,12 +378,7 @@ async fn create_deployment(
     identity_result(
         state
             .identity
-            .authorize(
-                &principal,
-                ResourceType::Deployment,
-                PermissionLevel::Write,
-                None,
-            )
+            .require_scope::<CreateDeployment>(&principal)
             .await,
         &headers,
     )?;
@@ -433,15 +421,13 @@ async fn update_deployment(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Write,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<WriteDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
     let deployment = identity_result(
         state
@@ -487,15 +473,13 @@ async fn update_deployment_metadata(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        id,
-        PermissionLevel::Write,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<WriteDeployment>(&principal, id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
     let deployment = identity_result(
         state
@@ -530,15 +514,13 @@ async fn rename_deployment(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
-    authorize_resource(
-        &state,
-        &principal,
-        input.id,
-        PermissionLevel::Write,
-        None,
+    identity_result(
+        state
+            .identity
+            .require_resource::<WriteDeployment>(&principal, input.id)
+            .await,
         &headers,
-    )
-    .await?;
+    )?;
     let deployment = identity_result(
         state
             .deployments
@@ -586,24 +568,6 @@ async fn delete_deployments(
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
-}
-
-async fn authorize_resource(
-    state: &DeploymentsHttpState,
-    principal: &ActorPrincipal,
-    id: Uuid,
-    level: PermissionLevel,
-    specific: Option<SpecificPermission>,
-    headers: &HeaderMap,
-) -> IdentityHttpResult<()> {
-    if principal.is_administrator() {
-        return Ok(());
-    }
-    state
-        .identity
-        .authorize_resource(principal, ResourceType::Deployment, id, level, specific)
-        .await
-        .map_err(|error| crate::identity_http::IdentityHttpError::from_parts(error, headers))
 }
 
 async fn collection_capabilities(
@@ -661,6 +625,23 @@ fn require_actor(
         .ok_or(IdentityError::Unauthenticated)
 }
 
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DeploymentsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list_deployments))
+        .normalized_routes(utoipa_axum::routes!(create_deployment))
+        .normalized_routes(utoipa_axum::routes!(adoption::draft))
+        .normalized_routes(utoipa_axum::routes!(adoption::adopt))
+        .normalized_routes(utoipa_axum::routes!(apply_deployment))
+        .normalized_routes(utoipa_axum::routes!(delete_deployments))
+        .normalized_routes(utoipa_axum::routes!(rename_deployment))
+        .normalized_routes(utoipa_axum::routes!(get_deployment))
+        .normalized_routes(utoipa_axum::routes!(check_deployment_updates))
+        .normalized_routes(utoipa_axum::routes!(get_deployment_config))
+        .normalized_routes(utoipa_axum::routes!(get_deployment_duplicate_draft))
+        .normalized_routes(utoipa_axum::routes!(update_deployment))
+        .normalized_routes(utoipa_axum::routes!(update_deployment_metadata))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -685,21 +666,4 @@ mod tests {
             .is_err()
         );
     }
-}
-
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DeploymentsHttpState> {
-    utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(list_deployments))
-        .normalized_routes(utoipa_axum::routes!(create_deployment))
-        .normalized_routes(utoipa_axum::routes!(adoption::draft))
-        .normalized_routes(utoipa_axum::routes!(adoption::adopt))
-        .normalized_routes(utoipa_axum::routes!(apply_deployment))
-        .normalized_routes(utoipa_axum::routes!(delete_deployments))
-        .normalized_routes(utoipa_axum::routes!(rename_deployment))
-        .normalized_routes(utoipa_axum::routes!(get_deployment))
-        .normalized_routes(utoipa_axum::routes!(check_deployment_updates))
-        .normalized_routes(utoipa_axum::routes!(get_deployment_config))
-        .normalized_routes(utoipa_axum::routes!(get_deployment_duplicate_draft))
-        .normalized_routes(utoipa_axum::routes!(update_deployment))
-        .normalized_routes(utoipa_axum::routes!(update_deployment_metadata))
 }

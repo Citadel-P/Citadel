@@ -109,6 +109,8 @@ async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initial
     let fixture = fixture_for_cluster(cluster.clone()).await;
     let id = fixture.platform_id;
     fixture.docker_server.abort();
+    // get_info shares its version document with negotiation and includes the
+    // existing visible-container count query: thirteen requests for the pass.
     let (docker, server, socket) = docker_fixture_for_cluster(13, cluster.clone()).await;
     // Replace the router's transport with the fixture using the same persisted
     // identity/permission services as the other Platform HTTP scenarios.

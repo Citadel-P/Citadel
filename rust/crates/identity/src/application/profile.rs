@@ -663,7 +663,7 @@ mod tests {
             direct_and_team_permissions: vec![PermissionGrant {
                 resource_type: ResourceType::AlertChannel,
                 level: PermissionLevel::Write,
-                specific_mask: SpecificPermission::Use as i32,
+                specifics: SpecificPermission::Use.into(),
             }],
         };
 

@@ -14,6 +14,8 @@ use uuid::Uuid;
 mod container_mutations;
 #[path = "docker_transport/distribution.rs"]
 mod distribution;
+#[path = "docker_transport/generated_boundary.rs"]
+mod generated_boundary;
 
 #[tokio::test]
 async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
@@ -694,7 +696,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/volumes/created?force=false",
             "/v1.49/events",
             "/v1.49/containers/container-fixture/stats?stream=true",
-            "/v1.49/containers/container-fixture/stats?stream=false&one-shot=true",
+            "/v1.49/containers/container-fixture/stats?stream=false&one-shot=false",
         ]
     );
     std::fs::remove_file(socket_path).unwrap();
@@ -769,7 +771,7 @@ fn response_for(path: &str) -> Vec<u8> {
         "/v1.49/containers/container-fixture/stats?stream=true" => {
             "{\"id\":\"container-fixture\",\"name\":\"fixture\",\"cpu_stats\":{\"cpu_usage\":{\"total_usage\":2},\"system_cpu_usage\":4,\"online_cpus\":2},\"precpu_stats\":{\"cpu_usage\":{\"total_usage\":1},\"system_cpu_usage\":2,\"online_cpus\":2},\"memory_stats\":{\"usage\":4096,\"limit\":8192},\"networks\":{}}\n"
         }
-        "/v1.49/containers/container-fixture/stats?stream=false&one-shot=true" => {
+        "/v1.49/containers/container-fixture/stats?stream=false&one-shot=false" => {
             r#"{"id":"container-fixture","memory_stats":{"usage":4096,"limit":8192}}"#
         }
         unexpected => panic!("unexpected request {unexpected}"),
@@ -833,7 +835,7 @@ async fn exercise_terminal_resize(resize_status: &'static str) {
         terminal.write_all(b"hello\n").await.unwrap();
         let (mut resize, _) = listener.accept().await.unwrap();
         let (request, _) = read_terminal_request(&mut resize).await;
-        assert!(request.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
+        assert!(request.starts_with("POST /v1.49/exec/exec-1/resize?h=30&w=100 "));
         resize
             .write_all(
                 format!(
@@ -1024,3 +1026,6 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
     server.await.unwrap();
     std::fs::remove_file(path).unwrap();
 }
+
+#[path = "docker_transport/runtime_sampling.rs"]
+mod runtime_sampling;

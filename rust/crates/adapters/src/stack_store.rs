@@ -17,8 +17,8 @@ use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
-mod update_checks;
 mod drift;
+mod update_checks;
 mod webhooks;
 
 const READ: i32 = 1;
@@ -586,9 +586,13 @@ ORDER BY s.createdat DESC,s.name,s.id"#
             let mut platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
             let has_snapshot: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM stackreleases snapshot JOIN stackreleases current ON current.id=$1 WHERE snapshot.stackid=current.stackid AND snapshot.id<>current.id AND snapshot.version=current.version AND snapshot.status='Healthy')")
                 .bind(current_release).fetch_one(&mut *tx).await.map_err(storage)?;
-            let status = StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?;
+            let status =
+                StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?;
             let create_next = has_snapshot
-                && !matches!(status, StackReleaseStatus::Created | StackReleaseStatus::Failed);
+                && !matches!(
+                    status,
+                    StackReleaseStatus::Created | StackReleaseStatus::Failed
+                );
             let operation = if let Some(selected) = rollback_release_id {
                 let rollback=sqlx::query("SELECT platformid,spec FROM stackreleases WHERE id=$1 AND stackid=$2 AND status='Healthy'")
                     .bind(selected).bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Validation("Only a previous healthy Stack release can be rolled back.".to_owned()))?;
@@ -603,7 +607,10 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 // row must never become a healthy historical release itself.
                 if has_snapshot {
                     sqlx::query("UPDATE stackreleases SET status='Created' WHERE id=$1")
-                        .bind(current_release).execute(&mut *tx).await.map_err(storage)?;
+                        .bind(current_release)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(storage)?;
                 }
                 let next = next_version(row.try_get("version").map_err(storage)?);
                 release_id = Uuid::now_v7();

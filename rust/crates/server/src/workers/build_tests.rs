@@ -50,7 +50,12 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
         chrono::Duration::minutes(5),
     ));
     let token = CancellationToken::new();
-    let worker = tokio::spawn(build_runs(token.clone(), service, 2));
+    let worker = tokio::spawn(build_runs(
+        token.clone(),
+        service,
+        2,
+        tokio::sync::watch::channel(()).1,
+    ));
     tokio::time::timeout(Duration::from_secs(5), async {
         while executor.0.load(Ordering::SeqCst) < 2 {
             tokio::time::sleep(Duration::from_millis(10)).await;

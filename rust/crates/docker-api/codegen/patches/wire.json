@@ -1,0 +1,157 @@
+[
+  {
+    "path": "/paths/~1distribution~1{name}~1json/get/parameters/-",
+    "value": {
+      "name": "X-Registry-Auth",
+      "in": "header",
+      "type": "string",
+      "required": false,
+      "description": "Base64url-encoded registry authentication."
+    }
+  },
+  {
+    "path": "/definitions/ContainerStatsResponse/properties/networks/type",
+    "value": "object"
+  },
+  {
+    "path": "/definitions/Volume/properties/Scope/x-nullable",
+    "expected": false,
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Labels/x-nullable",
+    "expected": false,
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Options/x-nullable",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/RepoTags/x-nullable",
+    "expected": false,
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/RepoDigests/x-nullable",
+    "expected": false,
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/Labels/x-nullable",
+    "expected": false,
+    "value": true
+  },
+  {
+    "path": "/paths/~1services~1{id}~1update/post/parameters/2/format",
+    "value": "int64"
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/ParentId/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/RepoTags/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/RepoDigests/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/Created/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/Size/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/SharedSize/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/Labels/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ImageSummary/properties/Containers/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Driver/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Mountpoint/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Labels/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Scope/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/Options/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/Created/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/CreatedBy/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/Tags/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/Size/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/Comment/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/Volume/properties/UsageData/required",
+    "expected": [
+      "Size",
+      "RefCount"
+    ],
+    "value": []
+  },
+  {
+    "path": "/paths/~1images~1{name}~1history/get/responses/200/schema/items/properties/Tags/x-nullable",
+    "value": true
+  },
+  {
+    "path": "/definitions/ContainerCreateResponse/properties/Warnings/x-citadel-default",
+    "value": true
+  },
+  {
+    "path": "/definitions/ContainerCreateResponse/properties/Warnings/x-nullable",
+    "value": true,
+    "expected": false
+  },
+  {
+    "path": "/definitions/DistributionInspect/required",
+    "expected": [
+      "Descriptor",
+      "Platforms"
+    ],
+    "value": [
+      "Descriptor"
+    ]
+  },
+  {
+    "path": "/definitions/DriverData/properties/Data/x-nullable",
+    "value": true,
+    "expected": false
+  }
+]

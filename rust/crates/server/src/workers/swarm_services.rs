@@ -42,6 +42,7 @@ pub(super) async fn swarm_service_operation_reconciliation(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::ServiceRecovery.start();
         match services
             .reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH)
             .await

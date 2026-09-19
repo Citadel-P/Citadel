@@ -95,13 +95,14 @@ async fn pruning_obeys_setting_and_only_deletes_terminal_tasks_without_volumes_o
     .expect("enabled terminal tasks must be pruned");
     token.cancel();
     worker.await.unwrap().unwrap();
-    let targets = runtime.0.lock().unwrap();
-    assert_eq!(targets.len(), 2);
-    assert!(
-        targets
-            .iter()
-            .all(|t| ids[..2].contains(&t.id) && t.node_id.as_deref() == Some("node-a"))
-    );
-    drop(targets);
+    {
+        let targets = runtime.0.lock().unwrap();
+        assert_eq!(targets.len(), 2);
+        assert!(
+            targets
+                .iter()
+                .all(|t| ids[..2].contains(&t.id) && t.node_id.as_deref() == Some("node-a"))
+        );
+    }
     pool.close().await;
 }

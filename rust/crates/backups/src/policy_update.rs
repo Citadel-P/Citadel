@@ -39,8 +39,10 @@ pub fn merge(current: &BackupPolicyView, patch: &Value) -> Result<BackupPolicyIn
             value[field] = proposed.clone();
         }
     }
-    let mut input: BackupPolicyInput = serde_path_to_error::deserialize(value)
-        .map_err(|error| BackupError::Validation(format!("Invalid Backup Policy patch: {error}")))?;
+    let mut input: BackupPolicyInput =
+        serde_path_to_error::deserialize(value).map_err(|error| {
+            BackupError::Validation(format!("Invalid Backup Policy patch: {error}"))
+        })?;
     input.description = input
         .description
         .take()

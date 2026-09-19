@@ -73,6 +73,7 @@ impl PlatformDeletionStore for PostgresPlatformDeletionStore {
             // Inventory/backup items cascade; activity platform links become null.
             sqlx::query("DELETE FROM platforms WHERE id = ANY($1)")
                 .bind(ids).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("SELECT pg_notify('citadel_platform_targets','')").execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)
         }.boxed()
     }

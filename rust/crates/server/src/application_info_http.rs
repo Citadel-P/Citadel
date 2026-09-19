@@ -60,6 +60,11 @@ pub const fn application_info() -> ApplicationInfoView {
     }
 }
 
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<()> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(get_application_info))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,9 +83,4 @@ mod tests {
                 .map_or(info.informational_version, |(display, _)| display)
         );
     }
-}
-
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<()> {
-    utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(get_application_info))
 }

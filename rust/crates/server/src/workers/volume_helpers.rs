@@ -12,6 +12,7 @@ pub(super) async fn reconcile(
     let mut after = Uuid::nil();
     loop {
         tokio::select! { ()=cancellation.cancelled()=>break,_=tick.tick()=>{} }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::VolumeRecovery.start();
         match volumes.reap_expired(after, &cancellation).await {
             Ok(next) => after = next,
             Err(error) => tracing::warn!(%error,"Volume helper recovery failed"),

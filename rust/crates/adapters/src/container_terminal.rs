@@ -63,8 +63,8 @@ impl ContainerTerminalPort for crate::docker::DockerClient {
 
 pub(crate) fn local_session(
     mut socket: reqwest::Upgraded,
-    client: reqwest::Client,
-    resize_url: String,
+    client: crate::docker::DockerClient,
+    exec_id: String,
     timeout: std::time::Duration,
     cancel: CancellationToken,
 ) -> TerminalSession {
@@ -92,8 +92,7 @@ pub(crate) fn local_session(
                         match input {
                             TerminalInput::Stdin(data)=>socket.write_all(&data).await.map_err(|_|failure("Docker terminal write failed.")),
                             TerminalInput::Resize {cols,rows}=>{
-                                let response=client.post(format!("{resize_url}?w={cols}&h={rows}")).send().await.map_err(|_|failure("Docker terminal resize failed."))?;
-                                if response.status().is_success() {Ok(())} else {Err(failure("Docker terminal resize rejected."))}
+                                client.resize_exec(&exec_id, cols, rows).await.map_err(|_|failure("Docker terminal resize failed."))
                             }
                         }
                     };

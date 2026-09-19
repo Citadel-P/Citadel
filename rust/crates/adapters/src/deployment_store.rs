@@ -1,15 +1,20 @@
 use chrono::{DateTime, Utc};
+use citadel_deployments::permissions::{
+    ApplyDeployment, DeleteDeployment, InspectDeployment, OpenDeploymentTerminal, ReadDeployment,
+    ReadDeploymentBindings, ViewDeploymentLogs, WriteDeployment,
+};
 use citadel_deployments::{
     ApplyClaim, AutoUpdateState, CreateDeploymentInput, CreateDeploymentInputView, DeletionClaim,
     DeploymentBindingSnapshot, DeploymentCapabilities, DeploymentDuplicateDraftView,
     DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentSpec, DeploymentStore,
-    DeploymentView, DuplicateSourceInput, DuplicateWarning, EffectiveDeploymentPermission,
-    FieldPatch, PatchDeploymentMetadataInput, RuntimeContainerState, RuntimeDeploymentResult,
-    TagSummary,
+    DeploymentView, DuplicateSourceInput, DuplicateWarning, FieldPatch,
+    PatchDeploymentMetadataInput, RuntimeContainerState, RuntimeDeploymentResult, TagSummary,
 };
 use citadel_domain::{
     ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActivityStatus,
-    ActorId, DeploymentActivitySnapshot, DeploymentResultActivitySnapshot,
+    ActorId, DeploymentActivitySnapshot, DeploymentResultActivitySnapshot, EffectivePermission,
+    PermissionLevel, PermissionPolicy, PermissionRequirement, SpecificPermission,
+    SpecificPermissions,
 };
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -27,11 +32,9 @@ pub use adoption::PostgresContainerAdoption;
 
 const DEPLOYMENT_RESOURCE_TYPE: i32 = 1;
 const PLATFORM_RESOURCE_TYPE: i32 = 0;
-const READ_LEVEL: i32 = 1;
-const WRITE_LEVEL: i32 = 2;
-const EXECUTE_LEVEL: i32 = 4;
-const RESOURCE_BINDINGS_PERMISSION: i32 = 1 << 5;
-const APPLY_PERMISSION: i32 = 1 << 2;
+const READ_LEVEL: PermissionLevel = PermissionLevel::Read;
+const WRITE_LEVEL: PermissionLevel = PermissionLevel::Write;
+const EXECUTE_LEVEL: PermissionLevel = PermissionLevel::Execute;
 
 const AUTHORIZED_CTES: &str = r#"
 WITH actor_scope AS (
@@ -76,8 +79,9 @@ SELECT d.id, d.name, d.description, d.platformid, d.createdat, d.createdbyactori
        i.id AS image_id, i.name AS image_name,
        COALESCE(tags.value, '[]'::jsonb) AS tags,
        activity.value AS latest_activity,
-       CASE WHEN $2 THEN 7 ELSE GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) END AS permission_level,
-       CASE WHEN $2 THEN 63 ELSE (COALESCE(g.specific_mask, 0) | COALESCE(r.specific_mask, 0)) END AS permission_specific
+       GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) AS permission_level,
+       $2 AS permission_administrator,
+       (COALESCE(g.specific_mask, 0) | COALESCE(r.specific_mask, 0)) AS permission_specific
 FROM deployments d
 JOIN platforms p ON p.id = d.platformid
 LEFT JOIN global_permission g ON TRUE
@@ -164,7 +168,7 @@ impl DeploymentStore for PostgresDeploymentStore {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE ($2 OR GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) >= 1)
+WHERE ($2 OR GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) = ANY($5))
   AND ($3::uuid IS NULL OR d.platformid = $3)
   AND NOT EXISTS (
       SELECT 1 FROM unnest($4::text[]) requested(name)
@@ -182,6 +186,7 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                 .bind(administrator)
                 .bind(filter.platform_id)
                 .bind(&filter.tags)
+                .bind(ReadDeployment::REQUIREMENT.level.accepted_database_levels())
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?
@@ -691,8 +696,7 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                 actor_id,
                 administrator,
                 id,
-                EXECUTE_LEVEL,
-                APPLY_PERMISSION,
+                ApplyDeployment::REQUIREMENT,
             )
             .await?;
             let row = sqlx::query(
@@ -949,13 +953,14 @@ async fn get_authorized(
 ) -> Result<DeploymentView, DeploymentError> {
     let query = format!(
         r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE d.id=$3 AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) >= 1)
+WHERE d.id=$3 AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) = ANY($4))
 LIMIT 1"#
     );
     sqlx::query(AssertSqlSafe(query.as_str()))
         .bind(actor_id.value())
         .bind(administrator)
         .bind(id)
+        .bind(ReadDeployment::REQUIREMENT.level.accepted_database_levels())
         .fetch_optional(pool)
         .await
         .map_err(storage)?
@@ -1089,7 +1094,7 @@ async fn ensure_access(
     actor_id: ActorId,
     administrator: bool,
     resource_id: Uuid,
-    required: i32,
+    required: PermissionLevel,
 ) -> Result<(), DeploymentError> {
     if administrator
         || has_resource_access(
@@ -1112,15 +1117,14 @@ async fn ensure_specific_access(
     actor_id: ActorId,
     administrator: bool,
     resource_id: Uuid,
-    required_level: i32,
-    required_specific: i32,
+    requirement: PermissionRequirement,
 ) -> Result<(), DeploymentError> {
     if administrator {
         return Ok(());
     }
-    let (level, specific) =
+    let permission =
         effective_permission(tx, actor_id, DEPLOYMENT_RESOURCE_TYPE, Some(resource_id)).await?;
-    if level >= required_level && specific & required_specific == required_specific {
+    if permission.allows(requirement) {
         Ok(())
     } else {
         Err(DeploymentError::Forbidden)
@@ -1146,14 +1150,17 @@ async fn require_duplicate_binding_access(
     if !has_bindings {
         return Ok(());
     }
-    let (source_level, source_specific) =
+    let source_permission =
         effective_permission(tx, actor_id, DEPLOYMENT_RESOURCE_TYPE, Some(source_id)).await?;
-    let (target_level, target_specific) =
+    let target_permission =
         effective_permission(tx, actor_id, DEPLOYMENT_RESOURCE_TYPE, None).await?;
-    if source_level < READ_LEVEL || source_specific & RESOURCE_BINDINGS_PERMISSION == 0 {
+    if !source_permission.allows(ReadDeploymentBindings::REQUIREMENT) {
         return Err(DeploymentError::Forbidden);
     }
-    if target_level < WRITE_LEVEL || target_specific & RESOURCE_BINDINGS_PERMISSION == 0 {
+    if !target_permission.allows(PermissionRequirement {
+        level: PermissionLevel::Write,
+        ..ReadDeploymentBindings::REQUIREMENT
+    }) {
         return Err(DeploymentError::Forbidden);
     }
     Ok(())
@@ -1164,8 +1171,8 @@ async fn effective_permission(
     actor_id: ActorId,
     resource_type: i32,
     resource_id: Option<Uuid>,
-) -> Result<(i32, i32), DeploymentError> {
-    sqlx::query_as::<_, (i32, i32)>(
+) -> Result<EffectivePermission, DeploymentError> {
+    let (level, specifics) = sqlx::query_as::<_, (i32, i32)>(
         r#"WITH actor_scope AS (
                SELECT id actorid FROM actors WHERE id=$1 AND isenabled
                UNION
@@ -1192,7 +1199,8 @@ async fn effective_permission(
     .bind(resource_id)
     .fetch_one(&mut **tx)
     .await
-    .map_err(storage)
+    .map_err(storage)?;
+    decode_permission(false, level, specifics)
 }
 
 async fn has_resource_access(
@@ -1200,7 +1208,7 @@ async fn has_resource_access(
     actor_id: ActorId,
     resource_type: i32,
     resource_id: Uuid,
-    required: i32,
+    required: PermissionLevel,
 ) -> Result<bool, DeploymentError> {
     sqlx::query_scalar::<_, bool>(
         r#"WITH actor_scope AS (
@@ -1214,16 +1222,16 @@ async fn has_resource_access(
                SELECT 1 FROM actor_scope scope
                JOIN actorroles assignment ON assignment.actorid=scope.actorid
                JOIN permissions permission ON permission.roleid=assignment.roleid
-               WHERE permission.resourcetype=$2 AND permission.permissionlevel >= $4
+               WHERE permission.resourcetype=$2 AND permission.permissionlevel = ANY($4)
                UNION ALL
                SELECT 1 FROM actor_scope scope
                JOIN resourceaccesses access ON access.actorid=scope.actorid
-               WHERE access.resourcetype=$2 AND access.resourceid=$3 AND access.permissionlevel >= $4)"#,
+               WHERE access.resourcetype=$2 AND access.resourceid=$3 AND access.permissionlevel = ANY($4))"#,
     )
     .bind(actor_id.value())
     .bind(resource_type)
     .bind(resource_id)
-    .bind(required)
+    .bind(required.accepted_database_levels())
     .fetch_one(&mut **tx)
     .await
     .map_err(storage)
@@ -1428,10 +1436,11 @@ fn map_deployment(row: PgRow) -> Result<DeploymentView, DeploymentError> {
     let spec = DeploymentSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
     let tags = serde_json::from_value::<Vec<TagSummary>>(row.try_get("tags").map_err(storage)?)
         .map_err(|error| DeploymentError::Storage(format!("invalid Deployment Tags: {error}")))?;
-    let permission = EffectiveDeploymentPermission {
-        level_mask: row.try_get("permission_level").map_err(storage)?,
-        specific_mask: row.try_get("permission_specific").map_err(storage)?,
-    };
+    let permission = decode_permission(
+        row.try_get("permission_administrator").map_err(storage)?,
+        row.try_get("permission_level").map_err(storage)?,
+        row.try_get("permission_specific").map_err(storage)?,
+    )?;
     let auto_status: Option<String> = row.try_get("autoupdatestate_status").map_err(storage)?;
     let auto_last_checked: Option<DateTime<Utc>> = row
         .try_get("autoupdatestate_lastcheckedat")
@@ -1477,17 +1486,40 @@ fn map_deployment(row: PgRow) -> Result<DeploymentView, DeploymentError> {
     })
 }
 
-fn capabilities(permission: EffectiveDeploymentPermission) -> DeploymentCapabilities {
+fn decode_permission(
+    administrator: bool,
+    level: i32,
+    specifics: i32,
+) -> Result<EffectivePermission, DeploymentError> {
+    if administrator {
+        return Ok(EffectivePermission::Administrator);
+    }
+    Ok(EffectivePermission::Granted {
+        level: PermissionLevel::from_i32(level).ok_or_else(|| {
+            DeploymentError::Storage(format!("unknown persisted PermissionLevel value {level}"))
+        })?,
+        specifics: SpecificPermissions::from_bits_retain(specifics as u32),
+    })
+}
+
+// Transitional View mapping: moves to server with the Deployment model split in Phase 6.
+fn capabilities(permission: EffectivePermission) -> DeploymentCapabilities {
     DeploymentCapabilities {
-        can_read: permission.level_mask >= READ_LEVEL,
-        can_write: permission.level_mask >= WRITE_LEVEL,
-        can_execute: permission.level_mask >= EXECUTE_LEVEL,
-        can_view_logs: permission.specific_mask & (1 << 0) != 0,
-        can_inspect: permission.specific_mask & (1 << 1) != 0,
-        can_apply: permission.specific_mask & (1 << 2) != 0,
-        can_pull: permission.specific_mask & (1 << 3) != 0,
-        can_open_terminal: permission.specific_mask & (1 << 4) != 0,
-        can_view_resource_bindings: permission.specific_mask & (1 << 5) != 0,
+        can_read: permission.allows(ReadDeployment::REQUIREMENT),
+        can_write: permission.allows(WriteDeployment::REQUIREMENT),
+        can_execute: permission.allows(DeleteDeployment::REQUIREMENT),
+        can_view_logs: permission.allows(ViewDeploymentLogs::REQUIREMENT),
+        can_inspect: permission.allows(InspectDeployment::REQUIREMENT),
+        can_apply: permission.allows(ApplyDeployment::REQUIREMENT),
+        // Legacy wire capability; Deployment has no Pull operation in the policy matrix.
+        can_pull: match permission {
+            EffectivePermission::Administrator => true,
+            EffectivePermission::Granted { specifics, .. } => {
+                specifics.contains(SpecificPermission::Pull)
+            }
+        },
+        can_open_terminal: permission.allows(OpenDeploymentTerminal::REQUIREMENT),
+        can_view_resource_bindings: permission.allows(ReadDeploymentBindings::REQUIREMENT),
     }
 }
 
@@ -1584,6 +1616,48 @@ fn database_error(error: sqlx::Error) -> DeploymentError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deployment_policy_parity_and_capabilities() {
+        let matrix = citadel_identity::permission_matrix();
+        let capability = matrix
+            .get(&citadel_domain::ResourceType::Deployment)
+            .unwrap();
+        for requirement in [
+            ApplyDeployment::REQUIREMENT,
+            ViewDeploymentLogs::REQUIREMENT,
+            InspectDeployment::REQUIREMENT,
+            OpenDeploymentTerminal::REQUIREMENT,
+            ReadDeploymentBindings::REQUIREMENT,
+        ] {
+            assert!(
+                capability
+                    .specifics
+                    .contains(&(requirement.specific.unwrap(), requirement.level))
+            );
+        }
+        assert_eq!(ApplyDeployment::REQUIREMENT.level, PermissionLevel::Read);
+        let read_apply = decode_permission(false, 1, 4).unwrap();
+        let view = capabilities(read_apply);
+        assert!(view.can_apply && view.can_read);
+        assert!(!view.can_execute && !view.can_write && !view.can_view_logs);
+        assert!(!capabilities(decode_permission(false, 0, 4).unwrap()).can_apply);
+        assert!(!capabilities(decode_permission(false, 4, 0).unwrap()).can_apply);
+        let admin = capabilities(decode_permission(true, 0, 0).unwrap());
+        assert!(
+            admin.can_read
+                && admin.can_write
+                && admin.can_execute
+                && admin.can_apply
+                && admin.can_pull
+                && admin.can_inspect
+                && admin.can_open_terminal
+                && admin.can_view_logs
+                && admin.can_view_resource_bindings
+        );
+        assert!(decode_permission(false, 7, 63).is_err());
+        assert!(decode_permission(false, 3, 4).is_err());
+    }
 
     #[test]
     fn duplicate_names_remain_bounded() {

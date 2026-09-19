@@ -71,6 +71,20 @@ fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, R
 }
 
 impl ApplicationGroupReader {
+    async fn deployment_permission<P: citadel_domain::PermissionPolicy>(
+        &self,
+        principal: &ActorPrincipal,
+        id: Uuid,
+    ) -> Result<(), RealtimeReadError> {
+        self.identity
+            .require_resource::<P>(principal, id)
+            .await
+            .map_err(|error| match error {
+                citadel_identity::IdentityError::Forbidden => RealtimeReadError::Authorization,
+                other => failure(other),
+            })
+    }
+
     async fn permission(
         &self,
         p: &ActorPrincipal,

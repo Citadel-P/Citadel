@@ -684,7 +684,10 @@ ORDER BY p.resourcetype
                                 "unknown persisted PermissionLevel value {level}"
                             ))
                         })?,
-                        specific_mask: row.try_get("specificpermissions").map_err(storage)?,
+                        specifics: citadel_domain::SpecificPermissions::from_bits_retain(
+                            row.try_get::<i32, _>("specificpermissions")
+                                .map_err(storage)? as u32,
+                        ),
                     })
                 })
                 .collect::<Result<Vec<_>, IdentityError>>()?;
@@ -755,10 +758,11 @@ FROM candidates
                         "unknown persisted PermissionLevel value {level}"
                     ))
                 })?,
-                specific_mask: row
-                    .try_get::<Option<i32>, _>("specificpermissions")
-                    .map_err(storage)?
-                    .unwrap_or_default(),
+                specifics: citadel_domain::SpecificPermissions::from_bits_retain(
+                    row.try_get::<Option<i32>, _>("specificpermissions")
+                        .map_err(storage)?
+                        .unwrap_or_default() as u32,
+                ),
             }))
         })
     }

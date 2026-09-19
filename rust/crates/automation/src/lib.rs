@@ -163,10 +163,10 @@ pub struct AutomationActionView {
 impl AutomationActionView {
     pub fn snapshot(&self) -> citadel_domain::AutomationActionActivitySnapshot {
         let mut webhook = self.webhook.clone();
-        if let Some(config) = &mut webhook {
-            if config.secret.is_some() {
-                config.secret = Some("********".into());
-            }
+        if let Some(config) = &mut webhook
+            && config.secret.is_some()
+        {
+            config.secret = Some("********".into());
         }
         citadel_domain::AutomationActionActivitySnapshot {
             id: self.id,
@@ -505,12 +505,12 @@ impl AutomationService {
         timeout_seconds: Option<i32>,
         code: Option<&str>,
     ) -> Result<mpsc::Receiver<AutomationProgress>, AutomationError> {
-        if let Some(code) = code {
-            if trigger != "Test" || code.trim().is_empty() || code.len() > 256 * 1024 {
-                return Err(AutomationError::Validation(
-                    "Draft code is only accepted for tests and must contain between 1 byte and 256 KiB.".into(),
-                ));
-            }
+        if let Some(code) = code
+            && (trigger != "Test" || code.trim().is_empty() || code.len() > 256 * 1024)
+        {
+            return Err(AutomationError::Validation(
+                "Draft code is only accepted for tests and must contain between 1 byte and 256 KiB.".into(),
+            ));
         }
         let configured = match timeout_seconds {
             Some(seconds) => seconds,

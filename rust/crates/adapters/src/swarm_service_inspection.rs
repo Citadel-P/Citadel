@@ -1,5 +1,5 @@
 //! Docker inspection is mapped once for Local, Agent-equivalent inspection and adoption.
-use crate::docker::generated::{SwarmService, SwarmTask};
+use crate::docker::projection::{SwarmService, SwarmTask};
 use citadel_contracts::citadel::swarm::v1::*;
 use citadel_platforms::RuntimeCapabilityError;
 use serde_json::Value;

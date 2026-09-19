@@ -12,7 +12,7 @@ pub(super) async fn git_repository_sync(
     cancellation: CancellationToken,
     service: Arc<GitRepositoryExecutionService>,
 ) -> Result<(), String> {
-    let mut schedule = tokio::time::interval(SCHEDULE_INTERVAL);
+    let mut schedule = super::schedule::interval("git-sync", SCHEDULE_INTERVAL);
     schedule.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         if cancellation.is_cancelled() {
@@ -21,6 +21,7 @@ pub(super) async fn git_repository_sync(
         // Keep a claimed execution alive across scheduling ticks. Dropping it
         // here used to interrupt clones taking longer than a minute and leave
         // their durable claim awaiting stale-run recovery.
+        let iteration = citadel_application::runtime_metrics::RuntimeWork::GitSync.start();
         let execution = service.process_one(&cancellation);
         tokio::pin!(execution);
         let result = loop {
@@ -33,6 +34,7 @@ pub(super) async fn git_repository_sync(
                 }
             }
         };
+        drop(iteration);
         match result {
             Ok(true) => {}
             Ok(false) => {

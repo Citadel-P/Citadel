@@ -17,19 +17,12 @@ impl DockerClient {
         futures_util::stream::BoxStream<'static, Result<ExecServerMessage, tonic::Status>>,
         RuntimeCapabilityError,
     > {
-        use crate::docker::generated::{CONTAINER_EXEC, EXEC_INSPECT, EXEC_START};
         let open = async {
             validate_identifier(id)?;
-            let path = CONTAINER_EXEC
-                .path
-                .replace("{id}", &urlencoding::encode(id));
-            let created: ContainerCreateResponse = self.request_json(&CONTAINER_EXEC, &path, None,
-                Some(&serde_json::json!({"AttachStdin":false,"AttachStdout":true,"AttachStderr":true,"Tty":false,"Cmd":command}))).await?;
-            validate_identifier(&created.id)?;
+            let created = self.create_exec(id, serde_json::json!({"AttachStdin":false,"AttachStdout":true,"AttachStderr":true,"Tty":false,"Cmd":command})).await?;
+            validate_identifier(&created)?;
             let version = self.negotiated_version().await?;
-            let path = EXEC_START
-                .path
-                .replace("{id}", &urlencoding::encode(&created.id));
+            let path = format!("/exec/{}/start", urlencoding::encode(&created));
             let response = self
                 .client
                 .post(format!("http://localhost/v{version}{path}"))
@@ -44,7 +37,7 @@ impl DockerClient {
                     message: "Docker did not upgrade binary execution.".into(),
                 });
             }
-            Ok::<_, DockerError>((response.upgrade().await?, created.id))
+            Ok::<_, DockerError>((response.upgrade().await?, created))
         };
         let (mut socket, exec_id) = tokio::select! {
             biased;
@@ -80,13 +73,10 @@ impl DockerClient {
                     yield ExecServerMessage { msg: Some(Msg::Output(ExecOutput { data, stream: i32::from(header[0] == 2) })) };
                 }
             }
-            #[derive(Deserialize)]
-            #[serde(rename_all="PascalCase")]
-            struct Exit { running: bool, exit_code: i32 }
-            let path = EXEC_INSPECT.path.replace("{id}", &urlencoding::encode(&exec_id));
-            let exit: Exit = docker.get_json(&EXEC_INSPECT, &path, None).await.map_err(|_| tonic::Status::unavailable("Could not confirm Docker binary execution completion."))?;
-            if exit.running { Err(tonic::Status::unavailable("Docker binary execution is still running."))?; }
-            yield ExecServerMessage { msg: Some(Msg::Exit(ExecExit { exit_code: exit.exit_code })) };
+            let exit = docker.exec_inspect(&exec_id).await.map_err(|_| tonic::Status::unavailable("Could not confirm Docker binary execution completion."))?;
+            if exit.running != Some(false) { Err(tonic::Status::unavailable("Docker binary execution is still running."))?; }
+            let exit_code = exit.exit_code.ok_or_else(|| tonic::Status::data_loss("Docker omitted the exit code."))?;
+            yield ExecServerMessage { msg: Some(Msg::Exit(ExecExit { exit_code })) };
         }))
     }
 }

@@ -104,6 +104,10 @@ impl PostgresBuildStore {
                 .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(project.try_get::<String,_>("imagerepository").map_err(storage)?)
                 .bind(project.try_get::<serde_json::Value,_>("tagtemplates").map_err(storage)?).bind(trigger).bind(project.try_get::<i32,_>("timeoutseconds").map_err(storage)?).bind(actor.value()).bind(commit)
                 .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("SELECT pg_notify('citadel_build_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             // Preserve BuildKit IDs with their secret references, never secret values.
             sqlx::query("UPDATE buildruns SET buildsecretssnapshot=$2 WHERE id=$1")
                 .bind(run_id)

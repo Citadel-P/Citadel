@@ -603,7 +603,7 @@ fn proto_spec(
 }
 
 fn observed_result(
-    service: crate::docker::generated::SwarmService,
+    service: crate::docker::projection::SwarmService,
     warnings: Vec<String>,
     accepted: bool,
 ) -> RuntimeServiceResult {

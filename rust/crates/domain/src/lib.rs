@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod activity;
+mod authorization;
 mod enums;
 mod license;
 
@@ -8,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use activity::*;
+pub use authorization::{
+    EffectivePermission, PermissionPolicy, PermissionRequirement, SpecificPermissions,
+};
 pub use enums::*;
 pub use license::*;
 

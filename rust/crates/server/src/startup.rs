@@ -42,18 +42,17 @@ pub async fn acquire_job_lease(config: &Config) -> Result<sqlx::PgConnection, sq
 }
 
 pub async fn watch_job_lease(
-    lease: std::sync::Arc<tokio::sync::Mutex<sqlx::PgConnection>>,
+    mut connection: sqlx::PgConnection,
     token: tokio_util::sync::CancellationToken,
-) -> Result<(), sqlx::Error> {
+) -> Result<sqlx::PgConnection, sqlx::Error> {
     loop {
         tokio::select! {
-            ()=token.cancelled()=>return Ok(()),
+            ()=token.cancelled()=>return Ok(connection),
             _=tokio::time::sleep(std::time::Duration::from_secs(5))=>{}
         }
-        let mut connection = lease.lock().await;
         tokio::select! {
-            ()=token.cancelled()=>return Ok(()),
-            result=tokio::time::timeout(std::time::Duration::from_secs(2),sqlx::query("SELECT 1").execute(&mut *connection))=>{
+            ()=token.cancelled()=>return Ok(connection),
+            result=tokio::time::timeout(std::time::Duration::from_secs(2),sqlx::query("SELECT 1").execute(&mut connection))=>{
                 result.map_err(|_|sqlx::Error::Protocol("Core job lease connection timed out".into()))??;
             }
         }

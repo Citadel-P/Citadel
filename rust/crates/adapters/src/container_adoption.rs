@@ -127,7 +127,7 @@ impl PostgresContainerAdoption {
                 .map_err(|_| DeploymentError::Forbidden)?;
         if !permissions
             .get(&platform_id)
-            .is_some_and(|p| p.level_mask >= READ_LEVEL && p.specific_mask & 2 != 0)
+            .is_some_and(|p| p.level_mask >= READ_LEVEL as i32 && p.specific_mask & 2 != 0)
         {
             return Err(DeploymentError::Forbidden);
         }

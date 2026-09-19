@@ -45,12 +45,12 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
-#[path = "platforms_http/swarm_overview.rs"]
-mod swarm_overview;
-#[path = "platforms_http/swarm_inventory.rs"]
-mod swarm_inventory;
 #[path = "platforms_http/service_adoption.rs"]
 mod service_adoption;
+#[path = "platforms_http/swarm_inventory.rs"]
+mod swarm_inventory;
+#[path = "platforms_http/swarm_overview.rs"]
+mod swarm_overview;
 #[path = "platforms_http/task_runtime.rs"]
 mod task_runtime;
 
@@ -66,10 +66,6 @@ mod edge;
 mod get_container;
 #[path = "platforms_http/images.rs"]
 mod images;
-#[path="platforms_http/platform_image_management.rs"]
-mod platform_image_management;
-#[path="platforms_http/registry_browsing.rs"]
-mod registry_browsing;
 #[path = "platforms_http/logs.rs"]
 mod logs;
 #[path = "platforms_http/lookup.rs"]
@@ -82,8 +78,12 @@ mod node_agent_setup;
 mod node_coverage;
 #[path = "platforms_http/node_resources.rs"]
 mod node_resources;
+#[path = "platforms_http/platform_image_management.rs"]
+mod platform_image_management;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
+#[path = "platforms_http/registry_browsing.rs"]
+mod registry_browsing;
 #[path = "platforms_http/search.rs"]
 mod search;
 #[path = "platforms_http/statistics.rs"]

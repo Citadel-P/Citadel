@@ -61,6 +61,7 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
+            targets: state.runtime_targets.clone(),
             volume_content: platform_state.volume_content.clone(),
             containers: platform_state.containers.clone(),
             docker: docker.clone(),
@@ -82,6 +83,7 @@ pub async fn spawn_all(
         workers::WorkerSettings {
             node_agent_policy: config.node_agent_policy.clone(),
             stats_flush_interval: config.stats_flush_interval,
+            retention_interval: config.retention_interval,
             stats_batch_size: config.stats_batch_size,
             build_parallel_runs: config.build_parallel_runs,
             build_retention_days: config.build_retention_days,
@@ -105,6 +107,7 @@ pub async fn spawn_all(
             pool.clone(),
             realtime_hub.clone(),
             config.node_agent_policy.clone(),
+            state.runtime_targets.inventory_budget.clone(),
         ),
     );
     supervisor.spawn(
