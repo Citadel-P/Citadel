@@ -7,7 +7,7 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     let mut tx = pool.begin().await?;
     // Existing recovery predicates protect live runs until their execution deadlines.
     let before = chrono::Utc::now();
-    if crate::automation_store::recover_interrupted(&mut tx, before)
+    if crate::postgres::automation::recover_interrupted(&mut tx, before)
         .await
         .map_err(protocol)?
         > 0
@@ -120,7 +120,7 @@ fn protocol(error: impl std::fmt::Display) -> sqlx::Error {
 pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let before = chrono::Utc::now();
-    crate::automation_store::recover_interrupted_with_mode(&mut tx, before, true)
+    crate::postgres::automation::recover_interrupted_with_mode(&mut tx, before, true)
         .await
         .map_err(protocol)?;
     crate::postgres::backups::recover_stale_with_mode(&mut tx, before, true)

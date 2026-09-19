@@ -2,7 +2,8 @@
 
 This describes the architecture of the incremental Rust refactor. Deployments is the
 implemented reference resource as of Phase 6. Stacks and Swarm Services follow it
-in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8.
+in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8, followed by
+Automation and Alerts in Phase 9.
 
 ## Ownership and dependency direction
 
@@ -289,8 +290,8 @@ the crash-recovery authority. Operation failures reach that tracker after redact
 Stack runtime, source-materialization, build-image resolution and update scanner
 adapters retain their established locations and consumer-owned ports. This phase
 moves workload persistence and inbound adapters, not the global runtime tree.
-Automation/Alerts and shared Platforms/Identity remain scheduled for their own
-resource migrations.
+Automation/Alerts now follow the Phase 9 resource organization below. Shared
+Platforms/Identity remain scheduled for Phase 10.
 
 
 ## Implemented multi-resource contexts (Phase 8)
@@ -324,7 +325,8 @@ owner before database teardown. Abnormal process failure still uses durable reco
 The shared Resources catalogue port and adapter retain compatibility delegation to
 Git persistence until shared-resource normalization. Shared tag/audit helpers retain
 that ownership too. Resources re-exports Git webhook evaluation; its legacy
-`RepoWebhookConfig` schema remains for Automation until Phase 9, while migrated APIs
+`RepoWebhookConfig` compatibility schema remains in Resources until Phase 10.
+Automation now consumes Git's semantic webhook configuration, and migrated APIs
 own their wire schemas in server. These compatibility paths do not put Views or HTTP
 schema dependencies back into Builds, Git or Backups. Phase 8 has dedicated architecture
 guards and adds no exemptions for these three feature crates.
@@ -333,9 +335,46 @@ The reviewed Phase 8 cross-feature contracts are:
 
 | Importing feature → owner | Consumed contract | Reason |
 |---|---|---|
-| Builds → Alerts | `AlertEventSink`, `AlertObservation` | Publish execution outcomes through the existing observation sink; Alerts orchestration remains Phase 9. |
+| Builds → Alerts | `AlertEventSink`, `AlertObservation` | Publish execution outcomes through the observation contract owned by Alerts. |
 | Builds → Resources | tag summaries and webhook validation/evaluation facade | Preserve shared tag enrichment and existing callers until Phase 10 shared-resource normalization. |
 | Git → Execution | bounded process requests, results and runner | Git CLI execution uses the existing cancellation/output-limit owner; runtime reorganization remains Phase 12. |
 | Resources → Git | repository persistence/error and webhook contracts | Delegate legacy catalogue and webhook entry points to the migrated owner without a dependency cycle. |
 
 These are explicit consumed contracts, not exceptions permitting feature-owned HTTP Views.
+
+## Implemented Automation and Alerts contexts (Phase 9)
+
+Automation owns `actions/` and `runs/`; Alerts owns `channels/`, `rules/`, and
+`events/`. Their roots only declare modules and selectively export contracts.
+Configuration and patch types keep Serde where JSON interpretation is part of their
+semantics. Resource entities, read results, and Automation progress carry semantic
+data without HTTP serialization or schema derives. Quiet-hours, time-zone, rule
+metadata, run-log redaction, and cron helpers retain named semantic modules.
+
+`AutomationRepository` keeps enqueue/claim/finish and action ownership atomic.
+`AlertRepository` keeps incident deduplication, rule state, delivery outbox claims,
+and retries under the existing transaction boundaries. PostgreSQL implementations
+live under `adapters/src/postgres/{automation,alerts}`. Shoutrrr delivery is a separate
+runtime adapter in `alert_delivery.rs`; global transport reorganization remains Phase 12.
+
+Server owns requests, views, schemas and explicit conversions under
+`api/{automation,alerts}`. Realtime uses those same response conversions. Automation
+capabilities use typed permissions and explicit administrator access. Both migrated
+PostgreSQL readers bind accepted ordinal permission values; invalid bit-mask values
+do not grant access.
+
+Direct Automation runs enter `DynamicTasks` through `AutomationTaskSpawner` before
+acquiring a durable claim. The task owns claim completion, uses a child of the root
+shutdown token, and cancels when its progress receiver disconnects. Rejected admission
+creates no claim. Shutdown drains completion while persistence is available. Scheduled
+and worker runs remain independent of viewers and retain durable recovery.
+
+| Importing feature → owner | Consumed contract | Reason |
+|---|---|---|
+| Automation → Alerts | `AlertEventSink`, `AlertObservation` | Report failed execution through the semantic observation contract. |
+| Automation → Git | `RepoWebhookConfig` | Share validated webhook configuration without sharing API schemas. |
+| Automation → Resources | `TagSummary` | Retain shared tag enrichment until Phase 10. |
+| Automation → Execution | bounded process runner | Preserve Deno sandbox, cancellation and output limits; runtime placement remains Phase 12. |
+
+No new architecture exemptions are introduced for either feature. Their architecture
+guards cover resource ownership, HTTP separation, persistence projection and detached tasks.

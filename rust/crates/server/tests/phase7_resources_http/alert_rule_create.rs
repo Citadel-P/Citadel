@@ -19,7 +19,7 @@ pub(super) async fn verify(
     admin: &ActorPrincipal,
     entitlement: &Entitlement,
     channel: &Value,
-    store: &PostgresAlertStore,
+    store: &PostgresAlertRepository,
 ) {
     let endpoint = "/api/v1/alertRules";
     let count = || sqlx::query_scalar::<_, i64>("SELECT count(*) FROM alertrules").fetch_one(pool);

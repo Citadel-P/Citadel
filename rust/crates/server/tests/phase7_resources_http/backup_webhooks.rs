@@ -18,8 +18,8 @@ pub fn router(
     stacks: Arc<citadel_stacks::StackService>,
 ) -> Router {
     use citadel_adapters::{
-        automation_store::PostgresAutomationStore,
         automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
+        postgres::automation::PostgresAutomationRepository,
         postgres::git::accounts::PostgresGitAccountRepository,
         postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
     };
@@ -33,8 +33,15 @@ pub fn router(
         std::env::temp_dir().join(format!("webhook-git-{}", Uuid::now_v7())),
         std::time::Duration::from_secs(60),
     ));
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
     let automation = Arc::new(citadel_automation::AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        Arc::new(
+            citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
+        ),
+        automation_shutdown.clone(),
+        Arc::new(PostgresAutomationRepository::new(pool.clone())),
         Arc::new(IdentityAutomationRunTokenIssuer::new(identity)),
         citadel_automation::AutomationRuntimeConfig {
             deno_path: "deno".into(),

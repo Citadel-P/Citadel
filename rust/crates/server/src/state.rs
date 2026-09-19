@@ -6,8 +6,6 @@ use std::time::Duration;
 
 use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
-use citadel_adapters::alert_store::{PostgresAlertStore, ShoutrrrAlertDelivery};
-use citadel_adapters::automation_store::PostgresAutomationStore;
 use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
 use citadel_adapters::backup_authorization::IdentityBackupRunAuthorizer;
 use citadel_adapters::backup_executor::{DockerResticBackupExecutor, PostgresBackupSecretResolver};
@@ -34,6 +32,7 @@ use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::platform_registration::{
     PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
 };
+use citadel_adapters::postgres::automation::PostgresAutomationRepository;
 use citadel_adapters::postgres::backups::PostgresBackupPersistence;
 use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
@@ -55,6 +54,9 @@ use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
 use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
 use citadel_adapters::team_store::PostgresTeamStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
+use citadel_adapters::{
+    alert_delivery::ShoutrrrAlertDelivery, postgres::alerts::PostgresAlertRepository,
+};
 use citadel_alerts::AlertDeliveryService;
 use citadel_application::{
     ActivityService, LicenseService, LicenseTransitionMonitor, service_account_last_used_channel,
@@ -106,7 +108,7 @@ pub struct AppState {
     pub agent_setup_context: platforms_http::AgentSetupContext,
     pub edge_context: platforms_http::EdgeHttpContext,
     pub edge_registry: citadel_adapters::edge::EdgeRegistry,
-    pub alert_store: Arc<PostgresAlertStore>,
+    pub alert_store: Arc<PostgresAlertRepository>,
     pub alert_delivery: Arc<ShoutrrrAlertDelivery>,
     pub alert_deliveries: Arc<AlertDeliveryService>,
     pub automation: Arc<AutomationService>,
@@ -303,7 +305,7 @@ impl AppState {
             agent.clone(),
         );
         let alert_store = Arc::new(
-            PostgresAlertStore::new(pool.clone())
+            PostgresAlertRepository::new(pool.clone())
                 .with_entitlements(entitlements.clone())
                 .with_change_notifier(citadel_server::realtime::change_callback(
                     realtime_hub.clone(),
@@ -320,7 +322,13 @@ impl AppState {
         ));
         let automation = Arc::new(
             AutomationService::new(
-                Arc::new(PostgresAutomationStore::new(pool.clone())),
+                Arc::new(
+                    citadel_server::api::automation::TrackedAutomationTasks::new(
+                        dynamic_tasks.clone(),
+                    ),
+                ),
+                cancellation.clone(),
+                Arc::new(PostgresAutomationRepository::new(pool.clone())),
                 Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
                 AutomationRuntimeConfig {
                     deno_path: std::env::var_os("Automations__DenoPath")

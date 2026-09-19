@@ -4,8 +4,7 @@ pub mod activity_store;
 pub mod actor_store;
 pub mod agent;
 mod agent_execution;
-pub mod alert_store;
-pub mod automation_store;
+
 pub mod automation_token;
 pub mod backup_authorization;
 pub mod backup_executor;
@@ -93,3 +92,5 @@ pub mod image_digest_cache;
 pub mod image_scanner;
 
 pub mod node_agent_reconciliation;
+
+pub mod alert_delivery;

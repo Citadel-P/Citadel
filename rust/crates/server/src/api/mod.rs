@@ -10,3 +10,6 @@ pub mod builds;
 pub mod backups;
 
 pub mod git;
+
+pub mod alerts;
+pub mod automation;

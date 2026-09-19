@@ -6,25 +6,28 @@ use axum::{
     http::{Method, Request, StatusCode},
 };
 use citadel_adapters::{
-    automation_store::PostgresAutomationStore,
     automation_token::IdentityAutomationRunTokenIssuer,
     crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
     identity_store::{PostgresIdentityStore, StaticEntitlementService},
+    postgres::automation::PostgresAutomationRepository,
 };
-use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
+use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::automation_http::{self, AutomationHttpState};
+use citadel_server::api::automation::{self as automation_http, AutomationHttpState};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
+
+#[path = "automation_http_execution/lifecycle.rs"]
+mod lifecycle;
 
 #[path = "automation_http_execution/drafts.rs"]
 mod drafts;
@@ -55,10 +58,19 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         chrono::Duration::days(30),
     ));
     let root = std::env::temp_dir().join(format!("citadel-automation-http-{}", Uuid::now_v7()));
-    let store = Arc::new(PostgresAutomationStore::new(db.clone()));
+    let store = Arc::new(PostgresAutomationRepository::new(db.clone()));
     let webhook_license = Arc::new(webhooks::Entitlement::default());
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+
     let service = Arc::new(
         AutomationService::new(
+            Arc::new(
+                citadel_server::api::automation::TrackedAutomationTasks::new(
+                    automation_tasks.clone(),
+                ),
+            ),
+            automation_shutdown.clone(),
             store.clone(),
             Arc::new(IdentityAutomationRunTokenIssuer::new(identity.clone())),
             AutomationRuntimeConfig {
@@ -337,7 +349,31 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .await
     .expect("A stalled progress consumer must be cancelled and persisted");
     drop(response);
-    std::fs::remove_dir(&root).unwrap();
+    lifecycle::verify_request_drop_during_claim(
+        &service,
+        &store,
+        admin.actor_id,
+        Uuid::parse_str(draft_action["id"].as_str().unwrap()).unwrap(),
+        &db,
+        &automation_tasks,
+    )
+    .await;
+    lifecycle::verify(
+        &service,
+        &store,
+        admin.actor_id,
+        Uuid::parse_str(draft_action["id"].as_str().unwrap()).unwrap(),
+        &automation_shutdown,
+        &automation_tasks,
+    )
+    .await;
+    automation_shutdown.cancel();
+    automation_tasks
+        .drain(Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(automation_tasks.active(), 0);
+    std::fs::remove_dir_all(&root).unwrap();
 }
 
 async fn create(

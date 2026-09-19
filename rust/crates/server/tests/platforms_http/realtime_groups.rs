@@ -1,9 +1,9 @@
 use super::*;
 use citadel_adapters::{
-    activity_store::PostgresActivityStore, alert_store::PostgresAlertStore,
-    automation_store::PostgresAutomationStore, postgres::backups::PostgresBackupPersistence,
-    postgres::builds::PostgresBuildRepository, postgres::deployments::PostgresDeploymentRepository,
-    postgres::stacks::PostgresStackRepository,
+    activity_store::PostgresActivityStore, postgres::alerts::PostgresAlertRepository,
+    postgres::automation::PostgresAutomationRepository,
+    postgres::backups::PostgresBackupPersistence, postgres::builds::PostgresBuildRepository,
+    postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
     postgres::swarm_services::PostgresSwarmServiceRepository,
 };
 use citadel_domain::ResourceType;
@@ -24,13 +24,13 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         stacks: Arc::new(PostgresStackRepository::new(f.pool.clone())),
         services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
         resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
-        automation: Arc::new(PostgresAutomationStore::new(f.pool.clone())),
+        automation: Arc::new(PostgresAutomationRepository::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
         backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
         activities: Arc::new(citadel_application::ActivityService::new(Arc::new(
             PostgresActivityStore::new(f.pool.clone()),
         ))),
-        alerts: Arc::new(PostgresAlertStore::new(f.pool.clone())),
+        alerts: Arc::new(PostgresAlertRepository::new(f.pool.clone())),
         docker: f.lookup_state.platforms.clone(),
     }
 }

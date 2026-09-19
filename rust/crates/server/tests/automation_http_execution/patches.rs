@@ -4,7 +4,7 @@ pub(super) async fn verify(
     app: &Router,
     admin: &ActorPrincipal,
     denied: &ActorPrincipal,
-    store: &PostgresAutomationStore,
+    store: &PostgresAutomationRepository,
 ) {
     let action = create(app, admin, "console.log('original');", true, 10).await;
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();

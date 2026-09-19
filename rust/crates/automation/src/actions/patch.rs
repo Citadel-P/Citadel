@@ -1,10 +1,10 @@
 //! Typed partial updates: missing preserves a field; null only clears nullable fields.
-use super::{AutomationActionInput, AutomationActionView};
-use citadel_resources::RepoWebhookConfig;
+use super::{AutomationAction, AutomationActionConfiguration};
+use citadel_git::repositories::webhooks::RepoWebhookConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Default)]
-enum Change<T> {
+pub enum Change<T> {
     #[default]
     Missing,
     Value(T),
@@ -25,50 +25,38 @@ impl<T> Change<T> {
     }
 }
 
-#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(remote = "Self", rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateAutomationActionInput {
     #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    description: Change<Option<String>>,
+    pub description: Change<Option<String>>,
     #[serde(default)]
-    #[schema(value_type = String, required = false)]
-    code: Change<String>,
+    pub code: Change<String>,
     #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    default_args_json: Change<Option<String>>,
+    pub default_args_json: Change<Option<String>>,
     #[serde(default)]
-    #[schema(value_type = bool, required = false)]
-    enabled: Change<bool>,
+    pub enabled: Change<bool>,
     #[serde(default)]
-    #[schema(value_type = bool, required = false)]
-    schedule_enabled: Change<bool>,
+    pub schedule_enabled: Change<bool>,
     #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    schedule_cron: Change<Option<String>>,
+    pub schedule_cron: Change<Option<String>>,
     #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    schedule_time_zone: Change<Option<String>>,
+    pub schedule_time_zone: Change<Option<String>>,
     #[serde(default)]
-    #[schema(value_type = Option<RepoWebhookConfig>, required = false)]
-    webhook: Change<Option<RepoWebhookConfig>>,
+    pub webhook: Change<Option<RepoWebhookConfig>>,
     #[serde(default)]
-    #[schema(value_type = Option<i32>, required = false)]
-    timeout_seconds: Change<Option<i32>>,
+    pub timeout_seconds: Change<Option<i32>>,
     #[serde(default)]
-    #[schema(value_type = bool, required = false)]
-    alert_on_failure: Change<bool>,
+    pub alert_on_failure: Change<bool>,
     #[serde(default)]
-    #[schema(value_type = Option<uuid::Uuid>, required = false)]
-    run_as_actor_id: Change<Option<uuid::Uuid>>,
+    pub run_as_actor_id: Change<Option<uuid::Uuid>>,
 }
 
-#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(remote = "Self", rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateAutomationActionMetadata {
     #[serde(default)]
-    #[schema(value_type = Option<String>, required = false)]
-    description: Change<Option<String>>,
+    pub description: Change<Option<String>>,
 }
 
 // Serde's default struct visitor also accepts arrays. PATCH requires a JSON
@@ -126,8 +114,8 @@ impl From<UpdateAutomationActionMetadata> for UpdateAutomationActionInput {
 }
 
 impl UpdateAutomationActionInput {
-    pub fn apply(self, current: AutomationActionView) -> AutomationActionInput {
-        AutomationActionInput {
+    pub fn apply(self, current: AutomationAction) -> AutomationActionConfiguration {
+        AutomationActionConfiguration {
             name: current.name,
             description: self.description.apply(current.description),
             code: self.code.apply(current.code),
@@ -154,8 +142,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn current() -> AutomationActionView {
-        AutomationActionView {
+    fn current() -> AutomationAction {
+        AutomationAction {
             id: uuid::Uuid::now_v7(),
             name: "action".into(),
             description: Some("description".into()),

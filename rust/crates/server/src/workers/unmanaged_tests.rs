@@ -1,5 +1,5 @@
 use super::*;
-use citadel_alerts::{AlertError, AlertEventView};
+use citadel_alerts::{AlertError, AlertEvent};
 use futures_util::future::BoxFuture;
 #[derive(Default)]
 struct Alerts(std::sync::Mutex<Vec<AlertObservation>>);
@@ -7,7 +7,7 @@ impl AlertEventSink for Alerts {
     fn observe<'a>(
         &'a self,
         observation: &'a AlertObservation,
-    ) -> BoxFuture<'a, Result<Option<AlertEventView>, AlertError>> {
+    ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
             self.0.lock().unwrap().push(observation.clone());
             Ok(None)
@@ -64,7 +64,7 @@ async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() 
     let rule = Uuid::now_v7();
     sqlx::query("INSERT INTO alertrules(id,name,createdbyactorid,limitedto,quiethours,severity,status,type) VALUES($1,'Unmanaged fixture',$2,$3,'[]','Critical','Enabled','UnmanagedContainerCreated')")
         .bind(rule).bind(citadel_identity::SYSTEM_ACTOR_ID).bind(serde_json::json!([{"resourceId": platform, "resourceType": "Platform"}])).execute(&pool).await.unwrap();
-    let persisted = citadel_adapters::alert_store::PostgresAlertStore::new(pool.clone());
+    let persisted = citadel_adapters::postgres::alerts::PostgresAlertRepository::new(pool.clone());
     observe(&pool, &persisted, &request).await.unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, Uuid>("SELECT resourceid FROM alertevents WHERE alertruleid=$1")

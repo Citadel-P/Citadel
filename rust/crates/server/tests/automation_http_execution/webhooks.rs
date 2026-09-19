@@ -46,7 +46,7 @@ pub async fn verify(
     app: &Router,
     admin: &ActorPrincipal,
     db: &PgPool,
-    store: &PostgresAutomationStore,
+    store: &PostgresAutomationRepository,
     service: &AutomationService,
     license: &Entitlement,
 ) {

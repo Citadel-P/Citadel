@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::AlertError;
 
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameAlertRuleInput {
     pub id: uuid::Uuid,

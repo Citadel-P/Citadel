@@ -1,7 +1,7 @@
 use super::*;
 use crate::realtime::topic::Topic;
 use citadel_application::{ActivityFilter, ActivityService};
-use citadel_automation::AutomationStore;
+use citadel_automation::AutomationRepository;
 use citadel_backups::BackupPersistence;
 use citadel_builds::BuildRepository;
 use citadel_deployments::DeploymentRepository;
@@ -32,11 +32,11 @@ pub struct ApplicationGroupReader {
     pub stacks: Arc<dyn StackRepository>,
     pub services: Arc<dyn SwarmServiceRepository>,
     pub resources: Arc<dyn ResourceMetadataStore>,
-    pub automation: Arc<dyn AutomationStore>,
+    pub automation: Arc<dyn AutomationRepository>,
     pub builds: Arc<dyn BuildRepository>,
     pub backups: Arc<dyn BackupPersistence>,
     pub activities: Arc<ActivityService>,
-    pub alerts: Arc<dyn citadel_alerts::AlertStore>,
+    pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
     pub docker: crate::platforms_http::PlatformsHttpState,
 }
 
@@ -203,6 +203,7 @@ impl ApplicationGroupReader {
                     .list_events(actor, admin, &filter)
                     .await
                     .map_err(failure)?;
+                let events: crate::api::alerts::views::AlertEventPage = events.into();
                 return Ok(GroupSnapshot {
                     rows: vec![GroupRows {
                         target: "AlertEventReceived",
@@ -518,7 +519,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationActions => rows(
                 "AutomationActionInfoUpdated",
-                crate::automation_http::authorized_actions(
+                crate::api::automation::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     self.automation.list(actor, admin).await.map_err(failure)?,
@@ -529,7 +530,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationAction(..) => rows(
                 "AutomationActionInfoUpdated",
-                crate::automation_http::authorized_actions(
+                crate::api::automation::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     vec![self.automation.get(id.unwrap()).await.map_err(failure)?],

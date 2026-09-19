@@ -1,0 +1,10 @@
+mod handlers;
+mod requests;
+pub mod views;
+pub(crate) use handlers::authorized_actions;
+pub(crate) use handlers::documented_routes;
+pub use handlers::{AutomationHttpState, router};
+mod tasks;
+pub use tasks::TrackedAutomationTasks;
+mod capabilities;
+mod patch;

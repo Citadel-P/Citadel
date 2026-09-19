@@ -1,5 +1,5 @@
 use super::*;
-use citadel_alerts::{AlertObservation, AlertStore};
+use citadel_alerts::{AlertObservation, AlertRepository};
 
 // Explicit values from AlertRuleCreateTests / AlertRulePatchTests snapshots.
 // Rust includes null/default fields and creation metadata in its shared view;
@@ -87,11 +87,14 @@ pub(super) async fn rule_set(pool: &sqlx::PgPool) -> Value {
 // store held by the HTTP router and exercise its next evaluation after commit.
 pub(super) async fn runtime_rule(
     pool: &sqlx::PgPool,
-    store: &PostgresAlertStore,
+    store: &PostgresAlertRepository,
     expected: &Value,
 ) {
     let id = Uuid::parse_str(expected["id"].as_str().unwrap()).unwrap();
-    let current = serde_json::to_value(store.get_rule(id).await.unwrap()).unwrap();
+    let current = serde_json::to_value(citadel_server::api::alerts::views::AlertRuleView::from(
+        store.get_rule(id).await.unwrap(),
+    ))
+    .unwrap();
     assert_eq!(&current, expected);
     // This combined test owns a disposable database. Temporarily isolate this
     // Rule from built-in/other fixture Rules; never alter the Rule under test.

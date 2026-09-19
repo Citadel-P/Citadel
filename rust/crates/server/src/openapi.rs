@@ -30,7 +30,7 @@ pub fn document(public_only: bool) -> OpenApi {
             .description(Some("Use a Citadel User JWT or Service Account bearer token in the Authorization header."))
             .build()),
     );
-    api.merge(crate::automation_http::documented_routes().into_openapi());
+    api.merge(crate::api::automation::documented_routes().into_openapi());
     api.merge(crate::api::stacks::documented_routes().into_openapi());
     api.merge(crate::license_http::documented_routes().into_openapi());
     api.merge(crate::api::deployments::documented_routes().into_openapi());
@@ -53,7 +53,7 @@ pub fn document(public_only: bool) -> OpenApi {
     api.merge(crate::roles_http::documented_routes().into_openapi());
     api.merge(crate::webhooks_http::documented_routes().into_openapi());
     api.merge(crate::diagnostics_http::documented_routes().into_openapi());
-    api.merge(crate::alerts_http::documented_routes().into_openapi());
+    api.merge(crate::api::alerts::documented_routes().into_openapi());
     api.merge(crate::identity_http::documented_routes().into_openapi());
     api.merge(crate::platforms_http::documented_routes().into_openapi());
     api.merge(crate::api::git::accounts::handlers::documented_routes().into_openapi());
