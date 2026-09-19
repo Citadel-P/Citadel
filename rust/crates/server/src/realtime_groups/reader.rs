@@ -4,7 +4,7 @@ use citadel_application::{ActivityFilter, ActivityService};
 use citadel_automation::AutomationStore;
 use citadel_backups::BackupStore;
 use citadel_builds::BuildStore;
-use citadel_deployments::DeploymentStore;
+use citadel_deployments::DeploymentRepository;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::IdentityService;
 use citadel_platforms::PlatformReadService;
@@ -27,7 +27,7 @@ mod tests;
 pub struct ApplicationGroupReader {
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
-    pub deployments: Arc<dyn DeploymentStore>,
+    pub deployments: Arc<dyn DeploymentRepository>,
     pub stacks: Arc<dyn StackStore>,
     pub services: Arc<dyn SwarmServiceStore>,
     pub resources: Arc<dyn ResourceMetadataStore>,
@@ -369,17 +369,20 @@ impl ApplicationGroupReader {
                 self.deployments
                     .list_authorized(actor, admin, &Default::default())
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::deployments::views::DeploymentView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::Deployment(..) => rows(
                 "DeploymentInfoUpdated",
-                vec![
+                vec![crate::api::deployments::views::DeploymentView::from(
                     self.deployments
                         .get_authorized(actor, admin, id.unwrap())
                         .await
                         .map_err(failure)?,
-                ],
+                )],
                 RowStyle::Update,
             ),
             Topic::Stacks => rows(

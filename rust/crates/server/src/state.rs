@@ -21,9 +21,7 @@ use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
-use citadel_adapters::deployment_bindings::PostgresDeploymentBindingResolver;
 use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
-use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::git_account_store::PostgresGitAccountStore;
 use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
@@ -38,6 +36,8 @@ use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::platform_registration::{
     PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
 };
+use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
@@ -73,8 +73,8 @@ use citadel_server::config::Config;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
 use citadel_server::{
-    Readiness, application_info_http, deployments_http, license_realtime, platforms_http,
-    stacks_http, swarm_services_http,
+    Readiness, application_info_http, license_realtime, platforms_http, stacks_http,
+    swarm_services_http,
 };
 use citadel_stacks::StackService;
 use citadel_swarm_services::ManagedSwarmServiceService;
@@ -517,7 +517,12 @@ impl AppState {
         ));
         let deployments = Arc::new(
             DeploymentService::new(
-                Arc::new(PostgresDeploymentStore::new(pool.clone())),
+                Arc::new(
+                    citadel_server::api::deployments::TrackedDeploymentTasks::new(
+                        dynamic_tasks.clone(),
+                    ),
+                ),
+                Arc::new(PostgresDeploymentRepository::new(pool.clone())),
                 Arc::new(
                     DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
                         .with_image_cache(image_cache.clone())
@@ -527,14 +532,16 @@ impl AppState {
                 cancellation.clone(),
             )
             .with_notifier(Arc::new(
-                deployments_http::DeploymentsRealtimeNotifier::new(realtime_hub.clone()),
+                citadel_server::api::deployments::DeploymentsRealtimeNotifier::new(
+                    realtime_hub.clone(),
+                ),
             ))
             .with_binding_resolver(Arc::new(PostgresDeploymentBindingResolver::new(
                 pool.clone(),
                 secret_protector.clone(),
             )?))
             .with_adoption(Arc::new(
-                citadel_adapters::deployment_store::PostgresContainerAdoption::new(
+                citadel_adapters::postgres::deployments::PostgresContainerAdoption::new(
                     pool.clone(),
                     container_runtime.clone(),
                     secret_protector.clone(),
@@ -655,7 +662,7 @@ impl AppState {
                 citadel_server::realtime_groups::ApplicationGroupReader {
                     identity: Arc::clone(&identity),
                     platforms: Arc::clone(&platform_reads),
-                    deployments: Arc::new(PostgresDeploymentStore::new(pool.clone())),
+                    deployments: Arc::new(PostgresDeploymentRepository::new(pool.clone())),
                     stacks: Arc::new(PostgresStackStore::new(pool.clone())),
                     services: Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
                     resources: Arc::clone(resources.store()),

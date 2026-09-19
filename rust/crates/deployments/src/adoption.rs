@@ -1,28 +1,23 @@
 //! Non-mutating Docker-to-Deployment draft mapping.
-use crate::{DeploymentError, DeploymentSpec, DeploymentView};
+use crate::{DeploymentDetails, DeploymentError, DeploymentSpec};
 use citadel_domain::ActorId;
 use futures_util::future::BoxFuture;
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-#[derive(Clone, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AdoptContainerInput {
+#[derive(Clone)]
+pub struct AdoptContainer {
     pub name: String,
     pub description: Option<String>,
     pub spec: DeploymentSpec,
     pub preview_fingerprint: String,
-    #[serde(default)]
     pub tag_ids: Vec<Uuid>,
-    #[serde(default)]
     pub import_sensitive_environment_as_secrets: bool,
 }
 
-#[derive(Clone, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub struct AdoptionSource {
     pub id: Uuid,
     pub docker_container_id: String,
@@ -32,8 +27,7 @@ pub struct AdoptionSource {
     pub state: String,
 }
 
-#[derive(Clone, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub struct AdoptionIssue {
     pub code: String,
     pub message: String,
@@ -41,8 +35,6 @@ pub struct AdoptionIssue {
     pub field_path: Option<String>,
 }
 
-#[derive(Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ContainerAdoptionDraft {
     pub source: AdoptionSource,
     pub draft: AdoptionDeploymentDraft,
@@ -51,8 +43,6 @@ pub struct ContainerAdoptionDraft {
     pub can_import_sensitive_environment_values: bool,
 }
 
-#[derive(Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct AdoptionDeploymentDraft {
     pub name: String,
     pub platform_id: Uuid,
@@ -74,9 +64,9 @@ pub trait ContainerAdoptionPort: Send + Sync {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-        input: AdoptContainerInput,
+        input: AdoptContainer,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<DeploymentView, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
 }
 
 // Docker and generated protobuf inspection documents spell acronyms differently.

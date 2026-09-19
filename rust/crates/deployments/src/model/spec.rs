@@ -1,0 +1,516 @@
+use std::collections::BTreeMap;
+
+use super::DeploymentError;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UpdateBehavior {
+    #[default]
+    #[serde(alias = "disabled")]
+    Disabled,
+    #[serde(alias = "notify")]
+    Notify,
+    #[serde(alias = "autoDeploy", alias = "autodeploy")]
+    AutoDeploy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StopSignal {
+    #[serde(alias = "sigterm")]
+    SIGTERM,
+    #[serde(alias = "sigkill")]
+    SIGKILL,
+    #[serde(alias = "sigint")]
+    SIGINT,
+    #[serde(alias = "sigquit")]
+    SIGQUIT,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerRestartPolicy {
+    #[serde(alias = "no")]
+    #[default]
+    No,
+    #[serde(alias = "always")]
+    Always,
+    #[serde(alias = "onFailure", alias = "onfailure")]
+    OnFailure,
+    #[serde(alias = "unlessStopped", alias = "unlessstopped")]
+    UnlessStopped,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "$type")]
+pub enum DeploymentImageInfo {
+    Local {
+        #[serde(rename = "imageId")]
+        image_id: String,
+    },
+    External {
+        #[serde(rename = "registryId")]
+        registry_id: Uuid,
+        #[serde(rename = "imageTag")]
+        image_tag: String,
+        #[serde(
+            rename = "resolvedDigest",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        resolved_digest: Option<String>,
+    },
+    Build {
+        #[serde(rename = "buildProjectId")]
+        build_project_id: Uuid,
+        #[serde(rename = "redeployOnBuild", default)]
+        redeploy_on_build: bool,
+        #[serde(
+            rename = "resolvedImageReference",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        resolved_image_reference: Option<String>,
+        #[serde(
+            rename = "resolvedDigest",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        resolved_digest: Option<String>,
+        #[serde(
+            rename = "resolvedBuildRunId",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        resolved_build_run_id: Option<Uuid>,
+        #[serde(
+            rename = "appliedImageReference",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        applied_image_reference: Option<String>,
+        #[serde(
+            rename = "appliedDigest",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        applied_digest: Option<String>,
+        #[serde(
+            rename = "appliedBuildRunId",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        applied_build_run_id: Option<Uuid>,
+        #[serde(rename = "appliedAt", default, skip_serializing_if = "Option::is_none")]
+        applied_at: Option<DateTime<Utc>>,
+    },
+}
+
+impl DeploymentImageInfo {
+    #[must_use]
+    pub fn without_provenance(self) -> Self {
+        match self {
+            Self::External {
+                registry_id,
+                image_tag,
+                ..
+            } => Self::External {
+                registry_id,
+                image_tag,
+                resolved_digest: None,
+            },
+            Self::Build {
+                build_project_id,
+                redeploy_on_build,
+                ..
+            } => Self::Build {
+                build_project_id,
+                redeploy_on_build,
+                resolved_image_reference: None,
+                resolved_digest: None,
+                resolved_build_run_id: None,
+                applied_image_reference: None,
+                applied_digest: None,
+                applied_build_run_id: None,
+                applied_at: None,
+            },
+            local => local,
+        }
+    }
+
+    #[must_use]
+    pub fn preserving_build_provenance_from(self, current: &Self) -> Self {
+        match (self, current) {
+            (
+                Self::Build {
+                    build_project_id,
+                    redeploy_on_build,
+                    ..
+                },
+                Self::Build {
+                    build_project_id: current_project,
+                    resolved_image_reference,
+                    resolved_digest,
+                    resolved_build_run_id,
+                    applied_image_reference,
+                    applied_digest,
+                    applied_build_run_id,
+                    applied_at,
+                    ..
+                },
+            ) if build_project_id == *current_project => Self::Build {
+                build_project_id,
+                redeploy_on_build,
+                resolved_image_reference: resolved_image_reference.clone(),
+                resolved_digest: resolved_digest.clone(),
+                resolved_build_run_id: *resolved_build_run_id,
+                applied_image_reference: applied_image_reference.clone(),
+                applied_digest: applied_digest.clone(),
+                applied_build_run_id: *applied_build_run_id,
+                applied_at: *applied_at,
+            },
+            (next, _) => next.without_provenance(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nano_cpus: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_limit: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeCycleSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_timeout: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_signal: Option<StopSignal>,
+    #[serde(default)]
+    pub restart_policy: ContainerRestartPolicy,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentSpec {
+    pub image: DeploymentImageInfo,
+    #[serde(default)]
+    pub update_behavior: UpdateBehavior,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub life_cycle_spec: Option<LifeCycleSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_spec: Option<ResourceSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ports: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volumes: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub networks: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment_variables: Option<Vec<String>>,
+}
+
+impl DeploymentSpec {
+    pub fn validate(&self) -> Result<(), DeploymentError> {
+        match &self.image {
+            DeploymentImageInfo::Local { image_id } if image_id.trim().is_empty() => {
+                return Err(DeploymentError::Validation(
+                    "A local image must be selected.".to_owned(),
+                ));
+            }
+            DeploymentImageInfo::External {
+                image_tag,
+                registry_id,
+                ..
+            } => {
+                if registry_id.is_nil() || image_tag.trim().is_empty() {
+                    return Err(DeploymentError::Validation(
+                        "An external image requires a Registry and image reference.".to_owned(),
+                    ));
+                }
+                if image_tag.contains('@') && self.update_behavior != UpdateBehavior::Disabled {
+                    return Err(DeploymentError::Validation(
+                        "Auto update is unavailable for an image pinned by digest.".to_owned(),
+                    ));
+                }
+            }
+            DeploymentImageInfo::Build {
+                build_project_id, ..
+            } if build_project_id.is_nil() => {
+                return Err(DeploymentError::Validation(
+                    "A Build Project must be selected.".to_owned(),
+                ));
+            }
+            _ => {}
+        }
+        if !matches!(self.image, DeploymentImageInfo::External { .. })
+            && self.update_behavior != UpdateBehavior::Disabled
+        {
+            return Err(DeploymentError::Validation(
+                "Auto update is available only for external tagged images.".to_owned(),
+            ));
+        }
+        if self
+            .life_cycle_spec
+            .as_ref()
+            .and_then(|value| value.stop_timeout)
+            .is_some_and(|value| value < 0)
+        {
+            return Err(DeploymentError::Validation(
+                "Stop timeout cannot be negative.".to_owned(),
+            ));
+        }
+        if let Some(resource) = &self.resource_spec
+            && (resource.nano_cpus.is_some_and(|value| value < 0.0)
+                || resource.memory_limit.is_some_and(|value| value < 0.0))
+        {
+            return Err(DeploymentError::Validation(
+                "Resource limits cannot be negative.".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn for_create(mut self) -> Self {
+        self.image = self.image.without_provenance();
+        self
+    }
+
+    #[must_use]
+    pub fn for_update(mut self, current: &Self) -> Self {
+        self.image = self.image.preserving_build_provenance_from(&current.image);
+        self
+    }
+
+    pub fn to_storage_value(&self) -> Result<Value, DeploymentError> {
+        serde_json::to_value(StoredDeploymentSpec::from(self)).map_err(json_error)
+    }
+
+    pub fn from_storage_value(value: Value) -> Result<Self, DeploymentError> {
+        serde_json::from_value::<StoredDeploymentSpec>(value)
+            .map(Self::from)
+            .map_err(json_error)
+    }
+}
+
+fn json_error(error: serde_json::Error) -> DeploymentError {
+    DeploymentError::Storage(format!("invalid persisted Deployment spec: {error}"))
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredDeploymentSpec {
+    #[serde(rename = "Image", alias = "image")]
+    image: StoredDeploymentImageInfo,
+    #[serde(rename = "UpdateBehavior", alias = "updateBehavior")]
+    update_behavior: UpdateBehavior,
+    #[serde(rename = "LifeCycleSpec", alias = "lifeCycleSpec")]
+    life_cycle_spec: Option<StoredLifeCycleSpec>,
+    #[serde(rename = "ResourceSpec", alias = "resourceSpec")]
+    resource_spec: Option<StoredResourceSpec>,
+    #[serde(rename = "Labels", alias = "labels")]
+    labels: Option<BTreeMap<String, String>>,
+    #[serde(rename = "Ports", alias = "ports")]
+    ports: Option<Vec<String>>,
+    #[serde(rename = "Volumes", alias = "volumes")]
+    volumes: Option<Vec<String>>,
+    #[serde(rename = "Networks", alias = "networks")]
+    networks: Option<Vec<String>>,
+    #[serde(rename = "Command", alias = "command")]
+    command: Option<Vec<String>>,
+    #[serde(rename = "EnvironmentVariables", alias = "environmentVariables")]
+    environment_variables: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "$type")]
+enum StoredDeploymentImageInfo {
+    Local {
+        #[serde(rename = "ImageId", alias = "imageId")]
+        image_id: String,
+    },
+    External {
+        #[serde(rename = "RegistryId", alias = "registryId")]
+        registry_id: Uuid,
+        #[serde(rename = "ImageTag", alias = "imageTag")]
+        image_tag: String,
+        #[serde(rename = "ResolvedDigest", alias = "resolvedDigest")]
+        resolved_digest: Option<String>,
+    },
+    Build {
+        #[serde(rename = "BuildProjectId", alias = "buildProjectId")]
+        build_project_id: Uuid,
+        #[serde(rename = "RedeployOnBuild", alias = "redeployOnBuild", default)]
+        redeploy_on_build: bool,
+        #[serde(rename = "ResolvedImageReference", alias = "resolvedImageReference")]
+        resolved_image_reference: Option<String>,
+        #[serde(rename = "ResolvedDigest", alias = "resolvedDigest")]
+        resolved_digest: Option<String>,
+        #[serde(rename = "ResolvedBuildRunId", alias = "resolvedBuildRunId")]
+        resolved_build_run_id: Option<Uuid>,
+        #[serde(rename = "AppliedImageReference", alias = "appliedImageReference")]
+        applied_image_reference: Option<String>,
+        #[serde(rename = "AppliedDigest", alias = "appliedDigest")]
+        applied_digest: Option<String>,
+        #[serde(rename = "AppliedBuildRunId", alias = "appliedBuildRunId")]
+        applied_build_run_id: Option<Uuid>,
+        #[serde(rename = "AppliedAt", alias = "appliedAt")]
+        applied_at: Option<DateTime<Utc>>,
+    },
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredResourceSpec {
+    #[serde(rename = "NanoCpus", alias = "nanoCpus")]
+    nano_cpus: Option<f32>,
+    #[serde(rename = "MemoryLimit", alias = "memoryLimit")]
+    memory_limit: Option<f32>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredLifeCycleSpec {
+    #[serde(rename = "StopTimeout", alias = "stopTimeout")]
+    stop_timeout: Option<i32>,
+    #[serde(rename = "StopSignal", alias = "stopSignal")]
+    stop_signal: Option<StopSignal>,
+    #[serde(rename = "RestartPolicy", alias = "restartPolicy")]
+    restart_policy: ContainerRestartPolicy,
+}
+
+impl From<&DeploymentSpec> for StoredDeploymentSpec {
+    fn from(value: &DeploymentSpec) -> Self {
+        Self {
+            image: StoredDeploymentImageInfo::from(&value.image),
+            update_behavior: value.update_behavior,
+            life_cycle_spec: value
+                .life_cycle_spec
+                .as_ref()
+                .map(|item| StoredLifeCycleSpec {
+                    stop_timeout: item.stop_timeout,
+                    stop_signal: item.stop_signal,
+                    restart_policy: item.restart_policy,
+                }),
+            resource_spec: value.resource_spec.as_ref().map(|item| StoredResourceSpec {
+                nano_cpus: item.nano_cpus,
+                memory_limit: item.memory_limit,
+            }),
+            labels: value.labels.clone(),
+            ports: value.ports.clone(),
+            volumes: value.volumes.clone(),
+            networks: value.networks.clone(),
+            command: value.command.clone(),
+            environment_variables: value.environment_variables.clone(),
+        }
+    }
+}
+
+impl From<&DeploymentImageInfo> for StoredDeploymentImageInfo {
+    fn from(value: &DeploymentImageInfo) -> Self {
+        match value {
+            DeploymentImageInfo::Local { image_id } => Self::Local {
+                image_id: image_id.clone(),
+            },
+            DeploymentImageInfo::External {
+                registry_id,
+                image_tag,
+                resolved_digest,
+            } => Self::External {
+                registry_id: *registry_id,
+                image_tag: image_tag.clone(),
+                resolved_digest: resolved_digest.clone(),
+            },
+            DeploymentImageInfo::Build {
+                build_project_id,
+                redeploy_on_build,
+                resolved_image_reference,
+                resolved_digest,
+                resolved_build_run_id,
+                applied_image_reference,
+                applied_digest,
+                applied_build_run_id,
+                applied_at,
+            } => Self::Build {
+                build_project_id: *build_project_id,
+                redeploy_on_build: *redeploy_on_build,
+                resolved_image_reference: resolved_image_reference.clone(),
+                resolved_digest: resolved_digest.clone(),
+                resolved_build_run_id: *resolved_build_run_id,
+                applied_image_reference: applied_image_reference.clone(),
+                applied_digest: applied_digest.clone(),
+                applied_build_run_id: *applied_build_run_id,
+                applied_at: *applied_at,
+            },
+        }
+    }
+}
+
+impl From<StoredDeploymentSpec> for DeploymentSpec {
+    fn from(value: StoredDeploymentSpec) -> Self {
+        Self {
+            image: DeploymentImageInfo::from(value.image),
+            update_behavior: value.update_behavior,
+            life_cycle_spec: value.life_cycle_spec.map(|item| LifeCycleSpec {
+                stop_timeout: item.stop_timeout,
+                stop_signal: item.stop_signal,
+                restart_policy: item.restart_policy,
+            }),
+            resource_spec: value.resource_spec.map(|item| ResourceSpec {
+                nano_cpus: item.nano_cpus,
+                memory_limit: item.memory_limit,
+            }),
+            labels: value.labels,
+            ports: value.ports,
+            volumes: value.volumes,
+            networks: value.networks,
+            command: value.command,
+            environment_variables: value.environment_variables,
+        }
+    }
+}
+
+impl From<StoredDeploymentImageInfo> for DeploymentImageInfo {
+    fn from(value: StoredDeploymentImageInfo) -> Self {
+        match value {
+            StoredDeploymentImageInfo::Local { image_id } => Self::Local { image_id },
+            StoredDeploymentImageInfo::External {
+                registry_id,
+                image_tag,
+                resolved_digest,
+            } => Self::External {
+                registry_id,
+                image_tag,
+                resolved_digest,
+            },
+            StoredDeploymentImageInfo::Build {
+                build_project_id,
+                redeploy_on_build,
+                resolved_image_reference,
+                resolved_digest,
+                resolved_build_run_id,
+                applied_image_reference,
+                applied_digest,
+                applied_build_run_id,
+                applied_at,
+            } => Self::Build {
+                build_project_id,
+                redeploy_on_build,
+                resolved_image_reference,
+                resolved_digest,
+                resolved_build_run_id,
+                applied_image_reference,
+                applied_digest,
+                applied_build_run_id,
+                applied_at,
+            },
+        }
+    }
+}

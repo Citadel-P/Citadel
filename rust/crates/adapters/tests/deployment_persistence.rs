@@ -1,9 +1,8 @@
-use citadel_adapters::deployment_store::PostgresDeploymentStore;
+use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
-    CreateDeploymentInput, DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentSpec,
-    DeploymentStore, DuplicateSourceInput, FieldPatch, PatchDeploymentMetadataInput,
-    UpdateBehavior,
+    CreateDeployment, DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository,
+    DeploymentSpec, DuplicateSource, FieldPatch, UpdateBehavior, UpdateDeploymentMetadata,
 };
 use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
@@ -21,7 +20,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .connect(&database_url)
         .await
         .unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();
     let platform_id = Uuid::now_v7();
@@ -68,7 +67,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: unsupported_name.clone(),
                 platform_id: swarm_platform_id,
                 description: None,
@@ -102,7 +101,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: format!("deployment-{suffix}"),
                 platform_id,
                 description: Some("created".to_owned()),
@@ -180,7 +179,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: format!("configured-local-{suffix}"),
                 platform_id,
                 description: None,
@@ -205,7 +204,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: format!("unresolved-local-{suffix}"),
                 platform_id,
                 description: None,
@@ -222,7 +221,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: format!("other-platform-{suffix}"),
                 platform_id: other_platform_id,
                 description: None,
@@ -265,13 +264,13 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             actor,
             true,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: draft.draft.name,
                 platform_id,
                 description: draft.draft.description,
                 spec: draft.draft.spec,
                 tag_ids: draft.draft.tag_ids,
-                duplicate_source: Some(DuplicateSourceInput {
+                duplicate_source: Some(DuplicateSource {
                     resource_type: "Deployment".to_owned(),
                     resource_id: created.id,
                     resource_name: "untrusted-name".to_owned(),
@@ -330,9 +329,8 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
             actor,
             true,
             duplicate.id,
-            &PatchDeploymentMetadataInput {
+            &UpdateDeploymentMetadata {
                 description: FieldPatch::Clear,
-                _tags: None,
             },
         )
         .await
@@ -350,7 +348,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .create(
             ActorId::new(reader),
             false,
-            &CreateDeploymentInput {
+            &CreateDeployment {
                 name: inaccessible_name.clone(),
                 platform_id,
                 description: None,
@@ -384,7 +382,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .unwrap();
     assert_eq!(authorized.len(), 1);
     assert_eq!(authorized[0].id, created.id);
-    assert!(!authorized[0].capabilities.unwrap().can_write);
+    assert!(!authorized[0].effective_permission.allows(<citadel_deployments::permissions::WriteDeployment as citadel_domain::PermissionPolicy>::REQUIREMENT));
 
     let team_member = Uuid::now_v7();
     let team_actor = Uuid::now_v7();
@@ -444,9 +442,8 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                 actor,
                 true,
                 duplicate.id,
-                &PatchDeploymentMetadataInput {
+                &UpdateDeploymentMetadata {
                     description: FieldPatch::Set("blocked".to_owned()),
-                    _tags: None,
                 },
             )
             .await,
@@ -479,7 +476,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
     store.release_delete(&concurrent_claims).await.unwrap();
 
     let concurrent_name = format!("concurrent-{suffix}");
-    let first_input = CreateDeploymentInput {
+    let first_input = CreateDeployment {
         name: concurrent_name.clone(),
         platform_id,
         description: None,

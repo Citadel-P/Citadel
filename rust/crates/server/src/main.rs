@@ -1,7 +1,7 @@
-mod api;
 mod app;
 mod cli;
 mod jobs;
+mod router;
 mod startup;
 mod state;
 

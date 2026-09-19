@@ -1,8 +1,8 @@
 # Citadel Rust architecture
 
-This describes the target architecture of the incremental Rust refactor. Existing
-resources move to these conventions in their owning migration phases. The examples
-below describe planned roles, not scaffolding to create before a resource is migrated.
+This describes the architecture of the incremental Rust refactor. Deployments is the
+implemented reference resource as of Phase 6. Other resources move to these conventions
+in their owning phases; the Builds example remains a target, not scaffolding.
 
 ## Ownership and dependency direction
 
@@ -90,49 +90,77 @@ never `GitRepositoryRepository` or a second conflicting `BackupRepository` trait
 Shared Build/Backup/Automation ports may span resources where transactions require it.
 Shared ports must make their transaction boundaries explicit.
 
-## Complete single-resource target: Deployment
+## Implemented reference resource: Deployment
 
 ```text
 crates/deployments/src/
   lib.rs                         # selective exports
-  model.rs                       # Deployment, specification, state, claims
-  repository.rs                  # DeploymentRepository, scoped durable operations
-  service.rs                     # DeploymentService
+  model/{mod,resource,spec,operations}.rs
+  repository.rs                  # DeploymentRepository, atomic durable operations
+  service/{mod,read,mutations,apply,delete,updates,adoption,bindings}.rs
   commands.rs                    # transport-neutral mutation inputs
-  queries.rs                     # filters, DeploymentSummary/Details when useful
-  runtime.rs                     # DeploymentRuntime port
-  adoption.rs                    # adoption use cases
-  jobs/                          # background work, only where needed
+  queries.rs                     # DeploymentDetails, Config, Draft, filters
+  permissions.rs                 # named operation requirements
+  runtime.rs                     # DeploymentRuntime and consumed runtime ports
+  tasks.rs                       # DeploymentTaskSpawner, consumer-owned port
+  adoption.rs                    # semantic adoption previews and port
 crates/adapters/src/
   postgres/deployments/
-    mod.rs                       # exports
-    repository.rs                # PostgresDeploymentRepository
-    rows.rs                      # SQL row decoding when useful
-  docker/deployments/
-    mod.rs
-    runtime.rs                   # DockerDeploymentRuntime implements feature port
+    mod.rs                       # selective exports
+    repository.rs                # PostgresDeploymentRepository, trait delegation
+    queries.rs                   # ACL-filtered, batch-enriched reads
+    rows.rs                      # SQL decoding into business/read models
+    authorization.rs             # typed grants, transactional policy checks
+    mutations.rs                 # create/config/metadata/rename transactions
+    claims.rs                    # Apply/delete claim and completion transactions
+    activity.rs                  # persisted audit snapshots
+    adoption.rs                  # atomic adoption and preview adapter
+    bindings.rs                  # environment/secret resolution
+    updates.rs                   # update-check claims
+  deployment_runtime.rs          # established Docker/Agent runtime router
 crates/server/src/api/deployments/
-  mod.rs                         # router assembly
-  handlers.rs                    # extraction, authorization, use-case invocation
-  requests.rs                    # HTTP request DTOs
-  views.rs                       # DeploymentView and response mappings
-  capabilities.rs                # presentation mapping if large enough
+  mod.rs                         # selective exports
+  handlers.rs                    # HTTP extraction, policies, use-case invocation
+  requests.rs                    # request DTOs and command conversions
+  views.rs                       # DeploymentView, response/progress mappings
+  spec.rs                        # wire value objects and OpenAPI schema ownership
+  capabilities.rs                # typed effective grants to public capabilities
+  adoption.rs, adoption_views.rs # adoption HTTP boundary
+  tasks.rs                       # adapter to the process DynamicTasks owner
 ```
 
-These are target roles, not scaffolding to create in Phase 1. The root selectively
-exports `Deployment`, `DeploymentRepository`, `DeploymentService` and
-`DeploymentRuntime`. A get flows from the handler through scoped persistence to a
-model/read projection, then through server mapping to the existing JSON contract.
-Apply invokes the feature service, atomically claims the version in persistence,
-executes through the runtime port, persists the result and emits a transport-neutral
-event. Progress streaming observes this operation; disconnect must preserve the
-established durable-operation contract.
+`Deployment` contains resource state, specification and row version. `DeploymentDetails`
+wraps that entity with platform/image/container/tag/activity enrichment and a typed
+`EffectivePermission`. These are query data, not presentation capabilities. The SQL
+projection performs ACL filtering and enrichment in one query; the adapter decodes
+persisted permission values and never constructs an HTTP View. Only server maps raw
+activity snapshots, capabilities, null omission and wire field names.
 
-Typed policies will be introduced in Phase 2 and consumed during resource migration.
-Collections remain SQL ACL-filtered. A transactional recheck is authoritative; a
-capability is only presentation. Do not add authorization round trips to satisfy an
-API shape. The known `Read + Apply` versus `Execute + Apply` discrepancy remains
-recorded for Phases 2/6; this document does not change current behavior.
+Requests become business commands; repository and service methods return business
+models or semantic projections. The feature has no Utoipa or HTTP dependency. Explicit
+conversions preserve wire defaults and build-image provenance while feature-owned
+storage conversion preserves the existing PascalCase persisted specification. No
+schema migration is required. HTTP and realtime use the same server View conversion.
+The binary's `router.rs` assembles resource routers; the library's `api` namespace owns
+Deployment's inbound adapter.
+
+Apply uses `ApplyDeployment` (Read + Apply) in both the inbound check and the atomic
+claim transaction. Write/delete/update operations likewise reuse named requirements.
+Capabilities are presentation only; authoritative authorization remains in persistence.
+Non-admin get/list retain two/three queries, respectively; admin get/list retain one.
+Lists do not issue per-resource permission or enrichment queries.
+
+Apply/delete/update-check operations submit work through `DeploymentTaskSpawner` to
+the existing process-owned `DynamicTasks`. Dropping an HTTP request/progress receiver
+does not abandon accepted work. Shutdown closes admission, signals cancellation and
+drains the owner. Rejected admission releases unexecuted claims; uncertain runtime
+outcomes retain the established stale-claim recovery semantics. Operation errors reach
+the owner for logging even when the requesting client has disconnected. Feature code
+does not construct a runtime or directly spawn these tasks.
+
+The established runtime router remains in place; moving unrelated Docker/Agent
+adapters is outside this resource migration. Boundary tests enforce the Deployment
+feature/persistence separation without a legacy exemption.
 
 ## Complete multi-resource target: Builds
 
@@ -219,7 +247,7 @@ ports or HTTP contracts. Existing release panic policy is unchanged.
 Runtime/task creation has a named owner, cancellation policy, shutdown drain and
 recovery behavior. Preserve the difference between a disconnect-cancelled interactive
 operation and a durable claimed operation. The process lifecycle foundation belongs
-to Phase 5 and adoption to the resource phases; this phase introduces no runtime code.
+to Phase 5; Deployments adopts it in Phase 6. Other resources adopt it in their phases.
 
 ## Incremental migration
 
@@ -228,6 +256,6 @@ justify adding new ones. Preserve API schemas and persisted formats through move
 run workspace tests and OpenAPI verification. Authorization conventions and parity
 are documented in [AUTHORIZATION.md](AUTHORIZATION.md).
 
-Feature Views and legacy umbrella crates remain until their owning migration phases.
+Other feature Views and legacy umbrella crates remain until their owning migration phases.
 Avoid mass renames, shared scaffolding and performance changes during authorization
 work. Keep diagnostics and raw measurement output outside the source changes.

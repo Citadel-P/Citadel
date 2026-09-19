@@ -33,7 +33,7 @@ pub fn document(public_only: bool) -> OpenApi {
     api.merge(crate::automation_http::documented_routes().into_openapi());
     api.merge(crate::stacks_http::documented_routes().into_openapi());
     api.merge(crate::license_http::documented_routes().into_openapi());
-    api.merge(crate::deployments_http::documented_routes().into_openapi());
+    api.merge(crate::api::deployments::documented_routes().into_openapi());
     api.merge(crate::activities_http::documented_routes().into_openapi());
     api.merge(crate::service_accounts_http::documented_routes().into_openapi());
     api.merge(crate::teams_http::documented_routes().into_openapi());

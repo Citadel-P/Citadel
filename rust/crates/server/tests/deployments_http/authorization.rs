@@ -1,5 +1,5 @@
 use super::*;
-use citadel_deployments::DeploymentStore;
+use citadel_deployments::DeploymentRepository;
 use citadel_deployments::permissions::{ApplyDeployment, CreateDeployment, ReadDeployment};
 use citadel_identity::IdentityError;
 
@@ -114,7 +114,7 @@ pub(super) async fn verify(
     .execute(pool)
     .await
     .unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     assert!(matches!(
         store
             .claim_apply(reader.actor_id, false, deployment_id)
@@ -180,23 +180,32 @@ pub(super) async fn verify(
             extra_grants.push(grant);
         }
 
-        for (path, expected) in [
-            ("/api/v1/deployments".to_owned(), 3_i64),
-            (format!("/api/v1/deployments/{deployment_id}"), 2_i64),
+        for (principal, path, expected) in [
+            (reader, "/api/v1/deployments".to_owned(), 3_i64),
+            (
+                reader,
+                format!("/api/v1/deployments/{deployment_id}"),
+                2_i64,
+            ),
+            (admin, "/api/v1/deployments".to_owned(), 1_i64),
+            (admin, format!("/api/v1/deployments/{deployment_id}"), 1_i64),
         ] {
             let before = query_count(pool).await;
-            let response = request(app, Method::GET, &path, Some(reader.clone()), None).await;
+            let response = request(app, Method::GET, &path, Some(principal.clone()), None).await;
             assert_eq!(response.status(), StatusCode::OK);
             let body = response_json(response).await;
             let count = query_count(pool).await - before;
-            if path == "/api/v1/deployments" {
+            if path == "/api/v1/deployments" && !principal.is_administrator() {
                 assert_eq!(body["deployments"].as_array().unwrap().len(), 3);
             }
             assert_eq!(
                 count, expected,
                 "authorization must not amplify queries for {path}: {body}"
             );
-            println!("authorization query count {path}: {count}");
+            println!(
+                "authorization query count admin={} {path}: {count}",
+                principal.is_administrator()
+            );
         }
         sqlx::query("DELETE FROM resourceaccesses WHERE id=ANY($1)")
             .bind(extra_grants)

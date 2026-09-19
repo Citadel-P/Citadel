@@ -2,14 +2,21 @@ use super::*;
 use citadel_deployments::{DeploymentUpdateCheck, checkable_deployment_image};
 
 pub(super) async fn begin(
-    store: &PostgresDeploymentStore,
+    store: &PostgresDeploymentRepository,
     actor: ActorId,
     administrator: bool,
-    expected: &DeploymentView,
+    expected: &DeploymentDetails,
 ) -> Result<DeploymentUpdateCheck, DeploymentError> {
     checkable_deployment_image(expected)?;
     let mut tx = store.pool.begin().await.map_err(storage)?;
-    ensure_access(&mut tx, actor, administrator, expected.id, WRITE_LEVEL).await?;
+    ensure_access(
+        &mut tx,
+        actor,
+        administrator,
+        expected.id,
+        WriteDeployment::REQUIREMENT,
+    )
+    .await?;
     let lease_id = Uuid::now_v7();
     let changed = sqlx::query("UPDATE deployments SET updatecheckid=$3,controlstate='Processing',controlstartedat=$4,controltriggeredby=$5,rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Idle' AND updatecheckid IS NULL")
         .bind(expected.id).bind(expected.row_version).bind(lease_id).bind(Utc::now().timestamp()).bind(actor.value())
@@ -27,7 +34,7 @@ pub(super) async fn begin(
 }
 
 pub(super) async fn finish(
-    store: &PostgresDeploymentStore,
+    store: &PostgresDeploymentRepository,
     claim: &DeploymentUpdateCheck,
     update: Option<&AutoUpdateState>,
 ) -> Result<(), DeploymentError> {
@@ -44,7 +51,7 @@ pub(super) async fn finish(
 }
 
 pub(super) async fn recover(
-    store: &PostgresDeploymentStore,
+    store: &PostgresDeploymentRepository,
     started_before: i64,
     limit: i64,
 ) -> Result<Vec<Uuid>, DeploymentError> {
@@ -53,10 +60,42 @@ pub(super) async fn recover(
 }
 
 pub(super) async fn candidates(
-    store: &PostgresDeploymentStore,
+    store: &PostgresDeploymentRepository,
     after: Uuid,
     limit: i64,
 ) -> Result<Vec<Uuid>, DeploymentError> {
     sqlx::query_scalar("SELECT d.id FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id>$1 AND d.controlstate='Idle' AND p.status='Online' AND p.platformdescriptor->>'$type'='Docker' AND d.spec->>'UpdateBehavior' IN ('Notify','AutoDeploy') AND d.spec->'Image'->>'$type'='External' AND COALESCE(d.spec->'Image'->>'ResolvedDigest','')<>'' AND position('@' in COALESCE(d.spec->'Image'->>'ImageTag',''))=0 ORDER BY d.id LIMIT $2")
         .bind(after).bind(limit.clamp(1,100)).fetch_all(&store.pool).await.map_err(storage)
+}
+
+impl PostgresDeploymentRepository {
+    pub(super) fn begin_update_check_impl<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        expected: &'a DeploymentDetails,
+    ) -> BoxFuture<'a, Result<citadel_deployments::DeploymentUpdateCheck, DeploymentError>> {
+        Box::pin(updates::begin(self, actor, administrator, expected))
+    }
+    pub(super) fn complete_update_check_impl<'a>(
+        &'a self,
+        claim: &'a citadel_deployments::DeploymentUpdateCheck,
+        state: Option<&'a AutoUpdateState>,
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        Box::pin(updates::finish(self, claim, state))
+    }
+    pub(super) fn recover_update_checks_impl(
+        &self,
+        started_before: i64,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        Box::pin(updates::recover(self, started_before, limit))
+    }
+    pub(super) fn scheduled_update_candidates_impl(
+        &self,
+        after: Uuid,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, DeploymentError>> {
+        Box::pin(updates::candidates(self, after, limit))
+    }
 }

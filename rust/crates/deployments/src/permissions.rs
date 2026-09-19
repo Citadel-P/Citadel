@@ -52,3 +52,11 @@ permission_policy!(
     PermissionLevel::Read,
     SpecificPermission::ResourceBindings
 );
+
+// Copying source bindings into a new Deployment also requires destination write.
+permission_policy!(
+    WriteDeploymentBindings,
+    ResourceType::Deployment,
+    PermissionLevel::Write,
+    SpecificPermission::ResourceBindings
+);

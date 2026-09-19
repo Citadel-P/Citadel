@@ -1,7 +1,7 @@
 //! DeploymentImageScannerJob: one successful registry observation per unique
 //! image each cycle, shared by Deployment, Compose Stack, and managed Service checks.
 use crate::image_digest_cache::ImageDigestCache;
-use citadel_deployments::{DeploymentRuntimePort, DeploymentStore};
+use citadel_deployments::{DeploymentRepository, DeploymentRuntime};
 use citadel_domain::ActorId;
 use citadel_stacks::StackStore;
 use citadel_swarm_services::SwarmServiceStore;
@@ -67,7 +67,8 @@ impl ImageScanner {
         cancel: &CancellationToken,
     ) -> Result<Vec<ImageScanTask>, sqlx::Error> {
         let actor = ActorId::new(Uuid::from_u128(1));
-        let deployments = crate::deployment_store::PostgresDeploymentStore::new(self.pool.clone());
+        let deployments =
+            crate::postgres::deployments::PostgresDeploymentRepository::new(self.pool.clone());
         let stacks = crate::stack_store::PostgresStackStore::new(self.pool.clone());
         let services =
             crate::swarm_service_store::PostgresSwarmServiceStore::new(self.pool.clone());

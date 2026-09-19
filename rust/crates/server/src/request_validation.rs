@@ -253,8 +253,10 @@ mod tests {
 
     #[tokio::test]
     async fn deployment_patch_reports_invalid_field_type() {
-        let body =
-            problem::<citadel_deployments::PatchDeploymentInput>(br#"{"platformId":42}"#).await;
+        let body = problem::<crate::api::deployments::requests::PatchDeploymentInput>(
+            br#"{"platformId":42}"#,
+        )
+        .await;
         assert!(
             body["errors"]["$.platformId"][0]
                 .as_str()

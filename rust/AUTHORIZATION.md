@@ -1,4 +1,4 @@
-# Authorization policies — Phase 2
+# Authorization policies — Phases 2 and 6
 
 `citadel-domain::authorization` temporarily owns `PermissionRequirement`,
 `PermissionPolicy`, `SpecificPermissions` and `EffectivePermission`, alongside the
@@ -39,7 +39,7 @@ snapshot behavior. Authentication remains responsible for producing a valid prin
 
 Evidence: .NET declarations in `src/Citadel.Application/Features.Deployments/{Commands,Queries}`,
 Rust `identity::permission_matrix()`, Deployment HTTP/transactional integration tests,
-and `deployment_store::tests::deployment_policy_parity_and_capabilities`.
+and `api::deployments::capabilities` parity tests.
 
 Apply was the behavioral mismatch: Read+Apply now succeeds without Execute at both
 boundaries. Missing/forbidden responses and pre-stream denial remain unchanged.
@@ -59,8 +59,7 @@ Excluding authentication/connection setup and runtime work:
 | Admin get/list | 1 | 1 | Existing bypass + scoped projection |
 | Apply authorization | 2 | 2 | One inbound permission precheck + one in-transaction effective-permission query; resource locking/claim/result writes are additional unchanged operations |
 
-The existing read precheck remains for error parity; Phase 6 can consolidate it when
-read projections change. List never calls the authorizer per resource. The HTTP
+Phase 6 retains the existing read precheck for error parity. List never calls the authorizer per resource. The HTTP
 integration test checks get/list SQL counts when pg_stat_statements is installed and
 verifies Apply grant, denial-before-runtime, and revocation after a successful precheck.
 The measured collection test includes three authorized rows and still executes three
@@ -74,9 +73,11 @@ The container and its volumes are removed when the step exits.
 
 ## Deferred boundaries
 
-Deployment View/capability mapping still resides at its legacy boundary until the
-Phase 6 model/server split. Its effective grants are typed now. The Platform projection
-has one explicit typed-set-to-legacy-mask bridge, removed in Phase 10.
+Deployment View/capability mapping now resides in `server/src/api/deployments/`.
+`PostgresDeploymentRepository` returns semantic projections with typed effective grants.
+The feature has no HTTP schemas; the architectural guard has no Deployment legacy
+exemption. The Platform projection retains one explicit typed-set-to-legacy-mask bridge,
+removed in Phase 10.
 
 Other feature authorization declarations remain unchanged: Stacks/Swarm (7),
 Builds/Git/Backups (8), Automation/Alerts (9), Platforms/Identity/shared resources (10),
@@ -92,11 +93,12 @@ capability integer representations (7). No broad exemption was added to the guar
 The Rust `deployment_authorization_conventions` test prevents raw tuple declarations
 returning to the migrated Deployment handler family, including scoped Deployment
 inspection/statistics and realtime logs/terminal entry points in shared modules.
-Those scopes must retain their named policy calls. Phase 3 is not part of this change.
+Those scopes must retain their named policy calls. The guard also prevents presentation
+and direct task spawning from returning to Deployment feature/persistence modules.
 
-## Validation
+## Historical Phase 2 validation
 
-Phase 2 is complete; Phase 3 remains unstarted. The initial `cargo test --locked --workspace`
+At Phase 2 completion, Phase 3 was unstarted. The initial `cargo test --locked --workspace`
 passes: **613 passed, 232 ignored**. Seven targeted PostgreSQL integration tests also
 pass: Deployment HTTP/authorization/query counts, the shared .NET ACL matrix, two
 Apply/binding persistence tests, and Deployment inspection, statistics and logs.
@@ -117,3 +119,6 @@ was weakened in source or CI. `git diff --check` passes.
 
 The earlier generated audit files and Python scripts were moved outside the repository;
 the source change keeps only Rust implementation/tests and these human-readable guides.
+
+Current Phase 6 validation and compatibility results are recorded in
+[the Deployment refactor report](reports/phase6-deployment-resource-refactor.md).

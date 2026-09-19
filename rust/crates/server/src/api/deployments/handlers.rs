@@ -1,32 +1,29 @@
-use crate::request_validation::WorkloadQuery;
-use crate::request_validation::{invalid_json, invalid_path};
-use std::sync::Arc;
+pub(super) use crate::request_validation::WorkloadQuery;
+pub(super) use crate::request_validation::{invalid_json, invalid_path};
+pub(super) use std::sync::Arc;
 
-use axum::body::Body;
-use axum::extract::rejection::{JsonRejection, PathRejection};
-use axum::extract::{Extension, Path, State};
-use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::IntoResponse;
-use axum::{Json, Router};
-use citadel_deployments::permissions::{
+pub(super) use axum::body::Body;
+pub(super) use axum::extract::rejection::{JsonRejection, PathRejection};
+pub(super) use axum::extract::{Extension, Path, State};
+pub(super) use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+pub(super) use axum::http::{HeaderMap, HeaderValue, StatusCode};
+pub(super) use axum::response::IntoResponse;
+pub(super) use axum::{Json, Router};
+pub(super) use citadel_deployments::permissions::{
     ApplyDeployment, CreateDeployment, ReadDeployment, WriteDeployment,
 };
-use citadel_deployments::{
-    ApplyDeploymentInput, CreateDeploymentInput, DeploymentChangeNotifier, DeploymentError,
-    DeploymentFilter, DeploymentService, PatchDeploymentInput, PatchDeploymentMetadataInput,
-    RenameDeploymentInput, ResourceCapabilities,
+pub(super) use citadel_deployments::{
+    DeploymentChangeNotifier, DeploymentError, DeploymentFilter, DeploymentService,
 };
-use citadel_domain::{PermissionLevel, ResourceType};
-use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
-use uuid::Uuid;
+pub(super) use citadel_domain::{PermissionLevel, ResourceType};
+pub(super) use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
+pub(super) use uuid::Uuid;
 
-use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
-use crate::openapi::router::OpenApiRouterExt;
-use crate::realtime::RealtimeHub;
+pub(super) use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+pub(super) use crate::openapi::router::OpenApiRouterExt;
+pub(super) use crate::realtime::RealtimeHub;
 
-#[path = "deployments_http/adoption.rs"]
-mod adoption;
+pub(super) use super::{requests::*, views::*};
 
 pub struct DeploymentsRealtimeNotifier {
     realtime: Option<RealtimeHub>,
@@ -40,7 +37,7 @@ impl DeploymentsRealtimeNotifier {
 }
 
 impl DeploymentChangeNotifier for DeploymentsRealtimeNotifier {
-    fn adopted(&self, deployment: &citadel_deployments::DeploymentView) {
+    fn adopted(&self, deployment: &citadel_deployments::DeploymentDetails) {
         self.changed(deployment.id, "created");
         if let Some(realtime) = &self.realtime {
             if let Some(container) = &deployment.docker_container_id {
@@ -78,7 +75,7 @@ pub fn router(state: DeploymentsHttpState) -> Router {
     tag = "Deployments",
     summary = "Check the applied Deployment image for updates",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -118,7 +115,9 @@ async fn check_deployment_updates(
             }),
         &headers,
     )?;
-    Ok(no_store(Json(checked).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(checked)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -129,7 +128,7 @@ async fn check_deployment_updates(
     summary = "Apply a Deployment",
     request_body = ApplyDeploymentInput,
     responses(
-        (status = 200, description = "Success", body = Vec<citadel_deployments::DeploymentStreamItem>, content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<DeploymentStreamItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     security(("Bearer" = [])),
@@ -171,7 +170,7 @@ async fn apply_deployment(
                 yield Ok(bytes::Bytes::from_static(b","));
             }
             first = false;
-            match serde_json::to_vec(&item) {
+            match serde_json::to_vec(&DeploymentStreamItem::from(item)) {
                 Ok(value) => yield Ok(bytes::Bytes::from(value)),
                 Err(error) => {
                     tracing::error!(%error, "failed to serialize Deployment Apply progress");
@@ -199,7 +198,7 @@ async fn apply_deployment(
     tag = "Deployments",
     summary = "List authorized Deployments",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentsView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentsView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
@@ -221,16 +220,18 @@ async fn list_deployments(
     let capabilities = collection_capabilities(&state.identity, &principal, &headers).await?;
     let result = state
         .deployments
-        .list(
-            principal.actor_id,
-            principal.is_administrator(),
-            &filter,
-            capabilities,
-        )
+        .list(principal.actor_id, principal.is_administrator(), &filter)
         .await
         .map_err(deployment_error);
     Ok(no_store(
-        Json(identity_result(result, &headers)?).into_response(),
+        Json(DeploymentsView {
+            deployments: identity_result(result, &headers)?
+                .into_iter()
+                .map(DeploymentView::from)
+                .collect(),
+            capabilities,
+        })
+        .into_response(),
     ))
 }
 
@@ -241,7 +242,7 @@ async fn list_deployments(
     tag = "Deployments",
     summary = "Get a Deployment",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -271,7 +272,9 @@ async fn get_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -281,7 +284,7 @@ async fn get_deployment(
     tag = "Deployments",
     summary = "Get Deployment configuration",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentConfigView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentConfigView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -311,7 +314,9 @@ async fn get_deployment_config(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(config).into_response()))
+    Ok(no_store(
+        Json(DeploymentConfigView::from(config)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -321,7 +326,7 @@ async fn get_deployment_config(
     tag = "Deployments",
     summary = "Build a Deployment duplicate draft",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentDuplicateDraftView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentDuplicateDraftView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -351,7 +356,9 @@ async fn get_deployment_duplicate_draft(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(draft).into_response()))
+    Ok(no_store(
+        Json(DeploymentDuplicateDraftView::from(draft)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -362,7 +369,7 @@ async fn get_deployment_duplicate_draft(
     summary = "Create a Deployment",
     request_body = CreateDeploymentInput,
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -386,12 +393,18 @@ async fn create_deployment(
     let deployment = identity_result(
         state
             .deployments
-            .create(principal.actor_id, principal.is_administrator(), input)
+            .create(
+                principal.actor_id,
+                principal.is_administrator(),
+                input.into(),
+            )
             .await
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -405,7 +418,7 @@ async fn create_deployment(
         (PatchDeploymentInput = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -443,7 +456,9 @@ async fn update_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -457,7 +472,7 @@ async fn update_deployment(
         (PatchDeploymentMetadataInput = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -484,12 +499,19 @@ async fn update_deployment_metadata(
     let deployment = identity_result(
         state
             .deployments
-            .update_metadata(principal.actor_id, principal.is_administrator(), id, input)
+            .update_metadata(
+                principal.actor_id,
+                principal.is_administrator(),
+                id,
+                input.into(),
+            )
             .await
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -500,7 +522,7 @@ async fn update_deployment_metadata(
     summary = "Rename a Deployment",
     request_body = RenameDeploymentInput,
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -534,7 +556,9 @@ async fn rename_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -599,7 +623,7 @@ async fn collection_capabilities(
     })
 }
 
-fn deployment_error(error: DeploymentError) -> IdentityError {
+pub(super) fn deployment_error(error: DeploymentError) -> IdentityError {
     match error {
         DeploymentError::Validation(message) => {
             crate::request_validation::validation_error(message)
@@ -617,7 +641,7 @@ fn deployment_error(error: DeploymentError) -> IdentityError {
     }
 }
 
-fn require_actor(
+pub(super) fn require_actor(
     principal: Option<Extension<ActorPrincipal>>,
 ) -> Result<ActorPrincipal, IdentityError> {
     principal
@@ -629,8 +653,8 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Deployme
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_deployments))
         .normalized_routes(utoipa_axum::routes!(create_deployment))
-        .normalized_routes(utoipa_axum::routes!(adoption::draft))
-        .normalized_routes(utoipa_axum::routes!(adoption::adopt))
+        .normalized_routes(utoipa_axum::routes!(super::adoption::draft))
+        .normalized_routes(utoipa_axum::routes!(super::adoption::adopt))
         .normalized_routes(utoipa_axum::routes!(apply_deployment))
         .normalized_routes(utoipa_axum::routes!(delete_deployments))
         .normalized_routes(utoipa_axum::routes!(rename_deployment))

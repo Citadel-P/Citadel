@@ -2,7 +2,7 @@ use super::*;
 use citadel_adapters::{
     activity_store::PostgresActivityStore, alert_store::PostgresAlertStore,
     automation_store::PostgresAutomationStore, backup_store::PostgresBackupStore,
-    build_store::PostgresBuildStore, deployment_store::PostgresDeploymentStore,
+    build_store::PostgresBuildStore, postgres::deployments::PostgresDeploymentRepository,
     stack_store::PostgresStackStore, swarm_service_store::PostgresSwarmServiceStore,
 };
 use citadel_domain::ResourceType;
@@ -19,7 +19,7 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
         identity: f.lookup_state.platforms.identity.clone(),
         platforms: f.lookup_state.platforms.platforms.clone(),
-        deployments: Arc::new(PostgresDeploymentStore::new(f.pool.clone())),
+        deployments: Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
         stacks: Arc::new(PostgresStackStore::new(f.pool.clone())),
         services: Arc::new(PostgresSwarmServiceStore::new(f.pool.clone())),
         resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
