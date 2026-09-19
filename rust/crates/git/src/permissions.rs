@@ -1,0 +1,32 @@
+//! Operation policies shared by API authorization and capability projection.
+use citadel_domain::{PermissionLevel, ResourceType, permission_policy};
+permission_policy!(
+    ReadGitAccount,
+    ResourceType::GitAccount,
+    PermissionLevel::Read
+);
+permission_policy!(
+    WriteGitAccount,
+    ResourceType::GitAccount,
+    PermissionLevel::Write
+);
+permission_policy!(
+    ExecuteGitAccount,
+    ResourceType::GitAccount,
+    PermissionLevel::Execute
+);
+permission_policy!(
+    ReadGitRepository,
+    ResourceType::GitRepository,
+    PermissionLevel::Read
+);
+permission_policy!(
+    WriteGitRepository,
+    ResourceType::GitRepository,
+    PermissionLevel::Write
+);
+permission_policy!(
+    ExecuteGitRepository,
+    ResourceType::GitRepository,
+    PermissionLevel::Execute
+);

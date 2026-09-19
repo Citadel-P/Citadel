@@ -1,6 +1,6 @@
 use super::*;
 use crate::container_mutations::Runtime;
-use citadel_backups::source_preview::{
+use citadel_backups::policies::read_models::{
     BackupPreviewKind, BackupPreviewResource, BackupSourcePreview, BackupVolumePreview,
 };
 use citadel_domain::{ActorId, ResourceType};
@@ -248,7 +248,7 @@ impl PostgresBackupSourcePlanner {
         // latest Failed run yields false. Never expose an inaccessible policy.
         let query = format!(
             "{} {}",
-            crate::backup_store::AUTHORIZED_CTE,
+            crate::postgres::backups::AUTHORIZED_CTE,
             r#"
 , policies AS (
 SELECT p.id,COALESCE(p.source->>'VolumeName',p.source->>'volumeName') AS volumename,
@@ -258,7 +258,7 @@ AND COALESCE(p.source->>'PlatformId',p.source->>'platformId')=$5::text
 AND COALESCE(p.source->>'VolumeName',p.source->>'volumeName')=ANY($6)
 AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS(
  SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
- WHERE access.resourcetype=$2 AND access.resourceid=p.id AND (access.permissionlevel & $3)<>0))
+ WHERE access.resourcetype=$2 AND access.resourceid=p.id AND access.permissionlevel = ANY($3)))
 ), latest AS (
 SELECT DISTINCT ON (p.volumename,p.dockernodeid) p.volumename,p.dockernodeid,r.status
 FROM policies p LEFT JOIN backupruns r ON r.backuppolicyid=p.id
@@ -269,7 +269,7 @@ SELECT volumename,dockernodeid FROM latest WHERE status IS DISTINCT FROM 'Failed
         let covered = sqlx::query(AssertSqlSafe(query.as_str()))
             .bind(actor.value())
             .bind(ResourceType::BackupPolicy as i32)
-            .bind(7_i32)
+            .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
             .bind(administrator)
             .bind(platform.to_string())
             .bind(names)

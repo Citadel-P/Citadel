@@ -1,28 +1,36 @@
 use chrono::Utc;
+
 use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, GitRepositoryActivitySnapshot,
-    RegistryActivitySnapshot, ResourceType,
+    ActivityEvent, ActivityEventInfo, ActorId, RegistryActivitySnapshot, ResourceType,
 };
+
 use citadel_resources::{
-    CatalogMutationKind, ExternalSecretInput, ExternalSecretPatch, GitRepositoryPatch,
-    GitRepositorySyncMode, GitRepositoryView, NewGitRepository, NewRegistry, NewResourceBinding,
+    CatalogMutationKind, ExternalSecretInput, ExternalSecretPatch, NewRegistry, NewResourceBinding,
     NewTag, RegistryPatch, RegistryStatus, RegistryView, ResourceBindingInput, ResourceBindingKind,
     ResourceBindingScope, ResourceBindingView, ResourceBindingsView, ResourceMetadataError,
     ResourceMetadataStore, SecretDefinitionView, SecretDeliveryMode, SecretProviderType,
     SecretProviderView, StoredSecretProviderInput, StoredSecretProviderPatch, TagPatch, TagSummary,
     TagView, TaggableResourceType, registry_type, validate_description, validate_name_identifier,
 };
+
 use futures_util::future::BoxFuture;
+
 use serde::Serialize;
+
 use serde_json::{Value, json};
+
 use sqlx::postgres::PgRow;
+
 use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
+
 use uuid::Uuid;
 
 use crate::activity_store::insert_activity as insert_typed_activity;
 
-const READ_MASK: i32 = 1 | 2 | 4;
+pub(crate) const READ_MASK: i32 = 1 | 2 | 4;
+
 const DEFAULT_REGISTRY_ID: Uuid = Uuid::from_u128(0x100);
+
 pub(crate) const AUTHORIZED_CTE: &str = r#"
 WITH actor_scope AS (
     SELECT actor.id AS actorid
@@ -45,7 +53,7 @@ WITH actor_scope AS (
 )
 "#;
 
-const TAG_SUMMARIES: &str = r#"
+pub(crate) const TAG_SUMMARIES: &str = r#"
 COALESCE((
     SELECT jsonb_agg(jsonb_build_object('id', tag.id, 'name', tag.name, 'color', tag.color)
                      ORDER BY tag.name, tag.id)
@@ -55,27 +63,9 @@ COALESCE((
 ), '[]'::jsonb) AS tags
 "#;
 
-const LATEST_GIT_ACTIVITY: &str = r#"
-(
-    SELECT jsonb_build_object(
-        'id', event.id,
-        'resourceType', event.resourcetype,
-        'eventType', event.eventtype,
-        'status', event.status,
-        'info', event.info::jsonb,
-        'createdAt', event.createdat)
-    FROM activityevents event
-    WHERE event.resourceid = resource.id
-      AND event.resourcetype = 'GitRepository'
-      AND event.eventtype NOT IN ('GitRepoUpdated', 'GitRepoRenamed')
-    ORDER BY event.createdat DESC, event.id DESC
-    LIMIT 1
-) AS latest_activity
-"#;
-
 #[derive(Clone)]
 pub struct PostgresResourceMetadataStore {
-    pool: PgPool,
+    pub(crate) pool: PgPool,
 }
 
 impl PostgresResourceMetadataStore {
@@ -486,244 +476,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         })
     }
 
-    fn list_git_repositories<'a>(
-        &'a self,
-        actor_id: ActorId,
-        administrator: bool,
-    ) -> BoxFuture<'a, Result<Vec<GitRepositoryView>, ResourceMetadataError>> {
-        Box::pin(async move {
-            let query = authorized_catalog_query(
-                "gitrepositories",
-                "repository",
-                ResourceType::GitRepository,
-            );
-            sqlx::query(AssertSqlSafe(query.as_str()))
-                .bind(actor_id.value())
-                .bind(ResourceType::GitRepository as i32)
-                .bind(READ_MASK)
-                .bind(administrator)
-                .bind(TaggableResourceType::GitRepository.as_database_str())
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_git_repository)
-                .collect()
-        })
-    }
-
-    fn get_git_repository<'a>(
-        &'a self,
-        id: Uuid,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>> {
-        Box::pin(async move { get_git_repository(&self.pool, id).await })
-    }
-
-    fn create_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        repository: &'a NewGitRepository,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>> {
-        Box::pin(async move {
-            let id = Uuid::now_v7();
-            let now = Utc::now();
-            let mut transaction = self.pool.begin().await.map_err(storage)?;
-            validate_tag_ids(&mut transaction, &repository.tag_ids).await?;
-            validate_git_account(&mut transaction, repository.git_account_id, &repository.url)
-                .await?;
-            sqlx::query(
-                r#"
-INSERT INTO gitrepositories (
-    id, name, description, url, defaultbranch, gitaccountid, status,
-    createdat, createdbyactorid, rowversion, controlstate, controltriggeredby,
-    syncmode, syncintervalminutes, webhook, onclone, onpull)
-VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
-"#,
-            )
-            .bind(id)
-            .bind(&repository.name)
-            .bind(repository.description.as_deref())
-            .bind(&repository.url)
-            .bind(&repository.default_branch)
-            .bind(repository.git_account_id)
-            .bind(now)
-            .bind(actor_id.value())
-            .bind(repository.sync_mode.as_database_str())
-            .bind(repository.sync_interval_minutes)
-            .bind(repository.webhook.as_ref())
-            .bind(serialize_optional(&repository.on_clone)?)
-            .bind(serialize_optional(&repository.on_pull)?)
-            .execute(&mut *transaction)
-            .await
-            .map_err(database_error)?;
-            sqlx::query(
-                "INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat) VALUES($1,$2,$3,NULL,'Pending',NULL,$4)",
-            )
-            .bind(Uuid::now_v7())
-            .bind(id)
-            .bind(&repository.default_branch)
-            .bind(now)
-            .execute(&mut *transaction)
-            .await
-            .map_err(storage)?;
-            insert_resource_tags(
-                &mut transaction,
-                actor_id,
-                TaggableResourceType::GitRepository,
-                id,
-                &repository.tag_ids,
-            )
-            .await?;
-            let created = get_git_repository_tx(&mut transaction, id, false).await?;
-            insert_catalog_activity(
-                &mut transaction,
-                actor_id,
-                id,
-                &repository.name,
-                ActivityEventInfo::git_repo_created(git_snapshot(&created)?),
-            )
-            .await?;
-            transaction.commit().await.map_err(storage)?;
-            get_git_repository(&self.pool, id).await
-        })
-    }
-
-    fn update_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        id: Uuid,
-        patch: &'a GitRepositoryPatch,
-        kind: CatalogMutationKind,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>> {
-        Box::pin(async move {
-            let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let old = get_git_repository_tx(&mut transaction, id, true).await?;
-            let mut updated = NewGitRepository {
-                name: patch.name.clone().unwrap_or_else(|| old.name.clone()),
-                description: patch.description.merge_optional(old.description.as_ref()),
-                url: patch.url.clone().unwrap_or_else(|| old.url.clone()),
-                default_branch: patch
-                    .default_branch
-                    .clone()
-                    .unwrap_or_else(|| old.default_branch.clone()),
-                git_account_id: patch
-                    .git_account_id
-                    .merge_optional(old.git_account_id.as_ref()),
-                sync_mode: patch.sync_mode.unwrap_or(old.sync_mode),
-                sync_interval_minutes: patch
-                    .sync_interval_minutes
-                    .merge_optional(old.sync_interval_minutes.as_ref()),
-                webhook: merge_json_patch(&patch.webhook, old.webhook.as_ref()),
-                on_clone: patch.on_clone.merge_optional(old.on_clone.as_ref()),
-                on_pull: patch.on_pull.merge_optional(old.on_pull.as_ref()),
-                tag_ids: patch
-                    .tag_ids
-                    .clone()
-                    .unwrap_or_else(|| old.tags.iter().map(|tag| tag.id).collect()),
-            };
-            match kind {
-                CatalogMutationKind::Update => updated.validate()?,
-                CatalogMutationKind::Metadata => {
-                    validate_description(updated.description.as_deref())?;
-                }
-                CatalogMutationKind::Rename => {
-                    validate_name_identifier(&updated.name, "Git repository")?;
-                    updated.name = updated.name.trim().to_owned();
-                }
-            }
-            validate_git_account(&mut transaction, updated.git_account_id, &updated.url).await?;
-            if patch.tag_ids.is_some() {
-                validate_tag_ids(&mut transaction, &updated.tag_ids).await?;
-            }
-            let source_changed = old.url != updated.url
-                || old.default_branch != updated.default_branch
-                || old.git_account_id != updated.git_account_id;
-            let affected = sqlx::query(
-                "UPDATE gitrepositories SET name=$2, description=$3, url=$4, defaultbranch=$5, gitaccountid=$6, syncmode=$7, syncintervalminutes=$8, webhook=$9, onclone=$10, onpull=$11, status=CASE WHEN $12 THEN 'Pending' ELSE status END, controlstate=CASE WHEN $12 AND controlstate<>'Processing' THEN 'Queued' ELSE controlstate END, controltriggeredby=CASE WHEN $12 THEN $13 ELSE controltriggeredby END, controlstartedat=CASE WHEN $12 AND controlstate<>'Processing' THEN NULL ELSE controlstartedat END, rowversion=rowversion+1 WHERE id=$1",
-            )
-            .bind(id).bind(&updated.name).bind(updated.description.as_deref()).bind(&updated.url).bind(&updated.default_branch).bind(updated.git_account_id)
-            .bind(updated.sync_mode.as_database_str()).bind(updated.sync_interval_minutes)
-            .bind(updated.webhook.as_ref()).bind(serialize_optional(&updated.on_clone)?).bind(serialize_optional(&updated.on_pull)?).bind(source_changed).bind(actor_id.value())
-            .execute(&mut *transaction).await.map_err(database_error)?.rows_affected();
-            exactly_one(affected)?;
-            if source_changed {
-                sqlx::query(
-                    r#"INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat)
-VALUES($1,$2,$3,NULL,'Pending',NULL,CURRENT_TIMESTAMP)
-ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NULL"#,
-                )
-                .bind(Uuid::now_v7())
-                .bind(id)
-                .bind(&updated.default_branch)
-                .execute(&mut *transaction)
-                .await
-                .map_err(storage)?;
-            }
-            if patch.tag_ids.is_some() {
-                replace_resource_tags_tx(
-                    &mut transaction,
-                    actor_id,
-                    TaggableResourceType::GitRepository,
-                    id,
-                    &updated.tag_ids,
-                )
-                .await?;
-            }
-            if kind != CatalogMutationKind::Metadata {
-                let updated_view = get_git_repository_tx(&mut transaction, id, false).await?;
-                let info = if kind == CatalogMutationKind::Rename {
-                    ActivityEventInfo::git_repo_renamed(old.name.clone(), updated.name.clone())
-                } else {
-                    ActivityEventInfo::git_repo_updated(
-                        git_snapshot(&old)?,
-                        git_snapshot(&updated_view)?,
-                    )
-                };
-                insert_catalog_activity(&mut transaction, actor_id, id, &updated.name, info)
-                    .await?;
-            }
-            transaction.commit().await.map_err(storage)?;
-            get_git_repository(&self.pool, id).await
-        })
-    }
-
-    fn delete_git_repositories<'a>(
-        &'a self,
-        actor_id: ActorId,
-        ids: &'a [Uuid],
-    ) -> BoxFuture<'a, Result<(), ResourceMetadataError>> {
-        Box::pin(async move {
-            let ids = unique_ids(ids);
-            if ids.is_empty() {
-                return Err(ResourceMetadataError::Validation(
-                    "Ids must not be empty.".into(),
-                ));
-            }
-            let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let rows = load_git_repositories_tx(&mut transaction, &ids).await?;
-            if rows.len() != ids.len() {
-                return Err(ResourceMetadataError::NotFound);
-            }
-            sqlx::query("DELETE FROM gitrepositories WHERE id = ANY($1::uuid[])")
-                .bind(&ids)
-                .execute(&mut *transaction)
-                .await
-                .map_err(database_error)?;
-            for repository in rows {
-                insert_catalog_activity(
-                    &mut transaction,
-                    actor_id,
-                    repository.id,
-                    &repository.name,
-                    ActivityEventInfo::git_repo_deleted(git_snapshot(&repository)?),
-                )
-                .await?;
-            }
-            transaction.commit().await.map_err(storage)?;
-            Ok(())
-        })
-    }
-
     fn update_platform_description<'a>(
         &'a self,
         platform_id: Uuid,
@@ -1104,34 +856,7 @@ fn map_registry(row: PgRow) -> Result<RegistryView, ResourceMetadataError> {
     })
 }
 
-fn map_git_repository(row: PgRow) -> Result<GitRepositoryView, ResourceMetadataError> {
-    Ok(GitRepositoryView {
-        id: row.try_get("id").map_err(storage)?,
-        name: row.try_get("name").map_err(storage)?,
-        description: row.try_get("description").map_err(storage)?,
-        url: row.try_get("url").map_err(storage)?,
-        default_branch: row.try_get("defaultbranch").map_err(storage)?,
-        git_account_id: row.try_get("gitaccountid").map_err(storage)?,
-        sync_mode: parse_git_sync_mode(&row.try_get::<String, _>("syncmode").map_err(storage)?)?,
-        sync_interval_minutes: row.try_get("syncintervalminutes").map_err(storage)?,
-        webhook: row.try_get("webhook").map_err(storage)?,
-        on_clone: deserialize_optional(row.try_get("onclone").map_err(storage)?)?,
-        on_pull: deserialize_optional(row.try_get("onpull").map_err(storage)?)?,
-        status: row.try_get("status").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        control_state: row
-            .try_get::<Option<String>, _>("controlstate")
-            .map_err(storage)?
-            .unwrap_or_else(|| "Idle".to_owned()),
-        latest_activity_view: citadel_application::public_latest_activity(
-            row.try_get("latest_activity").map_err(storage)?,
-        ),
-        tags: serde_json::from_value(row.try_get("tags").map_err(storage)?).map_err(storage)?,
-    })
-}
-
-fn serialize_optional<T: Serialize>(
+pub(crate) fn serialize_optional<T: Serialize>(
     value: &Option<T>,
 ) -> Result<Option<String>, ResourceMetadataError> {
     value
@@ -1141,7 +866,7 @@ fn serialize_optional<T: Serialize>(
         .map_err(storage)
 }
 
-fn deserialize_optional<T: serde::de::DeserializeOwned>(
+pub(crate) fn deserialize_optional<T: serde::de::DeserializeOwned>(
     value: Option<String>,
 ) -> Result<Option<T>, ResourceMetadataError> {
     value
@@ -1243,43 +968,11 @@ async fn get_registry_tx(
         .and_then(map_registry)
 }
 
-async fn get_git_repository(
-    pool: &PgPool,
-    id: Uuid,
-) -> Result<GitRepositoryView, ResourceMetadataError> {
-    let q = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2"
-    );
-    sqlx::query(AssertSqlSafe(q.as_str()))
-        .bind(TaggableResourceType::GitRepository.as_database_str())
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)
-        .and_then(map_git_repository)
-}
-
-async fn get_git_repository_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    id: Uuid,
-    lock: bool,
-) -> Result<GitRepositoryView, ResourceMetadataError> {
-    let lock_clause = if lock { " FOR UPDATE OF resource" } else { "" };
-    let query = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2{lock_clause}"
-    );
-    sqlx::query(AssertSqlSafe(query.as_str()))
-        .bind(TaggableResourceType::GitRepository.as_database_str())
-        .bind(id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)
-        .and_then(map_git_repository)
-}
-
-fn authorized_catalog_query(table: &str, alias: &str, resource_type: ResourceType) -> String {
+pub(crate) fn authorized_catalog_query(
+    table: &str,
+    alias: &str,
+    resource_type: ResourceType,
+) -> String {
     let extra_columns = if resource_type == ResourceType::GitRepository {
         ", NULL::jsonb AS latest_activity"
     } else {
@@ -1379,6 +1072,7 @@ async fn get_secret_definition(
         .ok_or(ResourceMetadataError::NotFound)
         .and_then(map_secret_definition)
 }
+
 async fn get_secret_provider(
     pool: &PgPool,
     id: Uuid,
@@ -1391,6 +1085,7 @@ async fn get_secret_provider(
         .ok_or(ResourceMetadataError::NotFound)
         .and_then(map_secret_provider)
 }
+
 async fn get_secret_provider_row_tx(
     transaction: &mut Transaction<'_, Postgres>,
     id: Uuid,
@@ -1416,6 +1111,7 @@ async fn ensure_resource_exists(
     ensure_resource_exists_tx(&mut tx, t, id).await?;
     tx.rollback().await.map_err(storage)
 }
+
 async fn ensure_resource_exists_tx(
     tx: &mut Transaction<'_, Postgres>,
     t: TaggableResourceType,
@@ -1452,6 +1148,7 @@ async fn ensure_resource_exists_tx(
     }
     Ok(())
 }
+
 async fn load_resource_tags(
     tx: &mut Transaction<'_, Postgres>,
     t: TaggableResourceType,
@@ -1460,7 +1157,8 @@ async fn load_resource_tags(
     sqlx::query("SELECT tag.id,tag.name,tag.color FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$1 AND link.resourceid=$2 ORDER BY tag.name,tag.id")
     .bind(t.as_database_str()).bind(id).fetch_all(&mut **tx).await.map_err(storage)?.into_iter().map(map_tag_summary).collect()
 }
-async fn validate_tag_ids(
+
+pub(crate) async fn validate_tag_ids(
     tx: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
 ) -> Result<(), ResourceMetadataError> {
@@ -1478,90 +1176,7 @@ async fn validate_tag_ids(
     Ok(())
 }
 
-async fn validate_git_account(
-    transaction: &mut Transaction<'_, Postgres>,
-    id: Option<Uuid>,
-    repository_url: &str,
-) -> Result<(), ResourceMetadataError> {
-    let Some(id) = id else {
-        return validate_direct_git_url(repository_url);
-    };
-    let domain = sqlx::query_scalar::<_, String>("SELECT domain FROM gitaccounts WHERE id=$1")
-        .bind(id)
-        .fetch_optional(&mut **transaction)
-        .await
-        .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)?;
-    if is_account_relative_git_path(repository_url) {
-        return Ok(());
-    }
-    let repository_domain = extract_git_domain(repository_url)?;
-    if repository_domain.eq_ignore_ascii_case(domain.trim().trim_end_matches('/')) {
-        Ok(())
-    } else {
-        Err(ResourceMetadataError::Validation(format!(
-            "Repository URL domain '{repository_domain}' does not match linked GitAccount domain '{}'.",
-            domain.trim().trim_end_matches('/')
-        )))
-    }
-}
-
-fn is_account_relative_git_path(repository_url: &str) -> bool {
-    let value = repository_url.trim();
-    !value.is_empty()
-        && !value.starts_with('-')
-        && !value.contains(['\r', '\n', '\0'])
-        && !value.starts_with('/')
-        && !value.contains("..")
-        && !value.contains("://")
-        && !value.starts_with("git@")
-}
-
-fn validate_direct_git_url(repository_url: &str) -> Result<(), ResourceMetadataError> {
-    let value = repository_url.trim();
-    let valid = url::Url::parse(value).is_ok_and(|url| {
-        matches!(url.scheme(), "http" | "https" | "file")
-            && (url.scheme() == "file" || url.host_str().is_some())
-    }) || value.strip_prefix("git@").is_some_and(|value| {
-        value
-            .split_once(':')
-            .is_some_and(|(host, path)| !host.is_empty() && !path.is_empty())
-    });
-    if valid {
-        Ok(())
-    } else {
-        Err(ResourceMetadataError::Validation(
-            "Enter a complete repository URL when no Git account is selected.".to_owned(),
-        ))
-    }
-}
-
-fn extract_git_domain(repository_url: &str) -> Result<String, ResourceMetadataError> {
-    let value = repository_url.trim();
-    if let Ok(url) = url::Url::parse(value)
-        && let Some(host) = url.host_str()
-    {
-        return Ok(host.to_owned());
-    }
-    if let Some(value) = value.strip_prefix("git@")
-        && let Some((host, _)) = value.split_once(':')
-    {
-        return Ok(host.to_owned());
-    }
-    let authority = value.split_once('/').map_or(value, |(host, _)| host);
-    let host = authority
-        .split_once(':')
-        .map_or(authority, |(host, _)| host)
-        .trim();
-    if host.is_empty() {
-        Err(ResourceMetadataError::Validation(
-            "Repository URL must include a host.".to_owned(),
-        ))
-    } else {
-        Ok(host.to_owned())
-    }
-}
-async fn insert_resource_tags(
+pub(crate) async fn insert_resource_tags(
     tx: &mut Transaction<'_, Postgres>,
     actor: ActorId,
     t: TaggableResourceType,
@@ -1577,7 +1192,7 @@ async fn insert_resource_tags(
     Ok(())
 }
 
-async fn replace_resource_tags_tx(
+pub(crate) async fn replace_resource_tags_tx(
     tx: &mut Transaction<'_, Postgres>,
     actor: ActorId,
     resource_type: TaggableResourceType,
@@ -1592,6 +1207,7 @@ async fn replace_resource_tags_tx(
         .map_err(storage)?;
     insert_resource_tags(tx, actor, resource_type, resource_id, ids).await
 }
+
 async fn validate_binding_references(
     tx: &mut Transaction<'_, Postgres>,
     kind: ResourceBindingKind,
@@ -1636,24 +1252,8 @@ async fn load_registries_tx(
         .map(map_registry)
         .collect()
 }
-async fn load_git_repositories_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    ids: &[Uuid],
-) -> Result<Vec<GitRepositoryView>, ResourceMetadataError> {
-    let q = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id"
-    );
-    sqlx::query(AssertSqlSafe(q.as_str()))
-        .bind(TaggableResourceType::GitRepository.as_database_str())
-        .bind(ids)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(storage)?
-        .into_iter()
-        .map(map_git_repository)
-        .collect()
-}
-async fn insert_catalog_activity(
+
+pub(crate) async fn insert_catalog_activity(
     tx: &mut Transaction<'_, Postgres>,
     actor: ActorId,
     id: Uuid,
@@ -1688,25 +1288,6 @@ fn registry_snapshot(
     })
 }
 
-fn git_snapshot(
-    value: &GitRepositoryView,
-) -> Result<GitRepositoryActivitySnapshot, ResourceMetadataError> {
-    Ok(GitRepositoryActivitySnapshot {
-        id: value.id,
-        name: value.name.clone(),
-        description: value.description.clone(),
-        url: value.url.clone(),
-        default_branch: value.default_branch.clone(),
-        git_account_id: value.git_account_id,
-        sync_mode: value.sync_mode.as_database_str().to_owned(),
-        sync_interval_minutes: value.sync_interval_minutes,
-        webhook: value.webhook.as_ref().map(mask_webhook),
-        on_clone: serialize_activity_value(value.on_clone.as_ref())?,
-        on_pull: serialize_activity_value(value.on_pull.as_ref())?,
-        resolved_commit_sha: None,
-    })
-}
-
 fn masked_registry_configuration(value: &Value) -> Result<Value, ResourceMetadataError> {
     let mut masked = value.clone();
     let kind = registry_type(&masked)?;
@@ -1724,7 +1305,7 @@ fn masked_registry_configuration(value: &Value) -> Result<Value, ResourceMetadat
     Ok(masked)
 }
 
-fn mask_webhook(value: &Value) -> Value {
+pub(crate) fn mask_webhook(value: &Value) -> Value {
     let mut masked = value.clone();
     if let Some(object) = masked.as_object_mut() {
         mask_property(object, "Secret");
@@ -1749,7 +1330,7 @@ fn mask_property(object: &mut serde_json::Map<String, Value>, pascal_name: &str)
     }
 }
 
-fn serialize_activity_value<T: Serialize>(
+pub(crate) fn serialize_activity_value<T: Serialize>(
     value: Option<&T>,
 ) -> Result<Option<Value>, ResourceMetadataError> {
     value.map(serde_json::to_value).transpose().map_err(storage)
@@ -1770,7 +1351,7 @@ fn merge_json_patch(
     }
 }
 
-fn apply_json_merge_patch(target: &mut Value, patch: &Value) {
+pub(crate) fn apply_json_merge_patch(target: &mut Value, patch: &Value) {
     let Value::Object(patch) = patch else {
         *target = patch.clone();
         return;
@@ -1789,13 +1370,15 @@ fn apply_json_merge_patch(target: &mut Value, patch: &Value) {
         }
     }
 }
-fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
+
+pub(crate) fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
     let mut ids = ids.to_vec();
     ids.sort_unstable();
     ids.dedup();
     ids
 }
-fn exactly_one(value: u64) -> Result<(), ResourceMetadataError> {
+
+pub(crate) fn exactly_one(value: u64) -> Result<(), ResourceMetadataError> {
     match value {
         1 => Ok(()),
         0 => Err(ResourceMetadataError::NotFound),
@@ -1804,7 +1387,8 @@ fn exactly_one(value: u64) -> Result<(), ResourceMetadataError> {
         )),
     }
 }
-fn database_error(error: sqlx::Error) -> ResourceMetadataError {
+
+pub(crate) fn database_error(error: sqlx::Error) -> ResourceMetadataError {
     if let sqlx::Error::Database(db) = &error {
         if db.code().as_deref() == Some("23505") {
             return ResourceMetadataError::Conflict(
@@ -1817,9 +1401,11 @@ fn database_error(error: sqlx::Error) -> ResourceMetadataError {
     }
     storage(error)
 }
-fn storage(error: impl std::fmt::Display) -> ResourceMetadataError {
+
+pub(crate) fn storage(error: impl std::fmt::Display) -> ResourceMetadataError {
     ResourceMetadataError::Storage(error.to_string())
 }
+
 fn parse_registry_status(v: &str) -> Result<RegistryStatus, ResourceMetadataError> {
     match v {
         "Active" => Ok(RegistryStatus::Active),
@@ -1830,21 +1416,14 @@ fn parse_registry_status(v: &str) -> Result<RegistryStatus, ResourceMetadataErro
         ))),
     }
 }
-fn parse_git_sync_mode(v: &str) -> Result<GitRepositorySyncMode, ResourceMetadataError> {
-    match v {
-        "Manual" => Ok(GitRepositorySyncMode::Manual),
-        "PullInterval" => Ok(GitRepositorySyncMode::PullInterval),
-        _ => Err(ResourceMetadataError::Storage(format!(
-            "Unknown Git repository sync mode '{v}'."
-        ))),
-    }
-}
+
 fn binding_kind(v: ResourceBindingKind) -> &'static str {
     match v {
         ResourceBindingKind::Variable => "Variable",
         ResourceBindingKind::Secret => "Secret",
     }
 }
+
 fn parse_binding_kind(v: &str) -> Result<ResourceBindingKind, ResourceMetadataError> {
     match v {
         "Variable" => Ok(ResourceBindingKind::Variable),
@@ -1854,6 +1433,7 @@ fn parse_binding_kind(v: &str) -> Result<ResourceBindingKind, ResourceMetadataEr
         ))),
     }
 }
+
 fn parse_scope(v: &str) -> Result<ResourceBindingScope, ResourceMetadataError> {
     match v {
         "Global" => Ok(ResourceBindingScope::Global),
@@ -1865,6 +1445,7 @@ fn parse_scope(v: &str) -> Result<ResourceBindingScope, ResourceMetadataError> {
         ))),
     }
 }
+
 fn delivery_mode(v: SecretDeliveryMode) -> &'static str {
     match v {
         SecretDeliveryMode::EnvironmentVariable => "EnvironmentVariable",
@@ -1872,6 +1453,7 @@ fn delivery_mode(v: SecretDeliveryMode) -> &'static str {
         SecretDeliveryMode::NativePlatformSecret => "NativePlatformSecret",
     }
 }
+
 fn parse_delivery(v: &str) -> Result<SecretDeliveryMode, ResourceMetadataError> {
     match v {
         "EnvironmentVariable" => Ok(SecretDeliveryMode::EnvironmentVariable),
@@ -1882,6 +1464,7 @@ fn parse_delivery(v: &str) -> Result<SecretDeliveryMode, ResourceMetadataError> 
         ))),
     }
 }
+
 fn parse_provider_type(v: &str) -> Result<SecretProviderType, ResourceMetadataError> {
     match v {
         "InternalEncrypted" => Ok(SecretProviderType::InternalEncrypted),
@@ -1889,6 +1472,76 @@ fn parse_provider_type(v: &str) -> Result<SecretProviderType, ResourceMetadataEr
         _ => Err(ResourceMetadataError::Storage(format!(
             "Unknown Secret provider type '{v}'."
         ))),
+    }
+}
+
+impl citadel_git::GitRepositoryPersistence for PostgresResourceMetadataStore {
+    fn list_git_repositories<'a>(
+        &'a self,
+        actor_id: ActorId,
+        administrator: bool,
+    ) -> BoxFuture<'a, Result<Vec<citadel_git::GitRepository>, citadel_git::GitRepositoryError>>
+    {
+        Box::pin(async move {
+            crate::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                self.pool.clone(),
+            )
+            .list_git_repositories(actor_id, administrator)
+            .await
+        })
+    }
+    fn get_git_repository<'a>(
+        &'a self,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<citadel_git::GitRepository, citadel_git::GitRepositoryError>> {
+        Box::pin(async move {
+            crate::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                self.pool.clone(),
+            )
+            .get_git_repository(id)
+            .await
+        })
+    }
+    fn create_git_repository<'a>(
+        &'a self,
+        actor_id: ActorId,
+        repository: &'a citadel_git::CreateGitRepository,
+    ) -> BoxFuture<'a, Result<citadel_git::GitRepository, citadel_git::GitRepositoryError>> {
+        Box::pin(async move {
+            crate::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                self.pool.clone(),
+            )
+            .create_git_repository(actor_id, repository)
+            .await
+        })
+    }
+    fn update_git_repository<'a>(
+        &'a self,
+        actor_id: ActorId,
+        id: Uuid,
+        patch: &'a citadel_git::GitRepositoryPatch,
+        kind: citadel_git::GitRepositoryMutationKind,
+    ) -> BoxFuture<'a, Result<citadel_git::GitRepository, citadel_git::GitRepositoryError>> {
+        Box::pin(async move {
+            crate::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                self.pool.clone(),
+            )
+            .update_git_repository(actor_id, id, patch, kind)
+            .await
+        })
+    }
+    fn delete_git_repositories<'a>(
+        &'a self,
+        actor_id: ActorId,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<(), citadel_git::GitRepositoryError>> {
+        Box::pin(async move {
+            crate::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                self.pool.clone(),
+            )
+            .delete_git_repositories(actor_id, ids)
+            .await
+        })
     }
 }
 

@@ -4,3 +4,9 @@ pub mod deployments;
 pub mod stacks;
 
 pub mod swarm_services;
+
+pub mod builds;
+
+pub mod backups;
+
+pub mod git;

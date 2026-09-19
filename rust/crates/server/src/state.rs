@@ -12,12 +12,10 @@ use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
 use citadel_adapters::backup_authorization::IdentityBackupRunAuthorizer;
 use citadel_adapters::backup_executor::{DockerResticBackupExecutor, PostgresBackupSecretResolver};
 use citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner;
-use citadel_adapters::backup_store::PostgresBackupStore;
 use citadel_adapters::build_executor::{
     AgentDockerBuildExecutor, LocalDockerBuildExecutor, PlatformBuildExecutor,
     PostgresBuildRegistryCredentialResolver, PostgresBuildSecretResolver,
 };
-use citadel_adapters::build_store::PostgresBuildStore;
 use citadel_adapters::citadel_system_backup::PostgresCitadelSystemBackupBuilder;
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
@@ -25,8 +23,6 @@ use citadel_adapters::crypto::{
 };
 use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
 use citadel_adapters::docker::DockerClient;
-use citadel_adapters::git_account_store::PostgresGitAccountStore;
-use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::PostgresIdentityStore;
 use citadel_adapters::license::{
     Ed25519LicenseVerifier, PostgresLicenseEntitlementService, PostgresLicenseStore,
@@ -38,8 +34,12 @@ use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::platform_registration::{
     PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
 };
+use citadel_adapters::postgres::backups::PostgresBackupPersistence;
+use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
 use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_adapters::postgres::stacks::bindings::PostgresStackBindingResolver;
 use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
@@ -247,7 +247,7 @@ impl AppState {
                 )),
         );
         let git_accounts = Arc::new(GitAccountService::new(
-            Arc::new(PostgresGitAccountStore::new(pool.clone())),
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             secret_protector.clone(),
         ));
         let data_root = std::env::var_os("CITADEL_DATA_ROOT")
@@ -255,7 +255,7 @@ impl AppState {
             .unwrap_or_else(|| std::path::PathBuf::from("/app/data"));
         let git_execution = Arc::new(
             GitRepositoryExecutionService::new(
-                Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+                Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
                 Arc::clone(&git_accounts),
                 Arc::new(GitCli::new(Duration::from_secs(120))),
                 data_root.join("git-repositories"),
@@ -369,7 +369,7 @@ impl AppState {
         );
         let backups = Arc::new(
             BackupService::new(
-                Arc::new(PostgresBackupStore::new(pool.clone())),
+                Arc::new(PostgresBackupPersistence::new(pool.clone())),
                 Arc::new(
                     DockerResticBackupExecutor::new(
                         std::env::var_os("CITADEL_DOCKER_PATH").unwrap_or_else(|| "docker".into()),
@@ -456,7 +456,11 @@ impl AppState {
         });
         let builds = Arc::new(
             BuildService::new(
-                Arc::new(PostgresBuildStore::new(pool.clone())),
+                Arc::new(citadel_server::api::builds::TrackedBuildTasks::new(
+                    dynamic_tasks.clone(),
+                )),
+                cancellation.clone(),
+                Arc::new(PostgresBuildRepository::new(pool.clone())),
                 Arc::new(
                     PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds)
                         .with_git_source(git_execution.clone())

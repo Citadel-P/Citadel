@@ -1,8 +1,8 @@
 # Citadel Rust architecture
 
 This describes the architecture of the incremental Rust refactor. Deployments is the
-implemented reference resource as of Phase 6. Other resources move to these conventions
-in their owning phases; the Builds example remains a target, not scaffolding.
+implemented reference resource as of Phase 6. Stacks and Swarm Services follow it
+in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8.
 
 ## Ownership and dependency direction
 
@@ -38,7 +38,7 @@ existing environment names/defaults, secret redaction and external contracts.
 | `repository` | Durable persistence ports and cohesive transactional operations |
 | `service` | Use-case orchestration using ports |
 | `commands` | Optional transport-neutral mutation inputs |
-| `queries` | Optional read ports, filters and semantic projections |
+| `read_models` | Optional transport-neutral read results and supporting filters |
 | `runtime` | Optional Docker/agent/external execution ports |
 | `validation` | Reusable business validation too large for model/service |
 | `jobs/`, `adoption`, `webhooks` | Optional cohesive background/adoption/webhook use cases |
@@ -46,7 +46,8 @@ existing environment names/defaults, secret redaction and external contracts.
 Start with role files such as `model.rs`, `repository.rs`, `service.rs`. Expand a large
 slot into `service/mod.rs`, `service/apply.rs`, etc., preserving the conceptual entry
 point. Use ordinary modules rather than avoidable `#[path]` indirection. Resource
-namespaces are plural; role filenames are singular; Rust modules use snake_case and
+namespaces are plural; role filenames describe responsibilities (`model`, `read_models`);
+Rust modules use snake_case and
 Cargo package directories use kebab-case (`swarm-services`). Avoid redundant names
 such as `postgres/deployments/deployment_repository.rs`.
 
@@ -90,6 +91,13 @@ never `GitRepositoryRepository` or a second conflicting `BackupRepository` trait
 Shared Build/Backup/Automation ports may span resources where transactions require it.
 Shared ports must make their transaction boundaries explicit.
 
+`read_models.rs` owns transport-neutral read results: enriched resource details,
+configuration snapshots, duplicate/adoption drafts, and supporting filters. These
+are application data types consumed by services and mapped to HTTP views by the
+server. Read operation implementations live in `service/read.rs`; PostgreSQL SQL
+queries live in `adapters/postgres/<resource>/queries.rs`. Use `read_models` for
+feature data types, including future resource migrations.
+
 ## Implemented reference resource: Deployment
 
 ```text
@@ -99,7 +107,7 @@ crates/deployments/src/
   repository.rs                  # DeploymentRepository, atomic durable operations
   service/{mod,read,mutations,apply,delete,updates,adoption,bindings}.rs
   commands.rs                    # transport-neutral mutation inputs
-  queries.rs                     # DeploymentDetails, Config, Draft, filters
+  read_models.rs                 # DeploymentDetails, Config, Draft, filters
   permissions.rs                 # named operation requirements
   runtime.rs                     # DeploymentRuntime and consumed runtime ports
   tasks.rs                       # DeploymentTaskSpawner, consumer-owned port
@@ -162,44 +170,32 @@ The established runtime router remains in place; moving unrelated Docker/Agent
 adapters is outside this resource migration. Boundary tests enforce the Deployment
 feature/persistence separation without a legacy exemption.
 
-## Complete multi-resource target: Builds
+## Implemented multi-resource anatomy: Builds
 
 ```text
 crates/builds/src/
   lib.rs
-  projects/
-    mod.rs
-    model.rs                     # BuildProject, argument/secret specifications
-  runs/
-    mod.rs
-    model.rs                     # BuildRun, BuildLog, claim/result types
-  agent_pools/
-    mod.rs
-    model.rs                     # BuildAgentPool, provider configuration/state
+  projects/{mod,model,commands,patch}.rs
+  runs/{mod,model,logs}.rs
+  agent_pools/{mod,model,commands,patch,runtime}.rs
   repository.rs                  # BuildRepository: shared atomic persistence
-  service.rs                     # BuildService: cross-resource orchestration
-  commands.rs                    # neutral build/project/pool inputs when useful
-  queries.rs                     # query/filter projections when useful
-  runtime.rs                     # build executor and provider ports
-  jobs/                          # claimed background execution
+  service/{mod,execution,pool_tests,pool_health,webhooks}.rs
+  runtime.rs                     # execution, secrets and entitlement ports
+  tasks.rs                       # process-owned pool-test admission port
+  permissions.rs                 # named operation requirements
+  jobs/completion.rs             # durable Build completion consumers
 crates/adapters/src/
   postgres/builds/
     mod.rs
-    repository.rs                # PostgresBuildRepository, atomic implementation
-    projects.rs                  # optional internal query implementation
-    runs.rs
-    agent_pools.rs
-  docker/builds/
-    mod.rs
-    runtime.rs                   # Docker execution implementation
-  external/builds/
-    mod.rs
-    providers.rs                 # external build-agent providers
+    repository.rs                # trait delegation
+    projects.rs, runs.rs, agent_pools.rs
+    rows.rs, activity.rs, recovery.rs, completion.rs
+  build_executor.rs              # existing runtime implementation
+  build_pool_checker.rs          # Agent capability checks
 crates/server/src/api/builds/
   mod.rs
-  handlers.rs
-  requests.rs
-  views.rs                       # BuildProjectView/BuildRunView/BuildAgentPoolView
+  handlers/{mod,projects,runs,agent_pools}.rs
+  requests.rs, views.rs, spec.rs, capabilities.rs, tasks.rs
 ```
 
 Each resource retains the same anatomy. Add a resource-local repository/service
@@ -263,7 +259,7 @@ work. Keep diagnostics and raw measurement output outside the source changes.
 ## Workload resources (v13 Phase 7)
 
 Stacks and Swarm Services now follow the Deployment reference. Each feature owns
-`model/`, `commands.rs`, `queries.rs`, `repository.rs`, `runtime.rs`, `permissions.rs`,
+`model/`, `commands.rs`, `read_models.rs`, `repository.rs`, `runtime.rs`, `permissions.rs`,
 `tasks.rs`, and operation-specific modules under `service/`. Crate façades export
 specific contracts. `Stack` and `StackRelease` are durable business resources;
 `StackDetails` and `StackReleaseDetails` add query enrichment. `SwarmServiceDetails`
@@ -293,5 +289,53 @@ the crash-recovery authority. Operation failures reach that tracker after redact
 Stack runtime, source-materialization, build-image resolution and update scanner
 adapters retain their established locations and consumer-owned ports. This phase
 moves workload persistence and inbound adapters, not the global runtime tree.
-Builds/Git/Backups, Automation/Alerts and shared Platforms/Identity remain scheduled
-for their own resource migrations.
+Automation/Alerts and shared Platforms/Identity remain scheduled for their own
+resource migrations.
+
+
+## Implemented multi-resource contexts (Phase 8)
+
+Builds uses one `BuildRepository` for project/pool/run claims and completion. Backups
+uses one `BackupPersistence` for repositories, policies, backup items and restores.
+Resource models and commands live in their plural namespaces; cross-resource
+orchestration is split by operation under `service/`. Persisted specifications keep
+Serde where JSON storage or merge-patch processing requires it. Business resource
+models do not serialize HTTP responses.
+
+Git owns Accounts and Repositories separately. `GitAccountRepository` stores protected
+credentials; `GitRepositoryPersistence` owns catalogue CRUD and
+`GitRepositoryExecutionPersistence` owns synchronization claims. `GitRepository` is
+the full business resource; `GitRepositorySource`, snapshots, directory listings and
+commit comparisons remain semantic projections. Execution is divided into synchronization,
+materialization, browsing, discovery and credential preparation modules.
+
+PostgreSQL implementations live under `adapters/postgres/{builds,git,backups}`. Runtime
+executors, planners and external transport adapters retain their established locations.
+Server owns all migrated request/response/schema types under `api/{builds,git,backups}`;
+HTTP and realtime use explicit conversions. Git activity presentation is mapped only
+in server. Build list capabilities use one batched, typed permission lookup; migrated
+SQL readers bind accepted ordinal permission levels instead of bit masks.
+
+Pool-test tasks acquire claims only after admission to the process `DynamicTasks`.
+Dropping the caller leaves accepted work owned by that tracker. Root shutdown cancels
+the check, persists its failed validation result, releases the claim, and drains the
+owner before database teardown. Abnormal process failure still uses durable recovery.
+
+The shared Resources catalogue port and adapter retain compatibility delegation to
+Git persistence until shared-resource normalization. Shared tag/audit helpers retain
+that ownership too. Resources re-exports Git webhook evaluation; its legacy
+`RepoWebhookConfig` schema remains for Automation until Phase 9, while migrated APIs
+own their wire schemas in server. These compatibility paths do not put Views or HTTP
+schema dependencies back into Builds, Git or Backups. Phase 8 has dedicated architecture
+guards and adds no exemptions for these three feature crates.
+
+The reviewed Phase 8 cross-feature contracts are:
+
+| Importing feature → owner | Consumed contract | Reason |
+|---|---|---|
+| Builds → Alerts | `AlertEventSink`, `AlertObservation` | Publish execution outcomes through the existing observation sink; Alerts orchestration remains Phase 9. |
+| Builds → Resources | tag summaries and webhook validation/evaluation facade | Preserve shared tag enrichment and existing callers until Phase 10 shared-resource normalization. |
+| Git → Execution | bounded process requests, results and runner | Git CLI execution uses the existing cancellation/output-limit owner; runtime reorganization remains Phase 12. |
+| Resources → Git | repository persistence/error and webhook contracts | Delegate legacy catalogue and webhook entry points to the migrated owner without a dependency cycle. |
+
+These are explicit consumed contracts, not exceptions permitting feature-owned HTTP Views.

@@ -39,14 +39,14 @@ pub fn document(public_only: bool) -> OpenApi {
     api.merge(crate::teams_http::documented_routes().into_openapi());
     api.merge(crate::profile_http::documented_routes().into_openapi());
     api.merge(crate::users_http::documented_routes().into_openapi());
-    api.merge(crate::builds_http::documented_pool_routes().into_openapi());
-    api.merge(crate::builds_http::documented_routes().into_openapi());
+    api.merge(crate::api::builds::handlers::documented_pool_routes().into_openapi());
+    api.merge(crate::api::builds::handlers::documented_routes().into_openapi());
     api.merge(crate::oidc_http::documented_routes().into_openapi());
     api.merge(crate::search_http::documented_routes().into_openapi());
-    api.merge(crate::git_repositories_http::documented_routes().into_openapi());
+    api.merge(crate::api::git::repositories::handlers::documented_routes().into_openapi());
     api.merge(crate::application_info_http::documented_routes().into_openapi());
     api.merge(crate::actors_http::documented_routes().into_openapi());
-    api.merge(crate::backups_http::documented_routes().into_openapi());
+    api.merge(crate::api::backups::handlers::documented_routes().into_openapi());
     api.merge(crate::mfa_http::documented_routes().into_openapi());
     api.merge(crate::api::swarm_services::documented_routes().into_openapi());
     api.merge(crate::lookup_http::documented_routes().into_openapi());
@@ -56,7 +56,7 @@ pub fn document(public_only: bool) -> OpenApi {
     api.merge(crate::alerts_http::documented_routes().into_openapi());
     api.merge(crate::identity_http::documented_routes().into_openapi());
     api.merge(crate::platforms_http::documented_routes().into_openapi());
-    api.merge(crate::git_accounts_http::documented_routes().into_openapi());
+    api.merge(crate::api::git::accounts::handlers::documented_routes().into_openapi());
     api.merge(crate::resources_http::tags::documented_routes().into_openapi());
     api.merge(crate::resources_http::bindings::documented_routes().into_openapi());
     api.merge(crate::resources_http::catalog::documented_routes().into_openapi());
@@ -313,7 +313,10 @@ mod tests {
                     .find_map(enum_values)
             })
         }
-        let native = serde_json::to_value(citadel_resources::RepoWebhookConfig::schema()).unwrap();
+        let native = serde_json::to_value(
+            crate::api::git::repositories::webhook::RepoWebhookConfig::schema(),
+        )
+        .unwrap();
         for public in [false, true] {
             let doc = serde_json::to_value(document(public)).unwrap();
             let schemas = &doc["components"]["schemas"];

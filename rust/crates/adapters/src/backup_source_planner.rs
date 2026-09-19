@@ -439,19 +439,21 @@ impl PostgresBackupSourcePlanner {
 impl BackupSourcePlanner for PostgresBackupSourcePlanner {
     fn preview<'a>(
         &'a self,
-        kind: citadel_backups::source_preview::BackupPreviewKind,
+        kind: citadel_backups::policies::read_models::BackupPreviewKind,
         id: Uuid,
         actor: citadel_domain::ActorId,
         administrator: bool,
         cancellation: &'a tokio_util::sync::CancellationToken,
-    ) -> BoxFuture<'a, Result<citadel_backups::source_preview::BackupSourcePreview, BackupError>>
-    {
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_backups::policies::read_models::BackupSourcePreview, BackupError>,
+    > {
         Box::pin(self.preview_source(kind, id, actor, administrator, cancellation))
     }
     fn validate_source<'a>(
         &'a self,
         source: &'a Value,
-        repository: &'a citadel_backups::BackupRepositoryView,
+        repository: &'a citadel_backups::BackupRepository,
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {

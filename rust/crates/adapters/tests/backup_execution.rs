@@ -2,16 +2,16 @@ use chrono::{Duration, Timelike, Utc};
 use citadel_adapters::backup_authorization::IdentityBackupRunAuthorizer;
 use citadel_adapters::backup_executor::{DockerResticBackupExecutor, PostgresBackupSecretResolver};
 use citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner;
-use citadel_adapters::backup_store::PostgresBackupStore;
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::backups::PostgresBackupPersistence;
 use citadel_backups::{
-    BackupExecutionResult, BackupExecutor, BackupPolicyInput, BackupRepositoryInput,
-    BackupRunAuthorizer, BackupRunItemResult, BackupSourceItem, BackupSourcePlan,
-    BackupSourcePlanner, BackupStore,
+    BackupExecutionResult, BackupExecutor, BackupPersistence, BackupPolicyConfiguration,
+    BackupRepositoryConfiguration, BackupRunAuthorizer, BackupRunItemResult, BackupSourceItem,
+    BackupSourcePlan, BackupSourcePlanner,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
@@ -75,8 +75,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
 
-    let store = PostgresBackupStore::new(pool.clone());
-    let mut repository_input = BackupRepositoryInput {
+    let store = PostgresBackupPersistence::new(pool.clone());
+    let mut repository_input = BackupRepositoryConfiguration {
         name: format!("backup-repository-{}", Uuid::now_v7().simple()),
         description: None,
         spec: json!({"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"}),
@@ -102,7 +102,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
 
     let mut policies = Vec::new();
     for suffix in ["one", "two"] {
-        let mut input = BackupPolicyInput {
+        let mut input = BackupPolicyConfiguration {
             name: format!("backup-policy-{suffix}-{}", Uuid::now_v7().simple()),
             description: None,
             source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":format!("volume-{suffix}")}),
@@ -129,7 +129,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .await
     .unwrap();
     assert_eq!(persisted_tags, 2);
-    let mut invalid_policy = BackupPolicyInput {
+    let mut invalid_policy = BackupPolicyConfiguration {
         name: format!("invalid-tag-policy-{}", Uuid::now_v7().simple()),
         description: None,
         source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":"invalid"}),
@@ -281,7 +281,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .execute(&pool)
         .await
         .unwrap();
-    let restarted = PostgresBackupStore::new(pool.clone());
+    let restarted = PostgresBackupPersistence::new(pool.clone());
     assert!(
         !restarted
             .enqueue_scheduled_backup(policies[0].id, scheduled_minute)
@@ -505,7 +505,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
     platform: Uuid,
 ) {
     use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
-    use citadel_backups::{BackupRestoreRunView, BackupSecretResolver, RestoreClaim};
+    use citadel_backups::{BackupRestoreRun, BackupSecretResolver, RestoreClaim};
     use citadel_contracts::citadel::{
         containers::v1::{
             CreateContainerRequest, CreateContainerResponse, ExecBinaryRequest, ExecExit,
@@ -559,7 +559,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             repository,
             source,
             source_item: None,
-            run: BackupRestoreRunView {
+            run: BackupRestoreRun {
                 id: Uuid::now_v7(),
                 backup_run_id: backup.run.id,
                 backup_repository_id: backup.repository.id,

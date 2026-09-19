@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use citadel_adapters::{
-    backup_executor::DockerResticBackupExecutor, backup_store::PostgresBackupStore,
+    backup_executor::DockerResticBackupExecutor, postgres::backups::PostgresBackupPersistence,
 };
 use citadel_backups::*;
 use citadel_database::MigrationRunner;
@@ -180,8 +180,8 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
             }
         }
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
-        let store = PostgresBackupStore::new(pool.clone());
-        let mut input = BackupRepositoryInput { name: format!("repo-{suffix}"), description: None, password_secret_id: secret,
+        let store = PostgresBackupPersistence::new(pool.clone());
+        let mut input = BackupRepositoryConfiguration { name: format!("repo-{suffix}"), description: None, password_secret_id: secret,
             spec: json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume}) };
         if let Some(endpoint) = &s3_endpoint {
             input.spec = json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,
@@ -193,7 +193,7 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
         let cancellation = CancellationToken::new();
         executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
         store.record_repository_operation(repository.id, "Initialize", "Platform", Some(platform), true, None).await.unwrap();
-        let mut policy = BackupPolicyInput { name: format!("policy-{suffix}"), description: None,
+        let mut policy = BackupPolicyConfiguration { name: format!("policy-{suffix}"), description: None,
             source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":source}),
             backup_repository_id: repository.id, enabled: true, cron: None, time_zone: None, webhook: None,
             keep_last_successful: Some(2), timeout_seconds: Some(120), alert_on_failure: false,
@@ -208,7 +208,7 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
         let completed = executor.backup(&claim, &plan, &cancellation).await;
         store.finish_backup(&claim, &completed).await.unwrap();
         assert_eq!(completed.status, "Succeeded", "{:?}; {:?}", completed.error_message, completed.logs);
-        let persisted = PostgresBackupStore::new(pool.clone()).get_run(run.id).await.unwrap();
+        let persisted = PostgresBackupPersistence::new(pool.clone()).get_run(run.id).await.unwrap();
         assert_eq!(persisted.status, "Succeeded");
         assert_eq!(persisted.items[0].restic_snapshot_id, completed.items[0].restic_snapshot_id);
         assert!(persisted.bytes_processed.unwrap() >= PAYLOAD.len() as i64);

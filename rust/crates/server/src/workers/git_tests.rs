@@ -1,5 +1,7 @@
 use super::*;
-use citadel_adapters::{crypto::AesGcmSecretProtector, git_account_store::PostgresGitAccountStore};
+use citadel_adapters::{
+    crypto::AesGcmSecretProtector, postgres::git::accounts::PostgresGitAccountRepository,
+};
 use citadel_domain::ActorId;
 use citadel_git::*;
 use futures_util::future::BoxFuture;
@@ -12,7 +14,7 @@ struct SlowStore {
     completed: AtomicUsize,
     schedules: AtomicUsize,
 }
-impl GitRepositoryExecutionStore for SlowStore {
+impl GitRepositoryExecutionPersistence for SlowStore {
     fn enqueue_webhook<'a>(
         &'a self,
         _: citadel_domain::ActorId,
@@ -71,13 +73,13 @@ impl GitRepositoryExecutionStore for SlowStore {
         &'a self,
         _: Uuid,
         _: &'a str,
-    ) -> BoxFuture<'a, Result<Option<GitRepositoryRefView>, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'a, Result<Option<GitRepositoryRef>, GitRepositoryExecutionError>> {
         unreachable!()
     }
     fn list_refs(
         &self,
         _: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<GitRepositoryRefView>, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'_, Result<Vec<GitRepositoryRef>, GitRepositoryExecutionError>> {
         unreachable!()
     }
     fn resolve_reference<'a>(
@@ -103,7 +105,7 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
         .connect_lazy("postgres://unused:unused@localhost/unused")
         .unwrap();
     let accounts = Arc::new(GitAccountService::new(
-        Arc::new(PostgresGitAccountStore::new(pool)),
+        Arc::new(PostgresGitAccountRepository::new(pool)),
         Arc::new(AesGcmSecretProtector::new(&[91; 32]).unwrap()),
     ));
     let store = Arc::new(SlowStore::default());

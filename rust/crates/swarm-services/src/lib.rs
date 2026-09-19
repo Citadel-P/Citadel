@@ -14,7 +14,7 @@ pub use tasks::SwarmServiceTaskSpawner;
 
 mod commands;
 
-mod queries;
+mod read_models;
 
 pub use model::{
     AutoUpdateState, MountKind, PortPublishMode, RestartCondition, RuntimeServiceResult,
@@ -31,7 +31,7 @@ pub use commands::{
     UpdateSwarmService,
 };
 
-pub use queries::{
+pub use read_models::{
     SwarmServiceDetails, SwarmServiceDuplicateDraft, SwarmServiceFilter, TagSummary,
 };
 

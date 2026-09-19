@@ -7,8 +7,8 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_adapters::{
     activity_store::PostgresActivityStore, automation_store::PostgresAutomationStore,
     crypto::AesGcmSecretProtector, docker::DockerClient,
-    git_account_store::PostgresGitAccountStore,
-    git_repository_execution_store::PostgresGitRepositoryExecutionStore,
+    postgres::git::accounts::PostgresGitAccountRepository,
+    postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
     postgres::stacks::PostgresStackRepository,
     postgres::stacks::bindings::PostgresStackBindingResolver, stack_runtime::StackRuntimeRouter,
     stack_source_materializer::GitStackSourceMaterializer,
@@ -164,7 +164,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         let initial_commit = initial["commit"]["sha"].as_str().unwrap();
         let file_sha = initial["content"]["sha"].as_str().unwrap();
         let protector = Arc::new(AesGcmSecretProtector::new(&[61;32]).unwrap());
-        let accounts = Arc::new(GitAccountService::new(Arc::new(PostgresGitAccountStore::new(pool.clone())), protector.clone()));
+        let accounts = Arc::new(GitAccountService::new(Arc::new(PostgresGitAccountRepository::new(pool.clone())), protector.clone()));
         let account = accounts.create(ActorId::new(SYSTEM_ACTOR_ID), serde_json::from_value(json!({
             "name":format!("forgejo-{repository}"),"domain":reqwest::Url::parse(&forgejo).unwrap().host_str().unwrap(),
             "transport":"Http","authType":"Basic","configuration":{"$type":"Basic","username":USER,"password":PASSWORD}
@@ -174,7 +174,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate,gitaccountid) VALUES($1,$2,'main',$3,'Unknown','Manual',$4,'Idle',$5)")
             .bind(repository).bind(SYSTEM_ACTOR_ID).bind(repo_name).bind(clone_url).bind(account.id).execute(&pool).await.unwrap();
         let git = Arc::new(GitRepositoryExecutionService::new(
-            Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())), accounts,
+            Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())), accounts,
             Arc::new(GitCli::new(Duration::from_secs(30))), root.join("git"), Duration::from_secs(120)));
         let token = shutdown.child_token();
         let worker_git = git.clone();

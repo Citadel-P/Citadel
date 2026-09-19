@@ -2,8 +2,8 @@ use super::*;
 use crate::realtime::topic::Topic;
 use citadel_application::{ActivityFilter, ActivityService};
 use citadel_automation::AutomationStore;
-use citadel_backups::BackupStore;
-use citadel_builds::BuildStore;
+use citadel_backups::BackupPersistence;
+use citadel_builds::BuildRepository;
 use citadel_deployments::DeploymentRepository;
 use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::IdentityService;
@@ -11,6 +11,7 @@ use citadel_platforms::PlatformReadService;
 use citadel_resources::ResourceMetadataStore;
 use citadel_stacks::StackRepository;
 use citadel_swarm_services::SwarmServiceRepository;
+use futures_util::TryFutureExt;
 use std::sync::Arc;
 
 #[path = "logs.rs"]
@@ -32,8 +33,8 @@ pub struct ApplicationGroupReader {
     pub services: Arc<dyn SwarmServiceRepository>,
     pub resources: Arc<dyn ResourceMetadataStore>,
     pub automation: Arc<dyn AutomationStore>,
-    pub builds: Arc<dyn BuildStore>,
-    pub backups: Arc<dyn BackupStore>,
+    pub builds: Arc<dyn BuildRepository>,
+    pub backups: Arc<dyn BackupPersistence>,
     pub activities: Arc<ActivityService>,
     pub alerts: Arc<dyn citadel_alerts::AlertStore>,
     pub docker: crate::platforms_http::PlatformsHttpState,
@@ -498,7 +499,10 @@ impl ApplicationGroupReader {
                 self.resources
                     .list_git_repositories(actor, admin)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::git::repositories::views::GitRepositoryView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::GitRepo(..) => rows(
@@ -506,6 +510,7 @@ impl ApplicationGroupReader {
                 vec![
                     self.resources
                         .get_git_repository(id.unwrap())
+                        .map_ok(crate::api::git::repositories::views::GitRepositoryView::from)
                         .await
                         .map_err(failure)?,
                 ],
@@ -538,17 +543,20 @@ impl ApplicationGroupReader {
                 self.backups
                     .list_repositories(actor, admin)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::backups::views::BackupRepositoryView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRepository(..) => rows(
                 "BackupRepositoryInfoUpdated",
-                vec![
+                vec![crate::api::backups::views::BackupRepositoryView::from(
                     self.backups
                         .get_repository(id.unwrap())
                         .await
                         .map_err(failure)?,
-                ],
+                )],
                 RowStyle::Update,
             ),
             Topic::BackupPolicies => rows(
@@ -556,17 +564,20 @@ impl ApplicationGroupReader {
                 self.backups
                     .list_policies(actor, admin)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::backups::views::BackupPolicyView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupPolicy(..) => rows(
                 "BackupPolicyInfoUpdated",
-                vec![
+                vec![crate::api::backups::views::BackupPolicyView::from(
                     self.backups
                         .get_policy(id.unwrap())
                         .await
                         .map_err(failure)?,
-                ],
+                )],
                 RowStyle::Update,
             ),
             Topic::BackupRuns(..) => rows(
@@ -574,12 +585,17 @@ impl ApplicationGroupReader {
                 self.backups
                     .list_runs(actor, admin, id, 100)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::backups::views::BackupRunView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRun(..) => rows(
                 "BackupRunInfoUpdated",
-                vec![self.backups.get_run(id.unwrap()).await.map_err(failure)?],
+                vec![crate::api::backups::views::BackupRunView::from(
+                    self.backups.get_run(id.unwrap()).await.map_err(failure)?,
+                )],
                 RowStyle::Update,
             ),
             Topic::BackupRestoreRuns(..) => rows(
@@ -587,22 +603,25 @@ impl ApplicationGroupReader {
                 self.backups
                     .list_restores(actor, admin, None, id, 100)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::backups::views::BackupRestoreRunView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRestoreRun(..) => rows(
                 "BackupRestoreRunInfoUpdated",
-                vec![
+                vec![crate::api::backups::views::BackupRestoreRunView::from(
                     self.backups
                         .get_restore(id.unwrap())
                         .await
                         .map_err(failure)?,
-                ],
+                )],
                 RowStyle::Update,
             ),
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
-                crate::builds_http::authorized_projects(
+                crate::api::builds::handlers::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     self.builds.list(actor, admin).await.map_err(failure)?,
@@ -613,7 +632,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildProject(..) => rows(
                 "BuildProjectInfoUpdated",
-                crate::builds_http::authorized_projects(
+                crate::api::builds::handlers::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
@@ -624,7 +643,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPools => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::builds_http::authorized_pools(
+                crate::api::builds::handlers::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     self.builds
@@ -638,7 +657,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPool(..) => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::builds_http::authorized_pools(
+                crate::api::builds::handlers::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
@@ -652,12 +671,17 @@ impl ApplicationGroupReader {
                 self.builds
                     .list_runs(actor, admin, id, 100)
                     .await
-                    .map_err(failure)?,
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::builds::views::BuildRunView::from)
+                    .collect(),
                 RowStyle::Update,
             ),
             Topic::BuildRun(..) => rows(
                 "BuildRunInfoUpdated",
-                vec![self.builds.get_run(id.unwrap()).await.map_err(failure)?],
+                vec![crate::api::builds::views::BuildRunView::from(
+                    self.builds.get_run(id.unwrap()).await.map_err(failure)?,
+                )],
                 RowStyle::Update,
             ),
             _ => Err(RealtimeReadError::Authorization),

@@ -16,7 +16,7 @@ pub use tasks::StackTaskSpawner;
 
 mod commands;
 
-mod queries;
+mod read_models;
 
 pub use model::{
     ComposeProjectImportValidation, ComposeProjectRuntimeService, ComposeProjectServiceComparison,
@@ -39,7 +39,7 @@ pub use commands::{
     RollbackStack, StackApplyOptions, UpdateStack,
 };
 
-pub use queries::{
+pub use read_models::{
     ComposeProjectImportDraft, ComposeProjectImportSource, ComposeProjectStackDraft,
     DuplicateDraftWarning, StackConfig, StackDetails, StackDraft, StackDuplicateDraft, StackFilter,
     StackReleaseDetails, TagSummary,

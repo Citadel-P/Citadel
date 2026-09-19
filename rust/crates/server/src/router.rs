@@ -6,10 +6,9 @@ use citadel_server::api::stacks as stacks_http;
 use citadel_server::api::swarm_services as swarm_services_http;
 use citadel_server::config::Config;
 use citadel_server::{
-    activities_http, alerts_http, application_info_http, automation_http, backups_http,
-    builds_http, git_accounts_http, git_repositories_http, identity_http, license_http, oidc_http,
-    platforms_http, profile_http, resources_http, roles_http, service_accounts_http, teams_http,
-    transport, users_http, webhooks_http,
+    activities_http, alerts_http, application_info_http, automation_http, identity_http,
+    license_http, oidc_http, platforms_http, profile_http, resources_http, roles_http,
+    service_accounts_http, teams_http, transport, users_http, webhooks_http,
 };
 use std::sync::Arc;
 use tower_http::{catch_panic::CatchPanicLayer, trace::TraceLayer};
@@ -114,15 +113,15 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
             service_accounts,
         },
     ))
-    .merge(git_accounts_http::router(
-        git_accounts_http::GitAccountsHttpState {
+    .merge(citadel_server::api::git::accounts::handlers::router(
+        citadel_server::api::git::accounts::handlers::GitAccountsHttpState {
             identity: Arc::clone(&identity),
             accounts: git_accounts,
             realtime: realtime_hub.clone(),
         },
     ))
-    .merge(git_repositories_http::router(
-        git_repositories_http::GitRepositoriesHttpState {
+    .merge(citadel_server::api::git::repositories::handlers::router(
+        citadel_server::api::git::repositories::handlers::GitRepositoriesHttpState {
             identity: Arc::clone(&identity),
             resources: Arc::clone(&resources),
             execution: Arc::clone(&git_execution),
@@ -146,15 +145,19 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
             automation,
         },
     ))
-    .merge(builds_http::router(builds_http::BuildsHttpState {
-        identity: Arc::clone(&identity),
-        builds,
-    }))
-    .merge(backups_http::router(backups_http::BackupsHttpState {
-        identity: Arc::clone(&identity),
-        backups,
-        cancellation: cancellation.clone(),
-    }))
+    .merge(citadel_server::api::builds::handlers::router(
+        citadel_server::api::builds::handlers::BuildsHttpState {
+            identity: Arc::clone(&identity),
+            builds,
+        },
+    ))
+    .merge(citadel_server::api::backups::handlers::router(
+        citadel_server::api::backups::handlers::BackupsHttpState {
+            identity: Arc::clone(&identity),
+            backups,
+            cancellation: cancellation.clone(),
+        },
+    ))
     .merge(alerts_http::router(alerts_http::AlertsHttpState {
         identity: Arc::clone(&identity),
         store: alert_store,

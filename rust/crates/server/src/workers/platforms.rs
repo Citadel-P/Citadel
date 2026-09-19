@@ -219,7 +219,7 @@ pub async fn register(
             cancellation.child_token(),
             citadel_builds::BuildCompletionService::new(
                 Arc::new(
-                    citadel_adapters::build_completion_store::PostgresBuildCompletionStore::new(
+                    citadel_adapters::postgres::builds::completion::PostgresBuildCompletionRepository::new(
                         pool.clone(),
                     ),
                 ),

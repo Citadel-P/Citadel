@@ -5,9 +5,9 @@ mod tasks;
 pub use tasks::DeploymentTaskSpawner;
 mod commands;
 mod model;
-mod queries;
+mod read_models;
 pub use commands::{CreateDeployment, FieldPatch, UpdateDeploymentMetadata};
-pub use queries::{
+pub use read_models::{
     DeploymentConfig, DeploymentDetails, DeploymentDraft, DeploymentDuplicateDraft,
     DeploymentFilter, DuplicateSource, DuplicateWarning,
 };

@@ -10,9 +10,9 @@ use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
-use citadel_adapters::git_account_store::PostgresGitAccountStore;
-use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
 use citadel_database::MigrationRunner;
@@ -23,9 +23,13 @@ use citadel_identity::{
     SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_resources::ResourceMetadataService;
+use citadel_server::api::git::accounts::handlers::{
+    self as git_accounts_http, GitAccountsHttpState,
+};
+use citadel_server::api::git::repositories::handlers::{
+    self as git_repositories_http, GitRepositoriesHttpState,
+};
 use citadel_server::automation_http::{self, AutomationHttpState};
-use citadel_server::git_accounts_http::{self, GitAccountsHttpState};
-use citadel_server::git_repositories_http::{self, GitRepositoriesHttpState};
 use citadel_server::resources_http::{self, ResourcesHttpState};
 use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use serde_json::{Value, json};
@@ -75,12 +79,12 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         )),
     );
     let git_accounts = Arc::new(GitAccountService::new(
-        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        Arc::new(PostgresGitAccountRepository::new(pool.clone())),
         secret_protector,
     ));
     let git_cache = std::env::temp_dir().join(format!("citadel-phase7-{}", Uuid::now_v7()));
     let git_execution = Arc::new(GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::clone(&git_accounts),
         Arc::new(GitCli::new(std::time::Duration::from_secs(5))),
         git_cache.clone(),

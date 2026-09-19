@@ -2,11 +2,11 @@
 //! cases through the real Build finish transaction and PostgreSQL queue.
 use super::*;
 use citadel_adapters::{
-    build_completion_store::PostgresBuildCompletionStore,
+    postgres::builds::completion::PostgresBuildCompletionRepository,
     postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
 };
 use citadel_builds::{
-    BuildCompletionService, BuildCompletionStore, BuildConsumerClaim, BuildConsumerRuntime,
+    BuildCompletionRepository, BuildCompletionService, BuildConsumerClaim, BuildConsumerRuntime,
     BuildConsumerType, BuildEntitlements, BuildError,
 };
 use citadel_deployments::DeploymentRepository;
@@ -86,7 +86,7 @@ impl BuildEntitlements for Entitlement {
     }
 }
 pub async fn verify(pool: &sqlx::PgPool, run: Uuid, ids: &Consumers) {
-    let store = Arc::new(PostgresBuildCompletionStore::new(pool.clone()));
+    let store = Arc::new(PostgresBuildCompletionRepository::new(pool.clone()));
     let runtime = Arc::new(Runtime::default());
     let entitlement = Arc::new(Entitlement(AtomicBool::new(false)));
     let service = BuildCompletionService::new(store.clone(), runtime.clone(), entitlement.clone());
@@ -222,7 +222,7 @@ pub async fn verify_lifecycle(
         "two Build Projects targeting the same Stack must not coalesce together"
     );
     assert!(queued.contains(&newest) && queued.contains(&other_run));
-    let store = PostgresBuildCompletionStore::new(pool.clone());
+    let store = PostgresBuildCompletionRepository::new(pool.clone());
     let mut stack_claims = Vec::new();
     while let Some(claim) = store.claim_next().await.unwrap() {
         if claim.resource_type == BuildConsumerType::Stack {
@@ -276,7 +276,7 @@ pub async fn verify_lifecycle(
 // The run must also retain its BuildKit bindings, arguments, and output tags.
 async fn verify_queued_snapshot(pool: &sqlx::PgPool, builds: &BuildService, project: Uuid) {
     let original = builds.store().get(project).await.unwrap();
-    let mut input: citadel_builds::BuildAgentPoolInput = serde_json::from_value(json!({"name":format!("snapshot-{}", Uuid::now_v7()),"enabled":true,"providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}})).unwrap();
+    let mut input: citadel_builds::BuildAgentPoolConfiguration = serde_json::from_value(json!({"name":format!("snapshot-{}", Uuid::now_v7()),"enabled":true,"providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}})).unwrap();
     input.validate().unwrap();
     let changed_pool = builds
         .store()

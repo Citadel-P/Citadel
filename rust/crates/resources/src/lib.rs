@@ -50,7 +50,9 @@ pub trait ResourceSecretProtector: Send + Sync {
     fn unprotect(&self, envelope: &str) -> Result<Zeroizing<Vec<u8>>, ResourceMetadataError>;
 }
 
-pub trait ResourceMetadataStore: Send + Sync {
+pub trait ResourceMetadataStore:
+    citadel_git::repositories::GitRepositoryPersistence + Send + Sync
+{
     fn list_tags<'a>(
         &'a self,
         actor_id: ActorId,
@@ -107,32 +109,6 @@ pub trait ResourceMetadataStore: Send + Sync {
         ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<(), ResourceMetadataError>>;
 
-    fn list_git_repositories<'a>(
-        &'a self,
-        actor_id: ActorId,
-        administrator: bool,
-    ) -> BoxFuture<'a, Result<Vec<GitRepositoryView>, ResourceMetadataError>>;
-    fn get_git_repository<'a>(
-        &'a self,
-        id: Uuid,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>>;
-    fn create_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        repository: &'a NewGitRepository,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>>;
-    fn update_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        id: Uuid,
-        patch: &'a GitRepositoryPatch,
-        kind: CatalogMutationKind,
-    ) -> BoxFuture<'a, Result<GitRepositoryView, ResourceMetadataError>>;
-    fn delete_git_repositories<'a>(
-        &'a self,
-        actor_id: ActorId,
-        ids: &'a [Uuid],
-    ) -> BoxFuture<'a, Result<(), ResourceMetadataError>>;
     fn update_platform_description<'a>(
         &'a self,
         platform_id: Uuid,
@@ -335,4 +311,17 @@ pub(crate) fn validate_name(name: &str, resource: &str) -> Result<(), ResourceMe
         )));
     }
     Ok(())
+}
+
+impl From<citadel_git::repositories::GitRepositoryError> for ResourceMetadataError {
+    fn from(error: citadel_git::repositories::GitRepositoryError) -> Self {
+        use citadel_git::repositories::GitRepositoryError as E;
+        match error {
+            E::Validation(e) => Self::Validation(e),
+            E::NotFound => Self::NotFound,
+            E::Conflict(e) => Self::Conflict(e),
+            E::Credential => Self::Credential,
+            E::Storage(e) => Self::Storage(e),
+        }
+    }
 }

@@ -6,16 +6,15 @@ pub mod actors_http;
 pub mod alerts_http;
 pub mod application_info_http;
 pub mod automation_http;
-pub mod backups_http;
+
 pub mod bootstrap;
-pub mod builds_http;
+
 mod capabilities;
 pub mod config;
 
 pub mod diagnostics;
 pub mod diagnostics_http;
-pub mod git_accounts_http;
-pub mod git_repositories_http;
+
 pub mod identity_http;
 pub mod license_http;
 pub mod license_realtime;

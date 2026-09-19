@@ -6,7 +6,7 @@ Deployments is migrated end to end. This is the v13 architecture phase, distinct
 
 | Resource | Old feature type | New business/read type | Server View | Feature module | Postgres module | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Deployment | `DeploymentView` | `Deployment` + `DeploymentDetails` | `api::deployments::views::DeploymentView` | `deployments::{model,queries,service}` | `postgres::deployments::PostgresDeploymentRepository` | Migrated |
+| Deployment | `DeploymentView` | `Deployment` + `DeploymentDetails` | `api::deployments::views::DeploymentView` | `deployments::{model,read_models,service}` | `postgres::deployments::PostgresDeploymentRepository` | Migrated |
 
 Config and duplication are semantic projections (`DeploymentConfig`, `DeploymentDuplicateDraft`, `DeploymentDraft`), not independent resources. Adoption owns semantic previews and a command. Apply progress is `DeploymentProgress`; only server serializes its HTTP stream representation.
 
@@ -16,7 +16,7 @@ Paths below are relative to `rust/crates/`. Old paths are removed, without forwa
 
 | Old file/module | Responsibility found | New file/module(s) | Reason |
 | --- | --- | --- | --- |
-| `deployments/src/model.rs` | Entity, spec/storage conversion, HTTP DTOs, claims/progress | `model/{mod,resource,spec,operations,tests}.rs`, `commands.rs`, `queries.rs`, server `api/deployments/{requests,views,spec}.rs` | Separate business and persistence semantics from presentation |
+| `deployments/src/model.rs` | Entity, spec/storage conversion, HTTP DTOs, claims/progress | `model/{mod,resource,spec,operations,tests}.rs`, `commands.rs`, `read_models.rs`, server `api/deployments/{requests,views,spec}.rs` | Separate business and persistence semantics from presentation |
 | `deployments/src/service.rs` | Repository/runtime ports, use cases, detached work, tests | `repository.rs`, `runtime.rs`, `tasks.rs`, `service/{mod,read,mutations,apply,delete,bindings,adoption,tests}.rs` | Cohesive operations behind one service façade |
 | `deployments/src/updates.rs` | Update checks and scheduling | `service/updates.rs` | Service-owned orchestration |
 | `adapters/src/deployment_store.rs` | Persistence, ACL queries, capabilities, activity, claims | `postgres/deployments/{mod,repository,queries,rows,authorization,mutations,claims,activity,tests}.rs`; server `capabilities.rs` | Durable Repository; presentation removed from SQL adapter |

@@ -1,0 +1,32 @@
+//! Operation policies shared by API authorization and capability projection.
+use citadel_domain::{PermissionLevel, ResourceType, permission_policy};
+permission_policy!(
+    ReadBackupRepository,
+    ResourceType::BackupRepository,
+    PermissionLevel::Read
+);
+permission_policy!(
+    WriteBackupRepository,
+    ResourceType::BackupRepository,
+    PermissionLevel::Write
+);
+permission_policy!(
+    ExecuteBackupRepository,
+    ResourceType::BackupRepository,
+    PermissionLevel::Execute
+);
+permission_policy!(
+    ReadBackupPolicy,
+    ResourceType::BackupPolicy,
+    PermissionLevel::Read
+);
+permission_policy!(
+    WriteBackupPolicy,
+    ResourceType::BackupPolicy,
+    PermissionLevel::Write
+);
+permission_policy!(
+    ExecuteBackupPolicy,
+    ResourceType::BackupPolicy,
+    PermissionLevel::Execute
+);

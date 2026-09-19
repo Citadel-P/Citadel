@@ -2,12 +2,12 @@ use chrono::{Duration, Utc};
 use citadel_adapters::build_executor::{
     LocalDockerBuildExecutor, PostgresBuildRegistryCredentialResolver, PostgresBuildSecretResolver,
 };
-use citadel_adapters::build_store::PostgresBuildStore;
 use citadel_adapters::crypto::AesGcmSecretProtector;
+use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_adapters::stack_build_images::PostgresStackBuildImageResolver;
 use citadel_builds::{
-    BuildExecutionResult, BuildExecutor, BuildProjectInput, BuildRegistryCredentialResolver,
-    BuildSecretResolver, BuildStore,
+    BuildExecutionResult, BuildExecutor, BuildProjectConfiguration,
+    BuildRegistryCredentialResolver, BuildRepository, BuildSecretResolver,
 };
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
@@ -48,8 +48,8 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}'::json,$2,$3,'docker.io','Enabled')").bind(registry).bind(actor.value()).bind(format!("build-registry-{}",registry.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repo.git','Idle')").bind(repository).bind(actor.value()).bind(format!("build-repo-{}",repository.simple())).execute(&pool).await.unwrap();
-    let store = PostgresBuildStore::new(pool.clone());
-    let mut input = BuildProjectInput {
+    let store = PostgresBuildRepository::new(pool.clone());
+    let mut input = BuildProjectConfiguration {
         name: format!("build-{}", Uuid::now_v7().simple()),
         description: None,
         enabled: true,
@@ -243,7 +243,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .unwrap();
     assert_eq!(retained, 2);
     // Build queue parity: different Projects cannot race past a Pool's limit.
-    let mut pool_input: citadel_builds::BuildAgentPoolInput = serde_json::from_value(serde_json::json!({
+    let mut pool_input: citadel_builds::BuildAgentPoolConfiguration = serde_json::from_value(serde_json::json!({
         "name":format!("pool-{}",Uuid::now_v7()),"enabled":true,
         "providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"},"maxActiveBuilders":1
     })).unwrap();

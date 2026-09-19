@@ -10,11 +10,10 @@ pub mod automation_token;
 pub mod backup_authorization;
 pub mod backup_executor;
 pub mod backup_source_planner;
-pub mod backup_store;
-pub mod build_completion_store;
+
 pub mod build_executor;
 pub mod build_pool_checker;
-pub mod build_store;
+
 pub mod citadel_system_backup;
 pub mod container_inspection;
 mod container_logs;
@@ -27,8 +26,7 @@ pub mod crypto;
 pub mod deployment_runtime;
 pub mod docker;
 pub mod edge;
-pub mod git_account_store;
-pub mod git_repository_execution_store;
+
 pub mod global_search;
 pub mod identity_store;
 pub mod image_deletion;

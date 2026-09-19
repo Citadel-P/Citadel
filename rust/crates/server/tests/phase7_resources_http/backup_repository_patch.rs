@@ -1,5 +1,5 @@
 use super::*;
-use citadel_backups::BackupStore;
+use citadel_backups::BackupPersistence;
 
 pub(super) async fn before_ready(
     app: &Router,
@@ -49,7 +49,7 @@ pub(super) async fn before_ready(
     }
     let mut spec = repository["spec"].clone();
     spec["path"] = json!(" /tmp/changed-backups ");
-    let store = PostgresBackupStore::new(pool.clone());
+    let store = PostgresBackupPersistence::new(pool.clone());
     let repo_id = Uuid::parse_str(id).unwrap();
     let operation = Uuid::now_v7();
     assert!(
