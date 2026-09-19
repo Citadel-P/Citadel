@@ -41,7 +41,7 @@ use citadel_platforms::{
     InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
 };
 use citadel_stacks::StackService;
-use citadel_swarm_services::ManagedSwarmServiceService;
+use citadel_swarm_services::SwarmServiceService;
 use futures_util::StreamExt;
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
@@ -83,7 +83,7 @@ pub struct WorkerDependencies {
     pub agent: Option<AgentClient>,
     pub realtime: Option<RealtimeHub>,
     pub deployments: Arc<DeploymentService>,
-    pub swarm_services: Arc<ManagedSwarmServiceService>,
+    pub swarm_services: Arc<SwarmServiceService>,
     pub stacks: Arc<StackService>,
     pub git: Arc<GitRepositoryExecutionService>,
     pub automation: Arc<AutomationService>,

@@ -259,3 +259,39 @@ are documented in [AUTHORIZATION.md](AUTHORIZATION.md).
 Other feature Views and legacy umbrella crates remain until their owning migration phases.
 Avoid mass renames, shared scaffolding and performance changes during authorization
 work. Keep diagnostics and raw measurement output outside the source changes.
+
+## Workload resources (v13 Phase 7)
+
+Stacks and Swarm Services now follow the Deployment reference. Each feature owns
+`model/`, `commands.rs`, `queries.rs`, `repository.rs`, `runtime.rs`, `permissions.rs`,
+`tasks.rs`, and operation-specific modules under `service/`. Crate façades export
+specific contracts. `Stack` and `StackRelease` are durable business resources;
+`StackDetails` and `StackReleaseDetails` add query enrichment. `SwarmServiceDetails`
+wraps `SwarmService` and includes the semantic `SwarmServiceOperation` projection.
+Immutable dereferencing supports read access; mutation names the owned resource.
+
+`adapters/src/postgres/{stacks,swarm_services}/` owns repositories, SQL projections,
+row decoding, transactional authorization, bindings and durable claim transitions.
+List/get queries retain SQL ACL filtering and batch tags/activity/operation metadata.
+Permissions decode into `EffectivePermission`; administrator access is explicit.
+No repository constructs HTTP capabilities or public activity envelopes.
+
+`server/src/api/{stacks,swarm_services}/` owns request DTOs, views, capabilities,
+OpenAPI schemas and conversions, including progress, adoption and duplicate drafts.
+HTTP and realtime use the same conversions. Public `ManagedSwarmServiceView` naming
+remains at that boundary. Persisted spec serialization remains in the features;
+server value objects preserve wire defaults, aliases and schema names explicitly.
+`StackDrift` serialization also serves durable alert payloads and fingerprints.
+
+`StackTaskSpawner` and `SwarmServiceTaskSpawner` admit durable work to the existing
+process `DynamicTasks`. Stack Apply/rollback owns an already-acquired claim and
+releases it if admission closes; Swarm mutations and update checks acquire claims
+inside accepted work. Request drops do not drop accepted work. Shutdown drains the
+same process tracker used by Deployments; persisted claims and reconciliation remain
+the crash-recovery authority. Operation failures reach that tracker after redaction.
+
+Stack runtime, source-materialization, build-image resolution and update scanner
+adapters retain their established locations and consumer-owned ports. This phase
+moves workload persistence and inbound adapters, not the global runtime tree.
+Builds/Git/Backups, Automation/Alerts and shared Platforms/Identity remain scheduled
+for their own resource migrations.

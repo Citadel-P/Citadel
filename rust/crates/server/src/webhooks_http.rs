@@ -29,7 +29,7 @@ pub struct WebhooksHttpState {
     pub backups: Option<Arc<citadel_backups::BackupService>>,
     pub builds: Option<Arc<citadel_builds::BuildService>>,
     pub stacks: Option<Arc<citadel_stacks::StackService>>,
-    pub services: Option<Arc<citadel_swarm_services::ManagedSwarmServiceService>>,
+    pub services: Option<Arc<citadel_swarm_services::SwarmServiceService>>,
     pub alerts: Option<Arc<dyn AlertEventSink>>,
     pub audit: Option<Arc<dyn citadel_application::WebhookActivitySink>>,
 }

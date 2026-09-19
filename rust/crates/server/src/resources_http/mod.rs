@@ -65,6 +65,95 @@ async fn authorize_resource(
     specific: Option<SpecificPermission>,
     headers: &HeaderMap,
 ) -> IdentityHttpResult<()> {
+    // Workload metadata uses the owning feature's named policies.
+    let result = match (resource_type, level, specific) {
+        (ResourceType::Stack, PermissionLevel::Read, None) => Some(
+            state
+                .identity
+                .require_resource::<citadel_stacks::permissions::ReadStack>(principal, resource_id)
+                .await,
+        ),
+        (ResourceType::Stack, PermissionLevel::Write, None) => Some(
+            state
+                .identity
+                .require_resource::<citadel_stacks::permissions::WriteStack>(principal, resource_id)
+                .await,
+        ),
+        (
+            ResourceType::Stack,
+            PermissionLevel::Read,
+            Some(SpecificPermission::ResourceBindings),
+        ) => Some(
+            state
+                .identity
+                .require_resource::<citadel_stacks::permissions::ReadStackBindings>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        (
+            ResourceType::Stack,
+            PermissionLevel::Write,
+            Some(SpecificPermission::ResourceBindings),
+        ) => Some(
+            state
+                .identity
+                .require_resource::<citadel_stacks::permissions::WriteStackBindings>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        (ResourceType::SwarmService, PermissionLevel::Read, None) => Some(
+            state
+                .identity
+                .require_resource::<citadel_swarm_services::permissions::ReadSwarmService>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        (ResourceType::SwarmService, PermissionLevel::Write, None) => Some(
+            state
+                .identity
+                .require_resource::<citadel_swarm_services::permissions::WriteSwarmService>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        (
+            ResourceType::SwarmService,
+            PermissionLevel::Read,
+            Some(SpecificPermission::ResourceBindings),
+        ) => Some(
+            state
+                .identity
+                .require_resource::<citadel_swarm_services::permissions::ReadSwarmServiceBindings>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        (
+            ResourceType::SwarmService,
+            PermissionLevel::Write,
+            Some(SpecificPermission::ResourceBindings),
+        ) => Some(
+            state
+                .identity
+                .require_resource::<citadel_swarm_services::permissions::WriteSwarmServiceBindings>(
+                    principal,
+                    resource_id,
+                )
+                .await,
+        ),
+        _ => None,
+    };
+    if let Some(result) = result {
+        return identity_result(result, headers);
+    }
     identity_result(
         state
             .identity

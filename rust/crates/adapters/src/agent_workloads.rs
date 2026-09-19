@@ -180,7 +180,7 @@ where
         if cost > 256 * 1024 {
             continue;
         }
-        let message = citadel_stacks::StackStreamItem {
+        let message = citadel_stacks::StackProgressItem {
             event_type,
             message: item.message,
             exit_code: item.exit_code,

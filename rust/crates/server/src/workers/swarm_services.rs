@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use citadel_swarm_services::ManagedSwarmServiceService;
+use citadel_swarm_services::SwarmServiceService;
 use tokio_util::sync::CancellationToken;
 
 const RECONCILIATION_INTERVAL: Duration = Duration::from_secs(5);
@@ -10,7 +10,7 @@ const MAXIMUM_BATCH: i64 = 25;
 
 pub(super) async fn swarm_service_image_updates(
     cancellation: CancellationToken,
-    services: Arc<ManagedSwarmServiceService>,
+    services: Arc<SwarmServiceService>,
 ) -> Result<(), std::convert::Infallible> {
     // Matches DeploymentAutoUpdateJob's two-hour Service check cadence. Keep it
     // separate from the five-second operation recovery path.
@@ -32,7 +32,7 @@ pub(super) async fn swarm_service_image_updates(
 
 pub(super) async fn swarm_service_operation_reconciliation(
     cancellation: CancellationToken,
-    services: Arc<ManagedSwarmServiceService>,
+    services: Arc<SwarmServiceService>,
 ) -> Result<(), std::convert::Infallible> {
     let mut ticker = tokio::time::interval(RECONCILIATION_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);

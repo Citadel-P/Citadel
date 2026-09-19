@@ -9,8 +9,9 @@ use citadel_adapters::{
     crypto::AesGcmSecretProtector, docker::DockerClient,
     git_account_store::PostgresGitAccountStore,
     git_repository_execution_store::PostgresGitRepositoryExecutionStore,
-    stack_bindings::PostgresStackBindingResolver, stack_runtime::StackRuntimeRouter,
-    stack_source_materializer::GitStackSourceMaterializer, stack_store::PostgresStackStore,
+    postgres::stacks::PostgresStackRepository,
+    postgres::stacks::bindings::PostgresStackBindingResolver, stack_runtime::StackRuntimeRouter,
+    stack_source_materializer::GitStackSourceMaterializer,
 };
 use citadel_automation::{
     AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig, AutomationService,
@@ -20,7 +21,7 @@ use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use citadel_stacks::{
-    NoopStackChangeNotifier, StackEntitlements, StackError, StackService, StackStore,
+    NoopStackChangeNotifier, StackEntitlements, StackError, StackRepository, StackService,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};
@@ -193,29 +194,30 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'citadel/acceptance','api_key',1)")
             .bind(secret).bind(secret.to_string()).bind(provider.id).execute(&pool).await.unwrap();
-        let stacks = Arc::new(StackService::new(Arc::new(PostgresStackStore::new(pool.clone())),
+        let stacks = Arc::new(StackService::new(
+Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
             Arc::new(StackRuntimeRouter::new(pool.clone(),docker.clone(),None)),
             Arc::new(PostgresStackBindingResolver::new(pool.clone(),protector).unwrap()),
             Arc::new(NoopStackChangeNotifier),shutdown.child_token())
             .with_source_materializer(Arc::new(GitStackSourceMaterializer::new(git.clone())))
             .with_entitlements(Arc::new(Entitlements)));
-        let stack = stacks.create(ActorId::new(SYSTEM_ACTOR_ID),true,serde_json::from_value(json!({
+        let stack = stacks.create(ActorId::new(SYSTEM_ACTOR_ID),true,serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({
             "name":format!("provider-test-{}",platform.simple()),"platformId":platform,"stackSource":"Git","spec":{
                 "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
                 "preDeploy":{"path":".","commands":["printf '%s' \"$INJECTED\""]},
                 "webhook":{"enabled":true,"provider":"GitHub","secret":HOOK}
             }
-        })).unwrap()).await.unwrap();
+        })).unwrap().try_into().unwrap()).await.unwrap();
         stack_id=Some(stack.id);
         sqlx::query("INSERT INTO resourcebindings(id,kind,name,resourceid,scope,secretdeliverymode,secretid) VALUES($1,'Secret','INJECTED',$2,'Stack','EnvironmentVariable',$3)")
             .bind(Uuid::now_v7()).bind(stack.id).bind(secret).execute(&pool).await.unwrap();
-        let mut progress = stacks.apply(ActorId::new(SYSTEM_ACTOR_ID),true,citadel_stacks::ApplyStackInput{id:stack.id,recreate:None}).await.unwrap();
+        let mut progress = stacks.apply(ActorId::new(SYSTEM_ACTOR_ID),true,citadel_stacks::ApplyStack{id:stack.id,recreate:None}).await.unwrap();
         let mut output = Vec::new();
         while let Some(item) = progress.recv().await {
-            assert!(!serde_json::to_string(&item).unwrap().contains(VALUE));
+            assert!(!serde_json::to_string(&citadel_server::api::stacks::views::StackStreamItem::from(item.clone())).unwrap().contains(VALUE));
             output.push(item);
         }
-        let initial_view=PostgresStackStore::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
+        let initial_view=PostgresStackRepository::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
         assert_eq!(initial_view.status,citadel_stacks::StackReleaseStatus::Healthy,"Initial Stack Apply failed: {output:?}");
         assert_runtime(&docker,stack.id,"one").await;
         inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "one").await;
@@ -241,7 +243,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
             }
         }).await.expect("The real Forgejo delivery did not queue Stack Apply");
         assert_eq!(stacks.process_webhooks().await.unwrap(),1);
-        let applied=PostgresStackStore::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
+        let applied=PostgresStackRepository::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
         assert_eq!(applied.status,citadel_stacks::StackReleaseStatus::Healthy);
         assert_eq!(applied.source.unwrap().resolved_commit_sha,updated_commit);
         assert_runtime(&docker,stack.id,"two").await;

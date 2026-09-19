@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
-use citadel_adapters::swarm_service_store::PostgresSwarmServiceStore;
+use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_swarm_services::{
-    CreateSwarmServiceInput, RuntimeServiceResult, SchedulingMode, ServiceOperationKind,
-    SwarmServiceFilter, SwarmServiceImageInfo, SwarmServiceSpec, SwarmServiceStore, UpdateBehavior,
-    UpdateSwarmServiceInput,
+    CreateSwarmService, RuntimeServiceResult, SchedulingMode, ServiceOperationKind,
+    SwarmServiceFilter, SwarmServiceImageInfo, SwarmServiceRepository, SwarmServiceSpec,
+    UpdateBehavior, UpdateSwarmService,
 };
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -23,7 +23,7 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         .connect(&database_url)
         .await
         .unwrap();
-    let store = PostgresSwarmServiceStore::new(pool.clone());
+    let store = PostgresSwarmServiceRepository::new(pool.clone());
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();
     let platform_id = Uuid::now_v7();
@@ -56,7 +56,7 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         .create(
             actor,
             true,
-            &CreateSwarmServiceInput {
+            &CreateSwarmService {
                 name: format!("redis-{suffix}"),
                 platform_id,
                 description: Some("fixture".to_owned()),
@@ -76,7 +76,7 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
             actor,
             true,
             created.id,
-            &UpdateSwarmServiceInput {
+            &UpdateSwarmService {
                 spec: spec(registry_id, 2),
                 row_version: created.row_version + 1,
             },
@@ -89,7 +89,7 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
             actor,
             true,
             created.id,
-            &UpdateSwarmServiceInput {
+            &UpdateSwarmService {
                 spec: spec(registry_id, 2),
                 row_version: created.row_version,
             },
@@ -235,7 +235,7 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
         .connect(&url)
         .await
         .unwrap();
-    let store = PostgresSwarmServiceStore::new(pool.clone());
+    let store = PostgresSwarmServiceRepository::new(pool.clone());
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let platform = Uuid::now_v7();
     let registry = Uuid::now_v7();
@@ -248,7 +248,7 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
         .create(
             actor,
             true,
-            &CreateSwarmServiceInput {
+            &CreateSwarmService {
                 name: format!("service-{}", Uuid::now_v7()),
                 platform_id: platform,
                 description: None,
@@ -404,7 +404,7 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         image_scanner::{ImageScanRuntime, ImageScanTask, ImageScanner},
     };
     use citadel_deployments::DeploymentRepository;
-    use citadel_stacks::StackStore;
+    use citadel_stacks::StackRepository;
     use std::sync::{Arc, Mutex};
     use tokio_util::sync::CancellationToken;
     #[derive(Default)]
@@ -444,8 +444,13 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
             .create(actor, true, &input)
             .await
             .unwrap();
-    let input=serde_json::from_value(serde_json::json!({"name":format!("stack-{platform}"),"platformId":platform,"stackSource":"WebEditor","spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx:latest\n","registryId":registry,"updateBehavior":"Notify"}})).unwrap();
-    let stack = citadel_adapters::stack_store::PostgresStackStore::new(pool.clone())
+    let input = citadel_stacks::CreateStack {
+        name: format!("stack-{platform}"), platform_id: platform,
+        stack_source: citadel_stacks::StackSource::WebEditor,
+        spec: serde_json::from_value(serde_json::json!({"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx:latest\n","registryId":registry,"updateBehavior":"Notify"})).unwrap(),
+        description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
+    };
+    let stack = citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone())
         .create(actor, true, &input)
         .await
         .unwrap();
@@ -475,11 +480,11 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
     );
     let mut definition = spec(registry, 1);
     definition.update_behavior = UpdateBehavior::Notify;
-    let service = PostgresSwarmServiceStore::new(pool.clone())
+    let service = PostgresSwarmServiceRepository::new(pool.clone())
         .create(
             actor,
             true,
-            &CreateSwarmServiceInput {
+            &CreateSwarmService {
                 name: format!("managed-{platform}"),
                 platform_id: platform,
                 description: None,
@@ -508,8 +513,9 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         )
         .with_image_cache(cache.clone()),
     );
-    let checker = citadel_swarm_services::ManagedSwarmServiceService::new(
-        Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+    let checker = citadel_swarm_services::SwarmServiceService::new(
+        Arc::new(TestServiceTasks),
+        Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
         router.clone(),
         CancellationToken::new(),
     )
@@ -558,4 +564,21 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         .execute(&pool)
         .await
         .unwrap();
+}
+
+struct TestServiceTasks;
+impl citadel_swarm_services::SwarmServiceTaskSpawner for TestServiceTasks {
+    fn spawn(
+        &self,
+        _: &'static str,
+        task: futures_util::future::BoxFuture<
+            'static,
+            Result<(), citadel_swarm_services::SwarmServiceError>,
+        >,
+    ) -> bool {
+        tokio::spawn(async move {
+            task.await.unwrap();
+        });
+        true
+    }
 }

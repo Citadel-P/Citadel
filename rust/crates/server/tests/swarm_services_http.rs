@@ -1,3 +1,4 @@
+use citadel_server::api::swarm_services as swarm_services_http;
 use std::sync::Arc;
 
 #[path = "swarm_services_http/metadata.rs"]
@@ -11,17 +12,17 @@ use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::swarm_service_store::PostgresSwarmServiceStore;
+use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_database::MigrationRunner;
 use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::swarm_services_http::{self, SwarmServicesHttpState};
+use citadel_server::api::swarm_services::SwarmServicesHttpState;
 use citadel_swarm_services::{
-    ManagedSwarmServiceService, RuntimeServiceResult, ServiceOperationClaim, SwarmServiceError,
-    SwarmServiceRuntimePort,
+    RuntimeServiceResult, ServiceOperationClaim, SwarmServiceError, SwarmServiceRuntime,
+    SwarmServiceService,
 };
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
@@ -30,13 +31,15 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "swarm_services_http/operations.rs"]
+mod operations;
 #[path = "swarm_services_http/updates.rs"]
 mod updates;
 #[path = "swarm_services_http/webhooks.rs"]
 mod webhooks;
 
 struct CompletingRuntime;
-impl SwarmServiceRuntimePort for CompletingRuntime {
+impl SwarmServiceRuntime for CompletingRuntime {
     fn apply<'a>(
         &'a self,
         claim: &'a ServiceOperationClaim,
@@ -92,6 +95,9 @@ fn completed(claim: &ServiceOperationClaim) -> RuntimeServiceResult {
     }
 }
 
+#[path = "swarm_services_http/task_ownership.rs"]
+mod task_ownership;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
 async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
@@ -118,8 +124,15 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     ));
     let digests = Arc::new(updates::DigestFixture::default());
     let services = Arc::new(
-        ManagedSwarmServiceService::new(
-            Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+        SwarmServiceService::new(
+            Arc::new(
+                citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                    citadel_application::DynamicTasks::new(
+                        tokio_util::sync::CancellationToken::new(),
+                    ),
+                ),
+            ),
+            Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(CompletingRuntime),
             CancellationToken::new(),
         )
@@ -261,9 +274,11 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
             >= 2
     );
 
+    operations::verify(&app, &pool, &admin, id).await;
     updates::exercise_update_checks(&app, &services, &pool, &admin, id, &digests).await;
     webhooks::verify(&pool, identity, &admin, id).await;
 
+    task_ownership::verify(&pool, admin.actor_id, id).await;
     let deleted = request(
         &app,
         Method::DELETE,

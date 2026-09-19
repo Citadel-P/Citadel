@@ -27,9 +27,10 @@ pub fn service(pool: sqlx::PgPool) -> (Arc<StackService>, Arc<Entitlement>) {
     )
     .unwrap();
     let service = StackService::new(
-        Arc::new(citadel_adapters::stack_store::PostgresStackStore::new(
-            pool.clone(),
+        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
+        Arc::new(citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone())),
         Arc::new(citadel_adapters::stack_runtime::StackRuntimeRouter::new(
             pool, docker, None,
         )),
@@ -69,10 +70,10 @@ pub async fn verify(
         .bind(platform).bind(platform.to_string()).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/team/repository.git','Idle')")
         .bind(repository).bind(SYSTEM_ACTOR_ID).bind(repository.to_string()).execute(pool).await.unwrap();
-    let input=serde_json::from_value(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
+    let input=serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
         "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
         "webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"disposable-stack-hook"}
-    }})).unwrap();
+    }})).unwrap().try_into().unwrap();
     let stack = stacks
         .create(ActorId::new(SYSTEM_ACTOR_ID), true, input)
         .await
@@ -146,7 +147,7 @@ pub async fn verify(
         .await
         .unwrap();
     assert!(
-        duplicate.draft["spec"]["webhook"].get("secret").is_none(),
+        matches!(&duplicate.draft.spec, citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. } if webhook.secret.is_none()),
         "duplicate config must not copy authentication credentials"
     );
 }

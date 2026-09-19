@@ -1,4 +1,6 @@
 //! Explicit dependency wiring shared by HTTP handlers and supervised workers.
+use citadel_server::api::stacks as stacks_http;
+use citadel_server::api::swarm_services as swarm_services_http;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,19 +40,19 @@ use citadel_adapters::platform_registration::{
 };
 use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
 use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+use citadel_adapters::postgres::stacks::PostgresStackRepository;
+use citadel_adapters::postgres::stacks::bindings::PostgresStackBindingResolver;
+use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
+use citadel_adapters::postgres::swarm_services::bindings::PostgresSwarmServiceBindingResolver;
 use citadel_adapters::postgres_runtime;
 use citadel_adapters::profile_store::PostgresProfileStore;
 use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_adapters::role_store::PostgresRoleStore;
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
-use citadel_adapters::stack_bindings::PostgresStackBindingResolver;
 use citadel_adapters::stack_build_images::PostgresStackBuildImageResolver;
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
 use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
-use citadel_adapters::stack_store::PostgresStackStore;
-use citadel_adapters::swarm_service_bindings::PostgresSwarmServiceBindingResolver;
 use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
-use citadel_adapters::swarm_service_store::PostgresSwarmServiceStore;
 use citadel_adapters::team_store::PostgresTeamStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_alerts::AlertDeliveryService;
@@ -72,12 +74,9 @@ use citadel_resources::ResourceMetadataService;
 use citadel_server::config::Config;
 use citadel_server::metrics::Metrics;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
-use citadel_server::{
-    Readiness, application_info_http, license_realtime, platforms_http, stacks_http,
-    swarm_services_http,
-};
+use citadel_server::{Readiness, application_info_http, license_realtime, platforms_http};
 use citadel_stacks::StackService;
-use citadel_swarm_services::ManagedSwarmServiceService;
+use citadel_swarm_services::SwarmServiceService;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
@@ -121,7 +120,7 @@ pub struct AppState {
     pub builds: Arc<BuildService>,
     pub deployments: Arc<DeploymentService>,
     pub image_scanner: Arc<citadel_adapters::image_scanner::ImageScanner>,
-    pub swarm_services: Arc<ManagedSwarmServiceService>,
+    pub swarm_services: Arc<SwarmServiceService>,
     pub stacks: Arc<StackService>,
     pub platform_state: platforms_http::PlatformsHttpState,
     pub realtime: Option<RealtimeService>,
@@ -551,14 +550,19 @@ impl AppState {
             .with_alerts(alert_store.clone()),
         );
         let swarm_services = Arc::new(
-            ManagedSwarmServiceService::new(
-                Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+            SwarmServiceService::new(
+                Arc::new(
+                    citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                        dynamic_tasks.clone(),
+                    ),
+                ),
+                Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
                 Arc::new(swarm_runtime.clone()),
                 cancellation.clone(),
             )
             .with_image_digests(Arc::new(swarm_runtime.clone()))
             .with_adoption(Arc::new(
-                citadel_adapters::swarm_service_store::PostgresSwarmServiceAdoption::new(
+                citadel_adapters::postgres::swarm_services::PostgresSwarmServiceAdoption::new(
                     pool.clone(),
                     swarm_runtime.clone(),
                     config.identity.secret_encryption_key.expose(),
@@ -576,7 +580,10 @@ impl AppState {
         );
         let stacks = Arc::new(
             StackService::new(
-                Arc::new(PostgresStackStore::new(pool.clone())),
+                Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+                    dynamic_tasks.clone(),
+                )),
+                Arc::new(PostgresStackRepository::new(pool.clone())),
                 Arc::new(stack_runtime.clone()),
                 Arc::new(PostgresStackBindingResolver::new(
                     pool.clone(),
@@ -663,8 +670,8 @@ impl AppState {
                     identity: Arc::clone(&identity),
                     platforms: Arc::clone(&platform_reads),
                     deployments: Arc::new(PostgresDeploymentRepository::new(pool.clone())),
-                    stacks: Arc::new(PostgresStackStore::new(pool.clone())),
-                    services: Arc::new(PostgresSwarmServiceStore::new(pool.clone())),
+                    stacks: Arc::new(PostgresStackRepository::new(pool.clone())),
+                    services: Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
                     resources: Arc::clone(resources.store()),
                     automation: Arc::clone(automation.store()),
                     builds: Arc::clone(builds.store()),

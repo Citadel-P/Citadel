@@ -1,10 +1,11 @@
 use super::*;
-use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
-use citadel_adapters::swarm_service_store::{
-    PostgresSwarmServiceAdoption, PostgresSwarmServiceStore,
+use citadel_adapters::postgres::swarm_services::{
+    PostgresSwarmServiceAdoption, PostgresSwarmServiceRepository,
 };
-use citadel_server::swarm_services_http::{self, SwarmServicesHttpState};
-use citadel_swarm_services::ManagedSwarmServiceService;
+use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
+use citadel_server::api::swarm_services as swarm_services_http;
+use citadel_server::api::swarm_services::SwarmServicesHttpState;
+use citadel_swarm_services::SwarmServiceService;
 use tokio_util::sync::CancellationToken;
 
 async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
@@ -14,8 +15,13 @@ async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
         f.lookup_state.platforms.docker.clone(),
         None,
     );
-    let services = ManagedSwarmServiceService::new(
-        Arc::new(PostgresSwarmServiceStore::new(f.pool.clone())),
+    let services = SwarmServiceService::new(
+        Arc::new(
+            citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
+        Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
         Arc::new(router.clone()),
         CancellationToken::new(),
     )

@@ -421,13 +421,7 @@ async fn workload(
         StatisticsWorkload::Stack if !principal.is_administrator() => identity_result(
             state
                 .identity
-                .authorize_resource(
-                    &principal,
-                    ResourceType::Stack,
-                    id,
-                    PermissionLevel::Read,
-                    None,
-                )
+                .require_resource::<citadel_stacks::permissions::ReadStack>(&principal, id)
                 .await,
             &headers,
         )?,

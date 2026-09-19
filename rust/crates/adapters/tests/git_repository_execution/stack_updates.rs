@@ -1,12 +1,12 @@
 use citadel_adapters::{
     docker::DockerClient,
+    postgres::stacks::PostgresStackRepository,
     stack_runtime::{StackRuntimeRouter, StackUpdateRuntime},
-    stack_store::PostgresStackStore,
 };
 use citadel_domain::ActorId;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_stacks::{
-    StackReleaseSource, StackSpec, StackStore, StackUpdateScanner, StackUpdateState,
+    StackReleaseSource, StackRepository, StackSpec, StackUpdateScanner, StackUpdateState,
 };
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
@@ -24,9 +24,13 @@ pub async fn verify(
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost.docker','Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform).bind(format!("git-update-{platform}")).execute(pool).await.unwrap();
-    let store = PostgresStackStore::new(pool.clone());
-    let input = serde_json::from_value(json!({"name":format!("git-update-{platform}"),"platformId":platform,"stackSource":"Git",
-        "spec":{"$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yaml"],"updateBehavior":"Notify"}})).unwrap();
+    let store = PostgresStackRepository::new(pool.clone());
+    let input = citadel_stacks::CreateStack {
+        name: format!("git-update-{platform}"), platform_id: platform,
+        stack_source: citadel_stacks::StackSource::Git,
+        spec: serde_json::from_value(json!({"$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yaml"],"updateBehavior":"Notify"})).unwrap(),
+        description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
+    };
     let stack = store.create(actor, true, &input).await.unwrap();
     let source: StackReleaseSource = serde_json::from_value(json!({"sourceType":"Git","gitRepositoryId":repository,"branch":"main","resolvedCommitSha":applied,"composePaths":["compose.yaml"]})).unwrap();
     sqlx::query("UPDATE stackreleases SET source=$2,status='Healthy' WHERE id=$1")

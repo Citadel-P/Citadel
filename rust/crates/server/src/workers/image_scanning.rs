@@ -6,7 +6,7 @@ pub async fn run(
     scanner: Arc<citadel_adapters::image_scanner::ImageScanner>,
     deployments: Arc<citadel_deployments::DeploymentService>,
     stacks: Arc<citadel_stacks::StackService>,
-    services: Arc<citadel_swarm_services::ManagedSwarmServiceService>,
+    services: Arc<citadel_swarm_services::SwarmServiceService>,
 ) -> Result<(), std::convert::Infallible> {
     let mut ticker = tokio::time::interval_at(
         tokio::time::Instant::now() + Duration::from_millis(5733),

@@ -7,7 +7,7 @@ use citadel_contracts::citadel::swarm::v1::{
 };
 use citadel_swarm_services::{
     MountKind, PortPublishMode, RuntimeServiceResult, SchedulingMode, ServiceOperationClaim,
-    ServiceOperationKind, SwarmServiceError, SwarmServiceRuntimePort, SwarmServiceSpec,
+    ServiceOperationKind, SwarmServiceError, SwarmServiceRuntime, SwarmServiceSpec,
 };
 use futures_util::future::BoxFuture;
 use serde_json::{Map, Value, json};
@@ -334,7 +334,7 @@ impl SwarmServiceRuntimeRouter {
     }
 }
 
-impl SwarmServiceRuntimePort for SwarmServiceRuntimeRouter {
+impl SwarmServiceRuntime for SwarmServiceRuntimeRouter {
     fn apply<'a>(
         &'a self,
         claim: &'a ServiceOperationClaim,

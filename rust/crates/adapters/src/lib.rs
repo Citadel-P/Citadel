@@ -60,18 +60,18 @@ mod resource_tags;
 pub mod role_store;
 pub mod secret_value_resolver;
 pub mod service_account_store;
-pub mod stack_bindings;
+
 pub mod stack_build_images;
 pub mod stack_runtime;
 pub mod stack_source_materializer;
-pub mod stack_store;
+
 pub mod statistics_read_store;
 pub mod swarm_inventory;
 pub mod swarm_inventory_store;
-pub mod swarm_service_bindings;
+
 mod swarm_service_inspection;
 pub mod swarm_service_runtime;
-pub mod swarm_service_store;
+
 pub mod team_store;
 pub mod user_store;
 pub mod volume_content;

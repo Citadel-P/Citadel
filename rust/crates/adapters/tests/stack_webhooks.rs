@@ -1,4 +1,4 @@
-use citadel_adapters::stack_store::PostgresStackStore;
+use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
 use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
@@ -18,7 +18,7 @@ async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
         .connect(&url)
         .await
         .unwrap();
-    let store = PostgresStackStore::new(pool.clone());
+    let store = PostgresStackRepository::new(pool.clone());
     let platform = Uuid::now_v7();
     let repository = Uuid::now_v7();
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
@@ -26,10 +26,15 @@ async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
         .bind(platform).bind(platform.to_string()).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repository.git','Idle')")
         .bind(repository).bind(actor.value()).bind(repository.to_string()).execute(&pool).await.unwrap();
-    let input:CreateStackInput=serde_json::from_value(json!({"name":format!("webhook-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
+    let input = citadel_stacks::CreateStack {
+        name: format!("webhook-{platform}"), platform_id: platform,
+        stack_source: citadel_stacks::StackSource::Git,
+        spec: serde_json::from_value(json!({
         "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
         "webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"disposable-stack-webhook-secret"}
-    }})).unwrap();
+    })).unwrap(),
+        description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
+    };
     let stack = store.create(actor, true, &input).await.unwrap();
     let commit = "a".repeat(40);
     store.enqueue_webhook(&stack, Some(&commit)).await.unwrap();

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_swarm_services::{ServiceImageDigestPort, SwarmServiceStore};
+use citadel_swarm_services::{ServiceImageDigestPort, SwarmServiceRepository};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Default)]
@@ -40,7 +40,7 @@ impl ServiceImageDigestPort for DigestFixture {
 // and lost-request/restart coverage beyond the original in-process lease.
 pub(super) async fn exercise_update_checks(
     app: &Router,
-    services: &Arc<ManagedSwarmServiceService>,
+    services: &Arc<SwarmServiceService>,
     pool: &sqlx::PgPool,
     admin: &ActorPrincipal,
     id: Uuid,
@@ -168,7 +168,7 @@ pub(super) async fn exercise_update_checks(
     .await
     .unwrap();
 
-    let store = PostgresSwarmServiceStore::new(pool.clone());
+    let store = PostgresSwarmServiceRepository::new(pool.clone());
     let expected = services.get(admin.actor_id, true, id).await.unwrap();
     let first = store
         .begin_update_check(admin.actor_id, true, &expected)
