@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::deployment_bindings::PostgresDeploymentBindingResolver;
-use citadel_adapters::deployment_store::PostgresDeploymentStore;
+use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
-    CreateDeploymentInput, DeploymentBindingResolverPort, DeploymentError, DeploymentImageInfo,
-    DeploymentSpec, DeploymentStore, RuntimeContainerState, RuntimeDeploymentResult,
+    CreateDeployment, DeploymentBindingResolverPort, DeploymentError, DeploymentImageInfo,
+    DeploymentRepository, DeploymentSpec, RuntimeContainerState, RuntimeDeploymentResult,
     UpdateBehavior,
 };
 use citadel_domain::ActorId;
@@ -26,7 +26,7 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
         .connect(&database_url)
         .await
         .unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let platform_id = Uuid::now_v7();
     sqlx::query(
@@ -262,8 +262,8 @@ async fn binding_resolution_uses_resource_precedence_and_keeps_secrets_masked() 
     pool.close().await;
 }
 
-fn create_input(platform_id: Uuid, prefix: &str) -> CreateDeploymentInput {
-    CreateDeploymentInput {
+fn create_input(platform_id: Uuid, prefix: &str) -> CreateDeployment {
+    CreateDeployment {
         name: format!("{prefix}-{}", Uuid::now_v7().simple()),
         platform_id,
         description: None,
@@ -286,7 +286,7 @@ fn create_input(platform_id: Uuid, prefix: &str) -> CreateDeploymentInput {
     }
 }
 
-fn external_input(platform_id: Uuid, prefix: &str) -> CreateDeploymentInput {
+fn external_input(platform_id: Uuid, prefix: &str) -> CreateDeployment {
     let mut input = create_input(platform_id, prefix);
     input.spec.image = DeploymentImageInfo::External {
         registry_id: Uuid::from_u128(0x100),
@@ -318,19 +318,19 @@ async fn assert_activity(
     .await
     .unwrap();
     let info: Value = serde_json::from_str(&info).unwrap();
-    let detail = PostgresDeploymentStore::new(pool.clone())
+    let detail = PostgresDeploymentRepository::new(pool.clone())
         .get_authorized(ActorId::new(SYSTEM_ACTOR_ID), true, deployment_id)
         .await
         .unwrap();
-    let latest = detail.latest_activity_view.unwrap();
+    let latest = detail.latest_activity.unwrap();
     assert_eq!(latest["status"], expected_status);
     assert_eq!(
         latest
-            .pointer("/info/result/message")
+            .pointer("/info/Result/Message")
             .and_then(Value::as_str),
         expected_message
     );
-    assert!(latest["info"].get("Result").is_none());
+    assert!(latest["info"].get("Result").is_some());
     assert_eq!(status, expected_status);
     assert_eq!(
         info.pointer("/Result/Message").and_then(Value::as_str),

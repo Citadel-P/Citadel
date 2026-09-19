@@ -403,7 +403,7 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         image_digest_cache::ImageDigestCache,
         image_scanner::{ImageScanRuntime, ImageScanTask, ImageScanner},
     };
-    use citadel_deployments::DeploymentStore;
+    use citadel_deployments::DeploymentRepository;
     use citadel_stacks::StackStore;
     use std::sync::{Arc, Mutex};
     use tokio_util::sync::CancellationToken;
@@ -431,11 +431,19 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///'||$2,'Local',1,0,1024,$2,0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).bind(format!("scanner-{platform}")).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}',$2,$3,'docker.io','Enabled')").bind(registry).bind(SYSTEM_ACTOR_ID).bind(format!("registry-{registry}")).execute(&pool).await.unwrap();
-    let input=serde_json::from_value(serde_json::json!({"name":format!("deployment-{platform}"),"platformId":platform,"spec":{"image":{"$type":"External","registryId":registry,"imageTag":"nginx:latest"},"updateBehavior":"Notify"}})).unwrap();
-    let deployment = citadel_adapters::deployment_store::PostgresDeploymentStore::new(pool.clone())
-        .create(actor, true, &input)
-        .await
-        .unwrap();
+    let input = citadel_deployments::CreateDeployment {
+        name: format!("deployment-{platform}"),
+        platform_id: platform,
+        description: None,
+        spec: serde_json::from_value(serde_json::json!({"image":{"$type":"External","registryId":registry,"imageTag":"nginx:latest"},"updateBehavior":"Notify"})).unwrap(),
+        tag_ids: Vec::new(),
+        duplicate_source: None,
+    };
+    let deployment =
+        citadel_adapters::postgres::deployments::PostgresDeploymentRepository::new(pool.clone())
+            .create(actor, true, &input)
+            .await
+            .unwrap();
     let input=serde_json::from_value(serde_json::json!({"name":format!("stack-{platform}"),"platformId":platform,"stackSource":"WebEditor","spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx:latest\n","registryId":registry,"updateBehavior":"Notify"}})).unwrap();
     let stack = citadel_adapters::stack_store::PostgresStackStore::new(pool.clone())
         .create(actor, true, &input)

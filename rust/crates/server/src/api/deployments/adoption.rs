@@ -1,5 +1,7 @@
-use super::*;
-use citadel_deployments::adoption::AdoptContainerInput;
+use super::adoption_views::ContainerAdoptionDraft;
+use super::handlers::*;
+use super::requests::AdoptContainerInput;
+use super::views::DeploymentView;
 use tokio_util::sync::CancellationToken;
 
 #[utoipa::path(
@@ -9,7 +11,7 @@ use tokio_util::sync::CancellationToken;
     tag = "Containers",
     summary = "Review adoption of an unmanaged Container",
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::adoption::ContainerAdoptionDraft, content_type = "application/json"),
+        (status = 200, description = "Success", body = ContainerAdoptionDraft, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -52,7 +54,9 @@ pub(super) async fn draft(
         .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(draft).into_response()))
+    Ok(no_store(
+        Json(ContainerAdoptionDraft::from(draft)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -63,7 +67,7 @@ pub(super) async fn draft(
     summary = "Adopt a Container without changing Docker",
     request_body = AdoptContainerInput,
     responses(
-        (status = 200, description = "Success", body = citadel_deployments::DeploymentView, content_type = "application/json"),
+        (status = 200, description = "Success", body = DeploymentView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -96,7 +100,7 @@ pub(super) async fn adopt(
                 principal.actor_id,
                 principal.is_administrator(),
                 id,
-                input,
+                input.into(),
                 &cancel,
             ),
         )
@@ -109,5 +113,7 @@ pub(super) async fn adopt(
         .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(Json(deployment).into_response()))
+    Ok(no_store(
+        Json(DeploymentView::from(deployment)).into_response(),
+    ))
 }

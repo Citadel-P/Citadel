@@ -3,10 +3,10 @@ use citadel_adapters::{
     container_mutations::ContainerRuntimeRouter,
     crypto::AesGcmSecretProtector,
     deployment_runtime::DeploymentRuntimeRouter,
-    deployment_store::{PostgresContainerAdoption, PostgresDeploymentStore},
+    postgres::deployments::{PostgresContainerAdoption, PostgresDeploymentRepository},
 };
 use citadel_deployments::DeploymentService;
-use citadel_server::deployments_http::{self, DeploymentsHttpState};
+use citadel_server::api::deployments::{self, DeploymentsHttpState};
 use tokio_util::sync::CancellationToken;
 
 // Ports ContainerAdoptionDraftFactoryTests + adoption endpoint persistence,
@@ -74,7 +74,12 @@ async fn exercise_adoption(external: bool) {
     let docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
     let protector = Arc::new(AesGcmSecretProtector::new(&[11; 32]).unwrap());
     let service = DeploymentService::new(
-        Arc::new(PostgresDeploymentStore::new(f.pool.clone())),
+        Arc::new(
+            citadel_server::api::deployments::TrackedDeploymentTasks::new(
+                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
+        Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
         Arc::new(DeploymentRuntimeRouter::new(
             f.pool.clone(),
             docker.clone(),
@@ -94,7 +99,7 @@ async fn exercise_adoption(external: bool) {
         protector.clone(),
         &[11; 32],
     )));
-    f.app = f.app.merge(deployments_http::router(DeploymentsHttpState {
+    f.app = f.app.merge(deployments::router(DeploymentsHttpState {
         identity: f.lookup_state.platforms.identity.clone(),
         deployments: Arc::new(service),
     }));
@@ -259,6 +264,38 @@ async fn exercise_adoption(external: bool) {
     assert_eq!(activity["ContainerId"], container);
     assert_eq!(activity["ContainerName"], "/nginx");
     assert!(!activity.to_string().contains("keep-me-private"));
+    // HTTP and realtime must expose the same enriched public representation,
+    // including capabilities and camelCase activity, without persistence metadata.
+    let response = send(
+        &f,
+        &format!("/api/v1/deployments/{deployment_id}"),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let http = json_body(response).await;
+    assert!(http.get("rowVersion").is_none());
+    assert!(http.get("effectivePermission").is_none());
+    assert_eq!(http["capabilities"]["canWrite"], true);
+    assert_eq!(http["latestActivityView"]["info"]["containerId"], container);
+    let groups = super::realtime_groups::reader(&f);
+    for name in [
+        format!("deployment:{deployment_id}"),
+        "deployments".to_owned(),
+    ] {
+        use citadel_server::realtime_groups::{Group, GroupReadPort};
+        let snapshot = groups
+            .read(&f.administrator, &Group::parse(&name).unwrap(), None)
+            .await
+            .unwrap();
+        let realtime = snapshot
+            .rows
+            .iter()
+            .flat_map(|group| &group.rows)
+            .find(|row| row["id"] == http["id"])
+            .expect("Deployment realtime row");
+        assert_eq!(realtime, &http);
+    }
     assert_eq!(
         send(&f, &draft_url, Some(f.administrator.clone()))
             .await

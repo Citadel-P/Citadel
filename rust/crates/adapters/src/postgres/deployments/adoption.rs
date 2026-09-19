@@ -125,25 +125,20 @@ impl PostgresContainerAdoption {
                 .permissions_for_platforms(actor, &[platform_id])
                 .await
                 .map_err(|_| DeploymentError::Forbidden)?;
-        if !permissions
-            .get(&platform_id)
-            .is_some_and(|p| p.level_mask >= READ_LEVEL as i32 && p.specific_mask & 2 != 0)
-        {
+        if !permissions.get(&platform_id).is_some_and(|p| {
+            p.level_mask >= PermissionLevel::Read as i32 && p.specific_mask & 2 != 0
+        }) {
             return Err(DeploymentError::Forbidden);
         }
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        if !has_resource_access(
+        ensure_access(
             &mut tx,
             actor,
-            DEPLOYMENT_RESOURCE_TYPE,
+            administrator,
             Uuid::nil(),
-            WRITE_LEVEL,
+            citadel_deployments::permissions::CreateDeployment::REQUIREMENT,
         )
-        .await?
-        {
-            return Err(DeploymentError::Forbidden);
-        }
-        Ok(())
+        .await
     }
     async fn image_defaults(
         &self,
@@ -268,9 +263,9 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-        mut input: AdoptContainerInput,
+        mut input: AdoptContainer,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<DeploymentView, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
         Box::pin(async move {
             let mut context = self.load(actor, administrator, id, cancel).await?;
             let fingerprint = self.fingerprint(&context)?;

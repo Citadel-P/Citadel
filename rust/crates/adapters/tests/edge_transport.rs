@@ -690,9 +690,7 @@ async fn persisted_edge_platform_routes_deployment_apply_without_using_local_doc
     use citadel_contracts::citadel::deployments::v1::{
         ApplyDeploymentRequest, ApplyDeploymentResponse, DeployedContainerState,
     };
-    use citadel_deployments::{
-        DeploymentRuntimePort, RuntimeContainerState, RuntimeDeploymentCommand,
-    };
+    use citadel_deployments::{DeploymentRuntime, RuntimeContainerState, RuntimeDeploymentCommand};
     use prost::Message;
     let (pool, _store, target) = setup().await;
     sqlx::query("UPDATE platforms SET status='Online' WHERE id=$1")

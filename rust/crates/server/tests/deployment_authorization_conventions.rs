@@ -4,8 +4,8 @@ use std::path::Path;
 #[test]
 fn deployment_handlers_use_named_policies() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    check(&root.join("deployments_http.rs"));
-    check(&root.join("deployments_http"));
+    check(&root.join("api/deployments/handlers.rs"));
+    check(&root.join("api/deployments/adoption.rs"));
 }
 
 #[test]
@@ -163,4 +163,64 @@ fn shared_scope_keeps_nested_checks_and_excludes_other_resources() {
     assert!(deployment.contains("self.permission(p, kind"));
     assert!(!deployment.contains("self.permission(p, stack"));
     assert!(std::panic::catch_unwind(|| assert_policy_source(deployment, "fixture", &[])).is_err());
+}
+
+#[test]
+fn deployment_architecture_keeps_presentation_out_of_feature_and_persistence() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let feature = crates.join("deployments");
+    let manifest = std::fs::read_to_string(feature.join("Cargo.toml")).unwrap();
+    for dependency in ["utoipa", "axum", "citadel-server", "citadel-adapters"] {
+        assert!(
+            !manifest.contains(dependency),
+            "feature depends on {dependency}"
+        );
+    }
+    for directory in [
+        feature.join("src"),
+        crates.join("adapters/src/postgres/deployments"),
+    ] {
+        check_resource_boundary(&directory);
+    }
+    for removed in [
+        "deployments/src/model.rs",
+        "deployments/src/service.rs",
+        "adapters/src/deployment_store.rs",
+        "server/src/deployments_http.rs",
+    ] {
+        assert!(
+            !crates.join(removed).exists(),
+            "legacy module returned: {removed}"
+        );
+    }
+}
+
+fn check_resource_boundary(path: &Path) {
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path).unwrap() {
+            check_resource_boundary(&entry.unwrap().path());
+        }
+        return;
+    }
+    if path.extension().is_none_or(|extension| extension != "rs")
+        || path.file_name().is_some_and(|name| name == "tests.rs")
+    {
+        return;
+    }
+    let source = std::fs::read_to_string(path).unwrap();
+    for forbidden in [
+        "DeploymentView",
+        "DeploymentCapabilities",
+        "ResourceCapabilities",
+        "utoipa",
+        "citadel_server",
+        "public_latest_activity",
+        "tokio::spawn",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "{} contains {forbidden}",
+            path.display()
+        );
+    }
 }

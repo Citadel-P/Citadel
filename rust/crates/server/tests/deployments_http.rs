@@ -8,11 +8,11 @@ use chrono::Duration;
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
 };
-use citadel_adapters::deployment_store::PostgresDeploymentStore;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
-    DeploymentError, DeploymentImageInfo, DeploymentRuntimePort, DeploymentService,
+    DeploymentError, DeploymentImageInfo, DeploymentRuntime, DeploymentService,
     PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
     RuntimeDeploymentResult,
 };
@@ -21,7 +21,7 @@ use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::deployments_http::{self, DeploymentsHttpState};
+use citadel_server::api::deployments::{self, DeploymentsHttpState};
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -43,7 +43,7 @@ struct RecordingRuntime {
     digests: Arc<updates::Digests>,
 }
 
-impl DeploymentRuntimePort for RecordingRuntime {
+impl DeploymentRuntime for RecordingRuntime {
     fn remote_image_digest<'a>(
         &'a self,
         _: Uuid,
@@ -147,7 +147,14 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let service = Arc::new(
         DeploymentService::new(
-            Arc::new(PostgresDeploymentStore::new(pool.clone())),
+            Arc::new(
+                citadel_server::api::deployments::TrackedDeploymentTasks::new(
+                    citadel_application::DynamicTasks::new(
+                        tokio_util::sync::CancellationToken::new(),
+                    ),
+                ),
+            ),
+            Arc::new(PostgresDeploymentRepository::new(pool.clone())),
             Arc::new(RecordingRuntime {
                 deleted: Arc::clone(&deleted),
                 fail: Arc::clone(&fail_runtime),
@@ -159,7 +166,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         )
         .with_alerts(alerts.clone()),
     );
-    let app = deployments_http::router(DeploymentsHttpState {
+    let app = deployments::router(DeploymentsHttpState {
         identity: identity.clone(),
         deployments: service.clone(),
     });

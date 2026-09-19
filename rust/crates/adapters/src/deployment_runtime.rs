@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use citadel_deployments::{
-    ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntimePort,
+    ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntime,
     PreparedDeploymentImage, ResolvedDeploymentBuild, RuntimeContainerState,
     RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
 };
@@ -370,7 +370,7 @@ fn observed_container_state(
         .then_some(RuntimeContainerState::Exited)
 }
 
-impl DeploymentRuntimePort for DeploymentRuntimeRouter {
+impl DeploymentRuntime for DeploymentRuntimeRouter {
     fn cached_image_digest<'a>(
         &'a self,
         _platform: Uuid,

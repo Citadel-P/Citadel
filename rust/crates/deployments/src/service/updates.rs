@@ -5,11 +5,11 @@ use chrono::Utc;
 
 pub struct DeploymentUpdateCheck {
     pub lease_id: Uuid,
-    pub deployment: DeploymentView,
+    pub deployment: DeploymentDetails,
 }
 
 pub fn checkable_deployment_image(
-    deployment: &DeploymentView,
+    deployment: &DeploymentDetails,
 ) -> Result<(Uuid, &str, &str), DeploymentError> {
     if deployment.control_state != "Idle" {
         return Err(DeploymentError::Conflict(
@@ -66,7 +66,7 @@ impl DeploymentService {
         administrator: bool,
         id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<DeploymentView, DeploymentError> {
+    ) -> Result<DeploymentDetails, DeploymentError> {
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
         self.check_update_snapshot(actor, administrator, snapshot, None, cancellation)
             .await
@@ -76,10 +76,10 @@ impl DeploymentService {
         &self,
         actor: ActorId,
         administrator: bool,
-        snapshot: DeploymentView,
+        snapshot: DeploymentDetails,
         cached_digest: Option<String>,
         cancellation: &CancellationToken,
-    ) -> Result<DeploymentView, DeploymentError> {
+    ) -> Result<DeploymentDetails, DeploymentError> {
         let (registry, reference, current) = checkable_deployment_image(&snapshot)?;
         let reference = reference.to_owned();
         let current = current.to_owned();
@@ -90,7 +90,7 @@ impl DeploymentService {
             .map_err(|_| DeploymentError::Conflict("Deployment operations are busy.".into()))?;
         let service = self.clone();
         let cancel = cancellation.clone();
-        tokio::spawn(async move {
+        self.spawn_result("deployment.update_check", async move {
             let _permit = permit;
             let claim = service.store.begin_update_check(actor, administrator, &snapshot).await?;
             service.notifier.changed(snapshot.id, "updated");
@@ -117,7 +117,7 @@ impl DeploymentService {
                 DeploymentError::Runtime("Registry update check failed. Verify connectivity and credentials.".into())
             })?;
             service.store.get_authorized(actor, administrator, snapshot.id).await
-        }).await.map_err(|_| DeploymentError::Runtime("Update check was interrupted.".into()))?
+        }).ok_or(DeploymentError::Cancelled)?.await.map_err(|_| DeploymentError::Runtime("Update check was interrupted.".into()))?
     }
 
     pub async fn recover_update_checks(&self) -> Result<usize, DeploymentError> {
@@ -233,7 +233,7 @@ impl DeploymentService {
         Ok(())
     }
 
-    async fn report_image_update(&self, deployment: &DeploymentView, kind: &str) {
+    async fn report_image_update(&self, deployment: &DeploymentDetails, kind: &str) {
         let Some(alerts) = &self.alerts else {
             return;
         };

@@ -660,7 +660,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "utoipa",
  "uuid",
  "zeroize",
 ]

@@ -1,5 +1,5 @@
 //! Executable lifecycle: initialization, supervised serving, and bounded shutdown.
-use crate::{api, cli, jobs, startup, state::AppState};
+use crate::{cli, jobs, router as api, startup, state::AppState};
 use axum::Router;
 use citadel_server::{config::Config, transport};
 use std::time::Duration;

@@ -7,8 +7,8 @@ use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
 use citadel_adapters::docker::DockerClient;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
-    ContainerRestartPolicy, DeploymentImageInfo, DeploymentRuntimePort, DeploymentSpec,
-    LifeCycleSpec, RuntimeContainerState, RuntimeDeploymentCommand, UpdateBehavior,
+    ContainerRestartPolicy, DeploymentImageInfo, DeploymentRuntime, DeploymentSpec, LifeCycleSpec,
+    RuntimeContainerState, RuntimeDeploymentCommand, UpdateBehavior,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;

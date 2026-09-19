@@ -3,13 +3,13 @@
 use super::*;
 use citadel_adapters::{
     build_completion_store::PostgresBuildCompletionStore,
-    deployment_store::PostgresDeploymentStore, stack_store::PostgresStackStore,
+    postgres::deployments::PostgresDeploymentRepository, stack_store::PostgresStackStore,
 };
 use citadel_builds::{
     BuildCompletionService, BuildCompletionStore, BuildConsumerClaim, BuildConsumerRuntime,
     BuildConsumerType, BuildEntitlements, BuildError,
 };
-use citadel_deployments::DeploymentStore;
+use citadel_deployments::DeploymentRepository;
 use citadel_stacks::StackStore;
 use std::sync::{
     Mutex,
@@ -25,11 +25,17 @@ pub async fn create(pool: &sqlx::PgPool, fixture: &FixtureIds, project: Uuid) ->
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',1,0,1048576,$2,0,'{\"$type\":\"Docker\"}'::json,'Online',0)")
         .bind(platform).bind(format!("build-consumers-{platform}")).execute(pool).await.unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     let mut ids = Vec::new();
     for automatic in [false, true] {
-        let input=serde_json::from_value(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,
-            "spec":{"image":{"$type":"Build","buildProjectId":project,"redeployOnBuild":automatic}}})).unwrap();
+        let input = citadel_deployments::CreateDeployment {
+            name: format!("consumer-{}", Uuid::now_v7()),
+            platform_id: platform,
+            description: None,
+            spec: serde_json::from_value(json!({"image":{"$type":"Build","buildProjectId":project,"redeployOnBuild":automatic}})).unwrap(),
+            tag_ids: Vec::new(),
+            duplicate_source: None,
+        };
         let resource = store
             .create(ActorId::new(SYSTEM_ACTOR_ID), true, &input)
             .await

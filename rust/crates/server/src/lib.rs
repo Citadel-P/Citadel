@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+pub mod api;
 
 pub mod activities_http;
 pub mod actors_http;
@@ -10,7 +11,7 @@ pub mod bootstrap;
 pub mod builds_http;
 mod capabilities;
 pub mod config;
-pub mod deployments_http;
+
 pub mod diagnostics;
 pub mod diagnostics_http;
 pub mod git_accounts_http;
