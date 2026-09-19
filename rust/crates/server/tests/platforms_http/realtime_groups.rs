@@ -223,7 +223,7 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
             .unwrap();
         let (mut resize, _) = listener.accept().await.unwrap();
         let (headers, _) = read_terminal_request(&mut resize).await;
-        assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
+        assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?h=30&w=100 "));
         resize
             .write_all(b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             .await
@@ -911,13 +911,15 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     assert!(
-        invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_string(),
+        invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+            .is_string(),
         "must join an authorized group first"
     );
     for revoke in [false, true] {
         assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
         assert!(
-            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+                .is_null()
         );
         let command = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
             .await
@@ -934,7 +936,8 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         assert_eq!(request.follow, Some(true));
         assert!(other_commands.try_recv().is_err());
         assert!(
-            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+                .is_null()
         );
         assert!(
             commands.try_recv().is_err(),

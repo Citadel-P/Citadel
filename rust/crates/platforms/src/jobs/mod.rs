@@ -4,7 +4,7 @@ mod inventory_reconciliation;
 
 pub use container_stats::{
     ContainerStatsBatch, ContainerStatsSampler, collect_running_container_stats,
-    persist_container_stats,
+    persist_container_stats, sample_running_container_stats,
 };
 pub use event_policy::triggers_inventory_reconciliation;
 pub use inventory_reconciliation::{

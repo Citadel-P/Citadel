@@ -1202,6 +1202,13 @@ fn bounded_error(message: &str) -> String {
     message[..end].to_owned()
 }
 
+fn map_webhook_error(error: WebhookError) -> GitRepositoryExecutionError {
+    match error {
+        WebhookError::Authentication => GitRepositoryExecutionError::Authentication,
+        WebhookError::Validation(message) => GitRepositoryExecutionError::Validation(message),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1266,12 +1273,5 @@ mod tests {
         assert_eq!(projects[0].env_file_paths, [".env"]);
         assert_eq!(projects[1].working_directory, "apps/api");
         assert_eq!(projects[1].suggested_watch_paths, ["apps/api/**"]);
-    }
-}
-
-fn map_webhook_error(error: WebhookError) -> GitRepositoryExecutionError {
-    match error {
-        WebhookError::Authentication => GitRepositoryExecutionError::Authentication,
-        WebhookError::Validation(message) => GitRepositoryExecutionError::Validation(message),
     }
 }

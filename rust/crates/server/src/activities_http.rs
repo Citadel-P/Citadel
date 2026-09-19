@@ -193,6 +193,12 @@ pub(crate) fn map_activity(record: ActivityRecord) -> Result<ActivityView, Ident
     })
 }
 
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ActivitiesHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(get_by_id))
+}
+
 #[cfg(test)]
 mod tests {
     use citadel_application::public_activity_info;
@@ -221,10 +227,4 @@ mod tests {
             })
         );
     }
-}
-
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ActivitiesHttpState> {
-    utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(list))
-        .normalized_routes(utoipa_axum::routes!(get_by_id))
 }

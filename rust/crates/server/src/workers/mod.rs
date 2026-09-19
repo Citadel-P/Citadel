@@ -20,6 +20,8 @@ mod disk;
 mod disk_tests;
 
 mod maintenance;
+mod notifications;
+mod schedule;
 mod unmanaged;
 
 mod pruning;
@@ -32,7 +34,7 @@ async fn listener(
 ) -> Result<sqlx::postgres::PgListener, sqlx::Error> {
     let dedicated = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
-        .connect_lazy_with((*pool.connect_options()).clone());
+        .connect_lazy_with((*pool.connect_options()).clone().application_name(channel));
     let mut listener = sqlx::postgres::PgListener::connect_with(&dedicated).await?;
     listener.listen(channel).await?;
     Ok(listener)
@@ -41,3 +43,6 @@ async fn listener(
 pub mod image_scanning;
 
 mod stats_alerts;
+
+#[cfg(test)]
+mod runtime_persistence_tests;

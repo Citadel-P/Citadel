@@ -98,9 +98,16 @@ impl StackRuntimeRouter {
                     StackError::Runtime("The Edge Agent is disconnected or unavailable.".into())
                 });
         }
-        let agent=self.agent.as_ref().filter(|_|target.connector.eq_ignore_ascii_case("Agent"))
-            .ok_or_else(||StackError::Runtime("The configured Agent transport is unavailable.".into()))?;
-        let agent=agent.at_address(&target.address).map_err(|error|StackError::Runtime(error.message))?;
+        let agent = self
+            .agent
+            .as_ref()
+            .filter(|_| target.connector.eq_ignore_ascii_case("Agent"))
+            .ok_or_else(|| {
+                StackError::Runtime("The configured Agent transport is unavailable.".into())
+            })?;
+        let agent = agent
+            .at_address(&target.address)
+            .map_err(|error| StackError::Runtime(error.message))?;
         Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
     }
 
@@ -1269,7 +1276,7 @@ async fn emit_process_line(
 }
 
 fn local_compose_snapshot(
-    containers: Vec<crate::docker::generated::ContainerSummary>,
+    containers: Vec<crate::docker::projection::ContainerSummary>,
     project: &str,
 ) -> StackRuntimeSnapshot {
     let mut containers = containers
@@ -1590,8 +1597,8 @@ mod tests {
 
     #[test]
     fn local_drift_uses_compose_service_labels_and_current_state() {
-        let container =
-            |project: &str, service: &str, state: &str| crate::docker::generated::ContainerSummary {
+        let container = |project: &str, service: &str, state: &str| {
+            crate::docker::projection::ContainerSummary {
                 id: service.into(),
                 names: vec!["/custom-container-name".into()],
                 state: state.into(),
@@ -1601,7 +1608,8 @@ mod tests {
                 ]
                 .into(),
                 ..Default::default()
-            };
+            }
+        };
         let snapshot = local_compose_snapshot(
             vec![
                 container("beszel", "agent", "running"),

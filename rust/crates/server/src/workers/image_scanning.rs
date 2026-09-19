@@ -8,11 +8,15 @@ pub async fn run(
     stacks: Arc<citadel_stacks::StackService>,
     services: Arc<citadel_swarm_services::ManagedSwarmServiceService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(Duration::from_secs(90 * 60));
+    let mut ticker = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_millis(5733),
+        Duration::from_secs(90 * 60),
+    );
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut first = true;
     loop {
         tokio::select! {biased;()=cancel.cancelled()=>return Ok(()),_=ticker.tick()=>{}}
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::ImageScan.start();
         match scanner.run_cycle(&cancel).await {
             Ok(count) => tracing::debug!(count, "Registry image scan completed"),
             Err(error) => {

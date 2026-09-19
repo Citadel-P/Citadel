@@ -530,6 +530,7 @@ impl AgentClient {
     /// Resolve a persisted Platform address without opening a second eager connection.
     /// RPC deadlines still bound the lazy connection; unchanged addresses reuse their channel.
     pub fn at_address(&self, address: &str) -> Result<Self, RuntimeCapabilityError> {
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::AgentConnect.start();
         let address = validate_address(address, self.allow_insecure)?;
         if self.address == address {
             return Ok(self.clone());
@@ -1382,9 +1383,7 @@ pub fn decode_daemon_event(bytes: &[u8]) -> Result<Option<AgentDaemonEvent>, pro
     Ok(map_daemon_event(response.kind))
 }
 
-pub fn map_daemon_event(
-    kind: Option<daemon_event_response::Kind>,
-) -> Option<AgentDaemonEvent> {
+pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<AgentDaemonEvent> {
     let event = match kind? {
         daemon_event_response::Kind::DaemonContainerEventResponse(value) => AgentDaemonEvent {
             resource_type: "container",
@@ -1594,6 +1593,38 @@ impl PlatformResourceMutationPort for AgentClient {
             Ok(())
         }
         .boxed()
+    }
+}
+
+impl citadel_platforms::PlatformHealthPort for AgentClient {
+    fn probe<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let request = self.signer.sign(
+                (),
+                "/citadel.platforms.v1.PlatformService/CheckHealth",
+                Some(self.operation_timeout),
+            )?;
+            let mut client = self.platform_client();
+            let response = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = tokio::time::timeout(self.operation_timeout, client.check_health(request)) => {
+                    result.map_err(|_| timeout_error("checking Agent health"))?.map_err(normalize_status)?
+                }
+            };
+            if response.into_inner().healthy {
+                Ok(())
+            } else {
+                Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Unavailable,
+                    "Agent health check failed",
+                    true,
+                ))
+            }
+        })
     }
 }
 
@@ -2658,8 +2689,11 @@ mod tests {
                 DaemonContainerEventResponse {
                     action: "start".to_owned(),
                     container_id: "docker-1".into(),
-                    container: Some(ContainerMessage { state: ContainerStateType::Exited as i32, name: "nginx".into(), ..Default::default() }),
-                    ..Default::default()
+                    container: Some(ContainerMessage {
+                        state: ContainerStateType::Exited as i32,
+                        name: "nginx".into(),
+                        ..Default::default()
+                    }),
                 },
             ),
         ))

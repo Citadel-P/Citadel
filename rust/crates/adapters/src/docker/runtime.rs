@@ -11,8 +11,23 @@ use futures_util::{FutureExt, future::BoxFuture};
 use reqwest::StatusCode;
 use tokio_util::sync::CancellationToken;
 
-use super::generated::ContainerSummary;
+use super::projection::ContainerSummary;
 use super::{DockerClient, DockerError};
+
+impl citadel_platforms::PlatformHealthPort for DockerClient {
+    fn probe<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => Err(cancelled_error()),
+                result = self.ping() => result.map_err(normalize_docker_error),
+            }
+        })
+    }
+}
 
 impl PlatformRuntimePort for DockerClient {
     fn get_info<'a>(
@@ -24,9 +39,9 @@ impl PlatformRuntimePort for DockerClient {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
                 value = async {
+                    let info = self.info().await?;
                     let version = self.version().await?;
                     let negotiated = self.negotiated_version().await?;
-                    let info = self.info().await?;
                     let containers = self.list_containers(true).await?;
                     Ok::<_, DockerError>((version, negotiated, info, ContainerCounts::from_list(&containers)))
                 } => value.map_err(normalize_docker_error)?,
@@ -149,7 +164,7 @@ impl PlatformRuntimePort for DockerClient {
     }
 }
 
-fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
+pub(super) fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
     let is_swarm_task = container.labels.contains_key("com.docker.swarm.task.id");
     let stack = container
         .labels
@@ -231,11 +246,11 @@ pub(crate) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityErr
         | DockerError::InvalidVersion(_)
         | DockerError::IncompatibleVersion { .. }
         | DockerError::InvalidPing(_)
-        | DockerError::InvalidIdentifier
-        | DockerError::InvalidMethod(_) => (RuntimeErrorKind::InvalidRequest, false),
+        | DockerError::InvalidIdentifier => (RuntimeErrorKind::InvalidRequest, false),
         DockerError::Transport(_)
         | DockerError::ResponseTooLarge { .. }
         | DockerError::StreamItemTooLarge { .. }
+        | DockerError::ProtocolIo(_)
         | DockerError::InvalidJson(_) => (RuntimeErrorKind::Remote, false),
         DockerError::Api { .. } => (RuntimeErrorKind::Remote, false),
     };
@@ -247,6 +262,7 @@ impl DockerClient {
         &self,
         docker_root: &str,
     ) -> Option<citadel_platforms::HostDiskUsage> {
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::HostDisk.start();
         let provider = self.host_disk.clone();
         let docker_root = docker_root.to_owned();
         tokio::task::spawn_blocking(move || provider.read(&docker_root))
@@ -330,7 +346,7 @@ mod tests {
 pub fn container_observation(
     document: serde_json::Value,
 ) -> Result<RuntimeContainerSummary, serde_json::Error> {
-    let inspected: super::generated::ContainerInspect = serde_json::from_value(document.clone())?;
+    let inspected: super::projection::ContainerInspect = serde_json::from_value(document.clone())?;
     Ok(map_container(ContainerSummary {
         id: inspected.id,
         names: vec![inspected.name],

@@ -408,18 +408,30 @@ async fn workload(
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
     let window = window(query, &headers)?;
-    let resource = match workload {
-        StatisticsWorkload::Deployment => ResourceType::Deployment,
-        StatisticsWorkload::Stack => ResourceType::Stack,
-    };
-    if !principal.is_administrator() {
-        identity_result(
+    match workload {
+        StatisticsWorkload::Deployment => identity_result(
             state
                 .identity
-                .authorize_resource(&principal, resource, id, PermissionLevel::Read, None)
+                .require_resource::<citadel_deployments::permissions::ReadDeployment>(
+                    &principal, id,
+                )
                 .await,
             &headers,
-        )?;
+        )?,
+        StatisticsWorkload::Stack if !principal.is_administrator() => identity_result(
+            state
+                .identity
+                .authorize_resource(
+                    &principal,
+                    ResourceType::Stack,
+                    id,
+                    PermissionLevel::Read,
+                    None,
+                )
+                .await,
+            &headers,
+        )?,
+        StatisticsWorkload::Stack => {}
     }
     let store = PostgresStatisticsReadStore::new(state.pool.clone());
     let containers = match store.workload_containers(workload, id).await {

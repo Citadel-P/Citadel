@@ -607,6 +607,16 @@ pub enum PermissionLevel {
 }
 
 impl PermissionLevel {
+    /// Persisted hierarchy values sufficient for this requirement; bind with SQL ANY.
+    pub const fn accepted_database_levels(self) -> &'static [i32] {
+        match self {
+            Self::None => &[0, 1, 2, 4],
+            Self::Read => &[1, 2, 4],
+            Self::Write => &[2, 4],
+            Self::Execute => &[4],
+        }
+    }
+
     #[must_use]
     pub const fn from_i32(value: i32) -> Option<Self> {
         match value {
@@ -620,7 +630,13 @@ impl PermissionLevel {
 
     #[must_use]
     pub const fn grants(self, required: Self) -> bool {
-        self as i32 >= required as i32
+        matches!(
+            (self, required),
+            (_, Self::None)
+                | (Self::Read | Self::Write | Self::Execute, Self::Read)
+                | (Self::Write | Self::Execute, Self::Write)
+                | (Self::Execute, Self::Execute)
+        )
     }
 }
 

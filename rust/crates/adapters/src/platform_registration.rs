@@ -148,6 +148,10 @@ impl PlatformRegistrationStore for PostgresPlatformRegistrationStore {
             insert_activity(&mut tx, &event)
                 .await
                 .map_err(|error| PlatformRegistrationError::Storage(error.to_string()))?;
+            sqlx::query("SELECT pg_notify('citadel_platform_targets','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(id)
         })
@@ -198,6 +202,10 @@ impl PlatformRegistrationStore for PostgresPlatformRegistrationStore {
                 .map_err(|error| PlatformRegistrationError::Storage(error.message))?;
             insert_tags(&mut transaction, actor_id, registration).await?;
             insert_created_activity(&mut transaction, actor_id, registration).await?;
+            sqlx::query("SELECT pg_notify('citadel_platform_targets','')")
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage)?;
             transaction.commit().await.map_err(storage)?;
             Ok(registration.id)
         }

@@ -1,11 +1,12 @@
 use crate::realtime::RealtimeHub;
 use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeSession, PostgresEdgeStore};
+use citadel_application::IoBudget;
 use citadel_contracts::citadel::edge::v1::EdgeCommandKind;
 use citadel_platforms::jobs::{InventoryCollectionTarget, collect_inventory};
 use futures_util::StreamExt;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::{sync::Semaphore, task::JoinSet};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 /// One supervised task per authenticated Edge Platform or Node. Reconnects
@@ -16,10 +17,10 @@ pub async fn run(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    scans: IoBudget,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
     let mut tasks = JoinSet::new();
-    let scans = Arc::new(Semaphore::new(4));
     let mut tick = tokio::time::interval(Duration::from_secs(2));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
@@ -64,7 +65,7 @@ async fn monitor(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
-    scans: Arc<Semaphore>,
+    scans: IoBudget,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::try_join!(
@@ -143,7 +144,7 @@ async fn observe(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    scans: Arc<Semaphore>,
+    scans: IoBudget,
     node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -169,7 +170,9 @@ async fn observe(
     )?;
     loop {
         {
-            let _permit = scans.acquire().await?;
+            let Some(_permit) = scans.enter(cancellation).await else {
+                return Ok(());
+            };
             let started = chrono::Utc::now();
             let snapshot = match collect_inventory(&runtime, &target, cancellation).await {
                 Ok(snapshot) => snapshot,

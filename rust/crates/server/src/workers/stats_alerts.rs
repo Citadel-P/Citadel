@@ -12,62 +12,72 @@ pub(super) async fn run(
     interval: Duration,
     batch_size: i64,
 ) -> Result<(), std::convert::Infallible> {
-    let mut last_flush = tokio::time::Instant::now();
-    let mut tick = tokio::time::interval(Duration::from_secs(1));
+    // Ten bounded batches or five seconds per flush; PostgreSQL retains the rest.
+    // No count query or per-second wakeup when there is no input.
+    let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { ()=cancel.cancelled()=>return Ok(()), _=tick.tick()=>{} }
-        let flush_batch = async {
-            if last_flush.elapsed() < interval {
-                let count:i64=sqlx::query_scalar("SELECT count(*) FROM (SELECT 1 FROM platformstats WHERE alertpending LIMIT $1) samples")
-                    .bind(batch_size).fetch_one(&pool).await?;
-                if count < batch_size {
-                    return Ok::<bool, sqlx::Error>(false);
+        let drain = async {
+            for _ in 0..10 {
+                let count = flush_pending(&pool, alerts.as_ref(), batch_size).await?;
+                if count < batch_size.max(1) as usize {
+                    break;
                 }
             }
-            flush_pending(&pool, alerts.as_ref(), batch_size).await?;
-            Ok(true)
+            Ok::<_, sqlx::Error>(())
         };
-        let result =
-            tokio::select! { ()=cancel.cancelled()=>return Ok(()), result=flush_batch=>result };
-        match result {
-            Ok(true) => {
-                last_flush = tokio::time::Instant::now();
-            }
-            Ok(false) => {}
-            Err(error) => {
-                tracing::warn!(%error,"Platform threshold batch failed; retrying retained samples")
+        tokio::select! {
+            () = cancel.cancelled() => return Ok(()),
+            result = tokio::time::timeout(Duration::from_secs(5), drain) => match result {
+                Ok(Ok(())) => {},
+                Ok(Err(error)) => tracing::warn!(%error, "Platform threshold batch failed; retaining samples"),
+                Err(_) => tracing::warn!("Platform threshold flush exhausted its time budget; retaining samples"),
             }
         }
     }
 }
 
-// Lock only the captured samples until their observations have been evaluated.
-// A delayed sample or an upsert arriving during a flush stays pending for the
-// next batch. There is no wall-clock cursor that can skip older timestamps.
+// Serialize flushers with a transaction advisory lock, never sample row locks
+// across alert I/O. Capture tuple revisions; concurrent upserts remain pending.
+// Rollback/cancellation releases the advisory lock and leaves samples retryable.
 pub(super) async fn flush_pending(
     pool: &PgPool,
     alerts: &dyn AlertEventSink,
     batch_size: i64,
-) -> Result<(), sqlx::Error> {
+) -> Result<usize, sqlx::Error> {
+    let _iteration = citadel_application::runtime_metrics::RuntimeWork::AlertFlush.start();
     let mut tx = pool.begin().await?;
-    let ids: Vec<uuid::Uuid> = sqlx::query_scalar(
-        "SELECT id FROM platformstats WHERE alertpending ORDER BY created,id LIMIT $1 FOR UPDATE SKIP LOCKED",
-    ).bind(batch_size.max(1)).fetch_all(&mut *tx).await?;
-    if ids.is_empty() {
-        return Ok(());
+    let claimed: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(4848495441444534)")
+        .fetch_one(&mut *tx)
+        .await?;
+    if !claimed {
+        return Ok(0);
     }
-    let rows = sqlx::query("WITH samples AS (SELECT * FROM platformstats WHERE id=ANY($1)), medians AS (SELECT platformid,percentile_cont(0.5) WITHIN GROUP(ORDER BY cpuusage) AS cpuusage,percentile_cont(0.5) WITHIN GROUP(ORDER BY memoryusage) AS memoryusage FROM samples GROUP BY platformid), latest AS (SELECT DISTINCT ON(platformid) platformid,diskusage,diskusedbytes,disktotalbytes FROM samples ORDER BY platformid,created DESC) SELECT p.id,p.name,p.agentversion,m.cpuusage,m.memoryusage,l.diskusage,l.diskusedbytes,l.disktotalbytes FROM medians m JOIN platforms p ON p.id=m.platformid JOIN latest l ON l.platformid=m.platformid")
-        .bind(&ids).fetch_all(&mut *tx).await?;
+    let captured: Vec<(uuid::Uuid, String)> = sqlx::query_as(
+        "SELECT id,xmin::text FROM platformstats WHERE alertpending ORDER BY created,id LIMIT $1",
+    )
+    .bind(batch_size.max(1))
+    .fetch_all(&mut *tx)
+    .await?;
+    let (ids, revisions): (Vec<_>, Vec<_>) = captured.into_iter().unzip();
+    citadel_application::runtime_metrics::RuntimeWork::AlertFlush.units(ids.len() as u64);
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let rows = sqlx::query("WITH samples AS (SELECT stats.* FROM platformstats stats JOIN unnest($1::uuid[],$2::text[]) claimed(id,revision) ON stats.id=claimed.id AND stats.xmin::text=claimed.revision), medians AS (SELECT platformid,percentile_cont(0.5) WITHIN GROUP(ORDER BY cpuusage) AS cpuusage,percentile_cont(0.5) WITHIN GROUP(ORDER BY memoryusage) AS memoryusage FROM samples GROUP BY platformid), latest AS (SELECT DISTINCT ON(platformid) platformid,diskusage,diskusedbytes,disktotalbytes FROM samples ORDER BY platformid,created DESC) SELECT p.id,p.name,p.agentversion,m.cpuusage,m.memoryusage,l.diskusage,l.diskusedbytes,l.disktotalbytes FROM medians m JOIN platforms p ON p.id=m.platformid JOIN latest l ON l.platformid=m.platformid")
+        .bind(&ids).bind(&revisions).fetch_all(&mut *tx).await?;
     for row in rows {
         let platform = row.try_get("id")?;
         super::platforms::observe_metric_row(alerts, platform, row)
             .await
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     }
-    sqlx::query("UPDATE platformstats SET alertpending=false WHERE id=ANY($1)")
+    sqlx::query("UPDATE platformstats stats SET alertpending=false FROM unnest($1::uuid[],$2::text[]) claimed(id,revision) WHERE stats.id=claimed.id AND stats.xmin::text=claimed.revision")
         .bind(&ids)
+        .bind(&revisions)
         .execute(&mut *tx)
         .await?;
-    tx.commit().await
+    tx.commit().await?;
+    Ok(ids.len())
 }

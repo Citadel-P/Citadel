@@ -3,19 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Semaphore;
 
-struct Alerts;
-impl AlertEventSink for Alerts {
-    fn observe<'a>(
-        &'a self,
-        _: &'a AlertObservation,
-    ) -> futures_util::future::BoxFuture<
-        'a,
-        Result<Option<citadel_alerts::AlertEventView>, citadel_alerts::AlertError>,
-    > {
-        Box::pin(async { Ok(None) })
-    }
-}
-
 // Executes the actual worker loop: burst coalescing and one follow-up when an
 // event arrives during Docker I/O. A closed realtime receiver cannot stale a commit.
 #[tokio::test]
@@ -74,6 +61,11 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
                 }
                 bytes.extend_from_slice(&chunk[..n]);
             }
+            // Cancellation may close a newly accepted connection before its
+            // request is written. That is a normal transport shutdown.
+            if !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                continue;
+            }
             let text = String::from_utf8_lossy(&bytes);
             let path = text
                 .split_whitespace()
@@ -116,17 +108,20 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .execute(&pool)
         .await
         .unwrap();
+    let targets = PlatformRuntimeRegistry::new(pool.clone(), None);
+    assert!(targets.refresh().await.is_err());
     let worker = tokio::spawn(inventory_reconciliation(
         stop.clone(),
         InventoryReconciliationWorker {
             node_agent_policy: Default::default(),
             docker: DockerClient::new(&socket, Duration::from_secs(5)).unwrap(),
-            agent: None,
+            targets: targets.clone(),
+            budget: targets.inventory_budget.clone(),
             pool: pool.clone(),
             local_triggers,
             agent_triggers,
+            agent_overflow: Arc::new(AtomicBool::new(false)),
             realtime: Some(hub),
-            alerts: Arc::new(Alerts),
             interval: Duration::from_secs(3600),
             retry_delay: Duration::from_millis(20),
         },
@@ -141,6 +136,8 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .execute(&pool)
         .await
         .unwrap();
+    targets.refresh().await.unwrap();
+    local.try_send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(5), updates.recv())
         .await
         .unwrap()
@@ -183,6 +180,11 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
             .is_err()
     );
     drop(updates);
+    sqlx::query("UPDATE swarmnodeprojections SET isstale=true WHERE platformid=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
     local.try_send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {

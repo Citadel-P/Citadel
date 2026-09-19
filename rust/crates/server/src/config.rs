@@ -66,6 +66,7 @@ pub struct Config {
     pub node_agent_policy:
         citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
+    pub retention_interval: Duration,
     pub stats_batch_size: usize,
     pub build_parallel_runs: usize,
     pub build_retention_days: Option<i32>,
@@ -191,6 +192,7 @@ pub struct EffectiveConfig {
     pub docker_request_timeout_seconds: u64,
     pub probe_interval_seconds: u64,
     pub reconciliation_interval_seconds: u64,
+    pub retention_interval_seconds: u64,
     pub event_queue_capacity: usize,
     pub shutdown_timeout_seconds: u64,
     pub agent_configured: bool,
@@ -315,6 +317,10 @@ impl Config {
                         }
                     },
                 },
+            retention_interval: Duration::from_secs(nonzero_seconds(
+                "CITADEL_RUST_RETENTION_INTERVAL_SECONDS",
+                900,
+            )?),
             stats_flush_interval: Duration::from_secs(positive_usize(
                 "JobConfiguration__FlashInterval",
                 60,
@@ -358,6 +364,7 @@ impl Config {
             docker_request_timeout_seconds: self.docker_request_timeout.as_secs(),
             probe_interval_seconds: self.probe_interval.as_secs(),
             reconciliation_interval_seconds: self.reconciliation_interval.as_secs(),
+            retention_interval_seconds: self.retention_interval.as_secs(),
             event_queue_capacity: self.event_queue_capacity,
             shutdown_timeout_seconds: self.shutdown_timeout.as_secs(),
             agent_configured: self.agent.is_some(),

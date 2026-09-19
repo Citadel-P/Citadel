@@ -5,8 +5,6 @@ use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const RETENTION_SECONDS: i64 = 7 * 24 * 60 * 60;
-
 #[derive(Clone)]
 pub struct PostgresContainerStatsStore {
     pool: PgPool,
@@ -96,6 +94,7 @@ pub(crate) async fn persist_scoped_with_disk(
     stats: &[RuntimeContainerStat],
     disk: Option<citadel_platforms::HostDiskUsage>,
 ) -> Result<usize, RuntimeCapabilityError> {
+    let _iteration = citadel_application::runtime_metrics::RuntimeWork::StatsPersistence.start();
     let disk = disk.and_then(|d| {
         citadel_platforms::HostDiskUsage::new(d.used_bytes, d.total_bytes, d.usage_percent)
     });
@@ -202,35 +201,7 @@ SELECT COUNT(*) FROM inserted
             .fetch_one(&mut **transaction)
             .await
             .map_err(storage)?;
-    let retention_cutoff = chrono::Utc::now()
-        .timestamp()
-        .saturating_sub(RETENTION_SECONDS);
-    sqlx::query("DELETE FROM containerstats WHERE id IN (SELECT id FROM containerstats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
-                .bind(retention_cutoff)
-                .execute(&mut **transaction)
-                .await
-                .map_err(storage)?;
-    sqlx::query("DELETE FROM platformstats WHERE id IN (SELECT id FROM platformstats WHERE created < $1 AND NOT alertpending ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
-                .bind(retention_cutoff)
-                .execute(&mut **transaction)
-                .await
-                .map_err(storage)?;
-    sqlx::query("DELETE FROM swarmservicestats WHERE id IN (SELECT id FROM swarmservicestats WHERE created < $1 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)")
-                .bind(retention_cutoff)
-                .execute(&mut **transaction)
-                .await
-                .map_err(storage)?;
     Ok(usize::try_from(inserted).unwrap_or(usize::MAX))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retention_is_bounded_to_seven_days() {
-        assert_eq!(RETENTION_SECONDS, 604_800);
-    }
 }
 
 /// Statistics update descriptor/counts only. Connectivity belongs to the health worker.
@@ -244,7 +215,7 @@ pub(crate) async fn persist_platform_metadata(
         "containersPaused": sample.containers_paused, "containersStopped": sample.containers_stopped,
         "imageUsedBytes": sample.image_used_bytes, "volumeUsedBytes": sample.volume_used_bytes,
     });
-    sqlx::query("UPDATE platforms SET networkcount=$2, volumecount=$3, imagecount=$4, memtotal=$5, platformdescriptor=(platformdescriptor::jsonb || $6::jsonb)::json WHERE id=$1")
+    sqlx::query("UPDATE platforms SET networkcount=$2, volumecount=$3, imagecount=$4, memtotal=$5, platformdescriptor=(platformdescriptor::jsonb || $6::jsonb)::json WHERE id=$1 AND (networkcount IS DISTINCT FROM $2 OR volumecount IS DISTINCT FROM $3 OR imagecount IS DISTINCT FROM $4 OR memtotal IS DISTINCT FROM $5 OR NOT platformdescriptor::jsonb @> $6::jsonb)")
         .bind(platform).bind(sample.network_count).bind(sample.volume_count).bind(i32::try_from(sample.image_count).unwrap_or(i32::MAX))
         .bind(sample.mem_total).bind(descriptor).execute(&mut **transaction).await.map_err(storage)?;
     Ok(())

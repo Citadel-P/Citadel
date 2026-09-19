@@ -104,13 +104,13 @@ pub(crate) async fn container_event_in(
             .execute(&mut **tx)
             .await?;
     }
-    if state.is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "exited" | "paused")) {
-        if let Some(stack) = row.try_get::<Option<Uuid>, _>("stackid")? {
-            sqlx::query("SELECT pg_notify('citadel_stack_drift', $1)")
-                .bind(stack.to_string())
-                .execute(&mut **tx)
-                .await?;
-        }
+    if state.is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "exited" | "paused"))
+        && let Some(stack) = row.try_get::<Option<Uuid>, _>("stackid")?
+    {
+        sqlx::query("SELECT pg_notify('citadel_stack_drift', $1)")
+            .bind(stack.to_string())
+            .execute(&mut **tx)
+            .await?;
     }
     if row.try_get::<bool, _>("isswarmtask")?
         && state.is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "exited" | "dead"))
@@ -122,6 +122,12 @@ pub(crate) async fn container_event_in(
     }
     reconcile(tx, platform, node, &removed, true).await?;
     Ok(true)
+}
+
+pub async fn platform_online(pool: &PgPool, platform: Uuid) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    platform_status(&mut tx, platform, "Online").await?;
+    tx.commit().await
 }
 
 pub async fn platform_offline(pool: &PgPool, platform: Uuid) -> Result<()> {
@@ -373,69 +379,6 @@ fn stack_status(states: &[&str]) -> &'static str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn stack_states_follow_dotnet_precedence() {
-        for (states, expected) in [
-            (vec![], "Degraded"),
-            (vec!["running", "running"], "Healthy"),
-            (vec!["paused", "paused"], "Paused"),
-            (vec!["exited", "offline"], "Degraded"),
-            (vec!["exited"], "Stopped"),
-            (vec!["offline"], "Degraded"),
-            (vec!["running", "restarting"], "Pending"),
-            (vec!["dead", "created"], "Pending"),
-            (vec!["removing"], "Pending"),
-            (vec!["dead", "dead"], "Failed"),
-            (vec!["unknown"], "Unknown"),
-            (vec!["running", "exited"], "Degraded"),
-        ] {
-            assert_eq!(stack_status(&states), expected);
-        }
-    }
-    #[test]
-    fn status_activities_keep_dotnet_wire_names() {
-        for (info, kind) in [
-            (
-                ActivityEventInfo::DeploymentStarted {
-                    container_ids: vec!["container".into()],
-                },
-                "DeploymentStarted",
-            ),
-            (
-                ActivityEventInfo::DeploymentStopped {
-                    container_ids: vec!["container".into()],
-                },
-                "DeploymentStopped",
-            ),
-            (
-                ActivityEventInfo::DeploymentPaused {
-                    container_ids: vec!["container".into()],
-                },
-                "DeploymentPaused",
-            ),
-            (
-                ActivityEventInfo::DeploymentDegraded {
-                    reason: "missing".into(),
-                },
-                "DeploymentDegraded",
-            ),
-            (
-                ActivityEventInfo::StackDegraded {
-                    reason: "missing".into(),
-                },
-                "StackDegraded",
-            ),
-        ] {
-            let json = serde_json::to_value(&info).unwrap();
-            assert_eq!(json["$type"], kind);
-            assert!(json.get("ContainerIds").is_some() || json.get("Reason").is_some());
-        }
-    }
-}
-
 /// Persist exactly one connection activity with the confirmed transition.
 pub(crate) async fn platform_status(
     tx: &mut Transaction<'_, Postgres>,
@@ -528,22 +471,72 @@ pub(crate) async fn container_metadata_in(
     container: &citadel_platforms::RuntimeContainerSummary,
     observed: i64,
 ) -> Result<()> {
-    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
-        .bind(platform)
-        .fetch_optional(&mut **tx)
-        .await?;
-    let stack = container
-        .labels
-        .get("com.citadel.stack-id")
-        .and_then(|id| Uuid::parse_str(id).ok());
-    let image = if container.image_id.is_empty() {
-        &container.image
-    } else {
-        &container.image_id
-    };
-    sqlx::query("UPDATE containers c SET dockerimageid=$4,ports=$5,issystem=$6,systemrole=$7,hascitadelownershiplabels=$8,isswarmtask=$9,stack=$10,stackid=CASE WHEN c.stackid IS NULL AND c.deploymentid IS NULL THEN (SELECT s.id FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$12 AND r.platformid=$1) ELSE c.stackid END WHERE c.platformid=$1 AND c.dockernodeid IS NOT DISTINCT FROM $2 AND c.dockercontainerid=$3 AND COALESCE(c.projectionobservedat,0)<=$11")
-        .bind(platform).bind(node).bind(&container.id).bind(image).bind(&container.ports).bind(container.is_system)
-        .bind(&container.system_role).bind(container.has_citadel_ownership_labels).bind(container.is_swarm_task)
-        .bind(&container.stack).bind(observed).bind(stack).execute(&mut **tx).await?;
-    Ok(())
+    crate::inventory_projection_store::persist_container_observation(
+        tx, platform, node, container, observed,
+    )
+    .await
+    .map_err(|error| sqlx::Error::Protocol(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn stack_states_follow_dotnet_precedence() {
+        for (states, expected) in [
+            (vec![], "Degraded"),
+            (vec!["running", "running"], "Healthy"),
+            (vec!["paused", "paused"], "Paused"),
+            (vec!["exited", "offline"], "Degraded"),
+            (vec!["exited"], "Stopped"),
+            (vec!["offline"], "Degraded"),
+            (vec!["running", "restarting"], "Pending"),
+            (vec!["dead", "created"], "Pending"),
+            (vec!["removing"], "Pending"),
+            (vec!["dead", "dead"], "Failed"),
+            (vec!["unknown"], "Unknown"),
+            (vec!["running", "exited"], "Degraded"),
+        ] {
+            assert_eq!(stack_status(&states), expected);
+        }
+    }
+    #[test]
+    fn status_activities_keep_dotnet_wire_names() {
+        for (info, kind) in [
+            (
+                ActivityEventInfo::DeploymentStarted {
+                    container_ids: vec!["container".into()],
+                },
+                "DeploymentStarted",
+            ),
+            (
+                ActivityEventInfo::DeploymentStopped {
+                    container_ids: vec!["container".into()],
+                },
+                "DeploymentStopped",
+            ),
+            (
+                ActivityEventInfo::DeploymentPaused {
+                    container_ids: vec!["container".into()],
+                },
+                "DeploymentPaused",
+            ),
+            (
+                ActivityEventInfo::DeploymentDegraded {
+                    reason: "missing".into(),
+                },
+                "DeploymentDegraded",
+            ),
+            (
+                ActivityEventInfo::StackDegraded {
+                    reason: "missing".into(),
+                },
+                "StackDegraded",
+            ),
+        ] {
+            let json = serde_json::to_value(&info).unwrap();
+            assert_eq!(json["$type"], kind);
+            assert!(json.get("ContainerIds").is_some() || json.get("Reason").is_some());
+        }
+    }
 }

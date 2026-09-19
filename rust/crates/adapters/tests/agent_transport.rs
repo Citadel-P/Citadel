@@ -12,7 +12,7 @@ use citadel_contracts::citadel::platforms::v1::{
     PlatformStatsResponse, PruneRequest, PruneResponse, daemon_event_response,
 };
 use citadel_contracts::citadel::shared_models::v1::{PlatformInfoResponse, PlatformStatMessage};
-use citadel_platforms::{PlatformRuntimePort, RuntimeErrorKind};
+use citadel_platforms::{PlatformHealthPort, PlatformRuntimePort, RuntimeErrorKind};
 use futures_util::{Stream, StreamExt};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -61,7 +61,12 @@ impl PlatformService for FixtureService {
         Ok(Response::new(platform_info()))
     }
 
-    async fn check_health(&self, _: Request<()>) -> Result<Response<CheckHealthResponse>, Status> {
+    async fn check_health(
+        &self,
+        request: Request<()>,
+    ) -> Result<Response<CheckHealthResponse>, Status> {
+        assert!(request.metadata().get_bin("x-signature-bin").is_some());
+        assert!(request.metadata().get_bin("x-nonce-bin").is_some());
         Ok(Response::new(CheckHealthResponse { healthy: true }))
     }
 
@@ -186,6 +191,29 @@ async fn start_fixture(
     });
     tokio::time::sleep(Duration::from_millis(20)).await;
     (format!("http://{address}"), attempts, nonces, cancellation)
+}
+
+#[tokio::test]
+async fn health_uses_the_signed_health_rpc_without_inventory_handshakes() {
+    let (address, attempts, _, stop) = start_fixture(HandshakeBehavior::FailOnce).await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[5; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let token = CancellationToken::new();
+    client.probe(&token).await.unwrap();
+    client.probe(&token).await.unwrap();
+    assert_eq!(attempts.load(Ordering::Relaxed), 0);
+    token.cancel();
+    assert_eq!(
+        client.probe(&token).await.unwrap_err().kind,
+        RuntimeErrorKind::Cancelled
+    );
+    stop.cancel();
 }
 
 #[tokio::test]

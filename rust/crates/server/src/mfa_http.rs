@@ -407,6 +407,19 @@ fn authentication_cookie_id(headers: &HeaderMap, name: &str) -> Result<Uuid, Ide
         .ok_or(IdentityError::Unauthenticated)
 }
 
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(verify_authentication))
+        .normalized_routes(utoipa_axum::routes!(get_mandatory_setup))
+        .normalized_routes(utoipa_axum::routes!(confirm_mandatory_setup))
+        .normalized_routes(utoipa_axum::routes!(get_profile_status))
+        .normalized_routes(utoipa_axum::routes!(start_profile_setup))
+        .normalized_routes(utoipa_axum::routes!(confirm_profile_setup))
+        .normalized_routes(utoipa_axum::routes!(disable_profile_mfa))
+        .normalized_routes(utoipa_axum::routes!(regenerate_recovery_codes))
+        .normalized_routes(utoipa_axum::routes!(reset_user_mfa))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::http::header::COOKIE;
@@ -435,17 +448,4 @@ mod tests {
             Err(IdentityError::Unauthenticated)
         ));
     }
-}
-
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
-    utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(verify_authentication))
-        .normalized_routes(utoipa_axum::routes!(get_mandatory_setup))
-        .normalized_routes(utoipa_axum::routes!(confirm_mandatory_setup))
-        .normalized_routes(utoipa_axum::routes!(get_profile_status))
-        .normalized_routes(utoipa_axum::routes!(start_profile_setup))
-        .normalized_routes(utoipa_axum::routes!(confirm_profile_setup))
-        .normalized_routes(utoipa_axum::routes!(disable_profile_mfa))
-        .normalized_routes(utoipa_axum::routes!(regenerate_recovery_codes))
-        .normalized_routes(utoipa_axum::routes!(reset_user_mfa))
 }

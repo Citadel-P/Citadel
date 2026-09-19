@@ -369,13 +369,13 @@ impl ActorPrincipal {
 pub struct PermissionGrant {
     pub resource_type: ResourceType,
     pub level: PermissionLevel,
-    pub specific_mask: i32,
+    pub specifics: citadel_domain::SpecificPermissions,
 }
 
 impl PermissionGrant {
     #[must_use]
     pub const fn has_specific(self, permission: SpecificPermission) -> bool {
-        self.specific_mask & permission as i32 != 0
+        self.specifics.contains(permission)
     }
 }
 
@@ -628,7 +628,7 @@ mod tests {
             direct_and_team_permissions: vec![PermissionGrant {
                 resource_type: ResourceType::ServiceAccount,
                 level: PermissionLevel::Read,
-                specific_mask: SpecificPermission::Use as i32,
+                specifics: SpecificPermission::Use.into(),
             }],
         };
         assert!(snapshot.permits(

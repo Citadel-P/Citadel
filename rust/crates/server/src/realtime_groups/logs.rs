@@ -216,11 +216,8 @@ impl ApplicationGroupReader {
             "StartStackLogs" => Group::parse(&format!("stack-log:{id}")),
             "StartDeploymentLogs" => {
                 let id = Uuid::parse_str(id).map_err(|_| RealtimeReadError::Authorization)?;
-                self.permission(
-                    p,
-                    ResourceType::Deployment,
-                    Some(id),
-                    Some(SpecificPermission::Logs),
+                self.deployment_permission::<citadel_deployments::permissions::ViewDeploymentLogs>(
+                    p, id,
                 )
                 .await?;
                 let deployment = self

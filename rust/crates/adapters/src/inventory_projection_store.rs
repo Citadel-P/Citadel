@@ -11,6 +11,7 @@ const STALE_RETENTION_HOURS: i32 = 24;
 
 #[derive(Clone)]
 pub struct PostgresInventoryProjectionStore {
+    health_owned: bool,
     pool: PgPool,
     node_policy: crate::node_agent_reconciliation::NodeAgentReconciliationPolicy,
 }
@@ -20,8 +21,14 @@ impl PostgresInventoryProjectionStore {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
+            health_owned: false,
             node_policy: Default::default(),
         }
+    }
+
+    pub fn with_health_owner(mut self) -> Self {
+        self.health_owned = true;
+        self
     }
 
     pub fn with_node_policy(
@@ -127,7 +134,13 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
         async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             validate_snapshot_identity(&mut transaction, snapshot).await?;
-            persist_snapshot(&mut transaction, snapshot, Some(&self.node_policy)).await?;
+            persist_snapshot_with_health(
+                &mut transaction,
+                snapshot,
+                Some(&self.node_policy),
+                !self.health_owned,
+            )
+            .await?;
             transaction.commit().await.map_err(storage)?;
             Ok(InventoryProjectionChange {
                 platform_id: snapshot.platform_id,
@@ -255,17 +268,36 @@ pub(crate) async fn persist_snapshot(
     snapshot: &RuntimeInventorySnapshot,
     node_policy: Option<&crate::node_agent_reconciliation::NodeAgentReconciliationPolicy>,
 ) -> Result<(), RuntimeCapabilityError> {
+    persist_snapshot_with_health(transaction, snapshot, node_policy, true).await
+}
+
+async fn persist_snapshot_with_health(
+    transaction: &mut Transaction<'_, Postgres>,
+    snapshot: &RuntimeInventorySnapshot,
+    node_policy: Option<&crate::node_agent_reconciliation::NodeAgentReconciliationPolicy>,
+    update_health: bool,
+) -> Result<(), RuntimeCapabilityError> {
     if snapshot.swarm.is_some() {
         // The event worker and a post-mutation refresh can finish in reverse
         // order. Serialize their short commits and never restore an older
         // manager observation over a newer one (including resource versions).
         sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
-            .bind(snapshot.platform_id).fetch_optional(&mut **transaction).await.map_err(storage)?;
+            .bind(snapshot.platform_id)
+            .fetch_optional(&mut **transaction)
+            .await
+            .map_err(storage)?;
         let newer: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1 AND observedat>$2)")
             .bind(snapshot.platform_id).bind(snapshot.observed_at).fetch_one(&mut **transaction).await.map_err(storage)?;
-        if newer { return Ok(()); }
+        if newer {
+            return Ok(());
+        }
     }
     persist_platform(transaction, snapshot).await?;
+    if update_health {
+        crate::resource_status_store::platform_status(transaction, snapshot.platform_id, "Online")
+            .await
+            .map_err(storage)?;
+    }
     persist_images(transaction, snapshot).await?;
     persist_containers(transaction, snapshot, None).await?;
     if let Some(swarm) = &snapshot.swarm {
@@ -351,9 +383,6 @@ WHERE id = $1
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
-    crate::resource_status_store::platform_status(transaction, snapshot.platform_id, "Online")
-        .await
-        .map_err(storage)?;
     Ok(())
 }
 
@@ -404,28 +433,69 @@ pub(crate) async fn persist_containers(
     snapshot: &RuntimeInventorySnapshot,
     node_id: Option<&str>,
 ) -> Result<(), RuntimeCapabilityError> {
+    persist_container_set(
+        transaction,
+        snapshot.platform_id,
+        &snapshot.containers,
+        node_id,
+        snapshot.observed_at.timestamp(),
+        true,
+    )
+    .await
+}
+
+/// A fully inspected container is authoritative for itself, never for absent siblings.
+pub(crate) async fn persist_container_observation(
+    transaction: &mut Transaction<'_, Postgres>,
+    platform_id: uuid::Uuid,
+    node_id: Option<&str>,
+    container: &citadel_platforms::RuntimeContainerSummary,
+    observed: i64,
+) -> Result<(), RuntimeCapabilityError> {
+    persist_container_set(
+        transaction,
+        platform_id,
+        std::slice::from_ref(container),
+        node_id,
+        observed,
+        false,
+    )
+    .await
+}
+
+async fn persist_container_set(
+    transaction: &mut Transaction<'_, Postgres>,
+    platform_id: uuid::Uuid,
+    containers: &[citadel_platforms::RuntimeContainerSummary],
+    node_id: Option<&str>,
+    observed: i64,
+    complete: bool,
+) -> Result<(), RuntimeCapabilityError> {
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
-        .bind(snapshot.platform_id)
+        .bind(platform_id)
         .fetch_optional(&mut **transaction)
         .await
         .map_err(storage)?;
-    let incoming_ids: Vec<_> = snapshot.containers.iter().map(|c| c.id.clone()).collect();
-    let removed = crate::resource_status_store::removed_bindings(
-        transaction,
-        snapshot.platform_id,
-        node_id,
-        &incoming_ids,
-        snapshot.observed_at.timestamp(),
-    )
-    .await
-    .map_err(storage)?;
+    let incoming_ids: Vec<_> = containers.iter().map(|c| c.id.clone()).collect();
+    let removed = if complete {
+        crate::resource_status_store::removed_bindings(
+            transaction,
+            platform_id,
+            node_id,
+            &incoming_ids,
+            observed,
+        )
+        .await
+        .map_err(storage)?
+    } else {
+        Default::default()
+    };
     // Transactional notifications are delivered only after the new inventory commits.
     // Every transport uses this projection path, including node-scoped Edge inventory.
     sqlx::query("SELECT pg_notify('citadel_container_created', json_build_object('platform', $1::uuid, 'container', incoming, 'node', $3::text)::text) FROM unnest($2::text[]) incoming WHERE NOT EXISTS(SELECT 1 FROM containers WHERE platformid=$1 AND dockercontainerid=incoming AND dockernodeid IS NOT DISTINCT FROM $3)")
-        .bind(snapshot.platform_id).bind(&incoming_ids).bind(node_id)
+        .bind(platform_id).bind(&incoming_ids).bind(node_id)
         .execute(&mut **transaction).await.map_err(storage)?;
-    let payload = json(&snapshot.containers)?;
-    let observed = snapshot.observed_at.timestamp();
+    let payload = json(&containers)?;
     let conflict = if node_id.is_some() {
         "(dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL"
     } else {
@@ -445,7 +515,9 @@ WITH incoming AS (
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, rowversion,
         projectionobservedat, dockernodeid, stackid, deploymentid)
-    SELECT gen_random_uuid(), $1, incoming.id, incoming.name, incoming."imageId",
+    SELECT gen_random_uuid(), $1, incoming.id, incoming.name,
+           CASE WHEN NOT $5::boolean AND incoming."imageId" = ''
+                THEN incoming.image ELSE incoming."imageId" END,
            incoming.created, initcap(incoming.state), 'Idle', $3, incoming.stack,
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
@@ -490,16 +562,17 @@ WITH incoming AS (
     RETURNING dockercontainerid
 )
 DELETE FROM containers container
-WHERE container.platformid = $1
+WHERE $5::boolean AND container.platformid = $1
   AND container.dockernodeid IS NOT DISTINCT FROM $4
   AND COALESCE(container.projectionobservedat, 0) <= $3
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = container.dockercontainerid)
 "#
     )))
-    .bind(snapshot.platform_id)
+    .bind(platform_id)
     .bind(payload)
     .bind(observed)
     .bind(node_id)
+    .bind(complete)
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
@@ -510,17 +583,23 @@ SET imageid = image.id
 FROM images image
 WHERE container.platformid = $1
   AND container.dockernodeid IS NOT DISTINCT FROM $2
+  AND ($3::boolean OR container.dockercontainerid=ANY($4::text[]))
   AND image.platformid = container.platformid
   AND image.dockerimageid = container.dockerimageid
 "#,
     )
-    .bind(snapshot.platform_id)
+    .bind(platform_id)
     .bind(node_id)
+    .bind(complete)
+    .bind(&incoming_ids)
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
-    crate::resource_status_store::reconcile(transaction, snapshot.platform_id, node_id, &removed, false)
-        .await.map_err(storage)?;
+    if complete {
+        crate::resource_status_store::reconcile(transaction, platform_id, node_id, &removed, false)
+            .await
+            .map_err(storage)?;
+    }
     Ok(())
 }
 

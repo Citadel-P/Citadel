@@ -72,6 +72,10 @@ impl PostgresBackupStore {
             let id = Uuid::now_v7();
             let repo: Uuid = p.try_get("backuprepositoryid").map_err(storage)?;
             sqlx::query("INSERT INTO backupruns(id,backuppolicyid,policynamesnapshot,backuprepositoryid,repositorytypesnapshot,sourcesnapshot,trigger,status,snapshotavailability,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Queued','Pending',$8)").bind(id).bind(policy_id).bind(p.try_get::<String,_>("name").map_err(storage)?).bind(repo).bind(p.try_get::<String,_>("type").map_err(storage)?).bind(p.try_get::<Value,_>("source").map_err(storage)?).bind(trigger).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("SELECT pg_notify('citadel_backup_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             sqlx::query("UPDATE backuppolicies SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(policy_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             self.get_run(id).await
@@ -603,6 +607,10 @@ ORDER BY policy.name,policy.id"#
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
+            sqlx::query("SELECT pg_notify('citadel_backup_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             let updated = sqlx::query("UPDATE backuppolicies SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,lastscheduledrunat=$3,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND controlstate='Idle'")
                 .bind(policy_id)
                 .bind(id)
@@ -937,7 +945,13 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
                 ));
             }
             let id = Uuid::now_v7();
-            sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,sourcebackuprunitemid,targetplatformid,targetdockernodeid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,'Queued',$9)").bind(id).bind(request.backup_run_id).bind(source.backup_repository_id).bind(selected_item.map(|item| item.id)).bind(request.target_platform_id).bind(request.target_docker_node_id).bind(name).bind(request.overwrite_existing).bind(request.actor.value()).execute(&self.pool).await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,sourcebackuprunitemid,targetplatformid,targetdockernodeid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,'Queued',$9)").bind(id).bind(request.backup_run_id).bind(source.backup_repository_id).bind(selected_item.map(|item| item.id)).bind(request.target_platform_id).bind(request.target_docker_node_id).bind(name).bind(request.overwrite_existing).bind(request.actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("SELECT pg_notify('citadel_restore_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
             self.get_restore(id).await
         })
     }

@@ -450,10 +450,10 @@ impl StackService {
         }
         let result = self.reconcile_drift(actor, true, id).await?;
         let report = result.after_report.unwrap_or(result.before_report);
-        if let Some((status, info)) = drift_status_update(&stack, &report) {
-            if self.store.record_drift(&stack, status, info).await? {
-                self.notifier.changed(id, "driftChanged");
-            }
+        if let Some((status, info)) = drift_status_update(&stack, &report)
+            && self.store.record_drift(&stack, status, info).await?
+        {
+            self.notifier.changed(id, "driftChanged");
         }
         Ok(())
     }
@@ -2390,8 +2390,10 @@ mod tests {
     // Port: StackDriftMonitorJobTests die on AutoFix vs intentional stop.
     #[test]
     fn daemon_drift_repair_only_targets_idle_healthy_or_degraded_auto_fix_stacks() {
-        let mut policy = StackDriftPolicy::default();
-        policy.mode = crate::StackDriftMode::AutoFix;
+        let mut policy = StackDriftPolicy {
+            mode: crate::StackDriftMode::AutoFix,
+            ..Default::default()
+        };
         for status in [StackReleaseStatus::Healthy, StackReleaseStatus::Degraded] {
             let mut value = stack(status, policy.clone());
             assert!(event_drift_eligible(&value));

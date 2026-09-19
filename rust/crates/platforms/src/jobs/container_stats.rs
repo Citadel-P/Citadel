@@ -27,7 +27,20 @@ where
     S: ContainerStatsSampler + Clone + 'static,
 {
     let containers = source.list_containers(cancellation).await?;
-    let results = stream::iter(
+    sample_running_container_stats(source, containers, 8, cancellation).await
+}
+
+/// Sample an already-discovered set. The caller owns discovery and the I/O budget.
+pub async fn sample_running_container_stats<S>(
+    source: &S,
+    containers: Vec<crate::RuntimeContainerSummary>,
+    concurrency: usize,
+    cancellation: &CancellationToken,
+) -> Result<ContainerStatsBatch, RuntimeCapabilityError>
+where
+    S: ContainerStatsSampler + Clone + 'static,
+{
+    let samples = stream::iter(
         containers
             .into_iter()
             .filter(|container| container.state == "running")
@@ -42,9 +55,13 @@ where
                 }
             }),
     )
-    .buffer_unordered(8)
-    .collect::<Vec<_>>()
-    .await;
+    .buffer_unordered(concurrency.clamp(1, 32))
+    .collect::<Vec<_>>();
+    let results = tokio::select! {
+        biased;
+        () = cancellation.cancelled() => return Err(RuntimeCapabilityError::new(crate::RuntimeErrorKind::Cancelled, "Sampling cancelled", false)),
+        results = samples => results,
+    };
     let failed_samples = results.iter().filter(|result| result.is_err()).count();
     let stats = results.into_iter().filter_map(Result::ok).collect();
     Ok(ContainerStatsBatch {
@@ -73,8 +90,14 @@ mod tests {
     use super::*;
     use crate::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimeStatsStream};
 
-    #[derive(Clone)]
-    struct Fixture;
+    #[derive(Default)]
+    struct Counters {
+        active: std::sync::atomic::AtomicUsize,
+        peak: std::sync::atomic::AtomicUsize,
+        lists: std::sync::atomic::AtomicUsize,
+    }
+    #[derive(Clone, Default)]
+    struct Fixture(std::sync::Arc<Counters>);
 
     impl PlatformRuntimePort for Fixture {
         fn get_info<'a>(
@@ -88,6 +111,9 @@ mod tests {
             &'a self,
             _cancellation: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+            self.0
+                .lists
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Box::pin(async {
                 Ok(vec![
                     RuntimeContainerSummary {
@@ -142,6 +168,18 @@ mod tests {
             _cancellation: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<RuntimeContainerStat, RuntimeCapabilityError>> {
             async move {
+                let active = self
+                    .0
+                    .active
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                    + 1;
+                self.0
+                    .peak
+                    .fetch_max(active, std::sync::atomic::Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(2)).await;
+                self.0
+                    .active
+                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 Ok(RuntimeContainerStat {
                     docker_container_id: container_id.into(),
                     memory_active: 0.0,
@@ -159,11 +197,41 @@ mod tests {
 
     #[tokio::test]
     async fn samples_only_running_containers() {
-        let batch = collect_running_container_stats(&Fixture, &CancellationToken::new())
+        let batch = collect_running_container_stats(&Fixture::default(), &CancellationToken::new())
             .await
             .unwrap();
         assert_eq!(batch.failed_samples, 0);
         assert_eq!(batch.stats.len(), 1);
         assert_eq!(batch.stats[0].docker_container_id, "running");
+    }
+    #[tokio::test]
+    async fn supplied_discovery_respects_the_explicit_sampling_budget() {
+        let source = Fixture::default();
+        let cancel = CancellationToken::new();
+        let container = source.list_containers(&cancel).await.unwrap().remove(0);
+        let containers = (0..48)
+            .map(|id| {
+                let mut value = container.clone();
+                value.id = id.to_string();
+                value
+            })
+            .collect();
+        let batch = sample_running_container_stats(&source, containers, 3, &cancel)
+            .await
+            .unwrap();
+        assert_eq!(batch.stats.len(), 48);
+        assert_eq!(source.0.peak.load(std::sync::atomic::Ordering::SeqCst), 3);
+        assert_eq!(
+            source.0.lists.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the sampler must reuse supplied discovery"
+        );
+        cancel.cancel();
+        assert!(
+            sample_running_container_stats(&source, vec![container], 3, &cancel)
+                .await
+                .is_err()
+        );
+        assert_eq!(source.0.active.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 }

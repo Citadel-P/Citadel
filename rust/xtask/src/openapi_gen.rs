@@ -215,10 +215,9 @@ fn validate_references(document: &Value) -> Result<(), Box<dyn std::error::Error
                     .get("$ref")
                     .and_then(Value::as_str)
                     .and_then(|r| r.strip_prefix('#'))
+                    && document.pointer(reference).is_none()
                 {
-                    if document.pointer(reference).is_none() {
-                        return Err(format!("Dangling OpenAPI reference: #{reference}").into());
-                    }
+                    return Err(format!("Dangling OpenAPI reference: #{reference}").into());
                 }
                 for value in map.values() {
                     walk(value, document)?;

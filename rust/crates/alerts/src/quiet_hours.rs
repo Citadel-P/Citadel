@@ -205,7 +205,7 @@ mod tests {
     fn weekly_full_day_names_use_previous_day_after_midnight() {
         let hour = weekly("Sunday", "22:00:00", "02:00:00");
         assert!(is_in_quiet_hours(
-            &[hour.clone()],
+            std::slice::from_ref(&hour),
             "2026-07-19T23:00:00Z".parse().unwrap()
         ));
         assert!(!is_in_quiet_hours(

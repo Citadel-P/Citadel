@@ -32,18 +32,22 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     startup::migrate(&config).await?;
-    let job_lease = std::sync::Arc::new(tokio::sync::Mutex::new(
-        startup::acquire_job_lease(&config).await?,
-    ));
+    let job_lease = startup::acquire_job_lease(&config).await?;
     let (state, pending_jobs) = AppState::build(&config).await?;
     startup::run(&state).await?;
     let cancellation = state.cancellation.clone();
     let pool = state.pool.clone();
+    let dynamic_tasks = state.dynamic_tasks.clone();
     let mut supervisor = jobs::spawn_all(&state, pending_jobs, &config).await?;
-    supervisor.spawn(
-        "core-job-lease",
-        startup::watch_job_lease(job_lease.clone(), cancellation.clone()),
-    );
+    // The watcher owns the connection by value. Return it on cancellation so
+    // the advisory lease remains held through worker/dynamic-task cleanup.
+    let (lease_return, lease_retained) = tokio::sync::oneshot::channel();
+    let lease_cancel = cancellation.clone();
+    supervisor.spawn("core-job-lease", async move {
+        let connection = startup::watch_job_lease(job_lease, lease_cancel).await?;
+        let _ = lease_return.send(connection);
+        Ok::<_, sqlx::Error>(())
+    });
     let api::Routers {
         http: app,
         edge: edge_app,
@@ -67,11 +71,18 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         server_result = &mut server => ServerExit::Server(server_result),
         task_result = supervisor.wait_for_exit() => ServerExit::Task(task_result),
     };
+    let shutdown_deadline = tokio::time::Instant::now() + config.shutdown_timeout;
     cancellation.cancel();
     if matches!(exit, ServerExit::Task(_)) {
-        let _ = tokio::time::timeout(config.shutdown_timeout, &mut server).await;
+        let _ = tokio::time::timeout_at(shutdown_deadline, &mut server).await;
     }
-    let supervisor_result = supervisor.shutdown(config.shutdown_timeout).await;
+    let supervisor_result = supervisor
+        .shutdown(shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()))
+        .await;
+    let dynamic_result = dynamic_tasks
+        .drain(shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()))
+        .await;
+    let _retained_job_lease = lease_retained.await.ok();
     let pool_close_result = tokio::time::timeout(config.shutdown_timeout, pool.close()).await;
 
     match exit {
@@ -79,6 +90,12 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         ServerExit::Task(result) => result?,
     }
     supervisor_result?;
+    if dynamic_result.is_err() {
+        return Err(
+            "Dynamic task cleanup exceeded the shutdown budget; durable claims remain recoverable"
+                .into(),
+        );
+    }
     if pool_close_result.is_err() {
         return Err("PostgreSQL pool close exceeded the shutdown timeout".into());
     }

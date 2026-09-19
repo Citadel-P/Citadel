@@ -15,20 +15,20 @@ use uuid::Uuid;
 pub mod agent_setup;
 pub mod containers;
 pub mod deletion;
-pub mod images;
 pub mod image_pull;
+pub mod images;
 mod inventory;
 pub mod jobs;
 pub mod logs;
 pub mod management;
-pub mod prune;
 mod mutations;
 pub mod node_agents;
+pub mod prune;
 mod read;
 mod registration;
 mod statistics;
-pub mod swarm_overview;
 pub mod swarm_mutations;
+pub mod swarm_overview;
 pub mod terminal;
 pub mod volume_content;
 
@@ -178,6 +178,14 @@ impl RuntimeCapabilityError {
             retryable,
         }
     }
+}
+
+/// Reachability without inventory discovery. Edge health is owned by its authenticated session.
+pub trait PlatformHealthPort: Send + Sync {
+    fn probe<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
 }
 
 pub trait PlatformRuntimePort: Send + Sync {

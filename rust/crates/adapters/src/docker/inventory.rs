@@ -12,7 +12,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use super::DockerClient;
-use super::generated::{
+use super::projection::{
     ContainerStats, DockerNetwork, DockerVolume, ImageSummary, SwarmConfig, SwarmNode, SwarmSecret,
     SwarmService, SwarmTask,
 };
@@ -333,8 +333,17 @@ pub(crate) fn map_node(value: SwarmNode) -> RuntimeSwarmNode {
 
 fn swarm_node_enum(value: String) -> String {
     if let Some(known) = [
-        "Manager", "Worker", "Reachable", "Unreachable", "Unknown", "Ready", "Down",
-        "Disconnected", "Active", "Pause", "Drain",
+        "Manager",
+        "Worker",
+        "Reachable",
+        "Unreachable",
+        "Unknown",
+        "Ready",
+        "Down",
+        "Disconnected",
+        "Active",
+        "Pause",
+        "Drain",
     ]
     .into_iter()
     .find(|known| known.eq_ignore_ascii_case(&value))
@@ -558,7 +567,7 @@ fn bounded_i32(value: u64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::docker::generated::{ObjectVersion, SwarmService};
+    use crate::docker::projection::{ObjectVersion, SwarmService};
     use serde_json::json;
 
     #[test]
@@ -589,23 +598,23 @@ mod tests {
     #[test]
     fn maps_container_stats_like_docker_stats_without_cache() {
         let value = ContainerStats {
-            cpu_stats: super::super::generated::CpuStats {
-                cpu_usage: super::super::generated::CpuUsage {
+            cpu_stats: super::super::projection::CpuStats {
+                cpu_usage: super::super::projection::CpuUsage {
                     total_usage: 300,
                     percpu_usage: vec![1, 1],
                 },
                 system_cpu_usage: 1_000,
                 online_cpus: 2,
             },
-            precpu_stats: super::super::generated::CpuStats {
-                cpu_usage: super::super::generated::CpuUsage {
+            precpu_stats: super::super::projection::CpuStats {
+                cpu_usage: super::super::projection::CpuUsage {
                     total_usage: 200,
                     ..Default::default()
                 },
                 system_cpu_usage: 500,
                 ..Default::default()
             },
-            memory_stats: super::super::generated::MemoryStats {
+            memory_stats: super::super::projection::MemoryStats {
                 usage: 1_000,
                 stats: [("inactive_file".to_owned(), 250), ("file".to_owned(), 300)]
                     .into_iter()
@@ -614,7 +623,7 @@ mod tests {
             },
             networks: [(
                 "eth0".to_owned(),
-                super::super::generated::NetworkStats {
+                super::super::projection::NetworkStats {
                     rx_bytes: 10,
                     tx_bytes: 20,
                     ..Default::default()

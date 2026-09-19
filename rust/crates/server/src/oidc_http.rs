@@ -511,21 +511,6 @@ fn invalid_query(error: QueryRejection, headers: &HeaderMap) -> Response {
     identity_error_response(crate::request_validation::invalid_query(error), headers)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn callback_replaces_public_url_path_and_query() {
-        let public_url = Url::parse("https://citadel.test/base?ignored=true").unwrap();
-        let provider_id = Uuid::now_v7();
-        assert_eq!(
-            callback_url(&public_url, provider_id).as_str(),
-            format!("https://citadel.test/api/v1/authentication/oidc/{provider_id}/callback")
-        );
-    }
-}
-
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<OidcHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_login_providers))
@@ -540,4 +525,19 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<OidcHttp
         .normalized_routes(utoipa_axum::routes!(delete_provider))
         .normalized_routes(utoipa_axum::routes!(test_provider_discovery))
         .normalized_routes(utoipa_axum::routes!(test_discovery))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn callback_replaces_public_url_path_and_query() {
+        let public_url = Url::parse("https://citadel.test/base?ignored=true").unwrap();
+        let provider_id = Uuid::now_v7();
+        assert_eq!(
+            callback_url(&public_url, provider_id).as_str(),
+            format!("https://citadel.test/api/v1/authentication/oidc/{provider_id}/callback")
+        );
+    }
 }

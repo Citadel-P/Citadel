@@ -18,11 +18,12 @@ pub(super) async fn stack_updates(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(Duration::from_secs(30));
+    let mut ticker = super::schedule::interval("stack-updates", Duration::from_secs(30));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_images = Some(tokio::time::Instant::now());
     loop {
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::StackUpdates.start();
         let images = last_images.is_none_or(|last: tokio::time::Instant| {
             last.elapsed() >= Duration::from_secs(2 * 60 * 60)
         });
@@ -41,13 +42,14 @@ pub(super) async fn stack_webhooks(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(Duration::from_secs(5));
+    let mut ticker = super::schedule::interval("stack-webhooks", Duration::from_secs(5));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::StackWebhooks.start();
         if let Err(error) = stacks.process_webhooks().await {
             tracing::warn!(%error,"Stack webhook dispatch failed");
         }
@@ -66,6 +68,7 @@ pub(super) async fn stack_operation_reconciliation(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::StackRecovery.start();
         match stacks
             .reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH)
             .await
@@ -81,7 +84,7 @@ pub(super) async fn stack_drift_monitor(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(DRIFT_MONITOR_INTERVAL);
+    let mut ticker = super::schedule::interval("stack-drift", DRIFT_MONITOR_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
@@ -89,6 +92,7 @@ pub(super) async fn stack_drift_monitor(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let _iteration = citadel_application::runtime_metrics::RuntimeWork::StackDrift.start();
         let mut cursor = None;
         loop {
             match stacks.monitor_drift(cursor, DRIFT_MONITOR_BATCH).await {

@@ -140,10 +140,9 @@ impl Fixture {
                     .get(format!("{}/api/v1/setup/status", server.url))
                     .send()
                     .await
+                    && response.status().is_success()
                 {
-                    if response.status().is_success() {
-                        return response.json().await.unwrap();
-                    }
+                    return response.json().await.unwrap();
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }

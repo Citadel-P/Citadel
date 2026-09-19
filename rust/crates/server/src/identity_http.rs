@@ -600,6 +600,15 @@ pub(crate) struct IdentityProblemDetails {
     effective_edition: Option<&'static str>,
 }
 
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(setup_status))
+        .normalized_routes(utoipa_axum::routes!(initialize))
+        .normalized_routes(utoipa_axum::routes!(login))
+        .normalized_routes(utoipa_axum::routes!(refresh))
+        .normalized_routes(utoipa_axum::routes!(logout))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -809,13 +818,4 @@ mod tests {
         };
         assert!(require_human_administrator(Some(Extension(principal))).is_ok());
     }
-}
-
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
-    utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(setup_status))
-        .normalized_routes(utoipa_axum::routes!(initialize))
-        .normalized_routes(utoipa_axum::routes!(login))
-        .normalized_routes(utoipa_axum::routes!(refresh))
-        .normalized_routes(utoipa_axum::routes!(logout))
 }

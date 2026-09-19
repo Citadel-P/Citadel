@@ -2,6 +2,7 @@
 use sqlx::PgPool;
 
 pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> {
+    let _iteration = citadel_application::runtime_metrics::RuntimeWork::Recovery.start();
     let mut changed = Vec::new();
     let mut tx = pool.begin().await?;
     // Existing recovery predicates protect live runs until their execution deadlines.
@@ -76,28 +77,41 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     Ok(changed)
 }
 
-pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
+pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result<u64, sqlx::Error> {
+    let _iteration = citadel_application::runtime_metrics::RuntimeWork::Retention.start();
+    let mut deleted = 0;
     // Bound each transaction. Repeated scheduled batches drain backlogs while keeping
     // locks short and retaining every active run and referenced build artifact.
     for sql in [
-        "DELETE FROM containerstats WHERE id IN(SELECT id FROM containerstats WHERE created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 LIMIT 5000)",
-        "DELETE FROM platformstats WHERE id IN(SELECT id FROM platformstats WHERE created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 LIMIT 5000)",
-        "DELETE FROM swarmservicestats WHERE id IN(SELECT id FROM swarmservicestats WHERE created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 LIMIT 5000)",
+        "DELETE FROM containerstats WHERE id IN(SELECT id FROM containerstats WHERE created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
+        "DELETE FROM platformstats WHERE id IN(SELECT id FROM platformstats WHERE NOT alertpending AND created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
+        "DELETE FROM swarmservicestats WHERE id IN(SELECT id FROM swarmservicestats WHERE created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
         "DELETE FROM activityevents WHERE id IN(SELECT id FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' LIMIT 5000)",
         "DELETE FROM actionruns WHERE id IN(SELECT r.id FROM actionruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM actions a WHERE a.currentrunid=r.id) LIMIT 5000)",
-        "DELETE FROM refreshtokens WHERE id IN(SELECT id FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP LIMIT 5000)",
-        "DELETE FROM backuprepositoryleases WHERE expiresat<CURRENT_TIMESTAMP",
-        "DELETE FROM backupsourceleases WHERE expiresat<CURRENT_TIMESTAMP",
     ] {
-        sqlx::query(sql).execute(&mut *tx).await?;
+        deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
     }
     if let Some(days) = build_retention_days.filter(|days| *days > 0) {
-        sqlx::query("DELETE FROM buildruns b WHERE b.id IN(SELECT r.id FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000)")
-            .bind(days).execute(&mut *tx).await?;
+        deleted += sqlx::query("DELETE FROM buildruns b WHERE b.id IN(SELECT r.id FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000)")
+            .bind(days).execute(pool).await?.rows_affected();
     }
-    tx.commit().await
+    citadel_application::runtime_metrics::RuntimeWork::Retention.units(deleted);
+    Ok(deleted)
 }
+/// Short-lived leases and refresh tokens have a separate expiry cadence.
+pub async fn expire_leases(pool: &PgPool) -> Result<(), sqlx::Error> {
+    let _iteration = citadel_application::runtime_metrics::RuntimeWork::LeaseExpiry.start();
+    for sql in [
+        "DELETE FROM refreshtokens WHERE id IN(SELECT id FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000)",
+        "DELETE FROM backuprepositoryleases WHERE ctid IN(SELECT ctid FROM backuprepositoryleases WHERE expiresat<CURRENT_TIMESTAMP LIMIT 5000)",
+        "DELETE FROM backupsourceleases WHERE ctid IN(SELECT ctid FROM backupsourceleases WHERE expiresat<CURRENT_TIMESTAMP LIMIT 5000)",
+    ] {
+        let count = sqlx::query(sql).execute(pool).await?.rows_affected();
+        citadel_application::runtime_metrics::RuntimeWork::LeaseExpiry.units(count);
+    }
+    Ok(())
+}
+
 fn protocol(error: impl std::fmt::Display) -> sqlx::Error {
     sqlx::Error::Protocol(error.to_string())
 }

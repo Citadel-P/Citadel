@@ -1137,7 +1137,8 @@ impl DockerResticBackupExecutor {
             .agent
             .as_ref()
             .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?
-            .at_address(&address).map_err(|error|error.message)?;
+            .at_address(&address)
+            .map_err(|error| error.message)?;
         if let Some(expected_node) = node_id {
             let info = agent
                 .handshake(cancellation)

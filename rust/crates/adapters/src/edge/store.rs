@@ -422,9 +422,17 @@ impl PostgresEdgeStore {
         Ok(())
     }
     /// Use the same session fence as inventory and metrics for targeted daemon updates.
-    pub async fn persist_container_event(&self, session: &super::EdgeSession, event: &crate::agent::AgentDaemonEvent) -> Result<bool, EdgeStoreError> {
-        let Some(id) = event.container_id.as_deref() else { return Ok(false); };
-        if event.action != "destroy" && event.container_state.is_none() { return Ok(false); }
+    pub async fn persist_container_event(
+        &self,
+        session: &super::EdgeSession,
+        event: &crate::agent::AgentDaemonEvent,
+    ) -> Result<bool, EdgeStoreError> {
+        let Some(id) = event.container_id.as_deref() else {
+            return Ok(false);
+        };
+        if event.action != "destroy" && event.container_state.is_none() {
+            return Ok(false);
+        }
         let mut tx = self.pool.begin().await?;
         let current: Option<Uuid> = sqlx::query_scalar("SELECT agentid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND resourcetype='Platform' AND dockernodeid IS NOT DISTINCT FROM $4 FOR SHARE")
             .bind(session.agent_id).bind(session.target.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;

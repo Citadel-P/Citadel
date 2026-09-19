@@ -416,7 +416,7 @@ mod tests {
         };
         service.update_state = "Paused".into();
         assert_eq!(
-            evaluate(&op, Some(&service), &[task.clone()], now),
+            evaluate(&op, Some(&service), std::slice::from_ref(&task), now),
             Outcome::Failure("Rejected", "RolloutPaused", "image pull failed".into())
         );
         service.update_state = "Completed".into();

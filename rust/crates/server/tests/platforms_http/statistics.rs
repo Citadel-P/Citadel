@@ -589,7 +589,7 @@ async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguit
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
-async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_tables() {
+async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_sample_tables() {
     use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
     let f = fixture().await;
@@ -634,9 +634,36 @@ async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_
     .await
     .unwrap();
     assert_eq!(
-        remaining, 1,
-        "one transaction prunes at most 5000 expired rows"
+        remaining, 5001,
+        "statistics writes must leave historical retention to maintenance"
     );
+    let expired = || async {
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM containerstats WHERE created<$1")
+            .bind(now - 7 * 24 * 3600)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap()
+    };
+    let before = expired().await;
+    citadel_adapters::maintenance_store::cleanup(&f.pool, None)
+        .await
+        .unwrap();
+    let removed = before - expired().await;
+    assert!(
+        (1..=5000).contains(&removed),
+        "a maintenance pass is bounded: {removed}"
+    );
+    // Other test Platforms may also have old history. Drain bounded global
+    // batches before checking this Platform's fresh sample survived.
+    for _ in 0..20 {
+        if citadel_adapters::maintenance_store::cleanup(&f.pool, None)
+            .await
+            .unwrap()
+            == 0
+        {
+            break;
+        }
+    }
     writer.persist(f.platform_id, &[sample]).await.unwrap();
     let remaining: i64 =
         sqlx::query_scalar("SELECT count(*) FROM containerstats WHERE containerid=$1")
@@ -646,7 +673,7 @@ async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_
             .unwrap();
     assert_eq!(
         remaining, 1,
-        "subsequent write prunes the remainder but keeps the fresh sample"
+        "maintenance keeps the fresh sample and a subsequent upsert stays idempotent"
     );
     f.docker_server.abort();
     f.pool.close().await;

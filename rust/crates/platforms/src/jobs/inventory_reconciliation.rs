@@ -19,13 +19,13 @@ pub async fn collect_inventory(
     cancellation: &CancellationToken,
 ) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
     let observed_at = Utc::now();
-    let (info, containers, images, networks, volumes) = tokio::try_join!(
-        runtime.get_info(cancellation),
-        runtime.list_containers(cancellation),
-        runtime.list_images(cancellation),
-        runtime.list_networks(cancellation),
-        runtime.list_volumes(cancellation),
-    )?;
+    // One external operation at a time per target. The orchestration layer bounds
+    // target concurrency; nested try_join fan-out would multiply that budget.
+    let info = runtime.get_info(cancellation).await?;
+    let containers = runtime.list_containers(cancellation).await?;
+    let images = runtime.list_images(cancellation).await?;
+    let networks = runtime.list_networks(cancellation).await?;
+    let volumes = runtime.list_volumes(cancellation).await?;
     let swarm = collect_swarm_inventory(runtime, target, cancellation).await?;
     Ok(RuntimeInventorySnapshot {
         platform_id: target.platform_id,
@@ -46,12 +46,10 @@ pub async fn collect_inventory_from_info(
     cancellation: &CancellationToken,
 ) -> Result<RuntimeInventorySnapshot, RuntimeCapabilityError> {
     let observed_at = Utc::now();
-    let (containers, images, networks, volumes) = tokio::try_join!(
-        runtime.list_containers(cancellation),
-        runtime.list_images(cancellation),
-        runtime.list_networks(cancellation),
-        runtime.list_volumes(cancellation),
-    )?;
+    let containers = runtime.list_containers(cancellation).await?;
+    let images = runtime.list_images(cancellation).await?;
+    let networks = runtime.list_networks(cancellation).await?;
+    let volumes = runtime.list_volumes(cancellation).await?;
     let swarm = collect_swarm_inventory(runtime, target, cancellation).await?;
     Ok(RuntimeInventorySnapshot {
         platform_id: target.platform_id,
@@ -71,13 +69,11 @@ async fn collect_swarm_inventory(
     cancellation: &CancellationToken,
 ) -> Result<Option<RuntimeSwarmInventory>, RuntimeCapabilityError> {
     if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
-        let (nodes, mut services, mut tasks, configs, secrets) = tokio::try_join!(
-            runtime.list_swarm_nodes(cancellation),
-            runtime.list_swarm_services(cancellation),
-            runtime.list_swarm_tasks(cancellation),
-            runtime.list_swarm_configs(cancellation),
-            runtime.list_swarm_secrets(cancellation),
-        )?;
+        let nodes = runtime.list_swarm_nodes(cancellation).await?;
+        let mut services = runtime.list_swarm_services(cancellation).await?;
+        let mut tasks = runtime.list_swarm_tasks(cancellation).await?;
+        let configs = runtime.list_swarm_configs(cancellation).await?;
+        let secrets = runtime.list_swarm_secrets(cancellation).await?;
         reconcile_running_counts(&mut services, &tasks);
         let running_task_count = tasks
             .iter()
@@ -158,6 +154,11 @@ mod tests {
 
         assert!(snapshot.swarm.is_none());
         assert_eq!(runtime.common.load(Ordering::Relaxed), 5);
+        assert_eq!(
+            runtime.peak.load(Ordering::SeqCst),
+            1,
+            "one target must not multiply the inventory I/O budget"
+        );
         assert_eq!(runtime.swarm.load(Ordering::Relaxed), 0);
     }
 
@@ -186,6 +187,11 @@ mod tests {
             "newest task observations survive the bound"
         );
         assert_eq!(runtime.common.load(Ordering::Relaxed), 5);
+        assert_eq!(
+            runtime.peak.load(Ordering::SeqCst),
+            1,
+            "one target must not multiply the inventory I/O budget"
+        );
         assert_eq!(runtime.swarm.load(Ordering::Relaxed), 5);
     }
 
@@ -231,6 +237,17 @@ mod tests {
     struct CountingRuntime {
         common: AtomicUsize,
         swarm: AtomicUsize,
+        active: AtomicUsize,
+        peak: AtomicUsize,
+    }
+
+    impl CountingRuntime {
+        async fn operation(&self) {
+            let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(active, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            self.active.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     impl PlatformRuntimePort for CountingRuntime {
@@ -239,7 +256,8 @@ mod tests {
             _cancellation: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
             self.common.fetch_add(1, Ordering::Relaxed);
-            Box::pin(async {
+            Box::pin(async move {
+                self.operation().await;
                 Ok(RuntimePlatformInfo {
                     daemon_id: "fixture".into(),
                     server_version: "fixture".into(),
@@ -265,7 +283,10 @@ mod tests {
             _cancellation: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
             self.common.fetch_add(1, Ordering::Relaxed);
-            Box::pin(async { Ok(Vec::new()) })
+            Box::pin(async move {
+                self.operation().await;
+                Ok(Vec::new())
+            })
         }
 
         fn stream_stats<'a>(
@@ -284,7 +305,10 @@ mod tests {
                 _cancellation: &'a CancellationToken,
             ) -> BoxFuture<'a, Result<Vec<$type>, RuntimeCapabilityError>> {
                 self.$counter.fetch_add(1, Ordering::Relaxed);
-                Box::pin(async { Ok(Vec::new()) })
+                Box::pin(async move {
+                    self.operation().await;
+                    Ok(Vec::new())
+                })
             }
         };
     }
@@ -300,7 +324,8 @@ mod tests {
             _: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmTask>, RuntimeCapabilityError>> {
             self.swarm.fetch_add(1, Ordering::Relaxed);
-            Box::pin(async {
+            Box::pin(async move {
+                self.operation().await;
                 Ok((0..600)
                     .map(|index| RuntimeSwarmTask {
                         id: index.to_string(),

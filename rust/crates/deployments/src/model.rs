@@ -596,12 +596,6 @@ pub struct CreateDeploymentInputView {
 }
 
 #[derive(Debug, Clone)]
-pub struct EffectiveDeploymentPermission {
-    pub level_mask: i32,
-    pub specific_mask: i32,
-}
-
-#[derive(Debug, Clone)]
 pub struct DeletionClaim {
     pub id: Uuid,
     pub platform_id: Uuid,

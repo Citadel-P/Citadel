@@ -26,12 +26,7 @@ pub(super) async fn draft(
     identity_result(
         state
             .identity
-            .authorize(
-                &principal,
-                ResourceType::Deployment,
-                PermissionLevel::Write,
-                None,
-            )
+            .require_scope::<CreateDeployment>(&principal)
             .await,
         &headers,
     )?;
@@ -86,12 +81,7 @@ pub(super) async fn adopt(
     identity_result(
         state
             .identity
-            .authorize(
-                &principal,
-                ResourceType::Deployment,
-                PermissionLevel::Write,
-                None,
-            )
+            .require_scope::<CreateDeployment>(&principal)
             .await,
         &headers,
     )?;

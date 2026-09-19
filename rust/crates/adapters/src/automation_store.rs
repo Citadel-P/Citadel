@@ -119,6 +119,10 @@ impl PostgresAutomationStore {
                 .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                 .bind(Utc::now()).bind(run_as).bind(timeout).bind(trigger).bind(triggered_by)
                 .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("SELECT pg_notify('citadel_automation_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(database)?;
             sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             let run = get_run_tx(&mut tx, run_id).await?;
             add_run_activity(&mut tx, &run).await?;
@@ -522,6 +526,10 @@ ORDER BY action.name,action.id"#
                 .bind(run_id).bind(action_id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                 .bind(Utc::now()).bind(run_as).bind(timeout)
                 .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("SELECT pg_notify('citadel_automation_work','')")
+                .execute(&mut *tx)
+                .await
+                .map_err(database)?;
             let affected = sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,lastscheduledrunat=$3,rowversion=rowversion+1 WHERE id=$1 AND controlstate='Idle'")
                 .bind(action_id).bind(run_id).bind(scheduled_minute)
                 .execute(&mut *tx).await.map_err(storage)?.rows_affected();

@@ -90,6 +90,10 @@ pub async fn update(
             .bind(current.id).bind(&input.name).bind(address).bind(&input.description).bind(input.connector_type.as_str()).bind(input.prune_historical_swarm_task_containers).bind(descriptor)
             .bind(info.map_or(current.cpu_count,|v| v.cpu_count)).bind(info.map_or(current.mem_total,|v| v.memory_total)).bind(info.map(|v| v.server_version.as_str()).or(current.server_version.as_deref())).bind(info.and_then(|v| v.agent_version.as_deref()).or(current.agent_version.as_deref())).bind(info.and_then(|v|v.swarm.as_ref()).and_then(|v|v.cluster_id.as_deref()).or(current.cluster_id.as_deref())).execute(&mut *tx).await.map_err(storage)?;
     }
+    sqlx::query("SELECT pg_notify('citadel_platform_targets','')")
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
     tx.commit().await.map_err(storage)
 }
 

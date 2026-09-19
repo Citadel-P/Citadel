@@ -58,6 +58,7 @@ async fn platform_header_config_and_key_rotation_preserve_authorization_and_stat
         .await
         .unwrap();
     let (docker,server,socket)=daemon(move |line| {
+        if line.contains("/containers/json") { return (200,"[]".into()); }
         assert!(line.contains("/info")||line.contains("/swarm"),"{line}");
         if line.contains("/swarm") {(200,json!({"ID":cluster,"CreatedAt":"2026-01-01T00:00:00Z"}).to_string())}
         else {(200,json!({"ID":daemon_id,"NCPU":2,"MemTotal":1048576,"OSType":"linux","Swarm":{"NodeID":"node-1","LocalNodeState":"active","ControlAvailable":true,"Nodes":1,"Managers":1,"Cluster":{"ID":cluster}}}).to_string())}

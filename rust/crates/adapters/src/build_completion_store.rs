@@ -25,6 +25,10 @@ pub(crate) async fn enqueue(
         .bind(project).bind(run).execute(&mut **tx).await.map_err(storage)?;
     sqlx::query("INSERT INTO buildcompletionqueue(id,buildrunid,buildprojectid,resourceid,resourcetype) SELECT gen_random_uuid(),$2,$1,s.id,'Stack' FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(r.spec::jsonb->'BuildImageBindings','[]'::jsonb)) b WHERE b->>'BuildProjectId'=$1::text) ON CONFLICT (resourceid,resourcetype,buildprojectid) WHERE status='Queued' DO UPDATE SET buildrunid=EXCLUDED.buildrunid,queuedat=now()")
         .bind(project).bind(run).execute(&mut **tx).await.map_err(storage)?;
+    sqlx::query("SELECT pg_notify('citadel_build_completion','')")
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
     Ok(())
 }
 

@@ -8,16 +8,18 @@ pub async fn backup_runs(
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     options: crate::config::BackupWorkerConfig,
+    wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    run_parallel(cancellation, service, false, options).await
+    run_parallel(cancellation, service, false, options, wake).await
 }
 
 pub async fn restore_runs(
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     options: crate::config::BackupWorkerConfig,
+    wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    run_parallel(cancellation, service, true, options).await
+    run_parallel(cancellation, service, true, options, wake).await
 }
 
 pub async fn policy_scheduler(
@@ -44,6 +46,7 @@ async fn run_parallel(
     service: Arc<BackupService>,
     restores: bool,
     options: crate::config::BackupWorkerConfig,
+    wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
     if !options.enabled {
         cancellation.cancelled().await;
@@ -55,6 +58,7 @@ async fn run_parallel(
             service.clone(),
             restores,
             options.poll_interval,
+            wake.clone(),
         )
     }))
     .await
@@ -69,15 +73,26 @@ async fn run_loop(
     service: Arc<BackupService>,
     restores: bool,
     poll_interval: Duration,
+    mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
     let minimum = poll_interval;
     let mut delay = minimum;
     while !cancellation.is_cancelled() {
+        let family = if restores {
+            citadel_application::runtime_metrics::RuntimeWork::RestoreClaim
+        } else {
+            citadel_application::runtime_metrics::RuntimeWork::BackupClaim
+        };
+        let iteration = family.start();
         let result = if restores {
             service.process_restore(&cancellation).await
         } else {
             service.process_backup(&cancellation).await
         };
+        drop(iteration);
+        if matches!(result, Ok(true)) {
+            family.units(1);
+        }
         match result {
             Ok(true) => {
                 delay = citadel_application::worker_poll_delay(delay, minimum, true);
@@ -87,10 +102,8 @@ async fn run_loop(
             Err(error) => tracing::error!(%error, restores, "Backup worker iteration failed"),
         }
         delay = citadel_application::worker_poll_delay(delay, minimum, false);
-        tokio::select! {
-            () = cancellation.cancelled() => break,
-            () = tokio::time::sleep(delay) => {}
-        }
+        super::notifications::wait(&mut wake, &cancellation, delay.max(Duration::from_secs(30)))
+            .await;
     }
     Ok(())
 }

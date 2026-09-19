@@ -333,19 +333,19 @@ async fn read_deployment(
             &headers,
         );
     }
-    identity_result(
+    use citadel_deployments::permissions::{InspectDeployment, ReadDeployment};
+    let authorization = if matches!(kind, ReadKind::Inspect) {
         state
             .identity
-            .authorize_resource(
-                &principal,
-                ResourceType::Deployment,
-                id,
-                PermissionLevel::Read,
-                matches!(kind, ReadKind::Inspect).then_some(SpecificPermission::Inspect),
-            )
-            .await,
-        &headers,
-    )?;
+            .require_resource::<InspectDeployment>(&principal, id)
+            .await
+    } else {
+        state
+            .identity
+            .require_resource::<ReadDeployment>(&principal, id)
+            .await
+    };
+    identity_result(authorization, &headers)?;
     let ids: Vec<Uuid> = identity_result(sqlx::query_scalar("SELECT c.id FROM containers c JOIN deployments d ON d.id=c.deploymentid AND d.platformid=c.platformid WHERE d.id=$1 LIMIT 2")
         .bind(id).fetch_all(&state.pool).await.map_err(|error|IdentityError::Storage(error.to_string())), &headers)?;
     let container_id = match ids.as_slice() {

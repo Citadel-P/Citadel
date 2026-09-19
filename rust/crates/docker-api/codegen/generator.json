@@ -1,0 +1,13 @@
+{
+  "library": "reqwest-trait",
+  "packageName": "citadel-docker-api",
+  "packageVersion": "0.0.0",
+  "typeMappings": {"integer+uint64": "u64", "integer+uint32": "u32"},
+  "topLevelApiClient": false,
+  "hideGenerationTimestamp": true,
+  "reqwestDefaultFeatures": "",
+  "useChrono": true,
+  "supportMiddleware": false,
+  "supportMultipleResponses": false,
+  "useSingleRequestParameter": false
+}

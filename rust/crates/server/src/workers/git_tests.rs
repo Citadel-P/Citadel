@@ -117,13 +117,19 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
     let cancellation = CancellationToken::new();
     let worker = tokio::spawn(git_repository_sync(cancellation.clone(), service));
     tokio::task::yield_now().await;
-    for _ in 0..2 {
-        tokio::time::advance(Duration::from_secs(60)).await;
+    // Cross the staggered scheduler deadline before the execution completes.
+    // Advancing straight to 120s makes both select branches ready together.
+    for seconds in [61, 59] {
+        tokio::time::advance(Duration::from_secs(seconds)).await;
         tokio::task::yield_now().await;
     }
     assert_eq!(store.calls.load(Ordering::SeqCst), 1);
     assert_eq!(store.completed.load(Ordering::SeqCst), 1);
-    assert!(store.schedules.load(Ordering::SeqCst) >= 2);
+    assert_eq!(
+        store.schedules.load(Ordering::SeqCst),
+        1,
+        "the initial background schedule is delayed past one full interval"
+    );
     cancellation.cancel();
     worker.await.unwrap().unwrap();
 }

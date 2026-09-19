@@ -210,11 +210,8 @@ impl ApplicationGroupReader {
         let mut expected_stack = None;
         if owner == Owner::Deployment {
             let id = Uuid::parse_str(&reference).map_err(failure)?;
-            self.permission(
-                p,
-                ResourceType::Deployment,
-                Some(id),
-                Some(SpecificPermission::Terminal),
+            self.deployment_permission::<citadel_deployments::permissions::OpenDeploymentTerminal>(
+                p, id,
             )
             .await?;
             let deployment = self

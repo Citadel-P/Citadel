@@ -753,6 +753,42 @@ impl IdentityService {
         Ok(principal)
     }
 
+    /// Typed resource authorization over the existing actor/team/role/ACL resolver.
+    /// The administrator bypass previously performed by inbound helpers lives here.
+    pub async fn require_resource<P: citadel_domain::PermissionPolicy>(
+        &self,
+        principal: &ActorPrincipal,
+        id: Uuid,
+    ) -> Result<(), IdentityError> {
+        if principal.is_administrator() {
+            return Ok(());
+        }
+        let required = P::REQUIREMENT;
+        self.authorize_resource(
+            principal,
+            required.resource_type,
+            id,
+            required.level,
+            required.specific,
+        )
+        .await
+    }
+
+    /// Scope checks retain the enabled-actor snapshot and global-role semantics.
+    pub async fn require_scope<P: citadel_domain::PermissionPolicy>(
+        &self,
+        principal: &ActorPrincipal,
+    ) -> Result<(), IdentityError> {
+        let required = P::REQUIREMENT;
+        self.authorize(
+            principal,
+            required.resource_type,
+            required.level,
+            required.specific,
+        )
+        .await
+    }
+
     pub async fn authorize(
         &self,
         principal: &ActorPrincipal,

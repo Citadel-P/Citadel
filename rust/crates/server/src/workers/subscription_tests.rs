@@ -30,6 +30,9 @@ impl PlatformService for RejectingAgent {
         Err(Status::permission_denied("fixture rejection"))
     }
     async fn check_health(&self, _: Request<()>) -> Result<Response<CheckHealthResponse>, Status> {
+        if self.delay {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
         Err(Status::permission_denied("fixture"))
     }
     async fn prune(&self, _: Request<PruneRequest>) -> Result<Response<PruneResponse>, Status> {
@@ -104,11 +107,14 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
     .await
     .unwrap();
     let (sender, _receiver) = bounded_channel(16, QueueOverflowPolicy::Wait);
+    let targets = PlatformRuntimeRegistry::new(pool.clone(), Some(base.clone()));
+    targets.refresh().await.unwrap();
     let worker = tokio::spawn(agent_subscriptions(
         token.clone(),
         base,
         sender,
         StatsWorkerContext {
+            targets: targets.clone(),
             pool: pool.clone(),
             metrics: Arc::new(Metrics::default()),
             realtime: None,
@@ -137,6 +143,7 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
         .execute(&pool)
         .await
         .unwrap();
+    targets.refresh().await.unwrap();
     tokio::time::timeout(Duration::from_secs(12), async {
         while fixtures[2].events.load(Ordering::SeqCst) < 2
             || fixtures[2].handshakes.load(Ordering::SeqCst) < 2

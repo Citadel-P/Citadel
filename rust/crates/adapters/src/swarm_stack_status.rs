@@ -36,10 +36,11 @@ pub(crate) async fn reconcile(
         if next == old {
             continue;
         }
-        if next == "Healthy" && matches!(old.as_str(), "Unknown" | "TimedOut") {
-            if !complete_resources(tx, release_id, &services, swarm).await? {
-                continue;
-            }
+        if next == "Healthy"
+            && matches!(old.as_str(), "Unknown" | "TimedOut")
+            && !complete_resources(tx, release_id, &services, swarm).await?
+        {
+            continue;
         }
         if next == "Healthy"
             && matches!(old.as_str(), "Unknown" | "TimedOut")
