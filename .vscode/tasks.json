@@ -17,14 +17,33 @@
     },
     {
       "label": "Citadel: Run application (API + UI)",
-      "detail": "Starts both the Rust API and Vite UI for normal browser testing.",
-      "dependsOn": ["Citadel: Run Rust API", "Citadel: Run UI only"],
+      "detail": "Starts Core and PostgreSQL in Docker Compose, then Vite for browser testing.",
+      "dependsOn": ["Citadel: Run Core + PostgreSQL (Compose)", "Citadel: Run UI only"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "group": {
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "Citadel: Run Core + PostgreSQL (Compose)",
+      "detail": "Builds Core using the local Cargo cache and starts the citadel-wsl Compose project.",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "compose-up"],
+      "options": { "cwd": "${workspaceFolder}/rust" },
+      "problemMatcher": ["$rustc"],
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "citadel-api" },
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
+      "label": "Citadel: Stop Core + PostgreSQL (Compose)",
+      "detail": "Stops the Compose services, preserving database and runtime data. Terminate the Vite task separately.",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "compose-stop"],
+      "problemMatcher": []
     },
     {
       "label": "Citadel: Initialize development dependencies",

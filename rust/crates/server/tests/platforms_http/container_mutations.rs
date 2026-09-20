@@ -7,6 +7,148 @@ use tokio_util::sync::CancellationToken;
 
 type RuntimeCall = (Uuid, String, Option<String>, ContainerAction);
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_mutation_transactions_lock_platform_before_inventory_children() {
+    let f = fixture().await;
+    let store = PostgresContainerRepository::new(f.pool.clone());
+    let actor = f.administrator.actor_id;
+    let container: Uuid = sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1")
+        .bind(f.platform_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let deployment = Uuid::now_v7();
+    let stack = Uuid::now_v7();
+    let release = Uuid::now_v7();
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,status,spec) VALUES($1,'lock-order-deployment',$2,$3,'Healthy','{}')")
+        .bind(deployment).bind(f.platform_id).bind(actor.value()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,'lock-order-stack',$2,'WebEditor','{}','{}')")
+        .bind(stack).bind(actor.value()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,status,spec,version) VALUES($1,$2,$3,$4,'Healthy','{}','1')")
+        .bind(release).bind(stack).bind(f.platform_id).bind(actor.value()).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$2 WHERE id=$1")
+        .bind(stack)
+        .bind(release)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$2,stackid=$3 WHERE id=$1")
+        .bind(container)
+        .bind(deployment)
+        .bind(stack)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+
+    for phase in ["finish", "observe", "claim", "deployment_claim", "abandon"] {
+        let claim = if matches!(phase, "claim" | "deployment_claim") {
+            None
+        } else {
+            Some(
+                store
+                    .claim(actor, true, &[container], ContainerAction::Start)
+                    .await
+                    .unwrap(),
+            )
+        };
+        // Inventory takes the Platform lock before updating its containers and parents.
+        let mut inventory = f.pool.begin().await.unwrap();
+        let inventory_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+            .fetch_one(&mut *inventory)
+            .await
+            .unwrap();
+        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+            .bind(f.platform_id)
+            .fetch_one(&mut *inventory)
+            .await
+            .unwrap();
+        let worker = store.clone();
+        let operation = tokio::spawn(async move {
+            match phase {
+                "claim" => worker
+                    .claim(actor, true, &[container], ContainerAction::Start)
+                    .await
+                    .map(|_| ()),
+                "deployment_claim" => worker
+                    .claim_selection(
+                        actor,
+                        true,
+                        &[deployment],
+                        ContainerAction::Start,
+                        ContainerSelectionKind::Deployments,
+                    )
+                    .await
+                    .map(|_| ()),
+                "observe" => {
+                    let claim = claim.unwrap();
+                    worker
+                        .observed(claim.operation_id, &claim.targets[0], Some("running"))
+                        .await
+                }
+                "finish" => worker.finish(claim.unwrap().operation_id).await,
+                "abandon" => worker.abandon(claim.unwrap().operation_id).await,
+                _ => unreachable!(),
+            }
+        });
+        // Wait for the actual database lock, rather than depending on task timing.
+        tokio::time::timeout(StdDuration::from_secs(5), async {
+            loop {
+                let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+                    .bind(inventory_pid).fetch_one(&f.pool).await.unwrap();
+                if waiting { break; }
+                assert!(!operation.is_finished(), "{phase} bypassed the Platform lock");
+                tokio::time::sleep(StdDuration::from_millis(10)).await;
+            }
+        }).await.unwrap();
+        // A waiting mutation must not hold a child lock that inventory needs.
+        for (table, id) in [
+            ("deployments", deployment),
+            ("stacks", stack),
+            ("stackreleases", release),
+            ("containers", container),
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "SELECT id FROM {table} WHERE id=$1 FOR UPDATE NOWAIT"
+            )))
+            .bind(id)
+            .fetch_one(&mut *inventory)
+            .await
+            .unwrap_or_else(|error| panic!("{phase} locked {table} before its Platform: {error}"));
+        }
+        inventory.commit().await.unwrap();
+        tokio::time::timeout(StdDuration::from_secs(5), operation)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let pending: Option<Uuid> =
+            sqlx::query_scalar("SELECT containeroperationid FROM containers WHERE id=$1")
+                .bind(container)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+        if let Some(pending) = pending {
+            store.finish(pending).await.unwrap();
+        }
+        for (table, id) in [
+            ("deployments", deployment),
+            ("stacks", stack),
+            ("containers", container),
+        ] {
+            let idle: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT controlstate='Idle' AND containeroperationid IS NULL FROM {table} WHERE id=$1")))
+                .bind(id).fetch_one(&f.pool).await.unwrap();
+            assert!(idle, "{phase} left {table} processing");
+        }
+    }
+    f.docker_server.abort();
+}
+
 #[derive(Default)]
 struct Runtime {
     calls: Mutex<Vec<RuntimeCall>>,

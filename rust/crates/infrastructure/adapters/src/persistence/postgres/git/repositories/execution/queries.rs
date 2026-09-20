@@ -12,7 +12,7 @@ impl PostgresGitRepositoryExecutionPersistence {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let row = sqlx::query(
-                "SELECT defaultbranch,webhook FROM gitrepositories WHERE id=$1 FOR UPDATE",
+                "SELECT defaultbranch,webhook FROM gitrepositories WHERE id=$1 FOR NO KEY UPDATE",
             )
             .bind(id)
             .fetch_optional(&mut *transaction)

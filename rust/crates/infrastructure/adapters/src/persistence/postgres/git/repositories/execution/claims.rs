@@ -52,7 +52,7 @@ WHERE branches.branch<>'' AND repository.syncmode='PullInterval'
     reference.lastsyncedat <= CURRENT_TIMESTAMP - make_interval(mins => COALESCE(repository.syncintervalminutes,5))
   )
 ORDER BY COALESCE(reference.lastsyncedat, repository.createdat), repository.id
-FOR UPDATE OF repository SKIP LOCKED
+FOR NO KEY UPDATE OF repository SKIP LOCKED
 LIMIT $1
 "#,
             )
@@ -89,11 +89,17 @@ impl PostgresGitRepositoryExecutionPersistence {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             sqlx::query(
                 r#"
-WITH stale AS (
-  UPDATE gitrepositoryrefs
+WITH candidates AS MATERIALIZED (
+  SELECT repository.id FROM gitrepositories repository
+  WHERE EXISTS (SELECT 1 FROM gitrepositoryrefs reference
+                WHERE reference.gitrepositoryid=repository.id AND reference.status='Syncing' AND reference.lastsyncedat<$1)
+  ORDER BY repository.id FOR NO KEY UPDATE SKIP LOCKED LIMIT 100
+), stale AS (
+  UPDATE gitrepositoryrefs reference
   SET status='Pending', lasterror='Previous synchronization was interrupted.'
-  WHERE status='Syncing' AND lastsyncedat < $1
-  RETURNING gitrepositoryid
+  FROM candidates WHERE reference.gitrepositoryid=candidates.id
+    AND reference.status='Syncing' AND reference.lastsyncedat<$1
+  RETURNING reference.gitrepositoryid
 )
 UPDATE gitrepositories
 SET controlstate='Queued', status='Pending', controlstartedat=NULL, rowversion=rowversion+1
@@ -118,7 +124,7 @@ WHERE reference.status='Pending' AND repository.controlstate='Queued'
     WHERE active.gitrepositoryid=repository.id AND active.status='Syncing'
   )
 ORDER BY reference.lastsyncedat, reference.id
-FOR UPDATE OF reference, repository SKIP LOCKED
+FOR NO KEY UPDATE OF repository, reference SKIP LOCKED
 LIMIT 1
 "#,
             )

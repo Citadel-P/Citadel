@@ -789,6 +789,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     .await
     .unwrap();
     *runtime.import_claim.lock().unwrap() = Some(StackImportClaim {
+        orphaned_owner_id: None,
         platform_id: swarm_platform_id,
         platform_name: format!("swarm-platform-{suffix}"),
         project_name: import_namespace.clone(),

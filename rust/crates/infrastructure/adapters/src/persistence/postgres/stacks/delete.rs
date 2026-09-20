@@ -32,7 +32,9 @@ impl PostgresStackRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let mut claims = Vec::with_capacity(ids.len());
-            for id in ids {
+            let mut ids = ids.to_vec();
+            ids.sort_unstable();
+            for id in &ids {
                 ensure_access(
                     &mut tx,
                     actor,
@@ -41,7 +43,7 @@ impl PostgresStackRepository {
                     policy::DeleteStack::REQUIREMENT,
                 )
                 .await?;
-                let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR UPDATE OF s")
+                let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR NO KEY UPDATE OF s")
                     .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
                 ensure_idle(&row)?;
                 let spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -65,7 +67,7 @@ impl PostgresStackRepository {
                         .map_err(storage)?,
                 });
             }
-            for id in ids {
+            for id in &ids {
                 sqlx::query("UPDATE stacks SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(Utc::now().timestamp()).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
             }
             tx.commit().await.map_err(storage)?;
@@ -81,6 +83,16 @@ impl PostgresStackRepository {
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            // DELETE changes referenced keys. Exclude observation insertions
+            // before locking Stack rows, matching Deployment deletion.
+            let ids = claims
+                .iter()
+                .map(|claim| claim.stack_id)
+                .collect::<Vec<_>>();
+            sqlx::query("SELECT p.id FROM platforms p WHERE p.id IN (SELECT r.platformid FROM stackreleases r WHERE r.stackid=ANY($1::uuid[])) ORDER BY p.id FOR SHARE OF p")
+                .bind(&ids).fetch_all(&mut *tx).await.map_err(storage)?;
+            let mut claims = claims.iter().collect::<Vec<_>>();
+            claims.sort_unstable_by_key(|claim| claim.stack_id);
             for claim in claims {
                 let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 AND s.controlstate='Processing' FOR UPDATE OF s")
                     .bind(claim.stack_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;

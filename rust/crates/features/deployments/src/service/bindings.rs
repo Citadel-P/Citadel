@@ -128,10 +128,22 @@ pub(super) fn binding_message(resolved: &ResolvedDeploymentBindings) -> String {
     }
 }
 
-pub(super) fn redact_error(error: DeploymentError, values: &[String]) -> DeploymentError {
-    let mut message = error.to_string();
-    for value in values.iter().filter(|value| !value.is_empty()) {
-        message = message.replace(value, "********");
+pub(super) fn redact_error(mut error: DeploymentError, values: &[String]) -> DeploymentError {
+    // Redact the underlying detail, preserving the error kind and its one prefix.
+    // Formatting and rewrapping a Runtime error duplicates its display prefix.
+    match &mut error {
+        DeploymentError::Validation(message)
+        | DeploymentError::Conflict(message)
+        | DeploymentError::Runtime(message)
+        | DeploymentError::Storage(message) => {
+            for value in values.iter().filter(|value| !value.is_empty()) {
+                *message = message.replace(value, "********");
+            }
+        }
+        DeploymentError::NotFound
+        | DeploymentError::Forbidden
+        | DeploymentError::LicenseRequired(_)
+        | DeploymentError::Cancelled => {}
     }
-    DeploymentError::Runtime(message)
+    error
 }

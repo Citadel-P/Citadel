@@ -126,7 +126,7 @@ impl PostgresDeploymentRepository {
             )
             .await?;
             let row = sqlx::query(
-                "SELECT name,description,platformid,spec,controlstate,rowversion FROM deployments WHERE id=$1 FOR UPDATE",
+                "SELECT name,description,platformid,spec,controlstate,rowversion FROM deployments WHERE id=$1 FOR NO KEY UPDATE",
             )
             .bind(id)
             .fetch_optional(&mut *tx)
@@ -188,7 +188,7 @@ impl PostgresDeploymentRepository {
             )
             .await?;
             let row = sqlx::query(
-                "SELECT name,description,platformid,spec,controlstate FROM deployments WHERE id=$1 FOR UPDATE",
+                "SELECT name,description,platformid,spec,controlstate FROM deployments WHERE id=$1 FOR NO KEY UPDATE",
             )
             .bind(id)
             .fetch_optional(&mut *tx)
@@ -249,7 +249,7 @@ impl PostgresDeploymentRepository {
             )
             .await?;
             let row = sqlx::query(
-                "SELECT name,platformid,controlstate FROM deployments WHERE id=$1 FOR UPDATE",
+                "SELECT name,platformid,controlstate FROM deployments WHERE id=$1 FOR NO KEY UPDATE",
             )
             .bind(id)
             .fetch_optional(&mut *tx)
@@ -284,19 +284,31 @@ impl PostgresDeploymentRepository {
         })
     }
 }
+// Deletion removes referenced rows, so it must exclude inventory insertions.
+// Ordinary Apply/configuration writes retain keys and do not take this lock.
+pub(super) async fn lock_delete_platforms(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[Uuid],
+) -> Result<(), DeploymentError> {
+    sqlx::query("SELECT p.id FROM platforms p WHERE p.id IN (SELECT platformid FROM deployments WHERE id=ANY($1::uuid[])) ORDER BY p.id FOR SHARE OF p")
+        .bind(ids).fetch_all(&mut **tx).await.map_err(storage)?;
+    Ok(())
+}
+
 pub(super) async fn ensure_platform(
     tx: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
     administrator: bool,
     platform_id: Uuid,
 ) -> Result<(), DeploymentError> {
-    let descriptor =
-        sqlx::query_scalar::<_, Value>("SELECT platformdescriptor FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(storage)?
-            .ok_or(DeploymentError::NotFound)?;
+    let descriptor = sqlx::query_scalar::<_, Value>(
+        "SELECT platformdescriptor FROM platforms WHERE id=$1 FOR KEY SHARE",
+    )
+    .bind(platform_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage)?
+    .ok_or(DeploymentError::NotFound)?;
     if !administrator
         && !has_resource_access(
             tx,

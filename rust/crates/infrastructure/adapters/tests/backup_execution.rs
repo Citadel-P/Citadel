@@ -211,9 +211,42 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let prepared = store.get_run(first_claim.run.id).await.unwrap();
     assert_eq!(prepared.items.len(), 1);
     assert_eq!(prepared.items[0].status, "Queued");
-    store
-        .finish_backup(&first_claim, &success_result("a", Some(plan.items[0].id)))
+    // A new request owns the policy before attempting its repository. Completion
+    // must wait at the policy without taking the repository in reverse order.
+    let mut enqueue = pool.begin().await.unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *enqueue)
         .await
+        .unwrap();
+    sqlx::query("SELECT id FROM backuppolicies WHERE id=$1 FOR UPDATE")
+        .bind(first_claim.policy.id)
+        .fetch_one(&mut *enqueue)
+        .await
+        .unwrap();
+    let result = success_result("a", Some(plan.items[0].id));
+    let completion = store.finish_backup(&first_claim, &result);
+    tokio::pin!(completion);
+    tokio::select! {
+        result = &mut completion => panic!("completion bypassed policy: {result:?}"),
+        () = async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))").bind(pid).fetch_one(&pool).await.unwrap();
+                    if waiting { break; }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            }).await.unwrap();
+        } => {}
+    }
+    sqlx::query("SELECT id FROM backuprepositories WHERE id=$1 FOR UPDATE NOWAIT")
+        .bind(first_claim.repository.id)
+        .fetch_one(&mut *enqueue)
+        .await
+        .unwrap();
+    enqueue.commit().await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), completion)
+        .await
+        .unwrap()
         .unwrap();
     let completed = store.get_run(first_claim.run.id).await.unwrap();
     assert_eq!(completed.items[0].status, "Succeeded");

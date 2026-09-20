@@ -177,7 +177,7 @@ impl PostgresStackRepository {
                 policy::WriteStack::REQUIREMENT,
             )
             .await?;
-            let row=sqlx::query("SELECT s.*,r.platformid,r.status release_status,r.version,r.spec release_spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR UPDATE OF s,r")
+            let row=sqlx::query("SELECT s.*,r.platformid,r.status release_status,r.version,r.spec release_spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
             ensure_idle(&row)?;
             if row.try_get::<i64, _>("rowversion").map_err(storage)? != expected_row_version {
@@ -299,7 +299,7 @@ impl PostgresStackRepository {
                 policy::WriteStack::REQUIREMENT,
             )
             .await?;
-            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.createdbyactorid,s.controlstate,r.platformid,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR UPDATE OF s")
+            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.createdbyactorid,s.controlstate,r.platformid,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR NO KEY UPDATE OF s")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
             ensure_idle(&row)?;
             let name: String = row.try_get("name").map_err(storage)?;
@@ -373,7 +373,7 @@ impl PostgresStackRepository {
                 policy::WriteStack::REQUIREMENT,
             )
             .await?;
-            let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR UPDATE OF s,r")
+            let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
             ensure_idle(&row)?;
             let old_name: String = row.try_get("name").map_err(storage)?;
@@ -420,7 +420,65 @@ impl PostgresStackRepository {
     ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR SHARE")
+                .bind(input.platform_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(storage)?
+                .ok_or(StackError::NotFound)?;
             ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
+            if claim.platform_id != input.platform_id
+                || claim.project_name != input.project_name
+                || claim.import_kind != input.import_kind
+            {
+                return Err(StackError::Conflict(
+                    "The Stack import source changed.".into(),
+                ));
+            }
+            if let Some(owner) = claim.orphaned_owner_id
+                && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM stacks WHERE id=$1)")
+                    .bind(owner)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(storage)?
+            {
+                return Err(StackError::Conflict(
+                    "The project is owned by an existing Citadel Stack.".into(),
+                ));
+            }
+            if claim.import_kind == citadel_stacks::StackImportKind::ComposeProject {
+                let ids = sqlx::query_scalar::<_, String>("SELECT dockercontainerid FROM containers WHERE platformid=$1 AND stack=$2 FOR UPDATE")
+                    .bind(input.platform_id).bind(&claim.project_name).fetch_all(&mut *tx).await.map_err(storage)?;
+                if ids.iter().collect::<std::collections::BTreeSet<_>>()
+                    != claim.container_ids.iter().collect()
+                {
+                    return Err(StackError::Conflict(
+                        "The Compose project changed while it was being imported.".into(),
+                    ));
+                }
+            } else {
+                use crate::connectors::containers::ownership::{Owner, owner};
+                let rows = sqlx::query("SELECT labels FROM swarmserviceprojections WHERE platformid=$1 AND dockerstacknamespace=$2 FOR UPDATE")
+                    .bind(input.platform_id).bind(&claim.project_name).fetch_all(&mut *tx).await.map_err(storage)?;
+                if rows.len() != claim.service_names.len() {
+                    return Err(StackError::Conflict(
+                        "The Docker Stack changed while it was being imported.".into(),
+                    ));
+                }
+                for row in rows {
+                    let labels =
+                        serde_json::from_value(row.try_get::<Value, _>("labels").map_err(storage)?)
+                            .map_err(storage)?;
+                    let current =
+                        owner(&labels).map_err(|message| StackError::Conflict(message.into()))?;
+                    if current != claim.orphaned_owner_id.map(Owner::Stack) {
+                        return Err(StackError::Conflict(
+                            "The Docker Stack ownership changed while it was being imported."
+                                .into(),
+                        ));
+                    }
+                }
+            }
             validate_references(&mut tx, &input.spec).await?;
             lock_name(&mut tx, &input.name).await?;
             ensure_name_available(&mut tx, &input.name, None).await?;
@@ -439,7 +497,7 @@ impl PostgresStackRepository {
                 .bind(now).bind(actor.value()).execute(&mut *tx).await.map_err(database_error)?;
             insert_tags(&mut tx, id, actor, &input.tag_ids).await?;
             if claim.import_kind == citadel_stacks::StackImportKind::SwarmStack {
-                let changed=sqlx::query("UPDATE swarmserviceprojections SET stackid=$1,ownership='CitadelStack',ownershipdiagnostic=NULL WHERE platformid=$2 AND dockerstacknamespace=$3 AND stackid IS NULL AND NOT isstale")
+                let changed=sqlx::query("UPDATE swarmserviceprojections SET stackid=$1,ownership='CitadelStack',ownershipdiagnostic=NULL WHERE platformid=$2 AND dockerstacknamespace=$3 AND stackid IS NULL AND swarmserviceid IS NULL AND ownership IN ('DockerStackExternal','Unmanaged') AND NOT isstale")
                     .bind(id).bind(input.platform_id).bind(&claim.project_name).execute(&mut *tx).await.map_err(storage)?.rows_affected();
                 if changed as usize != claim.service_names.len() {
                     return Err(StackError::Conflict(
@@ -449,7 +507,7 @@ impl PostgresStackRepository {
                 sqlx::query("INSERT INTO stackswarmnamespacereservations(stackid,platformid,namespace,createdat) VALUES($1,$2,$3,$4)")
                     .bind(id).bind(input.platform_id).bind(&claim.project_name).bind(now).execute(&mut *tx).await.map_err(database_error)?;
             } else {
-                let changed=sqlx::query("UPDATE containers SET stackid=$1 WHERE platformid=$2 AND stackid IS NULL AND stack=$3 AND NOT isswarmtask")
+                let changed=sqlx::query("UPDATE containers SET stackid=$1 WHERE platformid=$2 AND stackid IS NULL AND deploymentid IS NULL AND stack=$3 AND NOT isswarmtask AND NOT issystem AND COALESCE(controlstate,'Idle') <> 'Processing'")
                     .bind(id).bind(input.platform_id).bind(&claim.project_name).execute(&mut *tx).await.map_err(storage)?.rows_affected();
                 if changed as usize != claim.container_ids.len() {
                     return Err(StackError::Conflict(

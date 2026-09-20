@@ -288,6 +288,7 @@ fn stale_state_recovery_only_accepts_stable_container_aggregates() {
 fn import_fingerprint_changes_with_authoritative_runtime_state() {
     let platform_id = Uuid::now_v7();
     let base = StackImportClaim {
+        orphaned_owner_id: None,
         platform_id,
         platform_name: "swarm".to_owned(),
         project_name: "demo".to_owned(),

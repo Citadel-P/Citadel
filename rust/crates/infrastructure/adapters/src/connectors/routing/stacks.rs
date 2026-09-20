@@ -24,6 +24,7 @@ use crate::connectors::agent::client::AgentContainerAction;
 use crate::connectors::agent::client::AgentStackRegistry;
 use crate::connectors::docker::DockerClient;
 use crate::persistence::postgres::stacks::release_resources;
+mod import;
 mod update_scanner;
 pub use update_scanner::StackUpdateRuntime;
 
@@ -774,7 +775,7 @@ impl StackRuntime for StackRuntimeRouter {
         platform_id: Uuid,
         project_name: &'a str,
         import_kind: Option<StackImportKind>,
-        _cancellation: &'a CancellationToken,
+        cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackImportClaim, StackError>> {
         async move {
             let platform = sqlx::query("SELECT name,platformdescriptor FROM platforms WHERE id=$1 AND status='Online'")
@@ -791,9 +792,23 @@ impl StackRuntime for StackRuntimeRouter {
                     "Docker Stack import requires a Docker Swarm platform.".to_owned(),
                 ));
             }
+            let orphaned_owner_id;
+            let mut ownership_fingerprint = String::new();
             let (service_names, container_ids, container_names, services) = if import_kind == StackImportKind::SwarmStack {
-                let rows=sqlx::query("SELECT dockerserviceid,name,image,desiredtaskcount,runningtaskcount,updatestate FROM swarmserviceprojections WHERE platformid=$1 AND dockerstacknamespace=$2 AND NOT isstale ORDER BY name")
+                let rows=sqlx::query("SELECT dockerserviceid,name,image,desiredtaskcount,runningtaskcount,updatestate,labels,ownership,stackid,swarmserviceid FROM swarmserviceprojections WHERE platformid=$1 AND dockerstacknamespace=$2 AND NOT isstale ORDER BY name")
                     .bind(platform_id).bind(project_name).fetch_all(&self.pool).await.map_err(storage)?;
+                let mut owners = Vec::new();
+                for row in &rows {
+                    if row.try_get::<Option<Uuid>, _>("stackid").map_err(storage)?.is_some()
+                        || row.try_get::<Option<Uuid>, _>("swarmserviceid").map_err(storage)?.is_some()
+                        || !matches!(row.try_get::<String, _>("ownership").map_err(storage)?.as_str(), "DockerStackExternal" | "Unmanaged") {
+                        return Err(StackError::Conflict("A Service is already managed or has conflicting ownership.".into()));
+                    }
+                    let labels = serde_json::from_value(row.try_get::<Value, _>("labels").map_err(storage)?).map_err(runtime_io)?;
+                    owners.push(crate::connectors::containers::ownership::owner(&labels).map_err(|message| StackError::Conflict(message.into()))?);
+                    ownership_fingerprint.push_str(&serde_json::to_string(&labels).map_err(runtime_io)?);
+                }
+                orphaned_owner_id = self.orphaned_stack_owner(&owners).await?;
                 let prefix = format!("{project_name}_");
                 let services=rows.iter().map(|row| {
                     let docker_name: String = row.try_get("name").map_err(storage)?;
@@ -810,23 +825,14 @@ impl StackRuntime for StackRuntimeRouter {
                 let names=services.iter().map(|service|service.name.clone()).collect::<Vec<_>>();
                 (names,Vec::new(),Vec::new(),services)
             } else {
-                let rows=sqlx::query("SELECT dockercontainerid,name,dockerimageid,state FROM containers WHERE platformid=$1 AND stack=$2 AND NOT isswarmtask ORDER BY name,dockercontainerid")
-                    .bind(platform_id).bind(project_name).fetch_all(&self.pool).await.map_err(storage)?;
-                let ids=rows.iter().map(|row|row.try_get("dockercontainerid").map_err(storage)).collect::<Result<Vec<String>,_>>()?;
-                let container_names=rows.iter().map(|row|row.try_get("name").map_err(storage)).collect::<Result<Vec<String>,_>>()?;
-                let mut grouped=std::collections::BTreeMap::<String,(Option<String>,Vec<String>)>::new();
-                for row in rows {
-                    let name:String=row.try_get("name").map_err(storage)?;
-                    let entry=grouped.entry(name.trim_start_matches('/').to_owned()).or_default();
-                    entry.0=Some(row.try_get("dockerimageid").map_err(storage)?);
-                    entry.1.push(row.try_get("state").map_err(storage)?);
-                }
-                let services=grouped.into_iter().map(|(name,(image,states))|ComposeProjectRuntimeService{name, image, container_count:states.len(), states}).collect::<Vec<_>>();
-                let names=services.iter().map(|service|service.name.clone()).collect();
-                (names,ids,container_names,services)
+                let claim = self.compose_import(platform_id, project_name, cancellation).await?;
+                orphaned_owner_id = claim.orphaned_owner_id;
+                ownership_fingerprint = claim.runtime_fingerprint;
+                (claim.service_names, claim.container_ids, claim.container_names, claim.services)
             };
             if service_names.is_empty() { return Err(StackError::NotFound); }
             let mut hash = Sha256::new(); hash.update(platform_id.as_bytes()); hash.update(project_name.as_bytes());
+            hash.update(ownership_fingerprint.as_bytes());
             for service in &services {
                 hash.update(service.name.as_bytes()); hash.update([0]);
                 hash.update(service.image.as_deref().unwrap_or_default().as_bytes()); hash.update([0]);
@@ -836,7 +842,7 @@ impl StackRuntime for StackRuntimeRouter {
             for id in &container_ids { hash.update(id.as_bytes()); hash.update([0]); }
             for name in &container_names { hash.update(name.as_bytes()); hash.update([0]); }
             let fingerprint = hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
-            Ok(StackImportClaim { platform_id, platform_name: platform.try_get("name").map_err(storage)?, project_name: project_name.to_owned(), import_kind, runtime_fingerprint: format!("sha256:{fingerprint}"), service_names, container_ids, container_names, services })
+            Ok(StackImportClaim { orphaned_owner_id, platform_id, platform_name: platform.try_get("name").map_err(storage)?, project_name: project_name.to_owned(), import_kind, runtime_fingerprint: format!("sha256:{fingerprint}"), service_names, container_ids, container_names, services })
         }.boxed()
     }
 }

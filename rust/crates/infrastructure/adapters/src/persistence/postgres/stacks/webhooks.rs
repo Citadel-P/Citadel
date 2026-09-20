@@ -22,7 +22,7 @@ impl PostgresStackRepository {
         }
         let fingerprint = stack_webhook_fingerprint(expected_spec)?;
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        let row = sqlx::query("SELECT s.currentstackreleaseid,r.spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR UPDATE OF s,r")
+        let row = sqlx::query("SELECT s.currentstackreleaseid,r.spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
             .bind(expected.id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
         let spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
         if row

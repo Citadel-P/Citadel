@@ -47,7 +47,7 @@ impl PostgresInventoryProjectionStore {
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), RuntimeCapabilityError> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
             .bind(platform)
             .fetch_optional(&mut *tx)
             .await
@@ -81,7 +81,7 @@ impl PostgresInventoryProjectionStore {
     ) -> Result<bool, RuntimeCapabilityError> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
         let saved = sqlx::query_as::<_, (Option<String>, Value)>(
-            "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR UPDATE",
+            "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
         )
         .bind(snapshot.platform_id)
         .fetch_optional(&mut *tx)
@@ -142,6 +142,14 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
             )
             .await?;
             transaction.commit().await.map_err(storage)?;
+            crate::persistence::postgres::platforms::status::reconcile_deployments(
+                &self.pool,
+                snapshot.platform_id,
+                None,
+                false,
+            )
+            .await
+            .map_err(storage)?;
             Ok(InventoryProjectionChange {
                 platform_id: snapshot.platform_id,
                 revision: snapshot.observed_at.timestamp_millis(),
@@ -155,12 +163,13 @@ async fn validate_snapshot_identity(
     tx: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
 ) -> Result<(), RuntimeCapabilityError> {
-    let saved: Option<(Option<String>, Value)> =
-        sqlx::query_as("SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR UPDATE")
-            .bind(snapshot.platform_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(storage)?;
+    let saved: Option<(Option<String>, Value)> = sqlx::query_as(
+        "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
+    )
+    .bind(snapshot.platform_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage)?;
     let Some((cluster, descriptor)) = saved else {
         return Err(identity_conflict("Platform no longer exists"));
     };
@@ -281,7 +290,7 @@ async fn persist_snapshot_with_health(
         // The event worker and a post-mutation refresh can finish in reverse
         // order. Serialize their short commits and never restore an older
         // manager observation over a newer one (including resource versions).
-        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
             .bind(snapshot.platform_id)
             .fetch_optional(&mut **transaction)
             .await
@@ -480,7 +489,7 @@ async fn persist_container_set(
     observed: i64,
     complete: bool,
 ) -> Result<(), RuntimeCapabilityError> {
-    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(platform_id)
         .fetch_optional(&mut **transaction)
         .await

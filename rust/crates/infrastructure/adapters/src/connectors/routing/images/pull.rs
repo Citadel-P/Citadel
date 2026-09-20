@@ -95,7 +95,7 @@ pub async fn persist(
         .execute(&mut *tx)
         .await
         .map_err(db)?;
-    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR UPDATE")
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(platform)
         .fetch_optional(&mut *tx)
         .await

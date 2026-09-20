@@ -144,7 +144,7 @@ pub struct {{{classname}}} {
     ### Models
     }}{{#isModel}}{{^avoidBoxedModels}}Box<{{/avoidBoxedModels}}{{{dataType}}}{{^avoidBoxedModels}}>{{/avoidBoxedModels}}{{/isModel}}{{!
     ### Primative datatypes
-    }}{{^isModel}}{{#isByteArray}}Vec<u8>{{/isByteArray}}{{^isByteArray}}{{{dataType}}}{{/isByteArray}}{{/isModel}}{{!
+    }}{{^isModel}}{{#isByteArray}}Vec<u8>{{/isByteArray}}{{^isByteArray}}{{#isMap}}{{#additionalProperties.isArray}}{{#additionalProperties.isNullable}}std::collections::HashMap<String, Option<{{{additionalProperties.dataType}}}>>{{/additionalProperties.isNullable}}{{^additionalProperties.isNullable}}{{{dataType}}}{{/additionalProperties.isNullable}}{{/additionalProperties.isArray}}{{^additionalProperties.isArray}}{{{dataType}}}{{/additionalProperties.isArray}}{{/isMap}}{{^isMap}}{{{dataType}}}{{/isMap}}{{/isByteArray}}{{/isModel}}{{!
     ### Non-Enums End
     }}{{/isEnum}}{{!
     ### Option End (and trailing comma)
@@ -164,7 +164,7 @@ impl {{{classname}}} {
     ### Enums
     }}{{#isEnum}}{{#isArray}}{{#uniqueItems}}std::collections::HashSet<{{/uniqueItems}}{{^uniqueItems}}Vec<{{/uniqueItems}}{{/isArray}}{{{enumName}}}{{#isArray}}>{{/isArray}}{{/isEnum}}{{!
     ### Non-Enums
-    }}{{^isEnum}}{{#isByteArray}}Vec<u8>{{/isByteArray}}{{^isByteArray}}{{{dataType}}}{{/isByteArray}}{{/isEnum}}{{!
+    }}{{^isEnum}}{{#isByteArray}}Vec<u8>{{/isByteArray}}{{^isByteArray}}{{#isMap}}{{#additionalProperties.isArray}}{{#additionalProperties.isNullable}}std::collections::HashMap<String, Option<{{{additionalProperties.dataType}}}>>{{/additionalProperties.isNullable}}{{^additionalProperties.isNullable}}{{{dataType}}}{{/additionalProperties.isNullable}}{{/additionalProperties.isArray}}{{^additionalProperties.isArray}}{{{dataType}}}{{/additionalProperties.isArray}}{{/isMap}}{{^isMap}}{{{dataType}}}{{/isMap}}{{/isByteArray}}{{/isEnum}}{{!
     ### Option End
     }}{{#isNullable}}>{{/isNullable}}{{!
     ### Comma for next arguement

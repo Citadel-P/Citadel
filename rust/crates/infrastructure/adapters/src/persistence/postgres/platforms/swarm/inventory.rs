@@ -13,7 +13,7 @@ pub async fn refresh(
     };
     let mut tx = pool.begin().await.map_err(storage)?;
     let saved = sqlx::query_as::<_, (Option<String>, Value)>(
-        "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR UPDATE",
+        "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
     )
     .bind(snapshot.platform_id)
     .fetch_optional(&mut *tx)

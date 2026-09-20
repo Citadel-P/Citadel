@@ -201,7 +201,7 @@ pub struct HostConfig {
     pub pid_mode: Option<String>,
     /// PortMap describes the mapping of container ports to host ports, using the container's port-number and protocol as key in the format `<port>/<protocol>`, for example, `80/udp`.  If a container's port is mapped for multiple protocols, separate entries are added to the mapping table.
     #[serde(rename = "PortBindings", skip_serializing_if = "Option::is_none")]
-    pub port_bindings: Option<std::collections::HashMap<String, Vec<models::PortBinding>>>,
+    pub port_bindings: Option<std::collections::HashMap<String, Option<Vec<models::PortBinding>>>>,
     /// Gives the container full access to the host.
     #[serde(rename = "Privileged", skip_serializing_if = "Option::is_none")]
     pub privileged: Option<bool>,

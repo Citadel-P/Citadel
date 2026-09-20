@@ -559,17 +559,26 @@ pub(super) async fn execute_apply(
                     .iter()
                     .map(|entry| entry.snapshot.clone())
                     .collect::<Vec<_>>();
-                if let Err(error) = store
-                    .complete_apply(actor, &claim, &result, &snapshots, release_source.as_ref())
-                    .await
-                {
-                    let _ = sender
-                        .send(StackProgressItem::completed(
-                            StackReleaseStatus::Failed,
-                            error.to_string(),
-                        ))
-                        .await;
-                    return Err(error);
+                // Retry only completion persistence, preserving the source,
+                // bindings and build provenance of the successful Docker run.
+                for attempt in 0..3 {
+                    match store
+                        .complete_apply(actor, &claim, &result, &snapshots, release_source.as_ref())
+                        .await
+                    {
+                        Ok(()) => break,
+                        Err(StackError::Storage(_)) if attempt < 2 => {
+                            tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+                        }
+                        Err(error) => {
+                            let _ = sender.send(StackProgressItem::completed(
+                                StackReleaseStatus::Unknown,
+                                format!("Docker completed the Stack deployment, but saving its result failed. Recovery will check the deployed Stack: {error}"),
+                            )).await;
+                            notifier.changed(claim.stack_id, "outcomeUnknown");
+                            return Err(error);
+                        }
+                    }
                 }
                 notifier.changed(claim.stack_id, "applied");
                 Ok(())

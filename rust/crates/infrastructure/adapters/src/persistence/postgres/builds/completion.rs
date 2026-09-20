@@ -163,12 +163,13 @@ async fn update_deployment(
     reference: &str,
     digest: Option<&str>,
 ) -> Result<Option<(i64, bool, Vec<String>)>, BuildError> {
-    let Some(row) =
-        sqlx::query("SELECT spec,rowversion,controlstate FROM deployments WHERE id=$1 FOR UPDATE")
-            .bind(id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(storage)?
+    let Some(row) = sqlx::query(
+        "SELECT spec,rowversion,controlstate FROM deployments WHERE id=$1 FOR NO KEY UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage)?
     else {
         return Ok(None);
     };
@@ -215,7 +216,7 @@ async fn update_stack(
     reference: &str,
     digest: Option<&str>,
 ) -> Result<Option<(i64, bool, Vec<String>)>, BuildError> {
-    let Some(row)=sqlx::query("SELECT r.spec,s.rowversion,s.controlstate,r.id releaseid FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR UPDATE OF s,r")
+    let Some(row)=sqlx::query("SELECT r.spec,s.rowversion,s.controlstate,r.id releaseid FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
         .bind(id).fetch_optional(&mut **tx).await.map_err(storage)? else { return Ok(None); };
     if row.try_get::<&str, _>("controlstate").map_err(storage)? != "Idle" {
         return Err(BuildError::Conflict("Build consumer is busy.".into()));

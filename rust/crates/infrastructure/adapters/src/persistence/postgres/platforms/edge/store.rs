@@ -371,6 +371,9 @@ impl PostgresEdgeStore {
         let mut tx = self.pool.begin().await?;
         let changed: Option<(Uuid, Option<String>, String)> = sqlx::query_as("UPDATE edgeagentbindings SET connectionstatus='Offline',lastdisconnectedatutc=now(),updatedatutc=now() WHERE agentid=$1 AND lastconnectedatutc=$2 AND revokedatutc IS NULL RETURNING platformid,dockernodeid,resourcetype")
             .bind(agent_id).bind(connected_at).fetch_optional(&mut *tx).await?;
+        let offline_platform = changed.as_ref().and_then(|(platform, node, kind)| {
+            (kind == "Platform" && node.is_none()).then_some(*platform)
+        });
         if let Some((platform, node, resource_type)) = changed
             && resource_type == "Platform"
         {
@@ -384,6 +387,12 @@ impl PostgresEdgeStore {
             }
         }
         tx.commit().await?;
+        if let Some(platform) = offline_platform {
+            crate::persistence::postgres::platforms::status::reconcile_deployments(
+                &self.pool, platform, None, false,
+            )
+            .await?;
+        }
         Ok(())
     }
     pub async fn persist_inventory(
@@ -424,6 +433,13 @@ impl PostgresEdgeStore {
             .map_err(|_| EdgeStoreError::Invalid("Edge inventory persistence failed."))?;
         }
         tx.commit().await?;
+        crate::persistence::postgres::platforms::status::reconcile_deployments(
+            &self.pool,
+            snapshot.platform_id,
+            None,
+            false,
+        )
+        .await?;
         Ok(())
     }
     /// Use the same session fence as inventory and metrics for targeted daemon updates.
@@ -471,7 +487,14 @@ impl PostgresEdgeStore {
         )
         .await?;
         tx.commit().await?;
-        Ok(changed)
+        crate::persistence::postgres::platforms::status::reconcile_deployments(
+            &self.pool,
+            session.target.platform_id,
+            Some(&changed.deployments),
+            true,
+        )
+        .await?;
+        Ok(changed.changed)
     }
     pub async fn persist_stats(
         &self,

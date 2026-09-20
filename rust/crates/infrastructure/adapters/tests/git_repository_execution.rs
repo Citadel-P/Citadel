@@ -783,3 +783,92 @@ async fn invalid_credentials_and_unresolvable_remote_release_claim_without_runni
         .unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn completion_waits_for_enqueue_before_locking_the_branch() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,TRUE,'System')")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = Uuid::now_v7();
+    insert_repository(&pool, actor, id, "file:///unused", "concurrent-finish").await;
+    let store = PostgresGitRepositoryExecutionPersistence::new(pool.clone());
+    let claim = store
+        .claim_next(Utc::now() - chrono::Duration::minutes(10))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claim.repository.id, id);
+    let mut enqueue = pool.begin().await.unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *enqueue)
+        .await
+        .unwrap();
+    sqlx::query("SELECT id FROM gitrepositories WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(id)
+        .fetch_one(&mut *enqueue)
+        .await
+        .unwrap();
+    let result = SyncResult {
+        commit: "a".repeat(40),
+        cloned: true,
+    };
+    let completion = store.complete(&claim, &result);
+    tokio::pin!(completion);
+    tokio::select! {
+        result = &mut completion => panic!("completion bypassed the repository: {result:?}"),
+        () = async {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))").bind(pid).fetch_one(&pool).await.unwrap();
+                    if waiting { break; }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }).await.unwrap();
+        } => {}
+    }
+    // Completion must not own the branch while waiting for its repository.
+    sqlx::query("SELECT id FROM gitrepositoryrefs WHERE id=$1 FOR UPDATE NOWAIT")
+        .bind(claim.reference_id)
+        .fetch_one(&mut *enqueue)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE gitrepositoryrefs SET synctrigger='Manual' WHERE id=$1")
+        .bind(claim.reference_id)
+        .execute(&mut *enqueue)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE gitrepositories SET controlstate='Queued' WHERE id=$1")
+        .bind(id)
+        .execute(&mut *enqueue)
+        .await
+        .unwrap();
+    enqueue.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), completion)
+        .await
+        .unwrap()
+        .unwrap();
+    let state: (String,String) = sqlx::query_as("SELECT r.status,g.controlstate FROM gitrepositoryrefs r JOIN gitrepositories g ON g.id=r.gitrepositoryid WHERE r.id=$1").bind(claim.reference_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        state,
+        ("Pending".into(), "Queued".into()),
+        "the concurrent request must survive completion"
+    );
+    let rerun = store
+        .claim_next(Utc::now() - chrono::Duration::minutes(10))
+        .await
+        .unwrap()
+        .unwrap();
+    store.fail(&rerun, "fixture complete").await.unwrap();
+    pool.close().await;
+}

@@ -146,6 +146,15 @@ server. Read operation implementations live in `service/read.rs`; PostgreSQL SQL
 queries live in `adapters/postgres/<resource>/queries.rs`. Use `read_models` for
 feature data types, including future resource migrations.
 
+Adoption resolves runtime ownership labels against the current database. An
+unassigned standalone container may be adopted when its labeled Deployment no
+longer exists; reserved labels are omitted from the draft and reported as a
+warning. Compose and Swarm Stack imports require either all unmanaged workloads
+or one consistent missing Stack owner. Existing owners, malformed or mixed
+ownership, system workloads, and active operations remain protected. Ownership
+and membership are rechecked when committing the database links; adoption does
+not relabel, restart, or recreate Docker workloads.
+
 ## Implemented reference resource: Deployment
 
 ```text
@@ -215,6 +224,21 @@ drains the owner. Rejected admission releases unexecuted claims; uncertain runti
 outcomes retain the established stale-claim recovery semantics. Operation errors reach
 the owner for logging even when the requesting client has disconnected. Feature code
 does not construct a runtime or directly spawn these tasks.
+
+Inventory commits container observations before reconciling Deployment status. Status
+reconciliation locks one Deployment at a time, then reads the committed observations;
+it never holds container locks. The existing health sweep retries skipped or failed
+reconciliation, including interruption between the two commits. Inventory and Apply
+use `FOR NO KEY UPDATE` where keys are retained so foreign-key checks remain compatible.
+Only actual Deployment deletion excludes inventory with a platform lock before removing
+referenced rows; normal Apply and configuration writes do not take that platform gate.
+
+After Docker succeeds, Apply retries only completion persistence (three attempts),
+retaining the original runtime result, image digest and binding snapshots. Repeating an
+identical completion for the same version is idempotent and cannot duplicate its audit
+event. Exhausted persistence attempts leave the claim for the existing recovery worker;
+they do not record a Docker failure or recreate the container. An unavailable runtime
+during recovery leaves the claim pending for another observation.
 
 The established runtime router remains in place; moving unrelated Docker/Agent
 adapters is outside this resource migration. Boundary tests enforce the Deployment

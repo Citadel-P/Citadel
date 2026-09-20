@@ -130,6 +130,28 @@ pub(super) async fn resource_health(
             let state: &mut HealthState = states
                 .entry((target.id, target.address.clone()))
                 .or_default();
+            // Recover a committed inventory whose process stopped before the
+            // separate deployment reconciliation. Observations live in Postgres.
+            match citadel_adapters::persistence::postgres::platforms::status::reconcile_deployments(
+                &pool, target.id, None, false,
+            )
+            .await
+            {
+                Ok(changed) if changed > 0 => {
+                    if let Some(hub) = &realtime {
+                        hub.publish_runtime_change(
+                            target.id,
+                            "platformInventory",
+                            "updated",
+                            target.id.to_string(),
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(%error, platform_id=%target.id, "Deployment observation reconciliation failed")
+                }
+                _ => {}
+            }
             let Some(online) = state.observe(healthy) else {
                 continue;
             };

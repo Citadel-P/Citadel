@@ -53,6 +53,7 @@ impl DeploymentService {
             alerts: self.alerts.clone(),
             sender,
             _permit: permit,
+            runtime_applied: false,
         };
         let shutdown = self.shutdown.clone();
         let timeout = self.apply_timeout;
@@ -104,7 +105,8 @@ impl DeploymentService {
                         .fail_apply(actor_id, &claim, message, Some(&result), &[])
                         .await?;
                 }
-                Ok(None) | Err(_) => {
+                Err(_) => continue, // An unavailable runtime is not evidence of a failed Apply.
+                Ok(None) => {
                     let message = "Deployment Apply was interrupted and its runtime outcome could not be confirmed.";
                     self.store
                         .fail_apply(actor_id, &claim, message, None, &[])
@@ -128,6 +130,7 @@ struct ApplyOperation {
     alerts: Option<Arc<dyn AlertEventSink>>,
     sender: mpsc::Sender<DeploymentProgress>,
     _permit: OwnedSemaphorePermit,
+    runtime_applied: bool,
 }
 
 impl ApplyOperation {
@@ -148,6 +151,16 @@ impl ApplyOperation {
         };
         cancellation.cancel();
         if let Err(error) = result {
+            if self.runtime_applied {
+                self.send(DeploymentProgress::failure(
+                    deployment_error_code(&error),
+                    format!("Container is running, but saving the deployment result failed. Recovery will check the running container: {error}"),
+                ));
+                self.notifier.changed(self.claim.id, "updated");
+                // Keep successful Docker work out of the failure path. The
+                // existing recovery worker owns the still-pending claim.
+                return Err(error);
+            }
             if matches!(error, DeploymentError::Cancelled)
                 || matches!(&error, DeploymentError::Runtime(message) if message == "Deployment Apply timed out.")
             {
@@ -282,33 +295,27 @@ impl ApplyOperation {
             self.notifier.changed(self.claim.id, "updated");
             return Ok(());
         }
-        if let Err(error) = self
-            .store
-            .complete_apply(
-                self.actor_id,
-                &self.claim,
-                &runtime_result,
-                image.digest.as_deref(),
-                &environment.snapshots,
-            )
-            .await
-        {
-            let message = error.to_string();
-            self.store
-                .fail_apply(
+        self.runtime_applied = true;
+        // Retry only the database transaction, with the original result, digest
+        // and binding snapshots. Docker has already succeeded.
+        for attempt in 0..3 {
+            match self
+                .store
+                .complete_apply(
                     self.actor_id,
                     &self.claim,
-                    &message,
-                    Some(&runtime_result),
+                    &runtime_result,
+                    image.digest.as_deref(),
                     &environment.snapshots,
                 )
-                .await?;
-            self.send(DeploymentProgress::failure(
-                deployment_error_code(&error),
-                message,
-            ));
-            self.notifier.changed(self.claim.id, "updated");
-            return Ok(());
+                .await
+            {
+                Ok(()) => break,
+                Err(DeploymentError::Storage(_)) if attempt < 2 => {
+                    tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+                }
+                Err(error) => return Err(error),
+            }
         }
         self.notifier.changed(self.claim.id, "updated");
         self.send(DeploymentProgress::info("Deployment is now running."));

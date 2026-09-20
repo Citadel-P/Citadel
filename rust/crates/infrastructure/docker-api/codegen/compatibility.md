@@ -204,3 +204,17 @@ The default workspace ignore count includes fixtures run explicitly above; other
 external integration fixtures were not enabled. Disposable Phase 4 Docker and
 PostgreSQL containers were removed after verification. The measured release binary
 SHA-256 is `b9ddfb3a3dd9c4f35f9924cd822d4940e93463f5a04c35c6dc7408b7d3a7d88a`.
+
+## Unpublished container ports
+
+Docker represents an exposed port without a host binding as a null map value,
+for example `NetworkSettings.Ports = {"6379/tcp": null}`. The pinned schema already
+marks `PortMap.additionalProperties` nullable, but the stock Rust datatype rendering
+loses the optional wrapper around these array values. The model template preserves
+nullable array-valued maps as `HashMap<String, Option<Vec<T>>>`, including both
+`NetworkSettings.Ports` and `HostConfig.PortBindings`. Null, empty and populated
+bindings remain distinct during round-trip serialization. This prevents a successful
+container start from failing its subsequent inspection and leaving a processing claim.
+The wire-model and generated-transport tests cover the Redis-shaped response without
+requiring a live daemon. The generator templates also retain the workspace lint
+inheritance and import layout of the accepted generated code.

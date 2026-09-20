@@ -10,7 +10,7 @@ pub(super) async fn record(
     // Drift was observed outside the transaction. Never overwrite a newer apply,
     // policy edit, intentional state change or observation of another release.
     let locked = sqlx::query_scalar::<_, Uuid>(
-        "SELECT s.id FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.rowversion=$3 AND s.controlstate='Idle' AND r.status=$4 AND p.status='Online' FOR UPDATE OF s,r",
+        "SELECT s.id FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.rowversion=$3 AND s.controlstate='Idle' AND r.status=$4 AND p.status='Online' FOR NO KEY UPDATE OF s,r",
     )
     .bind(expected.id)
     .bind(expected.current_stack_release_id)

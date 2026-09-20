@@ -180,6 +180,8 @@ pub struct StackRuntimeSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackImportClaim {
+    /// Previous installation owner, checked again when the import is committed.
+    pub orphaned_owner_id: Option<Uuid>,
     pub platform_id: Uuid,
     pub platform_name: String,
     pub project_name: String,
