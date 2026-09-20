@@ -1,5 +1,6 @@
 //! Bounded interactive container sessions. Dropping output closes the session.
-use crate::{RuntimeCapabilityError, RuntimeErrorKind};
+use crate::RuntimeCapabilityError;
+use crate::RuntimeErrorKind;
 use futures_util::{future::BoxFuture, stream::BoxStream};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;

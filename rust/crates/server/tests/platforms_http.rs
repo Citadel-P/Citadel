@@ -1,29 +1,30 @@
 #![cfg(unix)]
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration as StdDuration;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
+};
 use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use citadel_adapters::{
+    connectors::{
+        docker::DockerClient, routing::platforms::registration::PlatformRegistrationRuntimeRouter,
+    },
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        platforms::{
+            PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
+            registration::PostgresPlatformRegistrationRepository,
+        },
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
 };
-use citadel_adapters::docker::DockerClient;
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
-use citadel_adapters::platform_registration::{
-    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationRepository,
-};
-use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
@@ -32,14 +33,23 @@ use citadel_platforms::{
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
 use citadel_primitives::ActorId;
-use citadel_server::platforms_http::{self, PlatformsHttpState};
-use citadel_server::realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
+use citadel_server::{
+    api::routes::{platforms as platforms_http, platforms::PlatformsHttpState},
+    realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort},
+};
 use serde_json::{Value, json};
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixListener;
-use tokio::sync::{Mutex, OwnedMutexGuard};
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::collections::BTreeMap;
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+    time::Duration as StdDuration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::UnixListener,
+    sync::{Mutex, OwnedMutexGuard},
+};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -101,7 +111,7 @@ struct Fixture {
     realtime: IdentityRealtimeReader,
     docker_server: tokio::task::JoinHandle<()>,
     docker_socket: PathBuf,
-    lookup_state: citadel_server::lookup_http::LookupHttpState,
+    lookup_state: citadel_server::api::routes::lookup::LookupHttpState,
     _guard: OwnedMutexGuard<()>,
 }
 
@@ -544,33 +554,35 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
         Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
     ));
-    let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let platform_state = PlatformsHttpState {
-        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
             edge.clone(),
             "citadel-agent:test".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
-            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+            citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
                 pool.clone(),
                 docker.clone(),
                 None,
                 edge.clone(),
             )
-            .into_service(),
+            .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity,
         platforms,
         registrations,
         pool: pool.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
         platform_metadata: Arc::new(
-            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
                 pool.clone(),
             ),
         ),
@@ -580,15 +592,18 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
     };
-    let lookup_state = citadel_server::lookup_http::LookupHttpState {
-        store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
-            pool.clone(),
-        )),
+    let lookup_state = citadel_server::api::routes::lookup::LookupHttpState {
+        store: Arc::new(
+            citadel_adapters::persistence::postgres::discovery::lookup::PostgresLookupStore::new(
+                pool.clone(),
+            ),
+        ),
         entitlements: Arc::new(StaticEntitlementService::new(true)),
         platforms: platform_state.clone(),
     };
-    let app = platforms_http::router(platform_state)
-        .merge(citadel_server::lookup_http::router(lookup_state.clone()));
+    let app = platforms_http::router(platform_state).merge(
+        citadel_server::api::routes::lookup::router(lookup_state.clone()),
+    );
     Fixture {
         app,
         pool,

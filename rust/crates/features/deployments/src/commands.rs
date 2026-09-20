@@ -1,4 +1,5 @@
-use crate::{DeploymentSpec, DuplicateSource};
+use crate::DeploymentSpec;
+use crate::DuplicateSource;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]

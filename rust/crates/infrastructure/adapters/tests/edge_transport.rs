@@ -1,5 +1,8 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use citadel_adapters::edge::{EdgeIntake, EdgeRegistry, EdgeTarget, PostgresEdgeStore};
+use citadel_adapters::connectors::edge::EdgeIntake;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::{
     AgentEnvelope, AgentHello, AuthChallengeResponse, CommandCompleted, EdgeCommandKind,
     EnrollmentRequest, agent_envelope, core_envelope,
@@ -190,7 +193,7 @@ async fn node_enrollment_requires_manager_verified_installation_and_exact_task_i
 async fn verify_same_node_task_replacement(
     pool: &PgPool,
     store: &PostgresEdgeStore,
-    binding: &citadel_adapters::edge::EdgeBinding,
+    binding: &citadel_adapters::persistence::postgres::platforms::edge::store::EdgeBinding,
     request: &EnrollmentRequest,
 ) {
     let mut hello = AgentHello {
@@ -286,7 +289,7 @@ async fn verify_same_node_task_replacement(
 async fn verify_node_rebind(
     pool: &PgPool,
     store: &PostgresEdgeStore,
-    binding: &citadel_adapters::edge::EdgeBinding,
+    binding: &citadel_adapters::persistence::postgres::platforms::edge::store::EdgeBinding,
     request: &EnrollmentRequest,
 ) -> EdgeTarget {
     let platform = binding.target.platform_id;
@@ -392,7 +395,7 @@ async fn verify_node_rebind(
 async fn verify_node_projection_isolation(
     pool: &PgPool,
     store: &PostgresEdgeStore,
-    binding: &citadel_adapters::edge::EdgeBinding,
+    binding: &citadel_adapters::persistence::postgres::platforms::edge::store::EdgeBinding,
 ) {
     use citadel_platforms::{
         RuntimeContainerStat, RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmInfo,
@@ -510,7 +513,7 @@ async fn verify_node_projection_isolation(
             .is_err()
     );
     assert!(store.persist_inventory(&session, &newer).await.is_err());
-    let stale_event = citadel_adapters::agent::AgentDaemonEvent {
+    let stale_event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
         container: None,
         resource_type: "container",
         action: "destroy".into(),
@@ -557,7 +560,7 @@ async fn verify_node_projection_isolation(
 async fn verify_node_local_resources(
     pool: &PgPool,
     store: &PostgresEdgeStore,
-    session: &citadel_adapters::edge::EdgeSession,
+    session: &citadel_adapters::connectors::edge::EdgeSession,
     initial: &citadel_platforms::RuntimeInventorySnapshot,
 ) {
     use citadel_platforms::{RuntimeImageSummary, RuntimeNetworkSummary, RuntimeVolumeSummary};
@@ -616,10 +619,12 @@ async fn verify_node_local_resources(
     {
         use citadel_platforms::PlatformReader;
         let images =
-            citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool.clone())
-                .list_images(platform)
-                .await
-                .unwrap();
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(
+                pool.clone(),
+            )
+            .list_images(platform)
+            .await
+            .unwrap();
         assert_eq!(images.len(), 2);
         let image = images
             .iter()
@@ -632,8 +637,9 @@ async fn verify_node_local_resources(
             Some(["redis@sha256:abc".into()].as_slice())
         );
         assert!(!image.is_stale);
-        let store =
-            citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool.clone());
+        let store = citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(
+            pool.clone(),
+        );
         let volumes = store.list_node_volumes(platform).await.unwrap();
         assert_eq!(volumes.len(), 2);
         let networks = store.list_node_networks(platform).await.unwrap();
@@ -686,7 +692,8 @@ async fn verify_node_local_resources(
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
 async fn persisted_edge_platform_routes_deployment_apply_without_using_local_docker() {
-    use citadel_adapters::{deployment_runtime::DeploymentRuntimeRouter, docker::DockerClient};
+    use citadel_adapters::connectors::docker::DockerClient;
+    use citadel_adapters::connectors::routing::deployments::DeploymentRuntimeRouter;
     use citadel_contracts::citadel::deployments::v1::{
         ApplyDeploymentRequest, ApplyDeploymentResponse, DeployedContainerState,
     };
@@ -1029,7 +1036,7 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
     .unwrap()
     .unwrap()
     .unwrap();
-    let decoded = citadel_adapters::agent::decode_daemon_event(&bytes)
+    let decoded = citadel_adapters::connectors::agent::client::decode_daemon_event(&bytes)
         .unwrap()
         .unwrap();
     assert_eq!(decoded.action, "die");

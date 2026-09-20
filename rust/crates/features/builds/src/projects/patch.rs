@@ -1,4 +1,6 @@
-use crate::{BuildError, BuildProject, BuildProjectConfiguration};
+use crate::BuildError;
+use crate::BuildProject;
+use crate::BuildProjectConfiguration;
 use serde_json::Value;
 
 impl BuildProject {

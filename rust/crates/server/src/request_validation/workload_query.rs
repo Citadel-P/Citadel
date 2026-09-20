@@ -1,9 +1,9 @@
+use crate::api::error::ApiError;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use citadel_identity::IdentityError;
 use uuid::Uuid;
 
-use crate::identity_http::IdentityHttpError;
+use crate::api::error::HttpError;
 
 /// Shared collection filters for Deployments, Stacks and Swarm Services.
 /// Repeated tags, case-insensitive keys and duplicate handling are compatibility
@@ -15,7 +15,7 @@ pub(crate) struct WorkloadQuery {
 }
 
 impl WorkloadQuery {
-    pub(crate) fn parse(query: Option<&str>) -> Result<Self, IdentityError> {
+    pub(crate) fn parse(query: Option<&str>) -> Result<Self, ApiError> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
             if key.eq_ignore_ascii_case("tags") {
@@ -48,11 +48,10 @@ impl WorkloadQuery {
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for WorkloadQuery {
-    type Rejection = IdentityHttpError;
+    type Rejection = HttpError;
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        Self::parse(parts.uri.query())
-            .map_err(|error| IdentityHttpError::from_parts(error, &parts.headers))
+        Self::parse(parts.uri.query()).map_err(|error| HttpError::from_parts(error, &parts.headers))
     }
 }
 

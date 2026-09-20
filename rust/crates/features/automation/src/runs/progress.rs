@@ -2,7 +2,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{AutomationRun, AutomationRunResult};
+use crate::AutomationRun;
+use crate::AutomationRunResult;
 
 #[derive(Debug, Default)]
 pub struct AutomationProgress {

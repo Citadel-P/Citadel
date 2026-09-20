@@ -1,10 +1,10 @@
 use chrono::{Duration, Utc};
-use citadel_adapters::build_executor::{
-    LocalDockerBuildExecutor, PostgresBuildRegistryCredentialResolver, PostgresBuildSecretResolver,
-};
-use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::postgres::builds::PostgresBuildRepository;
-use citadel_adapters::stack_build_images::PostgresStackBuildImageResolver;
+use citadel_adapters::external::builds::executor::LocalDockerBuildExecutor;
+use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
+use citadel_adapters::persistence::postgres::builds::credentials::PostgresBuildRegistryCredentialResolver;
+use citadel_adapters::persistence::postgres::builds::credentials::PostgresBuildSecretResolver;
+use citadel_adapters::persistence::postgres::stacks::build_images::PostgresStackBuildImageResolver;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_bindings::SecretProtector;
 use citadel_builds::{
     BuildExecutionResult, BuildExecutor, BuildProjectConfiguration,

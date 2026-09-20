@@ -1,4 +1,4 @@
-use citadel_adapters::volume_content::VolumeContentAdapter;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
 use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;

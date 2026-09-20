@@ -1,4 +1,4 @@
-use citadel_adapters::PostgresAuthorizedPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::PostgresAuthorizedPlatformReader;
 use citadel_platforms::AuthorizedPlatformReader;
 use citadel_primitives::ActorId;
 use sqlx::postgres::PgPoolOptions;

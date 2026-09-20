@@ -1,6 +1,6 @@
 use super::*;
-use citadel_adapters::agent::AgentRequestSigner;
-use citadel_server::platforms_http::AgentSetupContext;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_server::api::routes::platforms::AgentSetupContext;
 
 async fn daemon(
     handler: impl Fn(&str) -> (u16, String) + Send + Sync + 'static,
@@ -307,7 +307,7 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn edge_platform_prune_and_pull_stream_route_and_persist_without_local_fallback() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         images::v1::{PullImageRequest, PullImageResponse},

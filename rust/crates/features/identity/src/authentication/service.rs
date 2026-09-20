@@ -654,6 +654,9 @@ impl IdentityService {
             .await
             .map_err(|_| IdentityError::Credential)?;
         let passwords = Arc::clone(&self.passwords);
+        // Accepted blocking boundary: the bounded credential permit stays inside
+        // the hash job if HTTP is cancelled. This closure has no database/session
+        // handles or durable claims; Tokio owns its finite CPU work through exit.
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
             passwords.hash(&password)
@@ -672,6 +675,9 @@ impl IdentityService {
             .await
             .map_err(|_| IdentityError::Credential)?;
         let passwords = Arc::clone(&self.passwords);
+        // Accepted blocking boundary: the bounded credential permit stays inside
+        // the hash job if HTTP is cancelled. This closure has no database/session
+        // handles or durable claims; Tokio owns its finite CPU work through exit.
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
             passwords.verify(&password, &encoded_hash)

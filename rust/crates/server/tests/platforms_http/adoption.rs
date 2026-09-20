@@ -1,12 +1,13 @@
 use super::*;
 use citadel_adapters::{
-    container_mutations::ContainerRuntimeRouter,
-    crypto::AesGcmSecretProtector,
-    deployment_runtime::DeploymentRuntimeRouter,
-    postgres::deployments::{PostgresContainerAdoption, PostgresDeploymentRepository},
+    connectors::routing::{
+        containers::ContainerRuntimeRouter, deployments::DeploymentRuntimeRouter,
+    },
+    persistence::postgres::deployments::{PostgresContainerAdoption, PostgresDeploymentRepository},
+    security::identity::crypto::AesGcmSecretProtector,
 };
 use citadel_deployments::DeploymentService;
-use citadel_server::api::deployments::{self, DeploymentsHttpState};
+use citadel_server::api::routes::deployments::{self, DeploymentsHttpState};
 use tokio_util::sync::CancellationToken;
 
 // Ports ContainerAdoptionDraftFactoryTests + adoption endpoint persistence,
@@ -75,7 +76,7 @@ async fn exercise_adoption(external: bool) {
     let protector = Arc::new(AesGcmSecretProtector::new(&[11; 32]).unwrap());
     let service = DeploymentService::new(
         Arc::new(
-            citadel_server::api::deployments::TrackedDeploymentTasks::new(
+            citadel_server::tasks::deployments::TrackedDeploymentTasks::new(
                 citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         ),

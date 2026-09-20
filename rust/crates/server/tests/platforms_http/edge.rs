@@ -1,14 +1,17 @@
 use super::*;
 use axum::http::Method;
-use citadel_adapters::edge::EdgeRegistry;
-use citadel_server::platforms_http::EdgeHttpContext;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_server::api::routes::platforms::EdgeHttpContext;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_and_permissions() {
     let fixture = fixture().await;
     let app = fixture.app.clone().layer(axum::Extension(EdgeHttpContext {
-        store: citadel_adapters::edge::PostgresEdgeStore::new(fixture.pool.clone()),
+        store:
+            citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
+                fixture.pool.clone(),
+            ),
         registry: EdgeRegistry::default(),
         core_url: "https://core.example.test".into(),
         agent_image: "ghcr.io/citadel-p/citadel.agent:latest".into(),
@@ -140,7 +143,7 @@ async fn request(
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn edge_network_and_volume_endpoints_use_the_bound_session_and_enforce_permissions() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         networks::v1::{CreateNetworkRequest, CreateNetworkResponse, ListNetworksResponse},

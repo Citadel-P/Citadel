@@ -63,7 +63,7 @@ pub(super) async fn verify(
     let services = Arc::new(
         SwarmServiceService::new(
             Arc::new(
-                citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                citadel_server::tasks::swarm_services::TrackedSwarmServiceTasks::new(
                     citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 ),
             ),
@@ -78,7 +78,11 @@ pub(super) async fn verify(
         pool.clone(),
         identity.clone(),
         services.clone(),
-        Arc::new(citadel_adapters::activity_store::PostgresActivityStore::new(pool.clone())),
+        Arc::new(
+            citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(
+                pool.clone(),
+            ),
+        ),
     );
     let mut current = services.get(admin.actor_id, true, id).await.unwrap();
     current.service.spec.update_behavior = UpdateBehavior::Notify;
@@ -306,15 +310,15 @@ pub(super) async fn verify(
 }
 
 struct FailingAudit;
-impl citadel_application::WebhookActivitySink for FailingAudit {
+impl citadel_activities::WebhookActivitySink for FailingAudit {
     fn record_webhook(
         &self,
         _: citadel_activities::ActivityResourceType,
         _: Uuid,
         _: citadel_activities::WebhookActivityDetails,
-    ) -> BoxFuture<'_, Result<(), citadel_identity::IdentityError>> {
+    ) -> BoxFuture<'_, Result<(), citadel_activities::ActivityError>> {
         Box::pin(async {
-            Err(citadel_identity::IdentityError::Storage(
+            Err(citadel_activities::ActivityError::Storage(
                 "audit unavailable".into(),
             ))
         })
@@ -342,13 +346,19 @@ fn router(
     pool: sqlx::PgPool,
     identity: Arc<IdentityService>,
     services: Arc<SwarmServiceService>,
-    audit: Arc<dyn citadel_application::WebhookActivitySink>,
+    audit: Arc<dyn citadel_activities::WebhookActivitySink>,
 ) -> Router {
     use citadel_adapters::{
-        automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
-        postgres::automation::PostgresAutomationRepository,
-        postgres::git::accounts::PostgresGitAccountRepository,
-        postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
+        persistence::postgres::{
+            automation::PostgresAutomationRepository,
+            git::{
+                accounts::PostgresGitAccountRepository,
+                repositories::PostgresGitRepositoryExecutionPersistence,
+            },
+        },
+        security::identity::{
+            automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
+        },
     };
     let git = Arc::new(citadel_git::GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
@@ -369,7 +379,9 @@ fn router(
     let automation = Arc::new(citadel_automation::AutomationService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         Arc::new(
-            citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
+            citadel_server::tasks::automation::TrackedAutomationTasks::new(
+                automation_tasks.clone(),
+            ),
         ),
         automation_shutdown.clone(),
         Arc::new(PostgresAutomationRepository::new(pool.clone())),
@@ -383,14 +395,16 @@ fn router(
             stale_after: std::time::Duration::from_secs(60),
         },
     ));
-    citadel_server::webhooks_http::router(citadel_server::webhooks_http::WebhooksHttpState {
-        git,
-        automation,
-        backups: None,
-        builds: None,
-        stacks: None,
-        services: Some(services),
-        alerts: None,
-        audit: Some(audit),
-    })
+    citadel_server::api::routes::webhooks::router(
+        citadel_server::api::routes::webhooks::WebhooksHttpState {
+            git,
+            automation,
+            backups: None,
+            builds: None,
+            stacks: None,
+            services: Some(services),
+            alerts: None,
+            audit: Some(audit),
+        },
+    )
 }

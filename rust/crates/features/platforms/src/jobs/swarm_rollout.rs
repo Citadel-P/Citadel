@@ -1,6 +1,7 @@
 //! Shared observation rules from SwarmReconciliationJob. Transport acknowledgement
 //! and task counts alone do not establish that a rollout has completed.
-use crate::{RuntimeSwarmService, RuntimeSwarmTask};
+use crate::RuntimeSwarmService;
+use crate::RuntimeSwarmTask;
 
 pub fn rollout_complete_state(state: &str) -> bool {
     state.trim().is_empty()

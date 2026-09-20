@@ -1,4 +1,6 @@
-use crate::{SwarmServiceDetails, SwarmServiceError, SwarmServiceSpec};
+use crate::SwarmServiceDetails;
+use crate::SwarmServiceError;
+use crate::SwarmServiceSpec;
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 

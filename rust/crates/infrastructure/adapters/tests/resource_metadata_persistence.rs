@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::postgres::bindings::PostgresBindingRepository;
+use citadel_adapters::persistence::postgres::bindings::PostgresBindingRepository;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_bindings::BindingRepository;
 use citadel_bindings::BindingValidation;
 use citadel_bindings::ExternalSecretInput;
@@ -38,9 +38,12 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         .await
         .unwrap();
     let store = Arc::new(PostgresBindingRepository::new(pool.clone()));
-    let tag_store = citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone());
+    let tag_store =
+        citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(pool.clone());
     let registry_store =
-        citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone());
+        citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(
+            pool.clone(),
+        );
     use citadel_registries::RegistryRepository;
     use citadel_tags::TagRepository;
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
@@ -253,7 +256,7 @@ async fn concurrent_tag_creation_keeps_one_normalized_name() {
         .connect(&database_url)
         .await
         .unwrap();
-    let tag_store = citadel_adapters::postgres::tags::PostgresTagRepository::new(pool);
+    let tag_store = citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(pool);
     use citadel_tags::TagRepository;
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();

@@ -7,10 +7,12 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    PlatformInventoryPort, RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimeSwarmInfo,
-    jobs::{InventoryCollectionTarget, collect_inventory_from_info},
-};
+use crate::PlatformInventoryPort;
+use crate::RuntimeCapabilityError;
+use crate::RuntimeInventorySnapshot;
+use crate::RuntimeSwarmInfo;
+use crate::jobs::InventoryCollectionTarget;
+use crate::jobs::collect_inventory_from_info;
 
 pub const LOCAL_DOCKER_ADDRESS: &str = "http://localhost.docker";
 

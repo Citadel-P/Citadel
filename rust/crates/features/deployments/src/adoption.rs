@@ -1,5 +1,7 @@
 //! Non-mutating Docker-to-Deployment draft mapping.
-use crate::{DeploymentDetails, DeploymentError, DeploymentSpec};
+use crate::DeploymentDetails;
+use crate::DeploymentError;
+use crate::DeploymentSpec;
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};

@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use citadel_adapters::docker::DockerClient;
-use citadel_adapters::stack_runtime::StackRuntimeRouter;
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_stacks::{
     StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntime, StackSourceFile,
@@ -123,7 +123,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
     )
     .await
     .unwrap();
-    citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+    citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
         fixture.pool.clone(),
     )
     .persist(&snapshot)
@@ -220,7 +220,7 @@ impl Fixture {
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id,
                     platform_type:
-                        citadel_adapters::postgres::platform_classification::platform_kind(
+                        citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
                             platform_type,
                         )
                         .unwrap(),
@@ -229,7 +229,7 @@ impl Fixture {
             )
             .await
             .unwrap();
-            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+            citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
                 pool.clone(),
             )
             .persist(&snapshot)
@@ -305,10 +305,11 @@ impl Fixture {
             platform_id: self.platform_id,
             name: self.project_name.clone(),
             project_name: self.project_name.clone(),
-            platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
-                self.platform_type,
-            )
-            .unwrap(),
+            platform_type:
+                citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
+                    self.platform_type,
+                )
+                .unwrap(),
             spec: self.spec(),
             row_version: 1,
             actor_id: Uuid::nil(),
@@ -455,7 +456,7 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
         .map(|t| &t.node_id)
         .collect();
     assert_eq!(nodes.len(), 2, "both nodes must run a task");
-    citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+    citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
         f.pool.clone(),
     )
     .persist(&snapshot)
@@ -539,7 +540,7 @@ async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
             )
             .await
             .unwrap();
-            citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(
+            citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
                 f.pool.clone(),
             )
             .persist(&snapshot)

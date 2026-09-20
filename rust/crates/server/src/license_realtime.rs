@@ -9,12 +9,12 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_application::{
-    LicenseStateNotifier, LicenseTransitionMonitor, LicenseValidationPersistence,
-    license_transition_delay,
-};
 use citadel_identity::IdentityService;
+use citadel_licensing::LicenseStateNotifier;
 use citadel_licensing::LicenseStatus;
+use citadel_licensing::LicenseTransitionMonitor;
+use citadel_licensing::LicenseValidationPersistence;
+use citadel_licensing::license_transition_delay;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

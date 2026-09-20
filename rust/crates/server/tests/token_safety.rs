@@ -7,18 +7,22 @@ use axum::{
     middleware,
 };
 use citadel_adapters::{
-    crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
-    identity_store::{PostgresIdentityStore, StaticEntitlementService},
+    persistence::postgres::identity::authentication::store::{
+        PostgresIdentityStore, StaticEntitlementService,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
 };
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    AccessTokenClaims, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, ServiceAccountTokenCodec, SessionTokenCodec, SystemClock,
+    AccessTokenClaims, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, ServiceAccountTokenCodec,
+    SessionTokenCodec, SystemClock,
 };
 use citadel_primitives::ActorId;
 use citadel_server::{
-    identity_http::authentication_middleware,
+    api::routes::authentication::authentication_middleware,
     license_realtime::{LicenseRealtimeHub, LicenseRealtimeService},
 };
 use futures_util::{SinkExt, StreamExt};

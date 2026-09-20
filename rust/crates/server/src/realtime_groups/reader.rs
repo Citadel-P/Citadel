@@ -1,6 +1,6 @@
 use super::*;
 use crate::realtime::topic::Topic;
-use citadel_application::{ActivityFilter, ActivityService};
+use citadel_activities::{ActivityFilter, ActivityService};
 use citadel_automation::AutomationRepository;
 use citadel_backups::BackupPersistence;
 use citadel_builds::BuildRepository;
@@ -13,12 +13,9 @@ use citadel_swarm_services::SwarmServiceRepository;
 use futures_util::TryFutureExt;
 use std::sync::Arc;
 
-#[path = "logs.rs"]
 mod logs;
-#[path = "terminal.rs"]
 mod terminal;
 #[cfg(test)]
-#[path = "reader_tests.rs"]
 mod tests;
 
 // Reuse the same authorized read models as HTTP. No internal HTTP requests,
@@ -36,7 +33,7 @@ pub struct ApplicationGroupReader {
     pub backups: Arc<dyn BackupPersistence>,
     pub activities: Arc<ActivityService>,
     pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
-    pub docker: crate::platforms_http::PlatformsHttpState,
+    pub docker: crate::api::routes::platforms::PlatformsHttpState,
 }
 
 fn failure(error: impl std::fmt::Display) -> RealtimeReadError {
@@ -202,7 +199,7 @@ impl ApplicationGroupReader {
                     .list_events(actor, admin, &filter)
                     .await
                     .map_err(failure)?;
-                let events: crate::api::alerts::views::AlertEventPage = events.into();
+                let events: crate::api::resources::alerts::views::AlertEventPage = events.into();
                 return Ok(GroupSnapshot {
                     rows: vec![GroupRows {
                         target: "AlertEventReceived",
@@ -311,7 +308,9 @@ impl ApplicationGroupReader {
                         .platforms
                         .get_platform(e.unwrap().platform_id.unwrap())
                         .await
-                        .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
+                        .map(|value| {
+                            value.map(crate::api::resources::platforms::views::PlatformView::from)
+                        })
                         .map_err(failure)?
                         .ok_or(RealtimeReadError::Authorization)?;
                     if self
@@ -338,7 +337,7 @@ impl ApplicationGroupReader {
                         .map(|value| {
                             value
                                 .into_iter()
-                                .map(crate::platforms_http::views::PlatformView::from)
+                                .map(crate::api::resources::platforms::views::PlatformView::from)
                                 .collect::<Vec<_>>()
                         })
                         .map_err(failure)?,
@@ -353,7 +352,7 @@ impl ApplicationGroupReader {
                     .map(|value| {
                         value
                             .into_iter()
-                            .map(crate::platforms_http::views::ContainerView::from)
+                            .map(crate::api::resources::platforms::views::ContainerView::from)
                             .collect::<Vec<_>>()
                     })
                     .map_err(failure)?;
@@ -369,16 +368,19 @@ impl ApplicationGroupReader {
                 }
                 event(
                     "ImagesInfoUpdated",
-                    json!({"images":self.platforms.list_images(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
+                    json!({"images":self.platforms.list_images(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
                 )
             }
             Topic::DockerDaemon(..) => {
                 if sample {
                     return Ok(GroupSnapshot::default());
                 }
-                let mut result =
-                    crate::platforms_http::realtime_daemon_snapshot(&self.docker, p, id.unwrap())
-                        .await?;
+                let mut result = crate::api::routes::platforms::realtime_daemon_snapshot(
+                    &self.docker,
+                    p,
+                    id.unwrap(),
+                )
+                .await?;
                 result.rows.extend(
                     rows(
                         "ContainerEventReceived",
@@ -388,7 +390,7 @@ impl ApplicationGroupReader {
                             .map(|value| {
                                 value
                                     .into_iter()
-                                    .map(crate::platforms_http::views::ContainerView::from)
+                                    .map(crate::api::resources::platforms::views::ContainerView::from)
                                     .collect::<Vec<_>>()
                             })
                             .map_err(failure)?,
@@ -405,7 +407,7 @@ impl ApplicationGroupReader {
                             .map(|value| {
                                 value
                                     .into_iter()
-                                    .map(crate::platforms_http::views::ImageView::from)
+                                    .map(crate::api::resources::platforms::views::ImageView::from)
                                     .collect::<Vec<_>>()
                             })
                             .map_err(failure)?,
@@ -415,12 +417,12 @@ impl ApplicationGroupReader {
                 );
                 result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
                     "platformId":id,
-                    "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmNodeView::from).collect::<Vec<_>>()).map_err(failure)?},
-                    "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmServiceView::from).collect::<Vec<_>>()).map_err(failure)?},
-                    "tasks":{"items":self.platforms.list_swarm_tasks(id.unwrap(),None,1000).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmTaskView::from).collect::<Vec<_>>()).map_err(failure)?},
-                    "networks":{"items":self.platforms.list_swarm_networks(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmNetworkView::from).collect::<Vec<_>>()).map_err(failure)?},
-                    "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmSecretView::from).collect::<Vec<_>>()).map_err(failure)?},
-                    "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmConfigView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmNodeView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmServiceView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "tasks":{"items":self.platforms.list_swarm_tasks(id.unwrap(),None,1000).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmTaskView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "networks":{"items":self.platforms.list_swarm_networks(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmNetworkView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmSecretView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmConfigView::from).collect::<Vec<_>>()).map_err(failure)?},
                 })]));
                 Ok(result)
             }
@@ -431,18 +433,20 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::deployments::views::DeploymentView::from)
+                    .map(crate::api::resources::deployments::views::DeploymentView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::Deployment(..) => rows(
                 "DeploymentInfoUpdated",
-                vec![crate::api::deployments::views::DeploymentView::from(
-                    self.deployments
-                        .get_authorized(actor, admin, id.unwrap())
-                        .await
-                        .map_err(failure)?,
-                )],
+                vec![
+                    crate::api::resources::deployments::views::DeploymentView::from(
+                        self.deployments
+                            .get_authorized(actor, admin, id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ),
+                ],
                 RowStyle::Update,
             ),
             Topic::Stacks => rows(
@@ -452,13 +456,13 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::stacks::views::StackView::from)
+                    .map(crate::api::resources::stacks::views::StackView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::Stack(..) => rows(
                 "StackInfoUpdated",
-                vec![crate::api::stacks::views::StackView::from(
+                vec![crate::api::resources::stacks::views::StackView::from(
                     self.stacks
                         .get_authorized(actor, admin, id.unwrap())
                         .await
@@ -485,7 +489,7 @@ impl ApplicationGroupReader {
                     .map(|value| {
                         value
                             .into_iter()
-                            .map(crate::platforms_http::views::ContainerView::from)
+                            .map(crate::api::resources::platforms::views::ContainerView::from)
                             .collect::<Vec<_>>()
                     })
                     .map_err(failure)?
@@ -498,7 +502,7 @@ impl ApplicationGroupReader {
             Topic::SwarmService(..) => rows(
                 "SwarmServiceInfoUpdated",
                 vec![
-                    crate::api::swarm_services::views::ManagedSwarmServiceView::from(
+                    crate::api::resources::swarm_services::views::ManagedSwarmServiceView::from(
                         self.services
                             .get_authorized(actor, admin, id.unwrap())
                             .await
@@ -521,7 +525,9 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::swarm_services::views::ManagedSwarmServiceView::from)
+                    .map(
+                        crate::api::resources::swarm_services::views::ManagedSwarmServiceView::from,
+                    )
                     .collect(),
                 RowStyle::Update,
             ),
@@ -532,7 +538,7 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::git::repositories::views::GitRepositoryView::from)
+                    .map(crate::api::resources::git_repositories::views::GitRepositoryView::from)
                     .collect(),
                 RowStyle::Update,
             ),
@@ -541,7 +547,9 @@ impl ApplicationGroupReader {
                 vec![
                     self.git_repositories
                         .get_git_repository(id.unwrap())
-                        .map_ok(crate::api::git::repositories::views::GitRepositoryView::from)
+                        .map_ok(
+                            crate::api::resources::git_repositories::views::GitRepositoryView::from,
+                        )
                         .await
                         .map_err(failure)?,
                 ],
@@ -549,7 +557,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationActions => rows(
                 "AutomationActionInfoUpdated",
-                crate::api::automation::authorized_actions(
+                crate::api::routes::automation::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     self.automation.list(actor, admin).await.map_err(failure)?,
@@ -560,7 +568,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationAction(..) => rows(
                 "AutomationActionInfoUpdated",
-                crate::api::automation::authorized_actions(
+                crate::api::routes::automation::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     vec![self.automation.get(id.unwrap()).await.map_err(failure)?],
@@ -576,18 +584,20 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::backups::views::BackupRepositoryView::from)
+                    .map(crate::api::resources::backups::views::BackupRepositoryView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRepository(..) => rows(
                 "BackupRepositoryInfoUpdated",
-                vec![crate::api::backups::views::BackupRepositoryView::from(
-                    self.backups
-                        .get_repository(id.unwrap())
-                        .await
-                        .map_err(failure)?,
-                )],
+                vec![
+                    crate::api::resources::backups::views::BackupRepositoryView::from(
+                        self.backups
+                            .get_repository(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ),
+                ],
                 RowStyle::Update,
             ),
             Topic::BackupPolicies => rows(
@@ -597,18 +607,20 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::backups::views::BackupPolicyView::from)
+                    .map(crate::api::resources::backups::views::BackupPolicyView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupPolicy(..) => rows(
                 "BackupPolicyInfoUpdated",
-                vec![crate::api::backups::views::BackupPolicyView::from(
-                    self.backups
-                        .get_policy(id.unwrap())
-                        .await
-                        .map_err(failure)?,
-                )],
+                vec![
+                    crate::api::resources::backups::views::BackupPolicyView::from(
+                        self.backups
+                            .get_policy(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ),
+                ],
                 RowStyle::Update,
             ),
             Topic::BackupRuns(..) => rows(
@@ -618,13 +630,13 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::backups::views::BackupRunView::from)
+                    .map(crate::api::resources::backups::views::BackupRunView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRun(..) => rows(
                 "BackupRunInfoUpdated",
-                vec![crate::api::backups::views::BackupRunView::from(
+                vec![crate::api::resources::backups::views::BackupRunView::from(
                     self.backups.get_run(id.unwrap()).await.map_err(failure)?,
                 )],
                 RowStyle::Update,
@@ -636,23 +648,25 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::backups::views::BackupRestoreRunView::from)
+                    .map(crate::api::resources::backups::views::BackupRestoreRunView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::BackupRestoreRun(..) => rows(
                 "BackupRestoreRunInfoUpdated",
-                vec![crate::api::backups::views::BackupRestoreRunView::from(
-                    self.backups
-                        .get_restore(id.unwrap())
-                        .await
-                        .map_err(failure)?,
-                )],
+                vec![
+                    crate::api::resources::backups::views::BackupRestoreRunView::from(
+                        self.backups
+                            .get_restore(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ),
+                ],
                 RowStyle::Update,
             ),
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
-                crate::api::builds::handlers::authorized_projects(
+                crate::api::routes::builds::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     self.builds.list(actor, admin).await.map_err(failure)?,
@@ -663,7 +677,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildProject(..) => rows(
                 "BuildProjectInfoUpdated",
-                crate::api::builds::handlers::authorized_projects(
+                crate::api::routes::builds::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
@@ -674,7 +688,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPools => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::api::builds::handlers::authorized_pools(
+                crate::api::routes::builds::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     self.builds
@@ -688,7 +702,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPool(..) => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::api::builds::handlers::authorized_pools(
+                crate::api::routes::builds::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
@@ -704,13 +718,13 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::builds::views::BuildRunView::from)
+                    .map(crate::api::resources::builds::views::BuildRunView::from)
                     .collect(),
                 RowStyle::Update,
             ),
             Topic::BuildRun(..) => rows(
                 "BuildRunInfoUpdated",
-                vec![crate::api::builds::views::BuildRunView::from(
+                vec![crate::api::resources::builds::views::BuildRunView::from(
                     self.builds.get_run(id.unwrap()).await.map_err(failure)?,
                 )],
                 RowStyle::Update,
@@ -731,7 +745,7 @@ impl ApplicationGroupReader {
             .platforms
             .get_container(id)
             .await
-            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
+            .map(|value| value.map(crate::api::resources::platforms::views::ContainerView::from))
             .map_err(failure)?
             .ok_or(RealtimeReadError::Authorization)?;
         let mut allowed = p.is_administrator();
@@ -780,7 +794,7 @@ impl ApplicationGroupReader {
         let records = self
             .activities
             .list(
-                p,
+                &crate::api::routes::activities::activity_access(p),
                 ActivityFilter {
                     resource_id: g.id(),
                     resource_type: Some(kind),
@@ -796,7 +810,7 @@ impl ApplicationGroupReader {
             records
                 .items
                 .into_iter()
-                .map(crate::activities_http::map_activity)
+                .map(crate::api::resources::activities::views::map_activity)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(failure)?,
             RowStyle::Activity,
@@ -849,7 +863,7 @@ impl GroupReadPort for ApplicationGroupReader {
 }
 
 fn container_data(
-    container: crate::platforms_http::views::ContainerView,
+    container: crate::api::resources::platforms::views::ContainerView,
     event: Option<&PublishedRuntimeEvent>,
 ) -> Value {
     let mut value = container.runtime_data();
@@ -872,7 +886,7 @@ fn container_data(
 
 fn map_stats(
     event: &PublishedRuntimeEvent,
-    containers: &[crate::platforms_http::views::ContainerView],
+    containers: &[crate::api::resources::platforms::views::ContainerView],
 ) -> Vec<Value> {
     let Some(stats) = event.payload["stats"].as_array() else {
         return vec![];

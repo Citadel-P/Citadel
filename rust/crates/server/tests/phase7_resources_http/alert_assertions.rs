@@ -91,9 +91,11 @@ pub(super) async fn runtime_rule(
     expected: &Value,
 ) {
     let id = Uuid::parse_str(expected["id"].as_str().unwrap()).unwrap();
-    let current = serde_json::to_value(citadel_server::api::alerts::views::AlertRuleView::from(
-        store.get_rule(id).await.unwrap(),
-    ))
+    let current = serde_json::to_value(
+        citadel_server::api::resources::alerts::views::AlertRuleView::from(
+            store.get_rule(id).await.unwrap(),
+        ),
+    )
     .unwrap();
     assert_eq!(&current, expected);
     // This combined test owns a disposable database. Temporarily isolate this

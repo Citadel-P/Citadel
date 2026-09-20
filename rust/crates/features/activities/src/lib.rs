@@ -14,3 +14,15 @@ pub use model::{
     SwarmServiceActivitySnapshot, TeamActivitySnapshot, UserActivitySnapshot,
     VolumeContentDownloaded, WebhookActivityDetails, WebhookActivitySource,
 };
+
+mod error;
+mod read_models;
+mod repository;
+mod service;
+pub use error::ActivityError;
+pub use read_models::{
+    ActivityAccess, ActivityFilter, ActivityRecord, DEFAULT_ACTIVITY_PAGE_SIZE,
+    MAXIMUM_ACTIVITY_PAGE_SIZE, PagedActivityRecords, ValidatedActivityFilter,
+};
+pub use repository::{ActivityQueryStore, WebhookActivitySink};
+pub use service::ActivityService;

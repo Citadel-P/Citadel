@@ -4,7 +4,6 @@ members = [
     "crates/server",
     "crates/features/activities",
     "crates/features/alerts",
-    "crates/features/application",
     "crates/features/automation",
     "crates/features/backups",
     "crates/features/bindings",
@@ -106,3 +105,6 @@ lto = "thin"
 opt-level = "z"
 panic = "abort"
 strip = "symbols"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

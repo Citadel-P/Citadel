@@ -3,7 +3,7 @@ use tokio_util::sync::CancellationToken;
 
 pub async fn run(
     cancel: CancellationToken,
-    scanner: Arc<citadel_adapters::image_scanner::ImageScanner>,
+    scanner: Arc<citadel_adapters::connectors::routing::images::scanner::ImageScanner>,
     deployments: Arc<citadel_deployments::DeploymentService>,
     stacks: Arc<citadel_stacks::StackService>,
     services: Arc<citadel_swarm_services::SwarmServiceService>,

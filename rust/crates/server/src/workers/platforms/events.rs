@@ -310,7 +310,7 @@ pub(super) async fn apply_container_event(
             () = cancellation.cancelled() => return Ok(true),
             result = docker.inspect_container_document(id) => result?,
         };
-        let container = citadel_adapters::docker::container_observation(inspected)?;
+        let container = citadel_adapters::connectors::docker::container_observation(inspected)?;
         (
             Some(container.state.clone()),
             Some(container.name.clone()),
@@ -340,7 +340,7 @@ pub(super) async fn apply_container_event(
             continue;
         }
         let updated = if let Some(container) = &container {
-            citadel_adapters::resource_status_store::container_observation(
+            citadel_adapters::persistence::postgres::platforms::status::container_observation(
                 pool,
                 target.id,
                 None,
@@ -349,7 +349,7 @@ pub(super) async fn apply_container_event(
             )
             .await?
         } else {
-            citadel_adapters::resource_status_store::container_event(
+            citadel_adapters::persistence::postgres::platforms::status::container_event(
                 pool,
                 target.id,
                 None,

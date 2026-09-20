@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::{ComposeModel, ResolvedStackBindings};
+use crate::ComposeModel;
+use crate::ResolvedStackBindings;
 
 const MAX_LISTED_ENTRIES: usize = 10;
 const MAX_VALUE_CHARACTERS: usize = 80;

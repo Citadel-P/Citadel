@@ -5,7 +5,8 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
 use citadel_contracts::citadel::images::v1::image_service_server::{
     ImageService, ImageServiceServer,
 };

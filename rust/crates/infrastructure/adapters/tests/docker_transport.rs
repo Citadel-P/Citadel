@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use citadel_adapters::docker::DockerClient;
+use citadel_adapters::connectors::docker::DockerClient;
 use citadel_platforms::{CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort};
 use futures_util::StreamExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

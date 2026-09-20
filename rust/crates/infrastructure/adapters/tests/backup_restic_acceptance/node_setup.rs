@@ -1,8 +1,7 @@
 use super::*;
-use citadel_adapters::{
-    docker::DockerClient, node_agent_lifecycle_store::PostgresNodeAgentLifecycleStore,
-    node_agent_runtime::NodeAgentRuntimeRouter,
-};
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter;
+use citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore;
 use citadel_platforms::node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions};
 
 // Uses real Docker distribution, signed manager commands, PostgreSQL enrollment,

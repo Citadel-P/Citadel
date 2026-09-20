@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use citadel_adapters::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
 use citadel_alerts::{
     AlertChannelConfiguration, AlertError, AlertEventFilter, AlertObservation, AlertRepository,
     AlertRuleConfiguration, NewAlertEvent,
@@ -37,7 +37,7 @@ async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
         .await
         .unwrap();
     let store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
-        citadel_adapters::identity_store::StaticEntitlementService::new(true),
+        citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(true),
     ));
     let resource = Uuid::now_v7();
     let mut ids = Vec::new();
@@ -146,7 +146,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let changes = notifications.clone();
     let store = PostgresAlertRepository::new(pool.clone())
         .with_entitlements(Arc::new(
-            citadel_adapters::identity_store::StaticEntitlementService::new(true),
+            citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(true),
         ))
         .with_change_notifier(Arc::new(move || {
             changes.fetch_add(1, Ordering::SeqCst);
@@ -394,7 +394,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     // AlertService.ProcessAsync: a license downgrade skips custom rules, but
     // built-in rules continue. Reconstruct the store to exercise persisted state.
     let free_store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
-        citadel_adapters::identity_store::StaticEntitlementService::new(false),
+        citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(false),
     ));
     let after_downgrade = AlertObservation {
         deduplication_component: "after-downgrade".into(),
@@ -493,7 +493,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
         .await
         .unwrap();
     let store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
-        citadel_adapters::identity_store::StaticEntitlementService::new(true),
+        citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(true),
     ));
     let builtins:Vec<Uuid>=sqlx::query_scalar("UPDATE alertrules SET status='Disabled' WHERE type='PlatformCpuHigh' AND status='Enabled' RETURNING id").fetch_all(&pool).await.unwrap();
     for case in [

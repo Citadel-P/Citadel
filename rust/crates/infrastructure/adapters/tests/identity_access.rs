@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
+use citadel_activities::ActivityFilter;
+use citadel_activities::ActivityService;
 use citadel_activities::{ActivityEventType, ActivityResourceType};
-use citadel_adapters::activity_store::PostgresActivityStore;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
-};
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::profile_store::PostgresProfileStore;
-use citadel_adapters::service_account_store::PostgresServiceAccountStore;
-use citadel_adapters::user_store::PostgresUserReadStore;
-use citadel_application::{ActivityFilter, ActivityService};
+use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
+use citadel_adapters::persistence::postgres::identity::authentication::store::PostgresIdentityStore;
+use citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService;
+use citadel_adapters::persistence::postgres::identity::profile::repository::PostgresProfileRepository;
+use citadel_adapters::persistence::postgres::identity::service_accounts::repository::PostgresServiceAccountRepository;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+use citadel_adapters::security::identity::crypto::Argon2PasswordHasher;
+use citadel_adapters::security::identity::crypto::JwtSessionTokenCodec;
+use citadel_adapters::security::identity::crypto::OpaqueServiceAccountTokenCodec;
 use citadel_database::MigrationRunner;
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
@@ -38,7 +40,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         .unwrap();
 
     let identity_store = Arc::new(PostgresIdentityStore::new(pool.clone()));
-    let service_account_store = Arc::new(PostgresServiceAccountStore::new(pool.clone()));
+    let service_account_store = Arc::new(PostgresServiceAccountRepository::new(pool.clone()));
     let entitlement = Arc::new(StaticEntitlementService::new(true));
     let service_tokens = Arc::new(OpaqueServiceAccountTokenCodec);
     let clock = Arc::new(SystemClock);
@@ -61,9 +63,9 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         entitlement,
         clock.clone(),
     ));
-    let profile_store = Arc::new(PostgresProfileStore::new(pool.clone()));
+    let profile_store = Arc::new(PostgresProfileRepository::new(pool.clone()));
     let profiles = ProfileService::new(profile_store.clone(), Arc::clone(&identity), clock);
-    let users = UserReadService::new(Arc::new(PostgresUserReadStore::new(pool.clone())));
+    let users = UserReadService::new(Arc::new(PostgresUserRepository::new(pool.clone())));
 
     assert!(identity.setup_status().await.unwrap().requires_setup);
     let (login, session) = identity
@@ -797,7 +799,7 @@ VALUES
     let activities = ActivityService::new(Arc::new(PostgresActivityStore::new(pool.clone())));
     let user_activities = activities
         .list(
-            &owner,
+            &activity_access(&owner),
             ActivityFilter {
                 resource_id: Some(owner.subject_id),
                 resource_type: Some(ActivityResourceType::User),
@@ -830,13 +832,17 @@ VALUES
     }));
     let first_activity = user_activities.items[0].id;
     assert_eq!(
-        activities.get(&owner, first_activity).await.unwrap().id,
+        activities
+            .get(&activity_access(&owner), first_activity)
+            .await
+            .unwrap()
+            .id,
         first_activity
     );
     assert_eq!(
         activities
             .list(
-                &oidc_principal,
+                &activity_access(&oidc_principal),
                 ActivityFilter {
                     resource_type: Some(ActivityResourceType::User),
                     ..ActivityFilter::default()
@@ -848,8 +854,10 @@ VALUES
         0
     );
     assert!(matches!(
-        activities.get(&oidc_principal, first_activity).await,
-        Err(IdentityError::NotFound)
+        activities
+            .get(&activity_access(&oidc_principal), first_activity)
+            .await,
+        Err(citadel_activities::ActivityError::NotFound)
     ));
 
     pool.close().await;
@@ -863,5 +871,12 @@ fn metadata_for(user_agent: Option<&str>) -> SessionMetadata {
     SessionMetadata {
         user_agent: user_agent.map(str::to_owned),
         ip_address: Some("127.0.0.1".into()),
+    }
+}
+
+fn activity_access(principal: &ActorPrincipal) -> citadel_activities::ActivityAccess {
+    citadel_activities::ActivityAccess {
+        actor_id: principal.actor_id,
+        administrator: principal.is_administrator(),
     }
 }

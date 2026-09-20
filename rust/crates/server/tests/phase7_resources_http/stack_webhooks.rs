@@ -21,19 +21,25 @@ impl StackBindingResolverPort for Bindings {
 }
 pub fn service(pool: sqlx::PgPool) -> (Arc<StackService>, Arc<Entitlement>) {
     let entitlement = Arc::new(Entitlement::default());
-    let docker = citadel_adapters::docker::DockerClient::new(
+    let docker = citadel_adapters::connectors::docker::DockerClient::new(
         "/no-webhook-http-docker.sock",
         std::time::Duration::from_secs(1),
     )
     .unwrap();
     let service = StackService::new(
-        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
-        Arc::new(citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone())),
-        Arc::new(citadel_adapters::stack_runtime::StackRuntimeRouter::new(
-            pool, docker, None,
-        )),
+        Arc::new(
+            citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(
+                pool.clone(),
+            ),
+        ),
+        Arc::new(
+            citadel_adapters::connectors::routing::stacks::StackRuntimeRouter::new(
+                pool, docker, None,
+            ),
+        ),
         Arc::new(Bindings),
         Arc::new(citadel_stacks::NoopStackChangeNotifier),
         CancellationToken::new(),
@@ -70,7 +76,7 @@ pub async fn verify(
         .bind(platform).bind(platform.to_string()).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/team/repository.git','Idle')")
         .bind(repository).bind(SYSTEM_ACTOR_ID).bind(repository.to_string()).execute(pool).await.unwrap();
-    let input=serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
+    let input=serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
         "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
         "webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"disposable-stack-hook"}
     }})).unwrap().try_into().unwrap();

@@ -1,26 +1,33 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-
-use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
-use citadel_adapters::postgres::platforms::PostgresPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::{
+    PostgresPlatformReader, statistics::store::PostgresContainerStatsStore,
+};
 use citadel_database::MigrationRunner;
-use citadel_identity::ActorPrincipal;
-use citadel_identity::AuthenticatedPrincipalType;
+use citadel_identity::{ActorPrincipal, AuthenticatedPrincipalType};
 use citadel_platforms::{ContainerStatsStore, PlatformReader, RuntimeContainerStat};
 use citadel_primitives::ActorId;
-use citadel_server::config::RealtimeConfig;
-use citadel_server::metrics::Metrics;
-use citadel_server::platforms_http::views::{
-    ContainerView, PlatformCapabilitiesView, PlatformStatView, PlatformView, WorkloadStatusCounts,
+use citadel_server::{
+    api::resources::platforms::views::{
+        ContainerView, PlatformCapabilitiesView, PlatformStatView, PlatformView,
+        WorkloadStatusCounts,
+    },
+    config::RealtimeConfig,
+    metrics::Metrics,
+    realtime::{RealtimeHub, RealtimeReadError, RealtimeReadPort, RealtimeService},
 };
-use citadel_server::realtime::{RealtimeHub, RealtimeReadError, RealtimeReadPort, RealtimeService};
-use futures_util::future::BoxFuture;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, future::BoxFuture};
 use serde_json::{Value, json};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 use tokio::sync::broadcast;
-use tokio_tungstenite::MaybeTlsStream;
-use tokio_tungstenite::tungstenite::{Error as WebSocketError, Message};
+use tokio_tungstenite::{
+    MaybeTlsStream,
+    tungstenite::{Error as WebSocketError, Message},
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -28,8 +35,10 @@ const TOKEN: &str = "phase0c-test-token-with-at-least-32-characters";
 
 #[tokio::test]
 async fn successful_mutations_invalidate_but_reads_and_failures_do_not() {
-    use axum::body::Body;
-    use axum::http::{Method, Request, StatusCode};
+    use axum::{
+        body::Body,
+        http::{Method, Request, StatusCode},
+    };
     use tower::ServiceExt;
 
     let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));

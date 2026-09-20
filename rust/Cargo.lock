@@ -470,9 +470,10 @@ dependencies = [
  "chrono",
  "citadel-licensing",
  "citadel-primitives",
+ "futures-util",
  "serde",
  "serde_json",
- "utoipa",
+ "thiserror",
  "uuid",
 ]
 
@@ -489,7 +490,6 @@ dependencies = [
  "chrono",
  "citadel-activities",
  "citadel-alerts",
- "citadel-application",
  "citadel-automation",
  "citadel-backups",
  "citadel-bindings",
@@ -546,32 +546,11 @@ dependencies = [
  "citadel-activities",
  "citadel-primitives",
  "futures-util",
- "reqwest",
  "serde",
  "serde_json",
  "serde_path_to_error",
  "thiserror",
  "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "citadel-application"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "citadel-activities",
- "citadel-identity",
- "citadel-licensing",
- "citadel-primitives",
- "futures-util",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
- "utoipa",
  "uuid",
 ]
 
@@ -790,8 +769,9 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "citadel-primitives",
+ "futures-util",
  "serde",
- "utoipa",
+ "thiserror",
  "uuid",
 ]
 
@@ -819,7 +799,6 @@ name = "citadel-primitives"
 version = "0.0.0"
 dependencies = [
  "serde",
- "utoipa",
  "uuid",
 ]
 
@@ -876,7 +855,6 @@ dependencies = [
  "citadel-activities",
  "citadel-adapters",
  "citadel-alerts",
- "citadel-application",
  "citadel-automation",
  "citadel-backups",
  "citadel-bindings",
@@ -907,7 +885,6 @@ dependencies = [
  "serde_path_to_error",
  "sha2 0.11.0",
  "sqlx",
- "subtle",
  "thiserror",
  "tokio",
  "tokio-stream",

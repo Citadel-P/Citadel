@@ -1,6 +1,9 @@
-use crate::{
-    Clock, EntitlementService, IdentityError, PatchField, permission_matrix, validate_name,
-};
+use crate::Clock;
+use crate::EntitlementService;
+use crate::IdentityError;
+use crate::PatchField;
+use crate::permission_matrix;
+use crate::validate_name;
 use chrono::{DateTime, Utc};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 

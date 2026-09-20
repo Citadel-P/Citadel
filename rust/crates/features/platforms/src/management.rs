@@ -1,7 +1,9 @@
-use crate::{
-    CreatePlatformInput, PlatformConnectorType, PlatformDetails, PlatformRegistrationError,
-    PlatformType, RuntimePlatformInfo,
-};
+use crate::CreatePlatformInput;
+use crate::PlatformConnectorType;
+use crate::PlatformDetails;
+use crate::PlatformRegistrationError;
+use crate::PlatformType;
+use crate::RuntimePlatformInfo;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

@@ -10,13 +10,23 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    ApplyClaim, CreateDeployment, DeletionClaim, DeploymentBindingSnapshot, DeploymentConfig,
-    DeploymentDetails, DeploymentDuplicateDraft, DeploymentError, DeploymentFilter,
-    DeploymentImageInfo, DeploymentProgress, DeploymentSpec, FieldPatch,
-    ResolvedDeploymentBindings, RuntimeContainerState, RuntimeDeploymentCommand,
-    UpdateDeploymentMetadata,
-};
+use crate::ApplyClaim;
+use crate::CreateDeployment;
+use crate::DeletionClaim;
+use crate::DeploymentBindingSnapshot;
+use crate::DeploymentConfig;
+use crate::DeploymentDetails;
+use crate::DeploymentDuplicateDraft;
+use crate::DeploymentError;
+use crate::DeploymentFilter;
+use crate::DeploymentImageInfo;
+use crate::DeploymentProgress;
+use crate::DeploymentSpec;
+use crate::FieldPatch;
+use crate::ResolvedDeploymentBindings;
+use crate::RuntimeContainerState;
+use crate::RuntimeDeploymentCommand;
+use crate::UpdateDeploymentMetadata;
 
 mod adoption;
 mod apply;
@@ -27,10 +37,11 @@ mod read;
 #[cfg(test)]
 mod tests;
 mod updates;
-use crate::{
-    DeploymentBindingResolverPort, DeploymentEntitlementPort, DeploymentRepository,
-    DeploymentRuntime, EmptyDeploymentBindingResolver,
-};
+use crate::DeploymentBindingResolverPort;
+use crate::DeploymentEntitlementPort;
+use crate::DeploymentRepository;
+use crate::DeploymentRuntime;
+use crate::EmptyDeploymentBindingResolver;
 use bindings::*;
 use mutations::{normalize_description, normalize_name, unique_ids};
 pub use updates::{DeploymentUpdateCheck, checkable_deployment_image, evaluate_deployment_digest};

@@ -1,25 +1,30 @@
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, Response, StatusCode, header};
-use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, Response, StatusCode, header},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+use chrono::{Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::identity::{
+        authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        service_accounts::repository::PostgresServiceAccountRepository,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, ServiceAccountService, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, ServiceAccountService, SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::service_accounts_http::{self, ServiceAccountHttpState};
+use citadel_server::api::routes::{
+    service_accounts as service_accounts_http, service_accounts::ServiceAccountHttpState,
+};
 use serde_json::Value;
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -476,7 +481,7 @@ async fn fixture(custom_access: bool) -> Fixture {
         Duration::days(30),
     ));
     let service_accounts = Arc::new(ServiceAccountService::new(
-        Arc::new(PostgresServiceAccountStore::new(pool.clone())),
+        Arc::new(PostgresServiceAccountRepository::new(pool.clone())),
         token_codec,
         entitlements,
         clock,

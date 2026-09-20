@@ -1,6 +1,7 @@
 //! Image checks keep their own lease; they cannot be mistaken for a failed Apply.
 use super::*;
-use crate::{AutoUpdateState, UpdateBehavior};
+use crate::AutoUpdateState;
+use crate::UpdateBehavior;
 use chrono::Utc;
 
 pub struct DeploymentUpdateCheck {

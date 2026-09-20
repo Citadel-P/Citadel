@@ -1,5 +1,5 @@
 //! Executable lifecycle: initialization, supervised serving, and bounded shutdown.
-use crate::{cli, jobs, router as api, startup, state::AppState};
+use crate::{cli, composition::ServerComponents, jobs, router as api, startup};
 use axum::Router;
 use citadel_server::{config::Config, transport};
 use std::time::Duration;
@@ -33,7 +33,7 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     }
     startup::migrate(&config).await?;
     let job_lease = startup::acquire_job_lease(&config).await?;
-    let (state, pending_jobs) = AppState::build(&config).await?;
+    let (state, pending_jobs) = ServerComponents::build(&config).await?;
     startup::run(&state).await?;
     let cancellation = state.cancellation.clone();
     let pool = state.pool.clone();

@@ -4,7 +4,8 @@ use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{RuntimeCapabilityError, RuntimeVolumeSummary};
+use crate::RuntimeCapabilityError;
+use crate::RuntimeVolumeSummary;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

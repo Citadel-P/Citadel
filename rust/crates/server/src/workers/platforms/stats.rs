@@ -7,7 +7,8 @@ pub(super) async fn local_container_stats(
 ) -> Result<(), std::convert::Infallible> {
     let _task = context.metrics.task_guard();
     let store = PostgresContainerStatsStore::new(context.pool.clone());
-    let mut sampler = citadel_adapters::docker::LocalDockerSampler::new(docker, STATS_CONCURRENCY);
+    let mut sampler =
+        citadel_adapters::connectors::docker::LocalDockerSampler::new(docker, STATS_CONCURRENCY);
     let mut ticker = super::super::schedule::interval("local-stats", context.fetch_interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {

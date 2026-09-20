@@ -84,7 +84,7 @@ fn migrated_postgres_maps_semantic_data_without_http_projection() {
     for feature in ["builds", "git", "backups", "automation", "alerts"] {
         for path in sources(
             &crates
-                .join("infrastructure/adapters/src/postgres")
+                .join("infrastructure/adapters/src/persistence/postgres")
                 .join(feature),
         ) {
             let source = std::fs::read_to_string(&path).unwrap();

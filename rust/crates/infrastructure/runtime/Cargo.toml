@@ -7,9 +7,14 @@ publish = false
 [dependencies]
 citadel-identity = { path = "../../features/identity" }
 chrono.workspace = true
-futures-util.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+futures-util.workspace = true
+
+[lints]
+workspace = true

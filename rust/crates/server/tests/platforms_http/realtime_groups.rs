@@ -1,16 +1,18 @@
 use super::*;
-use citadel_adapters::{
-    activity_store::PostgresActivityStore, postgres::alerts::PostgresAlertRepository,
-    postgres::automation::PostgresAutomationRepository,
-    postgres::backups::PostgresBackupPersistence, postgres::builds::PostgresBuildRepository,
-    postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
-    postgres::swarm_services::PostgresSwarmServiceRepository,
+use citadel_adapters::persistence::postgres::{
+    activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
+    automation::PostgresAutomationRepository, backups::PostgresBackupPersistence,
+    builds::PostgresBuildRepository, deployments::PostgresDeploymentRepository,
+    stacks::PostgresStackRepository, swarm_services::PostgresSwarmServiceRepository,
 };
 use citadel_identity::{AccessTokenClaims, SessionTokenCodec};
 use citadel_primitives::ResourceType;
-use citadel_server::realtime::{IdentityRealtimeReader, RealtimeService};
-use citadel_server::realtime_groups::{ApplicationGroupReader, Group, GroupReadPort};
-use citadel_server::{config::RealtimeConfig, metrics::Metrics};
+use citadel_server::{
+    config::RealtimeConfig,
+    metrics::Metrics,
+    realtime::{IdentityRealtimeReader, RealtimeService},
+    realtime_groups::{ApplicationGroupReader, Group, GroupReadPort},
+};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use tokio_util::sync::CancellationToken;
@@ -19,7 +21,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
         git_repositories: Arc::new(
-            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
                 f.pool.clone(),
             ),
         ),
@@ -31,7 +33,7 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         automation: Arc::new(PostgresAutomationRepository::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
         backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
-        activities: Arc::new(citadel_application::ActivityService::new(Arc::new(
+        activities: Arc::new(citadel_activities::ActivityService::new(Arc::new(
             PostgresActivityStore::new(f.pool.clone()),
         ))),
         alerts: Arc::new(PostgresAlertRepository::new(f.pool.clone())),
@@ -296,7 +298,7 @@ async fn cleanup(f: Fixture) {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_logs_flow_while_another_group_snapshot_is_pending() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::containers::v1::ContainerLogResponse;
     use prost::Message as _;
     let f = fixture().await;
@@ -397,7 +399,7 @@ async fn container_logs_flow_while_another_group_snapshot_is_pending() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::*,
         edge::v1::{EdgeCommandKind, core_envelope},
@@ -579,7 +581,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn terminal_cancels_when_the_container_identity_changes_without_retargeting() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::edge::v1::core_envelope;
     use citadel_platforms::terminal::TerminalShell;
     let f = fixture().await;
@@ -641,7 +643,7 @@ async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn stack_logs_follow_committed_container_replacement_without_replaying_unchanged_streams() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
         edge::v1::core_envelope,
@@ -789,7 +791,7 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permission_revocation() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
         edge::v1::{EdgeCommandKind, core_envelope},

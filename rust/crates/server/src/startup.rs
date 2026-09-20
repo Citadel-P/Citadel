@@ -1,5 +1,5 @@
 //! One-time initialization, completed before jobs and listeners are started.
-use crate::state::AppState;
+use crate::composition::ServerComponents;
 use citadel_database::MigrationRunner;
 use citadel_server::config::Config;
 
@@ -14,14 +14,14 @@ pub async fn migrate(config: &Config) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-pub async fn run(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(state: &ServerComponents) -> Result<(), Box<dyn std::error::Error>> {
     citadel_server::bootstrap::initialize_from_environment(&state.identity).await?;
     // Login must use persisted setup state before listeners open, not wait for
     // the first background probe after a fresh bootstrap or ordinary restart.
     state
         .readiness
         .set_setup(!state.identity.setup_status().await?.requires_setup);
-    citadel_adapters::maintenance_store::recover_on_startup(&state.pool).await?;
+    citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&state.pool).await?;
     state.readiness.set(true, false);
     Ok(())
 }

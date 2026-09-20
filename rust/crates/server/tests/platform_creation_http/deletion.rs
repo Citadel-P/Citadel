@@ -193,7 +193,7 @@ async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_
     sqlx::query("INSERT INTO deployments (id,name,platformid,spec,status,createdbyactorid) VALUES ($1,'dependent',$2,'{}','Created',$3)")
         .bind(Uuid::now_v7()).bind(id).bind(harness.administrator.actor_id.value()).execute(&harness.pool).await.unwrap();
     use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionRepository};
-    let result = citadel_adapters::platform_deletion::PostgresPlatformDeletionRepository::new(
+    let result = citadel_adapters::persistence::postgres::platforms::deletion::PostgresPlatformDeletionRepository::new(
         harness.pool.clone(),
     )
     .delete(harness.administrator.actor_id, &[id, other])
@@ -251,7 +251,7 @@ async fn concurrent_deletes_emit_only_one_activity_and_notification() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn deletion_revokes_edge_credentials_and_disconnects_sessions_only_after_commit() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let enrollment = Uuid::now_v7();

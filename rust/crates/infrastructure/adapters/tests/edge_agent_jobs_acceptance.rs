@@ -1,8 +1,10 @@
 #![cfg(unix)]
 //! Production Agent regression, using an explicitly supplied isolated daemon.
-use citadel_adapters::edge::{
-    EdgeIntake, EdgeRegistry, EdgeRuntime, EdgeTarget, PostgresEdgeStore,
-};
+use citadel_adapters::connectors::edge::EdgeIntake;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeRuntime;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::{
     EdgeCommandKind, edge_agent_service_server::EdgeAgentServiceServer,
 };
@@ -39,7 +41,7 @@ async fn wait_session(
     registry: &EdgeRegistry,
     target: &EdgeTarget,
     previous: Option<Uuid>,
-) -> std::sync::Arc<citadel_adapters::edge::EdgeSession> {
+) -> std::sync::Arc<citadel_adapters::connectors::edge::EdgeSession> {
     tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             if let Ok(session) = registry.get(target)
@@ -285,7 +287,7 @@ async fn production_edge_agent_reconnects_streams_events_and_fences_stale_writer
 }
 
 async fn expect_event(
-    stream: &mut citadel_adapters::edge::EdgeCommandStream,
+    stream: &mut citadel_adapters::connectors::edge::EdgeCommandStream,
     container: &str,
     action: &str,
     stop: &CancellationToken,
@@ -297,7 +299,8 @@ async fn expect_event(
                 .await
                 .unwrap()
                 .expect("daemon stream ended");
-            let Some(event) = citadel_adapters::agent::decode_daemon_event(&payload).unwrap()
+            let Some(event) =
+                citadel_adapters::connectors::agent::client::decode_daemon_event(&payload).unwrap()
             else {
                 continue;
             };

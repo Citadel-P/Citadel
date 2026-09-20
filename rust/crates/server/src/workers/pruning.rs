@@ -61,5 +61,4 @@ pub(super) async fn run(
 }
 
 #[cfg(test)]
-#[path = "pruning_tests.rs"]
 mod tests;

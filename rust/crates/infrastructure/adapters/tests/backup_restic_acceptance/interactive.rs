@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::EdgeRuntime;
+use citadel_adapters::connectors::edge::EdgeRuntime;
 use citadel_platforms::logs::{LogReadPort, LogResource};
 use citadel_platforms::terminal::{
     ContainerTerminalPort, TerminalInput, TerminalOutput, TerminalShell,
@@ -150,7 +150,8 @@ async fn verify_container_actions(
     nodes: &[String],
     registry: &EdgeRegistry,
 ) {
-    use citadel_adapters::{container_mutations::ContainerRuntimeRouter, docker::DockerClient};
+    use citadel_adapters::connectors::docker::DockerClient;
+    use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
     use citadel_platforms::containers::{
         ContainerAction, ContainerMutationRuntime, ContainerTarget, DeleteContainerOptions,
     };

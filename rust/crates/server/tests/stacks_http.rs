@@ -1,24 +1,25 @@
-use citadel_server::api::stacks as stacks_http;
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::postgres::stacks::PostgresStackRepository;
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        stacks::PostgresStackRepository,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::api::stacks::StacksHttpState;
+use citadel_server::api::routes::{stacks as stacks_http, stacks::StacksHttpState};
 use citadel_stacks::{
     ComposeProjectRuntimeService, NoopStackChangeNotifier, ResolvedStackBindings, StackApplySource,
     StackBindingResolverPort, StackDeletionClaim, StackError, StackImportClaim, StackImportKind,
@@ -28,6 +29,10 @@ use citadel_stacks::{
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU8, Ordering},
+};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -282,7 +287,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let scanner = Arc::new(updates::Scanner::new(pool.clone()));
     let stacks = Arc::new(
         StackService::new(
-            Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+            Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
                 citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             )),
             Arc::new(PostgresStackRepository::new(pool.clone())),

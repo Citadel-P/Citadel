@@ -1,6 +1,8 @@
 //! Node-agent lifecycle orchestration. Runtime and persistence are separate ports;
 //! no transport may silently fall back to the Core's Docker daemon.
-use crate::{RuntimeCapabilityError, RuntimeErrorKind, RuntimePlatformInfo};
+use crate::RuntimeCapabilityError;
+use crate::RuntimeErrorKind;
+use crate::RuntimePlatformInfo;
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::Serialize;

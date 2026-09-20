@@ -25,7 +25,6 @@ base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 citadel-adapters = { path = "../infrastructure/adapters" }
-citadel-application = { path = "../features/application" }
 citadel-automation = { path = "../features/automation" }
 citadel-alerts = { path = "../features/alerts" }
 citadel-builds = { path = "../features/builds" }
@@ -46,9 +45,7 @@ rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_path_to_error.workspace = true
-sha2.workspace = true
 sqlx.workspace = true
-subtle.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -63,6 +60,7 @@ zeroize.workspace = true
 utoipa-swagger-ui.workspace = true
 
 [dev-dependencies]
+sha2.workspace = true
 prost.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tokio-tungstenite.workspace = true
@@ -70,3 +68,6 @@ tower.workspace = true
 
 [build-dependencies]
 serde_json.workspace = true
+
+[lints]
+workspace = true

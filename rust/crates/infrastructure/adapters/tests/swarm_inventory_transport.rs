@@ -1,8 +1,9 @@
-use citadel_adapters::{
-    agent::{AgentClient, AgentRequestSigner},
-    edge::{EdgeRegistry, EdgeRuntime, EdgeTarget},
-    swarm_inventory::SwarmInventoryClient,
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeRuntime;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::connectors::swarm::inventory::SwarmInventoryClient;
 use citadel_contracts::citadel::swarm::v1::swarm_service_server::{
     SwarmService, SwarmServiceServer,
 };

@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
 use citadel_contracts::citadel::platforms::v1::platform_service_server::{
     PlatformService, PlatformServiceServer,
 };

@@ -101,5 +101,4 @@ fn schedule(pending: &mut HashMap<Request, Instant>, request: &mut Request, now:
 }
 
 #[cfg(test)]
-#[path = "unmanaged_tests.rs"]
 mod tests;

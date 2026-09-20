@@ -72,7 +72,7 @@ fn workload_persistence_never_constructs_http_views_or_capabilities() {
     for resource in ["stacks", "swarm_services"] {
         for path in rust_files(
             &crates
-                .join("infrastructure/adapters/src/postgres")
+                .join("infrastructure/adapters/src/persistence/postgres")
                 .join(resource),
         ) {
             let source = std::fs::read_to_string(&path).unwrap();

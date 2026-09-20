@@ -4,8 +4,7 @@ use std::path::Path;
 #[test]
 fn deployment_handlers_use_named_policies() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    check(&root.join("api/deployments/handlers.rs"));
-    check(&root.join("api/deployments/adoption.rs"));
+    check(&root.join("api/routes/deployments.rs"));
 }
 
 #[test]
@@ -15,7 +14,7 @@ fn shared_entry_points_use_deployment_policies() {
     // and container-owner fallback checks migrate in later phases.
     for (file, marker, policies) in [
         (
-            "platforms_http/container_inspection.rs",
+            "api/routes/platforms.rs",
             "async fn read_deployment(",
             &[
                 "require_resource::<ReadDeployment>",
@@ -23,12 +22,12 @@ fn shared_entry_points_use_deployment_policies() {
             ][..],
         ),
         (
-            "realtime_groups/logs.rs",
+            "realtime_groups/reader/logs.rs",
             "\"StartDeploymentLogs\" =>",
             &["deployment_permission::<citadel_deployments::permissions::ViewDeploymentLogs>"][..],
         ),
         (
-            "realtime_groups/terminal.rs",
+            "realtime_groups/reader/terminal.rs",
             "if owner == Owner::Deployment",
             &["deployment_permission::<citadel_deployments::permissions::OpenDeploymentTerminal>"]
                 [..],
@@ -43,7 +42,7 @@ fn shared_entry_points_use_deployment_policies() {
         assert_policy_source(block(&source, marker), file, policies);
     }
 
-    let file = "platforms_http/statistics.rs";
+    let file = "api/routes/platforms.rs";
     let source = std::fs::read_to_string(root.join(file)).unwrap();
     let workload = block(&source, "async fn workload(");
     let deployment = workload
@@ -178,7 +177,7 @@ fn deployment_architecture_keeps_presentation_out_of_feature_and_persistence() {
     }
     for directory in [
         feature.join("src"),
-        crates.join("infrastructure/adapters/src/postgres/deployments"),
+        crates.join("infrastructure/adapters/src/persistence/postgres/deployments"),
     ] {
         check_resource_boundary(&directory);
     }

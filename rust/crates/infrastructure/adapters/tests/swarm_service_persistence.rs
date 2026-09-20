@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
+use citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_database::MigrationRunner;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
@@ -223,7 +223,7 @@ fn spec(registry_id: Uuid, replicas: i32) -> SwarmServiceSpec {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
 async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
-    use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
+    use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
     use citadel_platforms::{
         InventoryProjectionStore, RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmInfo,
         RuntimeSwarmInventory, RuntimeSwarmService,
@@ -399,10 +399,10 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
 async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_workloads() {
-    use citadel_adapters::{
-        image_digest_cache::ImageDigestCache,
-        image_scanner::{ImageScanRuntime, ImageScanTask, ImageScanner},
-    };
+    use citadel_adapters::connectors::registries::digest_cache::ImageDigestCache;
+    use citadel_adapters::connectors::routing::images::scanner::ImageScanRuntime;
+    use citadel_adapters::connectors::routing::images::scanner::ImageScanTask;
+    use citadel_adapters::connectors::routing::images::scanner::ImageScanner;
     use citadel_deployments::DeploymentRepository;
     use citadel_stacks::StackRepository;
     use std::sync::{Arc, Mutex};
@@ -440,20 +440,23 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         duplicate_source: None,
     };
     let deployment =
-        citadel_adapters::postgres::deployments::PostgresDeploymentRepository::new(pool.clone())
-            .create(actor, true, &input)
-            .await
-            .unwrap();
+        citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository::new(
+            pool.clone(),
+        )
+        .create(actor, true, &input)
+        .await
+        .unwrap();
     let input = citadel_stacks::CreateStack {
         name: format!("stack-{platform}"), platform_id: platform,
         stack_source: citadel_stacks::StackSource::WebEditor,
         spec: serde_json::from_value(serde_json::json!({"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx:latest\n","registryId":registry,"updateBehavior":"Notify"})).unwrap(),
         description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
     };
-    let stack = citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone())
-        .create(actor, true, &input)
-        .await
-        .unwrap();
+    let stack =
+        citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(pool.clone())
+            .create(actor, true, &input)
+            .await
+            .unwrap();
     sqlx::query("UPDATE stackreleases SET status='Healthy' WHERE id=$1")
         .bind(stack.current_stack_release_id)
         .execute(&pool)
@@ -502,9 +505,9 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
     assert_eq!(*inspector.0.lock().unwrap(), vec!["redis:7-alpine"]);
     sqlx::query("UPDATE swarmservices SET appliedimagedigest='sha256:current',health='Healthy',lastapplieddesiredspechash=desiredspechash WHERE id=$1").bind(service.id).execute(&pool).await.unwrap();
     let router = Arc::new(
-        citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter::new(
+        citadel_adapters::connectors::routing::swarm_services::SwarmServiceRuntimeRouter::new(
             pool.clone(),
-            citadel_adapters::docker::DockerClient::new(
+            citadel_adapters::connectors::docker::DockerClient::new(
                 "/no-docker-for-cached-check",
                 std::time::Duration::from_millis(100),
             )

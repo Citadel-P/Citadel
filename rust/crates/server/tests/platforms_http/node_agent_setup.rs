@@ -1,7 +1,9 @@
 use super::*;
 use citadel_adapters::{
-    edge::{EdgeRegistry, PostgresEdgeStore},
-    node_agent_lifecycle_store::PostgresNodeAgentLifecycleStore,
+    connectors::edge::EdgeRegistry,
+    persistence::postgres::platforms::{
+        edge::store::PostgresEdgeStore, node_agents::store::PostgresNodeAgentLifecycleStore,
+    },
 };
 use citadel_platforms::{
     PlatformRuntimePort,
@@ -10,7 +12,7 @@ use citadel_platforms::{
         setup::{NodeAgentSetupStore, SetupKind},
     },
 };
-use citadel_server::platforms_http::EdgeHttpContext;
+use citadel_server::api::routes::platforms::EdgeHttpContext;
 
 // Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair/upgrade
 // permission theory through actual HTTP handlers and PostgreSQL transactions.
@@ -202,7 +204,9 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
-    use citadel_adapters::{edge::EdgeTarget, node_agent_runtime::NodeAgentRuntimeRouter};
+    use citadel_adapters::connectors::{
+        edge::EdgeTarget, routing::node_agents::NodeAgentRuntimeRouter,
+    };
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         images::v1::*,

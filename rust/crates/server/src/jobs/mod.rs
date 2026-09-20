@@ -1,34 +1,34 @@
 //! Start workers in one supervisor; application shutdown cancels and joins them.
-use crate::state::AppState;
-use citadel_application::LicenseTransitionMonitor;
+use crate::composition::ServerComponents;
+use citadel_licensing::LicenseTransitionMonitor;
 use citadel_runtime::{ServiceAccountLastUsedWorker, TaskSupervisor};
 use citadel_server::{config::Config, license_realtime, workers};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-/// These inputs are owned, because a queue receiver can only be started once.
+/// Background-only services and worker inputs that must be started once.
 pub struct Jobs {
+    pub runtime_targets: Arc<citadel_server::runtime_targets::PlatformRuntimeRegistry>,
+    pub image_scanner: Arc<citadel_adapters::connectors::routing::images::scanner::ImageScanner>,
+    pub alert_deliveries: Arc<citadel_alerts::AlertDeliveryService>,
     pub last_used_worker: ServiceAccountLastUsedWorker,
     pub license_transition_monitor: LicenseTransitionMonitor,
     pub license_realtime_hub: license_realtime::LicenseRealtimeHub,
 }
 
 pub async fn spawn_all(
-    state: &AppState,
+    state: &ServerComponents,
     jobs: Jobs,
     config: &Config,
 ) -> Result<TaskSupervisor, sqlx::Error> {
-    let AppState {
+    let ServerComponents {
         cancellation,
         edge_registry,
         pool,
         realtime_hub,
         alert_store,
         platform_state,
-        docker,
         readiness,
         metrics,
-        agent,
         deployments,
         swarm_services,
         stacks,
@@ -36,10 +36,12 @@ pub async fn spawn_all(
         automation,
         builds,
         backups,
-        alert_deliveries,
         ..
     } = state;
     let Jobs {
+        runtime_targets,
+        image_scanner,
+        alert_deliveries,
         last_used_worker,
         license_transition_monitor,
         license_realtime_hub,
@@ -62,14 +64,14 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
-            targets: state.runtime_targets.clone(),
+            targets: runtime_targets.clone(),
             volume_content: platform_state.volume_content.clone(),
             containers: platform_state.containers.clone(),
-            docker: docker.clone(),
+            docker: platform_state.docker.clone(),
             pool: pool.clone(),
             readiness: Arc::clone(readiness),
             metrics: Arc::clone(metrics),
-            agent: agent.clone(),
+            agent: platform_state.agent.clone(),
             realtime: realtime_hub.clone(),
             deployments: Arc::clone(deployments),
             swarm_services: Arc::clone(swarm_services),
@@ -108,14 +110,14 @@ pub async fn spawn_all(
             pool.clone(),
             realtime_hub.clone(),
             config.node_agent_policy.clone(),
-            state.runtime_targets.inventory_budget.clone(),
+            runtime_targets.inventory_budget.clone(),
         ),
     );
     supervisor.spawn(
         "image-scanner",
         workers::image_scanning::run(
             cancellation.child_token(),
-            state.image_scanner.clone(),
+            image_scanner.clone(),
             deployments.clone(),
             stacks.clone(),
             swarm_services.clone(),

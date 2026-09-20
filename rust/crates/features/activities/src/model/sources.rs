@@ -9,7 +9,7 @@ pub struct ActivitySourceResource {
     pub resource_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct VolumeContentDownloaded {
     pub volume_name: String,

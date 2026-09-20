@@ -18,10 +18,16 @@ pub fn router(
     stacks: Arc<citadel_stacks::StackService>,
 ) -> Router {
     use citadel_adapters::{
-        automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
-        postgres::automation::PostgresAutomationRepository,
-        postgres::git::accounts::PostgresGitAccountRepository,
-        postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
+        persistence::postgres::{
+            automation::PostgresAutomationRepository,
+            git::{
+                accounts::PostgresGitAccountRepository,
+                repositories::PostgresGitRepositoryExecutionPersistence,
+            },
+        },
+        security::identity::{
+            automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
+        },
     };
     let git = Arc::new(citadel_git::GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
@@ -42,7 +48,9 @@ pub fn router(
     let automation = Arc::new(citadel_automation::AutomationService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         Arc::new(
-            citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
+            citadel_server::tasks::automation::TrackedAutomationTasks::new(
+                automation_tasks.clone(),
+            ),
         ),
         automation_shutdown.clone(),
         Arc::new(PostgresAutomationRepository::new(pool.clone())),
@@ -56,7 +64,7 @@ pub fn router(
             stale_after: std::time::Duration::from_secs(60),
         },
     ));
-    citadel_server::webhooks_http::router(citadel_server::webhooks_http::WebhooksHttpState {
+    citadel_server::api::routes::webhooks::router(citadel_server::api::routes::webhooks::WebhooksHttpState {
         git,
         automation,
         backups: Some(backups),
@@ -64,7 +72,9 @@ pub fn router(
         stacks: Some(stacks),
         services: None,
         audit: Some(Arc::new(
-            citadel_adapters::activity_store::PostgresActivityStore::new(pool),
+            citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(
+                pool,
+            ),
         )),
         alerts: None,
     })

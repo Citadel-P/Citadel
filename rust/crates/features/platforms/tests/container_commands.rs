@@ -107,7 +107,7 @@ impl ContainerMutationRuntime for Runtime {
 async fn disconnect_does_not_abandon_claim_and_overload_does_not_spawn_waiters() {
     let store = Arc::new(Store::default());
     let runtime = Arc::new(Runtime::new());
-    let service = ContainerMutationService::new(store.clone(), runtime.clone());
+    let service = ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
     let handles: Vec<_> = (0..4)
         .map(|_| {
             let service = service.clone();
@@ -152,7 +152,7 @@ async fn disconnect_does_not_abandon_claim_and_overload_does_not_spawn_waiters()
 async fn timeout_keeps_unknown_outcome_for_read_only_recovery() {
     let store = Arc::new(Store::default());
     let runtime = Arc::new(Runtime::new());
-    let service = ContainerMutationService::new(store.clone(), runtime.clone());
+    let service = ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
     let task = tokio::spawn(async move {
         service
             .execute(
@@ -168,4 +168,45 @@ async fn timeout_keeps_unknown_outcome_for_read_only_recovery() {
     assert!(matches!(task.await.unwrap(),Err(e) if e.kind==RuntimeErrorKind::Timeout));
     assert_eq!(store.claimed.load(Ordering::SeqCst), 1);
     assert_eq!(store.finished.load(Ordering::SeqCst), 0);
+}
+
+struct Tasks;
+impl ContainerTaskSpawner for Tasks {
+    fn spawn(&self, operation: BoxFuture<'static, Result<(), RuntimeCapabilityError>>) -> bool {
+        tokio::spawn(operation);
+        true
+    }
+    fn shutdown_token(&self) -> CancellationToken {
+        CancellationToken::new()
+    }
+}
+
+struct ClosedTasks;
+impl ContainerTaskSpawner for ClosedTasks {
+    fn spawn(&self, _: BoxFuture<'static, Result<(), RuntimeCapabilityError>>) -> bool {
+        false
+    }
+    fn shutdown_token(&self) -> CancellationToken {
+        CancellationToken::new()
+    }
+}
+
+#[tokio::test]
+async fn closed_process_admission_creates_no_claim() {
+    let store = Arc::new(Store::default());
+    let service = ContainerMutationService::new(
+        store.clone(),
+        Arc::new(Runtime::new()),
+        Arc::new(ClosedTasks),
+    );
+    let result = service
+        .execute(
+            ActorId::new(Uuid::now_v7()),
+            true,
+            vec![Uuid::now_v7().to_string()],
+            ContainerAction::Start,
+        )
+        .await;
+    assert!(matches!(result, Err(error) if error.kind == RuntimeErrorKind::ResourceExhausted));
+    assert_eq!(store.claimed.load(Ordering::SeqCst), 0);
 }

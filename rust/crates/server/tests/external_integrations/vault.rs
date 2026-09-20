@@ -4,26 +4,23 @@ use axum::{
     http::{Method, Request, StatusCode},
 };
 use citadel_adapters::{
-    crypto::{
+    persistence::postgres::{
+        bindings::{PostgresBindingRepository, secret_resolver::PostgresSecretValueResolver},
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::crypto::{
         AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
         OpaqueServiceAccountTokenCodec,
     },
-    identity_store::{PostgresIdentityStore, StaticEntitlementService},
-    postgres::bindings::PostgresBindingRepository,
-    secret_value_resolver::PostgresSecretValueResolver,
 };
 use citadel_bindings::SecretService;
-use citadel_identity::AuthenticatedPrincipalType;
-use citadel_identity::Login;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    PasswordHasher, SYSTEM_ACTOR_ID, SessionMetadata, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService, Login,
+    NoopServiceAccountLastUsedTracker, PasswordHasher, SYSTEM_ACTOR_ID, SessionMetadata,
+    SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::api::bindings;
-use citadel_server::api::git::repositories::catalog as git_catalog;
-use citadel_server::api::registries;
-use citadel_server::api::tags;
+use citadel_server::api::routes::{bindings, git_repositories as git_catalog, registries, tags};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -136,13 +133,13 @@ pub async fn verify(
     );
     let app = tags::router(tags::TagsHttpState {
         identity: identity.clone(),
-        tags: Arc::new(citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone())),
+        tags: Arc::new(citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(pool.clone())),
         realtime: None,
     })
     .merge(registries::router(registries::RegistriesHttpState {
         identity: identity.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
         realtime: None,
     }))
@@ -151,10 +148,10 @@ pub async fn verify(
         secrets: resources,
         realtime: None,
     }))
-    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+    .merge(git_catalog::catalog_router(git_catalog::GitCatalogHttpState {
         identity: identity.clone(),
         git_repositories: Arc::new(
-            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
                 pool.clone(),
             ),
         ),

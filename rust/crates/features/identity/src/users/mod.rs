@@ -1,7 +1,15 @@
-use crate::{
-    Clock, EntitlementService, IdentityError, PagedResult, PasswordHasher, PatchField,
-    ResourceInfo, StoredPage, permission_matrix, validate_email, validate_name, validate_password,
-};
+use crate::Clock;
+use crate::EntitlementService;
+use crate::IdentityError;
+use crate::PagedResult;
+use crate::PasswordHasher;
+use crate::PatchField;
+use crate::ResourceInfo;
+use crate::StoredPage;
+use crate::permission_matrix;
+use crate::validate_email;
+use crate::validate_name;
+use crate::validate_password;
 use chrono::{DateTime, Utc};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;

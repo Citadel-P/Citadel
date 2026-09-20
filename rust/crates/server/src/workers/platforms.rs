@@ -1,30 +1,26 @@
-#[path = "platforms/agents.rs"]
 mod agents;
 use agents::*;
 
-#[path = "platforms/stats.rs"]
 mod stats;
 use stats::*;
 
-#[path = "platforms/events.rs"]
 mod events;
 use events::*;
 
-#[path = "platforms/health.rs"]
 mod health;
 use health::*;
 
-#[path = "platforms/inventory.rs"]
 mod inventory;
 use inventory::*;
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use citadel_adapters::agent::AgentClient;
-use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
-use citadel_adapters::docker::{DockerClient, DockerError};
-use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::connectors::docker::DockerError;
+use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
+use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use citadel_alerts::{AlertDeliveryService, AlertEventSink, AlertObservation};
 use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
@@ -59,7 +55,7 @@ use crate::realtime::RealtimeHub;
 
 pub struct WorkerSettings {
     pub node_agent_policy:
-        citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,
@@ -74,7 +70,8 @@ pub struct WorkerSettings {
 
 pub struct WorkerDependencies {
     pub targets: Arc<PlatformRuntimeRegistry>,
-    pub volume_content: Arc<citadel_adapters::volume_content::VolumeContentAdapter>,
+    pub volume_content:
+        Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
     pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
     pub docker: DockerClient,
     pub pool: PgPool,
@@ -219,7 +216,7 @@ pub async fn register(
             cancellation.child_token(),
             citadel_builds::BuildCompletionService::new(
                 Arc::new(
-                    citadel_adapters::postgres::builds::completion::PostgresBuildCompletionRepository::new(
+                    citadel_adapters::persistence::postgres::builds::completion::PostgresBuildCompletionRepository::new(
                         pool.clone(),
                     ),
                 ),
@@ -809,9 +806,7 @@ mod health_tests {
 }
 
 #[cfg(test)]
-#[path = "subscription_tests.rs"]
 mod subscription_tests;
 
 #[cfg(test)]
-#[path = "inventory_tests.rs"]
 mod inventory_tests;

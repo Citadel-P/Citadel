@@ -3,8 +3,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
-use citadel_adapters::docker::DockerClient;
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::connectors::routing::deployments::DeploymentRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     ContainerRestartPolicy, DeploymentImageInfo, DeploymentRuntime, DeploymentSpec, LifeCycleSpec,

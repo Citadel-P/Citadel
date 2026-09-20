@@ -1,17 +1,21 @@
-use crate::identity_http::{IdentityHttpError, IdentityHttpResult, identity_result};
-use crate::platforms_http::views::ResourceCapabilitiesView;
-use crate::realtime::RealtimeHub;
-use axum::extract::Extension;
-use axum::http::HeaderMap;
-use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
+use crate::{
+    api::{
+        error::{ApiError, HttpError, HttpResult, api_result},
+        resources::platforms::views::ResourceCapabilitiesView,
+    },
+    realtime::RealtimeHub,
+};
+use axum::{extract::Extension, http::HeaderMap};
+use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use uuid::Uuid;
+
 pub(crate) fn require_actor(
     principal: Option<Extension<ActorPrincipal>>,
-) -> Result<ActorPrincipal, IdentityError> {
+) -> Result<ActorPrincipal, ApiError> {
     principal
         .map(|Extension(value)| value)
-        .ok_or(IdentityError::Unauthenticated)
+        .ok_or(ApiError::Unauthenticated)
 }
 pub(crate) async fn authorize_global(
     identity: &IdentityService,
@@ -19,8 +23,8 @@ pub(crate) async fn authorize_global(
     resource_type: ResourceType,
     level: PermissionLevel,
     headers: &HeaderMap,
-) -> IdentityHttpResult<()> {
-    identity_result(
+) -> HttpResult<()> {
+    api_result(
         match (resource_type, level) {
             (ResourceType::GitRepository, PermissionLevel::Read) => {
                 identity
@@ -55,10 +59,10 @@ pub(crate) async fn authorize_resource(
     level: PermissionLevel,
     specific: Option<SpecificPermission>,
     headers: &HeaderMap,
-) -> IdentityHttpResult<()> {
+) -> HttpResult<()> {
     let id = resource_id;
     if resource_type == ResourceType::GitRepository && specific.is_none() {
-        return identity_result(
+        return api_result(
             match (resource_type, level) {
                 (ResourceType::GitRepository, PermissionLevel::Read) => {
                     identity
@@ -169,9 +173,9 @@ pub(crate) async fn authorize_resource(
         _ => None,
     };
     if let Some(result) = result {
-        return identity_result(result, headers);
+        return api_result(result, headers);
     }
-    identity_result(
+    api_result(
         identity
             .authorize_resource(principal, resource_type, resource_id, level, specific)
             .await,
@@ -185,7 +189,7 @@ pub(crate) async fn capabilities(
     resource_type: ResourceType,
     resource_id: Option<Uuid>,
     headers: &HeaderMap,
-) -> IdentityHttpResult<ResourceCapabilitiesView> {
+) -> HttpResult<ResourceCapabilitiesView> {
     let permission = match resource_id {
         Some(id) => {
             identity
@@ -194,7 +198,7 @@ pub(crate) async fn capabilities(
         }
         None => identity.global_permission(principal, resource_type).await,
     }
-    .map_err(|error| IdentityHttpError::from_parts(error, headers))?;
+    .map_err(|error| HttpError::from_parts(error, headers))?;
     Ok(
         permission.map_or_else(ResourceCapabilitiesView::default, |permission| {
             ResourceCapabilitiesView {

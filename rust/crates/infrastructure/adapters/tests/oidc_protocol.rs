@@ -6,7 +6,7 @@ use axum::{Form, Json, Router};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{Duration, Utc};
-use citadel_adapters::oidc_protocol::OidcHttpProtocol;
+use citadel_adapters::connectors::oidc::protocol::OidcHttpProtocol;
 use citadel_identity::OidcProtocol;
 use citadel_identity::{OidcProvider, SYSTEM_ACTOR_ID};
 use citadel_primitives::ActorId;

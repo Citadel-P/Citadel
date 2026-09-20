@@ -8,7 +8,8 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{RuntimeCapabilityError, RuntimeErrorKind};
+use crate::RuntimeCapabilityError;
+use crate::RuntimeErrorKind;
 
 pub const MAX_CONTAINER_BATCH: usize = 100;
 pub const CONTAINER_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -126,11 +127,18 @@ pub trait ContainerMutationRuntime: Send + Sync {
     ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>>;
 }
 
+/// Process-owned admission for mutations that must outlive an HTTP connection.
+pub trait ContainerTaskSpawner: Send + Sync {
+    fn spawn(&self, operation: BoxFuture<'static, Result<(), RuntimeCapabilityError>>) -> bool;
+    fn shutdown_token(&self) -> CancellationToken;
+}
+
 #[derive(Clone)]
 pub struct ContainerMutationService {
     store: Arc<dyn ContainerRepository>,
     runtime: Arc<dyn ContainerMutationRuntime>,
     operations: Arc<Semaphore>,
+    tasks: Arc<dyn ContainerTaskSpawner>,
     changed: Arc<dyn Fn(&ContainerClaim) + Send + Sync>,
 }
 
@@ -138,10 +146,12 @@ impl ContainerMutationService {
     pub fn new(
         store: Arc<dyn ContainerRepository>,
         runtime: Arc<dyn ContainerMutationRuntime>,
+        tasks: Arc<dyn ContainerTaskSpawner>,
     ) -> Self {
         Self {
             store,
             runtime,
+            tasks,
             operations: Arc::new(Semaphore::new(4)),
             changed: Arc::new(|_| {}),
         }
@@ -168,7 +178,7 @@ impl ContainerMutationService {
             ids,
             action,
             ContainerSelectionKind::Containers,
-            CancellationToken::new(),
+            self.tasks.shutdown_token(),
         )
         .await
     }
@@ -192,7 +202,7 @@ impl ContainerMutationService {
             ids.into_iter().map(|id| id.to_string()).collect(),
             action,
             ContainerSelectionKind::Deployments,
-            CancellationToken::new(),
+            self.tasks.shutdown_token(),
         )
         .await
     }
@@ -242,85 +252,99 @@ impl ContainerMutationService {
         })?;
         let service = self.clone();
         // A disconnected HTTP caller must not abandon a committed processing claim.
-        tokio::spawn(async move {
-            let _permit = permit;
-            let mut ids = if selection == ContainerSelectionKind::Deployments {
-                ids.iter()
-                    .map(|id| {
-                        Uuid::parse_str(id).map_err(|_| {
-                            error(RuntimeErrorKind::InvalidRequest, "Invalid Deployment ID.")
+        let (completed, result) = tokio::sync::oneshot::channel();
+        if !self.tasks.spawn(Box::pin(async move {
+            let result = async move {
+                let _permit = permit;
+                let mut ids = if selection == ContainerSelectionKind::Deployments {
+                    ids.iter()
+                        .map(|id| {
+                            Uuid::parse_str(id).map_err(|_| {
+                                error(RuntimeErrorKind::InvalidRequest, "Invalid Deployment ID.")
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
-            } else {
-                tokio::time::timeout(Duration::from_secs(10), service.store.resolve_ids(&ids))
-                    .await
-                    .map_err(|_| {
-                        error(
-                            RuntimeErrorKind::Timeout,
-                            "Resolving the Container IDs timed out.",
-                        )
-                    })??
-            };
-            ids.sort_unstable();
-            ids.dedup();
-            let claim = tokio::time::timeout(
-                Duration::from_secs(10),
-                service
-                    .store
-                    .claim_selection(actor, administrator, &ids, action, selection),
-            )
-            .await
-            .map_err(|_| {
-                error(
-                    RuntimeErrorKind::Timeout,
-                    "Claiming the Container operation timed out.",
-                )
-            })??;
-            (service.changed)(&claim);
-            let _cancel_on_drop = cancellation.clone().drop_guard();
-            let work = async {
-                for target in &claim.targets {
-                    service
-                        .runtime
-                        .mutate(target, action, &cancellation)
-                        .await?;
-                    let state = service.runtime.observe(target, &cancellation).await?;
+                        .collect::<Result<Vec<_>, _>>()?
+                } else {
+                    tokio::time::timeout(Duration::from_secs(10), service.store.resolve_ids(&ids))
+                        .await
+                        .map_err(|_| {
+                            error(
+                                RuntimeErrorKind::Timeout,
+                                "Resolving the Container IDs timed out.",
+                            )
+                        })??
+                };
+                ids.sort_unstable();
+                ids.dedup();
+                let claim = tokio::time::timeout(
+                    Duration::from_secs(10),
                     service
                         .store
-                        .observed(claim.operation_id, target, state.as_deref())
-                        .await?;
-                }
-                Ok::<_, RuntimeCapabilityError>(())
-            };
-            let result = tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work)
-                .await
-                .unwrap_or_else(|_| {
-                    Err(error(
-                        RuntimeErrorKind::Timeout,
-                        "Container operation timed out; runtime state will be reconciled.",
-                    ))
-                });
-            cancellation.cancel();
-            // On partial failure retain the lease until read-only recovery has observed all targets.
-            if result.is_ok() {
-                tokio::time::timeout(
-                    Duration::from_secs(5),
-                    service.store.finish(claim.operation_id),
+                        .claim_selection(actor, administrator, &ids, action, selection),
                 )
                 .await
                 .map_err(|_| {
                     error(
                         RuntimeErrorKind::Timeout,
-                        "Container operation finalization timed out.",
+                        "Claiming the Container operation timed out.",
                     )
                 })??;
                 (service.changed)(&claim);
+                let _cancel_on_drop = cancellation.clone().drop_guard();
+                let work = async {
+                    for target in &claim.targets {
+                        service
+                            .runtime
+                            .mutate(target, action, &cancellation)
+                            .await?;
+                        let state = service.runtime.observe(target, &cancellation).await?;
+                        service
+                            .store
+                            .observed(claim.operation_id, target, state.as_deref())
+                            .await?;
+                    }
+                    Ok::<_, RuntimeCapabilityError>(())
+                };
+                let result = tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work)
+                    .await
+                    .unwrap_or_else(|_| {
+                        Err(error(
+                            RuntimeErrorKind::Timeout,
+                            "Container operation timed out; runtime state will be reconciled.",
+                        ))
+                    });
+                cancellation.cancel();
+                // On partial failure retain the lease until read-only recovery has observed all targets.
+                if result.is_ok() {
+                    tokio::time::timeout(
+                        Duration::from_secs(5),
+                        service.store.finish(claim.operation_id),
+                    )
+                    .await
+                    .map_err(|_| {
+                        error(
+                            RuntimeErrorKind::Timeout,
+                            "Container operation finalization timed out.",
+                        )
+                    })??;
+                    (service.changed)(&claim);
+                }
+                result
             }
-            result
-        })
-        .await
-        .map_err(|_| {
+            .await;
+            // If the caller disconnected, the process owner still observes errors
+            // and drains claim cleanup before closing persistence.
+            if let Err(result) = completed.send(result) {
+                result?;
+            }
+            Ok(())
+        })) {
+            return Err(error(
+                RuntimeErrorKind::ResourceExhausted,
+                "Container operations are shutting down.",
+            ));
+        }
+        result.await.map_err(|_| {
             error(
                 RuntimeErrorKind::Remote,
                 "Container operation failed; runtime state will be reconciled.",

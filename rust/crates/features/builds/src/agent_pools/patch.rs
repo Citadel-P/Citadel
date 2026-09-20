@@ -1,4 +1,6 @@
-use crate::{BuildAgentPool, BuildAgentPoolConfiguration, BuildError};
+use crate::BuildAgentPool;
+use crate::BuildAgentPoolConfiguration;
+use crate::BuildError;
 use serde_json::Value;
 impl BuildAgentPool {
     pub fn snapshot(&self) -> citadel_activities::BuildAgentPoolActivitySnapshot {

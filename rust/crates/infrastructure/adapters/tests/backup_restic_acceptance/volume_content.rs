@@ -1,5 +1,6 @@
 use super::*;
-use citadel_adapters::{docker::DockerClient, volume_content::VolumeContentAdapter};
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
 use futures_util::StreamExt;
 
 pub(super) async fn verify(
@@ -18,6 +19,7 @@ pub(super) async fn verify(
         Some(agent.clone()),
         registry.clone(),
         std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap(),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
     );
     let cancel = CancellationToken::new();
     // A same-named Volume on the connected manager must not replace a worker's data.
@@ -253,6 +255,7 @@ async fn verify_local(pool: &sqlx::PgPool) {
             None,
             EdgeRegistry::default(),
             std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap(),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         );
         let cancel = CancellationToken::new();
         let listing = client

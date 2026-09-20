@@ -161,13 +161,13 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         .bind(repo).bind(admin.actor_id.value()).bind(repo.to_string()).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositoryrefs(id,branch,gitrepositoryid,lastsyncedat,status,resolvedcommitsha) VALUES($1,'main',$2,now(),'Healthy',$3)")
         .bind(Uuid::now_v7()).bind(repo).bind("b".repeat(40)).execute(pool).await.unwrap();
-    let input: citadel_stacks::CreateStack = serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("git-updates-{repo}"),"platformId":platform,"stackSource":"Git",
+    let input: citadel_stacks::CreateStack = serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("git-updates-{repo}"),"platformId":platform,"stackSource":"Git",
         "spec":{"$type":"Git","gitRepoId":repo,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"Notify"}})).unwrap().try_into().unwrap();
     let stack = store.create(admin.actor_id, true, &input).await.unwrap();
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let service = StackService::new(
-        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         store.clone(),
@@ -261,7 +261,7 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
         guardrails: std::sync::atomic::AtomicBool::new(true),
     });
     let service = StackService::new(
-        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         Arc::new(PostgresStackRepository::new(pool.clone())),
@@ -337,7 +337,7 @@ async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: 
     let store = Arc::new(PostgresStackRepository::new(pool.clone()));
     let runtime = Arc::new(CompletingStackRuntime::default());
     let service = StackService::new(
-        Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         store.clone(),

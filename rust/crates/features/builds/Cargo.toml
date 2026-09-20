@@ -23,3 +23,6 @@ tracing.workspace = true
 uuid.workspace = true
 url.workspace = true
 zeroize.workspace = true
+
+[lints]
+workspace = true

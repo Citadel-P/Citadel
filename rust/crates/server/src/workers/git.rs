@@ -60,5 +60,4 @@ async fn wait_or_cancel(cancellation: &CancellationToken, duration: Duration) ->
 }
 
 #[cfg(test)]
-#[path = "git_tests.rs"]
 mod tests;

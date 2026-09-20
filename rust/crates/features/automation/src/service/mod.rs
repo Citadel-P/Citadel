@@ -6,11 +6,10 @@ mod execution;
 
 pub(crate) mod source;
 
-use crate::{
-    jobs::schedule::cron_is_due,
-    runs::{logs::*, progress},
-    service::source::automation_source,
-};
+use crate::jobs::schedule::cron_is_due;
+use crate::runs::logs::*;
+use crate::runs::progress;
+use crate::service::source::automation_source;
 
 use std::collections::HashMap;
 

@@ -135,7 +135,10 @@ pub(super) async fn resource_health(
             };
             if online {
                 if let Err(error) =
-                    citadel_adapters::resource_status_store::platform_online(&pool, target.id).await
+                    citadel_adapters::persistence::postgres::platforms::status::platform_online(
+                        &pool, target.id,
+                    )
+                    .await
                 {
                     tracing::warn!(%error, "Online Platform state persistence failed");
                     state.online = None;
@@ -149,7 +152,10 @@ pub(super) async fn resource_health(
                     }
                 }
             } else if let Err(error) =
-                citadel_adapters::resource_status_store::platform_offline(&pool, target.id).await
+                citadel_adapters::persistence::postgres::platforms::status::platform_offline(
+                    &pool, target.id,
+                )
+                .await
             {
                 tracing::warn!(%error, "Offline resource synchronization failed");
                 state.online = None; // Retry persistence on the next confirmed sample.

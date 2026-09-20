@@ -71,11 +71,11 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn service_history_survives_task_replacement_without_double_counting_or_crossing_nodes() {
-    use citadel_adapters::{
-        container_stats_store::PostgresContainerStatsStore,
-        edge::{EdgeRegistry, EdgeTarget, PostgresEdgeStore},
-        statistics_read_store::PostgresStatisticsReader,
-    };
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::edge::EdgeTarget;
+    use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{
         ContainerStatsStore, RuntimeContainerStat, ServiceStatIdentity, StatisticsReader,
         StatsWindow,
@@ -590,7 +590,7 @@ async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguit
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_sample_tables() {
-    use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
     let f = fixture().await;
     let writer = PostgresContainerStatsStore::new(f.pool.clone());
@@ -645,7 +645,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
             .unwrap()
     };
     let before = expired().await;
-    citadel_adapters::maintenance_store::cleanup(&f.pool, None)
+    citadel_adapters::persistence::postgres::maintenance::cleanup(&f.pool, None)
         .await
         .unwrap();
     let removed = before - expired().await;
@@ -656,7 +656,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
     // Other test Platforms may also have old history. Drain bounded global
     // batches before checking this Platform's fresh sample survived.
     for _ in 0..20 {
-        if citadel_adapters::maintenance_store::cleanup(&f.pool, None)
+        if citadel_adapters::persistence::postgres::maintenance::cleanup(&f.pool, None)
             .await
             .unwrap()
             == 0
@@ -683,7 +683,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn connected_manager_history_uses_reported_node_identity_without_replacing_container_ids() {
-    use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat, RuntimeSwarmInfo};
     let f = fixture().await;
     // This case models the connected manager, matching the fake daemon.

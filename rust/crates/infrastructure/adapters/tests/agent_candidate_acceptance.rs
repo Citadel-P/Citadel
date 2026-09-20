@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
-use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
 use citadel_execution::{ProcessLimits, ProcessRequest};
 use citadel_platforms::{
     RuntimeErrorKind,

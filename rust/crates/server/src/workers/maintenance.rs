@@ -16,7 +16,7 @@ pub(super) async fn run(
         let mut tick = super::schedule::interval("recovery", Duration::from_secs(60));
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            match citadel_adapters::maintenance_store::reconcile(&pool).await {
+            match citadel_adapters::persistence::postgres::maintenance::reconcile(&pool).await {
                 Ok(changed) => {
                     if let Some(hub) = &realtime {
                         for resource in changed {
@@ -32,7 +32,9 @@ pub(super) async fn run(
         let mut tick = super::schedule::interval("lease-expiry", Duration::from_secs(30));
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            if let Err(error) = citadel_adapters::maintenance_store::expire_leases(&pool).await {
+            if let Err(error) =
+                citadel_adapters::persistence::postgres::maintenance::expire_leases(&pool).await
+            {
                 tracing::warn!(%error, "Lease expiry failed");
             }
         }
@@ -45,8 +47,11 @@ pub(super) async fn run(
                 // Drain backlogs with short commits, at most 128 passes / ten seconds.
                 // One pass deletes at most 5,000 rows per historical table (1,000 builds).
                 for _ in 0..128 {
-                    if citadel_adapters::maintenance_store::cleanup(&pool, build_retention_days)
-                        .await?
+                    if citadel_adapters::persistence::postgres::maintenance::cleanup(
+                        &pool,
+                        build_retention_days,
+                    )
+                    .await?
                         == 0
                     {
                         break;

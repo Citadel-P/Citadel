@@ -229,5 +229,4 @@ pub(super) async fn send_text(
 }
 
 #[cfg(test)]
-#[path = "connection_tests.rs"]
 mod tests;

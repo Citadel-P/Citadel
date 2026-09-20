@@ -1,9 +1,9 @@
 //! Ports BuildRunStartTests' completion propagation and failed post-build Apply
 //! cases through the real Build finish transaction and PostgreSQL queue.
 use super::*;
-use citadel_adapters::{
-    postgres::builds::completion::PostgresBuildCompletionRepository,
-    postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
+use citadel_adapters::persistence::postgres::{
+    builds::completion::PostgresBuildCompletionRepository,
+    deployments::PostgresDeploymentRepository, stacks::PostgresStackRepository,
 };
 use citadel_builds::{
     BuildCompletionRepository, BuildCompletionService, BuildConsumerClaim, BuildConsumerRuntime,
@@ -44,7 +44,7 @@ pub async fn create(pool: &sqlx::PgPool, fixture: &FixtureIds, project: Uuid) ->
             .bind(resource.id).execute(pool).await.unwrap();
         ids.push(resource.id);
     }
-    let input=serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
+    let input=serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
         "spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx\n  worker:\n    image: nginx\n","registryId":fixture.registry,"updateBehavior":"Disabled",
             "buildImageBindings":[{"serviceName":"web","buildProjectId":project,"redeployOnBuild":true,"appliedImageReference":"old-image"},{"serviceName":"worker","buildProjectId":project,"redeployOnBuild":false,"appliedImageReference":"old-image"}]}})).unwrap().try_into().unwrap();
     let stack = PostgresStackRepository::new(pool.clone())

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::EdgeTarget;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     networks::v1::{InspectNetworkRequest, InspectNetworkResponse},

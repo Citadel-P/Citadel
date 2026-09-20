@@ -1,3 +1,5 @@
+pub mod execution;
+
 use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -49,6 +51,7 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub execution: execution::ExecutionConfig,
     pub listen_address: SocketAddr,
     pub database_url: String,
     pub database_max_connections: u32,
@@ -64,7 +67,7 @@ pub struct Config {
     pub identity: IdentityConfig,
     pub automation: citadel_automation::AutomationOptions,
     pub node_agent_policy:
-        citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,
@@ -277,11 +280,13 @@ impl Config {
             "CITADEL_RUST_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
-        let agent = agent_config()?;
+        let execution = execution::ExecutionConfig::from_env()?;
+        let agent = agent_config(execution.edge_agent.allow_insecure)?;
         let realtime = realtime_config()?;
         let identity = identity_config(&transport)?;
 
         Ok(Self {
+            execution,
             listen_address,
             database_url,
             database_max_connections,
@@ -299,7 +304,7 @@ impl Config {
             identity,
             automation: automation_options()?,
             node_agent_policy:
-                citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy {
+                citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy {
                     removal_grace: Duration::from_secs(
                         positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
                     ),
@@ -911,14 +916,13 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
     }))
 }
 
-fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
+fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError> {
     let address = env::var("CITADEL_RUST_AGENT_ADDRESS").ok();
     let private_key_path = env::var_os("CITADEL_RUST_AGENT_PRIVATE_KEY_PATH");
     match (address, private_key_path) {
         (None, None) => Ok(None),
         (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
             let timeout = required_nonzero_seconds("CITADEL_RUST_AGENT_TIMEOUT_SECONDS")?;
-            let allow_insecure = agent_allows_insecure()?;
             Ok(Some(AgentConfig {
                 address,
                 private_key_path: PathBuf::from(private_key_path),
@@ -933,10 +937,6 @@ fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
                 .to_owned(),
         }),
     }
-}
-
-pub fn agent_allows_insecure() -> Result<bool, ConfigError> {
-    parse_env("AgentTransport__AllowInsecure", true)
 }
 
 fn database_url() -> Result<(String, &'static str), ConfigError> {

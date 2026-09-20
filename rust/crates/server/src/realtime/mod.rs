@@ -152,3 +152,5 @@ enum RealtimeError {
     #[error("realtime socket failed: {0}")]
     Socket(String),
 }
+
+pub mod notifiers;

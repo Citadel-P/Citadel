@@ -1,36 +1,50 @@
-use std::collections::BTreeMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::extract::ConnectInfo;
-use axum::http::header::{CONTENT_TYPE, LOCATION, SET_COOKIE};
-use axum::http::{Method, Request, Response, StatusCode};
-use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
-    OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    extract::ConnectInfo,
+    http::{
+        Method, Request, Response, StatusCode,
+        header::{CONTENT_TYPE, LOCATION, SET_COOKIE},
+    },
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpService};
-use citadel_adapters::oidc_store::PostgresOidcStore;
+use chrono::{Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::identity::{
+        authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        mfa::store::PostgresMfaStore,
+        oidc::store::PostgresOidcStore,
+    },
+    security::identity::{
+        crypto::{
+            AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
+            OpaqueServiceAccountTokenCodec,
+        },
+        mfa::{HmacRecoveryCodeService, Sha1TotpService},
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, OidcProvider, SYSTEM_ACTOR_ID};
-use citadel_identity::{AuthenticatedPrincipalType, MfaPolicy};
 use citadel_identity::{
-    IdentityError, IdentityService, MfaConfiguration, MfaService,
-    NoopServiceAccountLastUsedTracker, OidcDiscovery, OidcIdentity, OidcProtocol, OidcService,
-    PasswordHasher, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityError, IdentityService,
+    MfaConfiguration, MfaPolicy, MfaService, NoopServiceAccountLastUsedTracker, OidcDiscovery,
+    OidcIdentity, OidcProtocol, OidcProvider, OidcService, PasswordHasher, SYSTEM_ACTOR_ID,
+    SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::Readiness;
-use citadel_server::identity_http::{self, IdentityHttpState};
-use citadel_server::oidc_http::{self, OidcHttpState};
+use citadel_server::{
+    Readiness,
+    api::routes::{
+        authentication as identity_http, authentication::IdentityHttpState, oidc as oidc_http,
+        oidc::OidcHttpState,
+    },
+};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::{
+    collections::BTreeMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, OnceLock},
+};
 use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 use tower::ServiceExt;
 use url::Url;

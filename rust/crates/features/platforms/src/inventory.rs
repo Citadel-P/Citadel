@@ -7,7 +7,8 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{PlatformRuntimePort, RuntimeCapabilityError};
+use crate::PlatformRuntimePort;
+use crate::RuntimeCapabilityError;
 use citadel_swarm_services::SwarmServiceOwnership;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]

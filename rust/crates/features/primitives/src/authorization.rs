@@ -1,5 +1,7 @@
 //! Transport-independent authorization vocabulary. Transitional owner until Phase 11.
-use crate::{PermissionLevel, ResourceType, SpecificPermission};
+use crate::PermissionLevel;
+use crate::ResourceType;
+use crate::SpecificPermission;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PermissionRequirement {

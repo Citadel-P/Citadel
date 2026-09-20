@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -50,7 +50,7 @@ async fn stats_writes_cannot_delete_history_and_maintenance_keeps_pending_alerts
         .unwrap();
     }
     assert_eq!(
-        citadel_adapters::maintenance_store::cleanup(&pool, None)
+        citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
             .await
             .unwrap(),
         1
@@ -211,7 +211,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
         is_swarm_task: false,
     };
     assert!(
-        citadel_adapters::resource_status_store::container_observation(
+        citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool, platform, None, &container, 10
         )
         .await
@@ -240,7 +240,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
     sibling.id = "sibling".into();
     sibling.name = "sibling".into();
     assert!(
-        citadel_adapters::resource_status_store::container_observation(
+        citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool, platform, None, &sibling, 11
         )
         .await
@@ -249,7 +249,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
     container.name = "renamed".into();
     container.state = "exited".into();
     assert!(
-        citadel_adapters::resource_status_store::container_observation(
+        citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool, platform, None, &container, 20
         )
         .await
@@ -257,7 +257,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
     );
     container.name = "stale".into();
     assert!(
-        !citadel_adapters::resource_status_store::container_observation(
+        !citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool, platform, None, &container, 5
         )
         .await
@@ -274,7 +274,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
         2
     );
     assert!(
-        citadel_adapters::resource_status_store::container_event(
+        citadel_adapters::persistence::postgres::platforms::status::container_event(
             &pool,
             platform,
             None,
