@@ -11,8 +11,7 @@ pub async fn build_consumers(
 ) -> Result<(), BuildError> {
     while !cancellation.is_cancelled() {
         let result = {
-            let _iteration =
-                citadel_application::runtime_metrics::RuntimeWork::BuildCompletion.start();
+            let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::BuildCompletion.start();
             service.process_batch(&cancellation).await
         };
         match result {
@@ -63,21 +62,21 @@ async fn run_worker(
     let mut delay = minimum;
     while !cancellation.is_cancelled() {
         let result = {
-            let _iteration = citadel_application::runtime_metrics::RuntimeWork::BuildClaim.start();
+            let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::BuildClaim.start();
             service.process_one(&cancellation).await
         };
         if matches!(result, Ok(true)) {
-            citadel_application::runtime_metrics::RuntimeWork::BuildClaim.units(1);
+            citadel_runtime::runtime_metrics::RuntimeWork::BuildClaim.units(1);
         }
         match result {
             Ok(true) => {
-                delay = citadel_application::worker_poll_delay(delay, minimum, true);
+                delay = citadel_runtime::worker_poll_delay(delay, minimum, true);
                 continue;
             }
             Ok(false) => {}
             Err(error) => tracing::error!(%error,"Build worker iteration failed"),
         }
-        delay = citadel_application::worker_poll_delay(delay, minimum, false);
+        delay = citadel_runtime::worker_poll_delay(delay, minimum, false);
         super::notifications::wait(
             &mut wake,
             &cancellation,

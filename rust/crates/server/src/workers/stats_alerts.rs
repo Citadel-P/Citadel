@@ -46,7 +46,7 @@ pub(super) async fn flush_pending(
     alerts: &dyn AlertEventSink,
     batch_size: i64,
 ) -> Result<usize, sqlx::Error> {
-    let _iteration = citadel_application::runtime_metrics::RuntimeWork::AlertFlush.start();
+    let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::AlertFlush.start();
     let mut tx = pool.begin().await?;
     let claimed: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(4848495441444534)")
         .fetch_one(&mut *tx)
@@ -61,7 +61,7 @@ pub(super) async fn flush_pending(
     .fetch_all(&mut *tx)
     .await?;
     let (ids, revisions): (Vec<_>, Vec<_>) = captured.into_iter().unzip();
-    citadel_application::runtime_metrics::RuntimeWork::AlertFlush.units(ids.len() as u64);
+    citadel_runtime::runtime_metrics::RuntimeWork::AlertFlush.units(ids.len() as u64);
     if ids.is_empty() {
         return Ok(0);
     }

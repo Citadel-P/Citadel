@@ -2,7 +2,7 @@ use citadel_stacks::StackRepository;
 #[path = "../support/workload_queries.rs"]
 mod query_counts;
 use super::*;
-use citadel_application::DynamicTasks;
+use citadel_runtime::DynamicTasks;
 use citadel_server::api::stacks::TrackedStackTasks;
 
 pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) {

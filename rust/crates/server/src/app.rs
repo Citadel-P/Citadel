@@ -104,7 +104,7 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
 enum ServerExit {
     Server(std::io::Result<()>),
-    Task(Result<(), citadel_application::SupervisedTaskError>),
+    Task(Result<(), citadel_runtime::SupervisedTaskError>),
 }
 
 async fn run_server(

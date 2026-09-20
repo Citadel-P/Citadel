@@ -18,7 +18,7 @@ async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
     let services = SwarmServiceService::new(
         Arc::new(
             citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
-                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         ),
         Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),

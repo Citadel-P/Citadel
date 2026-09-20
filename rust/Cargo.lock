@@ -505,7 +505,9 @@ dependencies = [
  "citadel-licensing",
  "citadel-platforms",
  "citadel-primitives",
+ "citadel-processes",
  "citadel-registries",
+ "citadel-runtime",
  "citadel-stacks",
  "citadel-swarm-services",
  "citadel-tags",
@@ -731,6 +733,7 @@ dependencies = [
 name = "citadel-execution"
 version = "0.0.0"
 dependencies = [
+ "futures-util",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -821,6 +824,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-processes"
+version = "0.0.0"
+dependencies = [
+ "citadel-execution",
+ "citadel-git",
+ "futures-util",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "citadel-registries"
 version = "0.0.0"
 dependencies = [
@@ -831,6 +846,20 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "citadel-runtime"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-identity",
+ "futures-util",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "uuid",
 ]
 
@@ -861,7 +890,9 @@ dependencies = [
  "citadel-licensing",
  "citadel-platforms",
  "citadel-primitives",
+ "citadel-processes",
  "citadel-registries",
+ "citadel-runtime",
  "citadel-stacks",
  "citadel-swarm-services",
  "citadel-tags",

@@ -24,7 +24,7 @@ pub(crate) struct PlatformTarget {
 
 pub struct PlatformRuntimeRegistry {
     /// Shared by Direct/Local and Edge inventory: at most two external operations.
-    pub inventory_budget: citadel_application::IoBudget,
+    pub inventory_budget: citadel_runtime::IoBudget,
     pool: PgPool,
     base: Option<AgentClient>,
     targets: RwLock<Arc<Vec<PlatformTarget>>>,
@@ -34,9 +34,9 @@ pub struct PlatformRuntimeRegistry {
 impl PlatformRuntimeRegistry {
     pub fn new(pool: PgPool, base: Option<AgentClient>) -> Arc<Self> {
         Arc::new(Self {
-            inventory_budget: citadel_application::IoBudget::new(
+            inventory_budget: citadel_runtime::IoBudget::new(
                 INVENTORY_CONCURRENCY.try_into().unwrap(),
-                citadel_application::runtime_metrics::RuntimeWork::Inventory,
+                citadel_runtime::runtime_metrics::RuntimeWork::Inventory,
             ),
             pool,
             base,
@@ -53,7 +53,7 @@ impl PlatformRuntimeRegistry {
     }
 
     pub(crate) async fn refresh(&self) -> Result<(), sqlx::Error> {
-        let _iteration = citadel_application::runtime_metrics::RuntimeWork::Targets.start();
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Targets.start();
         let rows = sqlx::query("SELECT id,name,address,connectortype,COALESCE(platformdescriptor->>'$type','Docker') AS platformtype FROM platforms WHERE connectortype IN ('Local','Agent','EdgeAgent') ORDER BY id").fetch_all(&self.pool).await?;
         let previous = self.snapshot().await;
         let mut next = Vec::with_capacity(rows.len());

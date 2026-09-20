@@ -283,7 +283,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let stacks = Arc::new(
         StackService::new(
             Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             )),
             Arc::new(PostgresStackRepository::new(pool.clone())),
             runtime.clone(),

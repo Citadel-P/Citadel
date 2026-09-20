@@ -26,7 +26,10 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
             Arc::new(PostgresGitAccountRepository::new(pool)),
             Arc::new(AesGcmSecretProtector::new(&[33; 32]).unwrap()),
         )),
-        Arc::new(GitCli::new(Duration::from_secs(5))),
+        Arc::new(GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            Duration::from_secs(5),
+        )),
         std::env::temp_dir().join(format!("citadel-webhook-test-{}", Uuid::now_v7())),
         Duration::from_secs(60),
     ));

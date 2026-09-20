@@ -33,7 +33,7 @@ pub(super) async fn run(
                 if let Err(error) = event { tracing::warn!(%error, "Swarm prune event listener failed"); listener=None; }
             }
         }
-        let _iteration = citadel_application::runtime_metrics::RuntimeWork::Pruning.start();
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Pruning.start();
         let candidates: Result<Vec<uuid::Uuid>, _> = sqlx::query_scalar("SELECT c.id FROM containers c JOIN platforms p ON p.id=c.platformid WHERE p.prunehistoricalswarmtaskcontainers AND lower(p.platformdescriptor->>'$type')='dockerswarm' AND p.status='Online' AND c.isswarmtask AND NOT c.issystem AND lower(c.state) IN('exited','dead') AND c.controlstate='Idle' AND c.projectionstalesince IS NULL ORDER BY c.updated,c.id LIMIT 100")
             .fetch_all(&pool).await;
         match candidates {

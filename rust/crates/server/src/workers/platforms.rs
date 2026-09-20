@@ -26,9 +26,6 @@ use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
 use citadel_adapters::docker::{DockerClient, DockerError};
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
 use citadel_alerts::{AlertDeliveryService, AlertEventSink, AlertObservation};
-use citadel_application::{
-    BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
-};
 use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_builds::BuildService;
@@ -39,6 +36,9 @@ use citadel_platforms::jobs::{
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
+};
+use citadel_runtime::{
+    BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
 use citadel_stacks::StackService;
 use citadel_swarm_services::SwarmServiceService;
@@ -51,8 +51,8 @@ use crate::runtime_targets::{
     HEALTH_CONCURRENCY, INVENTORY_CONCURRENCY, PlatformRuntimeRegistry,
     PlatformTarget as ReconciliationTarget, STATS_CONCURRENCY,
 };
-use citadel_application::{IoBudget, runtime_metrics::RuntimeWork};
 use citadel_platforms::PlatformHealthPort;
+use citadel_runtime::{IoBudget, runtime_metrics::RuntimeWork};
 
 use crate::metrics::Metrics;
 use crate::realtime::RealtimeHub;
@@ -108,7 +108,7 @@ pub async fn register(
     let job_alert_listener = super::listener(&dependencies.pool, "citadel_job_alerts").await?;
     let mut target_listener =
         super::listener(&dependencies.pool, "citadel_platform_targets").await?;
-    for signal in citadel_application::RuntimeSignal::ALL {
+    for signal in citadel_runtime::RuntimeSignal::ALL {
         target_listener.listen(signal.channel()).await?;
     }
     let notifications = super::notifications::DatabaseNotificationHub::new();
@@ -142,7 +142,7 @@ pub async fn register(
         "platform-targets",
         targets.clone().run(
             cancellation.child_token(),
-            notifications.subscribe(citadel_application::RuntimeSignal::Targets),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Targets),
         ),
     );
     supervisor.spawn(
@@ -183,7 +183,7 @@ pub async fn register(
         super::automation::automation_runs(
             cancellation.child_token(),
             Arc::clone(&automation),
-            notifications.subscribe(citadel_application::RuntimeSignal::Automation),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Automation),
         ),
     );
     supervisor.spawn(
@@ -210,7 +210,7 @@ pub async fn register(
             cancellation.child_token(),
             Arc::clone(&builds),
             settings.build_parallel_runs,
-            notifications.subscribe(citadel_application::RuntimeSignal::Builds),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Builds),
         ),
     );
     supervisor.spawn(
@@ -230,7 +230,7 @@ pub async fn register(
                 }),
                 builds.clone(),
             ),
-            notifications.subscribe(citadel_application::RuntimeSignal::BuildCompletion),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::BuildCompletion),
         ),
     );
     supervisor.spawn(
@@ -243,7 +243,7 @@ pub async fn register(
             cancellation.child_token(),
             Arc::clone(&backups),
             settings.backup_workers.clone(),
-            notifications.subscribe(citadel_application::RuntimeSignal::Backups),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Backups),
         ),
     );
     supervisor.spawn(
@@ -252,7 +252,7 @@ pub async fn register(
             cancellation.child_token(),
             Arc::clone(&backups),
             settings.backup_workers.clone(),
-            notifications.subscribe(citadel_application::RuntimeSignal::Restores),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Restores),
         ),
     );
     supervisor.spawn(

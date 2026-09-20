@@ -103,9 +103,8 @@ use citadel_adapters::{
 
 use citadel_alerts::AlertDeliveryService;
 
-use citadel_application::{
-    ActivityService, LicenseService, LicenseTransitionMonitor, service_account_last_used_channel,
-};
+use citadel_application::{ActivityService, LicenseService, LicenseTransitionMonitor};
+use citadel_runtime::service_account_last_used_channel;
 
 use citadel_automation::{AutomationRuntimeConfig, AutomationService};
 
@@ -148,7 +147,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub docker: DockerClient,
     pub cancellation: CancellationToken,
-    pub dynamic_tasks: citadel_application::DynamicTasks,
+    pub dynamic_tasks: citadel_runtime::DynamicTasks,
     pub runtime_targets: Arc<citadel_server::runtime_targets::PlatformRuntimeRegistry>,
     pub readiness: Arc<Readiness>,
     pub metrics: Arc<Metrics>,
@@ -206,7 +205,7 @@ impl AppState {
         let docker = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
         let cancellation = CancellationToken::new();
         let readiness = Arc::new(Readiness::default());
-        let dynamic_tasks = citadel_application::DynamicTasks::new(cancellation.clone());
+        let dynamic_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
         let metrics = Arc::new(Metrics::default().with_dynamic_tasks(dynamic_tasks.clone()));
         let realtime_hub = config
             .realtime
@@ -327,7 +326,10 @@ impl AppState {
             GitRepositoryExecutionService::new(
                 Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
                 Arc::clone(&git_accounts),
-                Arc::new(GitCli::new(Duration::from_secs(120))),
+                Arc::new(GitCli::new(
+                    std::sync::Arc::new(citadel_processes::SystemProcess),
+                    Duration::from_secs(120),
+                )),
                 data_root.join("git-repositories"),
                 Duration::from_secs(10 * 60),
             )
@@ -390,6 +392,7 @@ impl AppState {
         ));
         let automation = Arc::new(
             AutomationService::new(
+                std::sync::Arc::new(citadel_processes::SystemProcess),
                 Arc::new(
                     citadel_server::api::automation::TrackedAutomationTasks::new(
                         dynamic_tasks.clone(),

@@ -287,7 +287,7 @@ channels must be attached to the rule for external delivery.
 
 ## Database schema changes
 
-The declarative schema in `crates/database/src/schema/schema.sql` is the Rust
+The declarative schema in `crates/infrastructure/database/src/schema/schema.sql` is the Rust
 database authority. Until the first Rust release, keep a single generated
 baseline and fold schema changes into it; do not hand-write migration SQL:
 
@@ -474,7 +474,7 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-adapters \
 
 ### Production Edge Agent jobs regression
 
-`crates/adapters/tests/edge_agent_jobs_acceptance.rs` tests the actual Agent binary against Rust Core's Edge transport and persistence. Build the Agent image from its separate checkout, then run from `rust/`:
+`crates/infrastructure/adapters/tests/edge_agent_jobs_acceptance.rs` tests the actual Agent binary against Rust Core's Edge transport and persistence. Build the Agent image from its separate checkout, then run from `rust/`:
 
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters \

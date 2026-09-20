@@ -1,5 +1,5 @@
 //! One LISTEN connection fans out fixed, capacity-one signals; timers recover missed notifications.
-use citadel_application::RuntimeSignal;
+use citadel_runtime::RuntimeSignal;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -34,8 +34,7 @@ impl DatabaseNotificationHub {
                     }
                 }
                 Ok(None) => {
-                    citadel_application::runtime_metrics::RuntimeWork::NotificationReconnect
-                        .units(1);
+                    citadel_runtime::runtime_metrics::RuntimeWork::NotificationReconnect.units(1);
                     // SQLx has re-established LISTEN before returning None. Recover lost
                     // signals immediately; timers are still the final safety net.
                     for signal in self.signals.iter() {
@@ -43,8 +42,7 @@ impl DatabaseNotificationHub {
                     }
                 }
                 Err(error) => {
-                    citadel_application::runtime_metrics::RuntimeWork::NotificationReconnect
-                        .units(1);
+                    citadel_runtime::runtime_metrics::RuntimeWork::NotificationReconnect.units(1);
                     tracing::warn!(%error, "Database notification hub reconnecting; fallback timers remain active");
                     tokio::select! { ()=token.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
                 }

@@ -1,5 +1,5 @@
 //! Adapt the process-owned tracker to the Stack feature's admission port.
-use citadel_application::DynamicTasks;
+use citadel_runtime::DynamicTasks;
 use citadel_stacks::{StackError, StackTaskSpawner};
 use futures_util::future::BoxFuture;
 

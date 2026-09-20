@@ -76,7 +76,7 @@ async fn exercise_adoption(external: bool) {
     let service = DeploymentService::new(
         Arc::new(
             citadel_server::api::deployments::TrackedDeploymentTasks::new(
-                citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         ),
         Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),

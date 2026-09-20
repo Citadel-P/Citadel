@@ -1,5 +1,5 @@
 //! Adapt the process-owned tracker to the SwarmService feature's admission port.
-use citadel_application::DynamicTasks;
+use citadel_runtime::DynamicTasks;
 use citadel_swarm_services::{SwarmServiceError, SwarmServiceTaskSpawner};
 use futures_util::future::BoxFuture;
 

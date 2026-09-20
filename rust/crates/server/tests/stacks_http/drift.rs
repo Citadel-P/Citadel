@@ -123,7 +123,7 @@ pub(super) async fn verify(
     let denied_runtime = Arc::new(CompletingStackRuntime::default());
     let unlicensed = StackService::new(
         Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         Arc::new(PostgresStackRepository::new(pool.clone())),
         denied_runtime.clone(),

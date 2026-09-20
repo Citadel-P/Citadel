@@ -1,5 +1,5 @@
-use citadel_application::DynamicTasks;
 use citadel_builds::{BuildError, BuildTaskSpawner};
+use citadel_runtime::DynamicTasks;
 use futures_util::future::BoxFuture;
 
 pub struct TrackedBuildTasks(DynamicTasks);

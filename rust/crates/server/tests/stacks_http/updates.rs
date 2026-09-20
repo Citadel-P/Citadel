@@ -168,7 +168,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let service = StackService::new(
         Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         store.clone(),
         runtime.clone(),
@@ -262,7 +262,7 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
     });
     let service = StackService::new(
         Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         Arc::new(PostgresStackRepository::new(pool.clone())),
         runtime.clone(),
@@ -338,7 +338,7 @@ async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: 
     let runtime = Arc::new(CompletingStackRuntime::default());
     let service = StackService::new(
         Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         store.clone(),
         runtime.clone(),

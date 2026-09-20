@@ -112,7 +112,10 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
     let service = Arc::new(GitRepositoryExecutionService::new(
         store.clone(),
         accounts,
-        Arc::new(GitCli::new(Duration::from_secs(300))),
+        Arc::new(GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            Duration::from_secs(300),
+        )),
         std::env::temp_dir(),
         Duration::from_secs(300),
     ));

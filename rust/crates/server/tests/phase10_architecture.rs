@@ -27,7 +27,7 @@ fn phase10_features_keep_http_presentation_and_docker_protocols_out() {
         "bindings",
         "discovery",
     ] {
-        let root = crates.join(feature);
+        let root = crates.join("features").join(feature);
         for path in sources(&root.join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in ["utoipa", "axum::", "citadel_docker_api"] {
@@ -58,8 +58,8 @@ fn runtime_targets_and_stack_claims_use_closed_platform_classifications() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for relative in [
         "server/src/runtime_targets.rs",
-        "platforms/src/jobs/inventory_reconciliation.rs",
-        "stacks/src/model/operations.rs",
+        "features/platforms/src/jobs/inventory_reconciliation.rs",
+        "features/stacks/src/model/operations.rs",
     ] {
         let source = std::fs::read_to_string(crates.join(relative)).unwrap();
         assert!(!source.contains("pub platform_type: String"), "{relative}");
@@ -70,8 +70,13 @@ fn runtime_targets_and_stack_claims_use_closed_platform_classifications() {
         );
     }
     for owner in ["tags", "registries", "bindings"] {
-        let repository =
-            std::fs::read_to_string(crates.join(owner).join("src/repository.rs")).unwrap();
+        let repository = std::fs::read_to_string(
+            crates
+                .join("features")
+                .join(owner)
+                .join("src/repository.rs"),
+        )
+        .unwrap();
         assert!(!repository.contains("GitRepositoryPersistence"));
         assert!(!repository.contains("update_platform_description"));
     }

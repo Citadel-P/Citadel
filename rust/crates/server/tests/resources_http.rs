@@ -90,15 +90,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let git_execution = Arc::new(GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::clone(&git_accounts),
-        Arc::new(GitCli::new(std::time::Duration::from_secs(5))),
+        Arc::new(GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            std::time::Duration::from_secs(5),
+        )),
         git_cache.clone(),
         std::time::Duration::from_secs(60),
     ));
     let cancellation = tokio_util::sync::CancellationToken::new();
     let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
 
     let automation = Arc::new(AutomationService::new(
+        std::sync::Arc::new(citadel_processes::SystemProcess),
         Arc::new(
             citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
         ),

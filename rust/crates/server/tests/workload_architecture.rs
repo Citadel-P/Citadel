@@ -18,7 +18,7 @@ fn rust_files(path: &Path) -> Vec<PathBuf> {
 fn workload_features_own_business_models_and_ports_without_transport_or_detached_tasks() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for feature in ["stacks", "swarm-services"] {
-        for path in rust_files(&crates.join(feature).join("src")) {
+        for path in rust_files(&crates.join("features").join(feature).join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
                 "utoipa",
@@ -36,7 +36,9 @@ fn workload_features_own_business_models_and_ports_without_transport_or_detached
                 );
             }
         }
-        let facade = std::fs::read_to_string(crates.join(feature).join("src/lib.rs")).unwrap();
+        let facade =
+            std::fs::read_to_string(crates.join("features").join(feature).join("src/lib.rs"))
+                .unwrap();
         assert!(
             !facade
                 .lines()
@@ -52,7 +54,14 @@ fn workload_features_own_business_models_and_ports_without_transport_or_detached
             "model/mod.rs",
             "service/mod.rs",
         ] {
-            assert!(crates.join(feature).join("src").join(slot).exists());
+            assert!(
+                crates
+                    .join("features")
+                    .join(feature)
+                    .join("src")
+                    .join(slot)
+                    .exists()
+            );
         }
     }
 }
@@ -61,7 +70,11 @@ fn workload_features_own_business_models_and_ports_without_transport_or_detached
 fn workload_persistence_never_constructs_http_views_or_capabilities() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for resource in ["stacks", "swarm_services"] {
-        for path in rust_files(&crates.join("adapters/src/postgres").join(resource)) {
+        for path in rust_files(
+            &crates
+                .join("infrastructure/adapters/src/postgres")
+                .join(resource),
+        ) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
                 "StackView",

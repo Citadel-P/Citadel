@@ -6,13 +6,15 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-citadel-discovery = { path = "../discovery" }
-citadel-bindings = { path = "../bindings" }
-citadel-registries = { path = "../registries" }
-citadel-tags = { path = "../tags" }
-citadel-primitives = { path = "../primitives" }
-citadel-licensing = { path = "../licensing" }
-citadel-activities = { path = "../activities" }
+citadel-runtime = { path = "../infrastructure/runtime" }
+citadel-processes = { path = "../infrastructure/processes" }
+citadel-discovery = { path = "../features/discovery" }
+citadel-bindings = { path = "../features/bindings" }
+citadel-registries = { path = "../features/registries" }
+citadel-tags = { path = "../features/tags" }
+citadel-primitives = { path = "../features/primitives" }
+citadel-licensing = { path = "../features/licensing" }
+citadel-activities = { path = "../features/activities" }
 utoipa-axum.workspace = true
 utoipa.workspace = true
 axum.workspace = true
@@ -22,20 +24,20 @@ tokio-stream.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-citadel-adapters = { path = "../adapters" }
-citadel-application = { path = "../application" }
-citadel-automation = { path = "../automation" }
-citadel-alerts = { path = "../alerts" }
-citadel-builds = { path = "../builds" }
-citadel-backups = { path = "../backups" }
-citadel-contracts = { path = "../contracts" }
-citadel-database = { path = "../database" }
-citadel-git = { path = "../git" }
-citadel-deployments = { path = "../deployments" }
-citadel-swarm-services = { path = "../swarm-services" }
-citadel-stacks = { path = "../stacks" }
-citadel-identity = { path = "../identity" }
-citadel-platforms = { path = "../platforms" }
+citadel-adapters = { path = "../infrastructure/adapters" }
+citadel-application = { path = "../features/application" }
+citadel-automation = { path = "../features/automation" }
+citadel-alerts = { path = "../features/alerts" }
+citadel-builds = { path = "../features/builds" }
+citadel-backups = { path = "../features/backups" }
+citadel-contracts = { path = "../infrastructure/contracts" }
+citadel-database = { path = "../infrastructure/database" }
+citadel-git = { path = "../features/git" }
+citadel-deployments = { path = "../features/deployments" }
+citadel-swarm-services = { path = "../features/swarm-services" }
+citadel-stacks = { path = "../features/stacks" }
+citadel-identity = { path = "../features/identity" }
+citadel-platforms = { path = "../features/platforms" }
 clap.workspace = true
 futures-util.workspace = true
 ipnet.workspace = true

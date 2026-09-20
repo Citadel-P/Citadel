@@ -79,9 +79,9 @@ async fn run_loop(
     let mut delay = minimum;
     while !cancellation.is_cancelled() {
         let family = if restores {
-            citadel_application::runtime_metrics::RuntimeWork::RestoreClaim
+            citadel_runtime::runtime_metrics::RuntimeWork::RestoreClaim
         } else {
-            citadel_application::runtime_metrics::RuntimeWork::BackupClaim
+            citadel_runtime::runtime_metrics::RuntimeWork::BackupClaim
         };
         let iteration = family.start();
         let result = if restores {
@@ -95,13 +95,13 @@ async fn run_loop(
         }
         match result {
             Ok(true) => {
-                delay = citadel_application::worker_poll_delay(delay, minimum, true);
+                delay = citadel_runtime::worker_poll_delay(delay, minimum, true);
                 continue;
             }
             Ok(false) => {}
             Err(error) => tracing::error!(%error, restores, "Backup worker iteration failed"),
         }
-        delay = citadel_application::worker_poll_delay(delay, minimum, false);
+        delay = citadel_runtime::worker_poll_delay(delay, minimum, false);
         super::notifications::wait(&mut wake, &cancellation, delay.max(Duration::from_secs(30)))
             .await;
     }

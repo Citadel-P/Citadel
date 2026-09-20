@@ -37,8 +37,7 @@ pub(super) async fn deployment_apply_reconciliation(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
-        let _iteration =
-            citadel_application::runtime_metrics::RuntimeWork::DeploymentRecovery.start();
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DeploymentRecovery.start();
         let started_before = chrono::Utc::now().timestamp()
             - i64::try_from(STALE_AFTER.as_secs()).unwrap_or(i64::MAX);
         if let Err(error) = deployments.recover_update_checks().await {
