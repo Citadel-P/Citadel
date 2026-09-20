@@ -1,5 +1,6 @@
 use super::*;
-use citadel_adapters::edge::{EdgeSession, EdgeTarget};
+use citadel_adapters::connectors::edge::EdgeSession;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     containers::v1::{
         CreateContainerRequest, CreateContainerResponse, DeleteContainerRequest, ExecBinaryRequest,

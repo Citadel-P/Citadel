@@ -5,7 +5,9 @@ use serde_yaml_ng::{Mapping, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::{StackBuildImageBinding, StackError, validation};
+use crate::StackBuildImageBinding;
+use crate::StackError;
+use crate::validation;
 
 const MAX_COMPOSE_FILES: usize = 16;
 const MAX_COMPOSE_BYTES: usize = 4 * 1024 * 1024;

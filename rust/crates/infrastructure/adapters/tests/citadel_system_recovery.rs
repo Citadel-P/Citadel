@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use citadel_adapters::citadel_system_backup::{
-    CitadelSystemRestoreOptions, PostgresCitadelSystemBackupBuilder, restore_citadel_system,
-};
-use citadel_adapters::crypto::AesGcmSecretProtector;
+use citadel_adapters::external::backups::system_recovery::CitadelSystemRestoreOptions;
+use citadel_adapters::external::backups::system_recovery::PgDumpSystemBackupBuilder;
+use citadel_adapters::external::backups::system_recovery::restore_citadel_system;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_backups::CitadelSystemBackupBuilder;
 use citadel_database::MigrationRunner;
 use citadel_identity::SYSTEM_ACTOR_ID;
@@ -61,7 +61,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         Uuid::now_v7().simple()
     ));
     let cancellation = CancellationToken::new();
-    let builder = PostgresCitadelSystemBackupBuilder::new(
+    let builder = PgDumpSystemBackupBuilder::new(
         source.clone(),
         source_url.clone(),
         std::env::var_os("CITADEL_PG_DUMP").unwrap_or_else(|| "pg_dump".into()),

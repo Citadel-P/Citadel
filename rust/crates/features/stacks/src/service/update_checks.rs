@@ -1,5 +1,6 @@
 use super::*;
-use crate::{StackUpdateBehavior, StackUpdateState};
+use crate::StackUpdateBehavior;
+use crate::StackUpdateState;
 use sha2::Digest;
 
 pub trait StackUpdateScanner: Send + Sync {

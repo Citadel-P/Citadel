@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{LicenseCapability, LicenseStatus};
+use crate::LicenseCapability;
+use crate::LicenseStatus;
 use citadel_primitives::ActorId;
 
 pub const LICENSE_PRODUCT: &str = "citadel";

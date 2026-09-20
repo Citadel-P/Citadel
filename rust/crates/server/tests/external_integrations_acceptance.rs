@@ -1,17 +1,20 @@
 #![cfg(unix)]
 //! Ports ForgejoPush_ShouldUpdateAndDeployGitStack and the Vault KV v2
 //! resolve/inject/redact scenario against actual external services and Docker.
-use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
-
 use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_adapters::{
-    activity_store::PostgresActivityStore, crypto::AesGcmSecretProtector, docker::DockerClient,
-    postgres::automation::PostgresAutomationRepository,
-    postgres::git::accounts::PostgresGitAccountRepository,
-    postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
-    postgres::stacks::PostgresStackRepository,
-    postgres::stacks::bindings::PostgresStackBindingResolver, stack_runtime::StackRuntimeRouter,
-    stack_source_materializer::GitStackSourceMaterializer,
+    connectors::{docker::DockerClient, routing::stacks::StackRuntimeRouter},
+    filesystem::stacks::materializer::GitStackSourceMaterializer,
+    persistence::postgres::{
+        activities::store::PostgresActivityStore,
+        automation::PostgresAutomationRepository,
+        git::{
+            accounts::PostgresGitAccountRepository,
+            repositories::PostgresGitRepositoryExecutionPersistence,
+        },
+        stacks::{PostgresStackRepository, bindings::PostgresStackBindingResolver},
+    },
+    security::identity::crypto::AesGcmSecretProtector,
 };
 use citadel_automation::{
     AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig, AutomationService,
@@ -19,13 +22,14 @@ use citadel_automation::{
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
-use citadel_server::webhooks_http::{self, WebhooksHttpState};
+use citadel_server::api::routes::{webhooks as webhooks_http, webhooks::WebhooksHttpState};
 use citadel_stacks::{
     NoopStackChangeNotifier, StackEntitlements, StackError, StackRepository, StackService,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -195,13 +199,13 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'citadel/acceptance','api_key',1)")
             .bind(secret).bind(secret.to_string()).bind(provider.id).execute(&pool).await.unwrap();
         let stacks = Arc::new(StackService::new(
-Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
+Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
             Arc::new(StackRuntimeRouter::new(pool.clone(),docker.clone(),None)),
             Arc::new(PostgresStackBindingResolver::new(pool.clone(),protector).unwrap()),
             Arc::new(NoopStackChangeNotifier),shutdown.child_token())
             .with_source_materializer(Arc::new(GitStackSourceMaterializer::new(git.clone())))
             .with_entitlements(Arc::new(Entitlements)));
-        let stack = stacks.create(ActorId::new(SYSTEM_ACTOR_ID),true,serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({
+        let stack = stacks.create(ActorId::new(SYSTEM_ACTOR_ID),true,serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({
             "name":format!("provider-test-{}",platform.simple()),"platformId":platform,"stackSource":"Git","spec":{
                 "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
                 "preDeploy":{"path":".","commands":["printf '%s' \"$INJECTED\""]},
@@ -214,7 +218,7 @@ Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_runtime::Dy
         let mut progress = stacks.apply(ActorId::new(SYSTEM_ACTOR_ID),true,citadel_stacks::ApplyStack{id:stack.id,recreate:None}).await.unwrap();
         let mut output = Vec::new();
         while let Some(item) = progress.recv().await {
-            assert!(!serde_json::to_string(&citadel_server::api::stacks::views::StackStreamItem::from(item.clone())).unwrap().contains(VALUE));
+            assert!(!serde_json::to_string(&citadel_server::api::resources::stacks::views::StackStreamItem::from(item.clone())).unwrap().contains(VALUE));
             output.push(item);
         }
         let initial_view=PostgresStackRepository::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
@@ -226,7 +230,7 @@ Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_runtime::Dy
     let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
 
         let automation=Arc::new(AutomationService::new(std::sync::Arc::new(citadel_processes::SystemProcess),
-        Arc::new(citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone())),
+        Arc::new(citadel_server::tasks::automation::TrackedAutomationTasks::new(automation_tasks.clone())),
         automation_shutdown.clone(),Arc::new(PostgresAutomationRepository::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
             deno_path:"deno".into(),work_root:root.join("automation"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
         let app=webhooks_http::router(WebhooksHttpState{git:git.clone(),automation,backups:None,builds:None,stacks:Some(stacks.clone()),services:None,alerts:None,audit:Some(Arc::new(PostgresActivityStore::new(pool.clone())))});

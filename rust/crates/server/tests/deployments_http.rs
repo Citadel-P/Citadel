@@ -1,31 +1,37 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        deployments::PostgresDeploymentRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     DeploymentError, DeploymentImageInfo, DeploymentRuntime, DeploymentService,
     PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
     RuntimeDeploymentResult,
 };
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::api::deployments::{self, DeploymentsHttpState};
+use citadel_server::api::routes::deployments::{self, DeploymentsHttpState};
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -149,7 +155,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let service = Arc::new(
         DeploymentService::new(
             Arc::new(
-                citadel_server::api::deployments::TrackedDeploymentTasks::new(
+                citadel_server::tasks::deployments::TrackedDeploymentTasks::new(
                     citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 ),
             ),

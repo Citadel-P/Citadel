@@ -1,5 +1,7 @@
 use super::*;
-use crate::{RuntimeSwarmInventory, RuntimeSwarmNode, RuntimeSwarmTask};
+use crate::RuntimeSwarmInventory;
+use crate::RuntimeSwarmNode;
+use crate::RuntimeSwarmTask;
 use std::sync::{
     Mutex,
     atomic::{AtomicUsize, Ordering},

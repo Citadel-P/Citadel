@@ -22,7 +22,6 @@ argon2.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-citadel-application = { path = "../../features/application" }
 citadel-automation = { path = "../../features/automation" }
 citadel-alerts = { path = "../../features/alerts" }
 citadel-builds = { path = "../../features/builds" }
@@ -67,3 +66,6 @@ tokio = { workspace = true, features = ["test-util"] }
 axum.workspace = true
 citadel-database = { path = "../database" }
 tonic = { workspace = true, features = ["router"] }
+
+[lints]
+workspace = true

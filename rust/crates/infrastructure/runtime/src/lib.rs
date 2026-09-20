@@ -11,7 +11,7 @@ mod polling;
 pub use polling::worker_poll_delay;
 mod dynamic_tasks;
 pub mod runtime_metrics;
-pub use dynamic_tasks::DynamicTasks;
+pub use dynamic_tasks::{DynamicTaskReservation, DynamicTasks};
 mod io_budget;
 pub use io_budget::IoBudget;
 mod runtime_signal;

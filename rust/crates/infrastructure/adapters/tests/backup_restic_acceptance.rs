@@ -1,9 +1,8 @@
 #![cfg(unix)]
 
 use chrono::Utc;
-use citadel_adapters::{
-    backup_executor::DockerResticBackupExecutor, postgres::backups::PostgresBackupPersistence,
-};
+use citadel_adapters::external::backups::restic::DockerResticBackupExecutor;
+use citadel_adapters::persistence::postgres::backups::PostgresBackupPersistence;
 use citadel_backups::*;
 use citadel_database::MigrationRunner;
 use citadel_execution::{ProcessLimits, ProcessRequest};
@@ -121,7 +120,7 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let repository_volume = format!("citadel-backup-test-{suffix}-repository");
     let target = format!("citadel-backup-test-{suffix}-restored");
     let agent_name = format!("citadel-backup-test-{suffix}-agent");
-    let edge_registry = citadel_adapters::edge::EdgeRegistry::default();
+    let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let edge_cancel = CancellationToken::new();
     let mut edge_server = None;
     let result = AssertUnwindSafe(async {
@@ -131,7 +130,9 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
             .bind(platform).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
         let agent = if transport == Transport::Edge {
-            use citadel_adapters::edge::{EdgeIntake,EdgeTarget,PostgresEdgeStore};
+            use citadel_adapters::connectors::edge::EdgeIntake;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
             use citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer;
             sqlx::query("UPDATE platforms SET connectortype='EdgeAgent',status='Offline' WHERE id=$1").bind(platform).execute(&pool).await.unwrap();
             let store=PostgresEdgeStore::new(pool.clone());
@@ -155,7 +156,8 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
             sqlx::query("UPDATE platforms SET status='Online' WHERE id=$1").bind(platform).execute(&pool).await.unwrap();
             None
         } else if use_agent {
-            use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+            use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
             let image=std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
             let network=std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
             let mut key=[0;32];getrandom::fill(&mut key).unwrap();

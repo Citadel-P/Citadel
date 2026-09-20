@@ -4,7 +4,7 @@ pub(super) struct InventoryReconciliationWorker {
     pub(super) targets: Arc<PlatformRuntimeRegistry>,
     pub(super) budget: IoBudget,
     pub(super) node_agent_policy:
-        citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     pub(super) docker: DockerClient,
     pub(super) pool: PgPool,
     pub(super) local_triggers: BoundedReceiver<()>,

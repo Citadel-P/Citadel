@@ -2,10 +2,11 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    PlatformInventoryPort, RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimePlatformInfo,
-    RuntimeSwarmInventory,
-};
+use crate::PlatformInventoryPort;
+use crate::RuntimeCapabilityError;
+use crate::RuntimeInventorySnapshot;
+use crate::RuntimePlatformInfo;
+use crate::RuntimeSwarmInventory;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InventoryCollectionTarget {

@@ -1,6 +1,6 @@
 #![cfg(unix)]
 //! Run only against a disposable, initialized Swarm daemon with Alpine preloaded.
-use citadel_adapters::docker::DockerClient;
+use citadel_adapters::connectors::docker::DockerClient;
 use futures_util::StreamExt;
 use std::time::Duration;
 use tokio::net::{TcpStream, UnixListener};

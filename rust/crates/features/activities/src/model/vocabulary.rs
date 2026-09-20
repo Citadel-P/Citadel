@@ -37,7 +37,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum ActivityResourceType {
         Platform,
         Registry,
@@ -61,7 +61,7 @@ database_string_enum! {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum ActivityEventType {
         DeploymentCreated,
         DeploymentDuplicated,

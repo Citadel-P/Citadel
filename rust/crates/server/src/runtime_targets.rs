@@ -1,6 +1,6 @@
 //! Read-mostly connector snapshot and reusable channels, keyed only by persisted Platforms.
 //! No authorization data is cached. PostgreSQL and the periodic refresh are authoritative.
-use citadel_adapters::agent::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentClient;
 use sqlx::{PgPool, Row};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{RwLock, watch};
@@ -61,7 +61,7 @@ impl PlatformRuntimeRegistry {
             let id = row.try_get("id")?;
             let address: String = row.try_get("address")?;
             let connector_type =
-                citadel_adapters::postgres::platform_classification::connector_kind(
+                citadel_adapters::persistence::postgres::platforms::classification::connector_kind(
                     row.try_get("connectortype")?,
                 )?;
             let agent = if connector_type == citadel_platforms::ConnectorKind::Agent {
@@ -93,9 +93,10 @@ impl PlatformRuntimeRegistry {
                 connector_type,
                 agent,
                 name: row.try_get("name")?,
-                platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
-                    row.try_get("platformtype")?,
-                )?,
+                platform_type:
+                    citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
+                        row.try_get("platformtype")?,
+                    )?,
             });
         }
         let changed = previous.len() != next.len()
@@ -176,7 +177,7 @@ mod tests {
         let pool = PgPool::connect(&url).await.unwrap();
         let base = AgentClient::lazy(
             "http://localhost",
-            citadel_adapters::agent::AgentRequestSigner::from_bytes(&[42; 32]),
+            citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[42; 32]),
             Duration::from_secs(1),
             true,
         )

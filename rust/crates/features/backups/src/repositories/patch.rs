@@ -1,6 +1,8 @@
 use serde_json::Value;
 
-use crate::{BackupError, BackupRepository, BackupRepositoryConfiguration};
+use crate::BackupError;
+use crate::BackupRepository;
+use crate::BackupRepositoryConfiguration;
 
 pub fn apply(
     current: &BackupRepository,

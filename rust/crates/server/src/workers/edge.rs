@@ -1,5 +1,8 @@
 use crate::realtime::RealtimeHub;
-use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeSession, PostgresEdgeStore};
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeRuntime;
+use citadel_adapters::connectors::edge::EdgeSession;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::EdgeCommandKind;
 use citadel_platforms::jobs::{InventoryCollectionTarget, collect_inventory};
 use citadel_runtime::IoBudget;
@@ -16,7 +19,7 @@ pub async fn run(
     registry: EdgeRegistry,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     scans: IoBudget,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
@@ -64,7 +67,7 @@ async fn monitor(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     scans: IoBudget,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -119,7 +122,7 @@ async fn observe_stats(
             };
             match result {
                 Ok(inserted) => break inserted,
-                Err(citadel_adapters::edge::EdgeStoreError::Storage(error)) => {
+                Err(citadel_adapters::persistence::postgres::platforms::edge::store::EdgeStoreError::Storage(error)) => {
                     tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge statistics persistence failed; retaining batch for retry");
                     tokio::select! {()=cancellation.cancelled()=>return Ok(()),_=tokio::time::sleep(delay)=>{}}
                     delay = (delay * 2).min(Duration::from_secs(30));
@@ -145,13 +148,15 @@ async fn observe(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     scans: IoBudget,
-    node_policy: citadel_adapters::node_agent_reconciliation::NodeAgentReconciliationPolicy,
+    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
     let (platform_type,expected_daemon):(String,String)=sqlx::query_as("SELECT COALESCE(platform.platformdescriptor::jsonb->>'$type','Docker'),binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL").bind(platform_id).bind(session.agent_id).bind(session.connected_at).fetch_one(&pool).await?;
     let mut platform_type =
-        citadel_adapters::postgres::platform_classification::platform_kind(&platform_type)?;
+        citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
+            &platform_type,
+        )?;
     // Workers do not expose manager-only Swarm inventory APIs.
     if session.target.node_id.is_some() {
         platform_type = citadel_platforms::PlatformKind::Docker;
@@ -182,7 +187,7 @@ async fn observe(
                     if target.platform_type == citadel_platforms::PlatformKind::DockerSwarm
                         && !cancellation.is_cancelled()
                     {
-                        citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(pool.clone())
+                        citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())
                             .mark_swarm_stale(platform_id,started).await?;
                     }
                     return Err(error.into());
@@ -213,7 +218,8 @@ async fn observe(
                 ()=tokio::time::sleep_until(deadline)=>break,
                 event=events.next(cancellation)=>{ let Some(bytes)=event? else { return Ok(()); }; bytes }
             };
-            let Some(event) = citadel_adapters::agent::decode_daemon_event(bytes.as_slice())?
+            let Some(event) =
+                citadel_adapters::connectors::agent::client::decode_daemon_event(bytes.as_slice())?
             else {
                 continue;
             };

@@ -1,6 +1,8 @@
-use crate::{
-    AlertChannel, AlertChannelConfiguration, AlertError, AlertRule, AlertRuleConfiguration,
-};
+use crate::AlertChannel;
+use crate::AlertChannelConfiguration;
+use crate::AlertError;
+use crate::AlertRule;
+use crate::AlertRuleConfiguration;
 use serde_json::Value;
 
 pub fn apply_rule(

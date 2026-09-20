@@ -1,4 +1,5 @@
-use crate::{BuildAgentPool, BuildError};
+use crate::BuildAgentPool;
+use crate::BuildError;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde_json::Value;

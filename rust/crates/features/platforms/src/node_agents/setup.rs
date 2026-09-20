@@ -1,8 +1,9 @@
 //! Install/repair/upgrade share one idempotent system-Service workflow.
 use super::lifecycle::*;
-use crate::{
-    RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmService,
-};
+use crate::RuntimeCapabilityError;
+use crate::RuntimeInventorySnapshot;
+use crate::RuntimePlatformInfo;
+use crate::RuntimeSwarmService;
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::{

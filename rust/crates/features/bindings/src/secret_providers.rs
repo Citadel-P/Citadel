@@ -2,7 +2,8 @@ use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{BindingError, validate_provider};
+use crate::BindingError;
+use crate::validate_provider;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

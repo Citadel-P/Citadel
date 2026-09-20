@@ -1,4 +1,5 @@
-use crate::{AlertObservation, AlertRule};
+use crate::AlertObservation;
+use crate::AlertRule;
 use serde_json::Value;
 use uuid::Uuid;
 pub fn rule_applies(rule: &AlertRule, resource_id: Uuid) -> bool {

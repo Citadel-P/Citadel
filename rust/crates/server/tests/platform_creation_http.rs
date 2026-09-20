@@ -1,42 +1,48 @@
 #![cfg(unix)]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration as StdDuration;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
+};
 use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use citadel_adapters::{
+    connectors::docker::DockerClient,
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        platforms::{PostgresPlatformReader, registration::PostgresPlatformRegistrationRepository},
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
 };
-use citadel_adapters::docker::DockerClient;
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::platform_registration::PostgresPlatformRegistrationRepository;
-use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_platforms::{CreatePlatformInput, PlatformConnectorType};
 use citadel_platforms::{
-    PlatformInventoryPort, PlatformReadService, PlatformRegistrationError,
-    PlatformRegistrationRuntime, PlatformRegistrationService, PlatformRuntimePort,
-    RuntimeCapabilityError, RuntimeContainerSummary, RuntimeErrorKind, RuntimeImageSummary,
-    RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeStatsStream, RuntimeSwarmConfig,
-    RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask,
-    RuntimeVolumeSummary,
+    CreatePlatformInput, PlatformConnectorType, PlatformInventoryPort, PlatformReadService,
+    PlatformRegistrationError, PlatformRegistrationRuntime, PlatformRegistrationService,
+    PlatformRuntimePort, RuntimeCapabilityError, RuntimeContainerSummary, RuntimeErrorKind,
+    RuntimeImageSummary, RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeStatsStream,
+    RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService,
+    RuntimeSwarmTask, RuntimeVolumeSummary,
 };
 use citadel_primitives::ActorId;
-use citadel_server::metrics::Metrics;
-use citadel_server::platforms_http::{self, PlatformsHttpState};
-use citadel_server::realtime::RealtimeHub;
+use citadel_server::{
+    api::routes::{platforms as platforms_http, platforms::PlatformsHttpState},
+    metrics::Metrics,
+    realtime::RealtimeHub,
+};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration as StdDuration,
+};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -294,28 +300,33 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     ));
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let public_key =
-        citadel_adapters::agent::AgentRequestSigner::from_bytes(&[71; 32]).public_key_base64();
-    let setup = Arc::new(citadel_server::platforms_http::dto::AgentSetupView::new(
-        public_key.clone(),
-        "citadel-agent:test".into(),
-        false,
-    ));
+        citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[71; 32])
+            .public_key_base64();
+    let setup = Arc::new(
+        citadel_server::api::resources::platforms::views::AgentSetupView::new(
+            public_key.clone(),
+            "citadel-agent:test".into(),
+            false,
+        ),
+    );
     let app = platforms_http::router(PlatformsHttpState {
-        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
             pool.clone(),
             DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
             None,
-            citadel_adapters::edge::EdgeRegistry::default(),
+            citadel_adapters::connectors::edge::EdgeRegistry::default(),
             "citadel-agent:test".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
-            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+            citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
                 pool.clone(),
                 DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
                 None,
-                citadel_adapters::edge::EdgeRegistry::default(),
+                citadel_adapters::connectors::edge::EdgeRegistry::default(),
             )
-            .into_service(),
+            .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
@@ -324,16 +335,16 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         registrations,
         pool: pool.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
         platform_metadata: Arc::new(
-            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
                 pool.clone(),
             ),
         ),
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
-        edge: citadel_adapters::edge::EdgeRegistry::default(),
+        edge: citadel_adapters::connectors::edge::EdgeRegistry::default(),
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
     })
@@ -912,7 +923,7 @@ struct TestHarness {
     administrator: ActorPrincipal,
     runtime: Arc<StaticRegistrationRuntime>,
     realtime: RealtimeHub,
-    edge: citadel_adapters::edge::EdgeRegistry,
+    edge: citadel_adapters::connectors::edge::EdgeRegistry,
 }
 
 async fn harness(inventory: StaticInventory) -> TestHarness {
@@ -947,24 +958,26 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         runtime.clone(),
     ));
     let realtime = RealtimeHub::new(16, Arc::new(Metrics::default()));
-    let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let app = platforms_http::router(PlatformsHttpState {
-        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
             pool.clone(),
             DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
             None,
-            citadel_adapters::edge::EdgeRegistry::default(),
+            citadel_adapters::connectors::edge::EdgeRegistry::default(),
             "citadel-agent:test".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
-            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+            citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
                 pool.clone(),
                 DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
                 None,
-                citadel_adapters::edge::EdgeRegistry::default(),
+                citadel_adapters::connectors::edge::EdgeRegistry::default(),
             )
-            .into_service(),
+            .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
@@ -973,10 +986,10 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         registrations,
         pool: pool.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
         platform_metadata: Arc::new(
-            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
                 pool.clone(),
             ),
         ),

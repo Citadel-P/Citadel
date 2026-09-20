@@ -1,13 +1,15 @@
 use chrono::{Duration, Timelike, Utc};
-use citadel_adapters::backup_authorization::IdentityBackupRunAuthorizer;
-use citadel_adapters::backup_executor::{DockerResticBackupExecutor, PostgresBackupSecretResolver};
-use citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner;
-use citadel_adapters::crypto::{
-    AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
-    OpaqueServiceAccountTokenCodec,
-};
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::postgres::backups::PostgresBackupPersistence;
+use citadel_adapters::external::backups::restic::DockerResticBackupExecutor;
+use citadel_adapters::persistence::postgres::backups::PostgresBackupPersistence;
+use citadel_adapters::persistence::postgres::backups::secrets::PostgresBackupSecretResolver;
+use citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner;
+use citadel_adapters::persistence::postgres::identity::authentication::store::PostgresIdentityStore;
+use citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService;
+use citadel_adapters::security::identity::backup_authorization::IdentityBackupRunAuthorizer;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
+use citadel_adapters::security::identity::crypto::Argon2PasswordHasher;
+use citadel_adapters::security::identity::crypto::JwtSessionTokenCodec;
+use citadel_adapters::security::identity::crypto::OpaqueServiceAccountTokenCodec;
 use citadel_backups::{
     BackupExecutionResult, BackupExecutor, BackupPersistence, BackupPolicyConfiguration,
     BackupRepositoryConfiguration, BackupRunAuthorizer, BackupRunItemResult, BackupSourceItem,
@@ -223,14 +225,14 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
     // Port worker startup interruption: periodic maintenance must preserve a
     // fresh execution, but exclusive Core startup recovery interrupts it.
-    citadel_adapters::maintenance_store::reconcile(&pool)
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     assert_ne!(
         store.get_run(late_claim.run.id).await.unwrap().status,
         "Interrupted"
     );
-    citadel_adapters::maintenance_store::recover_on_startup(&pool)
+    citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
         .await
         .unwrap();
     assert!(
@@ -428,7 +430,8 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     claim: &citadel_backups::BackupClaim,
     platform: Uuid,
 ) {
-    use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::CreateContainerResponse,
         edge::v1::{EdgeCommandKind, core_envelope},
@@ -504,7 +507,8 @@ async fn edge_restore_uses_the_saved_snapshot_root(
     backup: &citadel_backups::BackupClaim,
     platform: Uuid,
 ) {
-    use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_backups::{BackupRestoreRun, BackupSecretResolver, RestoreClaim};
     use citadel_contracts::citadel::{
         containers::v1::{

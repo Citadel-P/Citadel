@@ -1,5 +1,7 @@
+use crate::RoleType;
+use crate::UserDateTimeFormat;
+use crate::UserTheme;
 use crate::*;
-use crate::{RoleType, UserDateTimeFormat, UserTheme};
 use chrono::Utc;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use uuid::Uuid;

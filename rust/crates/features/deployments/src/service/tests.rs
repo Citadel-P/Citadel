@@ -1,6 +1,7 @@
 use super::apply::*;
 use super::mutations::*;
-use crate::{PreparedDeploymentImage, RuntimeDeploymentResult};
+use crate::PreparedDeploymentImage;
+use crate::RuntimeDeploymentResult;
 use futures_util::future::BoxFuture;
 
 use std::sync::Mutex;
@@ -11,7 +12,8 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 use super::*;
-use crate::{DeploymentImageInfo, UpdateBehavior};
+use crate::DeploymentImageInfo;
+use crate::UpdateBehavior;
 
 fn spec() -> DeploymentSpec {
     DeploymentSpec {

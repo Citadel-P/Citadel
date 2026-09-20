@@ -2,9 +2,10 @@ use futures_util::{StreamExt, future::BoxFuture, stream};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    ContainerStatsStore, PlatformRuntimePort, RuntimeCapabilityError, RuntimeContainerStat,
-};
+use crate::ContainerStatsStore;
+use crate::PlatformRuntimePort;
+use crate::RuntimeCapabilityError;
+use crate::RuntimeContainerStat;
 
 pub trait ContainerStatsSampler: PlatformRuntimePort {
     fn sample_container_stats<'a>(

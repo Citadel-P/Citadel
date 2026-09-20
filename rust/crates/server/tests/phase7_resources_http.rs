@@ -1,20 +1,20 @@
-use citadel_server::api::bindings;
-use citadel_server::api::git::repositories::catalog as git_catalog;
-use citadel_server::api::registries;
-use citadel_server::api::tags;
-use std::sync::Arc;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::postgres::alerts::PostgresAlertRepository;
-use citadel_adapters::postgres::backups::PostgresBackupPersistence;
-use citadel_adapters::postgres::builds::PostgresBuildRepository;
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        alerts::PostgresAlertRepository,
+        backups::PostgresBackupPersistence,
+        builds::PostgresBuildRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_alerts::{AlertChannel, AlertDelivery, AlertError, AlertEvent};
 use citadel_backups::{
     BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog, BackupRepository,
@@ -25,20 +25,24 @@ use citadel_builds::{
     BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildRepository, BuildService,
 };
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::{ActorId, ResourceType};
-use citadel_server::api::alerts::{self as alerts_http, AlertsHttpState};
-use citadel_server::api::backups::handlers::{self as backups_http, BackupsHttpState};
-use citadel_server::api::builds::handlers::{self as builds_http, BuildsHttpState};
-use citadel_server::metrics::Metrics;
-use citadel_server::realtime::{RealtimeHub, change_callback};
+use citadel_server::{
+    api::routes::{
+        alerts as alerts_http, alerts::AlertsHttpState, backups as backups_http,
+        backups::BackupsHttpState, bindings, builds as builds_http, builds::BuildsHttpState,
+        git_repositories as git_catalog, registries, tags,
+    },
+    metrics::Metrics,
+    realtime::{RealtimeHub, change_callback},
+};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -110,12 +114,12 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
-    let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let cancellation = CancellationToken::new();
     let build_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
     let builds = Arc::new(
         BuildService::new(
-            Arc::new(citadel_server::api::builds::TrackedBuildTasks::new(
+            Arc::new(citadel_server::tasks::builds::TrackedBuildTasks::new(
                 build_tasks.clone(),
             )),
             cancellation.clone(),
@@ -126,7 +130,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_entitlements(build_entitlement.clone())
         .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
         .with_pool_checker(Arc::new(
-            citadel_adapters::build_pool_checker::AgentBuildPoolChecker {
+            citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
                 agent: None,
                 edge: edge.clone(),
             },
@@ -173,7 +177,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .merge(tags::router(tags::TagsHttpState {
         identity: identity.clone(),
         tags: Arc::new(
-            citadel_adapters::postgres::tags::PostgresTagRepository::new(
+            citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(
                 pool.clone(),
             ),
         ),
@@ -182,7 +186,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .merge(registries::router(registries::RegistriesHttpState {
         identity: identity.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(
                 pool.clone(),
             ),
         ),
@@ -192,18 +196,18 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         identity: identity.clone(),
         secrets: Arc::new(citadel_bindings::SecretService::new(
                 Arc::new(
-                    citadel_adapters::postgres::bindings::PostgresBindingRepository::new(
+                    citadel_adapters::persistence::postgres::bindings::PostgresBindingRepository::new(
                         pool.clone(),
                     ),
                 ),
-                Arc::new(citadel_adapters::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
+                Arc::new(citadel_adapters::security::identity::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
             )),
         realtime: None,
     }))
-    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+    .merge(git_catalog::catalog_router(git_catalog::GitCatalogHttpState {
         identity: identity.clone(),
         git_repositories: Arc::new(
-            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
                 pool.clone(),
             ),
         ),
@@ -211,9 +215,9 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     })))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
-        citadel_server::platforms_http::EdgeHttpContext {
+        citadel_server::api::routes::platforms::EdgeHttpContext {
             node_agent_ca_bundle: None,
-            store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
+            store: citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()),
             registry: edge.clone(),
             core_url: "https://core.example.test:8001".into(),
             agent_image: "citadel-agent:test".into(),

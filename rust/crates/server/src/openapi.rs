@@ -1,6 +1,5 @@
 //! Code-first API documentation, collected from the same factories as the live routers.
 use std::sync::LazyLock;
-
 use utoipa::openapi::{
     Components, Info, OpenApi, Paths,
     security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
@@ -34,37 +33,7 @@ pub fn document(public_only: bool) -> OpenApi {
             .description(Some("Use a Citadel User JWT or Service Account bearer token in the Authorization header."))
             .build()),
     );
-    api.merge(crate::api::automation::documented_routes().into_openapi());
-    api.merge(crate::api::stacks::documented_routes().into_openapi());
-    api.merge(crate::license_http::documented_routes().into_openapi());
-    api.merge(crate::api::deployments::documented_routes().into_openapi());
-    api.merge(crate::activities_http::documented_routes().into_openapi());
-    api.merge(crate::service_accounts_http::documented_routes().into_openapi());
-    api.merge(crate::teams_http::documented_routes().into_openapi());
-    api.merge(crate::profile_http::documented_routes().into_openapi());
-    api.merge(crate::users_http::documented_routes().into_openapi());
-    api.merge(crate::api::builds::handlers::documented_pool_routes().into_openapi());
-    api.merge(crate::api::builds::handlers::documented_routes().into_openapi());
-    api.merge(crate::oidc_http::documented_routes().into_openapi());
-    api.merge(crate::search_http::documented_routes().into_openapi());
-    api.merge(crate::api::git::repositories::handlers::documented_routes().into_openapi());
-    api.merge(crate::application_info_http::documented_routes().into_openapi());
-    api.merge(crate::actors_http::documented_routes().into_openapi());
-    api.merge(crate::api::backups::handlers::documented_routes().into_openapi());
-    api.merge(crate::mfa_http::documented_routes().into_openapi());
-    api.merge(crate::api::swarm_services::documented_routes().into_openapi());
-    api.merge(crate::lookup_http::documented_routes().into_openapi());
-    api.merge(crate::roles_http::documented_routes().into_openapi());
-    api.merge(crate::webhooks_http::documented_routes().into_openapi());
-    api.merge(crate::diagnostics_http::documented_routes().into_openapi());
-    api.merge(crate::api::alerts::documented_routes().into_openapi());
-    api.merge(crate::identity_http::documented_routes().into_openapi());
-    api.merge(crate::platforms_http::documented_routes().into_openapi());
-    api.merge(crate::api::git::accounts::handlers::documented_routes().into_openapi());
-    api.merge(crate::api::tags::handlers::documented_routes().into_openapi());
-    api.merge(crate::api::bindings::handlers::documented_routes().into_openapi());
-    api.merge(crate::api::registries::handlers::documented_routes().into_openapi());
-    api.merge(crate::api::git::repositories::catalog::documented_routes().into_openapi());
+    crate::api::endpoint_catalog::visit_documents(|document| api.merge(document));
     for (name, schema) in compatibility::schemas() {
         api.components
             .as_mut()
@@ -125,26 +94,7 @@ pub fn json_document(public_only: bool) -> &'static str {
 }
 
 pub fn setup_exempt(path: &str) -> bool {
-    static EXEMPT: LazyLock<Vec<String>> = LazyLock::new(|| {
-        document(false)
-            .paths
-            .paths
-            .into_iter()
-            .filter_map(|(path, item)| {
-                [&item.get, &item.post, &item.put, &item.patch, &item.delete]
-                    .iter()
-                    .any(|op| {
-                        op.as_ref()
-                            .and_then(|op| op.extensions.as_ref())
-                            .and_then(|e| e.get("x-citadel-setup-exempt"))
-                            .and_then(serde_json::Value::as_bool)
-                            .unwrap_or(false)
-                    })
-                    .then_some(path)
-            })
-            .collect()
-    });
-    EXEMPT.iter().any(|exempt| exempt == path)
+    crate::api::endpoint_catalog::setup_exempt(path)
 }
 
 // Utoipa's inline parameter attributes support extensions but not defaults.
@@ -319,7 +269,7 @@ mod tests {
             })
         }
         let native = serde_json::to_value(
-            crate::api::git::repositories::webhook::RepoWebhookConfig::schema(),
+            crate::api::resources::git_repositories::webhook::RepoWebhookConfig::schema(),
         )
         .unwrap();
         for public in [false, true] {
@@ -476,13 +426,13 @@ mod metadata_tests {
                     assert_eq!(examples.len(), 6);
                     for (name, example) in examples {
                         let value: Value = example["value"].clone();
-                        let create: crate::api::registries::dto::NewRegistry =
+                        let create: crate::api::resources::registries::requests::NewRegistry =
                             serde_json::from_value(value.clone()).unwrap();
                         let mut create: citadel_registries::NewRegistry = create.into();
                         create
                             .validate()
                             .unwrap_or_else(|error| panic!("{name}: {error}"));
-                        let _: crate::api::registries::dto::RegistryPatch =
+                        let _: crate::api::resources::registries::requests::RegistryPatch =
                             serde_json::from_value(value).unwrap();
                     }
                 }

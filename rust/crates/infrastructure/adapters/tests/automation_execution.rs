@@ -1,6 +1,6 @@
 mod automation_support;
 use chrono::{Duration, Timelike, Utc};
-use citadel_adapters::postgres::automation::PostgresAutomationRepository;
+use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
 use citadel_automation::{
     AutomationActionConfiguration, AutomationRepository, AutomationRunResult,
 };

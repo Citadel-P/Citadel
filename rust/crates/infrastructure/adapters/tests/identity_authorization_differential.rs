@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use citadel_adapters::identity_store::PostgresIdentityStore;
+use citadel_adapters::persistence::postgres::identity::authentication::store::PostgresIdentityStore;
 use citadel_database::MigrationRunner;
 use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ActorPrincipal, IdentityStore, PermissionGrant, permission_matrix};

@@ -73,7 +73,7 @@ The container and its volumes are removed when the step exits.
 
 ## Deferred boundaries
 
-Deployment View/capability mapping now resides in `server/src/api/deployments/`.
+Deployment View/capability mapping now resides in `server/src/api/resources/deployments/`.
 `PostgresDeploymentRepository` returns semantic projections with typed effective grants.
 The feature has no HTTP schemas; the architectural guard has no Deployment legacy
 exemption. The Platform projection retains one explicit typed-set-to-legacy-mask bridge,

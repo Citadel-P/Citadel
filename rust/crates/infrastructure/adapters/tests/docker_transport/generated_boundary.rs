@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::docker::DockerError;
+use citadel_adapters::connectors::docker::DockerError;
 
 #[tokio::test]
 async fn generated_calls_share_a_connection_and_renegotiate_after_bounded_400() {

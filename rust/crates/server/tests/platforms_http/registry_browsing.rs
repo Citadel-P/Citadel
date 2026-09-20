@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::registry_images::RegistryBrowser;
+use citadel_adapters::connectors::registries::browser::RegistryBrowser;
 
 // Ports RegistryImageQueryAuthorizationTests and ImageEndpointTests for all four
 // browse routes: real authorized Registry rows and controlled external HTTP servers.

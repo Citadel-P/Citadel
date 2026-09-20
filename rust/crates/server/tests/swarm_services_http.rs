@@ -1,26 +1,31 @@
-use citadel_server::api::swarm_services as swarm_services_http;
+use citadel_server::api::routes::swarm_services as swarm_services_http;
 use std::sync::Arc;
 
 #[path = "swarm_services_http/metadata.rs"]
 mod metadata;
 
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        swarm_services::PostgresSwarmServiceRepository,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::api::swarm_services::SwarmServicesHttpState;
+use citadel_server::api::routes::swarm_services::SwarmServicesHttpState;
 use citadel_swarm_services::{
     RuntimeServiceResult, ServiceOperationClaim, SwarmServiceError, SwarmServiceRuntime,
     SwarmServiceService,
@@ -127,7 +132,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let services = Arc::new(
         SwarmServiceService::new(
             Arc::new(
-                citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
+                citadel_server::tasks::swarm_services::TrackedSwarmServiceTasks::new(
                     citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 ),
             ),

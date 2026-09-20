@@ -1,5 +1,5 @@
 //! Reusable Problem Details responses shared by handler annotations.
-use crate::identity_http::IdentityProblemDetails;
+use crate::api::error::ProblemDetails;
 
 macro_rules! problem_responses {
     ($name:ident { $($variant:ident => ($status:literal, $description:literal)),* $(,)? }) => {
@@ -7,9 +7,9 @@ macro_rules! problem_responses {
         #[derive(utoipa::IntoResponses)]
         pub enum $name {
             $(#[response(status = $status, description = $description, content_type = "application/problem+json")]
-            $variant(IdentityProblemDetails),)*
+            $variant(ProblemDetails),)*
             #[response(status = "default", description = "Request failed", content_type = "application/problem+json")]
-            Unexpected(IdentityProblemDetails),
+            Unexpected(ProblemDetails),
         }
     };
 }

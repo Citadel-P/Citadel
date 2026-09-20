@@ -4,10 +4,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use chrono::Utc;
-use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
-use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
-use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
+use citadel_adapters::filesystem::stacks::materializer::GitStackSourceMaterializer;
+use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_database::MigrationRunner;
 use citadel_git::{
     GitAccountService, GitCli, GitRepositoryExecutionPersistence, GitRepositoryExecutionService,
@@ -566,7 +566,9 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
     };
     let stack = citadel_stacks::StackRepository::create(
-        &citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone()),
+        &citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(
+            pool.clone(),
+        ),
         ActorId::new(actor),
         true,
         &input,

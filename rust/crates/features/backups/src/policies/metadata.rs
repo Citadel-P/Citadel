@@ -3,7 +3,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::{BackupError, BackupPolicy};
+use crate::BackupError;
+use crate::BackupPolicy;
 
 #[derive(Debug, Deserialize)]
 pub struct RenameBackupPolicyInput {

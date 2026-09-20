@@ -1,4 +1,6 @@
+use std::error::Error;
 use std::future::Future;
+type TaskFailure = Box<dyn Error + Send + Sync>;
 use std::time::Duration;
 
 use tokio::task::{JoinError, JoinSet};
@@ -6,8 +8,12 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SupervisedTaskError {
-    #[error("task '{name}' failed: {message}")]
-    Failed { name: &'static str, message: String },
+    #[error("task '{name}' failed: {source}")]
+    Failed {
+        name: &'static str,
+        #[source]
+        source: TaskFailure,
+    },
     #[error("task '{name}' panicked or was cancelled: {source}")]
     Join {
         name: &'static str,
@@ -24,7 +30,7 @@ pub enum SupervisedTaskError {
 
 pub struct TaskSupervisor {
     cancellation: CancellationToken,
-    tasks: JoinSet<(&'static str, Result<(), String>)>,
+    tasks: JoinSet<(&'static str, Result<(), TaskFailure>)>,
 }
 
 impl TaskSupervisor {
@@ -39,17 +45,17 @@ impl TaskSupervisor {
     pub fn spawn<F, E>(&mut self, name: &'static str, task: F)
     where
         F: Future<Output = Result<(), E>> + Send + 'static,
-        E: std::fmt::Display + Send + 'static,
+        E: Into<TaskFailure> + Send + 'static,
     {
         self.tasks
-            .spawn(async move { (name, task.await.map_err(|error| error.to_string())) });
+            .spawn(async move { (name, task.await.map_err(Into::into)) });
     }
 
     pub async fn wait_for_exit(&mut self) -> Result<(), SupervisedTaskError> {
         match self.tasks.join_next().await {
             Some(Ok((_name, Ok(())))) if self.cancellation.is_cancelled() => Ok(()),
             Some(Ok((name, Ok(())))) => Err(SupervisedTaskError::Exited { name }),
-            Some(Ok((name, Err(message)))) => Err(SupervisedTaskError::Failed { name, message }),
+            Some(Ok((name, Err(source)))) => Err(SupervisedTaskError::Failed { name, source }),
             Some(Err(source)) => Err(SupervisedTaskError::Join {
                 name: "unknown",
                 source,
@@ -66,8 +72,8 @@ impl TaskSupervisor {
             while let Some(result) = self.tasks.join_next().await {
                 match result {
                     Ok((_name, Ok(()))) => {}
-                    Ok((name, Err(message))) => {
-                        failure.get_or_insert(SupervisedTaskError::Failed { name, message });
+                    Ok((name, Err(source))) => {
+                        failure.get_or_insert(SupervisedTaskError::Failed { name, source });
                     }
                     Err(source) => {
                         failure.get_or_insert(SupervisedTaskError::Join {
@@ -96,6 +102,22 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn task_failures_preserve_the_original_error_source() {
+        let mut supervisor = TaskSupervisor::new(CancellationToken::new());
+        supervisor.spawn("io", async {
+            Err::<(), _>(std::io::Error::other("disk unavailable"))
+        });
+        let error = supervisor.wait_for_exit().await.unwrap_err();
+        assert!(matches!(
+            &error,
+            SupervisedTaskError::Failed { name: "io", .. }
+        ));
+        let source = std::error::Error::source(&error).unwrap();
+        assert!(source.downcast_ref::<std::io::Error>().is_some());
+        assert_eq!(source.to_string(), "disk unavailable");
+    }
 
     #[tokio::test]
     async fn shutdown_cancels_and_joins_owned_tasks() {

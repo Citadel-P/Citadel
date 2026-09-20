@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use chrono::Utc;
-use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
-use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
-use citadel_adapters::postgres::platforms::PostgresPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
+use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use citadel_database::MigrationRunner;
 use citadel_platforms::{
     ContainerStatsStore, InventoryProjectionStore, PlatformReader, RuntimeContainerStat,
@@ -546,7 +546,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
     assert_eq!(current.disk_total_bytes, Some(100));
     assert_eq!(current.disk_usage, Some(90.0));
     let history =
-        citadel_adapters::statistics_read_store::PostgresStatisticsReader::new(pool.clone())
+        citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())
             .platform(platform, StatsWindow::new(24).unwrap(), created)
             .await
             .unwrap();
@@ -646,7 +646,8 @@ async fn deployment_status_tracks_container_inventory_without_overwriting_active
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn daemon_events_and_missed_event_reconciliation_update_resources_and_activities() {
-    use citadel_adapters::resource_status_store::{container_event, platform_offline};
+    use citadel_adapters::persistence::postgres::platforms::status::container_event;
+    use citadel_adapters::persistence::postgres::platforms::status::platform_offline;
     let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
@@ -1016,7 +1017,7 @@ async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_
         sqlx::query("INSERT INTO actionruns(id,actionid,actionname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,finishedat) VALUES($1,$2,'test','hash','',$3,$4,30,'Manual',CURRENT_TIMESTAMP-INTERVAL '91 days')")
             .bind(id).bind(action).bind(actor).bind(status).execute(&pool).await.unwrap();
     }
-    citadel_adapters::maintenance_store::reconcile(&pool)
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     assert_eq!(
@@ -1037,7 +1038,7 @@ async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_
         .unwrap(),
         0
     );
-    citadel_adapters::maintenance_store::cleanup(&pool, Some(90))
+    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, Some(90))
         .await
         .unwrap();
     assert!(
@@ -1083,7 +1084,7 @@ async fn container_event_refreshes_classification_and_rejects_older_metadata() {
     observed.image = "helper:latest".into();
     let now = inventory.observed_at.timestamp() + 2;
     assert!(
-        citadel_adapters::resource_status_store::container_observation(
+        citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool, platform, None, &observed, now
         )
         .await
@@ -1094,7 +1095,7 @@ async fn container_event_refreshes_classification_and_rejects_older_metadata() {
     assert_eq!(saved, (true, "helper:latest".into()));
     observed.is_system = false;
     assert!(
-        !citadel_adapters::resource_status_store::container_observation(
+        !citadel_adapters::persistence::postgres::platforms::status::container_observation(
             &pool,
             platform,
             None,
@@ -1239,7 +1240,7 @@ async fn dependent_sync_isolates_failures_and_direct_container_operations_releas
             .await
             .unwrap();
         sqlx::query("UPDATE containers SET controlstate='Processing' WHERE platformid=$1 AND dockercontainerid='owned-stack'").bind(platform).execute(&pool).await.unwrap();
-        citadel_adapters::resource_status_store::container_event(
+        citadel_adapters::persistence::postgres::platforms::status::container_event(
             &pool,
             platform,
             None,
@@ -1280,7 +1281,7 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
         .bind(action).bind(action.to_string()).bind(actor).bind(run).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO actionruns(id,actionid,actionname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,startedat) VALUES($1,$2,'fixture','hash','',$3,'Running',3600,'Manual',CURRENT_TIMESTAMP)")
         .bind(run).bind(action).bind(actor).execute(&pool).await.unwrap();
-    citadel_adapters::maintenance_store::reconcile(&pool)
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     assert_eq!(
@@ -1296,7 +1297,7 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
         .execute(&mut *lease)
         .await
         .unwrap();
-    citadel_adapters::maintenance_store::recover_on_startup(&pool)
+    citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
         .await
         .unwrap();
     assert_eq!(
@@ -1441,7 +1442,7 @@ async fn maintenance_releases_each_orphan_resource_kind() {
             .await
             .unwrap();
     }
-    citadel_adapters::maintenance_store::reconcile(&pool)
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     for table in kinds {
@@ -1757,7 +1758,7 @@ async fn inventory_initialization_serializes_one_platform_without_blocking_other
         .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
         .unwrap();
     let service = citadel_platforms::PlatformReadService::new(Arc::new(
-        citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool),
+        citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(pool),
     ));
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();

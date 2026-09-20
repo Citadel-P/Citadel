@@ -10,7 +10,8 @@
 
 use super::{Error, configuration};
 use crate::apis::ContentType;
-use crate::{apis::ResponseContent, models};
+use crate::apis::ResponseContent;
+use crate::models;
 use async_trait::async_trait;
 use reqwest;
 use serde::{Deserialize, Serialize, de::Error as _};

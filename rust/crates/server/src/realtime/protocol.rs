@@ -1,5 +1,5 @@
 use super::RealtimeError;
-use crate::platforms_http::views::{ContainerView, PlatformView};
+use crate::api::resources::platforms::views::{ContainerView, PlatformView};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;

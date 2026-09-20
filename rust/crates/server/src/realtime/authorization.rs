@@ -2,7 +2,7 @@ use super::{
     PLATFORM_RESOURCE_TYPE, REALTIME_PROTOCOL_VERSION, RealtimeError, RealtimeService,
     protocol::ClientMessage,
 };
-use crate::platforms_http::views::{ContainerView, PlatformView};
+use crate::api::resources::platforms::views::{ContainerView, PlatformView};
 use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_platforms::PlatformReadService;
 use citadel_primitives::{PermissionLevel, ResourceType};
@@ -90,7 +90,7 @@ impl RealtimeReadPort for IdentityRealtimeReader {
             self.platforms
                 .get_platform(platform_id)
                 .await
-                .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
+                .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })
@@ -107,7 +107,7 @@ impl RealtimeReadPort for IdentityRealtimeReader {
                 .map(|value| {
                     value
                         .into_iter()
-                        .map(crate::platforms_http::views::ContainerView::from)
+                        .map(crate::api::resources::platforms::views::ContainerView::from)
                         .collect::<Vec<_>>()
                 })
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))

@@ -1,9 +1,13 @@
+use crate::ActorPrincipal;
 use crate::AuthenticatedPrincipalType;
+use crate::AuthorizationSnapshot;
 use crate::IdentityError;
-use crate::{
-    ActorPrincipal, AuthorizationSnapshot, MAX_NAME_CHARS, PermissionGrant, SYSTEM_ACTOR_ID,
-    ServiceAccountCredential, ServiceAccountLastUsedTracker, User,
-};
+use crate::MAX_NAME_CHARS;
+use crate::PermissionGrant;
+use crate::SYSTEM_ACTOR_ID;
+use crate::ServiceAccountCredential;
+use crate::ServiceAccountLastUsedTracker;
+use crate::User;
 use chrono::{DateTime, Duration, Utc};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use email_address::EmailAddress;

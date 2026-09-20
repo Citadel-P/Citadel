@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::docker::LocalDockerSampler;
+use citadel_adapters::connectors::docker::LocalDockerSampler;
 use citadel_platforms::PlatformHealthPort;
 use std::{
     collections::HashMap,

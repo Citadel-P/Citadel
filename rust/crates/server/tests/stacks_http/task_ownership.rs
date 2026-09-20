@@ -3,7 +3,7 @@ use citadel_stacks::StackRepository;
 mod query_counts;
 use super::*;
 use citadel_runtime::DynamicTasks;
-use citadel_server::api::stacks::TrackedStackTasks;
+use citadel_server::tasks::stacks::TrackedStackTasks;
 
 pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) {
     let repository = Arc::new(PostgresStackRepository::new(pool.clone()));

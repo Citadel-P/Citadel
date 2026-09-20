@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use citadel_adapters::edge::EdgeRuntime;
-use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeRuntime;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::containers::v1::{
     ExecClientMessage, ExecOutput, ExecServerMessage, exec_client_message, exec_server_message,
 };

@@ -1,8 +1,9 @@
 //! Transport-neutral read results and supporting filters.
 //! Repository implementations populate these types; server adapters map them to HTTP views.
 
+use crate::Deployment;
+use crate::DeploymentSpec;
 use crate::model::TagSummary;
-use crate::{Deployment, DeploymentSpec};
 use serde_json::Value;
 use uuid::Uuid;
 /// ACL-aware enriched read projection, obtained with one repository query.

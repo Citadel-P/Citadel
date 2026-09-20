@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
-use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::persistence::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     CreateDeployment, DeploymentBindingResolverPort, DeploymentError, DeploymentImageInfo,

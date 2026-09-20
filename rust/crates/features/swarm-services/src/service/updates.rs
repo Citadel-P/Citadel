@@ -8,10 +8,11 @@ use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    AutoUpdateState, SwarmServiceDetails, SwarmServiceError, SwarmServiceImageInfo,
-    SwarmServiceService,
-};
+use crate::AutoUpdateState;
+use crate::SwarmServiceDetails;
+use crate::SwarmServiceError;
+use crate::SwarmServiceImageInfo;
+use crate::SwarmServiceService;
 use citadel_primitives::ActorId;
 
 pub trait ServiceAutomationEntitlements: Send + Sync {

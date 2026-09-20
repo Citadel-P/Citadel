@@ -27,7 +27,7 @@ macro_rules! database_string_enum {
     };
 }
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     pub enum LicenseCapability {
         CustomAccessControl,
         AutomatedOperations,
@@ -59,7 +59,7 @@ impl LicenseCapability {
 }
 
 database_string_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum LicenseStatus {
         Community,
         Valid,

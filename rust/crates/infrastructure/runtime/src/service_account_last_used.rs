@@ -8,7 +8,10 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{BoundedReceiver, BoundedSender, QueueOverflowPolicy, bounded_channel};
+use crate::BoundedReceiver;
+use crate::BoundedSender;
+use crate::QueueOverflowPolicy;
+use crate::bounded_channel;
 
 #[derive(Debug, Clone, Copy)]
 struct UsageCandidate {

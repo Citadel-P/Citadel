@@ -1,4 +1,4 @@
-use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     CreateDeployment, DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository,

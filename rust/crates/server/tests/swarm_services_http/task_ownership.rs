@@ -3,7 +3,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 mod query_counts;
 use super::*;
 use citadel_runtime::DynamicTasks;
-use citadel_server::api::swarm_services::TrackedSwarmServiceTasks;
+use citadel_server::tasks::swarm_services::TrackedSwarmServiceTasks;
 
 pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
     let shutdown = CancellationToken::new();

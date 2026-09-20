@@ -1,8 +1,14 @@
+use crate::ActorPrincipal;
+use crate::AuthorizationSnapshot;
+use crate::Clock;
+use crate::IdentityError;
+use crate::IdentityService;
+use crate::MAXIMUM_PASSWORD_CHARACTERS;
+use crate::PatchField;
+use crate::User;
 use crate::UserSessionRecord;
-use crate::{
-    ActorPrincipal, AuthorizationSnapshot, Clock, IdentityError, IdentityService,
-    MAXIMUM_PASSWORD_CHARACTERS, PatchField, User, validate_name, validate_password,
-};
+use crate::validate_name;
+use crate::validate_password;
 use chrono::{DateTime, Utc};
 use citadel_primitives::{PermissionLevel, ResourceType};
 

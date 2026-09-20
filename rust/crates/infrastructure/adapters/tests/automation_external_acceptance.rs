@@ -8,10 +8,9 @@ use axum::{
     http::{HeaderMap, StatusCode},
     routing::{get, post},
 };
-use citadel_adapters::{
-    alert_delivery::ShoutrrrAlertDelivery, postgres::alerts::PostgresAlertRepository,
-    postgres::automation::PostgresAutomationRepository,
-};
+use citadel_adapters::external::alerts::shoutrrr::ShoutrrrAlertDelivery;
+use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
 use citadel_alerts::{
     AlertChannelConfiguration, AlertDeliveryService, AlertEventFilter, AlertRepository,
     AlertRuleConfiguration,
@@ -115,7 +114,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     let store = Arc::new(PostgresAutomationRepository::new(db.clone()));
     let alerts = Arc::new(
         PostgresAlertRepository::new(db.clone()).with_entitlements(Arc::new(
-            citadel_adapters::identity_store::StaticEntitlementService::new(true),
+            citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(true),
         )),
     );
     let automation_shutdown = shutdown.clone();

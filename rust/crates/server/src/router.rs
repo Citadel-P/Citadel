@@ -1,29 +1,34 @@
 //! Compose feature routes and middleware for the HTTP and edge gRPC listeners.
-use crate::state::AppState;
+use crate::composition::ServerComponents;
 use axum::{Router, middleware};
-use citadel_server::api::bindings;
-use citadel_server::api::deployments;
-use citadel_server::api::git::repositories::catalog as git_catalog;
-use citadel_server::api::registries;
-use citadel_server::api::stacks as stacks_http;
-use citadel_server::api::swarm_services as swarm_services_http;
-use citadel_server::api::tags;
-use citadel_server::config::Config;
 use citadel_server::{
-    activities_http, api::alerts, api::automation, application_info_http, identity_http,
-    license_http, oidc_http, platforms_http, profile_http, roles_http, service_accounts_http,
-    teams_http, transport, users_http, webhooks_http,
+    api::routes::{
+        activities as activities_http, alerts, authentication as identity_http, automation,
+        bindings, deployments, git_repositories as git_catalog, licensing as license_http,
+        oidc as oidc_http, platforms as platforms_http, profile as profile_http, registries,
+        roles as roles_http, service_accounts as service_accounts_http, stacks as stacks_http,
+        swarm_services as swarm_services_http, tags, teams as teams_http, users as users_http,
+        webhooks as webhooks_http,
+    },
+    application_info_http,
+    config::Config,
+    transport,
 };
 use std::sync::Arc;
-use tower_http::{catch_panic::CatchPanicLayer, trace::TraceLayer};
+#[cfg(panic = "unwind")]
+use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::trace::TraceLayer;
 
 pub struct Routers {
     pub http: Router,
     pub edge: Router,
 }
 
-pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::error::Error>> {
-    let AppState {
+pub fn router(
+    state: ServerComponents,
+    config: &Config,
+) -> Result<Routers, Box<dyn std::error::Error>> {
+    let ServerComponents {
         pool,
         cancellation,
         readiness,
@@ -89,8 +94,8 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         secure_cookies: config.transport.mode != citadel_server::config::TransportMode::Disabled,
     }))
     .merge(application_info_http::router())
-    .merge(citadel_server::search_http::router(search))
-    .merge(citadel_server::actors_http::router(actors))
+    .merge(citadel_server::api::routes::search::router(search))
+    .merge(citadel_server::api::routes::actors::router(actors))
     .merge(license_http::router(license_http::LicenseHttpState {
         identity: Arc::clone(&identity),
         licenses,
@@ -119,18 +124,18 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
             service_accounts,
         },
     ))
-    .merge(citadel_server::api::git::accounts::handlers::router(
-        citadel_server::api::git::accounts::handlers::GitAccountsHttpState {
+    .merge(citadel_server::api::routes::git_accounts::router(
+        citadel_server::api::routes::git_accounts::GitAccountsHttpState {
             identity: Arc::clone(&identity),
             accounts: git_accounts,
             realtime: realtime_hub.clone(),
         },
     ))
-    .merge(citadel_server::api::git::repositories::handlers::router(
-        citadel_server::api::git::repositories::handlers::GitRepositoriesHttpState {
+    .merge(citadel_server::api::routes::git_repositories::router(
+        citadel_server::api::routes::git_repositories::GitRepositoriesHttpState {
             identity: Arc::clone(&identity),
             repository: Arc::new(
-            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
                 pool.clone(),
             ),
         ),
@@ -153,14 +158,14 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         identity: Arc::clone(&identity),
         automation,
     }))
-    .merge(citadel_server::api::builds::handlers::router(
-        citadel_server::api::builds::handlers::BuildsHttpState {
+    .merge(citadel_server::api::routes::builds::router(
+        citadel_server::api::routes::builds::BuildsHttpState {
             identity: Arc::clone(&identity),
             builds,
         },
     ))
-    .merge(citadel_server::api::backups::handlers::router(
-        citadel_server::api::backups::handlers::BackupsHttpState {
+    .merge(citadel_server::api::routes::backups::router(
+        citadel_server::api::routes::backups::BackupsHttpState {
             identity: Arc::clone(&identity),
             backups,
             cancellation: cancellation.clone(),
@@ -200,10 +205,10 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         secrets,
         realtime: realtime_hub.clone(),
     }))
-    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+    .merge(git_catalog::catalog_router(git_catalog::GitCatalogHttpState {
         identity: Arc::clone(&identity),
         git_repositories: Arc::new(
-            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
                 pool.clone(),
             ),
         ),
@@ -213,8 +218,8 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         platforms_http::router(platform_state.clone())
             .layer(axum::Extension(agent_setup))
             .layer(axum::Extension(agent_setup_context))
-            .merge(citadel_server::lookup_http::router(
-                citadel_server::lookup_http::LookupHttpState {
+            .merge(citadel_server::api::routes::lookup::router(
+                citadel_server::api::routes::lookup::LookupHttpState {
                     store: lookup,
                     entitlements: entitlements.clone(),
                     platforms: platform_state,
@@ -244,9 +249,9 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         ));
     }
     let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
-        citadel_adapters::edge::EdgeIntake::new(citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()), edge_registry.clone()),
-    ).max_decoding_message_size(citadel_adapters::edge::MAX_PAYLOAD + 4096)
-        .max_encoding_message_size(citadel_adapters::edge::MAX_PAYLOAD + 4096);
+        citadel_adapters::connectors::edge::EdgeIntake::new(citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()), edge_registry.clone()),
+    ).max_decoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096)
+        .max_encoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096);
     let edge_routes = tonic::service::Routes::new(edge_service).into_axum_router();
     app = app.layer(axum::Extension(edge_context));
     let mut edge_transport = config.transport.clone();
@@ -257,13 +262,16 @@ pub fn router(state: AppState, config: &Config) -> Result<Routers, Box<dyn std::
         Arc::clone(&readiness),
         Some(edge_routes),
     )?;
+    let app = app.layer(middleware::from_fn_with_state(
+        identity,
+        identity_http::authentication_middleware,
+    ));
+    // Release uses panic=abort. Only unwind-capable builds can render a panic;
+    // production recovery relies on returned errors and supervised shutdown.
+    #[cfg(panic = "unwind")]
+    let app = app.layer(CatchPanicLayer::custom(transport::panic_response));
     let app = transport::secure_router(
-        app.layer(middleware::from_fn_with_state(
-            identity,
-            identity_http::authentication_middleware,
-        ))
-        .layer(CatchPanicLayer::custom(transport::panic_response))
-        .layer(TraceLayer::new_for_http()),
+        app.layer(TraceLayer::new_for_http()),
         &config.transport,
         Arc::clone(&readiness),
     )?;

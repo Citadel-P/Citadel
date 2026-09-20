@@ -1,7 +1,15 @@
-use crate::{
-    ActorPrincipal, Clock, IdentityError, IdentityService, InitializeCitadel, Login, LoginNextStep,
-    LoginOutcome, PreparedSession, SessionMetadata, SessionTokens, UserAuthentication,
-};
+use crate::ActorPrincipal;
+use crate::Clock;
+use crate::IdentityError;
+use crate::IdentityService;
+use crate::InitializeCitadel;
+use crate::Login;
+use crate::LoginNextStep;
+use crate::LoginOutcome;
+use crate::PreparedSession;
+use crate::SessionMetadata;
+use crate::SessionTokens;
+use crate::UserAuthentication;
 use chrono::{DateTime, Duration, Utc};
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_primitives::ActorId;

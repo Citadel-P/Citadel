@@ -224,3 +224,248 @@ fn feature_sources(directory: &Path) -> Vec<PathBuf> {
         })
         .collect()
 }
+
+#[test]
+fn umbrella_services_have_feature_owners_without_reverse_dependencies() {
+    let crates = crates();
+    let features = crates.join("features");
+    for old in ["application", "domain"] {
+        assert!(!features.join(old).exists(), "{old} umbrella was recreated");
+    }
+    for manifest in manifests(&crates) {
+        let source = std::fs::read_to_string(&manifest).unwrap();
+        for forbidden in ["citadel-application", "citadel-domain"] {
+            assert!(
+                !source.contains(forbidden),
+                "{} depends on {forbidden}",
+                manifest.display()
+            );
+        }
+    }
+    for owner in ["activities", "licensing"] {
+        let root = features.join(owner);
+        let manifest = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+        assert!(
+            !manifest.contains("citadel-identity"),
+            "{owner} depends on Identity"
+        );
+        if owner == "licensing" {
+            assert!(
+                !manifest.contains("citadel-activities"),
+                "Licensing depends on Activities"
+            );
+        }
+        for path in feature_sources(&root.join("src")) {
+            let source = std::fs::read_to_string(&path).unwrap();
+            for forbidden in [
+                "ActorPrincipal",
+                "IdentityError",
+                "public_activity_info",
+                "public_latest_activity",
+                "pub struct InstallLicenseRequest",
+                "pub struct LicenseView",
+                "pub struct LicenseCapabilityView",
+                "pub struct LicenseEntitlementsView",
+                "pub struct LicenseRequestView",
+                "https://citadel.local/problems/",
+            ] {
+                assert!(
+                    !source.contains(forbidden),
+                    "{} contains {forbidden}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn server_resources_live_under_api_and_composition_has_no_hidden_configuration() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for entry in std::fs::read_dir(&source).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name();
+        let name = name.to_str().unwrap();
+        if name.ends_with("_http.rs") {
+            assert!(
+                ["application_info_http.rs", "diagnostics_http.rs"].contains(&name),
+                "resource endpoint family belongs under api/: {name}"
+            );
+        }
+    }
+    assert!(!source.join("state.rs").exists());
+    for entry in std::fs::read_dir(source.join("composition")).unwrap() {
+        let path = entry.unwrap().path();
+        let code = std::fs::read_to_string(&path).unwrap();
+        assert!(!code.contains("std::env"), "{}", path.display());
+        assert!(!code.contains("env::var"), "{}", path.display());
+    }
+    let graph = std::fs::read_to_string(source.join("composition/mod.rs")).unwrap();
+    let graph = graph
+        .split("pub struct ServerComponents {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    for worker_only in ["runtime_targets", "image_scanner", "alert_deliveries"] {
+        assert!(
+            !graph.contains(worker_only),
+            "{worker_only} belongs to Jobs"
+        );
+    }
+}
+
+#[test]
+fn feature_facades_and_dependencies_keep_presentation_in_server() {
+    for manifest in manifests(&crates().join("features")) {
+        let package = manifest.parent().unwrap();
+        let dependencies = std::fs::read_to_string(&manifest).unwrap();
+        assert!(!dependencies.contains("utoipa"), "{}", manifest.display());
+        let facade = std::fs::read_to_string(package.join("src/lib.rs")).unwrap();
+        for line in facade.lines().map(str::trim) {
+            for definition in ["pub struct ", "pub enum ", "pub trait ", "pub fn ", "impl "] {
+                assert!(
+                    !line.starts_with(definition),
+                    "{}: {line}",
+                    package.display()
+                );
+            }
+        }
+        for path in feature_sources(&package.join("src")) {
+            let source = std::fs::read_to_string(&path).unwrap();
+            assert!(!source.contains("utoipa"), "{}", path.display());
+        }
+    }
+}
+
+#[test]
+fn features_inject_task_ownership_except_bounded_password_cpu_work() {
+    let features = crates().join("features");
+    let mut blocking = 0;
+    for path in feature_sources(&features) {
+        let relative = path.strip_prefix(&features).unwrap();
+        if path.file_stem().unwrap() == "tests"
+            || relative
+                .components()
+                .any(|part| part.as_os_str() == "tests")
+            || path
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with("_tests")
+        {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).unwrap();
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        for unowned in [
+            "tokio::spawn(",
+            "tokio::task::spawn(",
+            "TaskTracker::new(",
+            "JoinSet::new(",
+        ] {
+            assert!(
+                !production.contains(unowned),
+                "{}: {unowned}",
+                path.display()
+            );
+        }
+        let count = production.matches("tokio::task::spawn_blocking(").count();
+        if count != 0 {
+            assert_eq!(
+                relative,
+                Path::new("identity/src/authentication/service.rs")
+            );
+            blocking += count;
+        }
+    }
+    assert_eq!(
+        blocking, 2,
+        "review finite, semaphore-bounded password jobs explicitly"
+    );
+}
+
+#[test]
+fn server_owns_error_rendering_and_startup_uses_only_endpoint_metadata() {
+    let server = crates().join("server/src");
+    for path in feature_sources(&server.join("api")) {
+        let source = std::fs::read_to_string(&path).unwrap();
+        for legacy in [
+            "identity_error_response",
+            "IdentityHttpResult",
+            "IdentityHttpError",
+        ] {
+            assert!(!source.contains(legacy), "{}: {legacy}", path.display());
+        }
+        if ![
+            "actors",
+            "authentication",
+            "mfa",
+            "oidc",
+            "profile",
+            "roles",
+            "service_accounts",
+            "teams",
+            "users",
+        ]
+        .contains(&path.file_stem().unwrap().to_str().unwrap())
+        {
+            assert!(!source.contains("-> IdentityError"), "{}", path.display());
+        }
+    }
+    let catalog = std::fs::read_to_string(server.join("api/endpoint_catalog.rs")).unwrap();
+    let production = catalog.split("#[cfg(test)]").next().unwrap();
+    assert!(!production.contains("crate::openapi::"));
+    assert!(!production.contains("json_document"));
+    for path in feature_sources(&server) {
+        let source = std::fs::read_to_string(&path).unwrap();
+        assert!(!source.contains("#[path ="), "{}", path.display());
+    }
+}
+
+#[test]
+fn routes_and_api_resources_have_separate_owners() {
+    let server = crates().join("server/src");
+    let api = server.join("api");
+    assert!(api.join("routes/deployments.rs").is_file());
+    assert!(api.join("resources/deployments/requests.rs").is_file());
+    assert!(api.join("resources/deployments/views.rs").is_file());
+    assert!(!api.join("deployments").exists());
+    assert!(!api.join("routes.rs").exists());
+    for entry in std::fs::read_dir(api.join("routes")).unwrap() {
+        let path = entry.unwrap().path();
+        assert!(
+            path.is_file(),
+            "route families must use a single named file: {}",
+            path.display()
+        );
+    }
+    for path in feature_sources(&api.join("routes")) {
+        assert_ne!(path.file_name().unwrap(), "handlers.rs");
+        let code = std::fs::read_to_string(&path).unwrap();
+        for forbidden in [
+            "pub struct Tracked",
+            "RealtimeNotifier {",
+            "ToSchema",
+            "Serialize",
+            "Deserialize",
+            "#[serde",
+            "#[schema",
+        ] {
+            assert!(!code.contains(forbidden), "{}: {forbidden}", path.display());
+        }
+    }
+    for path in feature_sources(&api.join("resources")) {
+        let code = std::fs::read_to_string(&path).unwrap();
+        for forbidden in [
+            "crate::api::routes::",
+            "axum::",
+            "sqlx::",
+            "#[utoipa::path",
+            "DynamicTasks",
+        ] {
+            assert!(!code.contains(forbidden), "{}: {forbidden}", path.display());
+        }
+    }
+}

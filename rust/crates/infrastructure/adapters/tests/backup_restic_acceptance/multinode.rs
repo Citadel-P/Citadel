@@ -1,9 +1,11 @@
 use super::*;
-use citadel_adapters::{
-    agent::{AgentClient, AgentRequestSigner},
-    backup_source_planner::PostgresBackupSourcePlanner,
-    edge::{EdgeIntake, EdgeRegistry, EdgeTarget, PostgresEdgeStore},
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_adapters::connectors::edge::EdgeIntake;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer;
 use citadel_platforms::{PlatformInventoryPort, PlatformRuntimePort};
 

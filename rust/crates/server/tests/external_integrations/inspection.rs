@@ -1,27 +1,30 @@
-use std::{sync::Arc, time::Duration};
-
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
 use citadel_adapters::{
-    container_mutations::ContainerRuntimeRouter,
-    docker::DockerClient,
-    edge::EdgeRegistry,
-    inventory_projection_store::PostgresInventoryProjectionStore,
-    platform_registration::{
-        PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationRepository,
+    connectors::{
+        docker::DockerClient,
+        edge::EdgeRegistry,
+        routing::{
+            containers::ContainerRuntimeRouter,
+            platforms::registration::PlatformRegistrationRuntimeRouter,
+            volumes::content::VolumeContentAdapter,
+        },
     },
-    postgres::platforms::PostgresPlatformReader,
-    volume_content::VolumeContentAdapter,
+    persistence::postgres::platforms::{
+        PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
+        registration::PostgresPlatformRegistrationRepository,
+    },
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
     jobs::{InventoryCollectionTarget, collect_inventory},
 };
-use citadel_server::platforms_http::{self, PlatformsHttpState};
+use citadel_server::api::routes::{platforms as platforms_http, platforms::PlatformsHttpState};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -62,16 +65,18 @@ pub async fn verify(
     let (id, docker_id) = &rows[0];
     let edge = EdgeRegistry::default();
     let app = platforms_http::router(PlatformsHttpState {
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         volume_content: Arc::new(VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
             edge.clone(),
             "unused".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
             ContainerRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone())
-                .into_service(),
+                .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity: provider.identity.clone(),
         platforms: Arc::new(PlatformReadService::new(Arc::new(
@@ -83,10 +88,10 @@ pub async fn verify(
         )),
         pool: pool.clone(),
         registries: Arc::new(
-            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
         platform_metadata: Arc::new(
-            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
                 pool.clone(),
             ),
         ),
@@ -98,7 +103,7 @@ pub async fn verify(
     })
     .layer(axum::middleware::from_fn_with_state(
         provider.identity.clone(),
-        citadel_server::identity_http::authentication_middleware,
+        citadel_server::api::routes::authentication::authentication_middleware,
     ));
     let data = get(
         &app,

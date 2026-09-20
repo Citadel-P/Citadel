@@ -1,7 +1,11 @@
-use crate::{
-    Clock, IdentityError, IdentityService, PatchField, SecretProtector, SessionMetadata,
-    SessionTokens, UserAuthentication,
-};
+use crate::Clock;
+use crate::IdentityError;
+use crate::IdentityService;
+use crate::PatchField;
+use crate::SecretProtector;
+use crate::SessionMetadata;
+use crate::SessionTokens;
+use crate::UserAuthentication;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Duration, Utc};

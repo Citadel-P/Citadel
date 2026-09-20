@@ -16,8 +16,11 @@ impl AutomationEntitlements for Entitlement {
 
 pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
     use citadel_adapters::{
-        crypto::AesGcmSecretProtector, postgres::git::accounts::PostgresGitAccountRepository,
-        postgres::git::repositories::PostgresGitRepositoryExecutionPersistence,
+        persistence::postgres::git::{
+            accounts::PostgresGitAccountRepository,
+            repositories::PostgresGitRepositoryExecutionPersistence,
+        },
+        security::identity::crypto::AesGcmSecretProtector,
     };
     use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
     let git = Arc::new(GitRepositoryExecutionService::new(
@@ -33,16 +36,18 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
         std::env::temp_dir().join(format!("citadel-webhook-test-{}", Uuid::now_v7())),
         Duration::from_secs(60),
     ));
-    citadel_server::webhooks_http::router(citadel_server::webhooks_http::WebhooksHttpState {
-        git,
-        automation,
-        backups: None,
-        builds: None,
-        stacks: None,
-        services: None,
-        audit: None,
-        alerts: None,
-    })
+    citadel_server::api::routes::webhooks::router(
+        citadel_server::api::routes::webhooks::WebhooksHttpState {
+            git,
+            automation,
+            backups: None,
+            builds: None,
+            stacks: None,
+            services: None,
+            audit: None,
+            alerts: None,
+        },
+    )
 }
 
 pub async fn verify(

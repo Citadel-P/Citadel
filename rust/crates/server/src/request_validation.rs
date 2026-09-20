@@ -1,8 +1,6 @@
-use std::error::Error;
-
+use crate::api::error::ApiError;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
-
-use citadel_identity::IdentityError;
+use std::error::Error;
 
 mod workload_query;
 
@@ -25,9 +23,7 @@ where
         axum::extract::Path::<T>::from_request_parts(parts, state)
             .await
             .map(|axum::extract::Path(value)| Self(value))
-            .map_err(|error| {
-                crate::identity_http::identity_error_response(invalid_path(error), &parts.headers)
-            })
+            .map_err(|error| crate::api::error::error_response(invalid_path(error), &parts.headers))
     }
 }
 
@@ -49,16 +45,16 @@ where
             .await
             .map(|axum::extract::Query(value)| Self(value))
             .map_err(|error| {
-                crate::identity_http::identity_error_response(invalid_query(error), &parts.headers)
+                crate::api::error::error_response(invalid_query(error), &parts.headers)
             })
     }
 }
 
-pub(crate) fn invalid_path(error: PathRejection) -> IdentityError {
+pub(crate) fn invalid_path(error: PathRejection) -> ApiError {
     field_error("$path".to_owned(), error.body_text())
 }
 
-pub(crate) fn invalid_query(error: QueryRejection) -> IdentityError {
+pub(crate) fn invalid_query(error: QueryRejection) -> ApiError {
     field_error("$query".to_owned(), error.body_text())
 }
 
@@ -81,9 +77,7 @@ where
         axum::Json::<T>::from_request(request, state)
             .await
             .map(|axum::Json(value)| Self(value))
-            .map_err(|error| {
-                crate::identity_http::identity_error_response(invalid_json(error), &headers)
-            })
+            .map_err(|error| crate::api::error::error_response(invalid_json(error), &headers))
     }
 }
 
@@ -102,15 +96,13 @@ where
         <axum::Json<T> as axum::extract::OptionalFromRequest<S>>::from_request(request, state)
             .await
             .map(|value| value.map(|axum::Json(value)| Self(value)))
-            .map_err(|error| {
-                crate::identity_http::identity_error_response(invalid_json(error), &headers)
-            })
+            .map_err(|error| crate::api::error::error_response(invalid_json(error), &headers))
     }
 }
 
 /// Keep Axum's JSON field path and parser explanation in the existing
 /// validation Problem Details contract instead of discarding the rejection.
-pub(crate) fn invalid_json(rejection: JsonRejection) -> IdentityError {
+pub(crate) fn invalid_json(rejection: JsonRejection) -> ApiError {
     let mut source: Option<&(dyn Error + 'static)> = Some(&rejection);
     while let Some(error) = source {
         if let Some(error) = error.downcast_ref::<serde_path_to_error::Error<serde_json::Error>>() {
@@ -127,11 +119,11 @@ pub(crate) fn invalid_json(rejection: JsonRejection) -> IdentityError {
     field_error("$".to_owned(), rejection.body_text())
 }
 
-fn field_error(path: String, message: String) -> IdentityError {
-    IdentityError::FieldValidation([(path, vec![message])].into_iter().collect())
+fn field_error(path: String, message: String) -> ApiError {
+    ApiError::FieldValidation([(path, vec![message])].into_iter().collect())
 }
 
-pub(crate) fn validation_error(message: String) -> IdentityError {
+pub(crate) fn validation_error(message: String) -> ApiError {
     field_error("$".to_owned(), message)
 }
 
@@ -241,10 +233,8 @@ mod tests {
             Ok(_) => panic!("input should fail JSON extraction"),
             Err(rejection) => rejection,
         };
-        let response = crate::identity_http::identity_error_response(
-            invalid_json(rejection),
-            &HeaderMap::new(),
-        );
+        let response =
+            crate::api::error::error_response(invalid_json(rejection), &HeaderMap::new());
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers()["content-type"],
@@ -255,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn deployment_patch_reports_invalid_field_type() {
-        let body = problem::<crate::api::deployments::requests::PatchDeploymentInput>(
+        let body = problem::<crate::api::resources::deployments::requests::PatchDeploymentInput>(
             br#"{"platformId":42}"#,
         )
         .await;
@@ -269,9 +259,10 @@ mod tests {
 
     #[tokio::test]
     async fn stack_patch_reports_unknown_field() {
-        let body =
-            problem::<crate::api::stacks::requests::PatchStackInput>(br#"{"unexpected":true}"#)
-                .await;
+        let body = problem::<crate::api::resources::stacks::requests::PatchStackInput>(
+            br#"{"unexpected":true}"#,
+        )
+        .await;
         assert!(
             body["errors"]
                 .to_string()
@@ -281,8 +272,10 @@ mod tests {
 
     #[tokio::test]
     async fn platform_input_reports_field_and_expected_type() {
-        let body =
-            problem::<crate::platforms_http::dto::CreatePlatformInput>(br#"{"name":42}"#).await;
+        let body = problem::<crate::api::resources::platforms::requests::CreatePlatformInput>(
+            br#"{"name":42}"#,
+        )
+        .await;
         assert!(
             body["errors"]["$.name"][0]
                 .as_str()
@@ -293,8 +286,10 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_json_reports_parser_location() {
-        let body =
-            problem::<crate::api::stacks::requests::PatchStackInput>(br#"{"platformId":"#).await;
+        let body = problem::<crate::api::resources::stacks::requests::PatchStackInput>(
+            br#"{"platformId":"#,
+        )
+        .await;
         let errors = body["errors"].to_string();
         assert!(errors.contains("EOF"), "{body}");
         assert!(errors.contains("line 1"), "{body}");

@@ -1,4 +1,4 @@
-use citadel_adapters::postgres::stacks::PostgresStackRepository;
+use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;

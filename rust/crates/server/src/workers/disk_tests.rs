@@ -1,7 +1,6 @@
 use super::platforms::observe_platform_metrics;
-use citadel_adapters::{
-    container_stats_store::PostgresContainerStatsStore, postgres::alerts::PostgresAlertRepository,
-};
+use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use citadel_platforms::{HostDiskUsage, StatisticsReader};
 use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
@@ -105,7 +104,7 @@ async fn persisted_disk_samples_drive_builtin_alert_and_history_without_containe
     assert!(resolved);
     // The same persisted fields feed history and dashboard projections.
     let history =
-        citadel_adapters::statistics_read_store::PostgresStatisticsReader::new(pool.clone())
+        citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())
             .platform(
                 platform,
                 citadel_platforms::StatsWindow::new(24).unwrap(),

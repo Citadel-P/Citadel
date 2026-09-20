@@ -1,9 +1,15 @@
 pub use self::webhooks::WebhookConfiguration as GitRepositoryWebhook;
 use self::webhooks::{WebhookError, repository_matches, webhook_branch};
-use crate::{
-    GitAccountService, GitAuthConfiguration, GitChangedPath, GitCli, GitEntryType, GitError,
-    GitTransport, GitTreeEntry, RemoteBranch, SyncResult,
-};
+use crate::GitAccountService;
+use crate::GitAuthConfiguration;
+use crate::GitChangedPath;
+use crate::GitCli;
+use crate::GitEntryType;
+use crate::GitError;
+use crate::GitTransport;
+use crate::GitTreeEntry;
+use crate::RemoteBranch;
+use crate::SyncResult;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};

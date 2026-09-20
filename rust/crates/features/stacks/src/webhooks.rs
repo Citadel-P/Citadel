@@ -5,7 +5,11 @@ use futures_util::future::BoxFuture;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::{StackDetails, StackError, StackService, StackSpec, StackUpdateBehavior};
+use crate::StackDetails;
+use crate::StackError;
+use crate::StackService;
+use crate::StackSpec;
+use crate::StackUpdateBehavior;
 
 pub trait StackEntitlements: Send + Sync {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, StackError>>;

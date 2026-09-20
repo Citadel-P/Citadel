@@ -1,22 +1,15 @@
-use axum::Json;
-
-use axum::Router;
-
-use axum::extract::Extension;
-
-use axum::http::HeaderMap;
-
-use axum::response::{IntoResponse, Response};
-
-use citadel_identity::ActorPrincipal;
-
-use citadel_identity::IdentityError;
-
+use crate::{
+    api::error::{error_response, no_store},
+    openapi::router::OpenApiRouterExt,
+};
+use axum::{
+    Json, Router,
+    extract::Extension,
+    http::HeaderMap,
+    response::{IntoResponse, Response},
+};
+use citadel_identity::{ActorPrincipal, IdentityError};
 use serde::Serialize;
-
-use crate::identity_http::{identity_error_response, no_store};
-
-use crate::openapi::router::OpenApiRouterExt;
 
 const NAME: &str = "Citadel";
 
@@ -55,7 +48,7 @@ async fn get_application_info(
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(_principal)) = principal else {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
+        return error_response(IdentityError::Unauthenticated, &headers);
     };
     no_store(Json(application_info()).into_response())
 }

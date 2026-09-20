@@ -1,11 +1,11 @@
 //! Auxiliary executable commands; these do not construct the running application.
-use crate::state::connect_database;
-use citadel_adapters::{
-    PostgresAuthorizedPlatformReader,
-    agent::{AgentClient, AgentRequestSigner},
-    citadel_system_backup::{CitadelSystemRestoreOptions, restore_citadel_system},
-    docker::DockerClient,
-};
+use crate::composition::connect_database;
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_adapters::connectors::docker::DockerClient;
+use citadel_adapters::external::backups::system_recovery::CitadelSystemRestoreOptions;
+use citadel_adapters::external::backups::system_recovery::restore_citadel_system;
+use citadel_adapters::persistence::postgres::platforms::PostgresAuthorizedPlatformReader;
 use citadel_database::MigrationRunner;
 use citadel_platforms::{AuthorizedPlatformReader, PlatformRuntimePort};
 use citadel_primitives::ActorId;
@@ -137,6 +137,7 @@ async fn restore_system(
     )
     .await;
     signal.abort();
+    let _ = signal.await;
     result?;
     println!("Citadel system recovery bundle restored successfully.");
     Ok(())
@@ -156,7 +157,11 @@ async fn phase0_smoke(
     actor_id: Option<Uuid>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let pool = connect_database(&config).await?;
-    let docker = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
+    let docker = DockerClient::with_host_root(
+        &config.docker_socket,
+        config.docker_request_timeout,
+        &config.execution.paths.host_root,
+    )?;
     docker.ping().await?;
     let version = docker.version().await?;
     let negotiated = docker.negotiated_version().await?;
@@ -211,7 +216,11 @@ async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Er
         .agent
         .as_ref()
         .ok_or("CITADEL_RUST_AGENT_ADDRESS and CITADEL_RUST_AGENT_PRIVATE_KEY_PATH are required")?;
-    let local = DockerClient::new(&config.docker_socket, config.docker_request_timeout)?;
+    let local = DockerClient::with_host_root(
+        &config.docker_socket,
+        config.docker_request_timeout,
+        &config.execution.paths.host_root,
+    )?;
     let agent = AgentClient::connect(
         &agent_config.address,
         AgentRequestSigner::from_file(&agent_config.private_key_path)?,

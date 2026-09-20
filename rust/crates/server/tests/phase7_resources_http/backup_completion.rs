@@ -142,7 +142,7 @@ pub(super) async fn verify_previews(
     fixture: &FixtureIds,
 ) {
     let planner = Arc::new(
-        citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner::new(pool.clone()),
+        citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner::new(pool.clone()),
     );
     let backups = Arc::new(BackupService::new(
         Arc::new(PostgresBackupPersistence::new(pool.clone())),
@@ -177,7 +177,7 @@ pub(super) async fn verify_previews(
     assert_eq!(preview["volumes"][0]["hasBackupCoverage"], false);
     assert_eq!(preview["volumes"].as_array().unwrap().len(), 1);
     let (stacks, _) = stack_webhooks::service(pool.clone());
-    let stack=stacks.create(admin.actor_id,true,serde_json::from_value::<citadel_server::api::stacks::requests::CreateStackInput>(json!({"name":format!("preview-stack-{deployment}"),"platformId":fixture.platform,"stackSource":"WebEditor","spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx\n    volumes:\n      - stack-data:/data\nvolumes:\n  stack-data:\n    external: true"}})).unwrap().try_into().unwrap()).await.unwrap();
+    let stack=stacks.create(admin.actor_id,true,serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("preview-stack-{deployment}"),"platformId":fixture.platform,"stackSource":"WebEditor","spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx\n    volumes:\n      - stack-data:/data\nvolumes:\n  stack-data:\n    external: true"}})).unwrap().try_into().unwrap()).await.unwrap();
     let response = request(
         &app,
         Method::GET,

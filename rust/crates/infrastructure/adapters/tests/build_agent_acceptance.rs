@@ -1,11 +1,11 @@
 #![cfg(unix)]
 //! Actual signed Agent Build + push, with a disposable Git checkout, Registry
 //! and PostgreSQL. No published images or existing user workloads are touched.
-use citadel_adapters::{
-    agent::{AgentClient, AgentRequestSigner},
-    build_executor::{AgentDockerBuildExecutor, PostgresBuildRegistryCredentialResolver},
-    postgres::builds::PostgresBuildRepository,
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_adapters::external::builds::executor::AgentDockerBuildExecutor;
+use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
+use citadel_adapters::persistence::postgres::builds::credentials::PostgresBuildRegistryCredentialResolver;
 use citadel_builds::*;
 use citadel_execution::{ProcessLimits, ProcessRequest};
 use citadel_identity::SYSTEM_ACTOR_ID;
@@ -91,7 +91,7 @@ async fn signed_agent_builds_committed_source_pushes_digest_and_persists_progres
     let network = std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
     let image = std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
     let use_edge = std::env::var("CITADEL_PHASE7_BUILD_EDGE").as_deref() == Ok("1");
-    let edge_registry = citadel_adapters::edge::EdgeRegistry::default();
+    let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let edge_cancel = CancellationToken::new();
     let mut edge_server = None;
     let suffix = Uuid::now_v7().simple().to_string();
@@ -118,7 +118,9 @@ async fn signed_agent_builds_committed_source_pushes_digest_and_persists_progres
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,$4,0,0,0,$3,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(&address).bind(format!("build-{suffix}")).bind(if use_edge { "EdgeAgent" } else { "Agent" }).execute(&pool).await.unwrap();
         let cancel=CancellationToken::new();
         let client = if use_edge {
-            use citadel_adapters::edge::{EdgeIntake, EdgeTarget, PostgresEdgeStore};
+            use citadel_adapters::connectors::edge::EdgeIntake;
+use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
             use citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer;
             let store = PostgresEdgeStore::new(pool.clone());
             let target = EdgeTarget::platform(platform);

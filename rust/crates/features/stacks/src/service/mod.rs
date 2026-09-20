@@ -13,18 +13,48 @@ mod update_checks;
 pub use update_checks::StackUpdateScanner;
 mod resolution_message;
 
-use crate::{
-    ApplyStack, ComposeModel, ComposeProjectImportDraft, ComposeProjectImportSource,
-    ComposeProjectImportValidation, ComposeProjectServiceComparison, ComposeProjectStackDraft,
-    CreateStack, ImportComposeProject, ResolvedStackBindings, ResolvedStackBuildImageBinding,
-    RollbackStack, StackAction, StackAdoptionIssue, StackConfig, StackDetails, StackDrift,
-    StackDriftMonitorFailure, StackDriftMonitorResult, StackDriftReport, StackError, StackFilter,
-    StackImportClaim, StackOperationClaim, StackOrchestrationMode, StackProgressItem,
-    StackReleaseDetails, StackReleaseStatus, StackRuntimeResult, StackRuntimeSnapshot,
-    StackSourceFile, StackSpec, UpdateStack, analyze_swarm_compatibility, compose_digest,
-    create_ownership_labels_override, merge_json, normalize_description, normalize_name,
-    normalize_tags, parse_compose, validation,
-};
+use crate::ApplyStack;
+use crate::ComposeModel;
+use crate::ComposeProjectImportDraft;
+use crate::ComposeProjectImportSource;
+use crate::ComposeProjectImportValidation;
+use crate::ComposeProjectServiceComparison;
+use crate::ComposeProjectStackDraft;
+use crate::CreateStack;
+use crate::ImportComposeProject;
+use crate::ResolvedStackBindings;
+use crate::ResolvedStackBuildImageBinding;
+use crate::RollbackStack;
+use crate::StackAction;
+use crate::StackAdoptionIssue;
+use crate::StackConfig;
+use crate::StackDetails;
+use crate::StackDrift;
+use crate::StackDriftMonitorFailure;
+use crate::StackDriftMonitorResult;
+use crate::StackDriftReport;
+use crate::StackError;
+use crate::StackFilter;
+use crate::StackImportClaim;
+use crate::StackOperationClaim;
+use crate::StackOrchestrationMode;
+use crate::StackProgressItem;
+use crate::StackReleaseDetails;
+use crate::StackReleaseStatus;
+use crate::StackRuntimeResult;
+use crate::StackRuntimeSnapshot;
+use crate::StackSourceFile;
+use crate::StackSpec;
+use crate::UpdateStack;
+use crate::analyze_swarm_compatibility;
+use crate::compose_digest;
+use crate::create_ownership_labels_override;
+use crate::merge_json;
+use crate::normalize_description;
+use crate::normalize_name;
+use crate::normalize_tags;
+use crate::parse_compose;
+use crate::validation;
 
 /// Bounded, redacted progress shared with the HTTP stream during execution.
 pub struct StackProgress {

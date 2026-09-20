@@ -1,6 +1,5 @@
-use citadel_adapters::postgres::{
-    alerts::PostgresAlertRepository, automation::PostgresAutomationRepository,
-};
+use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
 use citadel_alerts::{AlertChannelConfiguration, AlertRepository};
 use citadel_automation::{AutomationActionConfiguration, AutomationRepository};
 use citadel_database::MigrationRunner;

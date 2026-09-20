@@ -6,20 +6,23 @@ use axum::{
     http::{Method, Request, StatusCode},
 };
 use citadel_adapters::{
-    automation_token::IdentityAutomationRunTokenIssuer,
-    crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
-    identity_store::{PostgresIdentityStore, StaticEntitlementService},
-    postgres::automation::PostgresAutomationRepository,
+    persistence::postgres::{
+        automation::PostgresAutomationRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::{
+        automation_token::IdentityAutomationRunTokenIssuer,
+        crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
+    },
 };
 use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
-use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::ActorId;
-use citadel_server::api::automation::{self as automation_http, AutomationHttpState};
+use citadel_server::api::routes::{automation as automation_http, automation::AutomationHttpState};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -68,7 +71,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         AutomationService::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
             Arc::new(
-                citadel_server::api::automation::TrackedAutomationTasks::new(
+                citadel_server::tasks::automation::TrackedAutomationTasks::new(
                     automation_tasks.clone(),
                 ),
             ),

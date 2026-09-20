@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+use citadel_adapters::connectors::edge::{EdgeRegistry, EdgeTarget};
 use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     images::v1::CheckBuildHostResponse,
@@ -483,7 +483,7 @@ async fn verify_shutdown_ownership(db: &sqlx::PgPool, id: Uuid, actor: ActorId) 
     });
     let service = Arc::new(
         BuildService::new(
-            Arc::new(citadel_server::api::builds::TrackedBuildTasks::new(
+            Arc::new(citadel_server::tasks::builds::TrackedBuildTasks::new(
                 tasks.clone(),
             )),
             cancellation.clone(),

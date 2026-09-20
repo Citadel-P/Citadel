@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::global_search::PostgresGlobalSearchStore;
+use citadel_adapters::persistence::postgres::discovery::search::PostgresGlobalSearchStore;
 use citadel_primitives::ResourceType;
 
 // Ports all GlobalSearchTests scenarios: ranking, literal LIKE characters,
@@ -8,7 +8,7 @@ use citadel_primitives::ResourceType;
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn global_search_preserves_ranking_permissions_parent_redaction_and_bounds() {
     let mut f = fixture().await;
-    f.app = citadel_server::search_http::router(Arc::new(PostgresGlobalSearchStore::new(
+    f.app = citadel_server::api::routes::search::router(Arc::new(PostgresGlobalSearchStore::new(
         f.pool.clone(),
     )));
     let q = format!("search{}", Uuid::now_v7().simple());

@@ -9,7 +9,12 @@ publish = false
 chrono.workspace = true
 futures-util.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

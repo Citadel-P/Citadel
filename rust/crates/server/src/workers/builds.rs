@@ -88,5 +88,4 @@ async fn run_worker(
 }
 
 #[cfg(test)]
-#[path = "build_tests.rs"]
 mod tests;

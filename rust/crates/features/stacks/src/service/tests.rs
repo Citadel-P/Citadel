@@ -3,7 +3,10 @@ use super::*;
 
 use chrono::Utc;
 
-use crate::{RecreateStackOnNewImageState, StackDriftPolicy, StackSource, StackUpdateState};
+use crate::RecreateStackOnNewImageState;
+use crate::StackDriftPolicy;
+use crate::StackSource;
+use crate::StackUpdateState;
 
 #[test]
 fn runtime_output_is_redacted_before_progress_and_failure_persistence() {

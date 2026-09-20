@@ -3,10 +3,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::{
-    ImageUpdateState, RecreateStackOnNewImageState, StackDetails, StackError, StackReleaseStatus,
-    StackSpec, StackUpdateBehavior, StackUpdateState, parse_compose, validation,
-};
+use crate::ImageUpdateState;
+use crate::RecreateStackOnNewImageState;
+use crate::StackDetails;
+use crate::StackError;
+use crate::StackReleaseStatus;
+use crate::StackSpec;
+use crate::StackUpdateBehavior;
+use crate::StackUpdateState;
+use crate::parse_compose;
+use crate::validation;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StackImageKey {

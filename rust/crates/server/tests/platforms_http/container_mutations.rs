@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::container_mutation_store::PostgresContainerRepository;
+use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
 use citadel_primitives::ResourceType;
 use futures_util::future::BoxFuture;
@@ -62,6 +62,11 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
     let service = Arc::new(ContainerMutationService::new(
         Arc::new(PostgresContainerRepository::new(f.pool.clone())),
         runtime.clone(),
+        std::sync::Arc::new(
+            citadel_server::tasks::platforms::TrackedContainerTasks::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
     ));
     let mut state = f.lookup_state.platforms.clone();
     state.containers = service;
@@ -258,6 +263,11 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
     state.containers = Arc::new(ContainerMutationService::new(
         Arc::new(PostgresContainerRepository::new(f.pool.clone())),
         runtime.clone(),
+        std::sync::Arc::new(
+            citadel_server::tasks::platforms::TrackedContainerTasks::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
     ));
     f.app = platforms_http::router(state);
     let container: Uuid = sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1")
@@ -484,7 +494,15 @@ async fn container_claims_are_atomic_parent_aware_and_recovered_without_replayin
     }
     let runtime = Arc::new(Runtime::default());
     *runtime.state.lock().await = Some("exited".into());
-    let service = ContainerMutationService::new(store.clone(), runtime.clone());
+    let service = ContainerMutationService::new(
+        store.clone(),
+        runtime.clone(),
+        std::sync::Arc::new(
+            citadel_server::tasks::platforms::TrackedContainerTasks::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
+    );
     service.reconcile(&CancellationToken::new()).await.unwrap();
     assert!(
         runtime.calls.lock().await.is_empty(),
@@ -539,7 +557,7 @@ async fn container_claims_are_atomic_parent_aware_and_recovered_without_replayin
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_commands_use_the_owning_edge_node_and_confirm_deletion_without_a_manager_fallback()
  {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{
             ContainerIds, DeleteContainerRequest, InspectContainerRequest, ListContainersResponse,
