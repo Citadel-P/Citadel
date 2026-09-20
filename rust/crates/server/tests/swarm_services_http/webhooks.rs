@@ -1,5 +1,5 @@
 use super::*;
-use citadel_domain::LicenseCapability;
+use citadel_licensing::LicenseCapability;
 use citadel_swarm_services::{
     ServiceAutomationEntitlements, ServiceImageDigestPort, SwarmServiceWebhookConfig,
     UpdateBehavior, UpdateSwarmService,
@@ -311,9 +311,9 @@ struct FailingAudit;
 impl citadel_application::WebhookActivitySink for FailingAudit {
     fn record_webhook(
         &self,
-        _: citadel_domain::ActivityResourceType,
+        _: citadel_activities::ActivityResourceType,
         _: Uuid,
-        _: citadel_domain::WebhookActivityDetails,
+        _: citadel_activities::WebhookActivityDetails,
     ) -> BoxFuture<'_, Result<(), citadel_identity::IdentityError>> {
         Box::pin(async {
             Err(citadel_identity::IdentityError::Storage(

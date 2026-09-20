@@ -1,10 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use citadel_resources::{
-    ResourceMetadataError, ResourceSecretProtector, SecretProviderTester, SecretTestResult,
-    TestExternalSecretInput, TestSecretProviderInput,
-};
+use citadel_bindings::BindingError;
+use citadel_bindings::SecretProtector;
+use citadel_bindings::SecretProviderTester;
+use citadel_bindings::SecretTestResult;
+use citadel_bindings::TestExternalSecretInput;
+use citadel_bindings::TestSecretProviderInput;
 use futures_util::StreamExt;
 use futures_util::future::BoxFuture;
 use reqwest::redirect::Policy;
@@ -19,7 +21,7 @@ impl SecretProviderTester for PostgresSecretValueResolver {
     fn test_connection<'a>(
         &'a self,
         input: &'a TestSecretProviderInput,
-    ) -> BoxFuture<'a, Result<SecretTestResult, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<SecretTestResult, BindingError>> {
         Box::pin(async move {
             input.validate()?;
             let existing = match input.provider_id {
@@ -50,15 +52,12 @@ impl SecretProviderTester for PostgresSecretValueResolver {
                     "Vault token is required to test the connection.",
                 ));
             };
-            let mut url = provider_url(&input.address).map_err(|_| {
-                ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
-            })?;
+            let mut url = provider_url(&input.address)
+                .map_err(|_| BindingError::Validation("Secret provider URL is invalid.".into()))?;
             let mut health_url = url.clone();
             health_url
                 .path_segments_mut()
-                .map_err(|_| {
-                    ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
-                })?
+                .map_err(|_| BindingError::Validation("Secret provider URL is invalid.".into()))?
                 .pop_if_empty()
                 .extend(["v1", "sys", "health"]);
             let health = match self.client.get(health_url).send().await {
@@ -77,9 +76,7 @@ impl SecretProviderTester for PostgresSecretValueResolver {
                 ));
             }
             url.path_segments_mut()
-                .map_err(|_| {
-                    ResourceMetadataError::Validation("Secret provider URL is invalid.".into())
-                })?
+                .map_err(|_| BindingError::Validation("Secret provider URL is invalid.".into()))?
                 .pop_if_empty()
                 .extend(["v1", "auth", "token", "lookup-self"]);
             let response = self
@@ -124,7 +121,7 @@ impl SecretProviderTester for PostgresSecretValueResolver {
     fn test_external<'a>(
         &'a self,
         input: &'a TestExternalSecretInput,
-    ) -> BoxFuture<'a, Result<SecretTestResult, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<SecretTestResult, BindingError>> {
         Box::pin(async move {
             input.validate()?;
             let config = self.provider_configuration(input.provider_id).await?;
@@ -164,7 +161,7 @@ impl SecretProviderTester for PostgresSecretValueResolver {
 #[derive(Clone)]
 pub struct PostgresSecretValueResolver {
     pool: PgPool,
-    protector: Arc<dyn ResourceSecretProtector>,
+    protector: Arc<dyn SecretProtector>,
     client: reqwest::Client,
 }
 
@@ -179,25 +176,25 @@ struct VaultSecretRequest<'a> {
 }
 
 impl PostgresSecretValueResolver {
-    async fn provider_configuration(&self, id: Uuid) -> Result<Value, ResourceMetadataError> {
+    async fn provider_configuration(&self, id: Uuid) -> Result<Value, BindingError> {
         let row = sqlx::query("SELECT providertype,configuration FROM secretproviders WHERE id=$1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?
-            .ok_or(ResourceMetadataError::NotFound)?;
+            .map_err(|e| BindingError::Storage(e.to_string()))?
+            .ok_or(BindingError::NotFound)?;
         let kind: String = row
             .try_get("providertype")
-            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?;
+            .map_err(|e| BindingError::Storage(e.to_string()))?;
         if kind != "VaultCompatibleKvV2" {
-            return Err(ResourceMetadataError::Validation(
+            return Err(BindingError::Validation(
                 "The Secret provider is not supported.".into(),
             ));
         }
         let configuration: String = row
             .try_get("configuration")
-            .map_err(|e| ResourceMetadataError::Storage(e.to_string()))?;
-        serde_json::from_str(&configuration).map_err(|_| ResourceMetadataError::Credential)
+            .map_err(|e| BindingError::Storage(e.to_string()))?;
+        serde_json::from_str(&configuration).map_err(|_| BindingError::Credential)
     }
 
     fn provider_token(&self, config: &Value) -> Result<Zeroizing<String>, SecretValueError> {
@@ -209,7 +206,7 @@ impl PostgresSecretValueResolver {
 
     pub fn new(
         pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
+        protector: Arc<dyn SecretProtector>,
     ) -> Result<Self, SecretValueError> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))

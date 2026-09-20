@@ -447,7 +447,7 @@ impl StackSpec {
                     .map(serde_json::to_value)
                     .transpose()
                     .map_err(json_storage)?;
-                citadel_resources::validate_webhook(webhook.as_ref())
+                citadel_git::repositories::webhooks::validate_webhook(webhook.as_ref())
                     .map_err(|error| validation(&error.to_string()))?;
             }
         }

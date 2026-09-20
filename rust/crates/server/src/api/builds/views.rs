@@ -1,13 +1,17 @@
 use super::spec::{BuildArgSpec, BuildSecretSpec};
+
 use chrono::{DateTime, Utc};
+
 use serde::Serialize;
+
 use serde_json::Value;
+
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectView {
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<crate::api::tags::dto::TagSummary>,
     pub latest_run: Option<BuildRunView>,
     pub id: Uuid,
     pub name: String,
@@ -43,7 +47,7 @@ pub struct BuildProjectView {
 impl From<citadel_builds::BuildProject> for BuildProjectView {
     fn from(value: citadel_builds::BuildProject) -> Self {
         Self {
-            tags: value.tags,
+            tags: value.tags.into_iter().map(Into::into).collect(),
             latest_run: value.latest_run.map(|value| value.into()),
             id: value.id,
             name: value.name,
@@ -149,7 +153,7 @@ impl From<citadel_builds::BuildRun> for BuildRunView {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAgentPoolView {
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<crate::api::tags::dto::TagSummary>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
@@ -181,7 +185,7 @@ pub struct BuildAgentPoolView {
 impl From<citadel_builds::BuildAgentPool> for BuildAgentPoolView {
     fn from(value: citadel_builds::BuildAgentPool) -> Self {
         Self {
-            tags: value.tags,
+            tags: value.tags.into_iter().map(Into::into).collect(),
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,

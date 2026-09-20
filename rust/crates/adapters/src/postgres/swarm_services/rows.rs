@@ -201,14 +201,14 @@ mod permission_tests {
         );
         let known = decode_permission(false, 4, 1 << 30).unwrap();
         assert!(known.allows(PermissionRequirement {
-            resource_type: citadel_domain::ResourceType::SwarmService,
+            resource_type: citadel_primitives::ResourceType::SwarmService,
             level: PermissionLevel::Write,
             specific: None
         }));
         assert!(!known.allows(PermissionRequirement {
-            resource_type: citadel_domain::ResourceType::SwarmService,
+            resource_type: citadel_primitives::ResourceType::SwarmService,
             level: PermissionLevel::Read,
-            specific: Some(citadel_domain::SpecificPermission::Apply)
+            specific: Some(citadel_primitives::SpecificPermission::Apply)
         }));
     }
 }

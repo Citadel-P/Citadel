@@ -53,7 +53,7 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )
@@ -61,9 +61,9 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Volume,
+        citadel_primitives::ResourceType::Volume,
         f.platform_id,
-        citadel_domain::SpecificPermission::Browse as i32,
+        citadel_primitives::SpecificPermission::Browse as i32,
     )
     .await;
     assert_eq!(

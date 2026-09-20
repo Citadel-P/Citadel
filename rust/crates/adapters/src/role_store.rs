@@ -1,11 +1,12 @@
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, PermissionLevel, ResourceType, RoleActivitySnapshot,
-    RolePermissionActivitySnapshot, RoleType, SpecificPermission,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, RoleActivitySnapshot, RolePermissionActivitySnapshot,
 };
+use citadel_identity::RoleType;
 use citadel_identity::{
-    IdentityError, NewRoleMutation, RoleMutationStore, RolePermissionView, RoleReadStore, RoleView,
+    IdentityError, NewRoleMutation, RoleDetails, RolePermissionDetails, RoleReader, RoleRepository,
     role_permissions_expand,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -36,8 +37,8 @@ impl PostgresRoleStore {
     }
 }
 
-impl RoleReadStore for PostgresRoleStore {
-    fn list(&self) -> BoxFuture<'_, Result<Vec<RoleView>, IdentityError>> {
+impl RoleReader for PostgresRoleStore {
+    fn list(&self) -> BoxFuture<'_, Result<Vec<RoleDetails>, IdentityError>> {
         Box::pin(async move {
             let query =
                 format!("{ROLE_PROJECTION} ORDER BY role.name, role.id, permission.resourcetype");
@@ -49,7 +50,7 @@ impl RoleReadStore for PostgresRoleStore {
         })
     }
 
-    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<RoleView>, IdentityError>> {
+    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<RoleDetails>, IdentityError>> {
         Box::pin(async move {
             let query =
                 format!("{ROLE_PROJECTION} WHERE role.id = $1 ORDER BY permission.resourcetype");
@@ -63,11 +64,11 @@ impl RoleReadStore for PostgresRoleStore {
     }
 }
 
-impl RoleMutationStore for PostgresRoleStore {
+impl RoleRepository for PostgresRoleStore {
     fn create<'a>(
         &'a self,
         role: &'a NewRoleMutation,
-    ) -> BoxFuture<'a, Result<RoleView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<RoleDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -99,11 +100,11 @@ impl RoleMutationStore for PostgresRoleStore {
     fn patch_permissions<'a>(
         &'a self,
         id: Uuid,
-        permissions: Option<&'a [RolePermissionView]>,
+        permissions: Option<&'a [RolePermissionDetails]>,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<RoleView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<RoleDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -151,7 +152,7 @@ impl RoleMutationStore for PostgresRoleStore {
         name: &'a str,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'a, Result<RoleView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<RoleDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -255,7 +256,7 @@ async fn ensure_role_name_available(
 async fn replace_permissions(
     transaction: &mut Transaction<'_, Postgres>,
     role_id: Uuid,
-    permissions: &[RolePermissionView],
+    permissions: &[RolePermissionDetails],
 ) -> Result<(), IdentityError> {
     sqlx::query("DELETE FROM permissions WHERE roleid = $1")
         .bind(role_id)
@@ -280,7 +281,7 @@ async fn load_role(
     transaction: &mut Transaction<'_, Postgres>,
     id: Uuid,
     for_update: bool,
-) -> Result<Option<RoleView>, IdentityError> {
+) -> Result<Option<RoleDetails>, IdentityError> {
     let locking = if for_update {
         " FOR UPDATE OF role"
     } else {
@@ -300,7 +301,7 @@ async fn load_roles(
     transaction: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
     for_update: bool,
-) -> Result<Vec<RoleView>, IdentityError> {
+) -> Result<Vec<RoleDetails>, IdentityError> {
     let locking = if for_update {
         " FOR UPDATE OF role"
     } else {
@@ -317,8 +318,8 @@ async fn load_roles(
     map_roles(rows)
 }
 
-fn map_roles(rows: Vec<PgRow>) -> Result<Vec<RoleView>, IdentityError> {
-    let mut roles: Vec<RoleView> = Vec::new();
+fn map_roles(rows: Vec<PgRow>) -> Result<Vec<RoleDetails>, IdentityError> {
+    let mut roles: Vec<RoleDetails> = Vec::new();
     for row in rows {
         let id: Uuid = row.try_get("id").map_err(storage)?;
         if roles.last().is_none_or(|role| role.id != id) {
@@ -328,7 +329,7 @@ fn map_roles(rows: Vec<PgRow>) -> Result<Vec<RoleView>, IdentityError> {
                     "unknown persisted RoleType value '{role_type_value}'"
                 ))
             })?;
-            roles.push(RoleView {
+            roles.push(RoleDetails {
                 id,
                 name: row.try_get("name").map_err(storage)?,
                 role_type,
@@ -347,7 +348,7 @@ fn map_roles(rows: Vec<PgRow>) -> Result<Vec<RoleView>, IdentityError> {
                 .last_mut()
                 .ok_or_else(missing_persisted_role)?
                 .permissions
-                .push(RolePermissionView {
+                .push(RolePermissionDetails {
                     resource_type: ResourceType::from_i32(resource_value).ok_or_else(|| {
                         IdentityError::Storage(format!(
                             "unknown persisted ResourceType value {resource_value}"
@@ -365,7 +366,10 @@ fn map_roles(rows: Vec<PgRow>) -> Result<Vec<RoleView>, IdentityError> {
     Ok(roles)
 }
 
-fn role_snapshot(role_type: RoleType, permissions: &[RolePermissionView]) -> RoleActivitySnapshot {
+fn role_snapshot(
+    role_type: RoleType,
+    permissions: &[RolePermissionDetails],
+) -> RoleActivitySnapshot {
     let mut permissions = permissions
         .iter()
         .map(|permission| RolePermissionActivitySnapshot {
@@ -377,7 +381,7 @@ fn role_snapshot(role_type: RoleType, permissions: &[RolePermissionView]) -> Rol
     permissions
         .sort_by_key(|permission| (permission.resource_type, permission.permission_level as i32));
     RoleActivitySnapshot {
-        role_type,
+        role_type: role_type.as_database_str().to_owned(),
         permissions,
     }
 }

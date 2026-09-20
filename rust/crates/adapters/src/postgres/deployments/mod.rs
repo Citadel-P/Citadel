@@ -1,4 +1,8 @@
 use chrono::{DateTime, Utc};
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActivityStatus,
+    DeploymentActivitySnapshot, DeploymentResultActivitySnapshot,
+};
 use citadel_deployments::permissions::{
     ApplyDeployment, DeleteDeployment, ReadDeployment, ReadDeploymentBindings, WriteDeployment,
 };
@@ -9,10 +13,9 @@ use citadel_deployments::{
     DuplicateSource, DuplicateWarning, FieldPatch, RuntimeContainerState, RuntimeDeploymentResult,
     TagSummary, UpdateDeploymentMetadata,
 };
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActivityStatus,
-    ActorId, DeploymentActivitySnapshot, DeploymentResultActivitySnapshot, EffectivePermission,
-    PermissionLevel, PermissionPolicy, PermissionRequirement, SpecificPermissions,
+use citadel_primitives::{
+    ActorId, EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
+    SpecificPermissions,
 };
 use futures_util::future::BoxFuture;
 use serde_json::Value;

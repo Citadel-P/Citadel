@@ -1,15 +1,23 @@
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
+
 use axum::extract::{Extension, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::{IntoResponse, Response};
+
 use axum::{Json, Router};
+
 use citadel_application::{InstallLicenseRequest, LicenseService};
-use citadel_domain::{PermissionLevel, ResourceType};
+
+use citadel_primitives::{PermissionLevel, ResourceType};
+
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 
 use crate::identity_http::{identity_error_response, no_store, require_human_administrator};
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]

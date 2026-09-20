@@ -47,7 +47,7 @@ impl NodeAgentSetupRuntime for NodeAgentRuntimeRouter {
                 target.inventory(),
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id: claim.platform_id,
-                    platform_type: "DockerSwarm".into(),
+                    platform_type: citadel_platforms::PlatformKind::DockerSwarm,
                 },
                 cancel,
             )

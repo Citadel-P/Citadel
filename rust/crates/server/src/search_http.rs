@@ -2,19 +2,23 @@ use crate::{
     identity_http::{IdentityHttpResult, identity_result, no_store},
     openapi::router::OpenApiRouterExt,
 };
+
 use axum::{
     Json, Router,
     extract::{Extension, Query, State},
     http::HeaderMap,
     response::IntoResponse,
 };
+
 use citadel_identity::{ActorPrincipal, IdentityError};
-use citadel_resources::{
-    GlobalSearchQuery, GlobalSearchResponse, GlobalSearchStore, ResourceMetadataError,
-};
+
+use citadel_discovery::GlobalSearchQuery;
+use citadel_discovery::GlobalSearchReader;
+use citadel_discovery::SearchError;
+
 use std::sync::Arc;
 
-pub fn router(store: Arc<dyn GlobalSearchStore>) -> Router {
+pub fn router(store: Arc<dyn GlobalSearchReader>) -> Router {
     documented_routes().split_for_parts().0.with_state(store)
 }
 
@@ -25,7 +29,7 @@ pub fn router(store: Arc<dyn GlobalSearchStore>) -> Router {
     tag = "Search",
     summary = "Search authorized resources",
     responses(
-        (status = 200, description = "Success", body = citadel_resources::GlobalSearchResponse, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::discovery::dto::GlobalSearchResponse, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("q" = String, Query), ("types" = Option<String>, Query), ("limitPerType" = Option<i32>, Query, minimum = 1, maximum = 10, extensions(("x-citadel-default" = json!(5))))),
@@ -33,7 +37,7 @@ pub fn router(store: Arc<dyn GlobalSearchStore>) -> Router {
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn search(
-    State(store): State<Arc<dyn GlobalSearchStore>>,
+    State(store): State<Arc<dyn GlobalSearchReader>>,
     principal: Option<Extension<ActorPrincipal>>,
     query: Result<Query<GlobalSearchQuery>, axum::extract::rejection::QueryRejection>,
     headers: HeaderMap,
@@ -57,20 +61,25 @@ async fn search(
         &headers,
     )?;
     let response = identity_result(
-        GlobalSearchResponse::from_matches(query.query, matches).map_err(error),
+        citadel_discovery::GlobalSearchResults::from_matches(query.query, matches).map_err(error),
         &headers,
     )?;
-    Ok(no_store(Json(response).into_response()))
+    Ok(no_store(
+        Json(crate::api::discovery::dto::GlobalSearchResponse::from(
+            response,
+        ))
+        .into_response(),
+    ))
 }
 
-fn error(error: ResourceMetadataError) -> IdentityError {
+fn error(error: SearchError) -> IdentityError {
     match error {
-        ResourceMetadataError::Validation(message) => IdentityError::Validation(message),
+        SearchError::Validation(message) => IdentityError::Validation(message),
         other => IdentityError::Storage(other.to_string()),
     }
 }
 
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Arc<dyn GlobalSearchStore>>
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Arc<dyn GlobalSearchReader>>
 {
     utoipa_axum::router::OpenApiRouter::new().normalized_routes(utoipa_axum::routes!(search))
 }

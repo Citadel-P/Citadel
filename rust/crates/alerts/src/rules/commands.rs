@@ -77,8 +77,8 @@ impl AlertRuleConfiguration {
         )
     }
 
-    pub fn snapshot(&self, id: Uuid) -> citadel_domain::AlertRuleActivitySnapshot {
-        citadel_domain::AlertRuleActivitySnapshot {
+    pub fn snapshot(&self, id: Uuid) -> citadel_activities::AlertRuleActivitySnapshot {
+        citadel_activities::AlertRuleActivitySnapshot {
             id,
             name: self.name.clone(),
             description: self.description.clone(),

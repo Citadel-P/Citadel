@@ -9,11 +9,11 @@ use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_git::{
     GitAccountService, GitCli, GitRepositoryExecutionPersistence, GitRepositoryExecutionService,
     SyncResult,
 };
+use citadel_primitives::ActorId;
 use citadel_stacks::{
     StackOperationClaim, StackSourceMaterializerPort, StackSpec, StackSpecCommon,
     StackUpdateBehavior,
@@ -224,7 +224,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
                 platform_id: Uuid::now_v7(),
                 name: "git-stack".to_owned(),
                 project_name: "git-stack".to_owned(),
-                platform_type: "Docker".to_owned(),
+                platform_type: citadel_platforms::PlatformKind::Docker,
                 spec: StackSpec::Git {
                     git_repo_id: repository_id,
                     branch: "main".to_owned(),

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use citadel_backups::{BackupClaim, BackupError, BackupRunAuthorizer, RestoreClaim};
-use citadel_domain::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::{ActorPrincipal, IdentityService};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use uuid::Uuid;

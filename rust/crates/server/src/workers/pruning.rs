@@ -1,10 +1,13 @@
 //! SwarmTaskContainerPruner: use the normal node-aware mutation path, never force
 //! deletion or remove volumes. Claims recheck state after the candidate query.
-use citadel_platforms::containers::{
-    ContainerAction, ContainerMutationService, DeleteContainerOptions,
-};
+use citadel_platforms::containers::{ContainerAction, ContainerMutationService};
+
+use citadel_platforms::containers::DeleteContainerOptions;
+
 use sqlx::PgPool;
+
 use std::{sync::Arc, time::Duration};
+
 use tokio_util::sync::CancellationToken;
 
 pub(super) async fn run(
@@ -41,7 +44,7 @@ pub(super) async fn run(
                     }
                     if let Err(error) = containers
                         .execute_background(
-                            citadel_domain::ActorId::new(citadel_identity::SYSTEM_ACTOR_ID),
+                            citadel_primitives::ActorId::new(citadel_identity::SYSTEM_ACTOR_ID),
                             vec![id.to_string()],
                             ContainerAction::Delete(DeleteContainerOptions::default()),
                             token.child_token(),

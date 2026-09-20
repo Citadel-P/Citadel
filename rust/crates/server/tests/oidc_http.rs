@@ -16,13 +16,14 @@ use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementS
 use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpService};
 use citadel_adapters::oidc_store::PostgresOidcStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, MfaPolicy};
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, OidcProvider, SYSTEM_ACTOR_ID};
+use citadel_identity::{AuthenticatedPrincipalType, MfaPolicy};
 use citadel_identity::{
     IdentityError, IdentityService, MfaConfiguration, MfaService,
     NoopServiceAccountLastUsedTracker, OidcDiscovery, OidcIdentity, OidcProtocol, OidcService,
     PasswordHasher, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::Readiness;
 use citadel_server::identity_http::{self, IdentityHttpState};
 use citadel_server::oidc_http::{self, OidcHttpState};

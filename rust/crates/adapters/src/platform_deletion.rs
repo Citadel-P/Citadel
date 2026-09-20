@@ -1,25 +1,24 @@
 use chrono::Utc;
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, PlatformActivitySnapshot, ResourceType,
-};
-use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionStore};
+use citadel_activities::{ActivityEvent, ActivityEventInfo, PlatformActivitySnapshot};
+use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionRepository};
+use citadel_primitives::{ActorId, ResourceType};
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::activity_store::insert_activity;
 
-pub struct PostgresPlatformDeletionStore {
+pub struct PostgresPlatformDeletionRepository {
     pool: PgPool,
 }
 
-impl PostgresPlatformDeletionStore {
+impl PostgresPlatformDeletionRepository {
     pub const fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
-impl PlatformDeletionStore for PostgresPlatformDeletionStore {
+impl PlatformDeletionRepository for PostgresPlatformDeletionRepository {
     fn delete<'a>(
         &'a self,
         actor: ActorId,

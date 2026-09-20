@@ -78,7 +78,10 @@ impl StackRuntimeRouter {
         }
         Ok(PlatformTarget {
             platform_id,
-            connector: row.try_get("connectortype").map_err(storage)?,
+            connector: crate::postgres::platform_classification::connector_kind(
+                row.try_get("connectortype").map_err(storage)?,
+            )
+            .map_err(storage)?,
             address: row.try_get("address").map_err(storage)?,
         })
     }
@@ -88,7 +91,7 @@ impl StackRuntimeRouter {
         target: &PlatformTarget,
     ) -> Result<crate::agent_execution::AgentExecutionClient, StackError> {
         use crate::{agent_execution::AgentExecutionClient, edge::EdgeTarget};
-        if target.connector.eq_ignore_ascii_case("EdgeAgent") {
+        if target.connector == citadel_platforms::ConnectorKind::EdgeAgent {
             return self
                 .edge
                 .get(&EdgeTarget::platform(target.platform_id))
@@ -100,7 +103,7 @@ impl StackRuntimeRouter {
         let agent = self
             .agent
             .as_ref()
-            .filter(|_| target.connector.eq_ignore_ascii_case("Agent"))
+            .filter(|_| target.connector == citadel_platforms::ConnectorKind::Agent)
             .ok_or_else(|| {
                 StackError::Runtime("The configured Agent transport is unavailable.".into())
             })?;
@@ -191,7 +194,7 @@ impl StackRuntimeRouter {
                     return Ok(StackRuntimeResult { status, messages });
                 }
             }
-            if claim.platform_type == "DockerSwarm" {
+            if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                 let mut args = vec![
                     "stack".to_owned(),
                     "deploy".to_owned(),
@@ -302,11 +305,8 @@ impl StackRuntimeRouter {
             StackOrchestrationMode::DockerCompose => {
                 // Local drift needs current Docker state and Compose service labels;
                 // the inventory projection can lag immediately after an apply.
-                if self
-                    .platform(platform_id)
-                    .await?
-                    .connector
-                    .eq_ignore_ascii_case("Local")
+                if self.platform(platform_id).await?.connector
+                    == citadel_platforms::ConnectorKind::Local
                 {
                     let containers = self
                         .docker
@@ -429,15 +429,15 @@ impl StackRuntime for StackRuntimeRouter {
             validate_stack_execution(claim)?;
             let target = self.platform(claim.platform_id).await?;
             let registry = self.stack_registry(claim.spec.common().registry_id).await?;
-            let result = if target.connector.eq_ignore_ascii_case("Local") {
+            let result = if target.connector == citadel_platforms::ConnectorKind::Local  {
                 self.apply_local(claim, source, environment, registry.as_ref(), cancellation, progress).await
-            } else if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
+            } else if matches!(target.connector, citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent) {
                 self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation, progress).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
             }?;
-            if claim.platform_type == "DockerSwarm" && result.status == StackReleaseStatus::Healthy {
-                let runtime: Box<dyn PlatformInventoryPort> = if target.connector == "Local" {
+            if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm && result.status == StackReleaseStatus::Healthy {
+                let runtime: Box<dyn PlatformInventoryPort> = if target.connector == citadel_platforms::ConnectorKind::Local {
                     Box::new(self.docker.clone())
                 } else {
                     match self.agent_for(&target)? {
@@ -462,10 +462,10 @@ impl StackRuntime for StackRuntimeRouter {
                 .snapshot(
                     claim.platform_id,
                     &claim.project_name,
-                    orchestration(&claim.platform_type)?,
+                    orchestration(&claim.platform_type),
                 )
                 .await?;
-            let status = if claim.platform_type == "DockerSwarm" {
+            let status = if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                 if snapshot.services.is_empty() {
                     return Ok(None);
                 }
@@ -521,8 +521,8 @@ impl StackRuntime for StackRuntimeRouter {
     ) -> BoxFuture<'a, Result<(), StackError>> {
         async move {
             let target = self.platform(claim.platform_id).await?;
-            if claim.platform_type == "DockerSwarm"
-                && target.connector.eq_ignore_ascii_case("Local")
+            if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm
+                && (target.connector == citadel_platforms::ConnectorKind::Local)
             {
                 let args = vec![
                     "stack".to_owned(),
@@ -538,7 +538,7 @@ impl StackRuntime for StackRuntimeRouter {
                 };
             }
 
-            if claim.platform_type == "DockerSwarm" {
+            if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                 let service_ids = self
                     .swarm_service_ids(claim.platform_id, &claim.project_name)
                     .await?;
@@ -558,7 +558,7 @@ impl StackRuntime for StackRuntimeRouter {
             let container_ids = self
                 .compose_container_ids(claim.platform_id, &claim.project_name)
                 .await?;
-            if target.connector.eq_ignore_ascii_case("Local") {
+            if target.connector == citadel_platforms::ConnectorKind::Local {
                 for id in container_ids {
                     self.docker
                         .delete_container(&id, false, true)
@@ -616,7 +616,7 @@ impl StackRuntime for StackRuntimeRouter {
             if ids.is_empty() {
                 return Err(StackError::NotFound);
             }
-            if target.connector.eq_ignore_ascii_case("Local") {
+            if target.connector == citadel_platforms::ConnectorKind::Local {
                 let command = match action {
                     StackAction::Start => "start",
                     StackAction::Stop => "stop",
@@ -700,7 +700,8 @@ impl StackRuntime for StackRuntimeRouter {
                         container_id,
                         service_name,
                     } if policy.remove_extra_containers => {
-                        let result = if target.connector.eq_ignore_ascii_case("Local") {
+                        let result = if target.connector == citadel_platforms::ConnectorKind::Local
+                        {
                             self.docker
                                 .delete_container(container_id, false, true)
                                 .await
@@ -722,7 +723,7 @@ impl StackRuntime for StackRuntimeRouter {
                     _ => None,
                 };
                 if let Some((container_id, service_name, action_type, agent_action)) = selected {
-                    let result = if target.connector.eq_ignore_ascii_case("Local") {
+                    let result = if target.connector == citadel_platforms::ConnectorKind::Local {
                         let command = if agent_action == AgentContainerAction::Start {
                             "start"
                         } else {
@@ -1193,7 +1194,7 @@ async fn collect_process(
 
 fn validate_stack_execution(claim: &StackOperationClaim) -> Result<(), StackError> {
     let common = claim.spec.common();
-    if claim.platform_type == "DockerSwarm"
+    if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm
         && (common.destroy_before_deploy
             || common.pre_deploy.is_some()
             || common.post_deploy.is_some())
@@ -1327,13 +1328,10 @@ fn last_message(result: &StackRuntimeResult) -> String {
         .find_map(|item| item.message.clone())
         .unwrap_or_else(|| "Docker rejected the Stack operation.".to_owned())
 }
-fn orchestration(value: &str) -> Result<StackOrchestrationMode, StackError> {
+fn orchestration(value: &citadel_platforms::PlatformKind) -> StackOrchestrationMode {
     match value {
-        "Docker" => Ok(StackOrchestrationMode::DockerCompose),
-        "DockerSwarm" => Ok(StackOrchestrationMode::DockerSwarm),
-        _ => Err(StackError::Validation(
-            "Stacks require a Docker or Docker Swarm Platform.".to_owned(),
-        )),
+        citadel_platforms::PlatformKind::Docker => StackOrchestrationMode::DockerCompose,
+        citadel_platforms::PlatformKind::DockerSwarm => StackOrchestrationMode::DockerSwarm,
     }
 }
 
@@ -1348,7 +1346,7 @@ fn agent_error(error: impl std::fmt::Display) -> StackError {
 }
 struct PlatformTarget {
     platform_id: Uuid,
-    connector: String,
+    connector: citadel_platforms::ConnectorKind,
     address: String,
 }
 
@@ -1421,7 +1419,7 @@ mod tests {
             platform_id: Uuid::now_v7(),
             name: "demo".to_owned(),
             project_name: "demo".to_owned(),
-            platform_type: "DockerSwarm".to_owned(),
+            platform_type: citadel_platforms::PlatformKind::DockerSwarm,
             spec: citadel_stacks::StackSpec::WebEditor {
                 compose_file: "services: {}".to_owned(),
                 update_behavior: citadel_stacks::StackUpdateBehavior::Disabled,

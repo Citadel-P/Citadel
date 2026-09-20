@@ -1,6 +1,6 @@
 use super::views::DeploymentCapabilities;
 use citadel_deployments::permissions::*;
-use citadel_domain::{EffectivePermission, PermissionPolicy, SpecificPermission};
+use citadel_primitives::{EffectivePermission, PermissionPolicy, SpecificPermission};
 
 pub(super) fn capabilities(permission: EffectivePermission) -> DeploymentCapabilities {
     DeploymentCapabilities {
@@ -29,7 +29,7 @@ mod tests {
     fn deployment_policy_parity_and_capabilities() {
         let matrix = citadel_identity::permission_matrix();
         let capability = matrix
-            .get(&citadel_domain::ResourceType::Deployment)
+            .get(&citadel_primitives::ResourceType::Deployment)
             .unwrap();
         for requirement in [
             ApplyDeployment::REQUIREMENT,
@@ -46,10 +46,10 @@ mod tests {
         }
         assert_eq!(
             ApplyDeployment::REQUIREMENT.level,
-            citadel_domain::PermissionLevel::Read
+            citadel_primitives::PermissionLevel::Read
         );
         let read_apply = EffectivePermission::Granted {
-            level: citadel_domain::PermissionLevel::Read,
+            level: citadel_primitives::PermissionLevel::Read,
             specifics: SpecificPermission::Apply.into(),
         };
         let view = capabilities(read_apply);
@@ -57,15 +57,15 @@ mod tests {
         assert!(!view.can_execute && !view.can_write && !view.can_view_logs);
         assert!(
             !capabilities(EffectivePermission::Granted {
-                level: citadel_domain::PermissionLevel::None,
+                level: citadel_primitives::PermissionLevel::None,
                 specifics: SpecificPermission::Apply.into()
             })
             .can_apply
         );
         assert!(
             !capabilities(EffectivePermission::Granted {
-                level: citadel_domain::PermissionLevel::Execute,
-                specifics: citadel_domain::SpecificPermissions::EMPTY
+                level: citadel_primitives::PermissionLevel::Execute,
+                specifics: citadel_primitives::SpecificPermissions::EMPTY
             })
             .can_apply
         );

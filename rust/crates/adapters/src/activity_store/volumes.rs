@@ -1,5 +1,6 @@
 use super::*;
-use citadel_domain::{ActorId, VolumeContentDownloaded};
+use citadel_activities::VolumeContentDownloaded;
+use citadel_primitives::ActorId;
 
 impl PostgresActivityStore {
     pub async fn record_volume_download(

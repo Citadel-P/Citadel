@@ -74,10 +74,10 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     use citadel_adapters::{
         container_stats_store::PostgresContainerStatsStore,
         edge::{EdgeRegistry, EdgeTarget, PostgresEdgeStore},
-        statistics_read_store::PostgresStatisticsReadStore,
+        statistics_read_store::PostgresStatisticsReader,
     };
     use citadel_platforms::{
-        ContainerStatsStore, RuntimeContainerStat, ServiceStatIdentity, StatisticsReadStore,
+        ContainerStatsStore, RuntimeContainerStat, ServiceStatIdentity, StatisticsReader,
         StatsWindow,
     };
     let f = fixture().await;
@@ -94,7 +94,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     // Node session here to exercise the production Node statistics writer.
     sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,profile,dockernodeid,lastconnectedatutc) VALUES($1,$2,$1,'fixture','Connected',$3,$3,'SwarmNode','node-1',$4)")
         .bind(session.agent_id).bind(session.agent_id.to_string()).bind(f.platform_id).bind(session.connected_at).execute(&f.pool).await.unwrap();
-    let reader = PostgresStatisticsReadStore::new(f.pool.clone());
+    let reader = PostgresStatisticsReader::new(f.pool.clone());
     let container: Uuid =
         sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
             .bind(f.platform_id)
@@ -373,7 +373,7 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn workload_history_requires_its_own_permission_and_preserves_stack_grouping() {
-    use citadel_domain::ResourceType;
+    use citadel_primitives::ResourceType;
     let f = fixture().await;
     let deployment = Uuid::now_v7();
     let stack = Uuid::now_v7();

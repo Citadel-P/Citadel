@@ -73,7 +73,10 @@ impl DeploymentRuntimeRouter {
         }
         Ok(PlatformTarget {
             platform_id,
-            connector: row.try_get("connectortype").map_err(storage)?,
+            connector: crate::postgres::platform_classification::connector_kind(
+                row.try_get("connectortype").map_err(storage)?,
+            )
+            .map_err(storage)?,
             address: row.try_get("address").map_err(storage)?,
         })
     }
@@ -83,7 +86,7 @@ impl DeploymentRuntimeRouter {
         target: &PlatformTarget,
     ) -> Result<crate::agent_execution::AgentExecutionClient, DeploymentError> {
         use crate::{agent_execution::AgentExecutionClient, edge::EdgeTarget};
-        if target.connector.eq_ignore_ascii_case("EdgeAgent") {
+        if target.connector == citadel_platforms::ConnectorKind::EdgeAgent {
             return self
                 .edge
                 .get(&EdgeTarget::platform(target.platform_id))
@@ -97,7 +100,7 @@ impl DeploymentRuntimeRouter {
         let agent = self
             .agent
             .as_ref()
-            .filter(|_| target.connector.eq_ignore_ascii_case("Agent"))
+            .filter(|_| target.connector == citadel_platforms::ConnectorKind::Agent)
             .ok_or_else(|| {
                 DeploymentError::Runtime("The configured Agent transport is unavailable.".into())
             })?;
@@ -231,7 +234,7 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
     ) -> Result<PreparedDeploymentImage, DeploymentError> {
         let target = self.platform(platform_id).await?;
         let pull = self.registry(registry_id, image_tag).await?;
-        if target.connector.eq_ignore_ascii_case("Local") {
+        if target.connector == citadel_platforms::ConnectorKind::Local {
             let mut stream = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
@@ -268,7 +271,10 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
                     .map(|image| (image.id, image.repo_tags, image.repo_digests)),
             );
         }
-        if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
+        if matches!(
+            target.connector,
+            citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent
+        ) {
             let agent = self.agent_for(&target)?;
             agent
                 .pull_deployment_image(
@@ -397,7 +403,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
     ) -> BoxFuture<'a, Result<String, DeploymentError>> {
         Box::pin(async move {
             let target = self.platform(platform).await?;
-            let agent = if target.connector.eq_ignore_ascii_case("Local") {
+            let agent = if target.connector == citadel_platforms::ConnectorKind::Local {
                 None
             } else {
                 Some(self.agent_for(&target)?)
@@ -459,10 +465,14 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
     ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
         async move {
             let target = self.platform(platform_id).await?;
-            if target.connector.eq_ignore_ascii_case("Local") {
+            if target.connector == citadel_platforms::ConnectorKind::Local {
                 return self.apply_local(command, cancellation).await;
             }
-            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
+            if matches!(
+                target.connector,
+                citadel_platforms::ConnectorKind::Agent
+                    | citadel_platforms::ConnectorKind::EdgeAgent
+            ) {
                 let mut normalized = command.clone();
                 normalize_resource_limits(&mut normalized);
                 add_ownership_labels(&mut normalized);
@@ -486,7 +496,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
         async move {
             let target = self.platform(platform_id).await?;
             let deployment_id = deployment_id.to_string();
-            if target.connector.eq_ignore_ascii_case("Local") {
+            if target.connector == citadel_platforms::ConnectorKind::Local {
                 let containers = tokio::select! {
                     biased;
                     () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
@@ -520,7 +530,11 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
                         .unwrap_or(RuntimeContainerState::Timeout),
                 }));
             }
-            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
+            if matches!(
+                target.connector,
+                citadel_platforms::ConnectorKind::Agent
+                    | citadel_platforms::ConnectorKind::EdgeAgent
+            ) {
                 let containers = self
                     .agent_for(&target)?
                     .list_containers(cancellation)
@@ -559,7 +573,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         async move {
             let target = self.platform(platform_id).await?;
-            if target.connector.eq_ignore_ascii_case("Local") {
+            if target.connector == citadel_platforms::ConnectorKind::Local  {
                 let result = tokio::select! {
                     biased;
                     () = cancellation.cancelled() => return Err(DeploymentError::Cancelled),
@@ -574,7 +588,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
                     Err(error) => Err(runtime(error)),
                 };
             }
-            if matches!(target.connector.as_str(), "Agent" | "EdgeAgent") {
+            if matches!(target.connector, citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent) {
                 return match self
                     .agent_for(&target)?
                     .delete_container(docker_container_id, cancellation)
@@ -596,7 +610,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
 
 struct PlatformTarget {
     platform_id: Uuid,
-    connector: String,
+    connector: citadel_platforms::ConnectorKind,
     address: String,
 }
 

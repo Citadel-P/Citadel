@@ -5,13 +5,13 @@ use citadel_adapters::build_executor::{
 use citadel_adapters::crypto::AesGcmSecretProtector;
 use citadel_adapters::postgres::builds::PostgresBuildRepository;
 use citadel_adapters::stack_build_images::PostgresStackBuildImageResolver;
+use citadel_bindings::SecretProtector;
 use citadel_builds::{
     BuildExecutionResult, BuildExecutor, BuildProjectConfiguration,
     BuildRegistryCredentialResolver, BuildRepository, BuildSecretResolver,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
-use citadel_resources::ResourceSecretProtector;
+use citadel_primitives::ActorId;
 use citadel_stacks::{StackBuildImageBinding, StackBuildImageResolverPort};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -425,8 +425,7 @@ async fn build_secret_resolver_decrypts_internal_values_without_persisting_plain
         .unwrap();
     let secret_id = Uuid::now_v7();
     let protector = Arc::new(AesGcmSecretProtector::new(&[73_u8; 32]).unwrap());
-    let envelope =
-        ResourceSecretProtector::protect(protector.as_ref(), b"build-secret-value").unwrap();
+    let envelope = SecretProtector::protect(protector.as_ref(), b"build-secret-value").unwrap();
     assert!(!envelope.contains("build-secret-value"));
     sqlx::query(
         "INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')",

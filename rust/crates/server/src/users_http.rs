@@ -1,24 +1,36 @@
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+
 use axum::extract::{Extension, Path, Query, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::IntoResponse;
+
 use axum::{Json, Router};
-use citadel_domain::{PermissionLevel, ResourceType};
+
+use citadel_primitives::{PermissionLevel, ResourceType};
+
 use citadel_identity::{ActorPrincipal, PermissionGrant};
-use citadel_identity::{
-    AddUserRoleRequest, CreateUserRequest, DeleteUsersRequest, IdentityError, IdentityService,
-    PagedResult, PatchUserRequest, RenameUserRequest, UserMutationService, UserReadService,
-    UserResourceAccessRequest, UserView,
+
+use citadel_identity::{IdentityError, IdentityService, UserMutationService, UserReadService};
+
+use crate::identity_http::dto::{
+    AddUserRoleRequest, CreateUserRequest, DeleteUsersRequest, PagedResult, PatchUserRequest,
+    RenameUserRequest, UserResourceAccessRequest, UserView,
 };
+
 use serde::{Deserialize, Serialize};
+
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
+
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -105,7 +117,7 @@ async fn list(
             page_size: 0,
         }
     } else {
-        paged_result
+        paged_result.into()
     };
     Ok(no_store(
         Json(UsersResponse {
@@ -146,7 +158,15 @@ async fn search(
         state.users.search(&filter.query, filter.limit).await,
         &headers,
     )?;
-    Ok(no_store(Json(users).into_response()))
+    Ok(no_store(
+        Json(
+            users
+                .into_iter()
+                .map(crate::identity_http::dto::UserSearchItemView::from)
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -156,7 +176,7 @@ async fn search(
     tag = "Users",
     summary = "Get a User by ID",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -176,7 +196,9 @@ async fn get(
     )?;
     let id = identity_result(user_path(path), &headers)?;
     let user = identity_result(state.users.get(id).await, &headers)?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -187,7 +209,7 @@ async fn get(
     summary = "Create a User",
     request_body = CreateUserRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -203,12 +225,15 @@ async fn create(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: CreateUserRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::CreateUser = request.into();
     let user = identity_result(
         state.mutations.create(request, principal.actor_id).await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -222,7 +247,7 @@ async fn create(
         (PatchUserRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -241,12 +266,15 @@ async fn patch(
         &headers,
     )?;
     let id = identity_result(user_path(path), &headers)?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: PatchUserRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::PatchUser = request.into();
     let user = identity_result(
         state.mutations.patch(id, request, principal.actor_id).await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -257,7 +285,7 @@ async fn patch(
     summary = "Rename a User",
     request_body = RenameUserRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -273,7 +301,8 @@ async fn rename(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: RenameUserRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::RenameUser = request.into();
     let user = identity_result(
         state
             .mutations
@@ -281,7 +310,9 @@ async fn rename(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -292,7 +323,7 @@ async fn rename(
     summary = "Assign a Role to a User",
     request_body = AddUserRoleRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -311,7 +342,8 @@ async fn add_role(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: AddUserRoleRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::AddUserRole = request.into();
     let user = identity_result(
         state
             .mutations
@@ -319,7 +351,9 @@ async fn add_role(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -329,7 +363,7 @@ async fn add_role(
     tag = "Users",
     summary = "Remove a Role from a User",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
@@ -354,7 +388,9 @@ async fn remove_role(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -365,7 +401,7 @@ async fn remove_role(
     summary = "Add a resource override to a User",
     request_body = UserResourceAccessRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -384,7 +420,8 @@ async fn add_resource_access(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: UserResourceAccessRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::UserResourceAccess = request.into();
     let user = identity_result(
         state
             .mutations
@@ -392,7 +429,9 @@ async fn add_resource_access(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -403,7 +442,7 @@ async fn add_resource_access(
     summary = "Remove a resource override from a User",
     request_body = UserResourceAccessRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -422,7 +461,8 @@ async fn remove_resource_access(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: UserResourceAccessRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::UserResourceAccess = request.into();
     let user = identity_result(
         state
             .mutations
@@ -430,7 +470,9 @@ async fn remove_resource_access(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(user).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::UserView::from(user)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -457,7 +499,8 @@ async fn delete(
         authorize_administrator(&state, principal, PermissionLevel::Execute, None).await,
         &headers,
     )?;
-    let request = identity_result(user_json(payload), &headers)?;
+    let request: DeleteUsersRequest = identity_result(user_json(payload), &headers)?;
+    let request: citadel_identity::DeleteUsers = request.into();
     identity_result(
         state
             .mutations

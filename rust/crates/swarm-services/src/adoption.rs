@@ -1,5 +1,5 @@
 use crate::{SwarmServiceDetails, SwarmServiceError, SwarmServiceSpec};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 
 use tokio_util::sync::CancellationToken;

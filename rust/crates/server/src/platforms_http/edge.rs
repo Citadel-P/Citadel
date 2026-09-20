@@ -1,4 +1,5 @@
 use super::*;
+
 use citadel_adapters::edge::{EdgeRegistry, EdgeStoreError, EdgeTarget, PostgresEdgeStore};
 
 #[derive(Clone)]
@@ -11,6 +12,7 @@ pub struct EdgeHttpContext {
 }
 
 use citadel_platforms::node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions};
+
 macro_rules! setup_handler {
     ($(#[$name_attr:meta])* $name:ident,$kind:ident) => {
         $(#[$name_attr])*
@@ -39,6 +41,7 @@ macro_rules! setup_handler {
         }
     };
 }
+
 setup_handler!(
     #[utoipa::path(
     post,
@@ -57,6 +60,7 @@ setup_handler!(
     install_node_agents,
     Install
 );
+
 setup_handler!(
     #[utoipa::path(
     post,
@@ -75,6 +79,7 @@ setup_handler!(
     repair_node_agents,
     Repair
 );
+
 setup_handler!(
     #[utoipa::path(
     post,
@@ -116,6 +121,7 @@ pub(super) async fn remove_node_agents(
 ) -> IdentityHttpResult {
     node_agent_operation(state, principal, path, headers, None).await
 }
+
 async fn node_agent_operation(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -235,7 +241,7 @@ async fn node_agent_operation(
 
 pub(super) async fn initialize_swarm(
     state: &PlatformsHttpState,
-    platform: &PlatformView,
+    platform: &citadel_platforms::PlatformDetails,
 ) -> Result<bool, RuntimeCapabilityError> {
     let _guard = state.platforms.inventory_guard(platform.id).await;
     let initialized: bool =
@@ -259,7 +265,12 @@ pub(super) async fn initialize_swarm(
     let _cancel_on_drop = cancellation.clone().drop_guard();
     let target = citadel_platforms::jobs::InventoryCollectionTarget {
         platform_id: platform.id,
-        platform_type: platform.platform_type.clone(),
+        platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
+            &platform.platform_type,
+        )
+        .map_err(|error| {
+            RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+        })?,
     };
     let snapshot = tokio::time::timeout(
         std::time::Duration::from_secs(30),
@@ -385,6 +396,7 @@ pub(super) async fn enroll(
     )
     .await
 }
+
 #[utoipa::path(
     get,
     path = "/api/v1/platforms/{id}/edge/status",
@@ -417,6 +429,7 @@ pub(super) async fn status(
     )?;
     Ok(no_store(Json(status).into_response()))
 }
+
 #[utoipa::path(
     post,
     path = "/api/v1/platforms/{id}/edge/revoke",
@@ -449,9 +462,11 @@ pub(super) async fn revoke(
     publish_runtime_change(&state, id, "platform", "update", &id.to_string());
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
+
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
+
 fn error(error: EdgeStoreError) -> IdentityError {
     EdgeHttpContext::error(error)
 }

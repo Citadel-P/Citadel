@@ -1,5 +1,5 @@
-use citadel_domain::ActorType;
-use citadel_identity::{ActorStore, ActorView, IdentityError};
+use citadel_identity::ActorType;
+use citadel_identity::{ActorDetails, ActorRepository, IdentityError};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -15,8 +15,8 @@ impl PostgresActorStore {
     }
 }
 
-impl ActorStore for PostgresActorStore {
-    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<ActorView, IdentityError>> {
+impl ActorRepository for PostgresActorStore {
+    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<ActorDetails, IdentityError>> {
         Box::pin(async move { read(&self.pool, id).await })
     }
 
@@ -24,7 +24,7 @@ impl ActorStore for PostgresActorStore {
         &self,
         id: Uuid,
         enabled: bool,
-    ) -> BoxFuture<'_, Result<ActorView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<ActorDetails, IdentityError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             // Use the same serialization lock as User/Team/Role administration;
@@ -50,7 +50,7 @@ impl ActorStore for PostgresActorStore {
 async fn read<'e>(
     executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
     id: Uuid,
-) -> Result<ActorView, IdentityError> {
+) -> Result<ActorDetails, IdentityError> {
     if id.is_nil() {
         return Err(IdentityError::Validation(
             "Actor ID must not be empty.".into(),
@@ -59,7 +59,7 @@ async fn read<'e>(
     let row = sqlx::query("SELECT a.id,a.type,a.isenabled,COALESCE(u.name,t.name,s.name,CASE WHEN a.type='System' THEN 'System' ELSE 'Unknown' END) AS name FROM actors a LEFT JOIN users u ON u.actorid=a.id LEFT JOIN teams t ON t.actorid=a.id LEFT JOIN serviceaccounts s ON s.actorid=a.id WHERE a.id=$1")
         .bind(id).fetch_optional(executor).await.map_err(storage)?.ok_or(IdentityError::NotFound)?;
     let kind: String = row.try_get("type").map_err(storage)?;
-    Ok(ActorView {
+    Ok(ActorDetails {
         id,
         name: row.try_get("name").map_err(storage)?,
         is_enabled: row.try_get("isenabled").map_err(storage)?,

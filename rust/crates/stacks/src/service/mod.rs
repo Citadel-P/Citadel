@@ -2,8 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use citadel_activities::ActivityEventInfo;
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_domain::{ActivityEventInfo, ActorId};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;

@@ -1,4 +1,5 @@
-use citadel_resources::{ResourceMetadataError, registry_images::*};
+use citadel_registries::RegistryError;
+use citadel_registries::registry_images::*;
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -10,11 +11,11 @@ pub struct RegistryBrowser {
     github: String,
 }
 impl RegistryBrowser {
-    pub fn new() -> Result<Self, ResourceMetadataError> {
+    pub fn new() -> Result<Self, RegistryError> {
         Self::with_endpoints("https://hub.docker.com", "https://api.github.com")
     }
     /// Infrastructure injection for external-service fixtures. End-user input never sets these origins.
-    pub fn with_endpoints(docker_hub: &str, github: &str) -> Result<Self, ResourceMetadataError> {
+    pub fn with_endpoints(docker_hub: &str, github: &str) -> Result<Self, RegistryError> {
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(30))
@@ -33,7 +34,7 @@ impl RegistryBrowser {
         configuration: &Value,
         kind: RegistryBrowseKind,
         name: Option<&str>,
-    ) -> Result<Value, ResourceMetadataError> {
+    ) -> Result<Value, RegistryError> {
         let cfg_type = field(configuration, &["$type"]).unwrap_or_default();
         match (cfg_type, kind) {
             (
@@ -45,7 +46,7 @@ impl RegistryBrowser {
             ("GitHub", RegistryBrowseKind::Repositories | RegistryBrowseKind::GithubVersions) => {
                 self.github(configuration, kind, name).await
             }
-            _ => Err(ResourceMetadataError::NotFound),
+            _ => Err(RegistryError::NotFound),
         }
     }
     async fn docker(
@@ -53,7 +54,7 @@ impl RegistryBrowser {
         cfg: &Value,
         kind: RegistryBrowseKind,
         name: Option<&str>,
-    ) -> Result<Value, ResourceMetadataError> {
+    ) -> Result<Value, RegistryError> {
         let username = field(cfg, &["UserName", "userName", "username"]).unwrap_or_default();
         let secret = field(cfg, &["PAT", "pat"]).unwrap_or_default();
         let auth = self
@@ -115,7 +116,7 @@ impl RegistryBrowser {
         cfg: &Value,
         kind: RegistryBrowseKind,
         name: Option<&str>,
-    ) -> Result<Value, ResourceMetadataError> {
+    ) -> Result<Value, RegistryError> {
         let namespace = field(cfg, &["NameSpace", "nameSpace"]).unwrap_or_default();
         let token = field(cfg, &["PAT", "pat"]).unwrap_or_default();
         let path = if kind == RegistryBrowseKind::GithubVersions {
@@ -167,12 +168,12 @@ fn field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a str> {
         .iter()
         .find_map(|name| value.get(name).and_then(Value::as_str))
 }
-fn failure() -> ResourceMetadataError {
-    ResourceMetadataError::Validation(
+fn failure() -> RegistryError {
+    RegistryError::Validation(
         "Registry request failed. Check registry connectivity and credentials.".into(),
     )
 }
-async fn body(response: reqwest::Response) -> Result<Value, ResourceMetadataError> {
+async fn body(response: reqwest::Response) -> Result<Value, RegistryError> {
     if !response.status().is_success() {
         return Err(failure());
     }

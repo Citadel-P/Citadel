@@ -7,4 +7,4 @@ pub mod spec;
 
 pub mod webhook;
 
-pub(crate) mod catalog;
+pub mod catalog;

@@ -1,0 +1,13 @@
+[package]
+name = "citadel-licensing"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+citadel-primitives = { path = "../primitives" }
+chrono.workspace = true
+serde.workspace = true
+uuid.workspace = true
+utoipa.workspace = true

@@ -1,17 +1,27 @@
 use axum::Json;
+
 use axum::Router;
+
 use axum::extract::Extension;
+
 use axum::http::HeaderMap;
+
 use axum::response::{IntoResponse, Response};
+
 use citadel_identity::ActorPrincipal;
+
 use citadel_identity::IdentityError;
+
 use serde::Serialize;
 
 use crate::identity_http::{identity_error_response, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
 
 const NAME: &str = "Citadel";
+
 const VERSION: &str = env!("CITADEL_BUILD_VERSION");
+
 const INFORMATIONAL_VERSION: &str = env!("CITADEL_BUILD_INFORMATIONAL_VERSION");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]

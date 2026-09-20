@@ -17,7 +17,7 @@ pub trait BuildRepository: Send + Sync {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     >;
     fn create_pool<'a>(
         &'a self,
@@ -36,7 +36,7 @@ pub trait BuildRepository: Send + Sync {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     >;
     fn archive_pool<'a>(
         &'a self,

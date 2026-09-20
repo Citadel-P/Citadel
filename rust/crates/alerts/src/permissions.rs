@@ -1,4 +1,4 @@
-use citadel_domain::{PermissionLevel, ResourceType, permission_policy};
+use citadel_primitives::{PermissionLevel, ResourceType, permission_policy};
 permission_policy!(
     ReadAlertChannel,
     ResourceType::AlertChannel,

@@ -9,7 +9,7 @@ use super::capabilities::{granted, pool_capabilities, project_capabilities};
 pub(crate) use agent_pools::authorized_pools;
 use agent_pools::*;
 
-use citadel_domain::EffectivePermission;
+use citadel_primitives::EffectivePermission;
 
 use crate::api::builds::views::*;
 
@@ -33,7 +33,7 @@ use axum::{Json, Router};
 
 use citadel_builds::{BuildError, BuildProjectConfiguration, BuildService};
 
-use citadel_domain::{PermissionLevel, ResourceType};
+use citadel_primitives::{PermissionLevel, ResourceType};
 
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 

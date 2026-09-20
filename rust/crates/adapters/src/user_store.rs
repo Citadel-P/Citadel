@@ -1,12 +1,12 @@
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, IdentityResourceAccessSnapshot, PermissionLevel,
-    ResourceType, SpecificPermission, UserActivitySnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, UserActivitySnapshot,
 };
 use citadel_identity::{
-    IdentityError, NewUserMutation, ResourceInfo, StoredPage, UserMutationStore,
-    UserPasswordContext, UserPatchMutation, UserReadStore, UserResourceAccessInput,
-    UserResourceAccessView, UserSearchItemView, UserView,
+    IdentityError, NewUserMutation, ResourceInfo, StoredPage, UserDetails, UserPasswordContext,
+    UserPatchMutation, UserReader, UserRepository, UserResourceAccessDetails,
+    UserResourceAccessInput, UserSearchItemDetails,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;
@@ -113,13 +113,13 @@ impl PostgresUserReadStore {
     }
 }
 
-impl UserReadStore for PostgresUserReadStore {
+impl UserReader for PostgresUserReadStore {
     fn list<'a>(
         &'a self,
         name: Option<&'a str>,
         limit: i64,
         offset: i64,
-    ) -> BoxFuture<'a, Result<StoredPage<UserView>, IdentityError>> {
+    ) -> BoxFuture<'a, Result<StoredPage<UserDetails>, IdentityError>> {
         Box::pin(async move {
             let total_items = sqlx::query_scalar::<_, i64>(
                 "SELECT COUNT(*) FROM users WHERE ($1::text IS NULL OR name ILIKE '%' || $1 || '%')",
@@ -145,7 +145,7 @@ impl UserReadStore for PostgresUserReadStore {
         })
     }
 
-    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<UserView>, IdentityError>> {
+    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<UserDetails>, IdentityError>> {
         Box::pin(async move {
             sqlx::query(GET_USER_SQL)
                 .bind(id)
@@ -164,7 +164,7 @@ impl UserReadStore for PostgresUserReadStore {
         &'a self,
         query: &'a str,
         limit: i64,
-    ) -> BoxFuture<'a, Result<Vec<UserSearchItemView>, IdentityError>> {
+    ) -> BoxFuture<'a, Result<Vec<UserSearchItemDetails>, IdentityError>> {
         Box::pin(async move {
             sqlx::query(
                 r#"
@@ -182,7 +182,7 @@ LIMIT $2
             .map_err(storage)?
             .into_iter()
             .map(|row| {
-                Ok(UserSearchItemView {
+                Ok(UserSearchItemDetails {
                     id: row.try_get("id").map_err(storage)?,
                     name: row.try_get("name").map_err(storage)?,
                     email: required_email(&row)?,
@@ -193,7 +193,7 @@ LIMIT $2
     }
 }
 
-impl UserMutationStore for PostgresUserReadStore {
+impl UserRepository for PostgresUserReadStore {
     fn password_context(
         &self,
         id: Uuid,
@@ -218,7 +218,7 @@ impl UserMutationStore for PostgresUserReadStore {
         &'a self,
         user: &'a NewUserMutation,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -291,7 +291,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -401,7 +401,7 @@ WHERE id = $1
         name: &'a str,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'a, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -442,7 +442,7 @@ WHERE id = $1
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'_, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -500,7 +500,7 @@ WHERE id = $1
         role_id: Uuid,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'_, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -549,7 +549,7 @@ WHERE id = $1
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             if !custom_access_control_enabled {
                 return Err(IdentityError::LicenseRequired("custom-access-control"));
@@ -609,7 +609,7 @@ ON CONFLICT (resourcetype, resourceid, actorid) DO NOTHING
         access: &'a UserResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'a, Result<UserView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -1081,7 +1081,7 @@ SELECT EXISTS (
 async fn fetch_user_view(
     transaction: &mut Transaction<'_, Postgres>,
     id: Uuid,
-) -> Result<Option<UserView>, IdentityError> {
+) -> Result<Option<UserDetails>, IdentityError> {
     sqlx::query(GET_USER_SQL)
         .bind(id)
         .fetch_optional(&mut **transaction)
@@ -1137,9 +1137,9 @@ struct PersistedAccess {
 
 fn map_user(
     row: PgRow,
-    resource_accesses: Option<Vec<UserResourceAccessView>>,
-) -> Result<UserView, IdentityError> {
-    Ok(UserView {
+    resource_accesses: Option<Vec<UserResourceAccessDetails>>,
+) -> Result<UserDetails, IdentityError> {
+    Ok(UserDetails {
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         email: required_email(&row)?,
@@ -1172,7 +1172,7 @@ fn map_resource_info(value: serde_json::Value) -> Result<Vec<ResourceInfo>, Iden
         })
 }
 
-fn map_accesses(value: serde_json::Value) -> Result<Vec<UserResourceAccessView>, IdentityError> {
+fn map_accesses(value: serde_json::Value) -> Result<Vec<UserResourceAccessDetails>, IdentityError> {
     serde_json::from_value::<Vec<PersistedAccess>>(value)
         .map_err(|error| IdentityError::Storage(error.to_string()))?
         .into_iter()
@@ -1190,7 +1190,7 @@ fn map_accesses(value: serde_json::Value) -> Result<Vec<UserResourceAccessView>,
                         access.permission_level
                     ))
                 })?;
-            Ok(UserResourceAccessView {
+            Ok(UserResourceAccessDetails {
                 resource_type,
                 resource_id: access.resource_id,
                 resource_name: access.resource_name,

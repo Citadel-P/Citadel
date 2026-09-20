@@ -3,15 +3,15 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_platforms::{
-    ContainerStatsStore, InventoryProjectionStore, PlatformReadStore, RuntimeContainerStat,
+    ContainerStatsStore, InventoryProjectionStore, PlatformReader, RuntimeContainerStat,
     RuntimeContainerSummary, RuntimeImageSummary, RuntimeInventorySnapshot, RuntimeNetworkSummary,
     RuntimePlatformInfo, RuntimeSwarmConfig, RuntimeSwarmInventory, RuntimeSwarmNode,
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
+use citadel_primitives::ActorId;
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -93,7 +93,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     );
 
     // Recreate the adapter to prove that reads come from PostgreSQL, not process memory.
-    let reads = PostgresPlatformReadStore::new(pool.clone());
+    let reads = PostgresPlatformReader::new(pool.clone());
     let platforms = reads
         .list_authorized(ActorId::new(actor_id), true, &[tag_id])
         .await
@@ -264,7 +264,7 @@ async fn inventory_restores_only_platform_scoped_ownership_and_preserves_adoptio
     }
     let store = PostgresInventoryProjectionStore::new(pool.clone());
     store.persist(&snapshot).await.unwrap();
-    let reads = PostgresPlatformReadStore::new(pool.clone());
+    let reads = PostgresPlatformReader::new(pool.clone());
     for container in reads.list_containers(platform).await.unwrap() {
         assert_eq!(
             container.stack_id,
@@ -501,7 +501,7 @@ async fn seed_platform(pool: &sqlx::PgPool, platform_id: Uuid, actor_id: Uuid, t
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
-    use citadel_platforms::{HostDiskUsage, StatisticsReadStore, StatsWindow};
+    use citadel_platforms::{HostDiskUsage, StatisticsReader, StatsWindow};
     let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
@@ -536,7 +536,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
             .unwrap(),
         1
     );
-    let views = PostgresPlatformReadStore::new(pool.clone())
+    let views = PostgresPlatformReader::new(pool.clone())
         .list_authorized(ActorId::new(actor), true, &[tag])
         .await
         .unwrap();
@@ -546,7 +546,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
     assert_eq!(current.disk_total_bytes, Some(100));
     assert_eq!(current.disk_usage, Some(90.0));
     let history =
-        citadel_adapters::statistics_read_store::PostgresStatisticsReadStore::new(pool.clone())
+        citadel_adapters::statistics_read_store::PostgresStatisticsReader::new(pool.clone())
             .platform(platform, StatsWindow::new(24).unwrap(), created)
             .await
             .unwrap();
@@ -1757,7 +1757,7 @@ async fn inventory_initialization_serializes_one_platform_without_blocking_other
         .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
         .unwrap();
     let service = citadel_platforms::PlatformReadService::new(Arc::new(
-        citadel_adapters::platform_read_store::PostgresPlatformReadStore::new(pool),
+        citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool),
     ));
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();

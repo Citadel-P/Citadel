@@ -1,5 +1,5 @@
 use citadel_backups::permissions::*;
-use citadel_domain::PermissionPolicy;
+use citadel_primitives::PermissionPolicy;
 mod repositories;
 use repositories::*;
 mod policies;
@@ -37,7 +37,7 @@ use citadel_backups::{
     BackupRestoreRequest, BackupService,
 };
 
-use citadel_domain::{PermissionLevel, ResourceType};
+use citadel_primitives::{PermissionLevel, ResourceType};
 
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService, PermissionGrant};
 
@@ -250,9 +250,9 @@ async fn auth(
                     }
                     _ => return grant.level.grants(l),
                 };
-                citadel_domain::EffectivePermission::Granted {
+                citadel_primitives::EffectivePermission::Granted {
                     level: grant.level,
-                    specifics: citadel_domain::SpecificPermissions::EMPTY,
+                    specifics: citadel_primitives::SpecificPermissions::EMPTY,
                 }
                 .allows(requirement)
             })

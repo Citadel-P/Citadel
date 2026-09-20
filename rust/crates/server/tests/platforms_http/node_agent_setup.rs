@@ -65,7 +65,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
         )
         .bind(id)
         .bind(f.actor_id)
-        .bind(citadel_domain::SpecificPermission::ManageNodeAgents as i32)
+        .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
         .execute(&f.pool)
         .await
         .unwrap();

@@ -1,25 +1,30 @@
 use super::*;
-use citadel_adapters::statistics_read_store::PostgresStatisticsReadStore;
-use citadel_platforms::{StatisticsReadStore, StatisticsWorkload, StatsWindow};
+
+use citadel_adapters::statistics_read_store::PostgresStatisticsReader;
+
+use citadel_platforms::{StatisticsReader, StatisticsWorkload, StatsWindow};
 
 #[derive(Serialize)]
 struct History<T> {
     stats: Vec<T>,
 }
+
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct TaskHistory {
     container_projection_id: Uuid,
     docker_container_id: String,
-    stats: Vec<citadel_platforms::ContainerStatView>,
+    stats: Vec<crate::platforms_http::views::ContainerStatView>,
 }
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ContainerHistory {
     container_id: String,
     container_name: String,
-    stats: Vec<citadel_platforms::ContainerStatView>,
+    stats: Vec<crate::platforms_http::views::ContainerStatView>,
 }
+
 #[derive(Serialize)]
 struct StackHistory {
     containers: Vec<ContainerHistory>,
@@ -30,9 +35,11 @@ pub(super) struct Hours {
     #[serde(default = "default_hours", alias = "Hours")]
     hours: u16,
 }
+
 const fn default_hours() -> u16 {
     24
 }
+
 fn window(
     query: Result<Query<Hours>, QueryRejection>,
     headers: &HeaderMap,
@@ -44,6 +51,7 @@ fn window(
         headers,
     )
 }
+
 fn storage(error: RuntimeCapabilityError) -> IdentityError {
     IdentityError::Storage(error.to_string())
 }
@@ -80,6 +88,7 @@ pub(super) async fn task(
             .platforms
             .get_platform(platform_id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -122,7 +131,7 @@ pub(super) async fn task(
         Ok(id) => id,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let target = match store
         .task_container(platform_id, &live.node_id, docker_id)
         .await
@@ -149,7 +158,7 @@ pub(super) async fn task(
         Json(TaskHistory {
             container_projection_id: target.id,
             docker_container_id: docker_id.to_owned(),
-            stats,
+            stats: stats.into_iter().map(Into::into).collect(),
         })
         .into_response(),
     ))
@@ -186,6 +195,7 @@ pub(super) async fn service(
             .platforms
             .get_platform(platform_id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -205,7 +215,7 @@ pub(super) async fn service(
             .map_err(platform_error),
         &headers,
     )?;
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let now = chrono::Utc::now().timestamp();
     let tasks = match store.service_current_tasks(platform_id, &id, now).await {
         Ok(tasks) => tasks,
@@ -275,7 +285,7 @@ pub(super) async fn container(
         },
         &headers,
     )?;
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let target = match store.find_container(&reference).await {
         Ok(target) => required(Ok(target), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -321,10 +331,11 @@ pub(super) async fn platform(
             .platforms
             .get_platform(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let stats = identity_result(
         store
             .platform(id, window, chrono::Utc::now().timestamp())
@@ -366,6 +377,7 @@ pub(super) async fn deployment(
     )
     .await
 }
+
 #[utoipa::path(
     get,
     path = "/api/v1/stacks/{stackId}/stats",
@@ -397,6 +409,7 @@ pub(super) async fn stack(
     )
     .await
 }
+
 async fn workload(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -427,7 +440,7 @@ async fn workload(
         )?,
         StatisticsWorkload::Stack => {}
     }
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let containers = match store.workload_containers(workload, id).await {
         Ok(containers) => required(Ok(containers), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -456,7 +469,12 @@ async fn workload(
         .map(|c| ContainerHistory {
             container_id: c.docker_id,
             container_name: c.name,
-            stats: grouped.remove(&c.id).unwrap_or_default(),
+            stats: grouped
+                .remove(&c.id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         })
         .collect();
     Ok(no_store(Json(StackHistory { containers }).into_response()))

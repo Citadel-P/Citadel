@@ -1,6 +1,6 @@
 //! Transactional durable Deployment persistence.
 use crate::*;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 pub trait DeploymentRepository: Send + Sync {

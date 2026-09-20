@@ -3,8 +3,8 @@ use crate::container_mutations::Runtime;
 use citadel_backups::policies::read_models::{
     BackupPreviewKind, BackupPreviewResource, BackupSourcePreview, BackupVolumePreview,
 };
-use citadel_domain::{ActorId, ResourceType};
 use citadel_platforms::containers::{ContainerInspectionPort, ContainerTarget};
+use citadel_primitives::{ActorId, ResourceType};
 use serde_json::json;
 use sqlx::AssertSqlSafe;
 
@@ -269,7 +269,7 @@ SELECT volumename,dockernodeid FROM latest WHERE status IS DISTINCT FROM 'Failed
         let covered = sqlx::query(AssertSqlSafe(query.as_str()))
             .bind(actor.value())
             .bind(ResourceType::BackupPolicy as i32)
-            .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+            .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
             .bind(administrator)
             .bind(platform.to_string())
             .bind(names)

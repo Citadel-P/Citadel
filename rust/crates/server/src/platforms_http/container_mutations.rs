@@ -1,5 +1,8 @@
 use super::*;
-use citadel_platforms::containers::{ContainerAction, DeleteContainerOptions};
+
+use citadel_platforms::containers::ContainerAction;
+
+use crate::platforms_http::dto::DeleteContainerOptions;
 
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +27,7 @@ macro_rules! action_handler {
         }
     };
 }
+
 action_handler!(
     #[utoipa::path(
     patch,
@@ -42,6 +46,7 @@ action_handler!(
     start,
     Start
 );
+
 action_handler!(
     #[utoipa::path(
     patch,
@@ -60,6 +65,7 @@ action_handler!(
     stop,
     Stop
 );
+
 action_handler!(
     #[utoipa::path(
     patch,
@@ -78,6 +84,7 @@ action_handler!(
     restart,
     Restart
 );
+
 action_handler!(
     #[utoipa::path(
     patch,
@@ -96,6 +103,7 @@ action_handler!(
     pause,
     Pause
 );
+
 action_handler!(
     #[utoipa::path(
     patch,
@@ -142,6 +150,7 @@ macro_rules! deployment_action_handler {
         }
     };
 }
+
 deployment_action_handler!(
     #[utoipa::path(
     post,
@@ -160,6 +169,7 @@ deployment_action_handler!(
     start_deployments,
     Start
 );
+
 deployment_action_handler!(
     #[utoipa::path(
     post,
@@ -178,6 +188,7 @@ deployment_action_handler!(
     stop_deployments,
     Stop
 );
+
 deployment_action_handler!(
     #[utoipa::path(
     post,
@@ -196,6 +207,7 @@ deployment_action_handler!(
     restart_deployments,
     Restart
 );
+
 deployment_action_handler!(
     #[utoipa::path(
     post,
@@ -214,6 +226,7 @@ deployment_action_handler!(
     pause_deployments,
     Pause
 );
+
 deployment_action_handler!(
     #[utoipa::path(
     post,
@@ -259,7 +272,7 @@ pub(super) async fn delete(
         state,
         principal,
         input.container_ids,
-        ContainerAction::Delete(input.options),
+        ContainerAction::Delete(input.options.into()),
         &headers,
     )
     .await

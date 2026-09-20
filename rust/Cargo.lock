@@ -464,6 +464,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-activities"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-licensing",
+ "citadel-primitives",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "citadel-adapters"
 version = "0.0.0"
 dependencies = [
@@ -474,23 +487,28 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "chrono",
+ "citadel-activities",
  "citadel-alerts",
  "citadel-application",
  "citadel-automation",
  "citadel-backups",
+ "citadel-bindings",
  "citadel-builds",
  "citadel-contracts",
  "citadel-database",
  "citadel-deployments",
+ "citadel-discovery",
  "citadel-docker-api",
- "citadel-domain",
  "citadel-execution",
  "citadel-git",
  "citadel-identity",
+ "citadel-licensing",
  "citadel-platforms",
- "citadel-resources",
+ "citadel-primitives",
+ "citadel-registries",
  "citadel-stacks",
  "citadel-swarm-services",
+ "citadel-tags",
  "ed25519-dalek 3.0.0",
  "futures-util",
  "getrandom 0.4.3",
@@ -523,7 +541,8 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "citadel-domain",
+ "citadel-activities",
+ "citadel-primitives",
  "futures-util",
  "reqwest",
  "serde",
@@ -539,8 +558,10 @@ name = "citadel-application"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "citadel-domain",
+ "citadel-activities",
  "citadel-identity",
+ "citadel-licensing",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -558,11 +579,12 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "citadel-activities",
  "citadel-alerts",
- "citadel-domain",
  "citadel-execution",
  "citadel-git",
- "citadel-resources",
+ "citadel-primitives",
+ "citadel-tags",
  "futures-util",
  "serde",
  "serde_json",
@@ -580,7 +602,8 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "citadel-domain",
+ "citadel-activities",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -594,13 +617,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-bindings"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-builds"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "citadel-activities",
  "citadel-alerts",
- "citadel-domain",
- "citadel-resources",
+ "citadel-git",
+ "citadel-licensing",
+ "citadel-primitives",
+ "citadel-tags",
  "futures-util",
  "serde",
  "serde_json",
@@ -649,7 +688,8 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "citadel-alerts",
- "citadel-domain",
+ "citadel-licensing",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -659,6 +699,17 @@ dependencies = [
  "tracing",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "citadel-discovery"
+version = "0.0.0"
+dependencies = [
+ "citadel-primitives",
+ "futures-util",
+ "serde",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -677,19 +728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "citadel-domain"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "thiserror",
- "url",
- "utoipa",
- "uuid",
-]
-
-[[package]]
 name = "citadel-execution"
 version = "0.0.0"
 dependencies = [
@@ -704,8 +742,8 @@ version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
- "citadel-domain",
  "citadel-execution",
+ "citadel-primitives",
  "futures-util",
  "hmac 0.13.0",
  "serde",
@@ -727,7 +765,8 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "chrono-tz",
- "citadel-domain",
+ "citadel-activities",
+ "citadel-primitives",
  "email_address",
  "futures-util",
  "getrandom 0.4.3",
@@ -738,9 +777,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
- "utoipa",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "citadel-licensing"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-primitives",
+ "serde",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -748,7 +797,8 @@ name = "citadel-platforms"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "citadel-domain",
+ "citadel-primitives",
+ "citadel-swarm-services",
  "futures-util",
  "serde",
  "serde_json",
@@ -757,29 +807,31 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
- "utoipa",
  "uuid",
  "zeroize",
 ]
 
 [[package]]
-name = "citadel-resources"
+name = "citadel-primitives"
 version = "0.0.0"
 dependencies = [
- "base64 0.23.1",
- "chrono",
- "citadel-domain",
- "citadel-git",
- "futures-util",
- "hmac 0.13.0",
  "serde",
- "serde_json",
- "sha2 0.11.0",
- "subtle",
- "thiserror",
  "utoipa",
  "uuid",
- "zeroize",
+]
+
+[[package]]
+name = "citadel-registries"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-primitives",
+ "citadel-tags",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -792,22 +844,27 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "chrono",
+ "citadel-activities",
  "citadel-adapters",
  "citadel-alerts",
  "citadel-application",
  "citadel-automation",
  "citadel-backups",
+ "citadel-bindings",
  "citadel-builds",
  "citadel-contracts",
  "citadel-database",
  "citadel-deployments",
- "citadel-domain",
+ "citadel-discovery",
  "citadel-git",
  "citadel-identity",
+ "citadel-licensing",
  "citadel-platforms",
- "citadel-resources",
+ "citadel-primitives",
+ "citadel-registries",
  "citadel-stacks",
  "citadel-swarm-services",
+ "citadel-tags",
  "clap",
  "futures-util",
  "ipnet",
@@ -844,9 +901,11 @@ name = "citadel-stacks"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "citadel-activities",
  "citadel-alerts",
- "citadel-domain",
- "citadel-resources",
+ "citadel-git",
+ "citadel-platforms",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -866,7 +925,8 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "citadel-alerts",
- "citadel-domain",
+ "citadel-licensing",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -877,6 +937,18 @@ dependencies = [
  "tracing",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "citadel-tags"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-primitives",
+ "futures-util",
+ "serde",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -4795,7 +4867,6 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 name = "xtask"
 version = "0.0.0"
 dependencies = [
- "citadel-domain",
  "citadel-server",
  "clap",
  "serde",

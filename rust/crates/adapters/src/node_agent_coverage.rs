@@ -1,7 +1,7 @@
 use crate::edge::{EdgeRegistry, EdgeTarget};
 use chrono::{DateTime, Utc};
 use citadel_platforms::{
-    PlatformView,
+    PlatformDetails,
     node_agents::{NodeAgentOperation, NodeCoverageInput, SwarmNodeAgentCoverage},
 };
 use serde_json::Value;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub async fn read(
     pool: &PgPool,
     sessions: &EdgeRegistry,
-    platform: &PlatformView,
+    platform: &PlatformDetails,
 ) -> Result<SwarmNodeAgentCoverage, sqlx::Error> {
     let id = platform.id;
     let mut tx = pool.begin().await?;

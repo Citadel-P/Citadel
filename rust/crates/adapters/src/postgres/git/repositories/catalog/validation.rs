@@ -3,7 +3,7 @@ pub(super) async fn validate_git_account(
     transaction: &mut Transaction<'_, Postgres>,
     id: Option<Uuid>,
     repository_url: &str,
-) -> Result<(), ResourceMetadataError> {
+) -> Result<(), GitRepositoryError> {
     let Some(id) = id else {
         return validate_direct_git_url(repository_url);
     };
@@ -12,7 +12,7 @@ pub(super) async fn validate_git_account(
         .fetch_optional(&mut **transaction)
         .await
         .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)?;
+        .ok_or(GitRepositoryError::NotFound)?;
     if is_account_relative_git_path(repository_url) {
         return Ok(());
     }
@@ -20,7 +20,7 @@ pub(super) async fn validate_git_account(
     if repository_domain.eq_ignore_ascii_case(domain.trim().trim_end_matches('/')) {
         Ok(())
     } else {
-        Err(ResourceMetadataError::Validation(format!(
+        Err(GitRepositoryError::Validation(format!(
             "Repository URL domain '{repository_domain}' does not match linked GitAccount domain '{}'.",
             domain.trim().trim_end_matches('/')
         )))
@@ -38,7 +38,7 @@ pub(super) fn is_account_relative_git_path(repository_url: &str) -> bool {
         && !value.starts_with("git@")
 }
 
-pub(super) fn validate_direct_git_url(repository_url: &str) -> Result<(), ResourceMetadataError> {
+pub(super) fn validate_direct_git_url(repository_url: &str) -> Result<(), GitRepositoryError> {
     let value = repository_url.trim();
     let valid = url::Url::parse(value).is_ok_and(|url| {
         matches!(url.scheme(), "http" | "https" | "file")
@@ -51,13 +51,13 @@ pub(super) fn validate_direct_git_url(repository_url: &str) -> Result<(), Resour
     if valid {
         Ok(())
     } else {
-        Err(ResourceMetadataError::Validation(
+        Err(GitRepositoryError::Validation(
             "Enter a complete repository URL when no Git account is selected.".to_owned(),
         ))
     }
 }
 
-pub(super) fn extract_git_domain(repository_url: &str) -> Result<String, ResourceMetadataError> {
+pub(super) fn extract_git_domain(repository_url: &str) -> Result<String, GitRepositoryError> {
     let value = repository_url.trim();
     if let Ok(url) = url::Url::parse(value)
         && let Some(host) = url.host_str()
@@ -75,7 +75,7 @@ pub(super) fn extract_git_domain(repository_url: &str) -> Result<String, Resourc
         .map_or(authority, |(host, _)| host)
         .trim();
     if host.is_empty() {
-        Err(ResourceMetadataError::Validation(
+        Err(GitRepositoryError::Validation(
             "Repository URL must include a host.".to_owned(),
         ))
     } else {

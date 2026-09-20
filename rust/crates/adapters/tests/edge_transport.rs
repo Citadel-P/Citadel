@@ -614,9 +614,9 @@ async fn verify_node_local_resources(
     assert_eq!(tags, serde_json::json!(["redis:updated"]));
     assert_eq!(identity, "redis@sha256:abc");
     {
-        use citadel_platforms::PlatformReadStore;
+        use citadel_platforms::PlatformReader;
         let images =
-            citadel_adapters::platform_read_store::PostgresPlatformReadStore::new(pool.clone())
+            citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool.clone())
                 .list_images(platform)
                 .await
                 .unwrap();
@@ -633,7 +633,7 @@ async fn verify_node_local_resources(
         );
         assert!(!image.is_stale);
         let store =
-            citadel_adapters::platform_read_store::PostgresPlatformReadStore::new(pool.clone());
+            citadel_adapters::postgres::platforms::PostgresPlatformReader::new(pool.clone());
         let volumes = store.list_node_volumes(platform).await.unwrap();
         assert_eq!(volumes.len(), 2);
         let networks = store.list_node_networks(platform).await.unwrap();

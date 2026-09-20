@@ -2,9 +2,9 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// Public installation instructions. The signing private key never enters this model.
-#[derive(Clone, Serialize, utoipa::ToSchema)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentSetupView {
+pub struct AgentSetupInstructions {
     pub hub_public_key: String,
     pub environment: BTreeMap<String, String>,
     pub agent_image: String,
@@ -12,7 +12,7 @@ pub struct AgentSetupView {
     pub requires_tls: bool,
 }
 
-impl AgentSetupView {
+impl AgentSetupInstructions {
     pub fn new(hub_public_key: String, agent_image: String, requires_tls: bool) -> Self {
         let mut environment = BTreeMap::from([("HUB_PUBLIC_KEY".into(), hub_public_key.clone())]);
         if requires_tls {
@@ -71,7 +71,7 @@ mod tests {
     // Ports GetAgentSetupTests.Handle_ShouldReturnRegularAgentSetupWithoutPrivateKeyMaterial.
     #[test]
     fn regular_agent_setup_preserves_the_dotnet_ui_contract() {
-        let setup = AgentSetupView::new(
+        let setup = AgentSetupInstructions::new(
             "public-key".into(),
             "registry.example.com/citadel-agent:1.2.3".into(),
             false,
@@ -108,7 +108,8 @@ mod tests {
 
     #[test]
     fn tls_setup_includes_certificate_paths_but_not_certificate_contents() {
-        let setup = AgentSetupView::new("public-key".into(), "citadel-agent:1.2.3".into(), true);
+        let setup =
+            AgentSetupInstructions::new("public-key".into(), "citadel-agent:1.2.3".into(), true);
         assert!(setup.requires_tls);
         assert_eq!(setup.environment["CITADEL_AGENT_TLS_MODE"], "Direct");
         assert!(

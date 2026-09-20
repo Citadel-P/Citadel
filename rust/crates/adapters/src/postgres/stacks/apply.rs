@@ -124,12 +124,14 @@ impl PostgresStackRepository {
                 .await
                 .map_err(storage)?;
             let descriptor: Value = platform.try_get("platformdescriptor").map_err(storage)?;
-            let platform_type = descriptor
-                .get("$type")
-                .or_else(|| descriptor.get("type"))
-                .and_then(Value::as_str)
-                .unwrap_or("Docker")
-                .to_owned();
+            let platform_type = crate::postgres::platform_classification::platform_kind(
+                descriptor
+                    .get("$type")
+                    .or_else(|| descriptor.get("type"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("Docker"),
+            )
+            .map_err(storage)?;
             let project_name = spec.common().project_name.clone().unwrap_or_else(|| {
                 normalize_project_name(
                     row.try_get::<String, _>("name")
@@ -139,7 +141,7 @@ impl PostgresStackRepository {
                 )
             });
             if !options.service_names.is_empty() {
-                if platform_type != "Docker"
+                if platform_type != citadel_platforms::PlatformKind::Docker
                     || rollback_release_id.is_some()
                     || webhook_job_id.is_some()
                     || options.service_names.len() > 256
@@ -349,7 +351,7 @@ impl PostgresStackRepository {
                     let id:Uuid=row.try_get("id").map_err(storage)?;
                     let spec=StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
                     let descriptor:Value=row.try_get("platformdescriptor").map_err(storage)?;
-                    let platform_type=descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker").to_owned();
+                    let platform_type=crate::postgres::platform_classification::platform_kind(descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker")).map_err(storage)?;
                     let name:String=row.try_get("name").map_err(storage)?;
                     let actor=ActorId::new(row.try_get("controltriggeredby").map_err(storage)?);
                     Ok((actor,StackOperationClaim { stack_id:id,release_id:row.try_get("currentstackreleaseid").map_err(storage)?,platform_id:row.try_get("platformid").map_err(storage)?,project_name:spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name,id)),platform_type,spec,row_version:row.try_get("rowversion").map_err(storage)?,actor_id:actor.value(),name,operation:"Apply".to_owned(),service_names:row.try_get("applyservices").map_err(storage)? }))

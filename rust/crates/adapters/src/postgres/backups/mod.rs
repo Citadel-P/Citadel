@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 
 use citadel_backups::*;
 
-use citadel_domain::{ActorId, ResourceType};
+use citadel_primitives::{ActorId, ResourceType};
 
 use futures_util::future::BoxFuture;
 

@@ -1,5 +1,5 @@
-use citadel_domain::ActorId;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::sync::{
     Arc,
@@ -14,7 +14,7 @@ struct Store {
     claimed: AtomicUsize,
     finished: AtomicUsize,
 }
-impl ContainerMutationStore for Store {
+impl ContainerRepository for Store {
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],

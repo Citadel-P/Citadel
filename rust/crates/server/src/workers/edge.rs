@@ -149,10 +149,12 @@ async fn observe(
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
-    let (mut platform_type,expected_daemon):(String,String)=sqlx::query_as("SELECT CASE WHEN platform.platformdescriptor::jsonb->>'$type'='DockerSwarm' THEN 'DockerSwarm' ELSE 'Docker' END,binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL").bind(platform_id).bind(session.agent_id).bind(session.connected_at).fetch_one(&pool).await?;
+    let (platform_type,expected_daemon):(String,String)=sqlx::query_as("SELECT COALESCE(platform.platformdescriptor::jsonb->>'$type','Docker'),binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL").bind(platform_id).bind(session.agent_id).bind(session.connected_at).fetch_one(&pool).await?;
+    let mut platform_type =
+        citadel_adapters::postgres::platform_classification::platform_kind(&platform_type)?;
     // Workers do not expose manager-only Swarm inventory APIs.
     if session.target.node_id.is_some() {
-        platform_type = "Docker".into();
+        platform_type = citadel_platforms::PlatformKind::Docker;
     }
     let target = InventoryCollectionTarget {
         platform_id,
@@ -177,7 +179,9 @@ async fn observe(
             let snapshot = match collect_inventory(&runtime, &target, cancellation).await {
                 Ok(snapshot) => snapshot,
                 Err(error) => {
-                    if target.platform_type == "DockerSwarm" && !cancellation.is_cancelled() {
+                    if target.platform_type == citadel_platforms::PlatformKind::DockerSwarm
+                        && !cancellation.is_cancelled()
+                    {
                         citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore::new(pool.clone())
                             .mark_swarm_stale(platform_id,started).await?;
                     }

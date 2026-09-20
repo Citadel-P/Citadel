@@ -16,7 +16,7 @@ pub struct BuildSecretSpec {
 
 #[derive(Debug, Clone)]
 pub struct BuildProject {
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub latest_run: Option<BuildRun>,
     pub id: Uuid,
     pub name: String,

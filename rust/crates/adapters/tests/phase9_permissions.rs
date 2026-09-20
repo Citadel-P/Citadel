@@ -4,7 +4,7 @@ use citadel_adapters::postgres::{
 use citadel_alerts::{AlertChannelConfiguration, AlertRepository};
 use citadel_automation::{AutomationActionConfiguration, AutomationRepository};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, PermissionLevel, ResourceType};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use serde_json::json;
 use uuid::Uuid;
 

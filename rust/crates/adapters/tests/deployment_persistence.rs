@@ -4,8 +4,8 @@ use citadel_deployments::{
     CreateDeployment, DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository,
     DeploymentSpec, DuplicateSource, FieldPatch, UpdateBehavior, UpdateDeploymentMetadata,
 };
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
@@ -382,7 +382,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .unwrap();
     assert_eq!(authorized.len(), 1);
     assert_eq!(authorized[0].id, created.id);
-    assert!(!authorized[0].effective_permission.allows(<citadel_deployments::permissions::WriteDeployment as citadel_domain::PermissionPolicy>::REQUIREMENT));
+    assert!(!authorized[0].effective_permission.allows(<citadel_deployments::permissions::WriteDeployment as citadel_primitives::PermissionPolicy>::REQUIREMENT));
 
     let team_member = Uuid::now_v7();
     let team_actor = Uuid::now_v7();

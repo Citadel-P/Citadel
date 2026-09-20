@@ -2,12 +2,14 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEventInfo, ActorId, COMMUNITY_EDITION, CitadelInstanceIdentity, InstalledLicense,
-    LEGACY_LICENSE_SCHEMA, LICENSE_PRODUCT, LicenseCapability, LicenseState, LicenseStatus,
-    LicenseVerificationResult, TEAM_EDITION,
-};
+use citadel_activities::ActivityEventInfo;
 use citadel_identity::{Clock, IdentityError};
+use citadel_licensing::{
+    COMMUNITY_EDITION, CitadelInstanceIdentity, InstalledLicense, LEGACY_LICENSE_SCHEMA,
+    LICENSE_PRODUCT, LicenseCapability, LicenseState, LicenseStatus, LicenseVerificationResult,
+    TEAM_EDITION,
+};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -443,7 +445,7 @@ pub fn license_transition_delay(
 
 #[must_use]
 pub fn next_license_boundary(
-    payload: Option<&citadel_domain::LicensePayload>,
+    payload: Option<&citadel_licensing::LicensePayload>,
     now: DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
     let payload = payload?;
@@ -515,8 +517,8 @@ pub fn build_state(
     }
 }
 
-fn activity_snapshot(state: &LicenseState) -> citadel_domain::LicenseActivitySnapshot {
-    citadel_domain::LicenseActivitySnapshot {
+fn activity_snapshot(state: &LicenseState) -> citadel_activities::LicenseActivitySnapshot {
+    citadel_activities::LicenseActivitySnapshot {
         schema: state.license_schema,
         license_id: state.license_id.clone(),
         replaced_license_id: state.replaced_license_id.clone(),
@@ -592,7 +594,7 @@ fn to_view(state: &LicenseState) -> LicenseView {
 mod tests {
     use std::collections::BTreeSet;
 
-    use citadel_domain::{
+    use citadel_licensing::{
         CURRENT_LICENSE_SCHEMA, LicenseCustomer, LicensePayload, VerifiedLicense,
     };
 
@@ -657,7 +659,7 @@ mod tests {
 
     #[test]
     fn legacy_business_maps_to_team_and_every_shipped_capability() {
-        assert_eq!(citadel_domain::LEGACY_BUSINESS_EDITION, "Business");
+        assert_eq!(citadel_licensing::LEGACY_BUSINESS_EDITION, "Business");
         assert_eq!(LicenseCapability::ALL.len(), 5);
     }
 

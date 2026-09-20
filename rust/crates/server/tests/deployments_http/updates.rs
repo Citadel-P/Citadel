@@ -80,7 +80,7 @@ impl Entitlements {
 impl DeploymentEntitlementPort for Entitlements {
     fn enabled(
         &self,
-        _: citadel_domain::LicenseCapability,
+        _: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, DeploymentError>> {
         Box::pin(async { Ok(self.0.load(Ordering::Relaxed)) })
     }

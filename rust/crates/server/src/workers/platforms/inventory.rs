@@ -127,12 +127,12 @@ pub(super) async fn reconcile_inventory(
         }
         match scope {
             Some(ReconciliationTrigger::LocalEvent)
-                if !target.connector_type.eq_ignore_ascii_case("Local") =>
+                if !(target.connector_type == citadel_platforms::ConnectorKind::Local) =>
             {
                 return Ok(());
             }
             Some(ReconciliationTrigger::AgentEvent)
-                if !target.connector_type.eq_ignore_ascii_case("Agent") || agent_ids.is_some_and(|ids| !ids.contains(&target.id)) =>
+                if !(target.connector_type == citadel_platforms::ConnectorKind::Agent) || agent_ids.is_some_and(|ids| !ids.contains(&target.id)) =>
             {
                 return Ok(());
             }
@@ -140,9 +140,9 @@ pub(super) async fn reconcile_inventory(
         }
         let selected_agent;
         let runtime: &dyn PlatformInventoryPort =
-            if target.connector_type.eq_ignore_ascii_case("Local") {
+            if target.connector_type == citadel_platforms::ConnectorKind::Local  {
                 &worker.docker
-            } else if target.connector_type.eq_ignore_ascii_case("Agent") {
+            } else if target.connector_type == citadel_platforms::ConnectorKind::Agent  {
                 let Some(agent) = target.agent.as_ref() else {
                     return Ok(());
                 };
@@ -162,7 +162,7 @@ pub(super) async fn reconcile_inventory(
             runtime,
             &InventoryCollectionTarget {
                 platform_id: target.id,
-                platform_type: target.platform_type.clone(),
+                platform_type: target.platform_type,
             },
             cancellation,
         )
@@ -195,7 +195,7 @@ pub(super) async fn reconcile_inventory(
                     %error,
                     "platform inventory target failed"
                 );
-                if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
+                if target.platform_type == citadel_platforms::PlatformKind::DockerSwarm  {
                     PostgresInventoryProjectionStore::new(worker.pool.clone())
                         .mark_swarm_stale(target.id, started_at).await?;
                 }

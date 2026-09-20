@@ -5,9 +5,9 @@ pub(super) async fn write_rule_activity(
     id: Uuid,
     name: &str,
     actor: ActorId,
-    info: citadel_domain::ActivityEventInfo,
+    info: citadel_activities::ActivityEventInfo,
 ) -> Result<(), AlertError> {
-    let activity = citadel_domain::ActivityEvent::new_alert_rule_event(
+    let activity = citadel_activities::ActivityEvent::new_alert_rule_event(
         id,
         name.to_owned(),
         actor,

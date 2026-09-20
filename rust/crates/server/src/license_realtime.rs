@@ -13,8 +13,8 @@ use citadel_application::{
     LicenseStateNotifier, LicenseTransitionMonitor, LicenseValidationPersistence,
     license_transition_delay,
 };
-use citadel_domain::LicenseStatus;
 use citadel_identity::IdentityService;
+use citadel_licensing::LicenseStatus;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

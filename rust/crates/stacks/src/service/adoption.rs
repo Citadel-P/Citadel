@@ -281,10 +281,13 @@ impl StackService {
                             name: name.to_owned(),
                             project_name: project_name.to_owned(),
                             platform_type: match import_kind {
-                                crate::StackImportKind::ComposeProject => "Docker",
-                                crate::StackImportKind::SwarmStack => "DockerSwarm",
-                            }
-                            .to_owned(),
+                                crate::StackImportKind::ComposeProject => {
+                                    citadel_platforms::PlatformKind::Docker
+                                }
+                                crate::StackImportKind::SwarmStack => {
+                                    citadel_platforms::PlatformKind::DockerSwarm
+                                }
+                            },
                             spec: spec.clone(),
                             row_version: 0,
                             actor_id: Uuid::nil(),

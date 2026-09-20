@@ -50,7 +50,7 @@ impl BuildProject {
             .map_err(|error| BuildError::Validation(format!("Invalid Build update: {error}")))
     }
 
-    pub fn snapshot(&self) -> citadel_domain::BuildProjectActivitySnapshot {
+    pub fn snapshot(&self) -> citadel_activities::BuildProjectActivitySnapshot {
         let mut webhook = self.webhook.clone();
         if let Some(Value::Object(fields)) = &mut webhook {
             for (name, value) in fields {
@@ -59,7 +59,7 @@ impl BuildProject {
                 }
             }
         }
-        citadel_domain::BuildProjectActivitySnapshot {
+        citadel_activities::BuildProjectActivitySnapshot {
             id: self.id,
             name: self.name.clone(),
             description: self.description.clone(),
@@ -81,7 +81,7 @@ impl BuildProject {
             build_secrets: self
                 .build_secrets
                 .iter()
-                .map(|s| citadel_domain::BuildSecretActivitySnapshot {
+                .map(|s| citadel_activities::BuildSecretActivitySnapshot {
                     id: s.id.clone(),
                     secret_id: s.secret_id,
                 })

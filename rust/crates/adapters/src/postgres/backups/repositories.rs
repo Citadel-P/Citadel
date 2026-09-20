@@ -41,7 +41,7 @@ ORDER BY repository.name,repository.id"#
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BackupRepository as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await

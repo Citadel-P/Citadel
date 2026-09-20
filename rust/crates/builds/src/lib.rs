@@ -20,7 +20,7 @@ mod validation;
 pub use agent_pools::{BuildAgentPool, BuildAgentPoolConfiguration};
 use chrono::{DateTime, Utc};
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 pub use error::BuildError;
 use futures_util::future::BoxFuture;
 pub use projects::{BuildArgSpec, BuildProject, BuildProjectConfiguration, BuildSecretSpec};

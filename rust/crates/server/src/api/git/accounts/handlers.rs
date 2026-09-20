@@ -14,7 +14,7 @@ use axum::response::IntoResponse;
 
 use axum::{Json, Router};
 
-use citadel_domain::{PermissionLevel, ResourceType};
+use citadel_primitives::{PermissionLevel, ResourceType};
 
 use citadel_git::{GitAccountError, GitAccountService};
 

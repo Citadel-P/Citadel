@@ -47,3 +47,5 @@ pub use runtime::{
     EmptySwarmServiceBindingResolver, ResolvedSwarmServiceBinding, ResolvedSwarmServiceBindings,
     SwarmServiceBindingResolverPort, SwarmServiceRuntime,
 };
+
+pub use model::SwarmServiceOwnership;

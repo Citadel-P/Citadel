@@ -31,7 +31,7 @@ pub struct TagSummary {
 pub struct StackDetails {
     pub stack: Stack,
     pub status: StackReleaseStatus,
-    pub platform_type: String,
+    pub platform_type: citadel_platforms::PlatformKind,
     pub platform_id: Option<Uuid>,
     pub version: Option<String>,
     pub spec: Option<StackSpec>,
@@ -41,7 +41,7 @@ pub struct StackDetails {
     pub platform_name: Option<String>,
     pub tags: Vec<TagSummary>,
     pub latest_activity: Option<Value>,
-    pub effective_permission: citadel_domain::EffectivePermission,
+    pub effective_permission: citadel_primitives::EffectivePermission,
 }
 
 impl std::ops::Deref for StackDetails {
@@ -56,7 +56,7 @@ pub struct StackConfig {
     pub id: Uuid,
     pub name: String,
     pub platform_id: Uuid,
-    pub platform_type: String,
+    pub platform_type: citadel_platforms::PlatformKind,
     pub description: Option<String>,
     pub stack_source: StackSource,
     pub spec: StackSpec,

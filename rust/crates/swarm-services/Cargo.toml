@@ -6,9 +6,10 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-primitives = { path = "../primitives" }
+citadel-licensing = { path = "../licensing" }
 chrono.workspace = true
 citadel-alerts = { path = "../alerts" }
-citadel-domain = { path = "../domain" }
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true

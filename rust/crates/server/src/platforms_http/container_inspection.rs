@@ -1,6 +1,8 @@
 use super::*;
-use citadel_adapters::statistics_read_store::PostgresStatisticsReadStore;
-use citadel_platforms::{StatisticsReadStore, containers::ContainerInspectionPort};
+
+use citadel_adapters::statistics_read_store::PostgresStatisticsReader;
+
+use citadel_platforms::{StatisticsReader, containers::ContainerInspectionPort};
 
 #[utoipa::path(
     get,
@@ -126,6 +128,12 @@ pub(super) async fn stack_data(
             .platforms
             .list_stack_containers(stack_id)
             .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::ContainerView::from)
+                    .collect::<Vec<_>>()
+            })
             .map_err(platform_error),
         &headers,
     )?;
@@ -156,6 +164,7 @@ macro_rules! container_reader {
         }
     };
 }
+
 container_reader!(
     #[utoipa::path(
     get,
@@ -174,6 +183,7 @@ container_reader!(
     inspect,
     Inspect
 );
+
 container_reader!(
     #[utoipa::path(
     get,
@@ -192,6 +202,7 @@ container_reader!(
     info,
     Info
 );
+
 container_reader!(
     #[utoipa::path(
     get,
@@ -228,7 +239,7 @@ async fn read_container(
             &headers,
         );
     }
-    let store = PostgresStatisticsReadStore::new(state.pool.clone());
+    let store = PostgresStatisticsReader::new(state.pool.clone());
     let target = match store.find_container(&reference).await {
         Ok(target) => required(Ok(target), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -242,6 +253,7 @@ async fn read_container(
             .platforms
             .get_container(target.id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -273,6 +285,7 @@ macro_rules! deployment_reader {
         }
     };
 }
+
 deployment_reader!(
     #[utoipa::path(
     get,
@@ -291,6 +304,7 @@ deployment_reader!(
     inspect_deployment,
     Inspect
 );
+
 deployment_reader!(
     #[utoipa::path(
     get,
@@ -356,6 +370,7 @@ async fn read_deployment(
             .platforms
             .get_container(container_id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -424,6 +439,7 @@ pub(super) async fn inspect_stack(
             .platforms
             .get_container(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -451,6 +467,7 @@ async fn inspect_target(
             .platforms
             .get_platform(container.platform_id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         headers,
     )?;

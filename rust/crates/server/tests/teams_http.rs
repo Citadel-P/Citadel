@@ -10,12 +10,13 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::team_store::PostgresTeamStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
     IdentityService, NoopServiceAccountLastUsedTracker, SystemClock, TeamMutationService,
     TeamReadService,
 };
+use citadel_primitives::ActorId;
 use citadel_server::teams_http::{self, TeamsHttpState};
 use serde_json::Value;
 use sqlx::PgPool;

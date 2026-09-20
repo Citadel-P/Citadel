@@ -5,11 +5,12 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     AccessTokenClaims, IdentityError, PasswordHasher, RefreshTokenClaims, ServiceAccountTokenCodec,
     SessionTokenCodec, token_digest,
 };
+use citadel_primitives::ActorId;
 use getrandom::fill;
 use jsonwebtoken::{Algorithm as JwtAlgorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -320,21 +321,16 @@ impl citadel_identity::SecretProtector for AesGcmSecretProtector {
     }
 }
 
-impl citadel_resources::ResourceSecretProtector for AesGcmSecretProtector {
-    fn protect(
-        &self,
-        plaintext: &[u8],
-    ) -> Result<String, citadel_resources::ResourceMetadataError> {
-        Self::protect(self, plaintext)
-            .map_err(|_| citadel_resources::ResourceMetadataError::Credential)
+impl citadel_bindings::SecretProtector for AesGcmSecretProtector {
+    fn protect(&self, plaintext: &[u8]) -> Result<String, citadel_bindings::BindingError> {
+        Self::protect(self, plaintext).map_err(|_| citadel_bindings::BindingError::Credential)
     }
 
     fn unprotect(
         &self,
         envelope: &str,
-    ) -> Result<Zeroizing<Vec<u8>>, citadel_resources::ResourceMetadataError> {
-        Self::unprotect(self, envelope)
-            .map_err(|_| citadel_resources::ResourceMetadataError::Credential)
+    ) -> Result<Zeroizing<Vec<u8>>, citadel_bindings::BindingError> {
+        Self::unprotect(self, envelope).map_err(|_| citadel_bindings::BindingError::Credential)
     }
 }
 

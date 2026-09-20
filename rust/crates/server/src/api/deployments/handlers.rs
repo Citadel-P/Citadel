@@ -15,8 +15,8 @@ pub(super) use citadel_deployments::permissions::{
 pub(super) use citadel_deployments::{
     DeploymentChangeNotifier, DeploymentError, DeploymentFilter, DeploymentService,
 };
-pub(super) use citadel_domain::{PermissionLevel, ResourceType};
 pub(super) use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
+pub(super) use citadel_primitives::{PermissionLevel, ResourceType};
 pub(super) use uuid::Uuid;
 
 pub(super) use crate::identity_http::{IdentityHttpResult, identity_result, no_store};

@@ -2,7 +2,7 @@
 //! image each cycle, shared by Deployment, Compose Stack, and managed Service checks.
 use crate::image_digest_cache::ImageDigestCache;
 use citadel_deployments::{DeploymentRepository, DeploymentRuntime};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use citadel_stacks::StackRepository;
 use citadel_swarm_services::SwarmServiceRepository;
 use futures_util::future::BoxFuture;

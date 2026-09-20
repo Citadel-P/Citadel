@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use citadel_adapters::identity_store::PostgresIdentityStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{
-    ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType, SpecificPermission,
-};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ActorPrincipal, IdentityStore, PermissionGrant, permission_matrix};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction, postgres::PgPoolOptions};
 use uuid::Uuid;

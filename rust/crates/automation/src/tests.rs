@@ -4,7 +4,7 @@ use crate::{
     service::source::automation_source,
 };
 use chrono::{DateTime, Utc};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use uuid::Uuid;
 fn input() -> AutomationActionConfiguration {
     AutomationActionConfiguration {

@@ -39,7 +39,7 @@ pub(crate) async fn load(
     connection: &mut sqlx::PgConnection,
     kind: &str,
     ids: &[Uuid],
-) -> Result<std::collections::HashMap<Uuid, Vec<citadel_resources::TagSummary>>, sqlx::Error> {
+) -> Result<std::collections::HashMap<Uuid, Vec<citadel_tags::TagSummary>>, sqlx::Error> {
     use sqlx::Row;
     let mut tags = std::collections::HashMap::<Uuid, Vec<_>>::new();
     if ids.is_empty() {
@@ -49,7 +49,7 @@ pub(crate) async fn load(
     for row in rows {
         tags.entry(row.try_get("resourceid")?)
             .or_default()
-            .push(citadel_resources::TagSummary {
+            .push(citadel_tags::TagSummary {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 color: row.try_get("color")?,

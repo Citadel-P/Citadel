@@ -3,7 +3,7 @@ use super::lifecycle::*;
 use crate::{
     RuntimeCapabilityError, RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmService,
 };
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::{
     collections::{BTreeMap, BTreeSet},

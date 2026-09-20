@@ -314,7 +314,7 @@ mod tests {
                 row_version: 0,
             },
             status: StackReleaseStatus::Healthy,
-            platform_type: "Docker".to_owned(),
+            platform_type: citadel_platforms::PlatformKind::Docker,
             platform_id: Some(Uuid::now_v7()),
             version: Some("1".to_owned()),
             spec: Some(spec),
@@ -324,7 +324,7 @@ mod tests {
             platform_name: Some("local".to_owned()),
             tags: Vec::<TagSummary>::new(),
             latest_activity: None,
-            effective_permission: citadel_domain::EffectivePermission::Administrator,
+            effective_permission: citadel_primitives::EffectivePermission::Administrator,
         }
     }
 }

@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use citadel_backups::*;
+use citadel_bindings::SecretProtector;
 use citadel_contracts::citadel::containers::v1::{
     CreateContainerRequest, ExecBinaryRequest, RestartPolicy,
 };
 use citadel_contracts::citadel::shared_models::v1::Mount;
 use citadel_execution::{OutputLimitPolicy, ProcessLimits, ProcessRequest, run};
-use citadel_resources::ResourceSecretProtector;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
@@ -27,10 +27,7 @@ pub struct PostgresBackupSecretResolver {
     resolver: PostgresSecretValueResolver,
 }
 impl PostgresBackupSecretResolver {
-    pub fn new(
-        pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
-    ) -> Result<Self, BackupError> {
+    pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, BackupError> {
         Ok(Self {
             resolver: PostgresSecretValueResolver::new(pool, protector)
                 .map_err(|error| BackupError::Storage(error.to_string()))?,

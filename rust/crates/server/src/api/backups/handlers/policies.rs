@@ -88,7 +88,7 @@ pub(super) async fn create_policy(
         s.identity
             .ensure_run_as_allowed(
                 &p,
-                citadel_domain::ActorId::new(
+                citadel_primitives::ActorId::new(
                     i.run_as_actor_id.expect("validation sets the run-as Actor"),
                 ),
             )
@@ -202,7 +202,7 @@ pub(super) async fn update_policy(
             s.identity
                 .ensure_run_as_allowed(
                     &p,
-                    citadel_domain::ActorId::new(
+                    citadel_primitives::ActorId::new(
                         input.run_as_actor_id.expect("validated run-as Actor"),
                     ),
                 )

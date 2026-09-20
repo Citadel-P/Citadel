@@ -7,7 +7,7 @@ use crate::{
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -42,3 +42,5 @@ pub use repository::GitRepositoryPersistence;
 mod service;
 pub use error::GitRepositoryError;
 pub use service::GitRepositoryService;
+
+pub use commands::{validate_description, validate_name_identifier};

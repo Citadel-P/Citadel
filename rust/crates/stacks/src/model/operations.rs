@@ -69,7 +69,7 @@ pub struct StackOperationClaim {
     pub platform_id: Uuid,
     pub name: String,
     pub project_name: String,
-    pub platform_type: String,
+    pub platform_type: citadel_platforms::PlatformKind,
     pub spec: StackSpec,
     pub row_version: i64,
     pub actor_id: Uuid,
@@ -119,7 +119,7 @@ pub struct StackDeletionClaim {
     pub stack_id: Uuid,
     pub platform_id: Uuid,
     pub project_name: String,
-    pub platform_type: String,
+    pub platform_type: citadel_platforms::PlatformKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +129,7 @@ pub struct StackStateClaim {
     pub platform_id: Uuid,
     pub name: String,
     pub project_name: String,
-    pub platform_type: String,
+    pub platform_type: citadel_platforms::PlatformKind,
     pub previous_status: StackReleaseStatus,
     pub actor_id: Uuid,
 }

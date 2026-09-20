@@ -1,5 +1,5 @@
 use super::*;
-use citadel_platforms::ContainerView;
+use crate::platforms_http::views::ContainerView;
 
 #[test]
 fn build_log_events_only_target_the_matching_run_group() {

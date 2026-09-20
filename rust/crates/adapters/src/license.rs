@@ -4,17 +4,18 @@ use std::sync::{Arc, RwLock};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
+use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_application::{
     LicenseSource, LicenseStore, LicenseValidationPersistence, LicenseVerifier, build_state,
 };
 use citadel_deployments::{DeploymentEntitlementPort, DeploymentError};
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity,
-    InstalledLicense, LEGACY_BUSINESS_EDITION, LEGACY_LICENSE_SCHEMA, LICENSE_AUDIENCE,
-    LICENSE_ISSUER, LICENSE_PRODUCT, LicenseCapability, LicensePayload, LicenseStatus,
-    LicenseVerificationResult, VerifiedLicense,
-};
 use citadel_identity::{EntitlementService, IdentityError, SYSTEM_ACTOR_ID};
+use citadel_licensing::{
+    CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity, InstalledLicense, LEGACY_BUSINESS_EDITION,
+    LEGACY_LICENSE_SCHEMA, LICENSE_AUDIENCE, LICENSE_ISSUER, LICENSE_PRODUCT, LicenseCapability,
+    LicensePayload, LicenseStatus, LicenseVerificationResult, VerifiedLicense,
+};
+use citadel_primitives::ActorId;
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use futures_util::future::BoxFuture;
@@ -911,7 +912,7 @@ mod tests {
             audience: LICENSE_AUDIENCE.to_owned(),
             license_id: "lic-test".to_owned(),
             replaced_license_id: None,
-            customer: citadel_domain::LicenseCustomer {
+            customer: citadel_licensing::LicenseCustomer {
                 id: "customer".to_owned(),
                 name: "Customer".to_owned(),
             },

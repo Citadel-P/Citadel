@@ -33,7 +33,7 @@ impl BuildRepository for PostgresBuildRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     > {
         self.project_permissions_impl(actor, ids)
     }
@@ -60,7 +60,7 @@ impl BuildRepository for PostgresBuildRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     > {
         self.pool_permissions_impl(actor, ids)
     }

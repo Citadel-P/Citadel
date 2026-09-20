@@ -1,8 +1,9 @@
-use citadel_domain::{ActivityEvent, ActivityStatus, ActorId};
+use citadel_activities::{ActivityEvent, ActivityStatus};
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind, RuntimePlatformInfo,
     node_agents::lifecycle::{NodeAgentLifecycleStore, NodeAgentRemovalClaim},
 };
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};

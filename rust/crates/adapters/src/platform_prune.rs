@@ -12,7 +12,7 @@ impl PlatformPrunePort for DockerClient {
         &'a self,
         resource: PruneResource,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<PrunePlatformView, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'a, Result<PrunePlatformOutcome, RuntimeCapabilityError>> {
         Box::pin(async move {
             let kinds: &[PruneResource] = if resource == PruneResource::All {
                 &[
@@ -24,7 +24,7 @@ impl PlatformPrunePort for DockerClient {
             } else {
                 std::slice::from_ref(&resource)
             };
-            let mut result = PrunePlatformView::empty(resource);
+            let mut result = PrunePlatformOutcome::empty(resource);
             for kind in kinds {
                 let value = tokio::select! {
                     biased;
@@ -76,7 +76,7 @@ impl PlatformPrunePort for AgentClient {
         &'a self,
         resource: PruneResource,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<PrunePlatformView, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'a, Result<PrunePlatformOutcome, RuntimeCapabilityError>> {
         Box::pin(async move {
             Ok(map(
                 resource,
@@ -96,7 +96,7 @@ impl PlatformPrunePort for EdgeRuntime {
         &'a self,
         resource: PruneResource,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<PrunePlatformView, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'a, Result<PrunePlatformOutcome, RuntimeCapabilityError>> {
         Box::pin(async move {
             let response = crate::agent_execution::unary(
                 &self.session,
@@ -111,8 +111,8 @@ impl PlatformPrunePort for EdgeRuntime {
         })
     }
 }
-fn map(resource: PruneResource, v: PruneResponse) -> PrunePlatformView {
-    PrunePlatformView {
+fn map(resource: PruneResource, v: PruneResponse) -> PrunePlatformOutcome {
+    PrunePlatformOutcome {
         resource,
         space_reclaimed: v.space_reclaimed,
         volumes_deleted: v.volumes_deleted,

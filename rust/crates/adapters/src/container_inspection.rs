@@ -86,7 +86,7 @@ pub fn map_inspection(document: Value, expected_id: &str) -> Result<Value, Runti
         for entry in environment {
             if let Some((name, value)) = entry.as_str().and_then(|value| value.split_once('='))
                 && !value.is_empty()
-                && citadel_domain::is_sensitive_environment_name(name)
+                && citadel_primitives::is_sensitive_environment_name(name)
             {
                 *entry = Value::String(format!("{name}=********"));
             }

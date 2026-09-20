@@ -69,7 +69,7 @@ impl PostgresBuildRepository {
                 &mut transaction,
                 &pool,
                 actor,
-                citadel_domain::ActivityEventInfo::BuildAgentPoolCreated {
+                citadel_activities::ActivityEventInfo::BuildAgentPoolCreated {
                     pool: pool.snapshot(),
                 },
             )
@@ -102,7 +102,7 @@ ORDER BY pool.name,pool.id"#
             let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BuildAgentPool as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
@@ -127,7 +127,7 @@ impl PostgresBuildRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     > {
         Box::pin(async move {
             crate::resource_permissions::levels_for_resources(
@@ -196,13 +196,13 @@ impl PostgresBuildRepository {
                 .ok_or_else(|| BuildError::Conflict("The Build Pool check has been superseded.".into()))?;
             let pool = map_pool(row)?;
             let activity =
-                citadel_domain::ActivityEvent::new_build_pool_event(
+                citadel_activities::ActivityEvent::new_build_pool_event(
                     pool.id,
                     pool.name.clone(),
                     ActorId::new(claim.control_triggered_by.ok_or_else(|| {
                         BuildError::Storage("Build Pool claim has no actor.".into())
                     })?),
-                    citadel_domain::ActivityEventInfo::BuildAgentPoolTested {
+                    citadel_activities::ActivityEventInfo::BuildAgentPoolTested {
                         pool: pool.snapshot(),
                         status: pool.last_validation_status.clone(),
                         message,
@@ -238,12 +238,12 @@ impl PostgresBuildRepository {
                 .ok_or_else(|| BuildError::Conflict("The Build Pool was modified, archived or is processing. Refresh and try again.".into()))?;
             let pool = map_pool(row)?;
             let info = if current.name != pool.name {
-                citadel_domain::ActivityEventInfo::BuildAgentPoolRenamed {
+                citadel_activities::ActivityEventInfo::BuildAgentPoolRenamed {
                     old_name: current.name.clone(),
                     new_name: pool.name.clone(),
                 }
             } else {
-                citadel_domain::ActivityEventInfo::BuildAgentPoolUpdated {
+                citadel_activities::ActivityEventInfo::BuildAgentPoolUpdated {
                     old_pool: current.snapshot(),
                     new_pool: pool.snapshot(),
                 }
@@ -281,7 +281,7 @@ impl PostgresBuildRepository {
                 &mut tx,
                 &current,
                 actor,
-                citadel_domain::ActivityEventInfo::BuildAgentPoolDeleted {
+                citadel_activities::ActivityEventInfo::BuildAgentPoolDeleted {
                     pool: current.snapshot(),
                 },
             )

@@ -1,3 +1,7 @@
+use citadel_server::api::bindings;
+use citadel_server::api::git::repositories::catalog as git_catalog;
+use citadel_server::api::registries;
+use citadel_server::api::tags;
 use std::sync::Arc;
 
 use axum::Router;
@@ -21,11 +25,12 @@ use citadel_builds::{
     BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildRepository, BuildService,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, ResourceType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::{ActorId, ResourceType};
 use citadel_server::api::alerts::{self as alerts_http, AlertsHttpState};
 use citadel_server::api::backups::handlers::{self as backups_http, BackupsHttpState};
 use citadel_server::api::builds::handlers::{self as builds_http, BuildsHttpState};
@@ -165,20 +170,45 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         store: alert_store.clone(),
         delivery: Arc::new(FakeAlertDelivery),
     }))
-    .merge(citadel_server::resources_http::router(
-        citadel_server::resources_http::ResourcesHttpState {
-            identity: identity.clone(),
-            resources: Arc::new(citadel_resources::ResourceMetadataService::new(
+    .merge(tags::router(tags::TagsHttpState {
+        identity: identity.clone(),
+        tags: Arc::new(
+            citadel_adapters::postgres::tags::PostgresTagRepository::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    })
+    .merge(registries::router(registries::RegistriesHttpState {
+        identity: identity.clone(),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    }))
+    .merge(bindings::router(bindings::BindingsHttpState {
+        identity: identity.clone(),
+        secrets: Arc::new(citadel_bindings::SecretService::new(
                 Arc::new(
-                    citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore::new(
+                    citadel_adapters::postgres::bindings::PostgresBindingRepository::new(
                         pool.clone(),
                     ),
                 ),
                 Arc::new(citadel_adapters::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
             )),
-            realtime: None,
-        },
-    ))
+        realtime: None,
+    }))
+    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+        identity: identity.clone(),
+        git_repositories: Arc::new(
+            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    })))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
         citadel_server::platforms_http::EdgeHttpContext {
@@ -891,7 +921,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
     sqlx::query("UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2 AND resourcetype=$4")
         .bind(reader.actor_id.value()).bind(Uuid::parse_str(project_id).unwrap())
-        .bind(citadel_domain::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
+        .bind(citadel_primitives::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
         .execute(&pool).await.unwrap();
     let queued = request(&app, Method::POST, &queue_path, Some(reader.clone()), None).await;
     assert_eq!(queued.status(), StatusCode::OK);

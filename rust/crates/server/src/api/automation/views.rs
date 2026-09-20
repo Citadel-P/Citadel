@@ -1,7 +1,11 @@
 use crate::api::git::repositories::webhook::RepoWebhookConfig;
+
 use chrono::{DateTime, Utc};
+
 use serde::Serialize;
+
 use uuid::Uuid;
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationActionView {
@@ -25,9 +29,10 @@ pub struct AutomationActionView {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_scheduled_run_at: Option<DateTime<Utc>>,
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<crate::api::tags::dto::TagSummary>,
     pub latest_run: Option<AutomationRunView>,
 }
+
 impl From<citadel_automation::AutomationAction> for AutomationActionView {
     fn from(value: citadel_automation::AutomationAction) -> Self {
         Self {
@@ -51,11 +56,12 @@ impl From<citadel_automation::AutomationAction> for AutomationActionView {
             created_at: value.created_at,
             updated_at: value.updated_at,
             last_scheduled_run_at: value.last_scheduled_run_at,
-            tags: value.tags,
+            tags: value.tags.into_iter().map(Into::into).collect(),
             latest_run: value.latest_run.map(Into::into),
         }
     }
 }
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunView {
@@ -78,6 +84,7 @@ pub struct AutomationRunView {
     pub logs: Option<String>,
     pub error_message: Option<String>,
 }
+
 impl From<citadel_automation::AutomationRun> for AutomationRunView {
     fn from(value: citadel_automation::AutomationRun) -> Self {
         Self {
@@ -102,6 +109,7 @@ impl From<citadel_automation::AutomationRun> for AutomationRunView {
         }
     }
 }
+
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationProgress {
@@ -112,6 +120,7 @@ pub struct AutomationProgress {
     pub error_message: Option<String>,
     pub error: Option<AutomationProgressError>,
 }
+
 impl From<citadel_automation::AutomationProgress> for AutomationProgress {
     fn from(value: citadel_automation::AutomationProgress) -> Self {
         Self {
@@ -124,11 +133,13 @@ impl From<citadel_automation::AutomationProgress> for AutomationProgress {
         }
     }
 }
+
 #[derive(Debug, Serialize)]
 pub struct AutomationProgressError {
     pub code: i32,
     pub message: String,
 }
+
 impl From<citadel_automation::AutomationProgressError> for AutomationProgressError {
     fn from(value: citadel_automation::AutomationProgressError) -> Self {
         Self {

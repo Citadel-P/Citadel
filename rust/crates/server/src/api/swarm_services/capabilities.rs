@@ -1,6 +1,6 @@
 // Preserve historical read-based UI hints; logs and inspection enforce their specific policies.
 use super::views::SwarmServiceCapabilities;
-use citadel_domain::{EffectivePermission, PermissionPolicy};
+use citadel_primitives::{EffectivePermission, PermissionPolicy};
 use citadel_swarm_services::permissions::*;
 pub(super) fn capabilities(permission: EffectivePermission) -> SwarmServiceCapabilities {
     SwarmServiceCapabilities {
@@ -17,7 +17,7 @@ pub(super) fn capabilities(permission: EffectivePermission) -> SwarmServiceCapab
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_domain::{PermissionLevel, SpecificPermission, SpecificPermissions};
+    use citadel_primitives::{PermissionLevel, SpecificPermission, SpecificPermissions};
 
     #[test]
     fn read_apply_and_write_scale_remain_distinct() {

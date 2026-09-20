@@ -1,5 +1,5 @@
 use super::*;
-use citadel_domain::{ResourceType, SpecificPermission};
+use citadel_primitives::{ResourceType, SpecificPermission};
 
 pub(super) async fn subject(f: &Fixture) -> ActorPrincipal {
     let actor = Uuid::now_v7();

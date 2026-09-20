@@ -9,8 +9,8 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
         .await
         .unwrap();
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,$5)")
-        .bind(grant).bind(actor).bind(id).bind(citadel_domain::ResourceType::SwarmService as i32)
-        .bind(citadel_domain::SpecificPermission::Apply as i32).execute(pool).await.unwrap();
+        .bind(grant).bind(actor).bind(id).bind(citadel_primitives::ResourceType::SwarmService as i32)
+        .bind(citadel_primitives::SpecificPermission::Apply as i32).execute(pool).await.unwrap();
     let mut reader = admin.clone();
     reader.actor_id = ActorId::new(actor);
     reader.roles.clear();

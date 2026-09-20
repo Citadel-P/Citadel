@@ -241,7 +241,7 @@ ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Build as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(project_id)
                 .bind(administrator)
                 .bind(i64::try_from(limit.clamp(1, 100)).unwrap_or(100))

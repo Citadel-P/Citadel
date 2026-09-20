@@ -1,6 +1,6 @@
 //! Non-mutating Docker-to-Deployment draft mapping.
 use crate::{DeploymentDetails, DeploymentError, DeploymentSpec};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -111,7 +111,7 @@ fn nonempty(value: &Value) -> bool {
         Value::Number(v) => v.as_i64().is_some_and(|n| n != 0),
     }
 }
-pub use citadel_domain::is_sensitive_environment_name as sensitive;
+pub use citadel_primitives::is_sensitive_environment_name as sensitive;
 pub fn valid_binding_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128

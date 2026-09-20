@@ -1,12 +1,13 @@
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, ActorType, IdentityResourceAccessSnapshot,
-    PermissionLevel, ResourceType, SpecificPermission, TeamActivitySnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, TeamActivitySnapshot,
 };
+use citadel_identity::ActorType;
 use citadel_identity::{
-    IdentityError, NewTeamMutation, ResourceInfo, StoredPage, TeamMemberView, TeamMutationStore,
-    TeamPatchMutation, TeamReadStore, TeamResourceAccessInput, TeamResourceAccessView,
-    TeamSearchItemView, TeamView,
+    IdentityError, NewTeamMutation, ResourceInfo, StoredPage, TeamDetails, TeamMemberDetails,
+    TeamPatchMutation, TeamReader, TeamRepository, TeamResourceAccessDetails,
+    TeamResourceAccessInput, TeamSearchItemDetails,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;
@@ -87,13 +88,13 @@ impl PostgresTeamStore {
     }
 }
 
-impl TeamReadStore for PostgresTeamStore {
+impl TeamReader for PostgresTeamStore {
     fn list<'a>(
         &'a self,
         name: Option<&'a str>,
         limit: i64,
         offset: i64,
-    ) -> BoxFuture<'a, Result<StoredPage<TeamView>, IdentityError>> {
+    ) -> BoxFuture<'a, Result<StoredPage<TeamDetails>, IdentityError>> {
         Box::pin(async move {
             let total_items = sqlx::query_scalar::<_, i64>(
                 "SELECT COUNT(*) FROM teams WHERE ($1::text IS NULL OR name ILIKE '%' || $1 || '%')",
@@ -122,7 +123,7 @@ impl TeamReadStore for PostgresTeamStore {
         })
     }
 
-    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<TeamView>, IdentityError>> {
+    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<TeamDetails>, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let result = fetch_team_view(&mut transaction, id).await?;
@@ -135,7 +136,7 @@ impl TeamReadStore for PostgresTeamStore {
         &'a self,
         query: &'a str,
         limit: i64,
-    ) -> BoxFuture<'a, Result<Vec<TeamSearchItemView>, IdentityError>> {
+    ) -> BoxFuture<'a, Result<Vec<TeamSearchItemDetails>, IdentityError>> {
         Box::pin(async move {
             sqlx::query(
                 "SELECT id, name FROM teams WHERE name ILIKE '%' || $1 || '%' ORDER BY name, id LIMIT $2",
@@ -147,7 +148,7 @@ impl TeamReadStore for PostgresTeamStore {
             .map_err(storage)?
             .into_iter()
             .map(|row| {
-                Ok(TeamSearchItemView {
+                Ok(TeamSearchItemDetails {
                     id: row.try_get("id").map_err(storage)?,
                     name: row.try_get("name").map_err(storage)?,
                 })
@@ -157,12 +158,12 @@ impl TeamReadStore for PostgresTeamStore {
     }
 }
 
-impl TeamMutationStore for PostgresTeamStore {
+impl TeamRepository for PostgresTeamStore {
     fn create<'a>(
         &'a self,
         team: &'a NewTeamMutation,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -224,7 +225,7 @@ impl TeamMutationStore for PostgresTeamStore {
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -316,7 +317,7 @@ impl TeamMutationStore for PostgresTeamStore {
         name: &'a str,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'a, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -356,7 +357,7 @@ impl TeamMutationStore for PostgresTeamStore {
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'_, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -410,7 +411,7 @@ impl TeamMutationStore for PostgresTeamStore {
         role_id: Uuid,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'_, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -458,7 +459,7 @@ impl TeamMutationStore for PostgresTeamStore {
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'_, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -515,7 +516,7 @@ impl TeamMutationStore for PostgresTeamStore {
         member_actor_id: ActorId,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'_, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -565,7 +566,7 @@ impl TeamMutationStore for PostgresTeamStore {
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
-    ) -> BoxFuture<'a, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             if !custom_access_control_enabled {
                 return Err(IdentityError::LicenseRequired("custom-access-control"));
@@ -607,7 +608,7 @@ impl TeamMutationStore for PostgresTeamStore {
         access: &'a TeamResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
-    ) -> BoxFuture<'a, Result<TeamView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
@@ -1043,7 +1044,7 @@ async fn insert_team_activity(
 async fn fetch_team_view(
     transaction: &mut Transaction<'_, Postgres>,
     id: Uuid,
-) -> Result<Option<TeamView>, IdentityError> {
+) -> Result<Option<TeamDetails>, IdentityError> {
     let query = format!(
         "{RESOURCE_LOOKUP_CTE} SELECT aggregate.*, accesses.value AS resource_accesses FROM ({TEAM_AGGREGATE_SQL} WHERE team.id = $1) aggregate LEFT JOIN LATERAL (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', access.id, 'resourceType', access.resourcetype, 'resourceId', access.resourceid, 'resourceName', lookup.resourcename, 'permissionLevel', access.permissionlevel, 'specificPermissions', access.specificpermissions) ORDER BY access.resourcetype, access.resourceid), '[]'::jsonb) AS value FROM resourceaccesses access LEFT JOIN resource_lookup lookup ON lookup.resourceid = access.resourceid AND lookup.resourcetype = access.resourcetype WHERE access.actorid = aggregate.actorid) accesses ON TRUE"
     );
@@ -1085,9 +1086,9 @@ struct PersistedAccess {
 
 fn map_team(
     row: PgRow,
-    accesses: Option<Vec<TeamResourceAccessView>>,
-) -> Result<TeamView, IdentityError> {
-    Ok(TeamView {
+    accesses: Option<Vec<TeamResourceAccessDetails>>,
+) -> Result<TeamDetails, IdentityError> {
+    Ok(TeamDetails {
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         actor_id: ActorId::new(row.try_get("actorid").map_err(storage)?),
@@ -1115,13 +1116,13 @@ fn map_resource_info(value: serde_json::Value) -> Result<Vec<ResourceInfo>, Iden
         })
 }
 
-fn map_members(value: serde_json::Value) -> Result<Vec<TeamMemberView>, IdentityError> {
+fn map_members(value: serde_json::Value) -> Result<Vec<TeamMemberDetails>, IdentityError> {
     serde_json::from_value::<Vec<PersistedMember>>(value)
         .map_err(|error| IdentityError::Storage(error.to_string()))
         .map(|values| {
             values
                 .into_iter()
-                .map(|value| TeamMemberView {
+                .map(|value| TeamMemberDetails {
                     actor_id: ActorId::new(value.actor_id),
                     resource_id: value.resource_id,
                     name: value.name,
@@ -1131,7 +1132,7 @@ fn map_members(value: serde_json::Value) -> Result<Vec<TeamMemberView>, Identity
         })
 }
 
-fn map_accesses(value: serde_json::Value) -> Result<Vec<TeamResourceAccessView>, IdentityError> {
+fn map_accesses(value: serde_json::Value) -> Result<Vec<TeamResourceAccessDetails>, IdentityError> {
     serde_json::from_value::<Vec<PersistedAccess>>(value)
         .map_err(|error| IdentityError::Storage(error.to_string()))?
         .into_iter()
@@ -1149,7 +1150,7 @@ fn map_accesses(value: serde_json::Value) -> Result<Vec<TeamResourceAccessView>,
                         access.permission_level
                     ))
                 })?;
-            Ok(TeamResourceAccessView {
+            Ok(TeamResourceAccessDetails {
                 resource_type,
                 resource_id: access.resource_id,
                 resource_name: access.resource_name,

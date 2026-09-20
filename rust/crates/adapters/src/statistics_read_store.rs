@@ -1,16 +1,16 @@
 use citadel_platforms::{
-    ContainerStatView, PlatformStatView, RuntimeCapabilityError, RuntimeErrorKind,
-    ServiceStatIdentity, ServiceTaskSample, StatisticsContainer, StatisticsReadStore,
+    ContainerStatSnapshot, PlatformStatSnapshot, RuntimeCapabilityError, RuntimeErrorKind,
+    ServiceStatIdentity, ServiceTaskSample, StatisticsContainer, StatisticsReader,
     StatisticsWorkload, StatsWindow,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::{PgPool, Row, postgres::PgRow};
 use uuid::Uuid;
 
-pub struct PostgresStatisticsReadStore {
+pub struct PostgresStatisticsReader {
     pool: PgPool,
 }
-impl PostgresStatisticsReadStore {
+impl PostgresStatisticsReader {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -18,8 +18,8 @@ impl PostgresStatisticsReadStore {
 fn storage(e: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, e.to_string(), false)
 }
-fn map_container(row: PgRow) -> Result<ContainerStatView, RuntimeCapabilityError> {
-    Ok(ContainerStatView {
+fn map_container(row: PgRow) -> Result<ContainerStatSnapshot, RuntimeCapabilityError> {
+    Ok(ContainerStatSnapshot {
         container_id: row.try_get("containerid").map_err(storage)?,
         created: row.try_get("created").map_err(storage)?,
         cpu_usage: row.try_get("cpuusage").map_err(storage)?,
@@ -30,7 +30,7 @@ fn map_container(row: PgRow) -> Result<ContainerStatView, RuntimeCapabilityError
         tx_bytes: row.try_get("txbytes").map_err(storage)?,
     })
 }
-impl StatisticsReadStore for PostgresStatisticsReadStore {
+impl StatisticsReader for PostgresStatisticsReader {
     fn task_container<'a>(
         &'a self,
         platform_id: Uuid,
@@ -154,7 +154,7 @@ impl StatisticsReadStore for PostgresStatisticsReadStore {
         ids: &'a [Uuid],
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'a, Result<Vec<ContainerStatView>, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'a, Result<Vec<ContainerStatSnapshot>, RuntimeCapabilityError>> {
         async move {
             if ids.is_empty() {
                 return Ok(vec![]);
@@ -180,7 +180,7 @@ impl StatisticsReadStore for PostgresStatisticsReadStore {
         id: Uuid,
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'_, Result<Vec<PlatformStatView>, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'_, Result<Vec<PlatformStatSnapshot>, RuntimeCapabilityError>> {
         async move {
             let rows=sqlx::query(r#"SELECT MIN(created) AS created,AVG(cpuusage) AS cpuusage,AVG(memoryusage) AS memoryusage,
                 AVG(rxbytes) AS rxbytes,AVG(txbytes) AS txbytes,ROUND(AVG(diskusedbytes))::bigint AS diskusedbytes,
@@ -189,7 +189,7 @@ impl StatisticsReadStore for PostgresStatisticsReadStore {
                 .bind(id).bind(window.since(now)).bind(window.bucket_seconds()).bind(now).fetch_all(&self.pool).await.map_err(storage)?;
             rows.into_iter()
                 .map(|row| {
-                    Ok(PlatformStatView {
+                    Ok(PlatformStatSnapshot {
                         created: row.try_get("created").map_err(storage)?,
                         cpu_usage: row.try_get("cpuusage").map_err(storage)?,
                         memory_usage: row.try_get("memoryusage").map_err(storage)?,
@@ -209,7 +209,7 @@ impl StatisticsReadStore for PostgresStatisticsReadStore {
         id: ServiceStatIdentity<'a>,
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'a, Result<Vec<ContainerStatView>, RuntimeCapabilityError>> {
+    ) -> BoxFuture<'a, Result<Vec<ContainerStatSnapshot>, RuntimeCapabilityError>> {
         async move {
             // Bucket by logical slot first: replacing a Task must not double count
             // replicas, and deleting Container projections must not erase history.

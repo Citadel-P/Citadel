@@ -13,11 +13,12 @@ use citadel_adapters::{
 };
 use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::api::automation::{self as automation_http, AutomationHttpState};
 use futures_util::StreamExt;
 use serde_json::{Value, json};

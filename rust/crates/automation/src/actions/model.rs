@@ -25,19 +25,19 @@ pub struct AutomationAction {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_scheduled_run_at: Option<DateTime<Utc>>,
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub latest_run: Option<AutomationRun>,
 }
 
 impl AutomationAction {
-    pub fn snapshot(&self) -> citadel_domain::AutomationActionActivitySnapshot {
+    pub fn snapshot(&self) -> citadel_activities::AutomationActionActivitySnapshot {
         let mut webhook = self.webhook.clone();
         if let Some(config) = &mut webhook
             && config.secret.is_some()
         {
             config.secret = Some("********".into());
         }
-        citadel_domain::AutomationActionActivitySnapshot {
+        citadel_activities::AutomationActionActivitySnapshot {
             id: self.id,
             name: self.name.clone(),
             description: self.description.clone(),

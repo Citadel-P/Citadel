@@ -22,7 +22,7 @@ use citadel_alerts::{
     AlertRuleConfiguration, AlertRuleListItem, NewAlertEvent, is_in_quiet_hours,
 };
 
-use citadel_domain::{ActorId, ResourceType};
+use citadel_primitives::{ActorId, ResourceType};
 
 use futures_util::future::BoxFuture;
 

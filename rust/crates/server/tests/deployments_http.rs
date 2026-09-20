@@ -16,11 +16,12 @@ use citadel_deployments::{
     PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
     RuntimeDeploymentResult,
 };
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::api::deployments::{self, DeploymentsHttpState};
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};

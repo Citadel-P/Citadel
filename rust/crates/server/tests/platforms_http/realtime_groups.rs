@@ -6,8 +6,8 @@ use citadel_adapters::{
     postgres::deployments::PostgresDeploymentRepository, postgres::stacks::PostgresStackRepository,
     postgres::swarm_services::PostgresSwarmServiceRepository,
 };
-use citadel_domain::ResourceType;
 use citadel_identity::{AccessTokenClaims, SessionTokenCodec};
+use citadel_primitives::ResourceType;
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeService};
 use citadel_server::realtime_groups::{ApplicationGroupReader, Group, GroupReadPort};
 use citadel_server::{config::RealtimeConfig, metrics::Metrics};
@@ -18,12 +18,16 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        git_repositories: Arc::new(
+            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                f.pool.clone(),
+            ),
+        ),
         identity: f.lookup_state.platforms.identity.clone(),
         platforms: f.lookup_state.platforms.platforms.clone(),
         deployments: Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
         stacks: Arc::new(PostgresStackRepository::new(f.pool.clone())),
         services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
-        resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
         automation: Arc::new(PostgresAutomationRepository::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
         backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
@@ -398,7 +402,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
         containers::v1::*,
         edge::v1::{EdgeCommandKind, core_envelope},
     };
-    use citadel_domain::SpecificPermission;
+    use citadel_primitives::SpecificPermission;
     use prost::Message as _;
     let f = fixture().await;
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
@@ -790,7 +794,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
         edge::v1::{EdgeCommandKind, core_envelope},
     };
-    use citadel_domain::SpecificPermission;
+    use citadel_primitives::SpecificPermission;
     use prost::Message as _;
     let f = fixture().await;
     let docker_id = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());

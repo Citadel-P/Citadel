@@ -33,7 +33,7 @@ fn platform_builder() -> String {
 
 impl BuildProjectConfiguration {
     pub fn validate(&mut self) -> Result<(), BuildError> {
-        citadel_resources::validate_webhook(self.webhook.as_ref())
+        citadel_git::repositories::webhooks::validate_webhook(self.webhook.as_ref())
             .map_err(|error| BuildError::Validation(error.to_string()))?;
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {

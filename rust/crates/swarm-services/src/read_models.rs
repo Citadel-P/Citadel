@@ -41,7 +41,7 @@ pub struct SwarmServiceDetails {
     pub current_operation: Option<SwarmServiceOperation>,
     pub tags: Vec<TagSummary>,
     pub tasks: Option<Vec<Value>>,
-    pub effective_permission: citadel_domain::EffectivePermission,
+    pub effective_permission: citadel_primitives::EffectivePermission,
 }
 
 impl std::ops::Deref for SwarmServiceDetails {

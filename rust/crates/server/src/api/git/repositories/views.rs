@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
+
 use serde::Serialize;
+
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
@@ -257,8 +259,11 @@ impl From<citadel_git::GitChangedPath> for GitChangedPath {
 }
 
 use super::spec::{GitRepositorySyncMode, RepoCommand};
-use citadel_resources::TagSummary;
+
+use crate::api::tags::dto::TagSummary;
+
 use serde_json::Value;
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryView {
@@ -280,6 +285,7 @@ pub struct GitRepositoryView {
     pub latest_activity_view: Option<Value>,
     pub tags: Vec<TagSummary>,
 }
+
 impl From<citadel_git::GitRepository> for GitRepositoryView {
     fn from(value: citadel_git::GitRepository) -> Self {
         Self {

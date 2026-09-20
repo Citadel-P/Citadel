@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use citadel_bindings::SecretProtector;
 use citadel_deployments::{
     DeploymentBindingResolverPort, DeploymentBindingSnapshot, DeploymentError,
     ResolvedDeploymentBinding, ResolvedDeploymentBindings,
 };
-use citadel_resources::ResourceSecretProtector;
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -20,10 +20,7 @@ pub struct PostgresDeploymentBindingResolver {
 }
 
 impl PostgresDeploymentBindingResolver {
-    pub fn new(
-        pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
-    ) -> Result<Self, DeploymentError> {
+    pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, DeploymentError> {
         Ok(Self {
             pool: pool.clone(),
             secrets: PostgresSecretValueResolver::new(pool, protector)

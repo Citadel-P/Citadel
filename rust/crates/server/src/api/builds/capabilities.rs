@@ -1,6 +1,6 @@
 use crate::capabilities::ResourceCapabilitiesView;
 use citadel_builds::permissions::*;
-use citadel_domain::{EffectivePermission, PermissionPolicy};
+use citadel_primitives::{EffectivePermission, PermissionPolicy};
 pub(super) fn pool_capabilities(permission: EffectivePermission) -> ResourceCapabilitiesView {
     ResourceCapabilitiesView {
         can_read: permission.allows(ReadBuildAgentPool::REQUIREMENT),
@@ -15,17 +15,17 @@ pub(super) fn project_capabilities(permission: EffectivePermission) -> ResourceC
         can_execute: permission.allows(ExecuteBuild::REQUIREMENT),
     }
 }
-pub(super) fn granted(level: citadel_domain::PermissionLevel) -> EffectivePermission {
+pub(super) fn granted(level: citadel_primitives::PermissionLevel) -> EffectivePermission {
     EffectivePermission::Granted {
         level,
-        specifics: citadel_domain::SpecificPermissions::EMPTY,
+        specifics: citadel_primitives::SpecificPermissions::EMPTY,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_domain::PermissionLevel;
+    use citadel_primitives::PermissionLevel;
 
     #[test]
     fn capability_hierarchy_is_ordinal_and_admin_is_explicit() {

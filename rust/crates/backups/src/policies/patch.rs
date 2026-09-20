@@ -1,4 +1,4 @@
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use serde_json::{Value, json};
 
 use crate::{BackupError, BackupPolicy, BackupPolicyConfiguration};

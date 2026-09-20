@@ -685,12 +685,12 @@ ON CONFLICT (platformid, dockernodeid) DO UPDATE SET
         .collect();
     let mut services = swarm.services.clone();
     for service in &mut services {
-        if service.ownership == citadel_domain::SwarmServiceOwnership::CitadelStack
+        if service.ownership == citadel_swarm_services::SwarmServiceOwnership::CitadelStack
             && let Some(expected) = service.stack_id.and_then(|id| namespaces.get(&id))
             && service.stack_namespace.as_deref() != Some(expected.as_str())
         {
             service.stack_id = None;
-            service.ownership = citadel_domain::SwarmServiceOwnership::OwnershipConflict;
+            service.ownership = citadel_swarm_services::SwarmServiceOwnership::OwnershipConflict;
             service.ownership_diagnostic =
                 Some("The claimed Citadel Stack does not own this Docker Stack namespace.".into());
         }

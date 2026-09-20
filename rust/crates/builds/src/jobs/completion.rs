@@ -1,7 +1,7 @@
 //! Durable, bounded fan-out after a successful Build. Consumer failure never
 //! rewrites the outcome of the Build which produced the image.
 use crate::{BuildEntitlements, BuildError, BuildLogEntry};
-use citadel_domain::LicenseCapability;
+use citadel_licensing::LicenseCapability;
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

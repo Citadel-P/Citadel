@@ -14,16 +14,17 @@ use citadel_application::{
     LicenseService, LicenseTransitionMonitor, LicenseValidationPersistence, LicenseVerifier,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::{
-    ActorId, AuthenticatedPrincipalType, CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity,
-    LicenseCapability, LicenseCustomer, LicensePayload, LicenseStatus, LicenseVerificationResult,
-    VerifiedLicense,
-};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
     AccessTokenClaims, Clock, IdentityService, NoopServiceAccountLastUsedTracker,
     SessionTokenCodec, SystemClock,
 };
+use citadel_licensing::{
+    CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity, LicenseCapability, LicenseCustomer,
+    LicensePayload, LicenseStatus, LicenseVerificationResult, VerifiedLicense,
+};
+use citadel_primitives::ActorId;
 use citadel_server::license_http::{self, LicenseHttpState};
 use citadel_server::license_realtime::{LicenseRealtimeHub, LicenseRealtimeService};
 use futures_util::{SinkExt, StreamExt};

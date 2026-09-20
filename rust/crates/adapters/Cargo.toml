@@ -6,6 +6,13 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-discovery = { path = "../discovery" }
+citadel-bindings = { path = "../bindings" }
+citadel-registries = { path = "../registries" }
+citadel-tags = { path = "../tags" }
+citadel-primitives = { path = "../primitives" }
+citadel-licensing = { path = "../licensing" }
+citadel-activities = { path = "../activities" }
 citadel-docker-api = { path = "../docker-api" }
 aes-gcm.workspace = true
 async-stream.workspace = true
@@ -20,14 +27,12 @@ citadel-builds = { path = "../builds" }
 citadel-backups = { path = "../backups" }
 citadel-execution = { path = "../execution" }
 citadel-contracts = { path = "../contracts" }
-citadel-domain = { path = "../domain" }
 citadel-git = { path = "../git" }
 citadel-deployments = { path = "../deployments" }
 citadel-swarm-services = { path = "../swarm-services" }
 citadel-stacks = { path = "../stacks" }
 citadel-identity = { path = "../identity" }
 citadel-platforms = { path = "../platforms" }
-citadel-resources = { path = "../resources" }
 ed25519-dalek.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true

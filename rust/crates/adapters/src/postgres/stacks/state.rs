@@ -35,13 +35,15 @@ impl PostgresStackRepository {
                     ));
                 }
                 let descriptor: Value = row.try_get("platformdescriptor").map_err(storage)?;
-                let platform_type = descriptor
-                    .get("$type")
-                    .or_else(|| descriptor.get("type"))
-                    .and_then(Value::as_str)
-                    .unwrap_or("Docker")
-                    .to_owned();
-                if platform_type == "DockerSwarm" {
+                let platform_type = crate::postgres::platform_classification::platform_kind(
+                    descriptor
+                        .get("$type")
+                        .or_else(|| descriptor.get("type"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("Docker"),
+                )
+                .map_err(storage)?;
+                if platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                     return Err(StackError::Validation(
                         "Container state actions are not available for Docker Swarm stacks."
                             .to_owned(),
@@ -220,7 +222,7 @@ impl PostgresStackRepository {
                         release_id: row.try_get("currentstackreleaseid").map_err(storage)?,
                         platform_id: row.try_get("platformid").map_err(storage)?,
                         project_name: spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name, id)),
-                        platform_type: descriptor.get("$type").or_else(|| descriptor.get("type")).and_then(Value::as_str).unwrap_or("Docker").to_owned(),
+                        platform_type: crate::postgres::platform_classification::platform_kind(descriptor.get("$type").or_else(|| descriptor.get("type")).and_then(Value::as_str).unwrap_or("Docker")).map_err(storage)?,
                         previous_status: StackReleaseStatus::Unknown,
                         actor_id: actor.value(),
                         name,

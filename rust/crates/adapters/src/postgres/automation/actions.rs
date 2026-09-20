@@ -7,7 +7,10 @@ impl PostgresAutomationRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, AutomationError>,
+        Result<
+            std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>,
+            AutomationError,
+        >,
     > {
         Box::pin(async move {
             crate::resource_permissions::levels_for_resources(
@@ -91,7 +94,7 @@ ORDER BY action.name,action.id"#
             let mut actions = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::AutomationAction as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await

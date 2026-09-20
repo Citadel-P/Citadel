@@ -1,5 +1,5 @@
 //! Operation policies shared by API authorization and capability projection.
-use citadel_domain::{PermissionLevel, ResourceType, permission_policy};
+use citadel_primitives::{PermissionLevel, ResourceType, permission_policy};
 permission_policy!(
     ReadGitAccount,
     ResourceType::GitAccount,

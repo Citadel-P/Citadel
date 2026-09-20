@@ -1,13 +1,17 @@
 //! Code-first API documentation, collected from the same factories as the live routers.
 use std::sync::LazyLock;
+
 use utoipa::openapi::{
     Components, Info, OpenApi, Paths,
     security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
 pub(crate) mod compatibility;
+
 pub(crate) mod errors;
+
 pub(crate) mod router;
+
 pub mod serving;
 
 pub fn document(public_only: bool) -> OpenApi {
@@ -57,9 +61,10 @@ pub fn document(public_only: bool) -> OpenApi {
     api.merge(crate::identity_http::documented_routes().into_openapi());
     api.merge(crate::platforms_http::documented_routes().into_openapi());
     api.merge(crate::api::git::accounts::handlers::documented_routes().into_openapi());
-    api.merge(crate::resources_http::tags::documented_routes().into_openapi());
-    api.merge(crate::resources_http::bindings::documented_routes().into_openapi());
-    api.merge(crate::resources_http::catalog::documented_routes().into_openapi());
+    api.merge(crate::api::tags::handlers::documented_routes().into_openapi());
+    api.merge(crate::api::bindings::handlers::documented_routes().into_openapi());
+    api.merge(crate::api::registries::handlers::documented_routes().into_openapi());
+    api.merge(crate::api::git::repositories::catalog::documented_routes().into_openapi());
     for (name, schema) in compatibility::schemas() {
         api.components
             .as_mut()
@@ -471,12 +476,13 @@ mod metadata_tests {
                     assert_eq!(examples.len(), 6);
                     for (name, example) in examples {
                         let value: Value = example["value"].clone();
-                        let mut create: citadel_resources::NewRegistry =
+                        let create: crate::api::registries::dto::NewRegistry =
                             serde_json::from_value(value.clone()).unwrap();
+                        let mut create: citadel_registries::NewRegistry = create.into();
                         create
                             .validate()
                             .unwrap_or_else(|error| panic!("{name}: {error}"));
-                        let _: citadel_resources::RegistryPatch =
+                        let _: crate::api::registries::dto::RegistryPatch =
                             serde_json::from_value(value).unwrap();
                     }
                 }

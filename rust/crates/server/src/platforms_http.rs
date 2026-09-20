@@ -1,59 +1,105 @@
+pub mod dto;
+
+use crate::platforms_http::views::SwarmTaskView;
+
 use crate::request_validation::{invalid_json, invalid_path, invalid_query};
+
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+
 use axum::extract::{Extension, Path, Query, RawQuery, State};
+
 use axum::http::{HeaderMap, StatusCode};
+
 use axum::response::IntoResponse;
+
 use axum::{Json, Router};
+
 use citadel_adapters::agent::AgentClient;
+
 use citadel_adapters::docker::DockerClient;
+
 use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeTarget};
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
+
 use citadel_platforms::{
-    AuthorizedReadError, ContainerView, CreatePlatformInput, CreateRuntimeNetwork,
-    CreateRuntimeVolume, EffectivePlatformPermission, ImageCapabilitiesView, ImageView,
-    NetworkCapabilitiesView, NetworkView, PlatformCapabilitiesView, PlatformInventoryPort,
-    PlatformReadService, PlatformRegistrationError, PlatformRegistrationService,
-    PlatformResourceMutationPort, PlatformView, ResourceCapabilitiesView, RuntimeCapabilityError,
-    RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary, SwarmConfigView,
+    AuthorizedReadError, EffectivePlatformPermission, PlatformInventoryPort, PlatformReadService,
+    PlatformRegistrationError, PlatformRegistrationService, PlatformResourceMutationPort,
+    RuntimeCapabilityError, RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary,
+};
+
+use crate::platforms_http::dto::{CreatePlatformInput, CreateRuntimeNetwork, CreateRuntimeVolume};
+
+use crate::platforms_http::views::{
+    ContainerView, ImageCapabilitiesView, ImageView, NetworkCapabilitiesView, NetworkView,
+    PlatformCapabilitiesView, PlatformView, ResourceCapabilitiesView, SwarmConfigView,
     SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView, VolumeCapabilitiesView,
     VolumeView,
 };
-use citadel_resources::{MetadataPatch, ResourceMetadataStore};
+
+use crate::api::metadata_patch::MetadataPatch;
+
 use serde::{Deserialize, Serialize};
+
 use sqlx::PgPool;
+
 use tokio_util::sync::CancellationToken;
+
 use uuid::Uuid;
 
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
+
 use crate::realtime::RealtimeHub;
 
 const ALL_LEVELS: i32 =
     PermissionLevel::Read as i32 | PermissionLevel::Write as i32 | PermissionLevel::Execute as i32;
+
 const ALL_PLATFORM_SPECIFIC: i32 = SpecificPermission::Logs as i32
     | SpecificPermission::Inspect as i32
     | SpecificPermission::Pull as i32
     | SpecificPermission::Terminal as i32
     | SpecificPermission::ManageNodeAgents as i32;
+
 const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
+pub mod views;
+
+pub mod swarm_views;
+
 mod container_inspection;
+
 mod container_mutations;
+
 mod deletion;
+
 mod edge;
+
 mod image_pull;
+
 mod images;
+
 mod logs;
+
 mod management;
+
 mod registry_images;
+
 mod statistics;
+
 pub(crate) mod swarm_inventory;
+
 mod swarm_overview;
+
 mod task_runtime;
+
 mod volume_content;
+
 pub use edge::EdgeHttpContext;
 
 #[derive(Clone)]
@@ -64,7 +110,8 @@ pub struct PlatformsHttpState {
     pub platforms: Arc<PlatformReadService>,
     pub registrations: Arc<PlatformRegistrationService>,
     pub pool: PgPool,
-    pub resource_metadata: Arc<dyn ResourceMetadataStore>,
+    pub registries: Arc<dyn citadel_registries::RegistryRepository>,
+    pub platform_metadata: Arc<dyn citadel_platforms::PlatformMetadataRepository>,
     pub docker: DockerClient,
     pub agent: Option<AgentClient>,
     pub edge: EdgeRegistry,
@@ -90,7 +137,7 @@ struct PlatformsResponse {
     tag = "Platforms",
     summary = "Get regular Agent setup instructions",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::dto::AgentSetupView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -99,7 +146,7 @@ struct PlatformsResponse {
 async fn get_agent_setup(
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    setup: Option<Extension<Arc<citadel_platforms::agent_setup::AgentSetupView>>>,
+    setup: Option<Extension<Arc<crate::platforms_http::dto::AgentSetupView>>>,
     live: Option<Extension<management::AgentSetupContext>>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
@@ -276,6 +323,12 @@ async fn list_platforms(
             .platforms
             .list_authorized(principal.actor_id, principal.is_administrator(), &tags)
             .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::PlatformView::from)
+                    .collect::<Vec<_>>()
+            })
             .map_err(platform_error),
         &headers,
     )?;
@@ -327,7 +380,7 @@ async fn list_platforms(
     summary = "Create a Platform",
     request_body = CreatePlatformInput,
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     security(("Bearer" = [])),
@@ -342,6 +395,7 @@ async fn create_platform(
     let principal = identity_result(require_actor(principal), &headers)?;
     authorize_platform_creation(&state, &principal, &headers).await?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::CreatePlatformInput = input.into();
     let id = match state
         .registrations
         .create(principal.actor_id, input, &CancellationToken::new())
@@ -361,6 +415,7 @@ async fn create_platform(
             .platforms
             .get_platform(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -376,7 +431,7 @@ async fn create_platform(
     tag = "Platforms",
     summary = "Get a Platform",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -397,6 +452,7 @@ async fn get_platform(
             .platforms
             .get_platform(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -415,7 +471,7 @@ async fn get_platform(
         (PatchPlatformMetadataInput = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -452,10 +508,10 @@ async fn update_platform_metadata(
     if let Some(description) = description {
         identity_result(
             state
-                .resource_metadata
+                .platform_metadata
                 .update_platform_description(id, description.as_deref())
                 .await
-                .map_err(resource_metadata_error),
+                .map_err(platform_metadata_error),
             &headers,
         )?;
     }
@@ -465,6 +521,7 @@ async fn update_platform_metadata(
             .platforms
             .get_platform(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -501,6 +558,12 @@ async fn list_containers(
             .platforms
             .list_containers(platform_id)
             .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::ContainerView::from)
+                    .collect::<Vec<_>>()
+            })
             .map_err(platform_error),
         &headers,
     )?;
@@ -523,7 +586,7 @@ async fn list_containers(
     tag = "Containers",
     summary = "Get a Container",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::ContainerView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::ContainerView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = String, Path)),
@@ -549,8 +612,8 @@ async fn get_container(
     let id = match Uuid::parse_str(&reference) {
         Ok(id) => id,
         Err(_) => {
-            use citadel_platforms::StatisticsReadStore;
-            let store = citadel_adapters::statistics_read_store::PostgresStatisticsReadStore::new(
+            use citadel_platforms::StatisticsReader;
+            let store = citadel_adapters::statistics_read_store::PostgresStatisticsReader::new(
                 state.pool.clone(),
             );
             match store.find_container(&reference).await {
@@ -564,6 +627,7 @@ async fn get_container(
             .platforms
             .get_container(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -611,6 +675,12 @@ async fn list_images(
             .platforms
             .list_images(platform_id)
             .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::ImageView::from)
+                    .collect::<Vec<_>>()
+            })
             .map_err(platform_error),
         &headers,
     )?;
@@ -717,7 +787,7 @@ async fn list_networks(
 pub(crate) async fn lookup_platform_resources(
     state: &PlatformsHttpState,
     platform_id: Uuid,
-    kind: citadel_domain::LookupResourceType,
+    kind: citadel_discovery::LookupResourceType,
     headers: &HeaderMap,
 ) -> IdentityHttpResult {
     let runtime = match runtime_for(state, platform_id).await {
@@ -725,7 +795,7 @@ pub(crate) async fn lookup_platform_resources(
         Err(error) => return Ok(runtime_error_response(error, headers)),
     };
     let cancellation = CancellationToken::new();
-    let names = if kind == citadel_domain::LookupResourceType::Volume {
+    let names = if kind == citadel_discovery::LookupResourceType::Volume {
         let result = match runtime {
             RuntimeRef::Local(runtime) => {
                 PlatformInventoryPort::list_volumes(runtime, &cancellation).await
@@ -769,7 +839,7 @@ pub(crate) async fn lookup_platform_resources(
     names.sort();
     let rows: Vec<_> = names
         .into_iter()
-        .map(|name| citadel_resources::LookupResourceInfo {
+        .map(|name| citadel_discovery::LookupResourceInfo {
             id: Uuid::nil(),
             name,
             group: None,
@@ -878,16 +948,28 @@ async fn create_network(
     let cancellation = CancellationToken::new();
     let result = match runtime_for(&state, input.platform_id).await {
         Ok(RuntimeRef::Local(runtime)) => {
-            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
-                .await
+            PlatformResourceMutationPort::create_network(
+                runtime,
+                &input.network.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Ok(RuntimeRef::Agent(ref runtime)) => {
-            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
-                .await
+            PlatformResourceMutationPort::create_network(
+                runtime,
+                &input.network.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Ok(RuntimeRef::Edge(ref runtime)) => {
-            PlatformResourceMutationPort::create_network(runtime, &input.network, &cancellation)
-                .await
+            PlatformResourceMutationPort::create_network(
+                runtime,
+                &input.network.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
@@ -1233,13 +1315,28 @@ async fn create_volume(
     let cancellation = CancellationToken::new();
     let result = match runtime_for(&state, input.platform_id).await {
         Ok(RuntimeRef::Local(runtime)) => {
-            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+            PlatformResourceMutationPort::create_volume(
+                runtime,
+                &input.volume.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Ok(RuntimeRef::Agent(ref runtime)) => {
-            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+            PlatformResourceMutationPort::create_volume(
+                runtime,
+                &input.volume.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Ok(RuntimeRef::Edge(ref runtime)) => {
-            PlatformResourceMutationPort::create_volume(runtime, &input.volume, &cancellation).await
+            PlatformResourceMutationPort::create_volume(
+                runtime,
+                &input.volume.clone().into(),
+                &cancellation,
+            )
+            .await
         }
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
@@ -1367,7 +1464,7 @@ macro_rules! swarm_list_handler {
                 state
                     .platforms
                     .$method(platform_id)
-                    .await
+                    .await.map(|items| items.into_iter().map(<$item>::from).collect::<Vec<_>>())
                     .map_err(platform_error),
                 &headers,
             )?;
@@ -1386,7 +1483,7 @@ macro_rules! swarm_list_handler {
 }
 
 macro_rules! swarm_get_handler {
-    ($(#[$name_attr:meta])* $name:ident, $method:ident) => {
+    ($(#[$name_attr:meta])* $name:ident, $method:ident, $item:ident) => {
         $(#[$name_attr])*
         async fn $name(
             State(state): State<PlatformsHttpState>,
@@ -1404,7 +1501,7 @@ macro_rules! swarm_get_handler {
                 state
                     .platforms
                     .$method(platform_id, &resource_id)
-                    .await
+                    .await.map(|item| item.map(<$item>::from))
                     .map_err(platform_error),
                 &headers,
             )?;
@@ -1433,6 +1530,7 @@ swarm_list_handler!(
     list_swarm_nodes,
     SwarmNodeView
 );
+
 swarm_get_handler!(
     #[utoipa::path(
     get,
@@ -1441,7 +1539,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Node",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmNodeView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmNodeView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("nodeId" = String, Path)),
@@ -1449,8 +1547,10 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_node,
-    get_swarm_node
+    get_swarm_node,
+    SwarmNodeView
 );
+
 swarm_list_handler!(
     #[utoipa::path(
     get,
@@ -1470,6 +1570,7 @@ swarm_list_handler!(
     list_swarm_services,
     SwarmServiceView
 );
+
 swarm_get_handler!(
     #[utoipa::path(
     get,
@@ -1478,7 +1579,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Service",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmServiceView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmServiceView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -1486,7 +1587,8 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_service,
-    get_swarm_service
+    get_swarm_service,
+    SwarmServiceView
 );
 
 #[utoipa::path(
@@ -1520,6 +1622,12 @@ async fn list_swarm_tasks(
             .platforms
             .list_swarm_tasks(platform_id, filters.service_id.as_deref(), filters.limit)
             .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::SwarmTaskView::from)
+                    .collect::<Vec<_>>()
+            })
             .map_err(platform_error),
         &headers,
     )?;
@@ -1543,7 +1651,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Task",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmTaskView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmTaskView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -1551,8 +1659,10 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_task,
-    get_swarm_task
+    get_swarm_task,
+    SwarmTaskView
 );
+
 swarm_list_handler!(
     #[utoipa::path(
     get,
@@ -1572,6 +1682,7 @@ swarm_list_handler!(
     list_swarm_networks,
     SwarmNetworkView
 );
+
 swarm_get_handler!(
     #[utoipa::path(
     get,
@@ -1580,7 +1691,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Network",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmNetworkView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmNetworkView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -1588,8 +1699,10 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_network,
-    get_swarm_network
+    get_swarm_network,
+    SwarmNetworkView
 );
+
 swarm_list_handler!(
     #[utoipa::path(
     get,
@@ -1609,6 +1722,7 @@ swarm_list_handler!(
     list_swarm_configs,
     SwarmConfigView
 );
+
 swarm_get_handler!(
     #[utoipa::path(
     get,
@@ -1617,7 +1731,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Config",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmConfigView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmConfigView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -1625,8 +1739,10 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_config,
-    get_swarm_config
+    get_swarm_config,
+    SwarmConfigView
 );
+
 swarm_list_handler!(
     #[utoipa::path(
     get,
@@ -1646,6 +1762,7 @@ swarm_list_handler!(
     list_swarm_secrets,
     SwarmSecretView
 );
+
 swarm_get_handler!(
     #[utoipa::path(
     get,
@@ -1654,7 +1771,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "Get a Swarm Secret",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::SwarmSecretView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::SwarmSecretView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -1662,7 +1779,8 @@ swarm_get_handler!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     get_swarm_secret,
-    get_swarm_secret
+    get_swarm_secret,
+    SwarmSecretView
 );
 
 async fn effective_permissions(
@@ -1919,7 +2037,17 @@ pub(crate) async fn realtime_daemon_snapshot(
         .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
     {
         let failure = |error: AuthorizedReadError| RealtimeReadError::Storage(error.to_string());
-        let mut images = state.platforms.list_images(id).await.map_err(failure)?;
+        let mut images = state
+            .platforms
+            .list_images(id)
+            .await
+            .map(|value| {
+                value
+                    .into_iter()
+                    .map(crate::platforms_http::views::ImageView::from)
+                    .collect::<Vec<_>>()
+            })
+            .map_err(failure)?;
         for image in &mut images {
             image.capabilities = Some(image_capabilities(platform));
         }
@@ -1986,6 +2114,7 @@ pub(crate) async fn runtime_for_node<'a>(
         .platforms
         .get_swarm_node(platform_id, node_id)
         .await
+        .map(|value| value.map(crate::platforms_http::views::SwarmNodeView::from))
         .map_err(|error| {
             RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
         })?
@@ -2588,17 +2717,10 @@ fn platform_registration_error(error: PlatformRegistrationError) -> IdentityErro
     }
 }
 
-fn resource_metadata_error(error: citadel_resources::ResourceMetadataError) -> IdentityError {
+fn platform_metadata_error(error: citadel_platforms::PlatformMetadataError) -> IdentityError {
     match error {
-        citadel_resources::ResourceMetadataError::Validation(message) => {
-            IdentityError::Validation(message)
-        }
-        citadel_resources::ResourceMetadataError::NotFound => IdentityError::NotFound,
-        citadel_resources::ResourceMetadataError::Conflict(message) => {
-            IdentityError::Conflict(message)
-        }
-        citadel_resources::ResourceMetadataError::Credential => IdentityError::Credential,
-        citadel_resources::ResourceMetadataError::Storage(message) => {
+        citadel_platforms::PlatformMetadataError::NotFound => IdentityError::NotFound,
+        citadel_platforms::PlatformMetadataError::Storage(message) => {
             IdentityError::Storage(message)
         }
     }

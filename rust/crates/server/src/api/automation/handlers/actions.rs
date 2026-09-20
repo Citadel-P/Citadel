@@ -15,7 +15,7 @@ pub(crate) async fn authorized_actions(
         .into_iter()
         .map(|action| {
             let level = if principal.is_administrator() {
-                citadel_domain::EffectivePermission::Administrator
+                citadel_primitives::EffectivePermission::Administrator
             } else {
                 granted(
                     permissions
@@ -69,7 +69,7 @@ pub(super) async fn list(
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     let tags = identity_result(
-        crate::resources_http::tags::parse_filters(query.as_deref()),
+        crate::api::tags::handlers::parse_filters(query.as_deref()),
         &headers,
     )?;
     let mut actions = identity_result(
@@ -81,7 +81,7 @@ pub(super) async fn list(
             .map_err(map_error),
         &headers,
     )?;
-    actions.retain(|action| crate::resources_http::tags::matches_filters(&action.tags, &tags));
+    actions.retain(|action| crate::api::tags::handlers::matches_filters(&action.tags, &tags));
     let actions = identity_result(
         authorized_actions(state.automation.store().as_ref(), &principal, actions)
             .await
@@ -89,7 +89,7 @@ pub(super) async fn list(
         &headers,
     )?;
     let level = if principal.is_administrator() {
-        citadel_domain::EffectivePermission::Administrator
+        citadel_primitives::EffectivePermission::Administrator
     } else {
         granted(
             identity_result(
@@ -146,7 +146,7 @@ pub(super) async fn create(
             .identity
             .ensure_run_as_allowed(
                 &principal,
-                citadel_domain::ActorId::new(
+                citadel_primitives::ActorId::new(
                     input
                         .run_as_actor_id
                         .expect("validation sets the run-as Actor"),
@@ -350,7 +350,7 @@ pub(super) async fn update_action(
             .identity
             .ensure_run_as_allowed(
                 &principal,
-                citadel_domain::ActorId::new(
+                citadel_primitives::ActorId::new(
                     input
                         .run_as_actor_id
                         .expect("validation sets the run-as Actor"),

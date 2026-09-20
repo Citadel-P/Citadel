@@ -10,12 +10,14 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::role_store::PostgresRoleStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    CreateRoleRequest, IdentityService, NoopServiceAccountLastUsedTracker, RoleMutationService,
-    RolePermissionInput, RoleReadService, SystemClock,
+    IdentityService, NoopServiceAccountLastUsedTracker, RoleMutationService, RoleReadService,
+    SystemClock,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_server::identity_http::dto::{CreateRoleRequest, RolePermissionInput};
 use citadel_server::roles_http::{self, RolesHttpState};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -431,8 +433,8 @@ async fn concurrent_same_name_creates_are_serialized() {
     let second = fixture.mutations.clone();
     let actor_id = fixture.administrator.actor_id;
     let (first_result, second_result) = tokio::join!(
-        first.create(request.clone(), actor_id),
-        second.create(request, actor_id)
+        first.create(request.clone().into(), actor_id),
+        second.create(request.into(), actor_id)
     );
     assert_eq!(
         usize::from(first_result.is_ok()) + usize::from(second_result.is_ok()),

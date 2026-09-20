@@ -165,8 +165,8 @@ async fn delete_validates_input_and_requires_execute_permission() {
     assert_eq!(deleted_activities(&harness, id).await, 0);
     // Resource-scoped Execute grants work without an Administrator role.
     sqlx::query("INSERT INTO resourceaccesses (id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)")
-        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(citadel_domain::PermissionLevel::Execute as i32)
-        .bind(id).bind(citadel_domain::ResourceType::Platform as i32).execute(&harness.pool).await.unwrap();
+        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(citadel_primitives::PermissionLevel::Execute as i32)
+        .bind(id).bind(citadel_primitives::ResourceType::Platform as i32).execute(&harness.pool).await.unwrap();
     assert_eq!(
         delete(&harness.app, Some(reader), json!({"ids":[id]}))
             .await
@@ -192,8 +192,8 @@ async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_
         .bind(other).bind(other.to_string()).execute(&harness.pool).await.unwrap();
     sqlx::query("INSERT INTO deployments (id,name,platformid,spec,status,createdbyactorid) VALUES ($1,'dependent',$2,'{}','Created',$3)")
         .bind(Uuid::now_v7()).bind(id).bind(harness.administrator.actor_id.value()).execute(&harness.pool).await.unwrap();
-    use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionStore};
-    let result = citadel_adapters::platform_deletion::PostgresPlatformDeletionStore::new(
+    use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionRepository};
+    let result = citadel_adapters::platform_deletion::PostgresPlatformDeletionRepository::new(
         harness.pool.clone(),
     )
     .delete(harness.administrator.actor_id, &[id, other])

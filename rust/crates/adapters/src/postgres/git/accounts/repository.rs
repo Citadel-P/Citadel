@@ -1,7 +1,7 @@
-use citadel_domain::{ActorId, ResourceType};
 use citadel_git::{
     GitAccountError, GitAccountRepository, GitAuthType, GitTransport, StoredGitAccount,
 };
+use citadel_primitives::{ActorId, ResourceType};
 use futures_util::future::BoxFuture;
 use sqlx::{AssertSqlSafe, PgPool, Row};
 use uuid::Uuid;
@@ -62,7 +62,7 @@ ORDER BY account.createdat DESC, account.id"#
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::GitAccount as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await

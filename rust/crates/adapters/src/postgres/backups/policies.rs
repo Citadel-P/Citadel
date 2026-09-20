@@ -47,7 +47,7 @@ ORDER BY policy.name,policy.id"#
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BackupPolicy as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
@@ -101,11 +101,11 @@ impl PostgresBackupPersistence {
                     } else { storage(error) }
                 })?;
             let policy = map_policy(row)?;
-            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+            let activity = citadel_activities::ActivityEvent::new_backup_policy_event(
                 policy.id,
                 policy.name.clone(),
                 actor,
-                citadel_domain::ActivityEventInfo::BackupPolicyRenamed {
+                citadel_activities::ActivityEventInfo::BackupPolicyRenamed {
                     old_name: old.name,
                     new_name: policy.name.clone(),
                 },
@@ -150,11 +150,11 @@ impl PostgresBackupPersistence {
                 .bind(id).bind(&input.description).bind(&input.source).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(&input.webhook).bind(input.keep_last_successful).bind(input.timeout_seconds).bind(input.alert_on_failure).bind(input.run_as_actor_id)
                 .fetch_one(&mut *tx).await.map_err(storage)?;
             let policy = map_policy(row)?;
-            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+            let activity = citadel_activities::ActivityEvent::new_backup_policy_event(
                 policy.id,
                 policy.name.clone(),
                 actor,
-                citadel_domain::ActivityEventInfo::BackupPolicyUpdated {
+                citadel_activities::ActivityEventInfo::BackupPolicyUpdated {
                     old_policy: policy_metadata::activity_snapshot(&old)?,
                     new_policy: policy_metadata::activity_snapshot(&policy)?,
                 },
@@ -192,11 +192,11 @@ impl PostgresBackupPersistence {
             let row = sqlx::query("UPDATE backuppolicies SET description=$2,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
                 .bind(id).bind(description).fetch_one(&mut *tx).await.map_err(storage)?;
             let policy = map_policy(row)?;
-            let activity = citadel_domain::ActivityEvent::new_backup_policy_event(
+            let activity = citadel_activities::ActivityEvent::new_backup_policy_event(
                 policy.id,
                 policy.name.clone(),
                 actor,
-                citadel_domain::ActivityEventInfo::BackupPolicyUpdated {
+                citadel_activities::ActivityEventInfo::BackupPolicyUpdated {
                     old_policy,
                     new_policy: policy_metadata::activity_snapshot(&policy)?,
                 },

@@ -137,7 +137,7 @@ GROUP BY r.id"#
             let rows = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Alert as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
@@ -200,7 +200,7 @@ impl PostgresAlertRepository {
                 id,
                 &input.name,
                 actor,
-                citadel_domain::ActivityEventInfo::AlertRuleCreated {
+                citadel_activities::ActivityEventInfo::AlertRuleCreated {
                     alert_rule: input.snapshot(id),
                 },
             )
@@ -248,7 +248,7 @@ impl PostgresAlertRepository {
                 id,
                 &input.name,
                 request_actor,
-                citadel_domain::ActivityEventInfo::AlertRuleUpdated {
+                citadel_activities::ActivityEventInfo::AlertRuleUpdated {
                     old_rule: current.snapshot(),
                     new_rule: input.snapshot(id),
                 },
@@ -307,11 +307,11 @@ impl PostgresAlertRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
-            let activity = citadel_domain::ActivityEvent::new_alert_rule_event(
+            let activity = citadel_activities::ActivityEvent::new_alert_rule_event(
                 input.id,
                 input.name.clone(),
                 actor,
-                citadel_domain::ActivityEventInfo::AlertRuleRenamed {
+                citadel_activities::ActivityEventInfo::AlertRuleRenamed {
                     old_name,
                     new_name: input.name.clone(),
                 },

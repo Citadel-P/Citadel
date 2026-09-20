@@ -15,13 +15,12 @@ use citadel_adapters::crypto::{
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
 use citadel_adapters::platform_registration::{
-    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
+    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationRepository,
 };
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
+use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
@@ -32,6 +31,7 @@ use citadel_platforms::{
     RuntimePlatformInfo, RuntimeSwarmConfig, RuntimeSwarmInventory, RuntimeSwarmNode,
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
+use citadel_primitives::ActorId;
 use citadel_server::platforms_http::{self, PlatformsHttpState};
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
 use serde_json::{Value, json};
@@ -537,11 +537,11 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     };
     let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(10, cluster).await;
     let platforms = Arc::new(PlatformReadService::new(Arc::new(
-        PostgresPlatformReadStore::new(pool.clone()),
+        PostgresPlatformReader::new(pool.clone()),
     )));
     let realtime = IdentityRealtimeReader::new(identity.clone(), platforms.clone());
     let registrations = Arc::new(PlatformRegistrationService::new(
-        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
         Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
     ));
     let edge = citadel_adapters::edge::EdgeRegistry::default();
@@ -566,7 +566,14 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         platforms,
         registrations,
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker,
         agent: None,
         edge,

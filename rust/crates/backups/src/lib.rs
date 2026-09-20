@@ -14,7 +14,7 @@ mod tests;
 mod validation;
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use chrono_tz::Tz;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 pub use error::BackupError;
 use futures_util::future::BoxFuture;
 pub use policies::{BackupPolicy, BackupPolicyConfiguration};

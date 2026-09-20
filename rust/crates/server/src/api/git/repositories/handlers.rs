@@ -7,10 +7,9 @@ use axum::extract::{Extension, Path, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use citadel_domain::{PermissionLevel, ResourceType};
 use citadel_git::{GitRepositoryExecutionError, GitRepositoryExecutionService, RemoteBranch};
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
-use citadel_resources::ResourceMetadataService;
+use citadel_primitives::{PermissionLevel, ResourceType};
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -22,7 +21,7 @@ use crate::realtime::RealtimeHub;
 #[derive(Clone)]
 pub struct GitRepositoriesHttpState {
     pub identity: Arc<IdentityService>,
-    pub resources: Arc<ResourceMetadataService>,
+    pub repository: Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub execution: Arc<GitRepositoryExecutionService>,
     pub realtime: Option<RealtimeHub>,
     pub cancellation: CancellationToken,
@@ -351,8 +350,7 @@ async fn sync(
     )?;
     let repository: citadel_git::GitRepository = identity_result(
         state
-            .resources
-            .store()
+            .repository
             .get_git_repository(id)
             .await
             .map_err(|error| IdentityError::Storage(error.to_string())),

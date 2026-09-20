@@ -18,7 +18,10 @@ impl AutomationRepository for PostgresAutomationRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, AutomationError>,
+        Result<
+            std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>,
+            AutomationError,
+        >,
     > {
         self.permissions_impl(actor, ids)
     }

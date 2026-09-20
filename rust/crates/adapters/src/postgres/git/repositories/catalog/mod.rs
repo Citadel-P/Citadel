@@ -1,28 +1,39 @@
 mod queries;
+
 mod rows;
+
 use rows::*;
+
+mod persistence;
+
 mod validation;
-use crate::resource_metadata_store::{
-    TAG_SUMMARIES, apply_json_merge_patch, database_error, deserialize_optional, exactly_one,
-    insert_catalog_activity, insert_resource_tags, mask_webhook, replace_resource_tags_tx,
-    serialize_activity_value, serialize_optional, storage, unique_ids, validate_tag_ids,
-};
+
+use persistence::*;
+
+mod tag_links;
+
+use crate::postgres::tags::TAG_SUMMARIES;
+
+use tag_links::*;
+
 use validation::*;
 
 use chrono::Utc;
 
-use citadel_domain::{ActivityEventInfo, ActorId, GitRepositoryActivitySnapshot, ResourceType};
+use citadel_activities::{ActivityEventInfo, GitRepositoryActivitySnapshot};
+
+use citadel_primitives::{ActorId, ResourceType};
 
 use citadel_git::{
     CreateGitRepository, GitRepository, GitRepositoryError, GitRepositoryMutationKind,
     GitRepositoryPatch, GitRepositoryPersistence, GitRepositorySyncMode,
 };
 
-use citadel_resources::{
-    ResourceMetadataError, TaggableResourceType, validate_description, validate_name_identifier,
-};
+use citadel_git::repositories::{validate_description, validate_name_identifier};
 
-use futures_util::{TryFutureExt, future::BoxFuture};
+use citadel_tags::TaggableResourceType;
+
+use futures_util::future::BoxFuture;
 
 use serde_json::Value;
 
@@ -36,63 +47,12 @@ impl GitRepositoryPersistence for PostgresGitRepositoryPersistence {
         actor_id: ActorId,
         administrator: bool,
     ) -> BoxFuture<'a, Result<Vec<GitRepository>, GitRepositoryError>> {
-        Box::pin(
-            self.list_git_repositories_impl(actor_id, administrator)
-                .map_err(git_error),
-        )
-    }
-    fn get_git_repository<'a>(
-        &'a self,
-        id: Uuid,
-    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
-        Box::pin(self.get_git_repository_impl(id).map_err(git_error))
-    }
-    fn create_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        repository: &'a CreateGitRepository,
-    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
-        Box::pin(
-            self.create_git_repository_impl(actor_id, repository)
-                .map_err(git_error),
-        )
-    }
-    fn update_git_repository<'a>(
-        &'a self,
-        actor_id: ActorId,
-        id: Uuid,
-        patch: &'a GitRepositoryPatch,
-        kind: GitRepositoryMutationKind,
-    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
-        Box::pin(
-            self.update_git_repository_impl(actor_id, id, patch, kind)
-                .map_err(git_error),
-        )
-    }
-    fn delete_git_repositories<'a>(
-        &'a self,
-        actor_id: ActorId,
-        ids: &'a [Uuid],
-    ) -> BoxFuture<'a, Result<(), GitRepositoryError>> {
-        Box::pin(
-            self.delete_git_repositories_impl(actor_id, ids)
-                .map_err(git_error),
-        )
-    }
-}
-
-impl PostgresGitRepositoryPersistence {
-    fn list_git_repositories_impl<'a>(
-        &'a self,
-        actor_id: ActorId,
-        administrator: bool,
-    ) -> BoxFuture<'a, Result<Vec<GitRepository>, ResourceMetadataError>> {
         Box::pin(async move {
             let query = queries::authorized_list();
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::GitRepository as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .bind(TaggableResourceType::GitRepository.as_database_str())
                 .fetch_all(&self.pool)
@@ -103,17 +63,17 @@ impl PostgresGitRepositoryPersistence {
                 .collect()
         })
     }
-    fn get_git_repository_impl<'a>(
+    fn get_git_repository<'a>(
         &'a self,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<GitRepository, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
         Box::pin(async move { get_git_repository(&self.pool, id).await })
     }
-    fn create_git_repository_impl<'a>(
+    fn create_git_repository<'a>(
         &'a self,
         actor_id: ActorId,
         repository: &'a CreateGitRepository,
-    ) -> BoxFuture<'a, Result<GitRepository, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let now = Utc::now();
@@ -165,7 +125,7 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
             )
             .await?;
             let created = get_git_repository_tx(&mut transaction, id, false).await?;
-            insert_catalog_activity(
+            insert_git_activity(
                 &mut transaction,
                 actor_id,
                 id,
@@ -177,13 +137,13 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
             get_git_repository(&self.pool, id).await
         })
     }
-    fn update_git_repository_impl<'a>(
+    fn update_git_repository<'a>(
         &'a self,
         actor_id: ActorId,
         id: Uuid,
         patch: &'a GitRepositoryPatch,
         kind: GitRepositoryMutationKind,
-    ) -> BoxFuture<'a, Result<GitRepository, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<GitRepository, GitRepositoryError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let old = get_git_repository_tx(&mut transaction, id, true).await?;
@@ -268,29 +228,28 @@ ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NUL
                         git_snapshot(&updated_view)?,
                     )
                 };
-                insert_catalog_activity(&mut transaction, actor_id, id, &updated.name, info)
-                    .await?;
+                insert_git_activity(&mut transaction, actor_id, id, &updated.name, info).await?;
             }
             transaction.commit().await.map_err(storage)?;
             get_git_repository(&self.pool, id).await
         })
     }
-    fn delete_git_repositories_impl<'a>(
+    fn delete_git_repositories<'a>(
         &'a self,
         actor_id: ActorId,
         ids: &'a [Uuid],
-    ) -> BoxFuture<'a, Result<(), ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<(), GitRepositoryError>> {
         Box::pin(async move {
             let ids = unique_ids(ids);
             if ids.is_empty() {
-                return Err(ResourceMetadataError::Validation(
+                return Err(GitRepositoryError::Validation(
                     "Ids must not be empty.".into(),
                 ));
             }
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let rows = load_git_repositories_tx(&mut transaction, &ids).await?;
             if rows.len() != ids.len() {
-                return Err(ResourceMetadataError::NotFound);
+                return Err(GitRepositoryError::NotFound);
             }
             sqlx::query("DELETE FROM gitrepositories WHERE id = ANY($1::uuid[])")
                 .bind(&ids)
@@ -298,7 +257,7 @@ ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NUL
                 .await
                 .map_err(database_error)?;
             for repository in rows {
-                insert_catalog_activity(
+                insert_git_activity(
                     &mut transaction,
                     actor_id,
                     repository.id,

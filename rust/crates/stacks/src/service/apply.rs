@@ -145,7 +145,7 @@ impl StackService {
             .await?;
         let mut count = 0;
         for (actor, claim) in claims {
-            if claim.platform_type == "DockerSwarm" {
+            if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                 // Namespace/task counts cannot prove that every Service in this
                 // release was accepted. Release the expired claim as recoverable;
                 // the authoritative Swarm snapshot owns convergence and metadata checks.
@@ -203,7 +203,7 @@ impl StackService {
                     .runtime_snapshot(
                         claim.platform_id,
                         &claim.project_name,
-                        orchestration(&claim.platform_type)?,
+                        orchestration(&claim.platform_type),
                         &self.shutdown.child_token(),
                     )
                     .await?;
@@ -226,7 +226,7 @@ impl StackService {
         }
         if remaining > 0 {
             for (actor, claim) in self.store.stale_delete_claims(cutoff, remaining).await? {
-                let orchestration = orchestration(&claim.platform_type)?;
+                let orchestration = orchestration(&claim.platform_type);
                 let snapshot = self
                     .runtime
                     .runtime_snapshot(
@@ -488,7 +488,7 @@ pub(super) async fn execute_apply(
         &compose_files,
         claim.stack_id,
         claim.release_id,
-        claim.platform_type == "DockerSwarm",
+        claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm,
     ) {
         Ok(value) => value,
         Err(error) => {

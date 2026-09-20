@@ -7,7 +7,6 @@ publish = false
 
 [dependencies]
 citadel-server = { path = "../crates/server" }
-citadel-domain = { path = "../crates/domain" }
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,13 +1,14 @@
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, PermissionLevel, ResourceType,
-    ServiceAccountActivitySnapshot, ServiceAccountResourceAccessSnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, ServiceAccountActivitySnapshot,
+    ServiceAccountResourceAccessSnapshot,
 };
 use citadel_identity::{
     IdentityError, NewServiceAccount, NewServiceAccountToken, PatchField, ResourceInfo,
-    ServiceAccountResourceAccess, ServiceAccountStore, ServiceAccountTokenView, ServiceAccountView,
-    StoredPage,
+    ServiceAccountDetails, ServiceAccountRepository, ServiceAccountResourceAccess,
+    ServiceAccountTokenDetails, StoredPage,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;
@@ -28,18 +29,18 @@ impl PostgresServiceAccountStore {
     }
 }
 
-impl ServiceAccountStore for PostgresServiceAccountStore {
+impl ServiceAccountRepository for PostgresServiceAccountStore {
     fn usages(
         &self,
         actor_id: ActorId,
-    ) -> BoxFuture<'_, Result<Vec<citadel_identity::RunAsActorUsageView>, IdentityError>> {
+    ) -> BoxFuture<'_, Result<Vec<citadel_identity::RunAsActorUsageDetails>, IdentityError>> {
         Box::pin(async move {
             let rows: Vec<(Uuid, String, i32, bool)> = sqlx::query_as("SELECT id,name,13 AS resourcetype,enabled AS isactive FROM actions WHERE runasactorid=$1 UNION ALL SELECT id,name,16 AS resourcetype,(enabled AND archivedat IS NULL) AS isactive FROM backuppolicies WHERE runasactorid=$1 ORDER BY resourcetype,name,id")
                 .bind(actor_id.value()).fetch_all(&self.pool).await.map_err(storage)?;
             Ok(rows
                 .into_iter()
                 .map(
-                    |(id, name, kind, is_active)| citadel_identity::RunAsActorUsageView {
+                    |(id, name, kind, is_active)| citadel_identity::RunAsActorUsageDetails {
                         id,
                         name,
                         resource_type: if kind == 13 {
@@ -61,7 +62,7 @@ impl ServiceAccountStore for PostgresServiceAccountStore {
         name: Option<&'a str>,
         limit: i64,
         offset: i64,
-    ) -> BoxFuture<'a, Result<StoredPage<ServiceAccountView>, IdentityError>> {
+    ) -> BoxFuture<'a, Result<StoredPage<ServiceAccountDetails>, IdentityError>> {
         Box::pin(async move {
             let rows = sqlx::query(
                 r#"
@@ -141,14 +142,14 @@ LIMIT $5 OFFSET $6
         })
     }
 
-    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<ServiceAccountView>, IdentityError>> {
+    fn get(&self, id: Uuid) -> BoxFuture<'_, Result<Option<ServiceAccountDetails>, IdentityError>> {
         Box::pin(async move { load_account(&self.pool, id).await })
     }
 
     fn create<'a>(
         &'a self,
         account: &'a NewServiceAccount,
-    ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let roles = sqlx::query_scalar::<_, Uuid>("SELECT id FROM roles WHERE id = ANY($1)")
@@ -266,7 +267,7 @@ VALUES ($1, $2, $3, $4, $5, $6)
         is_enabled: Option<bool>,
         changed_by_actor_id: ActorId,
         updated_at: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_id = sqlx::query_scalar::<_, Uuid>(
@@ -347,7 +348,7 @@ WHERE id = $1
         name: &'a str,
         changed_by_actor_id: ActorId,
         updated_at: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let (old_name, old_snapshot) = load_activity_snapshot(&mut transaction, id).await?;
@@ -480,7 +481,7 @@ WHERE serviceaccountid = ANY($1)
         role_id: Uuid,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
-    ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
@@ -530,7 +531,7 @@ WHERE serviceaccountid = ANY($1)
         role_id: Uuid,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
-    ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
@@ -568,7 +569,7 @@ WHERE serviceaccountid = ANY($1)
         access: &'a ServiceAccountResourceAccess,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
@@ -621,7 +622,7 @@ ON CONFLICT DO NOTHING
         resource_access_id: Uuid,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
-    ) -> BoxFuture<'_, Result<ServiceAccountView, IdentityError>> {
+    ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
@@ -659,7 +660,7 @@ ON CONFLICT DO NOTHING
         account_id: Uuid,
         limit: i64,
         offset: i64,
-    ) -> BoxFuture<'_, Result<StoredPage<ServiceAccountTokenView>, IdentityError>> {
+    ) -> BoxFuture<'_, Result<StoredPage<ServiceAccountTokenDetails>, IdentityError>> {
         Box::pin(async move {
             if !sqlx::query_scalar::<_, bool>(
                 "SELECT EXISTS(SELECT 1 FROM serviceaccounts WHERE id = $1)",
@@ -710,7 +711,7 @@ LIMIT $2 OFFSET $3
         &'a self,
         token: &'a NewServiceAccountToken,
         maximum_active: i64,
-    ) -> BoxFuture<'a, Result<ServiceAccountTokenView, IdentityError>> {
+    ) -> BoxFuture<'a, Result<ServiceAccountTokenDetails, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let actor_available = sqlx::query_scalar::<_, bool>(
@@ -1004,7 +1005,7 @@ fn token_public_hint(id: Uuid) -> String {
 async fn load_account(
     pool: &PgPool,
     id: Uuid,
-) -> Result<Option<ServiceAccountView>, IdentityError> {
+) -> Result<Option<ServiceAccountDetails>, IdentityError> {
     let row = sqlx::query(
         r#"
 SELECT account.id, account.name, account.description, account.actorid, actor.isenabled,
@@ -1043,7 +1044,7 @@ async fn load_token(
     pool: &PgPool,
     account_id: Uuid,
     token_id: Uuid,
-) -> Result<Option<ServiceAccountTokenView>, IdentityError> {
+) -> Result<Option<ServiceAccountTokenDetails>, IdentityError> {
     let row = sqlx::query(
         r#"
 SELECT token.id, token.name, token.expiresatutc, token.lastusedatutc,
@@ -1082,7 +1083,7 @@ struct PersistedResourceInfo {
     name: String,
 }
 
-fn map_account(row: PgRow) -> Result<ServiceAccountView, IdentityError> {
+fn map_account(row: PgRow) -> Result<ServiceAccountDetails, IdentityError> {
     let accesses = serde_json::from_value::<Vec<PersistedAccess>>(
         row.try_get("resourceaccesses").map_err(storage)?,
     )
@@ -1102,7 +1103,7 @@ fn map_account(row: PgRow) -> Result<ServiceAccountView, IdentityError> {
                     access.permission_level
                 ))
             })?;
-        let specific_permissions = citadel_domain::SpecificPermission::ALL
+        let specific_permissions = citadel_primitives::SpecificPermission::ALL
             .into_iter()
             .filter(|permission| access.specific_permissions & *permission as i32 != 0)
             .collect();
@@ -1116,7 +1117,7 @@ fn map_account(row: PgRow) -> Result<ServiceAccountView, IdentityError> {
         })
     })
     .collect::<Result<Vec<_>, IdentityError>>()?;
-    Ok(ServiceAccountView {
+    Ok(ServiceAccountDetails {
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         description: row.try_get("description").map_err(storage)?,
@@ -1149,9 +1150,9 @@ fn map_resource_info(value: serde_json::Value) -> Result<Vec<ResourceInfo>, Iden
         })
 }
 
-fn map_token(row: PgRow) -> Result<ServiceAccountTokenView, IdentityError> {
+fn map_token(row: PgRow) -> Result<ServiceAccountTokenDetails, IdentityError> {
     let id: Uuid = row.try_get("id").map_err(storage)?;
-    Ok(ServiceAccountTokenView {
+    Ok(ServiceAccountTokenDetails {
         id,
         name: row.try_get("name").map_err(storage)?,
         hint: format!("cit_sa_{}", &id.simple().to_string()[..8]),
@@ -1168,7 +1169,7 @@ fn map_token(row: PgRow) -> Result<ServiceAccountTokenView, IdentityError> {
     })
 }
 
-fn specific_mask(permissions: &[citadel_domain::SpecificPermission]) -> i32 {
+fn specific_mask(permissions: &[citadel_primitives::SpecificPermission]) -> i32 {
     permissions
         .iter()
         .fold(0, |mask, permission| mask | *permission as i32)

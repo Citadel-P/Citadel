@@ -22,7 +22,7 @@ pub(super) async fn local_container_stats(
             .snapshot()
             .await
             .iter()
-            .find(|target| target.connector_type == "Local")
+            .find(|target| target.connector_type == citadel_platforms::ConnectorKind::Local)
             .map(|target| target.id)
         else {
             continue;

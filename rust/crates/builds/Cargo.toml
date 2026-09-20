@@ -6,9 +6,12 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-git = { path = "../git" }
+citadel-tags = { path = "../tags" }
+citadel-primitives = { path = "../primitives" }
+citadel-licensing = { path = "../licensing" }
+citadel-activities = { path = "../activities" }
 chrono.workspace = true
-citadel-domain = { path = "../domain" }
-citadel-resources = { path = "../resources" }
 citadel-alerts = { path = "../alerts" }
 futures-util.workspace = true
 serde.workspace = true

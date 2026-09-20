@@ -6,11 +6,11 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-utoipa.workspace = true
+citadel-primitives = { path = "../primitives" }
+citadel-activities = { path = "../activities" }
 base64.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
-citadel-domain = { path = "../domain" }
 email_address.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true

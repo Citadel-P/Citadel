@@ -3,7 +3,8 @@
 This describes the architecture of the incremental Rust refactor. Deployments is the
 implemented reference resource as of Phase 6. Stacks and Swarm Services follow it
 in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8, followed by
-Automation and Alerts in Phase 9.
+Automation and Alerts in Phase 9, then Platforms, Identity and shared Resources in
+Phase 10.
 
 ## Ownership and dependency direction
 
@@ -23,8 +24,10 @@ Docker models. A cross-feature edge requires its consumed contract, rationale an
 owning phase in the dependency inventory; it must not create a cycle. Prefer a
 consumer-owned port or an existing coordinator for workflows spanning features.
 Do not create common/shared junk drawers, a generic service locator, or an authorization
-framework. `citadel-domain` and `citadel-application` are transitional umbrellas to
-remove in Phase 11; the final tiny primitives bundle moves once in that phase.
+framework. `citadel-domain` has been removed: actor/permission/redaction primitives,
+audit models, licensing models and feature vocabulary now have explicit owners.
+`citadel-application` remains a transitional service/process umbrella for the rest
+of Phase 11; it consumes those owners directly.
 
 Server builds explicit typed components, handing narrow state to routes and separate
 handles to jobs. Configuration is read and validated at startup, then passed as typed
@@ -322,23 +325,20 @@ Dropping the caller leaves accepted work owned by that tracker. Root shutdown ca
 the check, persists its failed validation result, releases the claim, and drains the
 owner before database teardown. Abnormal process failure still uses durable recovery.
 
-The shared Resources catalogue port and adapter retain compatibility delegation to
-Git persistence until shared-resource normalization. Shared tag/audit helpers retain
-that ownership too. Resources re-exports Git webhook evaluation; its legacy
-`RepoWebhookConfig` compatibility schema remains in Resources until Phase 10.
-Automation now consumes Git's semantic webhook configuration, and migrated APIs
-own their wire schemas in server. These compatibility paths do not put Views or HTTP
-schema dependencies back into Builds, Git or Backups. Phase 8 has dedicated architecture
-guards and adds no exemptions for these three feature crates.
+Git owns catalogue persistence and webhook evaluation directly. Tags owns shared tag
+projections and transactional tag-link helpers; each catalogue adapter owns its audit
+mapping. The former Resources compatibility delegates and schema facade have been
+removed. Migrated APIs own their wire schemas in server. Phase 8's architecture guards
+continue to apply; the ownership correction adds no exemptions.
 
 The reviewed Phase 8 cross-feature contracts are:
 
 | Importing feature → owner | Consumed contract | Reason |
 |---|---|---|
 | Builds → Alerts | `AlertEventSink`, `AlertObservation` | Publish execution outcomes through the observation contract owned by Alerts. |
-| Builds → Resources | tag summaries and webhook validation/evaluation facade | Preserve shared tag enrichment and existing callers until Phase 10 shared-resource normalization. |
+| Builds → Tags | `TagSummary` | Tags owns the shared tag projection. |
+| Builds → Git | webhook validation and evaluation | Git owns webhook semantics directly. |
 | Git → Execution | bounded process requests, results and runner | Git CLI execution uses the existing cancellation/output-limit owner; runtime reorganization remains Phase 12. |
-| Resources → Git | repository persistence/error and webhook contracts | Delegate legacy catalogue and webhook entry points to the migrated owner without a dependency cycle. |
 
 These are explicit consumed contracts, not exceptions permitting feature-owned HTTP Views.
 
@@ -373,8 +373,137 @@ and worker runs remain independent of viewers and retain durable recovery.
 |---|---|---|
 | Automation → Alerts | `AlertEventSink`, `AlertObservation` | Report failed execution through the semantic observation contract. |
 | Automation → Git | `RepoWebhookConfig` | Share validated webhook configuration without sharing API schemas. |
-| Automation → Resources | `TagSummary` | Retain shared tag enrichment until Phase 10. |
+| Automation → Tags | `TagSummary` | Tags owns the shared tag summary projection; server maps it to the wire DTO. |
 | Automation → Execution | bounded process runner | Preserve Deno sandbox, cancellation and output limits; runtime placement remains Phase 12. |
 
 No new architecture exemptions are introduced for either feature. Their architecture
 guards cover resource ownership, HTTP separation, persistence projection and detached tasks.
+
+## Phase 10: Platforms, Identity and shared resource management
+
+Platforms owns the closed `ConnectorKind` (Local, Agent, EdgeAgent) and
+`PlatformKind` (Docker, DockerSwarm) classifications used by runtime collection.
+PostgreSQL decodes persisted spellings before workers receive a target. Both
+historical standalone descriptor spellings, `Docker` and `DockerStandalone`, denote
+Docker; unknown classifications are errors. Open external Docker status strings
+remain observations rather than being treated as closed Citadel classifications.
+Generated Docker models remain confined to adapters. Server owns platform Views,
+capability flags, Swarm overview messages and realtime JSON mapping.
+
+Identity follows the same resource roles as Deployments, Stacks and Git. Its
+`users`, `teams`, `roles`, `service_accounts`, `actors`, `profile`, `authentication`,
+`mfa` and `oidc` modules live directly under `src/`, with `model`, `commands`,
+`read_models`, `repository` and `service` slots as needed. There is no local
+`domain/` or `application/` layer and no structural security exception. Shared
+Identity authorization evaluation lives in `permissions.rs`; authentication
+invariants and transaction boundaries stay with their existing services and ports.
+Challenge consumption, session issuance, recovery-code consumption, account linking
+and last-administrator checks remain atomic. Security behavior does not depend on
+layer-shaped folder names.
+
+Feature roles may expand from `model.rs` or `service.rs` into a directory with that
+same name. Single-resource crates use those roles directly under `src/`; crates
+with multiple resources repeat them under the resource namespace. A service slot's
+`mod.rs` may define its service state and constructor shared by its operation modules;
+crate/resource façades do not contain use-case implementations. Do not add empty
+roles to projection-only or value-only resources.
+
+HTTP DTOs and schema descriptors remain server-owned. Identity and lookup vocabulary
+has semantic enum ownership in the feature, with server-side OpenAPI descriptors
+preserving the existing schema names and enum values. Serde on patch/configuration
+values preserves null/missing-field and persisted JSON behavior.
+
+Read projections use Reader ports; durable resource mutations use Repository ports.
+Sample/projection stores and transient MFA/OIDC security state retain Store where
+that describes their actual responsibility. Registries, tags, bindings and secret
+metadata have explicit owners described below; repository source configuration and
+webhook configuration belong to Git. Encryption remains behind secret-protection ports;
+HTTP mappings preserve credential redaction and never decrypt to construct a View.
+
+### Explicit ownership of shared resource management
+
+`citadel-resources` has been removed. It combined unrelated features behind one
+repository and a misleading service name. `citadel-primitives` remains the small
+actor/permission/redaction dependency; it does not own resource repositories or services.
+
+| Crate | Responsibility | Mutation/read port |
+|---|---|---|
+| `citadel-tags` | Tags and resource tag assignments | `TagRepository` |
+| `citadel-registries` | Registry configuration and image browsing | `RegistryRepository`, image browsing read models |
+| `citadel-bindings` | Variables, secret bindings, definitions and providers | `BindingRepository`, `SecretService`, `SecretProtector` |
+| `citadel-discovery` | Permission-filtered lookup and global search | `LookupReader`, `GlobalSearchReader` |
+
+Bindings retains secret definitions/providers because reference validation, orphan
+cleanup and binding mutations share transaction boundaries. Registries depends on
+Tags for `TagSummary`; Tags, Bindings and Discovery do not depend on Git or each
+other. Webhook consumers use Git's contracts directly. The small three-state patch
+values are owner-local, with explicit conversions from the server's HTTP patch type.
+
+PostgreSQL implementations live under `adapters/src/postgres/{tags,registries,bindings}`.
+Tag-link SQL is reusable within an existing Registry or Git transaction, with typed
+error conversion at that adapter boundary. Audit creation, tag replacement, row
+locking and commit order remain in the original transaction. Shared access SQL
+lives in the PostgreSQL authorization helper, not a feature-level umbrella port.
+Platform description persistence is owned by `PlatformMetadataRepository`.
+
+Server DTOs live under `api/{tags,registries,bindings,discovery}`. Tag, Registry and
+Binding handlers live beside their DTOs; lookup/search retain their existing HTTP
+modules. Git catalog handlers retain their Git namespace and their own HTTP state. Route
+composition supplies only each owner's repository/service plus identity and realtime.
+HTTP filters, metadata patch parsing and access helpers are server-local. Feature
+errors are typed by owner; HTTP ProblemDetails mapping preserves existing behavior.
+The broader HTTP error-boundary cleanup remains part of the later refactor.
+
+### Domain removal and remaining Phase 11 work
+
+The user requested domain ownership cleanup together with the Phase 10 structural
+correction. The domain portion of Phase 11 has therefore been brought forward:
+
+| Former domain content | Implemented owner/path |
+|---|---|
+| `ActorId` | `primitives/src/actor.rs` |
+| Permission levels, resource vocabulary, specific masks and policy traits | `primitives/src/{permissions,authorization}.rs` |
+| Environment-name redaction predicate | `primitives/src/redaction.rs` |
+| Setup, actor/principal/role, MFA and preference enums | Identity resource `model.rs` modules |
+| Lookup vocabulary | `discovery/src/lookup/model.rs` |
+| Swarm ownership classification | `swarm-services/src/model/ownership.rs` |
+| License identity/state/payload/capability vocabulary | `licensing/src/model/{resource,vocabulary}.rs` |
+| Audit envelope, event information and invariants | `activities/src/model/{event,info,vocabulary}.rs` |
+| Audit snapshots | Activities `model/` modules grouped by event family (Identity, Git, Builds, Stacks, etc.) |
+| Change fields, source and webhook metadata | Activities `model/{changes,sources,webhooks}.rs` |
+
+Activities owns historical audit snapshots rather than live feature aggregates. It
+uses serialized strings for role/setup/preference audit values to avoid depending
+on Identity, which emits events. Boundary mappings preserve the exact previous JSON
+strings. Activities depends only on narrow primitives and Licensing models; Licensing
+models depend only on primitives. Neither model crate depends on Identity services.
+The complete consumed domain symbol map is in the resource-structure correction report.
+There is no compatibility `citadel-domain` package or re-export layer. Platforms
+consumes the Swarm Services `SwarmServiceOwnership` classification in its inventory
+projection; this narrow dependency is acyclic and keeps that vocabulary with its
+feature owner. It does not move Swarm mutation orchestration into Platforms.
+
+The separate `citadel-application` cleanup remains for Phase 11:
+
+| Remaining application content | Destination |
+|---|---|
+| `activities` ports/service/filter/projections | Activities; public JSON sanitization/mapping to server |
+| `licenses` services/ports/transition jobs | Licensing; request/View/schema types to server |
+| `service_account_last_used` | Identity usage job and bounded notification adapter |
+| bounded_queue, supervisor, polling, dynamic_tasks, io_budget, runtime_signal, runtime_metrics | Dedicated process-runtime support crate |
+
+This correction does not claim completion of all Phase 11 work. Phase 12 still owns
+final process lifecycle/shutdown auditing.
+
+The Phase 10 transport guard intentionally does not certify final task ownership.
+Two existing, bounded and awaited password `spawn_blocking` calls stay inside
+Identity so that cancellation cannot release the hashing semaphore before the
+blocking operation ends. The existing Container mutation task also retains its
+claim-completion behavior when HTTP disconnects. Their three task-ownership
+exceptions remain explicit in the external audit and must be resolved by the
+Phase 12 lifecycle audit; they are not silently removed by moving their files.
+
+Stacks now consumes Platforms' `PlatformKind` in its durable-operation claims and
+read projections (Phase 10). This narrow cross-feature dependency prevents Stack
+workers from reinterpreting persisted strings; it is acyclic because Platforms
+has no dependency on Stacks. PostgreSQL owns the legacy spelling conversion.

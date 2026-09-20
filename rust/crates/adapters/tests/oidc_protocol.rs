@@ -7,9 +7,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{Duration, Utc};
 use citadel_adapters::oidc_protocol::OidcHttpProtocol;
-use citadel_domain::ActorId;
 use citadel_identity::OidcProtocol;
 use citadel_identity::{OidcProvider, SYSTEM_ACTOR_ID};
+use citadel_primitives::ActorId;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde_json::{Value, json};
 

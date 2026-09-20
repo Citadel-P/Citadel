@@ -1,6 +1,6 @@
 //! Consumer-owned runtime, binding, and entitlement capabilities.
 use crate::*;
-use citadel_domain::LicenseCapability;
+use citadel_licensing::LicenseCapability;
 use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;

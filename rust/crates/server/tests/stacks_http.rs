@@ -12,11 +12,12 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::api::stacks::StacksHttpState;
 use citadel_stacks::{
     ComposeProjectRuntimeService, NoopStackChangeNotifier, ResolvedStackBindings, StackApplySource,
@@ -75,7 +76,7 @@ impl StackRuntime for CompletingStackRuntime {
                 return Err(StackError::RuntimeRejected("private-runtime-error".into()));
             }
             self.apply_calls.lock().unwrap().push(ApplyCall {
-                platform_type: claim.platform_type.clone(),
+                platform_type: claim.platform_type.to_string(),
                 compose: source
                     .compose_contents()?
                     .into_iter()

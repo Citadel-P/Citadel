@@ -9,9 +9,10 @@ use citadel_adapters::{
     docker::DockerClient,
     edge::EdgeRegistry,
     inventory_projection_store::PostgresInventoryProjectionStore,
-    platform_read_store::PostgresPlatformReadStore,
-    platform_registration::{PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore},
-    resource_metadata_store::PostgresResourceMetadataStore,
+    platform_registration::{
+        PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationRepository,
+    },
+    postgres::platforms::PostgresPlatformReader,
     volume_content::VolumeContentAdapter,
 };
 use citadel_platforms::{
@@ -40,7 +41,7 @@ pub async fn verify(
         docker,
         &InventoryCollectionTarget {
             platform_id: platform,
-            platform_type: "Docker".into(),
+            platform_type: citadel_platforms::PlatformKind::Docker,
         },
         &CancellationToken::new(),
     )
@@ -74,14 +75,21 @@ pub async fn verify(
         ),
         identity: provider.identity.clone(),
         platforms: Arc::new(PlatformReadService::new(Arc::new(
-            PostgresPlatformReadStore::new(pool.clone()),
+            PostgresPlatformReader::new(pool.clone()),
         ))),
         registrations: Arc::new(PlatformRegistrationService::new(
-            Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+            Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
             Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
         )),
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker: docker.clone(),
         agent: None,
         edge,

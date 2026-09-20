@@ -1,6 +1,9 @@
 use super::*;
+
 use axum::http::HeaderValue;
+
 use citadel_platforms::volume_content::normalize_path;
+
 use futures_util::StreamExt;
 
 #[derive(Default, Deserialize)]
@@ -156,7 +159,7 @@ pub(super) async fn download(
             let _guard = guard;
             while let Some(chunk) = input.next().await { yield chunk?; }
             let activity = citadel_adapters::activity_store::PostgresActivityStore::new(state.pool.clone());
-            let details = citadel_domain::VolumeContentDownloaded { volume_name: name, path, is_directory: directory, file_name: filename };
+            let details = citadel_activities::VolumeContentDownloaded { volume_name: name, path, is_directory: directory, file_name: filename };
             if !matches!(tokio::time::timeout(std::time::Duration::from_secs(5), activity.record_volume_download(principal.actor_id, platform, details)).await, Ok(Ok(()))) {
                 tracing::warn!("Could not record completed Volume download activity.");
             }

@@ -21,7 +21,7 @@ use citadel_automation::{
     AutomationRuntimeConfig, AutomationService,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;

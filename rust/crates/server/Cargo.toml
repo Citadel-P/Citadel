@@ -6,6 +6,13 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-discovery = { path = "../discovery" }
+citadel-bindings = { path = "../bindings" }
+citadel-registries = { path = "../registries" }
+citadel-tags = { path = "../tags" }
+citadel-primitives = { path = "../primitives" }
+citadel-licensing = { path = "../licensing" }
+citadel-activities = { path = "../activities" }
 utoipa-axum.workspace = true
 utoipa.workspace = true
 axum.workspace = true
@@ -23,14 +30,12 @@ citadel-builds = { path = "../builds" }
 citadel-backups = { path = "../backups" }
 citadel-contracts = { path = "../contracts" }
 citadel-database = { path = "../database" }
-citadel-domain = { path = "../domain" }
 citadel-git = { path = "../git" }
 citadel-deployments = { path = "../deployments" }
 citadel-swarm-services = { path = "../swarm-services" }
 citadel-stacks = { path = "../stacks" }
 citadel-identity = { path = "../identity" }
 citadel-platforms = { path = "../platforms" }
-citadel-resources = { path = "../resources" }
 clap.workspace = true
 futures-util.workspace = true
 ipnet.workspace = true

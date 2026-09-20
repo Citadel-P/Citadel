@@ -17,8 +17,8 @@ pub(crate) struct PlatformTarget {
     pub id: uuid::Uuid,
     pub name: String,
     pub address: String,
-    pub connector_type: String,
-    pub platform_type: String,
+    pub connector_type: citadel_platforms::ConnectorKind,
+    pub platform_type: citadel_platforms::PlatformKind,
     pub agent: Option<Arc<AgentClient>>,
 }
 
@@ -60,8 +60,11 @@ impl PlatformRuntimeRegistry {
         for row in rows {
             let id = row.try_get("id")?;
             let address: String = row.try_get("address")?;
-            let connector_type: String = row.try_get("connectortype")?;
-            let agent = if connector_type == "Agent" {
+            let connector_type =
+                citadel_adapters::postgres::platform_classification::connector_kind(
+                    row.try_get("connectortype")?,
+                )?;
+            let agent = if connector_type == citadel_platforms::ConnectorKind::Agent {
                 previous
                     .iter()
                     .find(|target| {
@@ -90,7 +93,9 @@ impl PlatformRuntimeRegistry {
                 connector_type,
                 agent,
                 name: row.try_get("name")?,
-                platform_type: row.try_get("platformtype")?,
+                platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
+                    row.try_get("platformtype")?,
+                )?,
             });
         }
         let changed = previous.len() != next.len()
@@ -122,7 +127,7 @@ impl PlatformRuntimeRegistry {
         loop {
             let same = self.snapshot().await.iter().any(|target| {
                 target.id == id
-                    && target.connector_type == "Agent"
+                    && target.connector_type == citadel_platforms::ConnectorKind::Agent
                     && target.address.trim_end_matches('/') == address.trim_end_matches('/')
             });
             if !same || changes.changed().await.is_err() {

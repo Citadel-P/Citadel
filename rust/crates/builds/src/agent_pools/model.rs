@@ -2,7 +2,7 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct BuildAgentPool {
-    pub tags: Vec<citadel_resources::TagSummary>,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,

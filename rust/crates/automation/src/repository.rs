@@ -1,7 +1,7 @@
 use crate::*;
 use chrono::{DateTime, Utc};
-use citadel_domain::ActorId;
 use citadel_git::repositories::webhooks::RepoWebhookConfig;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use uuid::Uuid;
@@ -13,7 +13,10 @@ pub trait AutomationRepository: Send + Sync {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, AutomationError>,
+        Result<
+            std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>,
+            AutomationError,
+        >,
     >;
     fn create<'a>(
         &'a self,

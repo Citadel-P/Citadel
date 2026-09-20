@@ -10,7 +10,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InventoryCollectionTarget {
     pub platform_id: Uuid,
-    pub platform_type: String,
+    pub platform_type: crate::PlatformKind,
 }
 
 pub async fn collect_inventory(
@@ -68,7 +68,7 @@ async fn collect_swarm_inventory(
     target: &InventoryCollectionTarget,
     cancellation: &CancellationToken,
 ) -> Result<Option<RuntimeSwarmInventory>, RuntimeCapabilityError> {
-    if target.platform_type.eq_ignore_ascii_case("DockerSwarm") {
+    if target.platform_type == crate::PlatformKind::DockerSwarm {
         let nodes = runtime.list_swarm_nodes(cancellation).await?;
         let mut services = runtime.list_swarm_services(cancellation).await?;
         let mut tasks = runtime.list_swarm_tasks(cancellation).await?;
@@ -229,7 +229,11 @@ mod tests {
     fn target(platform_type: &str) -> InventoryCollectionTarget {
         InventoryCollectionTarget {
             platform_id: Uuid::now_v7(),
-            platform_type: platform_type.into(),
+            platform_type: match platform_type {
+                "DockerSwarm" => crate::PlatformKind::DockerSwarm,
+                "Docker" => crate::PlatformKind::Docker,
+                _ => panic!("Invalid test platform"),
+            },
         }
     }
 

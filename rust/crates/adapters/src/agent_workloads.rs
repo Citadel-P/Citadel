@@ -64,7 +64,7 @@ pub(crate) fn stack_request(
             .and_then(|path| path.rsplit_once('/').map(|(parent, _)| parent.to_owned())),
         secret_files: Vec::new(),
         secret_target_service_names: Vec::new(),
-        orchestration_mode: if claim.platform_type == "DockerSwarm" {
+        orchestration_mode: if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
             ProtoStackOrchestrationMode::DockerSwarm as i32
         } else {
             ProtoStackOrchestrationMode::DockerCompose as i32

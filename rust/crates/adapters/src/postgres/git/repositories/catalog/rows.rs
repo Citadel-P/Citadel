@@ -1,5 +1,6 @@
 use super::*;
-pub(super) fn map_git_repository(row: PgRow) -> Result<GitRepository, ResourceMetadataError> {
+
+pub(super) fn map_git_repository(row: PgRow) -> Result<GitRepository, GitRepositoryError> {
     Ok(GitRepository {
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
@@ -27,7 +28,7 @@ pub(super) fn map_git_repository(row: PgRow) -> Result<GitRepository, ResourceMe
 pub(super) async fn get_git_repository(
     pool: &PgPool,
     id: Uuid,
-) -> Result<GitRepository, ResourceMetadataError> {
+) -> Result<GitRepository, GitRepositoryError> {
     let q = format!(
         "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2"
     );
@@ -37,7 +38,7 @@ pub(super) async fn get_git_repository(
         .fetch_optional(pool)
         .await
         .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)
+        .ok_or(GitRepositoryError::NotFound)
         .and_then(map_git_repository)
 }
 
@@ -45,7 +46,7 @@ pub(super) async fn get_git_repository_tx(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     lock: bool,
-) -> Result<GitRepository, ResourceMetadataError> {
+) -> Result<GitRepository, GitRepositoryError> {
     let lock_clause = if lock { " FOR UPDATE OF resource" } else { "" };
     let query = format!(
         "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2{lock_clause}"
@@ -56,14 +57,14 @@ pub(super) async fn get_git_repository_tx(
         .fetch_optional(&mut **tx)
         .await
         .map_err(storage)?
-        .ok_or(ResourceMetadataError::NotFound)
+        .ok_or(GitRepositoryError::NotFound)
         .and_then(map_git_repository)
 }
 
 pub(super) async fn load_git_repositories_tx(
     tx: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
-) -> Result<Vec<GitRepository>, ResourceMetadataError> {
+) -> Result<Vec<GitRepository>, GitRepositoryError> {
     let q = format!(
         "SELECT resource.*, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id"
     );
@@ -80,7 +81,7 @@ pub(super) async fn load_git_repositories_tx(
 
 pub(super) fn git_snapshot(
     value: &GitRepository,
-) -> Result<GitRepositoryActivitySnapshot, ResourceMetadataError> {
+) -> Result<GitRepositoryActivitySnapshot, GitRepositoryError> {
     Ok(GitRepositoryActivitySnapshot {
         id: value.id,
         name: value.name.clone(),
@@ -97,22 +98,12 @@ pub(super) fn git_snapshot(
     })
 }
 
-pub(super) fn parse_git_sync_mode(v: &str) -> Result<GitRepositorySyncMode, ResourceMetadataError> {
+pub(super) fn parse_git_sync_mode(v: &str) -> Result<GitRepositorySyncMode, GitRepositoryError> {
     match v {
         "Manual" => Ok(GitRepositorySyncMode::Manual),
         "PullInterval" => Ok(GitRepositorySyncMode::PullInterval),
-        _ => Err(ResourceMetadataError::Storage(format!(
+        _ => Err(GitRepositoryError::Storage(format!(
             "Unknown Git repository sync mode '{v}'."
         ))),
-    }
-}
-
-pub(super) fn git_error(error: ResourceMetadataError) -> GitRepositoryError {
-    match error {
-        ResourceMetadataError::Validation(e) => GitRepositoryError::Validation(e),
-        ResourceMetadataError::NotFound => GitRepositoryError::NotFound,
-        ResourceMetadataError::Conflict(e) => GitRepositoryError::Conflict(e),
-        ResourceMetadataError::Credential => GitRepositoryError::Credential,
-        ResourceMetadataError::Storage(e) => GitRepositoryError::Storage(e),
     }
 }

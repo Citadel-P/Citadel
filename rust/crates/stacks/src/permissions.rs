@@ -1,5 +1,5 @@
 //! Named requirements shared by inbound and transactional workload checks.
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
 // Stack Apply/rollback preserve the existing Execute + Apply contract.
 permission_policy!(ReadStack, ResourceType::Stack, PermissionLevel::Read);
 permission_policy!(CreateStack, ResourceType::Stack, PermissionLevel::Write);

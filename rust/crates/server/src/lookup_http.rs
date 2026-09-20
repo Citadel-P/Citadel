@@ -1,21 +1,38 @@
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
+
 use crate::platforms_http::{PlatformsHttpState, lookup_platform_resources};
+
 use axum::extract::rejection::QueryRejection;
+
 use axum::extract::{Extension, Query, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::IntoResponse;
+
 use axum::{Json, Router};
-use citadel_domain::LookupResourceType;
+
+use citadel_discovery::LookupResourceType;
+
 use citadel_identity::{ActorPrincipal, EntitlementService, IdentityError};
-use citadel_resources::{LookupCaller, LookupError, LookupRequest, LookupResult, LookupStore};
+
+use citadel_discovery::LookupCaller;
+use citadel_discovery::LookupError;
+use citadel_discovery::LookupQuery as ResourceLookupQuery;
+use citadel_discovery::LookupReader;
+use citadel_discovery::LookupResult;
+
 use serde::Deserialize;
+
 use std::sync::Arc;
+
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct LookupHttpState {
-    pub store: Arc<dyn LookupStore>,
+    pub store: Arc<dyn LookupReader>,
     pub entitlements: Arc<dyn EntitlementService>,
     pub platforms: PlatformsHttpState,
 }
@@ -46,7 +63,7 @@ struct LookupQuery {
         (status = 200, description = "Success", body = ref("#/components/schemas/lookupResponse"), content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
-    params(("TargetResourceType" = citadel_domain::LookupResourceType, Query), ("SourceResourceType" = Option<citadel_domain::LookupResourceType>, Query), ("SourceResourceId" = Option<uuid::Uuid>, Query), ("PlatformId" = Option<uuid::Uuid>, Query)),
+    params(("TargetResourceType" = crate::api::vocabulary::LookupResourceTypeSchema, Query), ("SourceResourceType" = Option<crate::api::vocabulary::LookupResourceTypeSchema>, Query), ("SourceResourceId" = Option<uuid::Uuid>, Query), ("PlatformId" = Option<uuid::Uuid>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -62,7 +79,7 @@ async fn lookup(
         query.map_err(|_| IdentityError::Validation("Invalid lookup query parameters.".into())),
         &headers,
     )?;
-    let request = LookupRequest {
+    let request = ResourceLookupQuery {
         target: identity_result(parse_kind(&query.target), &headers)?,
         source: identity_result(
             query.source.as_deref().map(parse_kind).transpose(),

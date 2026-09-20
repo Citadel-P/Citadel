@@ -55,7 +55,7 @@ try {
     }
     if (-not $healthy) { throw 'The Phase 5 PostgreSQL fixture did not become healthy.' }
 
-    Invoke-RustTest @('test', '--locked', '-p', 'citadel-resources')
+    Invoke-RustTest @('test', '--locked', '-p', 'citadel-tags', '-p', 'citadel-registries', '-p', 'citadel-bindings', '-p', 'citadel-discovery')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--lib')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'resource_metadata_persistence', '--', '--ignored', '--test-threads=1')

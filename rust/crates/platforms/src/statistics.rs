@@ -1,4 +1,4 @@
-use crate::{ContainerStatView, PlatformStatView, RuntimeCapabilityError};
+use crate::{ContainerStatSnapshot, PlatformStatSnapshot, RuntimeCapabilityError};
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 
@@ -54,14 +54,14 @@ pub struct ServiceStatistics {
     pub missing_docker_node_ids: Vec<String>,
     pub oldest_sample_at: Option<chrono::DateTime<chrono::Utc>>,
     pub newest_sample_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub stats: Vec<ContainerStatView>,
+    pub stats: Vec<ContainerStatSnapshot>,
 }
 
 impl ServiceStatistics {
     pub fn new(
-        service: &crate::SwarmServiceView,
+        service: &crate::SwarmServiceSummary,
         tasks: Vec<ServiceTaskSample>,
-        stats: Vec<ContainerStatView>,
+        stats: Vec<ContainerStatSnapshot>,
         fresh_after: i64,
     ) -> Self {
         let mut ids = Vec::with_capacity(tasks.len());
@@ -101,7 +101,7 @@ impl ServiceStatistics {
     }
 }
 
-pub trait StatisticsReadStore: Send + Sync {
+pub trait StatisticsReader: Send + Sync {
     fn task_container<'a>(
         &'a self,
         platform_id: Uuid,
@@ -128,19 +128,19 @@ pub trait StatisticsReadStore: Send + Sync {
         ids: &'a [Uuid],
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'a, Result<Vec<ContainerStatView>, RuntimeCapabilityError>>;
+    ) -> BoxFuture<'a, Result<Vec<ContainerStatSnapshot>, RuntimeCapabilityError>>;
     fn platform(
         &self,
         id: Uuid,
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'_, Result<Vec<PlatformStatView>, RuntimeCapabilityError>>;
+    ) -> BoxFuture<'_, Result<Vec<PlatformStatSnapshot>, RuntimeCapabilityError>>;
     fn service<'a>(
         &'a self,
         identity: ServiceStatIdentity<'a>,
         window: StatsWindow,
         now: i64,
-    ) -> BoxFuture<'a, Result<Vec<ContainerStatView>, RuntimeCapabilityError>>;
+    ) -> BoxFuture<'a, Result<Vec<ContainerStatSnapshot>, RuntimeCapabilityError>>;
 }
 
 pub trait SwarmTaskRuntimePort: Send + Sync {
@@ -152,7 +152,7 @@ pub trait SwarmTaskRuntimePort: Send + Sync {
 }
 
 pub fn validate_running_task<'a>(
-    projection: &crate::SwarmTaskView,
+    projection: &crate::SwarmTaskSummary,
     live: &'a crate::RuntimeSwarmTask,
 ) -> Result<&'a str, RuntimeCapabilityError> {
     if projection.is_stale
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn task_target_rejects_stopped_stale_missing_container_and_changed_identity() {
-        let mut projection = crate::SwarmTaskView {
+        let mut projection = crate::SwarmTaskSummary {
             id: "task".into(),
             version_index: 1,
             name: "service.1".into(),
@@ -208,7 +208,6 @@ mod tests {
             updated_at: None,
             observed_at: chrono::Utc::now(),
             is_stale: false,
-            capabilities: None,
         };
         let live = crate::RuntimeSwarmTask {
             id: "task".into(),

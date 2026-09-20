@@ -1,6 +1,6 @@
 use super::*;
+use citadel_activities::WebhookActivityDetails;
 use citadel_application::WebhookActivitySink;
-use citadel_domain::WebhookActivityDetails;
 
 impl WebhookActivitySink for PostgresActivityStore {
     fn record_webhook(

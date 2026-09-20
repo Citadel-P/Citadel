@@ -6,12 +6,12 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use citadel_bindings::SecretProtector;
 use citadel_builds::{
     BuildClaim, BuildError, BuildExecutionResult, BuildExecutor, BuildLog,
     BuildRegistryCredentialResolver, BuildRegistryCredentials, BuildSecretResolver,
 };
 use citadel_execution::{OutputLimitPolicy, ProcessError, ProcessLimits, ProcessRequest, run};
-use citadel_resources::ResourceSecretProtector;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -34,10 +34,7 @@ pub struct PostgresBuildSecretResolver {
 }
 
 impl PostgresBuildSecretResolver {
-    pub fn new(
-        pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
-    ) -> Result<Self, BuildError> {
+    pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, BuildError> {
         Ok(Self {
             resolver: PostgresSecretValueResolver::new(pool, protector)
                 .map_err(|error| BuildError::Storage(error.to_string()))?,
@@ -186,7 +183,7 @@ impl BuildExecutor for PlatformBuildExecutor {
                 }
                 let commit = match git
                     .synchronize_commit(
-                        citadel_domain::ActorId::new(claim.run.triggered_by_actor_id),
+                        citadel_primitives::ActorId::new(claim.run.triggered_by_actor_id),
                         claim.run.git_repository_id,
                         &claim.run.branch,
                         cancellation,

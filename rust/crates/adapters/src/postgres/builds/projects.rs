@@ -7,7 +7,7 @@ impl PostgresBuildRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<
         'a,
-        Result<std::collections::BTreeMap<Uuid, citadel_domain::PermissionLevel>, BuildError>,
+        Result<std::collections::BTreeMap<Uuid, citadel_primitives::PermissionLevel>, BuildError>,
     > {
         Box::pin(async move {
             crate::resource_permissions::levels_for_resources(
@@ -54,7 +54,7 @@ impl PostgresBuildRepository {
                 &mut transaction,
                 &project,
                 actor,
-                citadel_domain::ActivityEventInfo::BuildCreated {
+                citadel_activities::ActivityEventInfo::BuildCreated {
                     build: project.snapshot(),
                 },
             )
@@ -87,7 +87,7 @@ ORDER BY project.name,project.id"#
             let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Build as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
@@ -151,12 +151,12 @@ impl PostgresBuildRepository {
             let project = map_project(row)?;
             if !metadata_only {
                 let info = if current.name != project.name {
-                    citadel_domain::ActivityEventInfo::BuildRenamed {
+                    citadel_activities::ActivityEventInfo::BuildRenamed {
                         old_name: current.name.clone(),
                         new_name: project.name.clone(),
                     }
                 } else {
-                    citadel_domain::ActivityEventInfo::BuildUpdated {
+                    citadel_activities::ActivityEventInfo::BuildUpdated {
                         old_build: current.snapshot(),
                         new_build: project.snapshot(),
                     }
@@ -194,7 +194,7 @@ impl PostgresBuildRepository {
                 &mut tx,
                 &current,
                 actor,
-                citadel_domain::ActivityEventInfo::BuildDeleted {
+                citadel_activities::ActivityEventInfo::BuildDeleted {
                     build: current.snapshot(),
                 },
             )

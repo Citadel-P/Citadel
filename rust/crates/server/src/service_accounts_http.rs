@@ -1,30 +1,48 @@
 use crate::request_validation::ApiPath;
+
 use crate::request_validation::ApiQuery;
+
 use crate::request_validation::ValidatedJson;
+
 use std::sync::Arc;
 
 use axum::Json;
+
 use axum::Router;
+
 use axum::extract::{Extension, State};
+
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+
 use axum::response::IntoResponse;
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+
 use citadel_identity::{ActorPrincipal, PermissionGrant};
+
 use citadel_identity::{
-    AddServiceAccountResourceAccessRequest, AddServiceAccountRoleRequest,
-    ArchiveServiceAccountsRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
     DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS, IdentityError, IdentityService,
     MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS, MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
-    PagedResult, RenameServiceAccountRequest, ServiceAccountLimitsView, ServiceAccountService,
-    ServiceAccountTokenView, ServiceAccountView, UpdateServiceAccountRequest,
+    ServiceAccountService,
 };
+
+use crate::identity_http::dto::{
+    AddServiceAccountResourceAccessRequest, AddServiceAccountRoleRequest,
+    ArchiveServiceAccountsRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
+    PagedResult, RenameServiceAccountRequest, ServiceAccountLimitsView, ServiceAccountTokenView,
+    ServiceAccountView, UpdateServiceAccountRequest,
+};
+
 use serde::{Deserialize, Serialize};
+
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
+
 use crate::identity_http::{
     IdentityHttpResult, identity_result, require_human, require_human_administrator,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -96,7 +114,7 @@ async fn list(
         &headers,
     )?;
     Ok(Json(ServiceAccountsResponse {
-        paged_result,
+        paged_result: paged_result.into(),
         capabilities: ResourceCapabilities::from(permission),
     })
     .into_response())
@@ -129,7 +147,7 @@ async fn get_one(
     )?;
     let account = identity_result(state.service_accounts.get(id).await, &headers)?;
     Ok(Json(ServiceAccountDetailResponse {
-        account,
+        account: account.into(),
         capabilities: ServiceAccountCapabilities::from(permission),
     })
     .into_response())
@@ -143,7 +161,7 @@ async fn get_one(
     summary = "Create a Service Account",
     request_body = CreateServiceAccountRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -155,6 +173,7 @@ async fn create(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<CreateServiceAccountRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::CreateServiceAccount = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -189,7 +208,7 @@ async fn create(
         (UpdateServiceAccountRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -203,6 +222,7 @@ async fn update(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<UpdateServiceAccountRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::UpdateServiceAccount = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -224,7 +244,7 @@ async fn update(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -262,7 +282,15 @@ async fn usages(
         &headers,
     )?;
     let usages = identity_result(state.service_accounts.usages(id).await, &headers)?;
-    Ok(crate::identity_http::no_store(Json(usages).into_response()))
+    Ok(crate::identity_http::no_store(
+        Json(
+            usages
+                .into_iter()
+                .map(crate::identity_http::dto::RunAsActorUsageView::from)
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -273,7 +301,7 @@ async fn usages(
     summary = "Rename a Service Account",
     request_body = RenameServiceAccountRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -285,6 +313,7 @@ async fn rename(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<RenameServiceAccountRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::RenameServiceAccount = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -306,7 +335,7 @@ async fn rename(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -329,6 +358,7 @@ async fn archive(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<ArchiveServiceAccountsRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::ArchiveServiceAccounts = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -360,7 +390,7 @@ async fn archive(
     summary = "Assign a Role to a Service Account",
     request_body = AddServiceAccountRoleRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -374,6 +404,7 @@ async fn add_role(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<AddServiceAccountRoleRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::AddServiceAccountRole = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -395,7 +426,7 @@ async fn add_role(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -405,7 +436,7 @@ async fn add_role(
     tag = "ServiceAccounts",
     summary = "Remove a Role from a Service Account",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
@@ -439,7 +470,7 @@ async fn remove_role(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -450,7 +481,7 @@ async fn remove_role(
     summary = "Add a resource override to a Service Account",
     request_body = AddServiceAccountResourceAccessRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -464,6 +495,7 @@ async fn add_resource_access(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<AddServiceAccountResourceAccessRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::AddServiceAccountResourceAccess = request.into();
     let principal = identity_result(require_human_administrator(principal), &headers)?;
     identity_result(
         state
@@ -485,7 +517,7 @@ async fn add_resource_access(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -495,7 +527,7 @@ async fn add_resource_access(
     tag = "ServiceAccounts",
     summary = "Remove a resource override from a Service Account",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path), ("resourceAccessId" = uuid::Uuid, Path)),
@@ -529,7 +561,7 @@ async fn remove_resource_access(
             .await,
         &headers,
     )?;
-    Ok(Json(account).into_response())
+    Ok(Json(crate::identity_http::dto::ServiceAccountView::from(account)).into_response())
 }
 
 #[utoipa::path(
@@ -539,7 +571,7 @@ async fn remove_resource_access(
     tag = "ServiceAccounts",
     summary = "Get Service Account limits",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ServiceAccountLimitsView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ServiceAccountLimitsView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -600,7 +632,10 @@ async fn list_tokens(
             .await,
         &headers,
     )?;
-    Ok(Json(ServiceAccountTokensResponse { paged_result }).into_response())
+    Ok(Json(ServiceAccountTokensResponse {
+        paged_result: paged_result.into(),
+    })
+    .into_response())
 }
 
 #[utoipa::path(
@@ -611,7 +646,7 @@ async fn list_tokens(
     summary = "Create a Service Account token",
     request_body = CreateServiceAccountTokenRequest,
     responses(
-        (status = 201, description = "Success", body = citadel_identity::CreatedServiceAccountTokenView, content_type = "application/json"),
+        (status = 201, description = "Success", body = crate::identity_http::dto::CreatedServiceAccountTokenView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -625,6 +660,7 @@ async fn create_token(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<CreateServiceAccountTokenRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::CreateServiceAccountToken = request.into();
     let principal = identity_result(require_human(principal), &headers)?;
     identity_result(
         state
@@ -646,7 +682,11 @@ async fn create_token(
             .await,
         &headers,
     )?;
-    let mut response = (StatusCode::CREATED, Json(created)).into_response();
+    let mut response = (
+        StatusCode::CREATED,
+        Json(crate::identity_http::dto::CreatedServiceAccountTokenView::from(created)),
+    )
+        .into_response();
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));

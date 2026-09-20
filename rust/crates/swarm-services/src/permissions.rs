@@ -1,5 +1,5 @@
 //! Named requirements shared by inbound and transactional workload checks.
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
 permission_policy!(
     ReadSwarmService,
     ResourceType::SwarmService,

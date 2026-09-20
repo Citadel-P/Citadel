@@ -7,7 +7,7 @@ pub struct Entitlement(AtomicBool);
 impl BuildEntitlements for Entitlement {
     fn enabled(
         &self,
-        _: citadel_domain::LicenseCapability,
+        _: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, BuildError>> {
         Box::pin(async { Ok(self.0.load(Ordering::Relaxed)) })
     }

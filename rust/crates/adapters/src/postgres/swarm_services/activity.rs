@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn service_creation_activity(
     service: SwarmServiceActivitySnapshot,
-    source: Option<citadel_domain::ActivitySourceResource>,
+    source: Option<citadel_activities::ActivitySourceResource>,
 ) -> ActivityEventInfo {
     match source {
         Some(source) => ActivityEventInfo::SwarmServiceDuplicated { service, source },

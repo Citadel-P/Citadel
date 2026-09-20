@@ -16,9 +16,9 @@ use citadel_adapters::{
 use citadel_automation::{
     AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig, AutomationService,
 };
-use citadel_domain::ActorId;
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use citadel_stacks::{
     NoopStackChangeNotifier, StackEntitlements, StackError, StackRepository, StackService,

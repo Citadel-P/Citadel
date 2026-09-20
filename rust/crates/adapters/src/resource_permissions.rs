@@ -1,4 +1,4 @@
-use citadel_domain::{ActorId, ResourceType};
+use citadel_primitives::{ActorId, ResourceType};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
@@ -49,7 +49,7 @@ pub(crate) async fn levels_for_resources<'e>(
     actor: ActorId,
     kind: ResourceType,
     ids: &[Uuid],
-) -> Result<BTreeMap<Uuid, citadel_domain::PermissionLevel>, sqlx::Error> {
+) -> Result<BTreeMap<Uuid, citadel_primitives::PermissionLevel>, sqlx::Error> {
     if ids.is_empty() {
         return Ok(BTreeMap::new());
     }
@@ -87,8 +87,8 @@ LEFT JOIN LATERAL (
         .map(|(id, value)| {
             (
                 id,
-                citadel_domain::PermissionLevel::from_i32(value)
-                    .unwrap_or(citadel_domain::PermissionLevel::None),
+                citadel_primitives::PermissionLevel::from_i32(value)
+                    .unwrap_or(citadel_primitives::PermissionLevel::None),
             )
         })
         .collect())

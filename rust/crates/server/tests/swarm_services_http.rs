@@ -14,11 +14,12 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::api::swarm_services::SwarmServicesHttpState;
 use citadel_swarm_services::{
     RuntimeServiceResult, ServiceOperationClaim, SwarmServiceError, SwarmServiceRuntime,

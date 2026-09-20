@@ -1,13 +1,18 @@
 use crate::openapi::router::OpenApiRouterExt;
+
 use crate::{Readiness, metrics::Metrics};
+
 use axum::{
     Router,
     extract::State,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+
 use serde::Serialize;
+
 use sqlx::PgPool;
+
 use std::sync::Arc;
 
 #[derive(Clone)]

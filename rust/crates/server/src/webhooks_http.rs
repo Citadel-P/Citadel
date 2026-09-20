@@ -1,23 +1,39 @@
 use std::sync::Arc;
 
 use crate::openapi::router::OpenApiRouterExt;
+
 use axum::body::Bytes;
+
 use axum::extract::{Path, State};
+
 use axum::http::{HeaderMap, StatusCode};
+
 use axum::response::{IntoResponse, Response};
+
 use axum::{Json, Router};
+
 use chrono::Utc;
+
 use citadel_alerts::{AlertEventSink, AlertObservation};
+
 use citadel_automation::{AutomationError, AutomationService};
-use citadel_domain::ActorId;
+
+use citadel_primitives::ActorId;
+
 use citadel_git::{GitRepositoryExecutionError, GitRepositoryExecutionService, GitWebhookOutcome};
-use citadel_resources::webhooks::{WebhookConfiguration, WebhookError};
+
+use citadel_git::repositories::webhooks::{WebhookConfiguration, WebhookError};
+
 use serde::Serialize;
+
 use uuid::Uuid;
 
 mod audit;
+
 mod builds;
+
 mod services;
+
 mod stacks;
 
 const SYSTEM_ACTOR_ID: ActorId = ActorId::new(Uuid::from_u128(1));
@@ -125,7 +141,7 @@ async fn receive(
             ),
             Err((_, reason)) => ("rejected", Some(*reason)),
         };
-        let details = citadel_domain::WebhookActivityDetails {
+        let details = citadel_activities::WebhookActivityDetails {
             request_id,
             auth_type: auth_type.chars().take(32).collect(),
             execution: execution.chars().take(32).collect(),
@@ -196,6 +212,7 @@ struct WebhookDispatch {
     branch: Option<String>,
     commit: Option<String>,
 }
+
 impl WebhookDispatch {
     fn noop(reason: &'static str) -> Self {
         Self {
@@ -212,8 +229,8 @@ impl WebhookDispatch {
     }
 }
 
-fn audit_resource(resource: &str) -> Option<citadel_domain::ActivityResourceType> {
-    use citadel_domain::ActivityResourceType;
+fn audit_resource(resource: &str) -> Option<citadel_activities::ActivityResourceType> {
+    use citadel_activities::ActivityResourceType;
     if resource.eq_ignore_ascii_case("repo") {
         Some(ActivityResourceType::GitRepository)
     } else if resource.eq_ignore_ascii_case("stack") {

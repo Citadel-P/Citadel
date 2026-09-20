@@ -18,7 +18,8 @@ use citadel_automation::{
     AutomationRun, AutomationRunClaim, AutomationRunResult, code_hash,
 };
 
-use citadel_domain::{ActivityEvent, ActivityEventInfo, ActorId, ResourceType};
+use citadel_activities::{ActivityEvent, ActivityEventInfo};
+use citadel_primitives::{ActorId, ResourceType};
 
 use citadel_git::repositories::webhooks::RepoWebhookConfig;
 

@@ -1,20 +1,34 @@
 use crate::request_validation::ApiPath;
+
 use std::sync::Arc;
 
 use axum::Json;
+
 use axum::Router;
+
 use axum::extract::rejection::QueryRejection;
+
 use axum::extract::{Extension, Query, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::{IntoResponse, Response};
+
 use citadel_application::{ActivityFilter, ActivityRecord, ActivityService, PagedActivityRecords};
-use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
+
+use citadel_activities::{ActivityEventType, ActivityResourceType, ActivityStatus};
+use citadel_identity::ActorType;
+
 use citadel_identity::{ActorPrincipal, IdentityError};
+
 use serde::{Deserialize, Serialize};
+
 use serde_json::Value;
+
 use uuid::Uuid;
 
 use crate::identity_http::{identity_error_response, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -129,7 +143,7 @@ async fn get_by_id(
         (status = 200, description = "Success", body = ref("#/components/schemas/ActivitiesView"), content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<citadel_domain::ActivityResourceType>, Query), ("EventType" = Option<citadel_domain::ActivityEventType>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
+    params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<citadel_activities::ActivityResourceType>, Query), ("EventType" = Option<citadel_activities::ActivityEventType>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

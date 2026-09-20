@@ -1,6 +1,6 @@
 use crate::*;
 use chrono::{DateTime, Utc};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use uuid::Uuid;
