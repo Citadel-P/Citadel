@@ -81,7 +81,7 @@ impl StackService {
                 self.runtime.change_state(
                     claim.platform_id,
                     &claim.project_name,
-                    orchestration(&claim.platform_type)?,
+                    orchestration(&claim.platform_type),
                     action,
                     &cancellation,
                 ),

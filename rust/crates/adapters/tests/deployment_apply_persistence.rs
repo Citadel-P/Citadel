@@ -9,8 +9,8 @@ use citadel_deployments::{
     DeploymentRepository, DeploymentSpec, RuntimeContainerState, RuntimeDeploymentResult,
     UpdateBehavior,
 };
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;

@@ -2,8 +2,8 @@ use super::*;
 use citadel_adapters::{
     crypto::AesGcmSecretProtector, postgres::git::accounts::PostgresGitAccountRepository,
 };
-use citadel_domain::ActorId;
 use citadel_git::*;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use uuid::Uuid;
@@ -17,7 +17,7 @@ struct SlowStore {
 impl GitRepositoryExecutionPersistence for SlowStore {
     fn enqueue_webhook<'a>(
         &'a self,
-        _: citadel_domain::ActorId,
+        _: citadel_primitives::ActorId,
         _: Uuid,
         _: &'a str,
         _: &'a GitRepositoryWebhook,

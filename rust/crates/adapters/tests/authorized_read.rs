@@ -1,6 +1,6 @@
 use citadel_adapters::PostgresAuthorizedPlatformReader;
-use citadel_domain::ActorId;
 use citadel_platforms::AuthorizedPlatformReader;
+use citadel_primitives::ActorId;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 

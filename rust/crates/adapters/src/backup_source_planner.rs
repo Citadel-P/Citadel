@@ -441,7 +441,7 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
         &'a self,
         kind: citadel_backups::policies::read_models::BackupPreviewKind,
         id: Uuid,
-        actor: citadel_domain::ActorId,
+        actor: citadel_primitives::ActorId,
         administrator: bool,
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<

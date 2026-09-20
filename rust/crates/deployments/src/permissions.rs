@@ -1,5 +1,5 @@
 //! Deployment policies shared by entry points and authoritative persistence checks.
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission, permission_policy};
 
 permission_policy!(
     ReadDeployment,

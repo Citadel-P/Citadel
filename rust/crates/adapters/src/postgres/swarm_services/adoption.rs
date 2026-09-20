@@ -49,7 +49,7 @@ impl PostgresSwarmServiceAdoption {
                     PermissionRequirement {
                         resource_type: ResourceType::Platform,
                         level: PermissionLevel::Read,
-                        specific: Some(citadel_domain::SpecificPermission::Inspect),
+                        specific: Some(citadel_primitives::SpecificPermission::Inspect),
                     },
                 )
                 .await?)
@@ -215,7 +215,7 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
                 .collect();
             for entry in &mut spec.environment {
                 if let Some((name, value)) = entry.split_once('=')
-                    && citadel_domain::is_sensitive_environment_name(name)
+                    && citadel_primitives::is_sensitive_environment_name(name)
                     && !value.is_empty()
                 {
                     issues.push(SwarmServiceAdoptionIssue { code: format!("sensitive-environment-{}",issues.len()+1),
@@ -278,7 +278,9 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
                 .environment
                 .iter()
                 .filter_map(|v| v.split_once('='))
-                .any(|(n, v)| citadel_domain::is_sensitive_environment_name(n) && v == "********")
+                .any(|(n, v)| {
+                    citadel_primitives::is_sensitive_environment_name(n) && v == "********"
+                })
             {
                 return Err(validation(
                     "Enter new values or Citadel bindings for redacted sensitive environment variables.",

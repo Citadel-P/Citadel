@@ -14,12 +14,13 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, MfaPolicy};
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
+use citadel_identity::{AuthenticatedPrincipalType, MfaPolicy};
 use citadel_identity::{
     IdentityError, IdentityService, MfaConfiguration, MfaService,
     NoopServiceAccountLastUsedTracker, PasswordHasher, SystemClock, TotpService, TotpSetup,
 };
+use citadel_primitives::ActorId;
 use citadel_server::Readiness;
 use citadel_server::identity_http::{self, IdentityHttpState};
 use serde_json::{Value, json};

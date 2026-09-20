@@ -13,3 +13,13 @@ pub mod git;
 
 pub mod alerts;
 pub mod automation;
+
+pub mod vocabulary;
+
+pub mod bindings;
+pub(crate) mod catalog_query;
+pub mod discovery;
+pub(crate) mod metadata_patch;
+pub mod registries;
+pub(crate) mod resource_access;
+pub mod tags;

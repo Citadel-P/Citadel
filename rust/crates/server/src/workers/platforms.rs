@@ -761,8 +761,8 @@ mod tests {
             id,
             name: "worker-01".into(),
             address: "http://agent:8080".into(),
-            connector_type: "Agent".into(),
-            platform_type: "Docker".into(),
+            connector_type: citadel_platforms::ConnectorKind::Agent,
+            platform_type: citadel_platforms::PlatformKind::Docker,
         };
         let error = RuntimeCapabilityError::new(
             citadel_platforms::RuntimeErrorKind::Remote,

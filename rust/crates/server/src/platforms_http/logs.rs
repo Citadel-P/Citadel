@@ -1,8 +1,10 @@
 use super::*;
+
 use citadel_platforms::{
     SwarmTaskRuntimePort,
     logs::{LogReadPort, LogResource},
 };
+
 use citadel_swarm_services::SwarmServiceRepository;
 
 #[derive(Deserialize)]
@@ -10,6 +12,7 @@ pub(super) struct Tail {
     #[serde(default = "default_tail", alias = "Tail")]
     tail: u16,
 }
+
 const fn default_tail() -> u16 {
     100
 }
@@ -89,6 +92,7 @@ pub(super) async fn swarm_platform(
             .platforms
             .get_platform(platform_id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
             .map_err(platform_error),
         headers,
     )?;
@@ -160,6 +164,7 @@ async fn service_logs(
             .platforms
             .get_swarm_service(platform, id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::SwarmServiceView::from))
             .map_err(platform_error),
         headers,
     )?;

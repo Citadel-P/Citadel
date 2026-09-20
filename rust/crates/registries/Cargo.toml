@@ -1,0 +1,16 @@
+[package]
+name = "citadel-registries"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+citadel-primitives = { path = "../primitives" }
+chrono.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+citadel-tags = { path = "../tags" }

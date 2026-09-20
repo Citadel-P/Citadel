@@ -83,7 +83,7 @@ pub(super) async fn list_projects(
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     let tags = identity_result(
-        crate::resources_http::tags::parse_filters(query.as_deref()),
+        crate::api::tags::handlers::parse_filters(query.as_deref()),
         &headers,
     )?;
     let mut projects = identity_result(
@@ -95,7 +95,7 @@ pub(super) async fn list_projects(
             .map_err(map_error),
         &headers,
     )?;
-    projects.retain(|project| crate::resources_http::tags::matches_filters(&project.tags, &tags));
+    projects.retain(|project| crate::api::tags::handlers::matches_filters(&project.tags, &tags));
     let projects = identity_result(
         authorized_projects(state.builds.store().as_ref(), &principal, projects)
             .await
@@ -177,7 +177,7 @@ pub(super) async fn validate_configuration_entitlements(
         identity_result(
             state
                 .builds
-                .ensure_entitled(citadel_domain::LicenseCapability::ElasticBuildExecution)
+                .ensure_entitled(citadel_licensing::LicenseCapability::ElasticBuildExecution)
                 .await
                 .map_err(map_error),
             headers,
@@ -194,7 +194,7 @@ pub(super) async fn validate_configuration_entitlements(
         identity_result(
             state
                 .builds
-                .ensure_entitled(citadel_domain::LicenseCapability::AutomatedOperations)
+                .ensure_entitled(citadel_licensing::LicenseCapability::AutomatedOperations)
                 .await
                 .map_err(map_error),
             headers,

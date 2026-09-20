@@ -9,17 +9,21 @@ use citadel_adapters::{
         OpaqueServiceAccountTokenCodec,
     },
     identity_store::{PostgresIdentityStore, StaticEntitlementService},
-    resource_metadata_store::PostgresResourceMetadataStore,
+    postgres::bindings::PostgresBindingRepository,
     secret_value_resolver::PostgresSecretValueResolver,
 };
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_bindings::SecretService;
+use citadel_identity::AuthenticatedPrincipalType;
+use citadel_identity::Login;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, LoginRequest,
-    NoopServiceAccountLastUsedTracker, PasswordHasher, SYSTEM_ACTOR_ID, SessionMetadata,
-    SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
+    PasswordHasher, SYSTEM_ACTOR_ID, SessionMetadata, SystemClock,
 };
-use citadel_resources::ResourceMetadataService;
-use citadel_server::resources_http::{self, ResourcesHttpState};
+use citadel_primitives::ActorId;
+use citadel_server::api::bindings;
+use citadel_server::api::git::repositories::catalog as git_catalog;
+use citadel_server::api::registries;
+use citadel_server::api::tags;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -110,7 +114,7 @@ pub async fn verify(
         .unwrap();
     let (_, session) = identity
         .login(
-            LoginRequest {
+            Login {
                 email_or_name: format!("vault-{user_id}@example.test"),
                 password: super::PASSWORD.into(),
             },
@@ -122,19 +126,40 @@ pub async fn verify(
         .await
         .unwrap();
     let resources = Arc::new(
-        ResourceMetadataService::new(
-            Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        SecretService::new(
+            Arc::new(PostgresBindingRepository::new(pool.clone())),
             protector.clone(),
         )
         .with_secret_provider_tester(Arc::new(
             PostgresSecretValueResolver::new(pool.clone(), protector).unwrap(),
         )),
     );
-    let app = resources_http::router(ResourcesHttpState {
+    let app = tags::router(tags::TagsHttpState {
         identity: identity.clone(),
-        resources,
+        tags: Arc::new(citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone())),
         realtime: None,
-    });
+    })
+    .merge(registries::router(registries::RegistriesHttpState {
+        identity: identity.clone(),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        realtime: None,
+    }))
+    .merge(bindings::router(bindings::BindingsHttpState {
+        identity: identity.clone(),
+        secrets: resources,
+        realtime: None,
+    }))
+    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+        identity: identity.clone(),
+        git_repositories: Arc::new(
+            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    }));
     let connection = "/api/v1/resourceBindings/secret-providers/vault-kv2/test";
     for (token, success) in [(super::TOKEN, true), ("invalid-token", false)] {
         let result = request(

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
+use citadel_activities::{ActivityEventType, ActivityResourceType};
 use citadel_adapters::activity_store::PostgresActivityStore;
 use citadel_adapters::crypto::{
     Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
@@ -11,19 +12,16 @@ use citadel_adapters::service_account_store::PostgresServiceAccountStore;
 use citadel_adapters::user_store::PostgresUserReadStore;
 use citadel_application::{ActivityFilter, ActivityService};
 use citadel_database::MigrationRunner;
-use citadel_domain::{
-    ActivityEventType, ActivityResourceType, ActorId, AuthenticatedPrincipalType, PermissionLevel,
-    ResourceType, SpecificPermission, UserDateTimeFormat, UserTheme,
-};
 use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    AddServiceAccountResourceAccessRequest, ArchiveServiceAccountsRequest,
-    ChangeCurrentPasswordRequest, CreateServiceAccountRequest, CreateServiceAccountTokenRequest,
-    IdentityError, IdentityService, IdentityStore, InitializeCitadelRequest, NewSession,
-    NoopServiceAccountLastUsedTracker, PatchField, PatchUserPreferencesRequest, ProfileService,
-    ProfileStore, ServiceAccountResourceAccess, ServiceAccountService, SessionMetadata,
-    SystemClock, UpdateCurrentProfileRequest, UserReadService,
+    AddServiceAccountResourceAccess, ArchiveServiceAccounts, ChangeCurrentPassword,
+    CreateServiceAccount, CreateServiceAccountToken, IdentityError, IdentityService, IdentityStore,
+    InitializeCitadel, NewSession, NoopServiceAccountLastUsedTracker, PatchField,
+    PatchUserPreferences, ProfileRepository, ProfileService, ServiceAccountResourceAccess,
+    ServiceAccountService, SessionMetadata, SystemClock, UpdateCurrentProfile, UserReadService,
 };
+use citadel_identity::{AuthenticatedPrincipalType, UserDateTimeFormat, UserTheme};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
@@ -70,7 +68,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     assert!(identity.setup_status().await.unwrap().requires_setup);
     let (login, session) = identity
         .initialize(
-            InitializeCitadelRequest {
+            InitializeCitadel {
                 name: "owner".into(),
                 email: "owner@example.test".into(),
                 password: "correct-horse-battery-staple".into(),
@@ -113,7 +111,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     let preferences = profiles
         .patch_preferences(
             &owner,
-            PatchUserPreferencesRequest {
+            PatchUserPreferences {
                 time_zone: PatchField::Value("Europe/Paris".into()),
                 date_time_format: PatchField::Value(UserDateTimeFormat::TwentyFourHour),
                 theme: PatchField::Value(UserTheme::Dark),
@@ -145,16 +143,16 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     let time_zone_patch = profiles.patch_preferences(
         &owner,
-        PatchUserPreferencesRequest {
+        PatchUserPreferences {
             time_zone: PatchField::Value("America/New_York".into()),
-            ..PatchUserPreferencesRequest::default()
+            ..PatchUserPreferences::default()
         },
     );
     let theme_patch = profiles.patch_preferences(
         &owner,
-        PatchUserPreferencesRequest {
+        PatchUserPreferences {
             theme: PatchField::Value(UserTheme::Light),
-            ..PatchUserPreferencesRequest::default()
+            ..PatchUserPreferences::default()
         },
     );
     let (time_zone_result, theme_result) = tokio::join!(time_zone_patch, theme_patch);
@@ -171,9 +169,9 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         profiles
             .patch_preferences(
                 &owner,
-                PatchUserPreferencesRequest {
+                PatchUserPreferences {
                     time_zone: PatchField::Value("Romance Standard Time".into()),
-                    ..PatchUserPreferencesRequest::default()
+                    ..PatchUserPreferences::default()
                 },
             )
             .await,
@@ -182,7 +180,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     let profile = profiles
         .update(
             &owner,
-            UpdateCurrentProfileRequest {
+            UpdateCurrentProfile {
                 display_name: "owner-renamed".into(),
             },
         )
@@ -210,7 +208,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     let (renamed_login, renamed_session) = identity
         .login(
-            citadel_identity::LoginRequest {
+            citadel_identity::Login {
                 email_or_name: "owner-renamed".into(),
                 password: "correct-horse-battery-staple".into(),
             },
@@ -355,7 +353,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     for user_agent in ["Firefox/140.0 (Linux)", "curl/8.16.0"] {
         identity
             .login(
-                citadel_identity::LoginRequest {
+                citadel_identity::Login {
                     email_or_name: "owner@example.test".into(),
                     password: "correct-horse-battery-staple".into(),
                 },
@@ -394,7 +392,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
 
     let (_, password_other_session) = identity
         .login(
-            citadel_identity::LoginRequest {
+            citadel_identity::Login {
                 email_or_name: "owner@example.test".into(),
                 password: "correct-horse-battery-staple".into(),
             },
@@ -413,7 +411,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
             .change_password(
                 &owner,
                 Some(&session.refresh_token),
-                ChangeCurrentPasswordRequest {
+                ChangeCurrentPassword {
                     current_password: "wrong-current-password".into(),
                     new_password: "new-correct-horse-battery-staple".into(),
                 },
@@ -426,7 +424,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
             .change_password(
                 &owner,
                 Some(&session.refresh_token),
-                ChangeCurrentPasswordRequest {
+                ChangeCurrentPassword {
                     current_password: "correct-horse-battery-staple".into(),
                     new_password: "short".into(),
                 },
@@ -438,7 +436,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
         .change_password(
             &owner,
             Some(&session.refresh_token),
-            ChangeCurrentPasswordRequest {
+            ChangeCurrentPassword {
                 current_password: "correct-horse-battery-staple".into(),
                 new_password: "new-correct-horse-battery-staple".into(),
             },
@@ -458,7 +456,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     assert!(
         identity
             .login(
-                citadel_identity::LoginRequest {
+                citadel_identity::Login {
                     email_or_name: "owner@example.test".into(),
                     password: "correct-horse-battery-staple".into(),
                 },
@@ -469,7 +467,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     );
     let (_, new_password_session) = identity
         .login(
-            citadel_identity::LoginRequest {
+            citadel_identity::Login {
                 email_or_name: "owner@example.test".into(),
                 password: "new-correct-horse-battery-staple".into(),
             },
@@ -508,7 +506,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
         .change_password(
             &owner,
             None,
-            ChangeCurrentPasswordRequest {
+            ChangeCurrentPassword {
                 current_password: "new-correct-horse-battery-staple".into(),
                 new_password: "final-correct-horse-battery-staple".into(),
             },
@@ -520,7 +518,7 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
     }
     identity
         .login(
-            citadel_identity::LoginRequest {
+            citadel_identity::Login {
                 email_or_name: "owner@example.test".into(),
                 password: "final-correct-horse-battery-staple".into(),
             },
@@ -572,7 +570,7 @@ VALUES
             .change_password(
                 &oidc_principal,
                 None,
-                ChangeCurrentPasswordRequest {
+                ChangeCurrentPassword {
                     current_password: "ignored-current-password".into(),
                     new_password: "another-secure-password".into(),
                 },
@@ -585,7 +583,7 @@ VALUES
     let protected_resource = Uuid::now_v7();
     let mut account = accounts
         .create(
-            CreateServiceAccountRequest {
+            CreateServiceAccount {
                 name: "ci-runner".into(),
                 description: Some("CI".into()),
                 is_enabled: true,
@@ -619,7 +617,7 @@ VALUES
     account = accounts
         .add_resource_access(
             account.id,
-            AddServiceAccountResourceAccessRequest {
+            AddServiceAccountResourceAccess {
                 resource_type: ResourceType::Platform,
                 resource_id: removable_resource,
                 permission_level: PermissionLevel::Read,
@@ -648,7 +646,7 @@ VALUES
     let token = accounts
         .create_token(
             account.id,
-            CreateServiceAccountTokenRequest {
+            CreateServiceAccountToken {
                 name: "pipeline".into(),
                 expires_at_utc: None,
                 never_expires: false,
@@ -661,7 +659,7 @@ VALUES
         accounts
             .create_token(
                 account.id,
-                CreateServiceAccountTokenRequest {
+                CreateServiceAccountToken {
                     name: "pipeline".into(),
                     expires_at_utc: None,
                     never_expires: false,
@@ -691,7 +689,7 @@ VALUES
             .change_password(
                 &service_principal,
                 None,
-                ChangeCurrentPasswordRequest {
+                ChangeCurrentPassword {
                     current_password: "ignored-current-password".into(),
                     new_password: "another-secure-password".into(),
                 },
@@ -729,7 +727,7 @@ VALUES
 
     let bounded = accounts
         .create(
-            CreateServiceAccountRequest {
+            CreateServiceAccount {
                 name: "bounded-runner".into(),
                 description: None,
                 is_enabled: true,
@@ -747,7 +745,7 @@ VALUES
             accounts
                 .create_token(
                     bounded.id,
-                    CreateServiceAccountTokenRequest {
+                    CreateServiceAccountToken {
                         name: format!("token-{index}"),
                         expires_at_utc: None,
                         never_expires: false,
@@ -770,7 +768,7 @@ VALUES
 
     accounts
         .archive(
-            ArchiveServiceAccountsRequest {
+            ArchiveServiceAccounts {
                 ids: vec![bounded.id],
             }
             .ids,
@@ -785,7 +783,7 @@ VALUES
         accounts
             .create_token(
                 bounded.id,
-                CreateServiceAccountTokenRequest {
+                CreateServiceAccountToken {
                     name: "after-archive".into(),
                     expires_at_utc: None,
                     never_expires: false,

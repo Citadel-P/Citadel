@@ -1,9 +1,13 @@
 use super::*;
+
 use citadel_adapters::registry_images::RegistryBrowser;
-use citadel_resources::registry_images::{RegistryBrowseKind, validate_browse_name};
+
+use citadel_registries::registry_images::{RegistryBrowseKind, validate_browse_name};
+
 use sqlx::Row;
 
 static BROWSER: std::sync::OnceLock<Result<RegistryBrowser, String>> = std::sync::OnceLock::new();
+
 static BROWSE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
 
 macro_rules! browse_one {
@@ -31,6 +35,7 @@ macro_rules! browse_one {
         }
     };
 }
+
 macro_rules! browse_two {
     ($(#[$handler_attr:meta])* $handler:ident,$kind:ident) => {
         $(#[$handler_attr])*
@@ -56,6 +61,7 @@ macro_rules! browse_two {
         }
     };
 }
+
 browse_one!(
     #[utoipa::path(
     get,
@@ -74,6 +80,7 @@ browse_one!(
     repositories,
     Repositories
 );
+
 browse_one!(
     #[utoipa::path(
     get,
@@ -92,6 +99,7 @@ browse_one!(
     docker_repositories,
     DockerHubRepositories
 );
+
 browse_two!(
     #[utoipa::path(
     get,
@@ -110,6 +118,7 @@ browse_two!(
     docker_tags,
     DockerHubTags
 );
+
 browse_two!(
     #[utoipa::path(
     get,
@@ -209,7 +218,7 @@ async fn browse(
         )
         .await
         .map_err(|_| IdentityError::Validation("Registry request timed out.".into()))
-        .and_then(|v| v.map_err(resource_metadata_error)),
+        .and_then(|v| v.map_err(crate::api::registries::metadata_error)),
         headers,
     )?;
     Ok(no_store(Json(result).into_response()))

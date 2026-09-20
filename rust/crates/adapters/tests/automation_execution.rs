@@ -5,7 +5,7 @@ use citadel_automation::{
     AutomationActionConfiguration, AutomationRepository, AutomationRunResult,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;

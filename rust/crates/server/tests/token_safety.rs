@@ -11,11 +11,12 @@ use citadel_adapters::{
     identity_store::{PostgresIdentityStore, StaticEntitlementService},
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     AccessTokenClaims, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, ServiceAccountTokenCodec, SessionTokenCodec, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::{
     identity_http::authentication_middleware,
     license_realtime::{LicenseRealtimeHub, LicenseRealtimeService},

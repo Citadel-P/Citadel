@@ -330,8 +330,11 @@ pub(super) async fn apply_container_event(
     let snapshot = targets.snapshot().await;
     for target in snapshot.iter() {
         let matches = event.platform_id.map_or_else(
-            || target.connector_type.eq_ignore_ascii_case("Local"),
-            |id| id == target.id && target.connector_type.eq_ignore_ascii_case("Agent"),
+            || target.connector_type == citadel_platforms::ConnectorKind::Local,
+            |id| {
+                id == target.id
+                    && (target.connector_type == citadel_platforms::ConnectorKind::Agent)
+            },
         );
         if !matches {
             continue;
@@ -359,7 +362,8 @@ pub(super) async fn apply_container_event(
         };
         // Swarm task/service relationships require a complete desired set before
         // replica counts can fall. Keep the full fallback for Swarm container events.
-        handled |= updated && !target.platform_type.eq_ignore_ascii_case("DockerSwarm");
+        handled |=
+            updated && !(target.platform_type == citadel_platforms::PlatformKind::DockerSwarm);
         if updated && let Some(hub) = realtime {
             hub.publish_runtime_change(target.id, "container", &event.action, id.to_owned());
         }

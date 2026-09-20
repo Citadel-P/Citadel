@@ -176,7 +176,7 @@ ORDER BY restore.queuedat DESC,restore.id DESC LIMIT $7"#
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BackupPolicy as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(backup_run_id)
                 .bind(policy_id)
                 .bind(administrator)

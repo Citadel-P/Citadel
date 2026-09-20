@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use citadel_resources::ResourceSecretProtector;
+use citadel_bindings::SecretProtector;
 use citadel_swarm_services::{
     ResolvedSwarmServiceBinding, ResolvedSwarmServiceBindings, SwarmServiceBindingResolverPort,
     SwarmServiceError,
@@ -21,7 +21,7 @@ pub struct PostgresSwarmServiceBindingResolver {
 impl PostgresSwarmServiceBindingResolver {
     pub fn new(
         pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
+        protector: Arc<dyn SecretProtector>,
     ) -> Result<Self, SwarmServiceError> {
         Ok(Self {
             pool: pool.clone(),

@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-use crate::{ImageCapabilitiesView, RuntimeCapabilityError};
+use crate::RuntimeCapabilityError;
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +27,6 @@ pub struct ImageInspection {
     pub containers: Vec<ImageContainer>,
     pub registry: Option<Value>,
     pub docker_node_id: Option<String>,
-    pub capabilities: Option<ImageCapabilitiesView>,
 }
 
 impl ImageInspection {

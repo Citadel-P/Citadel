@@ -18,7 +18,7 @@ pub struct DeploymentDetails {
     pub docker_image_id: Option<String>,
     pub tags: Vec<TagSummary>,
     pub latest_activity: Option<Value>,
-    pub effective_permission: citadel_domain::EffectivePermission,
+    pub effective_permission: citadel_primitives::EffectivePermission,
 }
 impl std::ops::Deref for DeploymentDetails {
     type Target = Deployment;

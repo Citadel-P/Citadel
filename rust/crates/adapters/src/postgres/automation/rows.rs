@@ -66,7 +66,7 @@ pub(super) async fn enrich_actions(
     for row in tags {
         let id: Uuid = row.try_get("resourceid").map_err(storage)?;
         if let Some(index) = positions.get(&id) {
-            actions[*index].tags.push(citadel_resources::TagSummary {
+            actions[*index].tags.push(citadel_tags::TagSummary {
                 id: row.try_get("id").map_err(storage)?,
                 name: row.try_get("name").map_err(storage)?,
                 color: row.try_get("color").map_err(storage)?,

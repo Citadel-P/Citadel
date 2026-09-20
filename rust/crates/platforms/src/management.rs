@@ -1,12 +1,12 @@
 use crate::{
-    CreatePlatformInput, PlatformConnectorType, PlatformRegistrationError, PlatformType,
-    PlatformView, RuntimePlatformInfo,
+    CreatePlatformInput, PlatformConnectorType, PlatformDetails, PlatformRegistrationError,
+    PlatformType, RuntimePlatformInfo,
 };
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Deserialize, utoipa::ToSchema)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenamePlatformInput {
     pub id: Uuid,
@@ -14,7 +14,7 @@ pub struct RenamePlatformInput {
 }
 
 pub fn patch_input(
-    current: &PlatformView,
+    current: &PlatformDetails,
     patch: &Value,
 ) -> Result<CreatePlatformInput, PlatformRegistrationError> {
     let patch = patch
@@ -61,7 +61,7 @@ pub fn patch_input(
 }
 
 pub fn validate_target(
-    current: &PlatformView,
+    current: &PlatformDetails,
     info: &RuntimePlatformInfo,
 ) -> Result<(), PlatformRegistrationError> {
     let kind = if current.platform_type == "DockerSwarm" {

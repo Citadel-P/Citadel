@@ -1,6 +1,7 @@
 use super::*;
+use crate::platforms_http::views::ContainerView;
 use crate::realtime::topic::Topic;
-use citadel_platforms::{ContainerView, logs::ContainerLogPort};
+use citadel_platforms::logs::ContainerLogPort;
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
@@ -34,6 +35,12 @@ impl ApplicationGroupReader {
                         .ok_or_else(|| failure("The Stack has no applied Platform."))?,
                 )
                 .await
+                .map(|value| {
+                    value
+                        .into_iter()
+                        .map(crate::platforms_http::views::ContainerView::from)
+                        .collect::<Vec<_>>()
+                })
                 .map_err(failure)?;
             let containers: Vec<_> = containers
                 .into_iter()
@@ -50,6 +57,7 @@ impl ApplicationGroupReader {
             .platforms
             .get_container_by_reference(g.reference().unwrap_or_default())
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(failure)?
             .ok_or(RealtimeReadError::Authorization)?;
         for (kind, id) in [

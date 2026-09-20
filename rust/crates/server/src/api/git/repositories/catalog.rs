@@ -3,30 +3,48 @@ use crate::api::git::repositories::{
     spec::{GitRepositorySyncMode, RepoCommand},
     views::GitRepositoryView,
 };
+
 use crate::capabilities::ResourceCapabilitiesView;
+
 use crate::identity_http::{IdentityHttpResult, identity_result, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
+
 use crate::request_validation::invalid_json;
-use crate::resources_http::catalog::{
+
+use crate::api::catalog_query::{
     DeleteResourcesInput, PatchResourceMetadataInput, RenameResourceInput, parse_catalog_filters,
     principal_and_id,
 };
-use crate::resources_http::{
-    ResourcesHttpState, authorize_global, authorize_resource, metadata_error,
-    publish_resource_change, require_actor,
+
+use crate::api::resource_access::{
+    authorize_global, authorize_resource, publish_resource_change, require_actor,
 };
+
 use axum::Json;
+
 use axum::extract::rejection::{JsonRejection, PathRejection};
+
 use axum::extract::{Extension, Path, RawQuery, State};
+
 use axum::http::{HeaderMap, StatusCode};
+
 use axum::response::IntoResponse;
-use citadel_domain::{PermissionLevel, ResourceType};
+
+use citadel_primitives::{PermissionLevel, ResourceType};
+
 use citadel_identity::ActorPrincipal;
-use citadel_resources::MetadataPatch;
-use citadel_resources::TagSummary;
+
+use crate::api::metadata_patch::MetadataPatch;
+
+use crate::api::tags::dto::TagSummary;
+
 use serde::Serialize;
+
 use serde_json::Value;
+
 use uuid::Uuid;
+
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct GitRepositoriesResponse {
@@ -56,7 +74,7 @@ struct GitRepositoryConfigResponse {
     webhook: Option<Value>,
     on_clone: Option<RepoCommand>,
     on_pull: Option<RepoCommand>,
-    tags: Vec<citadel_resources::TagSummary>,
+    tags: Vec<crate::api::tags::dto::TagSummary>,
 }
 
 #[utoipa::path(
@@ -74,7 +92,7 @@ struct GitRepositoryConfigResponse {
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn list_git_repositories(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     RawQuery(raw_query): RawQuery,
     headers: HeaderMap,
@@ -91,8 +109,7 @@ async fn list_git_repositories(
     .await?;
     let authorized_repositories = identity_result(
         state
-            .resources
-            .store()
+            .git_repositories
             .list_git_repositories(principal.actor_id, principal.is_administrator())
             .await
             .map_err(metadata_error),
@@ -142,14 +159,14 @@ async fn list_git_repositories(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn get_git_repository(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(&headers, principal, path)?;
     authorize_resource(
-        &state,
+        &state.identity,
         &principal,
         ResourceType::GitRepository,
         id,
@@ -191,14 +208,14 @@ async fn get_git_repository(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn get_git_repository_config(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
 ) -> IdentityHttpResult {
     let (principal, id) = principal_and_id(&headers, principal, path)?;
     authorize_resource(
-        &state,
+        &state.identity,
         &principal,
         ResourceType::GitRepository,
         id,
@@ -250,7 +267,7 @@ async fn get_git_repository_config(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn create_git_repository(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     input: Result<Json<NewGitRepository>, JsonRejection>,
@@ -258,7 +275,7 @@ async fn create_git_repository(
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
     let principal = identity_result(require_actor(principal), &headers)?;
     authorize_global(
-        &state,
+        &state.identity,
         &principal,
         ResourceType::GitRepository,
         PermissionLevel::Write,
@@ -266,7 +283,7 @@ async fn create_git_repository(
     )
     .await?;
     let input: citadel_git::CreateGitRepository = input.into();
-    let service = citadel_git::GitRepositoryService::new(state.resources.store().clone());
+    let service = citadel_git::GitRepositoryService::new(state.git_repositories.clone());
     let repository = identity_result(
         service
             .create(principal.actor_id, input)
@@ -274,7 +291,7 @@ async fn create_git_repository(
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state, "GitRepository", "gitRepositoryChanged");
+    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
     Ok(no_store(
         Json(GitRepositoryView::from(repository)).into_response(),
     ))
@@ -299,7 +316,7 @@ async fn create_git_repository(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn update_git_repository(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
@@ -321,7 +338,7 @@ async fn update_git_repository(
 }
 
 async fn mutate_git_repository(
-    state: ResourcesHttpState,
+    state: GitCatalogHttpState,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
@@ -331,7 +348,7 @@ async fn mutate_git_repository(
     let input: citadel_git::GitRepositoryPatch = input.into();
     let (principal, id) = principal_and_id(&headers, principal, path)?;
     authorize_resource(
-        &state,
+        &state.identity,
         &principal,
         ResourceType::GitRepository,
         id,
@@ -342,14 +359,13 @@ async fn mutate_git_repository(
     .await?;
     let repository = identity_result(
         state
-            .resources
-            .store()
+            .git_repositories
             .update_git_repository(principal.actor_id, id, &input, kind)
             .await
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state, "GitRepository", "gitRepositoryChanged");
+    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
     Ok(no_store(
         Json(GitRepositoryView::from(repository)).into_response(),
     ))
@@ -374,7 +390,7 @@ async fn mutate_git_repository(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn update_git_repository_metadata(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
@@ -410,7 +426,7 @@ async fn update_git_repository_metadata(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn rename_git_repository(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     input: Result<Json<RenameResourceInput>, JsonRejection>,
@@ -445,7 +461,7 @@ async fn rename_git_repository(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn delete_git_repositories(
-    State(state): State<ResourcesHttpState>,
+    State(state): State<GitCatalogHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
     input: Result<Json<DeleteResourcesInput>, JsonRejection>,
@@ -454,7 +470,7 @@ async fn delete_git_repositories(
     let principal = identity_result(require_actor(principal), &headers)?;
     for id in &input.ids {
         authorize_resource(
-            &state,
+            &state.identity,
             &principal,
             ResourceType::GitRepository,
             *id,
@@ -466,26 +482,24 @@ async fn delete_git_repositories(
     }
     identity_result(
         state
-            .resources
-            .store()
+            .git_repositories
             .delete_git_repositories(principal.actor_id, &input.ids)
             .await
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state, "GitRepository", "gitRepositoryChanged");
+    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
 async fn load_git_repository(
-    state: &ResourcesHttpState,
+    state: &GitCatalogHttpState,
     id: Uuid,
     headers: &HeaderMap,
 ) -> IdentityHttpResult<citadel_git::GitRepository> {
     identity_result(
         state
-            .resources
-            .store()
+            .git_repositories
             .get_git_repository(id)
             .await
             .map_err(metadata_error),
@@ -493,7 +507,7 @@ async fn load_git_repository(
     )
 }
 
-pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ResourcesHttpState> {
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<GitCatalogHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_git_repositories))
         .normalized_routes(utoipa_axum::routes!(create_git_repository))
@@ -506,14 +520,14 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Resource
 }
 
 async fn capabilities(
-    state: &ResourcesHttpState,
+    state: &GitCatalogHttpState,
     principal: &ActorPrincipal,
     _: ResourceType,
     id: Option<Uuid>,
     headers: &HeaderMap,
 ) -> IdentityHttpResult<ResourceCapabilitiesView> {
-    use citadel_domain::{EffectivePermission, PermissionPolicy, SpecificPermissions};
     use citadel_git::permissions::*;
+    use citadel_primitives::{EffectivePermission, PermissionPolicy, SpecificPermissions};
     let permission = if principal.is_administrator() {
         EffectivePermission::Administrator
     } else {
@@ -542,4 +556,31 @@ async fn capabilities(
         can_write: permission.allows(WriteGitRepository::REQUIREMENT),
         can_execute: permission.allows(ExecuteGitRepository::REQUIREMENT),
     })
+}
+
+#[derive(Clone)]
+pub struct GitCatalogHttpState {
+    pub git_repositories: std::sync::Arc<dyn citadel_git::GitRepositoryPersistence>,
+    pub identity: std::sync::Arc<citadel_identity::IdentityService>,
+    pub realtime: Option<crate::realtime::RealtimeHub>,
+}
+pub fn router(state: GitCatalogHttpState) -> axum::Router {
+    documented_routes().split_for_parts().0.with_state(state)
+}
+pub(crate) fn metadata_error(
+    error: citadel_git::GitRepositoryError,
+) -> citadel_identity::IdentityError {
+    match error {
+        citadel_git::GitRepositoryError::Validation(message) => {
+            crate::request_validation::validation_error(message)
+        }
+        citadel_git::GitRepositoryError::NotFound => citadel_identity::IdentityError::NotFound,
+        citadel_git::GitRepositoryError::Conflict(message) => {
+            citadel_identity::IdentityError::Conflict(message)
+        }
+        citadel_git::GitRepositoryError::Credential => citadel_identity::IdentityError::Credential,
+        citadel_git::GitRepositoryError::Storage(message) => {
+            citadel_identity::IdentityError::Storage(message)
+        }
+    }
 }

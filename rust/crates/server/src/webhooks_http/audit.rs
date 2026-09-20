@@ -1,4 +1,4 @@
-use citadel_domain::WebhookActivitySource;
+use citadel_activities::WebhookActivitySource;
 use serde_json::Value;
 
 // Only authenticated, bounded identifiers are kept. Never persist clone URLs,

@@ -2,8 +2,10 @@
 //! it neither issues a browser session nor reopens a completed installation.
 use std::path::Path;
 
-use citadel_identity::{IdentityError, IdentityService, InitializeCitadelRequest};
+use citadel_identity::{IdentityError, IdentityService};
+
 use tokio::io::AsyncReadExt;
+
 use zeroize::Zeroizing;
 
 pub async fn initialize_from_environment(identity: &IdentityService) -> Result<(), IdentityError> {
@@ -34,12 +36,12 @@ pub async fn initialize_from_environment(identity: &IdentityService) -> Result<(
     let password = read_password(Path::new(&path)).await?;
     match identity
         .initialize_user_in_mode(
-            InitializeCitadelRequest {
+            citadel_identity::InitializeCitadel {
                 name,
                 email,
                 password,
             },
-            citadel_domain::SetupInitializationMode::Unattended,
+            citadel_identity::SetupInitializationMode::Unattended,
         )
         .await
     {

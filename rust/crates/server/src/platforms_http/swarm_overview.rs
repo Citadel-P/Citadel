@@ -7,7 +7,7 @@ use super::*;
     tag = "Platforms",
     summary = "Get Swarm inventory health and quorum",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::swarm_overview::SwarmOverviewView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::swarm_views::SwarmOverviewView, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -87,7 +87,8 @@ pub(super) async fn get(
         .or_else(|| descriptor.get("Error"))
         .and_then(serde_json::Value::as_str);
     Ok(no_store(
-        Json(summary.into_view(
+        Json(super::swarm_views::overview(
+            summary,
             id,
             platform.status == "Online",
             control,

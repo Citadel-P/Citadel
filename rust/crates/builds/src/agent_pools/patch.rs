@@ -1,7 +1,7 @@
 use crate::{BuildAgentPool, BuildAgentPoolConfiguration, BuildError};
 use serde_json::Value;
 impl BuildAgentPool {
-    pub fn snapshot(&self) -> citadel_domain::BuildAgentPoolActivitySnapshot {
+    pub fn snapshot(&self) -> citadel_activities::BuildAgentPoolActivitySnapshot {
         let field = |camel: &str, pascal: &str| {
             self.provider_spec
                 .get(camel)
@@ -33,7 +33,7 @@ impl BuildAgentPool {
                 text("instanceType", "InstanceType"),
             )
         };
-        citadel_domain::BuildAgentPoolActivitySnapshot {
+        citadel_activities::BuildAgentPoolActivitySnapshot {
             id: self.id,
             name: self.name.clone(),
             description: self.description.clone(),

@@ -1,5 +1,6 @@
 use crate::*;
-use citadel_domain::{ActivityEventInfo, ActorId};
+use citadel_activities::ActivityEventInfo;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 

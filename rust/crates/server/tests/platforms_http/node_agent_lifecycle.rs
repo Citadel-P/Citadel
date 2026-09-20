@@ -217,7 +217,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     )
     .bind(id)
     .bind(fixture.actor_id)
-    .bind(citadel_domain::SpecificPermission::ManageNodeAgents as i32)
+    .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
     .execute(&fixture.pool)
     .await
     .unwrap();

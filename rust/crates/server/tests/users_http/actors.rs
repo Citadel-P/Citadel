@@ -1,6 +1,6 @@
 use super::*;
 use citadel_adapters::actor_store::PostgresActorStore;
-use citadel_identity::ActorStore;
+use citadel_identity::ActorRepository;
 
 // Ports ActorEndpointTests.ActorEndpoints_ShouldReadAndPersistEnabledState and
 // extends the AdministratorGuard concurrency/last-administrator scenarios.

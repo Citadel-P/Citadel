@@ -27,7 +27,7 @@ pub(super) async fn agent_subscriptions(
                     && let Some((_,token,_))=active.remove(&platform) { token.cancel(); }
             }
             _ = ticker.tick() => {
-                let targets: Vec<_> = context.targets.snapshot().await.iter().filter(|target| target.connector_type == "Agent").map(|target| (target.id, target.address.clone())).collect();
+                let targets: Vec<_> = context.targets.snapshot().await.iter().filter(|target| target.connector_type == citadel_platforms::ConnectorKind::Agent).map(|target| (target.id, target.address.clone())).collect();
                 active.retain(|id, (address, token, _)| {
                     let keep = targets.iter().any(|(target, endpoint)| target == id && endpoint == address);
                     if !keep { token.cancel(); }

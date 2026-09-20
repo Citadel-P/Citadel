@@ -1,8 +1,11 @@
 use super::*;
-use citadel_platforms::image_pull::{
-    ImagePullError, ImagePullPort, PullImageInput, PullImageStreamItem,
-};
+
+use citadel_platforms::image_pull::{ImagePullError, ImagePullPort, PullImageStreamItem};
+
+use crate::platforms_http::dto::PullImageInput;
+
 use futures_util::StreamExt;
+
 static PULL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
 #[utoipa::path(
@@ -27,6 +30,7 @@ pub(super) async fn pull(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::image_pull::PullImageInput = input.into();
     if input.platform_id.is_nil()
         || input.registry_id.is_nil()
         || input.image_tag.trim().is_empty()
@@ -156,6 +160,7 @@ fn progress_body(
     };
     axum::body::Body::from_stream(stream)
 }
+
 fn cancelled() -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Image pull cancelled.", false)
 }

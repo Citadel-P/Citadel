@@ -1,10 +1,11 @@
 use chrono::Utc;
-use citadel_domain::{ActivityEvent, ActivityEventInfo, ActorId, PlatformActivitySnapshot};
+use citadel_activities::{ActivityEvent, ActivityEventInfo, PlatformActivitySnapshot};
 use citadel_platforms::{
     PlatformConnectorType, PlatformInventoryPort, PlatformRegistration, PlatformRegistrationError,
-    PlatformRegistrationRuntime, PlatformRegistrationStore, RuntimeCapabilityError,
+    PlatformRegistrationRepository, PlatformRegistrationRuntime, RuntimeCapabilityError,
     RuntimeErrorKind,
 };
+use citadel_primitives::ActorId;
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -71,18 +72,18 @@ fn same_address(left: &str, right: &str) -> bool {
 }
 
 #[derive(Clone)]
-pub struct PostgresPlatformRegistrationStore {
+pub struct PostgresPlatformRegistrationRepository {
     pool: PgPool,
 }
 
-impl PostgresPlatformRegistrationStore {
+impl PostgresPlatformRegistrationRepository {
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
-impl PlatformRegistrationStore for PostgresPlatformRegistrationStore {
+impl PlatformRegistrationRepository for PostgresPlatformRegistrationRepository {
     fn create_pending_edge<'a>(
         &'a self,
         actor_id: ActorId,

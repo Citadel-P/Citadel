@@ -1,19 +1,29 @@
 use crate::request_validation::ApiPath;
+
 use crate::request_validation::ValidatedJson;
+
 use std::sync::Arc;
 
 use axum::Json;
+
 use axum::Router;
+
 use axum::extract::{Extension, State};
+
 use axum::http::{HeaderMap, StatusCode};
+
 use axum::response::{IntoResponse, Response};
+
 use citadel_identity::ActorPrincipal;
-use citadel_identity::{
-    ChangeCurrentPasswordRequest, IdentityError, PatchUserPreferencesRequest, ProfileService,
-    UpdateCurrentProfileRequest,
+
+use citadel_identity::{IdentityError, ProfileService};
+
+use crate::identity_http::dto::{
+    ChangeCurrentPasswordRequest, PatchUserPreferencesRequest, UpdateCurrentProfileRequest,
 };
 
 use crate::identity_http::{current_refresh_token, identity_error_response, no_store};
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -45,6 +55,7 @@ async fn change_password(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<ChangeCurrentPasswordRequest>,
 ) -> Response {
+    let request: citadel_identity::ChangeCurrentPassword = request.into();
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);
     };
@@ -65,7 +76,7 @@ async fn change_password(
     tag = "Profile",
     summary = "List current profile sessions",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserSessionsView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserSessionsView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -84,7 +95,9 @@ async fn list_sessions(
         .list_sessions(&principal, current_refresh_token(&headers))
         .await
     {
-        Ok(sessions) => no_store(Json(sessions).into_response()),
+        Ok(sessions) => no_store(
+            Json(crate::identity_http::dto::UserSessionsView::from(sessions)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -129,7 +142,7 @@ async fn revoke_session(
     tag = "Profile",
     summary = "Revoke other profile sessions",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::RevokeOtherProfileSessionsView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::RevokeOtherProfileSessionsView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -148,7 +161,10 @@ async fn revoke_other_sessions(
         .revoke_other_sessions(&principal, current_refresh_token(&headers))
         .await
     {
-        Ok(result) => no_store(Json(result).into_response()),
+        Ok(result) => no_store(
+            Json(crate::identity_http::dto::RevokeOtherProfileSessionsView::from(result))
+                .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -160,7 +176,7 @@ async fn revoke_other_sessions(
     tag = "Profile",
     summary = "Get current profile preferences",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserPreferencesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -175,7 +191,12 @@ async fn get_preferences(
         return identity_error_response(IdentityError::Unauthenticated, &headers);
     };
     match state.profiles.get_preferences(&principal).await {
-        Ok(preferences) => no_store(Json(preferences).into_response()),
+        Ok(preferences) => no_store(
+            Json(crate::identity_http::dto::UserPreferencesView::from(
+                preferences,
+            ))
+            .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -191,7 +212,7 @@ async fn get_preferences(
         (PatchUserPreferencesRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::UserPreferencesView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::UserPreferencesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -203,11 +224,17 @@ async fn patch_preferences(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<PatchUserPreferencesRequest>,
 ) -> Response {
+    let request: citadel_identity::PatchUserPreferences = request.into();
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);
     };
     match state.profiles.patch_preferences(&principal, request).await {
-        Ok(preferences) => no_store(Json(preferences).into_response()),
+        Ok(preferences) => no_store(
+            Json(crate::identity_http::dto::UserPreferencesView::from(
+                preferences,
+            ))
+            .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -219,7 +246,7 @@ async fn patch_preferences(
     tag = "Profile",
     summary = "Get current profile",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::CurrentProfileView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::CurrentProfileView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -234,7 +261,9 @@ async fn get_current(
         return identity_error_response(IdentityError::Unauthenticated, &headers);
     };
     match state.profiles.get(&principal).await {
-        Ok(profile) => no_store(Json(profile).into_response()),
+        Ok(profile) => no_store(
+            Json(crate::identity_http::dto::CurrentProfileView::from(profile)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -247,7 +276,7 @@ async fn get_current(
     summary = "Update current profile",
     request_body = UpdateCurrentProfileRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::CurrentProfileView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::CurrentProfileView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -259,11 +288,14 @@ async fn update_current(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<UpdateCurrentProfileRequest>,
 ) -> Response {
+    let request: citadel_identity::UpdateCurrentProfile = request.into();
     let Some(Extension(principal)) = principal else {
         return identity_error_response(IdentityError::Unauthenticated, &headers);
     };
     match state.profiles.update(&principal, request).await {
-        Ok(profile) => no_store(Json(profile).into_response()),
+        Ok(profile) => no_store(
+            Json(crate::identity_http::dto::CurrentProfileView::from(profile)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }

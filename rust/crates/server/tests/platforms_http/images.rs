@@ -167,7 +167,7 @@ async fn image_inspect_authorizes_and_uses_the_exact_node_with_existing_ui_shape
     super::lookup::grant(
         &f,
         principal.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )

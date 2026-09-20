@@ -1,8 +1,17 @@
 use super::*;
+
 use citadel_adapters::swarm_inventory::SwarmInventoryClient;
+
 use citadel_contracts::citadel::swarm::v1::SwarmServiceMessage;
-use citadel_platforms::swarm_mutations::*;
+
+use super::dto::{
+    DeleteSwarmResourcesInput, UpdateSwarmNodeInput, UpdateSwarmNodesAvailabilityInput,
+    UpdateSwarmResourceLabelsInput,
+};
+use citadel_platforms::swarm_mutations::{CreateSwarmMaterialInput, manager_matches, resource_id};
+
 use serde_json::{Value, json};
+
 use std::time::Duration;
 
 pub(crate) fn client<'a>(runtime: &'a RuntimeRef<'_>) -> SwarmInventoryClient<'a> {
@@ -12,12 +21,15 @@ pub(crate) fn client<'a>(runtime: &'a RuntimeRef<'_>) -> SwarmInventoryClient<'a
         RuntimeRef::Edge(r) => SwarmInventoryClient::Edge(r),
     }
 }
+
 fn validation(value: Result<(), &'static str>) -> Result<(), IdentityError> {
     value.map_err(|message| IdentityError::Validation(message.into()))
 }
+
 fn conflict(message: &str) -> IdentityError {
     IdentityError::Conflict(message.into())
 }
+
 async fn context(
     state: &PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -25,7 +37,7 @@ async fn context(
     level: PermissionLevel,
     inspect: bool,
     headers: &HeaderMap,
-) -> IdentityHttpResult<PlatformView> {
+) -> IdentityHttpResult<citadel_platforms::PlatformDetails> {
     let principal = identity_result(require_actor(principal), headers)?;
     if platform.is_nil() {
         return identity_result(
@@ -59,9 +71,10 @@ async fn context(
         headers,
     )
 }
+
 async fn manager_identity(
     runtime: &RuntimeRef<'_>,
-    platform: &PlatformView,
+    platform: &citadel_platforms::PlatformDetails,
     cancel: &CancellationToken,
 ) -> Result<(), RuntimeCapabilityError> {
     use citadel_platforms::PlatformRuntimePort;
@@ -83,9 +96,10 @@ async fn manager_identity(
     }
     Ok(())
 }
+
 async fn refresh(
     state: &PlatformsHttpState,
-    platform: &PlatformView,
+    platform: &citadel_platforms::PlatformDetails,
 ) -> Result<(), RuntimeCapabilityError> {
     let runtime = runtime_for(state, platform.id).await?;
     let port: &dyn PlatformInventoryPort = match &runtime {
@@ -101,7 +115,12 @@ async fn refresh(
             port,
             &citadel_platforms::jobs::InventoryCollectionTarget {
                 platform_id: platform.id,
-                platform_type: platform.platform_type.clone(),
+                platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
+                    &platform.platform_type,
+                )
+                .map_err(|error| {
+                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+                })?,
             },
             &cancel,
         ),
@@ -120,9 +139,10 @@ async fn refresh(
     }
     Ok(())
 }
+
 async fn finish(
     state: &PlatformsHttpState,
-    platform: &PlatformView,
+    platform: &citadel_platforms::PlatformDetails,
     result: Result<(), RuntimeCapabilityError>,
     headers: &HeaderMap,
 ) -> IdentityHttpResult {
@@ -134,6 +154,7 @@ async fn finish(
         Err(error) => Ok(runtime_error_response(error, headers)),
     }
 }
+
 async fn bounded<T>(
     future: impl std::future::Future<Output = Result<T, RuntimeCapabilityError>>,
 ) -> Result<T, RuntimeCapabilityError> {
@@ -181,12 +202,14 @@ pub(super) async fn update_node(
     )
     .await?;
     let Json(input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::swarm_mutations::UpdateSwarmNodeInput = input.into();
     identity_result(validation(resource_id(&id).and(input.validate())), &headers)?;
     let node = required(
         state
             .platforms
             .get_swarm_node(pid, &id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::SwarmNodeView::from))
             .map_err(platform_error),
         &headers,
     )?;
@@ -203,6 +226,7 @@ pub(super) async fn update_node(
     .await;
     finish(&state, &platform, result, &headers).await
 }
+
 fn check_node(node: &SwarmNodeView, version: i64) -> Result<(), IdentityError> {
     if node.is_stale {
         Err(conflict(
@@ -214,6 +238,7 @@ fn check_node(node: &SwarmNodeView, version: i64) -> Result<(), IdentityError> {
         Ok(())
     }
 }
+
 #[utoipa::path(
     patch,
     path = "/api/v1/platforms/{platformId}/swarm/nodes/availability",
@@ -247,6 +272,7 @@ pub(super) async fn update_availability(
     )
     .await?;
     let Json(input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::swarm_mutations::UpdateSwarmNodesAvailabilityInput = input.into();
     identity_result(validation(input.validate()), &headers)?;
     let mut updates = Vec::with_capacity(input.nodes.len());
     for target in input.nodes {
@@ -255,6 +281,7 @@ pub(super) async fn update_availability(
                 .platforms
                 .get_swarm_node(pid, &target.node_id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::SwarmNodeView::from))
                 .map_err(platform_error),
             &headers,
         )?;
@@ -262,7 +289,7 @@ pub(super) async fn update_availability(
         if !node.availability.eq_ignore_ascii_case(&input.availability) {
             updates.push((
                 node.id,
-                UpdateSwarmNodeInput {
+                citadel_platforms::swarm_mutations::UpdateSwarmNodeInput {
                     version_index: target.version_index,
                     availability: input.availability.clone(),
                     labels: node.labels,
@@ -293,6 +320,7 @@ pub(super) async fn update_availability(
     .await;
     finish(&state, &platform, result, &headers).await
 }
+
 fn partial(
     error: RuntimeCapabilityError,
     completed: usize,
@@ -311,6 +339,7 @@ fn partial(
         )
     }
 }
+
 async fn service_guard(
     state: &PlatformsHttpState,
     pid: Uuid,
@@ -322,6 +351,7 @@ async fn service_guard(
             .platforms
             .get_swarm_service(pid, id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::SwarmServiceView::from))
             .map_err(platform_error),
         headers,
     )?;
@@ -349,6 +379,7 @@ async fn service_guard(
     }
     Ok(())
 }
+
 #[utoipa::path(
     post,
     path = "/api/v1/platforms/{platformId}/swarm/services/{resourceId}/restart",
@@ -411,6 +442,7 @@ macro_rules! material_create {
         }
     };
 }
+
 material_create!(
     #[utoipa::path(
     post,
@@ -430,6 +462,7 @@ material_create!(
     create_secret,
     true
 );
+
 material_create!(
     #[utoipa::path(
     post,
@@ -449,6 +482,7 @@ material_create!(
     create_config,
     false
 );
+
 async fn create_material(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -486,6 +520,7 @@ async fn create_material(
     .await;
     finish(&state, &platform, result, &headers).await
 }
+
 macro_rules! material_labels {
     ($(#[$name_attr:meta])* $name:ident,$secret:expr) => {
         $(#[$name_attr])*
@@ -500,6 +535,7 @@ macro_rules! material_labels {
         }
     };
 }
+
 material_labels!(
     #[utoipa::path(
     patch,
@@ -507,7 +543,7 @@ material_labels!(
     operation_id = "updateSwarmSecretLabels",
     tag = "Platforms",
     summary = "updateSwarmSecretLabels",
-    request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
+    request_body = crate::platforms_http::dto::UpdateSwarmResourceLabelsInput,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -519,6 +555,7 @@ material_labels!(
     update_secret_labels,
     true
 );
+
 material_labels!(
     #[utoipa::path(
     patch,
@@ -526,7 +563,7 @@ material_labels!(
     operation_id = "updateSwarmConfigLabels",
     tag = "Platforms",
     summary = "updateSwarmConfigLabels",
-    request_body = citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput,
+    request_body = crate::platforms_http::dto::UpdateSwarmResourceLabelsInput,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -538,6 +575,7 @@ material_labels!(
     update_config_labels,
     false
 );
+
 async fn material_guard(
     state: &PlatformsHttpState,
     pid: Uuid,
@@ -553,6 +591,7 @@ async fn material_guard(
                 .platforms
                 .get_swarm_secret(pid, id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::SwarmSecretView::from))
                 .map_err(platform_error),
             headers,
         )?;
@@ -563,6 +602,7 @@ async fn material_guard(
                 .platforms
                 .get_swarm_config(pid, id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::SwarmConfigView::from))
                 .map_err(platform_error),
             headers,
         )?;
@@ -582,6 +622,7 @@ async fn material_guard(
     }
     Ok(())
 }
+
 async fn update_labels(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -601,6 +642,7 @@ async fn update_labels(
     )
     .await?;
     let Json(input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput = input.into();
     identity_result(validation(resource_id(&id).and(input.validate())), &headers)?;
     material_guard(
         &state,
@@ -629,6 +671,7 @@ async fn update_labels(
     .await;
     finish(&state, &platform, result, &headers).await
 }
+
 macro_rules! delete_resources {
     ($(#[$name_attr:meta])* $name:ident,$kind:expr) => {
         $(#[$name_attr])*
@@ -643,6 +686,7 @@ macro_rules! delete_resources {
         }
     };
 }
+
 delete_resources!(
     #[utoipa::path(
     delete,
@@ -650,7 +694,7 @@ delete_resources!(
     operation_id = "deleteSwarmInventoryServices",
     tag = "Platforms",
     summary = "deleteSwarmInventoryServices",
-    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    request_body = crate::platforms_http::dto::DeleteSwarmResourcesInput,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -662,6 +706,7 @@ delete_resources!(
     delete_services,
     "service"
 );
+
 delete_resources!(
     #[utoipa::path(
     delete,
@@ -669,7 +714,7 @@ delete_resources!(
     operation_id = "deleteSwarmSecrets",
     tag = "Platforms",
     summary = "deleteSwarmSecrets",
-    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    request_body = crate::platforms_http::dto::DeleteSwarmResourcesInput,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -681,6 +726,7 @@ delete_resources!(
     delete_secrets,
     "secret"
 );
+
 delete_resources!(
     #[utoipa::path(
     delete,
@@ -688,7 +734,7 @@ delete_resources!(
     operation_id = "deleteSwarmConfigs",
     tag = "Platforms",
     summary = "deleteSwarmConfigs",
-    request_body = citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput,
+    request_body = crate::platforms_http::dto::DeleteSwarmResourcesInput,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -700,6 +746,7 @@ delete_resources!(
     delete_configs,
     "config"
 );
+
 async fn delete(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -722,7 +769,8 @@ async fn delete(
         &headers,
     )
     .await?;
-    let Json(mut input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let Json(input) = identity_result(body.map_err(invalid_json), &headers)?;
+    let mut input: citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput = input.into();
     identity_result(validation(input.validate()), &headers)?;
     for id in &input.ids {
         if kind == "service" {
@@ -790,6 +838,7 @@ async fn delete(
 pub(crate) fn inspect_service_view(value: SwarmServiceMessage) -> Value {
     json!({"id":value.id,"versionIndex":value.version_index,"name":value.name,"mode":value.mode,"image":value.image,"runningTaskCount":value.running_task_count,"desiredTaskCount":value.desired_task_count,"updateState":value.update_state,"updateMessage":(!value.update_message.is_empty()).then_some(value.update_message),"ports":value.ports,"networkIds":value.network_ids,"secretIds":value.secret_ids,"configIds":value.config_ids,"labels":value.labels,"createdAt":value.created_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32)),"updatedAt":value.updated_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32))})
 }
+
 macro_rules! reader {
     ($(#[$name_attr:meta])* $name:ident,$kind:expr) => {
         $(#[$name_attr])*
@@ -803,6 +852,7 @@ macro_rules! reader {
         }
     };
 }
+
 reader!(
     #[utoipa::path(
     get,
@@ -821,6 +871,7 @@ reader!(
     inspect_node,
     "node"
 );
+
 reader!(
     #[utoipa::path(
     get,
@@ -839,6 +890,7 @@ reader!(
     inspect_service,
     "service"
 );
+
 reader!(
     #[utoipa::path(
     get,
@@ -857,6 +909,7 @@ reader!(
     config_data,
     "config"
 );
+
 async fn read(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -882,6 +935,7 @@ async fn read(
                     .platforms
                     .get_swarm_node(pid, &id)
                     .await
+                    .map(|value| value.map(crate::platforms_http::views::SwarmNodeView::from))
                     .map_err(platform_error),
                 &headers,
             )?;
@@ -892,6 +946,7 @@ async fn read(
                     .platforms
                     .get_swarm_service(pid, &id)
                     .await
+                    .map(|value| value.map(crate::platforms_http::views::SwarmServiceView::from))
                     .map_err(platform_error),
                 &headers,
             )?;
@@ -902,6 +957,7 @@ async fn read(
                     .platforms
                     .get_swarm_config(pid, &id)
                     .await
+                    .map(|value| value.map(crate::platforms_http::views::SwarmConfigView::from))
                     .map_err(platform_error),
                 &headers,
             )?;

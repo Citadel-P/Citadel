@@ -107,7 +107,7 @@ pub(super) async fn enqueue_restore(
     .await?;
     identity_result(
         permission
-            .has_specific(citadel_domain::SpecificPermission::Restore)
+            .has_specific(citadel_primitives::SpecificPermission::Restore)
             .then_some(())
             .ok_or(IdentityError::Forbidden),
         h,

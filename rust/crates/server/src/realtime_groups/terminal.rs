@@ -1,7 +1,8 @@
 use super::*;
+use crate::platforms_http::views::ContainerView;
 use crate::platforms_http::{RuntimeRef, runtime_for_node};
 use crate::realtime::topic::Topic;
-use citadel_platforms::{ContainerView, StatisticsReadStore, SwarmTaskRuntimePort, terminal::*};
+use citadel_platforms::{StatisticsReader, SwarmTaskRuntimePort, terminal::*};
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
@@ -55,7 +56,7 @@ impl ApplicationGroupReader {
             .map_err(failure)?;
             let docker_id =
                 citadel_platforms::validate_running_task(&projection, &live).map_err(failure)?;
-            let store = citadel_adapters::statistics_read_store::PostgresStatisticsReadStore::new(
+            let store = citadel_adapters::statistics_read_store::PostgresStatisticsReader::new(
                 self.docker.pool.clone(),
             );
             let target = store
@@ -66,6 +67,7 @@ impl ApplicationGroupReader {
             self.platforms
                 .get_container(target.id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
                 .map_err(failure)?
                 .ok_or(RealtimeReadError::Authorization)?
         } else {
@@ -73,6 +75,7 @@ impl ApplicationGroupReader {
                 .platforms
                 .get_container_by_reference(g.reference().unwrap_or_default())
                 .await
+                .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
                 .map_err(failure)?
                 .ok_or(RealtimeReadError::Authorization)?;
             let mut allowed = false;
@@ -223,6 +226,12 @@ impl ApplicationGroupReader {
                 .platforms
                 .list_containers(deployment.platform_id)
                 .await
+                .map(|value| {
+                    value
+                        .into_iter()
+                        .map(crate::platforms_http::views::ContainerView::from)
+                        .collect::<Vec<_>>()
+                })
                 .map_err(failure)?;
             reference = containers
                 .into_iter()

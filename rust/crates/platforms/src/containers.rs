@@ -1,7 +1,7 @@
 //! Container commands operate on persisted identities, never on a client-selected daemon.
 use std::{sync::Arc, time::Duration};
 
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use tokio::sync::Semaphore;
@@ -37,7 +37,7 @@ pub enum ContainerSelectionKind {
     Deployments,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteContainerOptions {
     #[serde(default)]
@@ -65,7 +65,7 @@ pub struct ContainerClaim {
     pub stack_ids: Vec<Uuid>,
 }
 
-pub trait ContainerMutationStore: Send + Sync {
+pub trait ContainerRepository: Send + Sync {
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],
@@ -128,7 +128,7 @@ pub trait ContainerMutationRuntime: Send + Sync {
 
 #[derive(Clone)]
 pub struct ContainerMutationService {
-    store: Arc<dyn ContainerMutationStore>,
+    store: Arc<dyn ContainerRepository>,
     runtime: Arc<dyn ContainerMutationRuntime>,
     operations: Arc<Semaphore>,
     changed: Arc<dyn Fn(&ContainerClaim) + Send + Sync>,
@@ -136,7 +136,7 @@ pub struct ContainerMutationService {
 
 impl ContainerMutationService {
     pub fn new(
-        store: Arc<dyn ContainerMutationStore>,
+        store: Arc<dyn ContainerRepository>,
         runtime: Arc<dyn ContainerMutationRuntime>,
     ) -> Self {
         Self {

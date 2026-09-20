@@ -1,10 +1,10 @@
+use citadel_activities::{
+    ActivityEvent, ActivityEventType, ActivityInvariantError, ActivityResourceType, ActivityStatus,
+};
 use citadel_application::{
     ActivityQueryStore, ActivityRecord, PagedActivityRecords, ValidatedActivityFilter,
 };
-use citadel_domain::{
-    ActivityEvent, ActivityEventType, ActivityInvariantError, ActivityResourceType, ActivityStatus,
-    ActorType,
-};
+use citadel_identity::ActorType;
 use citadel_identity::{ActorPrincipal, IdentityError};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -363,7 +363,8 @@ fn storage(error: impl std::fmt::Display) -> IdentityError {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use citadel_domain::{ActivityEventInfo, ActorId};
+    use citadel_activities::ActivityEventInfo;
+    use citadel_primitives::ActorId;
     use serde_json::json;
 
     #[test]

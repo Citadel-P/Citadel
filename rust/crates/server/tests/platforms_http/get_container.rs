@@ -46,7 +46,7 @@ async fn get_container_ports_the_complete_dotnet_summary_snapshot_without_deploy
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )
@@ -127,7 +127,7 @@ async fn get_container_by_docker_and_persisted_id_returns_the_same_resource() {
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )

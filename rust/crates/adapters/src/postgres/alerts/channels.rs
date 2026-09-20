@@ -21,7 +21,7 @@ ORDER BY channel.name,channel.id"#
             let rows = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::AlertChannel as i32)
-                .bind(citadel_domain::PermissionLevel::Read.accepted_database_levels())
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await

@@ -1,25 +1,39 @@
 use crate::request_validation::ApiPath;
+
 use std::collections::BTreeMap;
+
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
+
 use axum::extract::{Extension, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::{IntoResponse, Response};
+
 use axum::{Json, Router};
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+
 use citadel_identity::{ActorPrincipal, PermissionGrant, permission_matrix};
-use citadel_identity::{
-    CreateRoleRequest, DeleteRolesRequest, IdentityError, IdentityService,
-    PatchRolePermissionsRequest, RenameRoleRequest, RoleMutationService, RoleReadService, RoleView,
+
+use citadel_identity::{IdentityError, IdentityService, RoleMutationService, RoleReadService};
+
+use crate::identity_http::dto::{
+    CreateRoleRequest, DeleteRolesRequest, PatchRolePermissionsRequest, RenameRoleRequest, RoleView,
 };
+
 use serde::Serialize;
+
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
+
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -69,7 +83,7 @@ async fn list(
     let roles = identity_result(state.roles.list().await, &headers)?;
     Ok(no_store(
         Json(RolesResponse {
-            roles,
+            roles: roles.into_iter().map(Into::into).collect(),
             capabilities: permission.into(),
         })
         .into_response(),
@@ -83,7 +97,7 @@ async fn list(
     tag = "Roles",
     summary = "Get a Role by ID",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::RoleView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -102,7 +116,9 @@ async fn get(
         &headers,
     )?;
     let role = identity_result(state.roles.get(id).await, &headers)?;
-    Ok(no_store(Json(role).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::RoleView::from(role)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -113,7 +129,7 @@ async fn get(
     summary = "Create a Role",
     request_body = CreateRoleRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::RoleView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -129,12 +145,15 @@ async fn create(
         authorize(&state, principal, PermissionLevel::Write).await,
         &headers,
     )?;
-    let request = identity_result(role_json(request), &headers)?;
+    let request: CreateRoleRequest = identity_result(role_json(request), &headers)?;
+    let request: citadel_identity::CreateRole = request.into();
     let role = identity_result(
         state.mutations.create(request, principal.actor_id).await,
         &headers,
     )?;
-    Ok(no_store(Json(role).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::RoleView::from(role)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -148,7 +167,7 @@ async fn create(
         (PatchRolePermissionsRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::RoleView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -166,7 +185,8 @@ async fn patch_permissions(
         authorize(&state, principal, PermissionLevel::Write).await,
         &headers,
     )?;
-    let request = identity_result(role_json(request), &headers)?;
+    let request: PatchRolePermissionsRequest = identity_result(role_json(request), &headers)?;
+    let request: citadel_identity::PatchRolePermissions = request.into();
     let role = identity_result(
         state
             .mutations
@@ -174,7 +194,9 @@ async fn patch_permissions(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(role).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::RoleView::from(role)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -185,7 +207,7 @@ async fn patch_permissions(
     summary = "Rename a Role",
     request_body = RenameRoleRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::RoleView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::RoleView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -201,7 +223,8 @@ async fn rename(
         authorize(&state, principal, PermissionLevel::Write).await,
         &headers,
     )?;
-    let request = identity_result(role_json(request), &headers)?;
+    let request: RenameRoleRequest = identity_result(role_json(request), &headers)?;
+    let request: citadel_identity::RenameRole = request.into();
     let role = identity_result(
         state
             .mutations
@@ -209,7 +232,9 @@ async fn rename(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(role).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::RoleView::from(role)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -236,7 +261,8 @@ async fn delete(
         authorize(&state, principal, PermissionLevel::Execute).await,
         &headers,
     )?;
-    let request = identity_result(role_json(request), &headers)?;
+    let request: DeleteRolesRequest = identity_result(role_json(request), &headers)?;
+    let request: citadel_identity::DeleteRoles = request.into();
     identity_result(
         state
             .mutations

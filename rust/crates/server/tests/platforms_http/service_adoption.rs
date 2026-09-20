@@ -69,7 +69,7 @@ async fn service_adoption_rejects_a_different_manager_identity() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn service_adoption_requires_access_to_the_selected_registry() {
-    use citadel_domain::{ResourceType, SpecificPermission};
+    use citadel_primitives::{ResourceType, SpecificPermission};
     let (f, runtime) = setup().await;
     let actor = super::lookup::subject(&f).await;
     let role = Uuid::now_v7();

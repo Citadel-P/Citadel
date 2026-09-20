@@ -1,85 +1,146 @@
 //! Explicit dependency wiring shared by HTTP handlers and supervised workers.
 use citadel_server::api::stacks as stacks_http;
+
 use citadel_server::api::swarm_services as swarm_services_http;
+
 use std::sync::Arc;
+
 use std::time::Duration;
 
 use citadel_adapters::activity_store::PostgresActivityStore;
+
 use citadel_adapters::agent::{AgentClient, AgentRequestSigner};
+
 use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
+
 use citadel_adapters::backup_authorization::IdentityBackupRunAuthorizer;
+
 use citadel_adapters::backup_executor::{DockerResticBackupExecutor, PostgresBackupSecretResolver};
+
 use citadel_adapters::backup_source_planner::PostgresBackupSourcePlanner;
+
 use citadel_adapters::build_executor::{
     AgentDockerBuildExecutor, LocalDockerBuildExecutor, PlatformBuildExecutor,
     PostgresBuildRegistryCredentialResolver, PostgresBuildSecretResolver,
 };
+
 use citadel_adapters::citadel_system_backup::PostgresCitadelSystemBackupBuilder;
+
 use citadel_adapters::crypto::{
     AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
     OpaqueServiceAccountTokenCodec,
 };
+
 use citadel_adapters::deployment_runtime::DeploymentRuntimeRouter;
+
 use citadel_adapters::docker::DockerClient;
+
 use citadel_adapters::identity_store::PostgresIdentityStore;
+
 use citadel_adapters::license::{
     Ed25519LicenseVerifier, PostgresLicenseEntitlementService, PostgresLicenseStore,
 };
+
 use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore, Sha1TotpService};
+
 use citadel_adapters::oidc_protocol::OidcHttpProtocol;
+
 use citadel_adapters::oidc_store::PostgresOidcStore;
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+
+use citadel_adapters::postgres::platforms::PostgresPlatformReader;
+
 use citadel_adapters::platform_registration::{
-    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
+    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationRepository,
 };
+
 use citadel_adapters::postgres::automation::PostgresAutomationRepository;
+
 use citadel_adapters::postgres::backups::PostgresBackupPersistence;
+
 use citadel_adapters::postgres::builds::PostgresBuildRepository;
+
 use citadel_adapters::postgres::deployments::PostgresDeploymentRepository;
+
 use citadel_adapters::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+
 use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
+
 use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
+
 use citadel_adapters::postgres::stacks::PostgresStackRepository;
+
 use citadel_adapters::postgres::stacks::bindings::PostgresStackBindingResolver;
+
 use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
+
 use citadel_adapters::postgres::swarm_services::bindings::PostgresSwarmServiceBindingResolver;
+
 use citadel_adapters::postgres_runtime;
+
 use citadel_adapters::profile_store::PostgresProfileStore;
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
+
+use citadel_adapters::postgres::bindings::PostgresBindingRepository;
+
 use citadel_adapters::role_store::PostgresRoleStore;
+
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
+
 use citadel_adapters::stack_build_images::PostgresStackBuildImageResolver;
+
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
+
 use citadel_adapters::stack_source_materializer::GitStackSourceMaterializer;
+
 use citadel_adapters::swarm_service_runtime::SwarmServiceRuntimeRouter;
+
 use citadel_adapters::team_store::PostgresTeamStore;
+
 use citadel_adapters::user_store::PostgresUserReadStore;
+
 use citadel_adapters::{
     alert_delivery::ShoutrrrAlertDelivery, postgres::alerts::PostgresAlertRepository,
 };
+
 use citadel_alerts::AlertDeliveryService;
+
 use citadel_application::{
     ActivityService, LicenseService, LicenseTransitionMonitor, service_account_last_used_channel,
 };
+
 use citadel_automation::{AutomationRuntimeConfig, AutomationService};
+
 use citadel_backups::BackupService;
+
 use citadel_builds::BuildService;
+
 use citadel_deployments::DeploymentService;
+
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
+
 use citadel_identity::{
     IdentityService, MfaConfiguration, MfaService, OidcService, ProfileService,
     RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
     TeamReadService, UserReadService,
 };
+
 use citadel_platforms::{PlatformReadService, PlatformRegistrationService};
-use citadel_resources::ResourceMetadataService;
+
+use citadel_bindings::SecretService;
+
 use citadel_server::config::Config;
+
 use citadel_server::metrics::Metrics;
+
 use citadel_server::realtime::{IdentityRealtimeReader, RealtimeHub, RealtimeService};
+
 use citadel_server::{Readiness, application_info_http, license_realtime, platforms_http};
+
 use citadel_stacks::StackService;
+
 use citadel_swarm_services::SwarmServiceService;
+
 use sqlx::PgPool;
+
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
@@ -100,11 +161,13 @@ pub struct AppState {
     pub service_accounts: Arc<ServiceAccountService>,
     pub profiles: Arc<ProfileService>,
     pub activities: Arc<ActivityService>,
-    pub resources: Arc<ResourceMetadataService>,
+    pub secrets: Arc<SecretService>,
+    pub tags: Arc<dyn citadel_tags::TagRepository>,
+    pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub git_accounts: Arc<GitAccountService>,
     pub git_execution: Arc<GitRepositoryExecutionService>,
     pub agent: Option<AgentClient>,
-    pub agent_setup: Arc<citadel_platforms::agent_setup::AgentSetupView>,
+    pub agent_setup: Arc<citadel_server::platforms_http::dto::AgentSetupView>,
     pub agent_setup_context: platforms_http::AgentSetupContext,
     pub edge_context: platforms_http::EdgeHttpContext,
     pub edge_registry: citadel_adapters::edge::EdgeRegistry,
@@ -238,9 +301,14 @@ impl AppState {
         let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
             pool.clone(),
         ))));
-        let resource_metadata = Arc::new(PostgresResourceMetadataStore::new(pool.clone()));
-        let resources = Arc::new(
-            ResourceMetadataService::new(resource_metadata.clone(), secret_protector.clone())
+        let tags: Arc<dyn citadel_tags::TagRepository> =
+            Arc::new(citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone()));
+        let registries: Arc<dyn citadel_registries::RegistryRepository> = Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        );
+        let binding_store = Arc::new(PostgresBindingRepository::new(pool.clone()));
+        let secrets = Arc::new(
+            SecretService::new(binding_store, secret_protector.clone())
                 .with_secret_provider_tester(Arc::new(
                     citadel_adapters::secret_value_resolver::PostgresSecretValueResolver::new(
                         pool.clone(),
@@ -275,7 +343,7 @@ impl AppState {
         };
         let agent_image = std::env::var("CITADEL_EDGE_AGENT_IMAGE")
             .unwrap_or_else(|_| "ghcr.io/citadel-p/citadel.agent:latest".into());
-        let agent_setup = Arc::new(citadel_platforms::agent_setup::AgentSetupView::new(
+        let agent_setup = Arc::new(citadel_server::platforms_http::dto::AgentSetupView::new(
             agent_signer.public_key_base64(),
             agent_image.clone(),
             !citadel_server::config::agent_allows_insecure()?,
@@ -416,7 +484,7 @@ impl AppState {
             )),
         );
         let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
-            PostgresPlatformReadStore::new(pool.clone()),
+            PostgresPlatformReader::new(pool.clone()),
         )));
         let user_store = Arc::new(PostgresUserReadStore::new(pool.clone()));
         let users = Arc::new(UserReadService::new(user_store.clone()));
@@ -503,7 +571,7 @@ impl AppState {
             )),
         );
         let platform_registrations = Arc::new(PlatformRegistrationService::new(
-            Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+            Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
             Arc::new(PlatformRegistrationRuntimeRouter::new(
                 docker.clone(),
                 agent.clone(),
@@ -654,7 +722,12 @@ impl AppState {
             platforms: Arc::clone(&platform_reads),
             registrations: platform_registrations,
             pool: pool.clone(),
-            resource_metadata,
+            registries: Arc::clone(&registries),
+            platform_metadata: Arc::new(
+                citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                    pool.clone(),
+                ),
+            ),
             docker: docker.clone(),
             agent: agent.clone(),
             edge: edge_registry.clone(),
@@ -679,12 +752,12 @@ impl AppState {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+    git_repositories: Arc::new(citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(pool.clone())),
                     identity: Arc::clone(&identity),
                     platforms: Arc::clone(&platform_reads),
                     deployments: Arc::new(PostgresDeploymentRepository::new(pool.clone())),
                     stacks: Arc::new(PostgresStackRepository::new(pool.clone())),
                     services: Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
-                    resources: Arc::clone(resources.store()),
                     automation: Arc::clone(automation.store()),
                     builds: Arc::clone(builds.store()),
                     backups: Arc::clone(backups.store()),
@@ -763,7 +836,9 @@ impl AppState {
                 service_accounts,
                 profiles,
                 activities,
-                resources,
+                secrets,
+                tags,
+                registries,
                 git_accounts,
                 git_execution,
                 agent,

@@ -80,7 +80,7 @@ pub(super) async fn verify(
             .record_drift(
                 &original,
                 StackReleaseStatus::Healthy,
-                citadel_domain::ActivityEventInfo::StackDriftResolved {
+                citadel_activities::ActivityEventInfo::StackDriftResolved {
                     previous_fingerprint: "stale".into()
                 }
             )

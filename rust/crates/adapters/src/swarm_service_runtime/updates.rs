@@ -27,11 +27,12 @@ impl ServiceImageDigestPort for SwarmServiceRuntimeRouter {
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<String, SwarmServiceError>> {
         Box::pin(async move {
-            let agent = if self.connector(platform).await? == "Local" {
-                None
-            } else {
-                Some(self.agent_for(platform).await?)
-            };
+            let agent =
+                if self.connector(platform).await? == citadel_platforms::ConnectorKind::Local {
+                    None
+                } else {
+                    Some(self.agent_for(platform).await?)
+                };
             crate::registry_digest::inspect(
                 &self.pool,
                 &self.docker,

@@ -1,8 +1,12 @@
-use crate::resource_metadata_store::AUTHORIZED_CTE;
-use citadel_domain::{LookupResourceType as Kind, ResourceType, SpecificPermission};
-use citadel_resources::{
-    LookupCaller, LookupError, LookupRequest, LookupResourceInfo, LookupResult, LookupStore,
-};
+use crate::postgres::authorization::AUTHORIZED_CTE;
+use citadel_discovery::LookupCaller;
+use citadel_discovery::LookupError;
+use citadel_discovery::LookupQuery;
+use citadel_discovery::LookupReader;
+use citadel_discovery::LookupResourceInfo;
+use citadel_discovery::LookupResourceType as Kind;
+use citadel_discovery::LookupResult;
+use citadel_primitives::{ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use sqlx::{AssertSqlSafe, PgPool, Row};
 use uuid::Uuid;
@@ -106,11 +110,11 @@ impl PostgresLookupStore {
     }
 }
 
-impl LookupStore for PostgresLookupStore {
+impl LookupReader for PostgresLookupStore {
     fn lookup<'a>(
         &'a self,
         caller: &'a LookupCaller,
-        request: &'a LookupRequest,
+        request: &'a LookupQuery,
     ) -> BoxFuture<'a, Result<LookupResult, LookupError>> {
         Box::pin(async move {
             request.validate(caller.administrator)?;

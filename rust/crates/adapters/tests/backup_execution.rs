@@ -14,10 +14,10 @@ use citadel_backups::{
     BackupSourcePlan, BackupSourcePlanner,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_identity::{
     ADMIN_ROLE_ID, IdentityService, NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_primitives::ActorId;
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;

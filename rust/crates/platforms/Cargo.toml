@@ -6,9 +6,9 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-utoipa.workspace = true
+citadel-swarm-services = { path = "../swarm-services" }
+citadel-primitives = { path = "../primitives" }
 chrono.workspace = true
-citadel-domain = { path = "../domain" }
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,5 +1,5 @@
 use super::views::StackCapabilities;
-use citadel_domain::{EffectivePermission, PermissionPolicy};
+use citadel_primitives::{EffectivePermission, PermissionPolicy};
 use citadel_stacks::permissions::*;
 pub(super) fn capabilities(permission: EffectivePermission) -> StackCapabilities {
     StackCapabilities {
@@ -20,7 +20,7 @@ pub(super) fn capabilities(permission: EffectivePermission) -> StackCapabilities
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_domain::{PermissionLevel, SpecificPermission, SpecificPermissions};
+    use citadel_primitives::{PermissionLevel, SpecificPermission, SpecificPermissions};
 
     #[test]
     fn apply_and_release_permissions_preserve_the_stack_contract() {

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use citadel_stacks::{
     StackDetails, StackSpec, StackUpdateScanner, StackUpdateState, build_manual_stack_checks,
     evaluate_manual_stack_updates, stack_git_path_matches, state_key,
@@ -118,7 +118,7 @@ impl StackUpdateRuntime {
                 recreate_stack_on_new_commit_state.last_checked_at = chrono::Utc::now();
                 return Ok(next);
             }
-            if stack.platform_type == "DockerSwarm" {
+            if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
                 return Err(StackError::Validation(
                     "Image update checks for native Swarm Stacks are unavailable.".into(),
                 ));
@@ -133,7 +133,7 @@ impl StackUpdateRuntime {
                 .runtime
                 .platform(stack.platform_id.ok_or(StackError::NotFound)?)
                 .await?;
-            let peer = if target.connector.eq_ignore_ascii_case("Local") {
+            let peer = if target.connector == citadel_platforms::ConnectorKind::Local {
                 None
             } else {
                 Some(self.runtime.agent_for(&target)?)

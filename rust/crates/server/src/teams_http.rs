@@ -1,26 +1,40 @@
 use crate::request_validation::ApiPath;
+
 use crate::request_validation::ValidatedJson;
+
 use std::sync::Arc;
 
 use axum::extract::rejection::QueryRejection;
+
 use axum::extract::{Extension, Query, State};
+
 use axum::http::HeaderMap;
+
 use axum::response::IntoResponse;
+
 use axum::{Json, Router};
-use citadel_domain::{PermissionLevel, ResourceType};
+
+use citadel_primitives::{PermissionLevel, ResourceType};
+
 use citadel_identity::{ActorPrincipal, PermissionGrant};
-use citadel_identity::{
-    AddTeamMemberRequest, AddTeamRoleRequest, CreateTeamRequest, DeleteTeamsRequest, IdentityError,
-    IdentityService, PagedResult, PatchTeamRequest, RenameTeamRequest, TeamMutationService,
-    TeamReadService, TeamResourceAccessInput, TeamView,
+
+use citadel_identity::{IdentityError, IdentityService, TeamMutationService, TeamReadService};
+
+use crate::identity_http::dto::{
+    AddTeamMemberRequest, AddTeamRoleRequest, CreateTeamRequest, DeleteTeamsRequest, PagedResult,
+    PatchTeamRequest, RenameTeamRequest, TeamResourceAccessInput, TeamView,
 };
+
 use serde::{Deserialize, Serialize};
+
 use uuid::Uuid;
 
 use crate::capabilities::ResourceCapabilities;
+
 use crate::identity_http::{
     IdentityHttpResult, identity_result, no_store, require_human_administrator,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -107,7 +121,7 @@ async fn list(
             page_size: 0,
         }
     } else {
-        paged_result
+        paged_result.into()
     };
     Ok(no_store(
         Json(TeamsResponse {
@@ -148,7 +162,15 @@ async fn search(
         state.teams.search(&filter.query, filter.limit).await,
         &headers,
     )?;
-    Ok(no_store(Json(teams).into_response()))
+    Ok(no_store(
+        Json(
+            teams
+                .into_iter()
+                .map(crate::identity_http::dto::TeamSearchItemView::from)
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -158,7 +180,7 @@ async fn search(
     tag = "Teams",
     summary = "Get a Team by ID",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -177,7 +199,9 @@ async fn get(
         &headers,
     )?;
     let team = identity_result(state.teams.get(id).await, &headers)?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -188,7 +212,7 @@ async fn get(
     summary = "Create a Team",
     request_body = CreateTeamRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -200,6 +224,7 @@ async fn create(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<CreateTeamRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::CreateTeam = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
         &headers,
@@ -208,7 +233,9 @@ async fn create(
         state.mutations.create(request, principal.actor_id).await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -222,7 +249,7 @@ async fn create(
         (PatchTeamRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -236,6 +263,7 @@ async fn patch(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<PatchTeamRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::PatchTeam = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -244,7 +272,9 @@ async fn patch(
         state.mutations.patch(id, request, principal.actor_id).await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -255,7 +285,7 @@ async fn patch(
     summary = "Rename a Team",
     request_body = RenameTeamRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -267,6 +297,7 @@ async fn rename(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<RenameTeamRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::RenameTeam = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, None).await,
         &headers,
@@ -278,7 +309,9 @@ async fn rename(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -289,7 +322,7 @@ async fn rename(
     summary = "Assign a Role to a Team",
     request_body = AddTeamRoleRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -303,6 +336,7 @@ async fn add_role(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<AddTeamRoleRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::AddTeamRole = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -314,7 +348,9 @@ async fn add_role(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -324,7 +360,7 @@ async fn add_role(
     tag = "Teams",
     summary = "Remove a Role from a Team",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("roleId" = uuid::Uuid, Path)),
@@ -348,7 +384,9 @@ async fn remove_role(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -359,7 +397,7 @@ async fn remove_role(
     summary = "Add an Actor to a Team",
     request_body = AddTeamMemberRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -373,6 +411,7 @@ async fn add_member(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<AddTeamMemberRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::AddTeamMember = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -384,7 +423,9 @@ async fn add_member(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -394,7 +435,7 @@ async fn add_member(
     tag = "Teams",
     summary = "Remove an Actor from a Team",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("memberActorId" = uuid::Uuid, Path)),
@@ -418,7 +459,9 @@ async fn remove_member(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -429,7 +472,7 @@ async fn remove_member(
     summary = "Add a resource override to a Team",
     request_body = TeamResourceAccessInput,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -443,6 +486,7 @@ async fn add_resource_access(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::TeamResourceAccessInput = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -454,7 +498,9 @@ async fn add_resource_access(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -465,7 +511,7 @@ async fn add_resource_access(
     summary = "Remove a resource override from a Team",
     request_body = TeamResourceAccessInput,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::TeamView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -479,6 +525,7 @@ async fn remove_resource_access(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::TeamResourceAccessInput = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -490,7 +537,9 @@ async fn remove_resource_access(
             .await,
         &headers,
     )?;
-    Ok(no_store(Json(team).into_response()))
+    Ok(no_store(
+        Json(crate::identity_http::dto::TeamView::from(team)).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -513,6 +562,7 @@ async fn delete(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<DeleteTeamsRequest>,
 ) -> IdentityHttpResult {
+    let request: citadel_identity::DeleteTeams = request.into();
     let principal = identity_result(
         authorize_administrator(&state, principal, PermissionLevel::Execute, None).await,
         &headers,
@@ -570,9 +620,11 @@ fn team_query<T>(query: Result<Query<T>, QueryRejection>) -> Result<T, IdentityE
 const fn first_page() -> i64 {
     1
 }
+
 const fn default_page_size() -> i64 {
     50
 }
+
 const fn default_search_limit() -> i64 {
     20
 }

@@ -1,8 +1,14 @@
+use super::dto::RenamePlatformInput;
+
 use super::*;
-use citadel_platforms::prune::{PlatformPrunePort, PrunePlatformInput};
+
+use citadel_platforms::prune::PlatformPrunePort;
+
+use crate::platforms_http::dto::PrunePlatformInput;
+
 use citadel_platforms::{
     PlatformRuntimePort,
-    management::{RenamePlatformInput, patch_input, validate_target},
+    management::{patch_input, validate_target},
 };
 
 static PRUNE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -15,7 +21,7 @@ static PRUNE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4
     summary = "Prune unused Docker resources",
     request_body = PrunePlatformInput,
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::prune::PrunePlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::dto::PrunePlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -32,6 +38,7 @@ pub(super) async fn prune(
     let principal = identity_result(require_actor(principal), &headers)?;
     let Path(id) = identity_result(path.map_err(invalid_path), &headers)?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::prune::PrunePlatformInput = input.into();
     if id.is_nil() {
         return identity_result(
             Err(IdentityError::Validation(
@@ -82,9 +89,10 @@ pub struct AgentSetupContext {
     pub image: String,
     pub requires_tls: bool,
 }
+
 impl AgentSetupContext {
-    pub fn view(&self) -> citadel_platforms::agent_setup::AgentSetupView {
-        citadel_platforms::agent_setup::AgentSetupView::new(
+    pub fn view(&self) -> crate::platforms_http::dto::AgentSetupView {
+        crate::platforms_http::dto::AgentSetupView::new(
             self.signer.public_key_base64(),
             self.image.clone(),
             self.requires_tls,
@@ -99,7 +107,7 @@ impl AgentSetupContext {
     tag = "Platforms",
     summary = "Rotate the Agent signing key",
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::agent_setup::AgentSetupView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::dto::AgentSetupView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -151,7 +159,7 @@ pub(super) async fn rotate_key(
     summary = "Rename a Platform",
     request_body = RenamePlatformInput,
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -165,6 +173,7 @@ pub(super) async fn rename(
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
     let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let input: citadel_platforms::management::RenamePlatformInput = input.into();
     update(
         state,
         principal,
@@ -187,7 +196,7 @@ pub(super) async fn rename(
         (ref("#/components/schemas/PlatformInput") = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_platforms::PlatformView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::platforms_http::views::PlatformView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -306,7 +315,7 @@ async fn update(
         .map_err(platform_registration_error),
         &headers,
     )?;
-    let mut updated = required(
+    let updated = required(
         state
             .platforms
             .get_platform(id)
@@ -314,6 +323,7 @@ async fn update(
             .map_err(platform_error),
         &headers,
     )?;
+    let mut updated = PlatformView::from(updated);
     updated.capabilities = Some(capabilities);
     publish_runtime_change(&state, id, "platform", "update", &id.to_string());
     Ok(no_store(Json(updated).into_response()))

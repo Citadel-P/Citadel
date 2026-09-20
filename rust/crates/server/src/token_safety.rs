@@ -1,5 +1,5 @@
 //! Credential restrictions shared by HTTP and websocket authentication.
-use citadel_domain::AuthenticatedPrincipalType;
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{ActorPrincipal, AuthenticatedBearer, IdentityError, IdentityService};
 
 pub(crate) fn authorize_http(auth: &AuthenticatedBearer, path: &str) -> Result<(), IdentityError> {
@@ -56,7 +56,7 @@ fn authorize_realtime(auth: &AuthenticatedBearer) -> Result<(), IdentityError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_domain::ActorId;
+    use citadel_primitives::ActorId;
     use uuid::Uuid;
 
     fn authenticated(kind: AuthenticatedPrincipalType, run: bool) -> AuthenticatedBearer {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -14,7 +14,7 @@ use crate::{
 
 pub const LOCAL_DOCKER_ADDRESS: &str = "http://localhost.docker";
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum PlatformType {
     #[default]
     Docker,
@@ -33,7 +33,7 @@ impl PlatformType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum PlatformConnectorType {
     #[default]
     Unknown,
@@ -54,7 +54,7 @@ impl PlatformConnectorType {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePlatformInput {
     pub name: String,
@@ -115,7 +115,7 @@ pub trait PlatformRegistrationRuntime: Send + Sync {
     ) -> Result<&'a dyn PlatformInventoryPort, PlatformRegistrationError>;
 }
 
-pub trait PlatformRegistrationStore: Send + Sync {
+pub trait PlatformRegistrationRepository: Send + Sync {
     fn create_pending_edge<'a>(
         &'a self,
         _actor_id: ActorId,
@@ -143,14 +143,14 @@ pub trait PlatformRegistrationStore: Send + Sync {
 
 #[derive(Clone)]
 pub struct PlatformRegistrationService {
-    store: Arc<dyn PlatformRegistrationStore>,
+    store: Arc<dyn PlatformRegistrationRepository>,
     runtime: Arc<dyn PlatformRegistrationRuntime>,
 }
 
 impl PlatformRegistrationService {
     #[must_use]
     pub fn new(
-        store: Arc<dyn PlatformRegistrationStore>,
+        store: Arc<dyn PlatformRegistrationRepository>,
         runtime: Arc<dyn PlatformRegistrationRuntime>,
     ) -> Self {
         Self { store, runtime }
@@ -189,7 +189,11 @@ impl PlatformRegistrationService {
             runtime,
             &InventoryCollectionTarget {
                 platform_id: id,
-                platform_type: input.platform_type.as_str().to_owned(),
+                platform_type: match input.platform_type {
+                    PlatformType::DockerSwarm => crate::PlatformKind::DockerSwarm,
+                    PlatformType::Docker => crate::PlatformKind::Docker,
+                    PlatformType::Kubernetes => unreachable!("validated before inventory"),
+                },
             },
             info,
             cancellation,

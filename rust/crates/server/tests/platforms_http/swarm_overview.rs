@@ -19,7 +19,7 @@ async fn overview_reports_persisted_quorum_workloads_and_stale_inventory() {
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )

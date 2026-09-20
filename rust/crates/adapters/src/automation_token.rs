@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use citadel_automation::{AutomationError, AutomationRunTokenIssuer};
-use citadel_domain::ActorId;
 use citadel_identity::{IdentityError, IdentityService};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 

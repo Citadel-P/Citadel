@@ -21,8 +21,8 @@ pub struct AlertRule {
 }
 
 impl AlertRule {
-    pub fn snapshot(&self) -> citadel_domain::AlertRuleActivitySnapshot {
-        citadel_domain::AlertRuleActivitySnapshot {
+    pub fn snapshot(&self) -> citadel_activities::AlertRuleActivitySnapshot {
+        citadel_activities::AlertRuleActivitySnapshot {
             id: self.id,
             name: self.name.clone(),
             description: self.description.clone(),

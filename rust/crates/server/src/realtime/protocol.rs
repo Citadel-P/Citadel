@@ -1,5 +1,5 @@
 use super::RealtimeError;
-use citadel_platforms::{ContainerView, PlatformView};
+use crate::platforms_http::views::{ContainerView, PlatformView};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;

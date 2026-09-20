@@ -1,5 +1,5 @@
 use super::spec::*;
-use citadel_resources::MetadataPatch;
+use crate::api::metadata_patch::MetadataPatch;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

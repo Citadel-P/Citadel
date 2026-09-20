@@ -26,7 +26,7 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
     // A per-resource grant must not grant collection-level create permission.
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,4,$3,$4,0)")
         .bind(Uuid::now_v7()).bind(actor_id).bind(Uuid::now_v7())
-        .bind(citadel_domain::ResourceType::Stack as i32).execute(pool).await.unwrap();
+        .bind(citadel_primitives::ResourceType::Stack as i32).execute(pool).await.unwrap();
     assert_capabilities(app, &reader, false, false, false).await;
 
     let role_id = Uuid::now_v7();
@@ -44,7 +44,7 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
         .unwrap();
     let permission_id = Uuid::now_v7();
     sqlx::query("INSERT INTO permissions(id,roleid,resourcetype,permissionlevel,specificpermissions) VALUES($1,$2,$3,1,0)")
-        .bind(permission_id).bind(role_id).bind(citadel_domain::ResourceType::Stack as i32)
+        .bind(permission_id).bind(role_id).bind(citadel_primitives::ResourceType::Stack as i32)
         .execute(pool).await.unwrap();
     for (level, write, execute) in [(1, false, false), (2, true, false), (4, true, true)] {
         sqlx::query("UPDATE permissions SET permissionlevel=$2 WHERE id=$1")

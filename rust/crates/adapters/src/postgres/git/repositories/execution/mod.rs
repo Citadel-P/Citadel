@@ -7,10 +7,11 @@ mod claims;
 mod queries;
 use chrono::{DateTime, Utc};
 
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, GitRepositoryActivitySnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, GitRepositoryActivitySnapshot,
     GitRepositorySyncActivitySnapshot,
 };
+use citadel_primitives::ActorId;
 
 use citadel_git::{
     GitRepositoryExecutionError, GitRepositoryExecutionPersistence, GitRepositoryRef,

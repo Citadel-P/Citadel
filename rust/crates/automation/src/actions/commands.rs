@@ -1,6 +1,6 @@
 use crate::*;
-use citadel_domain::ActorId;
 use citadel_git::repositories::webhooks::RepoWebhookConfig;
+use citadel_primitives::ActorId;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

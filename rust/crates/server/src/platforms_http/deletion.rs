@@ -1,8 +1,10 @@
 use super::*;
-use citadel_adapters::platform_deletion::PostgresPlatformDeletionStore;
-use citadel_platforms::deletion::{
-    DeletePlatformsInput, PlatformDeletionError, PlatformDeletionStore,
-};
+
+use citadel_adapters::platform_deletion::PostgresPlatformDeletionRepository;
+
+use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionRepository};
+
+use crate::platforms_http::dto::DeletePlatformsInput;
 
 #[utoipa::path(
     delete,
@@ -25,7 +27,8 @@ pub(super) async fn delete(
     input: Result<Json<DeletePlatformsInput>, JsonRejection>,
 ) -> IdentityHttpResult {
     let principal = identity_result(require_actor(principal), &headers)?;
-    let Json(mut input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let Json(input) = identity_result(input.map_err(invalid_json), &headers)?;
+    let mut input: citadel_platforms::deletion::DeletePlatformsInput = input.into();
     identity_result(input.validate().map_err(deletion_error), &headers)?;
     let permissions = effective_permissions(&state, &principal, &input.ids, &headers).await?;
     if input.ids.iter().any(|id| {
@@ -39,7 +42,7 @@ pub(super) async fn delete(
         return identity_result(Err(IdentityError::Forbidden), &headers);
     }
     identity_result(
-        PostgresPlatformDeletionStore::new(state.pool.clone())
+        PostgresPlatformDeletionRepository::new(state.pool.clone())
             .delete(principal.actor_id, &input.ids)
             .await
             .map_err(deletion_error),

@@ -4,9 +4,9 @@ pub(super) async fn record_pool_activity(
     tx: &mut Transaction<'_, Postgres>,
     pool: &BuildAgentPool,
     actor: ActorId,
-    info: citadel_domain::ActivityEventInfo,
+    info: citadel_activities::ActivityEventInfo,
 ) -> Result<(), BuildError> {
-    let activity = citadel_domain::ActivityEvent::new_build_pool_event(
+    let activity = citadel_activities::ActivityEvent::new_build_pool_event(
         pool.id,
         pool.name.clone(),
         actor,
@@ -23,9 +23,9 @@ pub(super) async fn record_project_activity(
     tx: &mut Transaction<'_, Postgres>,
     pool: &BuildProject,
     actor: ActorId,
-    info: citadel_domain::ActivityEventInfo,
+    info: citadel_activities::ActivityEventInfo,
 ) -> Result<(), BuildError> {
-    let activity = citadel_domain::ActivityEvent::new_build_event(
+    let activity = citadel_activities::ActivityEvent::new_build_event(
         pool.id,
         pool.name.clone(),
         actor,
@@ -42,7 +42,7 @@ pub(super) async fn record_run_activity(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<(), BuildError> {
-    use citadel_domain::ActivityEventInfo as Info;
+    use citadel_activities::ActivityEventInfo as Info;
     let row = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
         .bind(id)
         .fetch_one(&mut **tx)
@@ -93,7 +93,7 @@ pub(super) async fn record_run_activity(
             ));
         }
     };
-    let activity = citadel_domain::ActivityEvent::new_build_event(
+    let activity = citadel_activities::ActivityEvent::new_build_event(
         run.build_project_id,
         run.project_name_snapshot,
         ActorId::new(run.triggered_by_actor_id),

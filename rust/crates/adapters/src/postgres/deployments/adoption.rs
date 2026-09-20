@@ -2,7 +2,7 @@ use super::*;
 use crate::container_mutations::{ContainerRuntimeRouter, Runtime};
 use citadel_deployments::adoption::*;
 use citadel_identity::SecretProtector;
-use citadel_platforms::{PlatformReadStore, containers::ContainerTarget};
+use citadel_platforms::{PlatformReader, containers::ContainerTarget};
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::sync::Arc;
@@ -121,7 +121,7 @@ impl PostgresContainerAdoption {
             return Ok(());
         }
         let permissions =
-            crate::platform_read_store::PostgresPlatformReadStore::new(self.pool.clone())
+            crate::postgres::platforms::PostgresPlatformReader::new(self.pool.clone())
                 .permissions_for_platforms(actor, &[platform_id])
                 .await
                 .map_err(|_| DeploymentError::Forbidden)?;

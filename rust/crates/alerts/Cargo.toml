@@ -6,9 +6,10 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+citadel-primitives = { path = "../primitives" }
+citadel-activities = { path = "../activities" }
 chrono.workspace = true
 chrono-tz.workspace = true
-citadel-domain = { path = "../domain" }
 futures-util.workspace = true
 reqwest.workspace = true
 serde.workspace = true

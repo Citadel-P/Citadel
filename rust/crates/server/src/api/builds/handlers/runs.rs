@@ -60,7 +60,7 @@ pub(super) async fn queue_run(
                 ResourceType::Build,
                 id,
                 PermissionLevel::Read,
-                Some(citadel_domain::SpecificPermission::Apply),
+                Some(citadel_primitives::SpecificPermission::Apply),
             )
             .await,
         &headers,
@@ -259,7 +259,7 @@ pub(super) async fn cancel_run(
                 ResourceType::Build,
                 run.build_project_id,
                 PermissionLevel::Read,
-                Some(citadel_domain::SpecificPermission::Apply),
+                Some(citadel_primitives::SpecificPermission::Apply),
             )
             .await,
         &headers,

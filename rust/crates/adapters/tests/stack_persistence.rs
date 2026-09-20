@@ -4,8 +4,8 @@ use citadel_adapters::docker::DockerClient;
 use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_adapters::stack_runtime::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use citadel_stacks::{
     ComposeProjectRuntimeService, CreateStack, ImportComposeProject, StackDriftPolicy, StackFilter,
     StackImportClaim, StackImportKind, StackReleaseSource, StackReleaseStatus, StackRepository,
@@ -107,7 +107,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .get_authorized(ActorId::new(reader), false, created.id)
         .await
         .unwrap();
-    use citadel_domain::PermissionPolicy;
+    use citadel_primitives::PermissionPolicy;
     assert!(
         readable
             .effective_permission

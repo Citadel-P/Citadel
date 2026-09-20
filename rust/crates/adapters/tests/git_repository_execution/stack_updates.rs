@@ -3,8 +3,8 @@ use citadel_adapters::{
     postgres::stacks::PostgresStackRepository,
     stack_runtime::{StackRuntimeRouter, StackUpdateRuntime},
 };
-use citadel_domain::ActorId;
 use citadel_git::GitRepositoryExecutionService;
+use citadel_primitives::ActorId;
 use citadel_stacks::{
     StackReleaseSource, StackRepository, StackSpec, StackUpdateScanner, StackUpdateState,
 };

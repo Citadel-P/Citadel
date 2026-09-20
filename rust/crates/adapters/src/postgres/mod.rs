@@ -12,3 +12,12 @@ pub mod git;
 
 pub mod alerts;
 pub mod automation;
+
+pub mod platform_classification;
+
+pub(crate) mod authorization;
+pub mod bindings;
+pub mod registries;
+pub mod tags;
+
+pub mod platforms;

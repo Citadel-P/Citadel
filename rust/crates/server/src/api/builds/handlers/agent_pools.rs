@@ -36,7 +36,7 @@ pub(super) async fn list_pools(
 ) -> IdentityHttpResult {
     let principal = actor(principal, &headers)?;
     let tags = identity_result(
-        crate::resources_http::tags::parse_filters(query.as_deref()),
+        crate::api::tags::handlers::parse_filters(query.as_deref()),
         &headers,
     )?;
     let mut build_agent_pools = identity_result(
@@ -48,8 +48,7 @@ pub(super) async fn list_pools(
             .map_err(map_error),
         &headers,
     )?;
-    build_agent_pools
-        .retain(|pool| crate::resources_http::tags::matches_filters(&pool.tags, &tags));
+    build_agent_pools.retain(|pool| crate::api::tags::handlers::matches_filters(&pool.tags, &tags));
     let pools = identity_result(
         authorized_pools(state.builds.store().as_ref(), &principal, build_agent_pools)
             .await

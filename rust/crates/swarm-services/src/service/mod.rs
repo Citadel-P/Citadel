@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -15,7 +15,10 @@ use crate::{
 };
 
 mod updates;
-pub use updates::*;
+pub use updates::{
+    ServiceAutomationEntitlements, ServiceImageDigestPort, ServiceUpdateCheck,
+    ServiceUpdateOutcome, checkable_image, evaluate_digest,
+};
 mod image_updates;
 
 pub trait SwarmServiceChangeNotifier: Send + Sync {

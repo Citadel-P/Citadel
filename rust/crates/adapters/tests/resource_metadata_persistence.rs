@@ -1,16 +1,27 @@
 use std::sync::Arc;
 
 use citadel_adapters::crypto::AesGcmSecretProtector;
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
+use citadel_adapters::postgres::bindings::PostgresBindingRepository;
+use citadel_bindings::BindingRepository;
+use citadel_bindings::BindingValidation;
+use citadel_bindings::ExternalSecretInput;
+use citadel_bindings::ExternalSecretPatch;
+use citadel_bindings::NewResourceBinding;
+use citadel_bindings::ResourceBindingKind;
+use citadel_bindings::ResourceBindingScope;
+use citadel_bindings::SecretDeliveryMode;
+use citadel_bindings::SecretProviderInput;
+use citadel_bindings::SecretProviderPatch;
+use citadel_bindings::SecretService;
+use citadel_bindings::validate_binding;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
-use citadel_resources::{
-    BindingValidation, CatalogMutationKind, ExternalSecretInput, ExternalSecretPatch, NewRegistry,
-    NewResourceBinding, NewTag, RegistryPatch, RegistryStatus, ResourceBindingKind,
-    ResourceBindingScope, ResourceMetadataError, ResourceMetadataService, ResourceMetadataStore,
-    SecretDeliveryMode, SecretProviderInput, SecretProviderPatch, validate_binding,
-};
+use citadel_primitives::ActorId;
+use citadel_registries::NewRegistry;
+use citadel_registries::RegistryMutationKind;
+use citadel_registries::RegistryPatch;
+use citadel_registries::RegistryStatus;
+use citadel_tags::NewTag;
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -26,11 +37,16 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         .connect(&database_url)
         .await
         .unwrap();
-    let store = Arc::new(PostgresResourceMetadataStore::new(pool.clone()));
+    let store = Arc::new(PostgresBindingRepository::new(pool.clone()));
+    let tag_store = citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone());
+    let registry_store =
+        citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone());
+    use citadel_registries::RegistryRepository;
+    use citadel_tags::TagRepository;
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
 
     let suffix = Uuid::now_v7().simple().to_string();
-    let tag = store
+    let tag = tag_store
         .create_tag(
             actor,
             &NewTag {
@@ -40,7 +56,7 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         )
         .await
         .unwrap();
-    let registry = store
+    let registry = registry_store
         .create_registry(
             actor,
             &NewRegistry {
@@ -68,7 +84,7 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
     assert!(!activity_info.contains("\"Password\":\"secret\""));
 
     let missing_tag = Uuid::now_v7();
-    let failed = store
+    let failed = registry_store
         .update_registry(
             actor,
             registry.id,
@@ -77,15 +93,18 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
                 tag_ids: Some(vec![missing_tag]),
                 ..RegistryPatch::default()
             },
-            CatalogMutationKind::Update,
+            RegistryMutationKind::Update,
         )
         .await;
-    assert!(matches!(failed, Err(ResourceMetadataError::Validation(_))));
-    let unchanged = store.get_registry(registry.id).await.unwrap();
+    assert!(matches!(
+        failed,
+        Err(citadel_registries::RegistryError::Validation(_))
+    ));
+    let unchanged = registry_store.get_registry(registry.id).await.unwrap();
     assert_eq!(unchanged.name, registry.name);
     assert_eq!(unchanged.tags[0].id, tag.id);
 
-    let service = ResourceMetadataService::new(
+    let service = SecretService::new(
         store.clone(),
         Arc::new(AesGcmSecretProtector::new(&[17_u8; 32]).unwrap()),
     );
@@ -216,11 +235,11 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         0,
         "an unreferenced secret created for a binding must not leak"
     );
-    store
+    registry_store
         .delete_registries(actor, &[registry.id])
         .await
         .unwrap();
-    store.delete_tag(tag.id).await.unwrap();
+    tag_store.delete_tag(tag.id).await.unwrap();
 }
 
 #[tokio::test]
@@ -234,7 +253,8 @@ async fn concurrent_tag_creation_keeps_one_normalized_name() {
         .connect(&database_url)
         .await
         .unwrap();
-    let store = Arc::new(PostgresResourceMetadataStore::new(pool));
+    let tag_store = citadel_adapters::postgres::tags::PostgresTagRepository::new(pool);
+    use citadel_tags::TagRepository;
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();
     let first = NewTag {
@@ -247,19 +267,19 @@ async fn concurrent_tag_creation_keeps_one_normalized_name() {
     };
 
     let (first_result, second_result) = tokio::join!(
-        store.create_tag(actor, &first),
-        store.create_tag(actor, &second)
+        tag_store.create_tag(actor, &first),
+        tag_store.create_tag(actor, &second)
     );
     let results = [first_result, second_result];
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(
         results
             .iter()
-            .filter(|result| matches!(result, Err(ResourceMetadataError::Conflict(_))))
+            .filter(|result| matches!(result, Err(citadel_tags::TagError::Conflict(_))))
             .count(),
         1
     );
 
     let created = results.into_iter().find_map(Result::ok).unwrap();
-    store.delete_tag(created.id).await.unwrap();
+    tag_store.delete_tag(created.id).await.unwrap();
 }

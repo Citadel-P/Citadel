@@ -1,6 +1,6 @@
-use citadel_domain::ActorId;
 use citadel_platforms::PlatformSummary;
 use citadel_platforms::{AuthorizedPlatformReader, AuthorizedReadError};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;
 

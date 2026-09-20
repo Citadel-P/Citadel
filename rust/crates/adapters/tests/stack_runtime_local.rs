@@ -117,7 +117,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
         &fixture.docker,
         &citadel_platforms::jobs::InventoryCollectionTarget {
             platform_id: fixture.platform_id,
-            platform_type: "DockerSwarm".into(),
+            platform_type: citadel_platforms::PlatformKind::DockerSwarm,
         },
         &fixture.cancellation,
     )
@@ -156,7 +156,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
                 stack_id: fixture.stack_id,
                 platform_id: fixture.platform_id,
                 project_name: fixture.project_name.clone(),
-                platform_type: "DockerSwarm".to_owned(),
+                platform_type: citadel_platforms::PlatformKind::DockerSwarm,
             },
             &fixture.cancellation,
         )
@@ -219,7 +219,11 @@ impl Fixture {
                 &docker,
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id,
-                    platform_type: platform_type.into(),
+                    platform_type:
+                        citadel_adapters::postgres::platform_classification::platform_kind(
+                            platform_type,
+                        )
+                        .unwrap(),
                 },
                 &CancellationToken::new(),
             )
@@ -301,7 +305,10 @@ impl Fixture {
             platform_id: self.platform_id,
             name: self.project_name.clone(),
             project_name: self.project_name.clone(),
-            platform_type: self.platform_type.to_owned(),
+            platform_type: citadel_adapters::postgres::platform_classification::platform_kind(
+                self.platform_type,
+            )
+            .unwrap(),
             spec: self.spec(),
             row_version: 1,
             actor_id: Uuid::nil(),
@@ -427,7 +434,7 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
         &f.docker,
         &citadel_platforms::jobs::InventoryCollectionTarget {
             platform_id: f.platform_id,
-            platform_type: "DockerSwarm".into(),
+            platform_type: citadel_platforms::PlatformKind::DockerSwarm,
         },
         &f.cancellation,
     )
@@ -526,7 +533,7 @@ async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
                 &f.docker,
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id: f.platform_id,
-                    platform_type: "DockerSwarm".into(),
+                    platform_type: citadel_platforms::PlatformKind::DockerSwarm,
                 },
                 &f.cancellation,
             )

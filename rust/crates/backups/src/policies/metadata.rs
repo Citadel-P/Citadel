@@ -1,4 +1,4 @@
-use citadel_domain::BackupPolicyActivitySnapshot;
+use citadel_activities::BackupPolicyActivitySnapshot;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

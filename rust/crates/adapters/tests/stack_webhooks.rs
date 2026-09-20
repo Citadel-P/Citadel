@@ -1,7 +1,7 @@
 use citadel_adapters::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use citadel_stacks::*;
 use serde_json::json;
 use uuid::Uuid;

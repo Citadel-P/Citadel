@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, IdentityResourceAccessSnapshot, UserActivitySnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, UserActivitySnapshot,
 };
 use citadel_identity::{
     IdentityError, OidcIdentity, OidcLoginState, OidcProvider, OidcStore, SYSTEM_ACTOR_ID,
     UserAuthentication,
 };
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;

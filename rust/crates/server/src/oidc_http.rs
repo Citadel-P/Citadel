@@ -1,26 +1,41 @@
 use crate::request_validation::ApiPath;
+
 use std::net::SocketAddr;
+
 use std::sync::Arc;
 
 use axum::extract::rejection::{JsonRejection, QueryRejection};
+
 use axum::extract::{ConnectInfo, Extension, Query, State};
+
 use axum::http::header::LOCATION;
+
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
+
 use axum::response::{IntoResponse, Response};
+
 use axum::{Json, Router};
+
 use citadel_identity::ActorPrincipal;
-use citadel_identity::{
-    CreateOidcProviderRequest, IdentityError, OidcService, PatchOidcProviderMetadataRequest,
-    PatchOidcProviderRequest, RenameOidcProviderRequest, TestOidcDiscoveryRequest,
+
+use citadel_identity::{IdentityError, OidcService};
+
+use crate::identity_http::dto::{
+    CreateOidcProviderRequest, PatchOidcProviderMetadataRequest, PatchOidcProviderRequest,
+    RenameOidcProviderRequest, TestOidcDiscoveryRequest,
 };
+
 use serde::Deserialize;
+
 use url::Url;
+
 use uuid::Uuid;
 
 use crate::identity_http::{
     identity_error_response, no_store, require_human_administrator, session_metadata,
     with_refresh_cookie,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 #[derive(Clone)]
@@ -56,7 +71,7 @@ pub fn router(state: OidcHttpState) -> Router {
     tag = "Authentication",
     summary = "List enabled OIDC login providers",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcLoginProvidersView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcLoginProvidersView, content_type = "application/json"),
         crate::openapi::errors::RequestErrors
     ),
     security(),
@@ -64,7 +79,12 @@ pub fn router(state: OidcHttpState) -> Router {
 )]
 async fn list_login_providers(State(state): State<OidcHttpState>, headers: HeaderMap) -> Response {
     match state.oidc.list_login_providers().await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::OidcLoginProvidersView::from(
+                view,
+            ))
+            .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -179,7 +199,7 @@ async fn complete_login(
     tag = "OidcProviders",
     summary = "List OIDC providers",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProvidersView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProvidersView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -194,7 +214,9 @@ async fn list_providers(
         return identity_error_response(error, &headers);
     }
     match state.oidc.list().await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProvidersView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -206,7 +228,7 @@ async fn list_providers(
     tag = "OidcProviders",
     summary = "Get OIDC provider",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -223,7 +245,9 @@ async fn get_provider(
         return identity_error_response(error, &headers);
     }
     match state.oidc.get(id).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProviderView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -236,7 +260,7 @@ async fn get_provider(
     summary = "Create OIDC provider",
     request_body = CreateOidcProviderRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -252,12 +276,15 @@ async fn create_provider(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: CreateOidcProviderRequest = match input {
         Ok(Json(input)) => input,
         Err(error) => return invalid_json(error, &headers),
     };
+    let input: citadel_identity::CreateOidcProvider = input.into();
     match state.oidc.create(input, principal.actor_id).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProviderView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -270,7 +297,7 @@ async fn create_provider(
     summary = "Rename OIDC provider",
     request_body = RenameOidcProviderRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -286,16 +313,19 @@ async fn rename_provider(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: RenameOidcProviderRequest = match input {
         Ok(Json(input)) => input,
         Err(error) => return invalid_json(error, &headers),
     };
+    let input: citadel_identity::RenameOidcProvider = input.into();
     match state
         .oidc
         .rename(input.id, &input.name, principal.actor_id)
         .await
     {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProviderView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -311,7 +341,7 @@ async fn rename_provider(
         (PatchOidcProviderRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -329,12 +359,15 @@ async fn update_provider(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: PatchOidcProviderRequest = match input {
         Ok(Json(input)) => input,
         Err(error) => return invalid_json(error, &headers),
     };
+    let input: citadel_identity::PatchOidcProvider = input.into();
     match state.oidc.patch(id, input, principal.actor_id).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProviderView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -350,7 +383,7 @@ async fn update_provider(
         (PatchOidcProviderMetadataRequest = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::OidcProviderView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::OidcProviderView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -368,16 +401,19 @@ async fn update_provider_metadata(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: PatchOidcProviderMetadataRequest = match input {
         Ok(Json(input)) => input,
         Err(error) => return invalid_json(error, &headers),
     };
+    let input: citadel_identity::PatchOidcProviderMetadata = input.into();
     match state
         .oidc
         .update_metadata(id, input, principal.actor_id)
         .await
     {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => {
+            no_store(Json(crate::identity_http::dto::OidcProviderView::from(view)).into_response())
+        }
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -437,7 +473,7 @@ async fn test_provider_discovery(
     }
     match state
         .oidc
-        .test_discovery(TestOidcDiscoveryRequest {
+        .test_discovery(citadel_identity::TestOidcDiscovery {
             provider_id: Some(id),
             issuer: None,
         })
@@ -471,10 +507,11 @@ async fn test_discovery(
     if let Err(error) = require_human_administrator(principal) {
         return identity_error_response(error, &headers);
     }
-    let input = match input {
+    let input: TestOidcDiscoveryRequest = match input {
         Ok(Json(input)) => input,
         Err(error) => return invalid_json(error, &headers),
     };
+    let input: citadel_identity::TestOidcDiscovery = input.into();
     match state.oidc.test_discovery(input).await {
         Ok(view) => no_store(Json(view).into_response()),
         Err(error) => identity_error_response(error, &headers),

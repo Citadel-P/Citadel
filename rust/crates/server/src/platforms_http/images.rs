@@ -1,4 +1,5 @@
 use super::*;
+
 use citadel_platforms::images::ImageInspectionPort;
 
 static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -236,6 +237,7 @@ pub(super) async fn inspect(
                 .platforms
                 .get_platform(platform_id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
                 .map_err(platform_error),
             &headers,
         )?;
@@ -280,7 +282,6 @@ pub(super) async fn inspect(
         Ok(image) => image,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    image.capabilities = Some(capabilities);
     if selector.docker_node_id.is_none() {
         let registry_id: Option<Uuid> = identity_result(
             sqlx::query_scalar::<_, Option<Uuid>>(
@@ -297,7 +298,7 @@ pub(super) async fn inspect(
         if let Some(id) = registry_id {
             let registry = identity_result(
                 state
-                    .resource_metadata
+                    .registries
                     .get_registry(id)
                     .await
                     .map_err(|error| IdentityError::Storage(error.to_string())),
@@ -311,5 +312,9 @@ pub(super) async fn inspect(
         }
     }
     image.docker_node_id = selector.docker_node_id;
+    let image = super::views::ImageInspectionView {
+        image,
+        capabilities: Some(capabilities),
+    };
     Ok(no_store(Json(image).into_response()))
 }

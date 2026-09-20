@@ -23,12 +23,14 @@ pub(super) fn map_stack(row: PgRow) -> Result<StackDetails, StackError> {
             row_version: row.try_get("rowversion").map_err(storage)?,
         },
         status: StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?,
-        platform_type: descriptor
-            .get("$type")
-            .or_else(|| descriptor.get("type"))
-            .and_then(Value::as_str)
-            .unwrap_or("Docker")
-            .to_owned(),
+        platform_type: crate::postgres::platform_classification::platform_kind(
+            descriptor
+                .get("$type")
+                .or_else(|| descriptor.get("type"))
+                .and_then(Value::as_str)
+                .unwrap_or("Docker"),
+        )
+        .map_err(storage)?,
         platform_id: Some(row.try_get("platformid").map_err(storage)?),
         version: Some(row.try_get("version").map_err(storage)?),
         spec: Some(StackSpec::from_storage_value(
@@ -169,14 +171,14 @@ mod permission_tests {
         );
         let known = decode_permission(false, 4, 1 << 30).unwrap();
         assert!(known.allows(PermissionRequirement {
-            resource_type: citadel_domain::ResourceType::Stack,
+            resource_type: citadel_primitives::ResourceType::Stack,
             level: PermissionLevel::Write,
             specific: None
         }));
         assert!(!known.allows(PermissionRequirement {
-            resource_type: citadel_domain::ResourceType::Stack,
+            resource_type: citadel_primitives::ResourceType::Stack,
             level: PermissionLevel::Read,
-            specific: Some(citadel_domain::SpecificPermission::Apply)
+            specific: Some(citadel_primitives::SpecificPermission::Apply)
         }));
     }
 }

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_resources::webhooks::{repository_matches, webhook_branch};
+use citadel_git::repositories::webhooks::{repository_matches, webhook_branch};
 use citadel_stacks::{StackError, StackSpec, StackUpdateBehavior, stack_git_path_matches};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;

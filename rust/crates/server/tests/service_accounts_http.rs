@@ -10,11 +10,12 @@ use citadel_adapters::crypto::{
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::service_account_store::PostgresServiceAccountStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, ServiceAccountService, SystemClock,
 };
+use citadel_primitives::ActorId;
 use citadel_server::service_accounts_http::{self, ServiceAccountHttpState};
 use serde_json::Value;
 use sqlx::PgPool;

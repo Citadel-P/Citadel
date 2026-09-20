@@ -1,10 +1,10 @@
-use citadel_domain::{
-    ActivityChangedField, ActivityEvent, ActivityEventInfo, ActorId, UserDateTimeFormat, UserTheme,
-};
+use citadel_activities::{ActivityChangedField, ActivityEvent, ActivityEventInfo};
 use citadel_identity::{
-    CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileResourceInfo, ProfileStore,
-    User, UserPreferences, UserPreferencesUpdate,
+    CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileRepository,
+    ProfileResourceInfo, User, UserPreferences, UserPreferencesUpdate,
 };
+use citadel_identity::{UserDateTimeFormat, UserTheme};
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -78,7 +78,7 @@ impl PostgresProfileStore {
     }
 }
 
-impl ProfileStore for PostgresProfileStore {
+impl ProfileRepository for PostgresProfileStore {
     fn get_current(
         &self,
         user_id: Uuid,
@@ -244,15 +244,18 @@ impl ProfileStore for PostgresProfileStore {
                 .is_some_and(|value| value != old_date_time_format)
             {
                 changes.push(ActivityChangedField::date_time_format(
-                    old_date_time_format,
-                    date_time_format,
+                    old_date_time_format.as_database_str(),
+                    date_time_format.as_database_str(),
                 ));
             }
             let old_theme = current
                 .as_ref()
                 .map_or(UserTheme::System, UserPreferences::theme);
             if update.theme.is_some_and(|value| value != old_theme) {
-                changes.push(ActivityChangedField::theme(old_theme, theme));
+                changes.push(ActivityChangedField::theme(
+                    old_theme.as_database_str(),
+                    theme.as_database_str(),
+                ));
             }
             if changes.is_empty()
                 && let Some(current) = current

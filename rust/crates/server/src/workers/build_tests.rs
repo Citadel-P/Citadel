@@ -4,7 +4,7 @@ use citadel_builds::{
     BuildClaim, BuildExecutionResult, BuildExecutor, BuildLogSink, BuildProjectConfiguration,
     BuildRepository,
 };
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use uuid::Uuid;
 

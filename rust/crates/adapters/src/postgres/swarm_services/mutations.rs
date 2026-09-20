@@ -89,8 +89,8 @@ impl PostgresSwarmServiceRepository {
                         return Err(SwarmServiceError::Forbidden);
                     }
                 }
-                Some(citadel_domain::ActivitySourceResource {
-                    resource_type: citadel_domain::ActivityResourceType::SwarmService,
+                Some(citadel_activities::ActivitySourceResource {
+                    resource_type: citadel_activities::ActivityResourceType::SwarmService,
                     resource_id: source.resource_id,
                     resource_name: name,
                 })

@@ -3,16 +3,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
+use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::ActorPrincipal;
-use citadel_platforms::{
-    ContainerStatsStore, ContainerView, PlatformCapabilitiesView, PlatformReadStore,
-    PlatformStatView, PlatformView, RuntimeContainerStat, WorkloadStatusCounts,
-};
+use citadel_identity::AuthenticatedPrincipalType;
+use citadel_platforms::{ContainerStatsStore, PlatformReader, RuntimeContainerStat};
+use citadel_primitives::ActorId;
 use citadel_server::config::RealtimeConfig;
 use citadel_server::metrics::Metrics;
+use citadel_server::platforms_http::views::{
+    ContainerView, PlatformCapabilitiesView, PlatformStatView, PlatformView, WorkloadStatusCounts,
+};
 use citadel_server::realtime::{RealtimeHub, RealtimeReadError, RealtimeReadPort, RealtimeService};
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
@@ -307,7 +308,7 @@ async fn global_subscription_streams_committed_platform_stats_after_store_recrea
             platform: platform(platform_id),
             allowed: Arc::new(AtomicBool::new(true)),
         },
-        store: PostgresPlatformReadStore::new(pool.clone()),
+        store: PostgresPlatformReader::new(pool.clone()),
     };
     let service = RealtimeService::new(
         &config(),
@@ -614,7 +615,7 @@ struct FakeReader {
 
 struct PersistedReader {
     authentication: FakeReader,
-    store: PostgresPlatformReadStore,
+    store: PostgresPlatformReader,
 }
 
 impl RealtimeReadPort for PersistedReader {
@@ -637,6 +638,7 @@ impl RealtimeReadPort for PersistedReader {
             self.store
                 .get_platform(platform_id)
                 .await
+                .map(|platform| platform.map(PlatformView::from))
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use citadel_domain::{ActivityEventType, ActivityResourceType, ActivityStatus, ActorType};
+use citadel_activities::{ActivityEventType, ActivityResourceType, ActivityStatus};
+use citadel_identity::ActorType;
 use citadel_identity::{ActorPrincipal, IdentityError};
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
@@ -14,7 +15,7 @@ pub trait WebhookActivitySink: Send + Sync {
         &self,
         resource_type: ActivityResourceType,
         id: Uuid,
-        details: citadel_domain::WebhookActivityDetails,
+        details: citadel_activities::WebhookActivityDetails,
     ) -> BoxFuture<'_, Result<(), IdentityError>>;
 }
 

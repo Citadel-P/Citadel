@@ -87,7 +87,7 @@ impl StackService {
             .runtime_snapshot(
                 platform_id,
                 &project,
-                orchestration(&stack.platform_type)?,
+                orchestration(&stack.platform_type),
                 &self.shutdown.child_token(),
             )
             .await?;

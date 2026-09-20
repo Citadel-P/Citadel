@@ -13,7 +13,7 @@ pub(super) async fn verify(
     let writer = actor(db, false).await;
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,2,$3,$4,0)")
         .bind(Uuid::now_v7()).bind(writer.actor_id.value()).bind(id)
-        .bind(citadel_domain::ResourceType::AutomationAction as i32)
+        .bind(citadel_primitives::ResourceType::AutomationAction as i32)
         .execute(db).await.unwrap();
     assert_eq!(
         request(

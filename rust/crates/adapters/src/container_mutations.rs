@@ -43,7 +43,7 @@ impl ContainerRuntimeRouter {
     pub fn into_service(self) -> ContainerMutationService {
         ContainerMutationService::new(
             std::sync::Arc::new(
-                crate::container_mutation_store::PostgresContainerMutationStore::new(
+                crate::container_mutation_store::PostgresContainerRepository::new(
                     self.pool.clone(),
                 ),
             ),

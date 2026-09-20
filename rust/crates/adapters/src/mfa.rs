@@ -431,7 +431,7 @@ impl MfaStore for PostgresMfaStore {
         challenge_id: Uuid,
         maximum_failed_attempts: i32,
         now: DateTime<Utc>,
-        activity: citadel_domain::ActivityEvent,
+        activity: citadel_activities::ActivityEvent,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;

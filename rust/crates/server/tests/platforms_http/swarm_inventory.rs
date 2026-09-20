@@ -420,7 +420,7 @@ async fn native_swarm_preflights_entire_batches_permissions_usage_and_versions()
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )
@@ -560,7 +560,7 @@ async fn native_swarm_preflights_entire_batches_permissions_usage_and_versions()
     .await;
     assert!(runtime.lock().await.mutations.is_empty());
     sqlx::query("UPDATE resourceaccesses SET permissionlevel=2,specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3")
-        .bind(citadel_domain::SpecificPermission::Inspect as i32).bind(reader.actor_id.value()).bind(f.platform_id).execute(&f.pool).await.unwrap();
+        .bind(citadel_primitives::SpecificPermission::Inspect as i32).bind(reader.actor_id.value()).bind(f.platform_id).execute(&f.pool).await.unwrap();
     assert_status(
         send_json(
             &f,

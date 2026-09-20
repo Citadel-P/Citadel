@@ -13,23 +13,24 @@ use citadel_adapters::crypto::{
 };
 use citadel_adapters::docker::DockerClient;
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
-use citadel_adapters::platform_registration::PostgresPlatformRegistrationStore;
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
+use citadel_adapters::platform_registration::PostgresPlatformRegistrationRepository;
+use citadel_adapters::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
+use citadel_platforms::{CreatePlatformInput, PlatformConnectorType};
 use citadel_platforms::{
-    CreatePlatformInput, PlatformConnectorType, PlatformInventoryPort, PlatformReadService,
-    PlatformRegistrationError, PlatformRegistrationRuntime, PlatformRegistrationService,
-    PlatformRuntimePort, RuntimeCapabilityError, RuntimeContainerSummary, RuntimeErrorKind,
-    RuntimeImageSummary, RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeStatsStream,
-    RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService,
-    RuntimeSwarmTask, RuntimeVolumeSummary,
+    PlatformInventoryPort, PlatformReadService, PlatformRegistrationError,
+    PlatformRegistrationRuntime, PlatformRegistrationService, PlatformRuntimePort,
+    RuntimeCapabilityError, RuntimeContainerSummary, RuntimeErrorKind, RuntimeImageSummary,
+    RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeStatsStream, RuntimeSwarmConfig,
+    RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask,
+    RuntimeVolumeSummary,
 };
+use citadel_primitives::ActorId;
 use citadel_server::metrics::Metrics;
 use citadel_server::platforms_http::{self, PlatformsHttpState};
 use citadel_server::realtime::RealtimeHub;
@@ -288,13 +289,13 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         selections: Mutex::new(Vec::new()),
     });
     let registrations = Arc::new(PlatformRegistrationService::new(
-        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
         runtime.clone(),
     ));
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let public_key =
         citadel_adapters::agent::AgentRequestSigner::from_bytes(&[71; 32]).public_key_base64();
-    let setup = Arc::new(citadel_platforms::agent_setup::AgentSetupView::new(
+    let setup = Arc::new(citadel_server::platforms_http::dto::AgentSetupView::new(
         public_key.clone(),
         "citadel-agent:test".into(),
         false,
@@ -318,11 +319,18 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
-            PostgresPlatformReadStore::new(pool.clone()),
+            PostgresPlatformReader::new(pool.clone()),
         ))),
         registrations,
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
         edge: citadel_adapters::edge::EdgeRegistry::default(),
@@ -794,7 +802,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
         selections: Mutex::new(Vec::new()),
     });
     let rollback_service = PlatformRegistrationService::new(
-        Arc::new(PostgresPlatformRegistrationStore::new(
+        Arc::new(PostgresPlatformRegistrationRepository::new(
             invalid_tag.pool.clone(),
         )),
         rollback_runtime,
@@ -935,7 +943,7 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         selections: Mutex::new(Vec::new()),
     });
     let registrations = Arc::new(PlatformRegistrationService::new(
-        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
         runtime.clone(),
     ));
     let realtime = RealtimeHub::new(16, Arc::new(Metrics::default()));
@@ -960,11 +968,18 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
         ),
         identity,
         platforms: Arc::new(PlatformReadService::new(Arc::new(
-            PostgresPlatformReadStore::new(pool.clone()),
+            PostgresPlatformReader::new(pool.clone()),
         ))),
         registrations,
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker: DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(),
         agent: None,
         realtime: Some(realtime.clone()),

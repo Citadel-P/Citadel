@@ -2,7 +2,7 @@ use super::{requests::*, spec::*, views::*};
 
 use citadel_swarm_services::permissions as policy;
 
-use citadel_domain::PermissionPolicy;
+use citadel_primitives::PermissionPolicy;
 
 use crate::request_validation::WorkloadQuery;
 
@@ -24,7 +24,7 @@ use axum::response::IntoResponse;
 
 use axum::{Json, Router};
 
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 

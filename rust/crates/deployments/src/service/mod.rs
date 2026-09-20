@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
-use citadel_domain::{ActorId, LicenseCapability};
+use citadel_licensing::LicenseCapability;
+use citadel_primitives::ActorId;
 use serde_json::Value;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;

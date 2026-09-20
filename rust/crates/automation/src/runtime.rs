@@ -1,5 +1,5 @@
 use crate::*;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::ffi::OsString;
 use std::path::PathBuf;

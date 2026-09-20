@@ -276,7 +276,7 @@ async fn verify_capabilities(
         .await
         .unwrap();
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
-        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(id).bind(citadel_domain::ResourceType::BuildAgentPool as i32).execute(db).await.unwrap();
+        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(id).bind(citadel_primitives::ResourceType::BuildAgentPool as i32).execute(db).await.unwrap();
     let response = request(
         app,
         Method::GET,

@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActivityStatus, ActorId, ResourceType,
-    SwarmServiceActivitySnapshot,
+use citadel_activities::{
+    ActivityEvent, ActivityEventInfo, ActivityStatus, SwarmServiceActivitySnapshot,
 };
-use citadel_domain::{
+use citadel_primitives::{ActorId, ResourceType};
+use citadel_primitives::{
     EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
     SpecificPermissions,
 };

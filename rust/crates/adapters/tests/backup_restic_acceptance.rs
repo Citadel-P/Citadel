@@ -6,9 +6,9 @@ use citadel_adapters::{
 };
 use citadel_backups::*;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_execution::{ProcessLimits, ProcessRequest, run};
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::json;
 use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};

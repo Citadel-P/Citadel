@@ -22,7 +22,7 @@ pub struct BuildService {
 impl BuildEntitlements for BuildService {
     fn enabled(
         &self,
-        capability: citadel_domain::LicenseCapability,
+        capability: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, BuildError>> {
         Box::pin(async move {
             match &self.entitlements {
@@ -85,7 +85,7 @@ impl BuildService {
 
     pub async fn ensure_entitled(
         &self,
-        capability: citadel_domain::LicenseCapability,
+        capability: citadel_licensing::LicenseCapability,
     ) -> Result<(), BuildError> {
         if let Some(entitlements) = &self.entitlements
             && entitlements.enabled(capability).await?
@@ -101,11 +101,11 @@ impl BuildService {
         trigger: &str,
     ) -> Result<(), BuildError> {
         if trigger != "Manual" {
-            self.ensure_entitled(citadel_domain::LicenseCapability::AutomatedOperations)
+            self.ensure_entitled(citadel_licensing::LicenseCapability::AutomatedOperations)
                 .await?;
         }
         if project.builder_kind == "BuildAgentPool" {
-            self.ensure_entitled(citadel_domain::LicenseCapability::ElasticBuildExecution)
+            self.ensure_entitled(citadel_licensing::LicenseCapability::ElasticBuildExecution)
                 .await?;
         }
         Ok(())

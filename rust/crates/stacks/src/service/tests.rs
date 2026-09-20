@@ -65,7 +65,7 @@ fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> StackDetails {
             row_version: 0,
         },
         status,
-        platform_type: "Docker".to_owned(),
+        platform_type: citadel_platforms::PlatformKind::Docker,
         platform_id: Some(Uuid::now_v7()),
         version: Some("1".to_owned()),
         spec: Some(StackSpec::WebEditor {
@@ -79,7 +79,7 @@ fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> StackDetails {
         platform_name: Some("local".to_owned()),
         tags: Vec::new(),
         latest_activity: None,
-        effective_permission: citadel_domain::EffectivePermission::Administrator,
+        effective_permission: citadel_primitives::EffectivePermission::Administrator,
     }
 }
 

@@ -1,18 +1,28 @@
 use crate::request_validation::ApiPath;
+
 use std::net::SocketAddr;
 
 use axum::extract::rejection::JsonRejection;
+
 use axum::extract::{ConnectInfo, Extension, State};
+
 use axum::http::{HeaderMap, StatusCode};
+
 use axum::response::{IntoResponse, Response};
+
 use axum::{Json, Router};
-use citadel_domain::{PermissionLevel, ResourceType};
+
+use citadel_primitives::{PermissionLevel, ResourceType};
+
 use citadel_identity::ActorPrincipal;
-use citadel_identity::{
+
+use citadel_identity::IdentityError;
+
+use crate::identity_http::dto::{
     ConfirmMandatoryMfaSetupInput, ConfirmProfileMfaSetupInput, DisableProfileMfaInput,
-    IdentityError, MfaVerificationInput, RegenerateProfileMfaRecoveryCodesInput,
-    StartProfileMfaSetupInput,
+    MfaVerificationInput, RegenerateProfileMfaRecoveryCodesInput, StartProfileMfaSetupInput,
 };
+
 use uuid::Uuid;
 
 use crate::identity_http::{
@@ -20,6 +30,7 @@ use crate::identity_http::{
     identity_error_response, no_store, require_human, require_human_administrator,
     session_metadata, with_deleted_cookie, with_refresh_cookie,
 };
+
 use crate::openapi::router::OpenApiRouterExt;
 
 pub fn router(state: IdentityHttpState) -> Router {
@@ -35,7 +46,7 @@ pub fn router(state: IdentityHttpState) -> Router {
     request_body = MfaVerificationInput,
     params(("citadel_mfa_challenge" = String, Cookie, description = "MFA Challenge")),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::MfaVerificationView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA challenge cookie."))),
+        (status = 200, description = "Success", body = crate::identity_http::dto::MfaVerificationView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA challenge cookie."))),
         crate::openapi::errors::AuthenticationErrors
     ),
     security(),
@@ -51,7 +62,7 @@ async fn verify_authentication(
         Ok(id) => id,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: MfaVerificationInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -60,6 +71,7 @@ async fn verify_authentication(
             );
         }
     };
+    let input: citadel_identity::MfaVerificationInput = input.into();
     match state
         .mfa
         .verify_challenge(
@@ -71,7 +83,10 @@ async fn verify_authentication(
     {
         Ok((view, session)) => {
             let response = with_refresh_cookie(
-                no_store(Json(view).into_response()),
+                no_store(
+                    Json(crate::identity_http::dto::MfaVerificationView::from(view))
+                        .into_response(),
+                ),
                 &session.refresh_token,
                 session.refresh_expires_at,
                 state.secure_cookies,
@@ -90,7 +105,7 @@ async fn verify_authentication(
     summary = "Get mandatory MFA setup",
     params(("citadel_mfa_setup" = String, Cookie, description = "MFA Setup")),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::MandatoryMfaSetupView, content_type = "application/json"),
         crate::openapi::errors::AuthenticationErrors
     ),
     security(),
@@ -105,7 +120,9 @@ async fn get_mandatory_setup(
         Err(error) => return identity_error_response(error, &headers),
     };
     match state.mfa.mandatory_setup(setup_id).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::MandatoryMfaSetupView::from(view)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -119,7 +136,7 @@ async fn get_mandatory_setup(
     request_body = ConfirmMandatoryMfaSetupInput,
     params(("citadel_mfa_setup" = String, Cookie, description = "MFA Setup")),
     responses(
-        (status = 200, description = "Success", body = citadel_identity::MandatoryMfaSetupCompleteView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA setup cookie."))),
+        (status = 200, description = "Success", body = crate::identity_http::dto::MandatoryMfaSetupCompleteView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token and expires the MFA setup cookie."))),
         crate::openapi::errors::AuthenticationErrors
     ),
     security(),
@@ -135,7 +152,7 @@ async fn confirm_mandatory_setup(
         Ok(id) => id,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: ConfirmMandatoryMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -144,6 +161,7 @@ async fn confirm_mandatory_setup(
             );
         }
     };
+    let input: citadel_identity::ConfirmMandatoryMfaSetupInput = input.into();
     match state
         .mfa
         .confirm_mandatory_setup(
@@ -155,7 +173,10 @@ async fn confirm_mandatory_setup(
     {
         Ok((view, session)) => {
             let response = with_refresh_cookie(
-                no_store(Json(view).into_response()),
+                no_store(
+                    Json(crate::identity_http::dto::MandatoryMfaSetupCompleteView::from(view))
+                        .into_response(),
+                ),
                 &session.refresh_token,
                 session.refresh_expires_at,
                 state.secure_cookies,
@@ -173,7 +194,7 @@ async fn confirm_mandatory_setup(
     tag = "Profile",
     summary = "Get MFA status",
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ProfileMfaStatusView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ProfileMfaStatusView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     security(("Bearer" = [])),
@@ -189,7 +210,9 @@ async fn get_profile_status(
         Err(error) => return identity_error_response(error, &headers),
     };
     match state.mfa.profile_status(&principal).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::ProfileMfaStatusView::from(view)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -202,7 +225,7 @@ async fn get_profile_status(
     summary = "Start MFA setup",
     request_body = StartProfileMfaSetupInput,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ProfileMfaSetupView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ProfileMfaSetupView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -218,7 +241,7 @@ async fn start_profile_setup(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: StartProfileMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -227,8 +250,11 @@ async fn start_profile_setup(
             );
         }
     };
+    let input: citadel_identity::StartProfileMfaSetupInput = input.into();
     match state.mfa.start_profile_setup(&principal, input).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::ProfileMfaSetupView::from(view)).into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -241,7 +267,7 @@ async fn start_profile_setup(
     summary = "Complete MFA setup",
     request_body = ConfirmProfileMfaSetupInput,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ProfileMfaRecoveryCodesView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ProfileMfaRecoveryCodesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -257,7 +283,7 @@ async fn confirm_profile_setup(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: ConfirmProfileMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -266,12 +292,16 @@ async fn confirm_profile_setup(
             );
         }
     };
+    let input: citadel_identity::ConfirmProfileMfaSetupInput = input.into();
     match state
         .mfa
         .confirm_profile_setup(&principal, input, current_refresh_token(&headers))
         .await
     {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::ProfileMfaRecoveryCodesView::from(view))
+                .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -300,7 +330,7 @@ async fn disable_profile_mfa(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: DisableProfileMfaInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -309,6 +339,7 @@ async fn disable_profile_mfa(
             );
         }
     };
+    let input: citadel_identity::DisableProfileMfaInput = input.into();
     match state
         .mfa
         .disable_profile_mfa(&principal, input, current_refresh_token(&headers))
@@ -327,7 +358,7 @@ async fn disable_profile_mfa(
     summary = "Regenerate MFA recovery codes",
     request_body = RegenerateProfileMfaRecoveryCodesInput,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::ProfileMfaRecoveryCodesView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::ProfileMfaRecoveryCodesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -343,7 +374,7 @@ async fn regenerate_recovery_codes(
         Ok(principal) => principal,
         Err(error) => return identity_error_response(error, &headers),
     };
-    let input = match input {
+    let input: RegenerateProfileMfaRecoveryCodesInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
             return identity_error_response(
@@ -352,8 +383,12 @@ async fn regenerate_recovery_codes(
             );
         }
     };
+    let input: citadel_identity::RegenerateProfileMfaRecoveryCodesInput = input.into();
     match state.mfa.regenerate_recovery_codes(&principal, input).await {
-        Ok(view) => no_store(Json(view).into_response()),
+        Ok(view) => no_store(
+            Json(crate::identity_http::dto::ProfileMfaRecoveryCodesView::from(view))
+                .into_response(),
+        ),
         Err(error) => identity_error_response(error, &headers),
     }
 }

@@ -2869,7 +2869,7 @@ mod tests {
         assert_eq!(mapped.swarm_service_id, Some(service_id));
         assert_eq!(
             mapped.ownership,
-            citadel_domain::SwarmServiceOwnership::CitadelService
+            citadel_swarm_services::SwarmServiceOwnership::CitadelService
         );
     }
 }

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use citadel_domain::MfaPolicy;
+use citadel_identity::MfaPolicy;
 use ipnet::IpNet;
 use serde::Serialize;
 use url::Url;

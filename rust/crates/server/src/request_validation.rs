@@ -1,9 +1,11 @@
 use std::error::Error;
 
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+
 use citadel_identity::IdentityError;
 
 mod workload_query;
+
 pub(crate) use workload_query::WorkloadQuery;
 
 /// Typed path extraction with Citadel's validation response format.
@@ -279,7 +281,8 @@ mod tests {
 
     #[tokio::test]
     async fn platform_input_reports_field_and_expected_type() {
-        let body = problem::<citadel_platforms::CreatePlatformInput>(br#"{"name":42}"#).await;
+        let body =
+            problem::<crate::platforms_http::dto::CreatePlatformInput>(br#"{"name":42}"#).await;
         assert!(
             body["errors"]["$.name"][0]
                 .as_str()

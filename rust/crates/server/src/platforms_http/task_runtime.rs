@@ -1,4 +1,5 @@
 use super::*;
+
 use citadel_platforms::{SwarmTaskRuntimePort, containers::ContainerInspectionPort};
 
 #[derive(Serialize)]
@@ -27,6 +28,7 @@ macro_rules! task_reader {
         }
     };
 }
+
 task_reader!(
     #[utoipa::path(
     get,
@@ -45,6 +47,7 @@ task_reader!(
     inspect,
     Inspect
 );
+
 task_reader!(
     #[utoipa::path(
     get,

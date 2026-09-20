@@ -1,12 +1,13 @@
-use citadel_domain::{ActivityEvent, ActivityEventInfo, ActorId};
+use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_platforms::{
-    CreatePlatformInput, PlatformRegistrationError, PlatformView, RuntimePlatformInfo,
+    CreatePlatformInput, PlatformDetails, PlatformRegistrationError, RuntimePlatformInfo,
 };
+use citadel_primitives::ActorId;
 use sqlx::{PgPool, Row};
 
 pub async fn update(
     pool: &PgPool,
-    current: &PlatformView,
+    current: &PlatformDetails,
     input: &CreatePlatformInput,
     info: Option<&RuntimePlatformInfo>,
     actor: ActorId,

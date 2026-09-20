@@ -16,7 +16,7 @@ impl PostgresStackRepository {
                         stack_id:id,
                         platform_id:row.try_get("platformid").map_err(storage)?,
                         project_name:spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name,id)),
-                        platform_type:descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker").to_owned(),
+                        platform_type:crate::postgres::platform_classification::platform_kind(descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker")).map_err(storage)?,
                     }))
                 }).collect()
         })
@@ -55,11 +55,13 @@ impl PostgresStackRepository {
                         .project_name
                         .clone()
                         .unwrap_or_else(|| normalize_project_name(&name, *id)),
-                    platform_type: descriptor
-                        .get("$type")
-                        .and_then(Value::as_str)
-                        .unwrap_or("Docker")
-                        .to_owned(),
+                    platform_type: crate::postgres::platform_classification::platform_kind(
+                        descriptor
+                            .get("$type")
+                            .and_then(Value::as_str)
+                            .unwrap_or("Docker"),
+                    )
+                    .map_err(storage)?,
                 });
             }
             for id in ids {

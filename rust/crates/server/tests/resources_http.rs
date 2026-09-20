@@ -1,3 +1,7 @@
+use citadel_server::api::bindings;
+use citadel_server::api::git::repositories::catalog as git_catalog;
+use citadel_server::api::registries;
+use citadel_server::api::tags;
 use std::sync::Arc;
 
 use axum::Router;
@@ -11,18 +15,19 @@ use citadel_adapters::crypto::{
 };
 use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
 use citadel_adapters::postgres::automation::PostgresAutomationRepository;
+use citadel_adapters::postgres::bindings::PostgresBindingRepository;
 use citadel_adapters::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
+use citadel_bindings::SecretService;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
     SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_resources::ResourceMetadataService;
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use citadel_server::api::automation::{self as automation_http, AutomationHttpState};
 use citadel_server::api::git::accounts::handlers::{
     self as git_accounts_http, GitAccountsHttpState,
@@ -30,7 +35,6 @@ use citadel_server::api::git::accounts::handlers::{
 use citadel_server::api::git::repositories::handlers::{
     self as git_repositories_http, GitRepositoriesHttpState,
 };
-use citadel_server::resources_http::{self, ResourcesHttpState};
 use citadel_server::webhooks_http::{self, WebhooksHttpState};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -66,8 +70,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     ));
     let secret_protector = Arc::new(AesGcmSecretProtector::new(&[29_u8; 32]).unwrap());
     let resources = Arc::new(
-        ResourceMetadataService::new(
-            Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        SecretService::new(
+            Arc::new(PostgresBindingRepository::new(pool.clone())),
             secret_protector.clone(),
         )
         .with_secret_provider_tester(Arc::new(
@@ -111,11 +115,32 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             stale_after: std::time::Duration::from_secs(60),
         },
     ));
-    let app = resources_http::router(ResourcesHttpState {
+    let app = tags::router(tags::TagsHttpState {
         identity: Arc::clone(&identity),
-        resources: Arc::clone(&resources),
+        tags: Arc::new(citadel_adapters::postgres::tags::PostgresTagRepository::new(pool.clone())),
         realtime: None,
     })
+    .merge(registries::router(registries::RegistriesHttpState {
+        identity: Arc::clone(&identity),
+        registries: Arc::new(
+            citadel_adapters::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        realtime: None,
+    }))
+    .merge(bindings::router(bindings::BindingsHttpState {
+        identity: Arc::clone(&identity),
+        secrets: Arc::clone(&resources),
+        realtime: None,
+    }))
+    .merge(git_catalog::router(git_catalog::GitCatalogHttpState {
+        identity: Arc::clone(&identity),
+        git_repositories: Arc::new(
+            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    }))
     .merge(git_accounts_http::router(GitAccountsHttpState {
         identity: Arc::clone(&identity),
         accounts: git_accounts,
@@ -123,7 +148,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     }))
     .merge(git_repositories_http::router(GitRepositoriesHttpState {
         identity: Arc::clone(&identity),
-        resources,
+        repository: Arc::new(
+            citadel_adapters::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
         execution: Arc::clone(&git_execution),
         realtime: None,
         cancellation,

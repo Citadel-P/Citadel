@@ -50,7 +50,7 @@ impl StackSourceMaterializerPort for GitStackSourceMaterializer {
             let revision = if let Some(commit) = commit_sha.as_deref().filter(|sha| !sha.trim().is_empty()) {
                 commit
             } else {
-                synchronized = self.git.synchronize_commit(citadel_domain::ActorId::new(claim.actor_id), *git_repo_id, branch, cancellation)
+                synchronized = self.git.synchronize_commit(citadel_primitives::ActorId::new(claim.actor_id), *git_repo_id, branch, cancellation)
                     .await.map_err(|error| StackError::Validation(error.to_string()))?;
                 &synchronized
             };

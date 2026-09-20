@@ -30,7 +30,7 @@ use axum::{Json, Router};
 
 use citadel_automation::{AutomationError, AutomationService};
 
-use citadel_domain::{PermissionLevel, ResourceType};
+use citadel_primitives::{PermissionLevel, ResourceType};
 
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 

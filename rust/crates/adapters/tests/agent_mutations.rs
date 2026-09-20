@@ -777,7 +777,7 @@ fn stack_claim() -> StackOperationClaim {
         platform_id: uuid::Uuid::now_v7(),
         name: "Agent Stack".to_owned(),
         project_name: "agent-stack".to_owned(),
-        platform_type: "Docker".to_owned(),
+        platform_type: citadel_platforms::PlatformKind::Docker,
         spec: StackSpec::WebEditor {
             compose_file: "services:\n  web:\n    image: nginx\n".to_owned(),
             update_behavior: StackUpdateBehavior::Disabled,

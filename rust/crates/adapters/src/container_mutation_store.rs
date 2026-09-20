@@ -1,23 +1,23 @@
 use std::collections::BTreeSet;
 
-use citadel_domain::{ActorId, PermissionLevel, ResourceType};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct PostgresContainerMutationStore {
+pub struct PostgresContainerRepository {
     pool: PgPool,
 }
 
-impl PostgresContainerMutationStore {
+impl PostgresContainerRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
-impl ContainerMutationStore for PostgresContainerMutationStore {
+impl ContainerRepository for PostgresContainerRepository {
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],

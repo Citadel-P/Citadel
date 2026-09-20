@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{PlatformRuntimePort, RuntimeCapabilityError};
-use citadel_domain::SwarmServiceOwnership;
+use citadel_swarm_services::SwarmServiceOwnership;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct RuntimeImageSummary {

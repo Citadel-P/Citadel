@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use citadel_adapters::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_database::MigrationRunner;
-use citadel_domain::ActorId;
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_primitives::ActorId;
 use citadel_swarm_services::{
     CreateSwarmService, RuntimeServiceResult, SchedulingMode, ServiceOperationKind,
     SwarmServiceFilter, SwarmServiceImageInfo, SwarmServiceRepository, SwarmServiceSpec,

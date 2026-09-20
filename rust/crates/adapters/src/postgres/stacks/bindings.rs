@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use citadel_resources::ResourceSecretProtector;
+use citadel_bindings::SecretProtector;
 use citadel_stacks::{
     ResolvedStackBindings, ResourceBindingSnapshot, StackBinding, StackBindingResolverPort,
     StackError,
@@ -20,10 +20,7 @@ pub struct PostgresStackBindingResolver {
 }
 
 impl PostgresStackBindingResolver {
-    pub fn new(
-        pool: PgPool,
-        protector: Arc<dyn ResourceSecretProtector>,
-    ) -> Result<Self, StackError> {
+    pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, StackError> {
         Ok(Self {
             pool: pool.clone(),
             secrets: PostgresSecretValueResolver::new(pool, protector)

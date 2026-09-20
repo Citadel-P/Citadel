@@ -28,7 +28,7 @@ use chrono::Timelike;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
 
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 
 use citadel_execution::{OutputLimitPolicy, ProcessError, ProcessLimits, ProcessRequest, run};
 

@@ -92,7 +92,7 @@ pub(super) async fn resource_health(
                 let Some(_permit) = budget.enter(&cancellation).await else {
                     return (target, None);
                 };
-                if target.connector_type == "EdgeAgent" {
+                if target.connector_type == citadel_platforms::ConnectorKind::EdgeAgent {
                     let health = match edge_health(&pool, target.id).await {
                         Ok(health) => health,
                         Err(error) => {
@@ -103,15 +103,16 @@ pub(super) async fn resource_health(
                     return (target, health);
                 }
                 let selected;
-                let runtime: &dyn PlatformHealthPort = if target.connector_type == "Local" {
-                    &docker
-                } else {
-                    let Some(agent) = target.agent.as_ref() else {
-                        return (target, None);
+                let runtime: &dyn PlatformHealthPort =
+                    if target.connector_type == citadel_platforms::ConnectorKind::Local {
+                        &docker
+                    } else {
+                        let Some(agent) = target.agent.as_ref() else {
+                            return (target, None);
+                        };
+                        selected = agent.as_ref().clone();
+                        &selected
                     };
-                    selected = agent.as_ref().clone();
-                    &selected
-                };
                 let healthy = probe_health(runtime, &cancellation, Duration::from_secs(2)).await;
                 (target, Some(healthy))
             }
@@ -140,8 +141,8 @@ pub(super) async fn resource_health(
                     state.online = None;
                     continue;
                 }
-                if target.connector_type != "EdgeAgent" {
-                    if target.connector_type == "Local" {
+                if target.connector_type != citadel_platforms::ConnectorKind::EdgeAgent {
+                    if target.connector_type == citadel_platforms::ConnectorKind::Local {
                         let _ = local.try_send(());
                     } else {
                         agent_trigger.request(Some(target.id));

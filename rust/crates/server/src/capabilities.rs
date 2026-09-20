@@ -1,5 +1,5 @@
-use citadel_domain::PermissionLevel;
 use citadel_identity::PermissionGrant;
+use citadel_primitives::PermissionLevel;
 use serde::Serialize;
 
 #[derive(Debug, Default, Serialize, utoipa::ToSchema)]

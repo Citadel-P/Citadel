@@ -1,6 +1,6 @@
 use super::*;
 use citadel_builds::BuildError;
-use citadel_resources::webhooks::repository_matches;
+use citadel_git::repositories::webhooks::repository_matches;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -66,7 +66,7 @@ pub(super) async fn receive(
         return Ok(WebhookDispatch::noop("Repository identity mismatch"));
     }
     let (_, payload_branch) =
-        citadel_resources::webhooks::webhook_branch(&webhook.provider, headers, body)
+        citadel_git::repositories::webhooks::webhook_branch(&webhook.provider, headers, body)
             .map_err(webhook_auth_error)?;
     let branch = payload_branch
         .as_deref()

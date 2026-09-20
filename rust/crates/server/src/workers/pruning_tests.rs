@@ -63,7 +63,7 @@ async fn pruning_obeys_setting_and_only_deletes_terminal_tasks_without_volumes_o
     let runtime = Arc::new(Runtime::default());
     let service = Arc::new(ContainerMutationService::new(
         Arc::new(
-            citadel_adapters::container_mutation_store::PostgresContainerMutationStore::new(
+            citadel_adapters::container_mutation_store::PostgresContainerRepository::new(
                 pool.clone(),
             ),
         ),

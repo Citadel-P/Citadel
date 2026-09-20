@@ -5,10 +5,9 @@ use citadel_automation::AutomationRepository;
 use citadel_backups::BackupPersistence;
 use citadel_builds::BuildRepository;
 use citadel_deployments::DeploymentRepository;
-use citadel_domain::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_identity::IdentityService;
 use citadel_platforms::PlatformReadService;
-use citadel_resources::ResourceMetadataStore;
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use citadel_stacks::StackRepository;
 use citadel_swarm_services::SwarmServiceRepository;
 use futures_util::TryFutureExt;
@@ -26,12 +25,12 @@ mod tests;
 // browser query policy, copied SQL schema, or second resource cache.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
     pub deployments: Arc<dyn DeploymentRepository>,
     pub stacks: Arc<dyn StackRepository>,
     pub services: Arc<dyn SwarmServiceRepository>,
-    pub resources: Arc<dyn ResourceMetadataStore>,
     pub automation: Arc<dyn AutomationRepository>,
     pub builds: Arc<dyn BuildRepository>,
     pub backups: Arc<dyn BackupPersistence>,
@@ -72,7 +71,7 @@ fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, R
 }
 
 impl ApplicationGroupReader {
-    async fn deployment_permission<P: citadel_domain::PermissionPolicy>(
+    async fn deployment_permission<P: citadel_primitives::PermissionPolicy>(
         &self,
         principal: &ActorPrincipal,
         id: Uuid,
@@ -96,7 +95,7 @@ impl ApplicationGroupReader {
         if p.is_administrator() {
             return Ok(());
         }
-        use citadel_domain::PermissionPolicy;
+        use citadel_primitives::PermissionPolicy;
         let workload_requirement = match (kind, specific) {
             (ResourceType::Stack, None) => {
                 Some(citadel_stacks::permissions::ReadStack::REQUIREMENT)
@@ -312,6 +311,7 @@ impl ApplicationGroupReader {
                         .platforms
                         .get_platform(e.unwrap().platform_id.unwrap())
                         .await
+                        .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
                         .map_err(failure)?
                         .ok_or(RealtimeReadError::Authorization)?;
                     if self
@@ -335,6 +335,12 @@ impl ApplicationGroupReader {
                     self.platforms
                         .list_authorized(actor, admin, &[])
                         .await
+                        .map(|value| {
+                            value
+                                .into_iter()
+                                .map(crate::platforms_http::views::PlatformView::from)
+                                .collect::<Vec<_>>()
+                        })
                         .map_err(failure)?,
                     RowStyle::Platforms,
                 )
@@ -344,6 +350,12 @@ impl ApplicationGroupReader {
                     .platforms
                     .list_containers(id.unwrap())
                     .await
+                    .map(|value| {
+                        value
+                            .into_iter()
+                            .map(crate::platforms_http::views::ContainerView::from)
+                            .collect::<Vec<_>>()
+                    })
                     .map_err(failure)?;
                 if sample {
                     let stats = map_stats(e.unwrap(), &containers);
@@ -357,7 +369,7 @@ impl ApplicationGroupReader {
                 }
                 event(
                     "ImagesInfoUpdated",
-                    json!({"images":self.platforms.list_images(id.unwrap()).await.map_err(failure)?}),
+                    json!({"images":self.platforms.list_images(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
                 )
             }
             Topic::DockerDaemon(..) => {
@@ -373,6 +385,12 @@ impl ApplicationGroupReader {
                         self.platforms
                             .list_containers(id.unwrap())
                             .await
+                            .map(|value| {
+                                value
+                                    .into_iter()
+                                    .map(crate::platforms_http::views::ContainerView::from)
+                                    .collect::<Vec<_>>()
+                            })
                             .map_err(failure)?,
                         RowStyle::DockerResource,
                     )?
@@ -384,6 +402,12 @@ impl ApplicationGroupReader {
                         self.platforms
                             .list_images(id.unwrap())
                             .await
+                            .map(|value| {
+                                value
+                                    .into_iter()
+                                    .map(crate::platforms_http::views::ImageView::from)
+                                    .collect::<Vec<_>>()
+                            })
                             .map_err(failure)?,
                         RowStyle::DockerResource,
                     )?
@@ -391,12 +415,12 @@ impl ApplicationGroupReader {
                 );
                 result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
                     "platformId":id,
-                    "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map_err(failure)?},
-                    "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map_err(failure)?},
-                    "tasks":{"items":self.platforms.list_swarm_tasks(id.unwrap(),None,1000).await.map_err(failure)?},
-                    "networks":{"items":self.platforms.list_swarm_networks(id.unwrap()).await.map_err(failure)?},
-                    "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map_err(failure)?},
-                    "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map_err(failure)?},
+                    "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmNodeView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmServiceView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "tasks":{"items":self.platforms.list_swarm_tasks(id.unwrap(),None,1000).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmTaskView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "networks":{"items":self.platforms.list_swarm_networks(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmNetworkView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmSecretView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map(|value| value.into_iter().map(crate::platforms_http::views::SwarmConfigView::from).collect::<Vec<_>>()).map_err(failure)?},
                 })]));
                 Ok(result)
             }
@@ -458,6 +482,12 @@ impl ApplicationGroupReader {
                     .platforms
                     .list_containers(platform)
                     .await
+                    .map(|value| {
+                        value
+                            .into_iter()
+                            .map(crate::platforms_http::views::ContainerView::from)
+                            .collect::<Vec<_>>()
+                    })
                     .map_err(failure)?
                     .into_iter()
                     .filter(|c| c.stack_id == id)
@@ -497,7 +527,7 @@ impl ApplicationGroupReader {
             ),
             Topic::GitRepositories => rows(
                 "GitRepositoryInfoUpdated",
-                self.resources
+                self.git_repositories
                     .list_git_repositories(actor, admin)
                     .await
                     .map_err(failure)?
@@ -509,7 +539,7 @@ impl ApplicationGroupReader {
             Topic::GitRepo(..) => rows(
                 "GitRepositoryInfoUpdated",
                 vec![
-                    self.resources
+                    self.git_repositories
                         .get_git_repository(id.unwrap())
                         .map_ok(crate::api::git::repositories::views::GitRepositoryView::from)
                         .await
@@ -701,6 +731,7 @@ impl ApplicationGroupReader {
             .platforms
             .get_container(id)
             .await
+            .map(|value| value.map(crate::platforms_http::views::ContainerView::from))
             .map_err(failure)?
             .ok_or(RealtimeReadError::Authorization)?;
         let mut allowed = p.is_administrator();
@@ -730,10 +761,10 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
-        let kind: citadel_domain::ActivityResourceType =
+        let kind: citadel_activities::ActivityResourceType =
             serde_json::from_value(json!(g.reference()))
                 .map_err(|_| RealtimeReadError::Authorization)?;
-        use citadel_domain::ActivityResourceType as A;
+        use citadel_activities::ActivityResourceType as A;
         if matches!(
             kind,
             A::User | A::Team | A::Role | A::ServiceAccount | A::OidcProvider | A::License
@@ -818,7 +849,7 @@ impl GroupReadPort for ApplicationGroupReader {
 }
 
 fn container_data(
-    container: citadel_platforms::ContainerView,
+    container: crate::platforms_http::views::ContainerView,
     event: Option<&PublishedRuntimeEvent>,
 ) -> Value {
     let mut value = container.runtime_data();
@@ -841,7 +872,7 @@ fn container_data(
 
 fn map_stats(
     event: &PublishedRuntimeEvent,
-    containers: &[citadel_platforms::ContainerView],
+    containers: &[crate::platforms_http::views::ContainerView],
 ) -> Vec<Value> {
     let Some(stats) = event.payload["stats"].as_array() else {
         return vec![];

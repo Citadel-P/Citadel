@@ -1,9 +1,9 @@
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeletePlatformsInput {
     pub ids: Vec<Uuid>,
@@ -34,7 +34,7 @@ pub enum PlatformDeletionError {
     Storage(String),
 }
 
-pub trait PlatformDeletionStore: Send + Sync {
+pub trait PlatformDeletionRepository: Send + Sync {
     /// Atomically remove registrations and record audit snapshots; never mutate Docker.
     fn delete<'a>(
         &'a self,

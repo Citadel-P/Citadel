@@ -1,8 +1,9 @@
-use citadel_domain::{ActorId, ResourceType};
-use citadel_resources::{
-    GlobalSearchMatch, GlobalSearchParent, GlobalSearchStore, ResourceMetadataError,
-    ValidatedSearch,
-};
+use citadel_discovery::GlobalSearchMatch;
+use citadel_discovery::GlobalSearchParent;
+use citadel_discovery::GlobalSearchReader;
+use citadel_discovery::SearchError;
+use citadel_discovery::ValidatedSearch;
+use citadel_primitives::{ActorId, ResourceType};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -16,13 +17,13 @@ impl PostgresGlobalSearchStore {
     }
 }
 
-impl GlobalSearchStore for PostgresGlobalSearchStore {
+impl GlobalSearchReader for PostgresGlobalSearchStore {
     fn search<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         query: &'a ValidatedSearch,
-    ) -> BoxFuture<'a, Result<Vec<GlobalSearchMatch>, ResourceMetadataError>> {
+    ) -> BoxFuture<'a, Result<Vec<GlobalSearchMatch>, SearchError>> {
         Box::pin(async move {
             let escaped = query
                 .query
@@ -87,10 +88,10 @@ impl GlobalSearchStore for PostgresGlobalSearchStore {
         })
     }
 }
-fn storage(error: sqlx::Error) -> ResourceMetadataError {
-    ResourceMetadataError::Storage(error.to_string())
+fn storage(error: sqlx::Error) -> SearchError {
+    SearchError::Storage(error.to_string())
 }
-fn resource_type(kind: i32) -> Result<ResourceType, ResourceMetadataError> {
+fn resource_type(kind: i32) -> Result<ResourceType, SearchError> {
     ResourceType::from_i32(kind)
-        .ok_or_else(|| ResourceMetadataError::Storage("Invalid search resource type.".into()))
+        .ok_or_else(|| SearchError::Storage("Invalid search resource type.".into()))
 }

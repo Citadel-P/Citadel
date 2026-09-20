@@ -80,13 +80,12 @@ pub(super) fn redact_runtime_messages(result: &mut StackRuntimeResult, secrets: 
     }
 }
 
-pub(super) fn orchestration(platform_type: &str) -> Result<StackOrchestrationMode, StackError> {
+pub(super) fn orchestration(
+    platform_type: &citadel_platforms::PlatformKind,
+) -> StackOrchestrationMode {
     match platform_type {
-        "Docker" => Ok(StackOrchestrationMode::DockerCompose),
-        "DockerSwarm" => Ok(StackOrchestrationMode::DockerSwarm),
-        _ => Err(validation(
-            "Stacks require a Docker or Docker Swarm Platform.",
-        )),
+        citadel_platforms::PlatformKind::Docker => StackOrchestrationMode::DockerCompose,
+        citadel_platforms::PlatformKind::DockerSwarm => StackOrchestrationMode::DockerSwarm,
     }
 }
 

@@ -1,13 +1,12 @@
 use chrono::{DateTime, Utc};
-use citadel_domain::{
-    ActivityEvent, ActivityEventInfo, ActorId, AuthenticatedPrincipalType, PermissionLevel,
-    ResourceType,
-};
+use citadel_activities::{ActivityEvent, ActivityEventInfo};
+use citadel_identity::AuthenticatedPrincipalType;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, AuthorizationSnapshot, EntitlementService, IdentityError,
     IdentityStore, NewSession, PermissionGrant, ServiceAccountCredential,
     ServiceAccountLastUsedStore, SessionMetadata, User, UserAuthentication, UserSessionRecord,
 };
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -44,7 +43,7 @@ impl IdentityStore for PostgresIdentityStore {
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
-        mode: citadel_domain::SetupInitializationMode,
+        mode: citadel_identity::SetupInitializationMode,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
@@ -125,7 +124,11 @@ WHERE id = 1 AND initializedat IS NULL
                 ActivityEventInfo::InitialAdministratorCreated {
                     user_id: administrator.id(),
                     user_name: administrator.name().to_owned(),
-                    mode,
+                    mode: match mode {
+                        citadel_identity::SetupInitializationMode::Interactive => "Interactive",
+                        citadel_identity::SetupInitializationMode::Unattended => "Unattended",
+                    }
+                    .to_owned(),
                 },
                 administrator.created_at(),
             )
@@ -684,7 +687,7 @@ ORDER BY p.resourcetype
                                 "unknown persisted PermissionLevel value {level}"
                             ))
                         })?,
-                        specifics: citadel_domain::SpecificPermissions::from_bits_retain(
+                        specifics: citadel_primitives::SpecificPermissions::from_bits_retain(
                             row.try_get::<i32, _>("specificpermissions")
                                 .map_err(storage)? as u32,
                         ),
@@ -758,7 +761,7 @@ FROM candidates
                         "unknown persisted PermissionLevel value {level}"
                     ))
                 })?,
-                specifics: citadel_domain::SpecificPermissions::from_bits_retain(
+                specifics: citadel_primitives::SpecificPermissions::from_bits_retain(
                     row.try_get::<Option<i32>, _>("specificpermissions")
                         .map_err(storage)?
                         .unwrap_or_default() as u32,
@@ -931,7 +934,7 @@ impl citadel_alerts::AlertEntitlements for StaticEntitlementService {
 impl citadel_deployments::DeploymentEntitlementPort for StaticEntitlementService {
     fn enabled(
         &self,
-        _capability: citadel_domain::LicenseCapability,
+        _capability: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, citadel_deployments::DeploymentError>> {
         Box::pin(async move { Ok(self.custom_access_control) })
     }

@@ -12,12 +12,12 @@ use crate::{
     AutoUpdateState, SwarmServiceDetails, SwarmServiceError, SwarmServiceImageInfo,
     SwarmServiceService,
 };
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 
 pub trait ServiceAutomationEntitlements: Send + Sync {
     fn enabled(
         &self,
-        capability: citadel_domain::LicenseCapability,
+        capability: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, SwarmServiceError>>;
 }
 
@@ -136,7 +136,7 @@ impl SwarmServiceService {
         cancellation: &CancellationToken,
     ) -> Result<ServiceUpdateOutcome, SwarmServiceError> {
         use crate::{ServiceOperationKind, ServiceOperationRequest, UpdateBehavior};
-        use citadel_domain::LicenseCapability;
+        use citadel_licensing::LicenseCapability;
         if snapshot.spec.update_behavior == UpdateBehavior::Disabled {
             return Ok(ServiceUpdateOutcome::Noop(
                 "Service image updates are disabled.",

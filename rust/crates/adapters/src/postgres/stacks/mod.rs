@@ -1,9 +1,10 @@
 use chrono::Utc;
-use citadel_domain::{
+use citadel_activities::{
     ActivityEvent, ActivityEventInfo, ActivityResourceType, ActivitySourceResource, ActivityStatus,
-    ActorId, StackActivitySnapshot, StackResultActivitySnapshot,
+    StackActivitySnapshot, StackResultActivitySnapshot,
 };
-use citadel_domain::{
+use citadel_primitives::ActorId;
+use citadel_primitives::{
     EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
     SpecificPermissions,
 };

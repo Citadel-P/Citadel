@@ -1,6 +1,6 @@
 use super::*;
 use citadel_adapters::global_search::PostgresGlobalSearchStore;
-use citadel_domain::ResourceType;
+use citadel_primitives::ResourceType;
 
 // Ports all GlobalSearchTests scenarios: ranking, literal LIKE characters,
 // per-resource grants, parent redaction, Swarm Services, role/team grants and validation.

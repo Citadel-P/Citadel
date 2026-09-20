@@ -1,8 +1,9 @@
 //! Operation outcomes are established by a complete, identity-validated manager
 //! snapshot. A failed inspection is never evidence that a Service is absent.
 use chrono::{DateTime, Utc};
-use citadel_domain::{ActivityEventInfo, ActivityStatus, ActorId};
+use citadel_activities::{ActivityEventInfo, ActivityStatus};
 use citadel_platforms::{RuntimeInventorySnapshot, RuntimeSwarmInventory, RuntimeSwarmService};
+use citadel_primitives::ActorId;
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 

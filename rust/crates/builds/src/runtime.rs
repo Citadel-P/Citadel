@@ -31,6 +31,6 @@ pub trait BuildRegistryCredentialResolver: Send + Sync {
 pub trait BuildEntitlements: Send + Sync {
     fn enabled(
         &self,
-        capability: citadel_domain::LicenseCapability,
+        capability: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, BuildError>>;
 }

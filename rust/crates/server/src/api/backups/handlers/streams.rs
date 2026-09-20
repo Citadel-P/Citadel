@@ -113,7 +113,7 @@ fn response(
                 }
             };
             let authorized=state.identity.permission_for_resource(&principal,ResourceType::BackupPolicy,policy_id).await;
-            if !authorized.ok().flatten().is_some_and(|p|p.level.grants(PermissionLevel::Execute) && (!restore || p.has_specific(citadel_domain::SpecificPermission::Restore))) {break;}
+            if !authorized.ok().flatten().is_some_and(|p|p.level.grants(PermissionLevel::Execute) && (!restore || p.has_specific(citadel_primitives::SpecificPermission::Restore))) {break;}
             if let Some(item)=update && !is_terminal(item.status.as_deref().unwrap_or("Running")) {
                 received_output |= item.status.is_none();
                 yield Ok(encode((*item).clone(),restore,true));

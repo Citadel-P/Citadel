@@ -1,31 +1,51 @@
+pub mod dto;
+
 use crate::request_validation::ValidatedJson;
+
 use std::net::SocketAddr;
+
 use std::sync::Arc;
 
 use axum::Json;
+
 use axum::Router;
+
 use axum::extract::{ConnectInfo, Extension, State};
+
 use axum::http::header::{
     AUTHORIZATION, CACHE_CONTROL, COOKIE, PRAGMA, SET_COOKIE, WWW_AUTHENTICATE,
 };
+
 use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
+
 use axum::middleware::Next;
+
 use axum::response::{IntoResponse, Response};
+
 use chrono::{DateTime, Utc};
+
 use citadel_identity::ActorPrincipal;
+
 use citadel_identity::{
-    BrowserAuthenticationAction, IdentityError, IdentityService, InitializeCitadelRequest,
-    LoginRequest, MfaService, SessionMetadata,
+    BrowserAuthenticationAction, IdentityError, IdentityService, MfaService, SessionMetadata,
 };
+
+use crate::identity_http::dto::{InitializeCitadelRequest, LoginRequest};
+
 use serde::Serialize;
 
 use crate::Readiness;
+
 use crate::openapi::router::OpenApiRouterExt;
 
 pub(crate) const REFRESH_COOKIE: &str = "refresh_token";
+
 pub(crate) const MFA_CHALLENGE_COOKIE: &str = "citadel_mfa_challenge";
+
 pub(crate) const MFA_SETUP_COOKIE: &str = "citadel_mfa_setup";
+
 const API_COOKIE_PATH: &str = "/api/v1";
+
 const REQUEST_ID: &str = "x-request-id";
 
 #[derive(Clone)]
@@ -78,7 +98,7 @@ pub async fn authentication_middleware(
 )]
 async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap) -> Response {
     match state.identity.setup_status().await {
-        Ok(status) => no_store(Json(status).into_response()),
+        Ok(status) => no_store(Json(dto::SetupStatusView::from(status)).into_response()),
         Err(error) => identity_error_response(error, &headers),
     }
 }
@@ -91,7 +111,7 @@ async fn setup_status(State(state): State<IdentityHttpState>, headers: HeaderMap
     summary = "Initialize Citadel",
     request_body = InitializeCitadelRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::identity_http::dto::LoginResponse, content_type = "application/json"),
         crate::openapi::errors::InitializationErrors
     ),
     security(),
@@ -103,12 +123,18 @@ async fn initialize(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<InitializeCitadelRequest>,
 ) -> Response {
+    let request: citadel_identity::InitializeCitadel = request.into();
     let metadata = session_metadata(&headers, connect);
     match state.mfa.initialize(request, metadata).await {
         Ok(result) => {
             state.readiness.set_setup(true);
             with_authentication_action(
-                no_store(Json(result.response).into_response()),
+                no_store(
+                    Json(crate::identity_http::dto::LoginResponse::from(
+                        result.response,
+                    ))
+                    .into_response(),
+                ),
                 result.action,
                 state.secure_cookies,
             )
@@ -125,7 +151,7 @@ async fn initialize(
     summary = "Sign in",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Success", body = citadel_identity::LoginResponse, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token on success, or citadel_mfa_challenge / citadel_mfa_setup when MFA is required. Multiple Set-Cookie headers may be returned."))),
+        (status = 200, description = "Success", body = crate::identity_http::dto::LoginResponse, content_type = "application/json", headers(("Set-Cookie" = String, description = "Sets refresh_token on success, or citadel_mfa_challenge / citadel_mfa_setup when MFA is required. Multiple Set-Cookie headers may be returned."))),
         crate::openapi::errors::LoginErrors
     ),
     security(),
@@ -137,10 +163,16 @@ async fn login(
     headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<LoginRequest>,
 ) -> Response {
+    let request: citadel_identity::Login = request.into();
     let metadata = session_metadata(&headers, connect);
     match state.mfa.login(request, metadata).await {
         Ok(result) => with_authentication_action(
-            no_store(Json(result.response).into_response()),
+            no_store(
+                Json(crate::identity_http::dto::LoginResponse::from(
+                    result.response,
+                ))
+                .into_response(),
+            ),
             result.action,
             state.secure_cookies,
         ),
@@ -788,12 +820,12 @@ mod tests {
     #[test]
     fn administrator_boundary_rejects_non_administrators_and_service_accounts() {
         for principal_type in [
-            citadel_domain::AuthenticatedPrincipalType::User,
-            citadel_domain::AuthenticatedPrincipalType::ServiceAccount,
+            citadel_identity::AuthenticatedPrincipalType::User,
+            citadel_identity::AuthenticatedPrincipalType::ServiceAccount,
         ] {
             let principal = ActorPrincipal {
                 subject_id: uuid::Uuid::now_v7(),
-                actor_id: citadel_domain::ActorId::new(uuid::Uuid::now_v7()),
+                actor_id: citadel_primitives::ActorId::new(uuid::Uuid::now_v7()),
                 name: "reader".to_owned(),
                 principal_type,
                 credential_id: None,
@@ -810,9 +842,9 @@ mod tests {
     fn administrator_boundary_accepts_a_human_admin_role() {
         let principal = ActorPrincipal {
             subject_id: uuid::Uuid::now_v7(),
-            actor_id: citadel_domain::ActorId::new(uuid::Uuid::now_v7()),
+            actor_id: citadel_primitives::ActorId::new(uuid::Uuid::now_v7()),
             name: "owner".to_owned(),
-            principal_type: citadel_domain::AuthenticatedPrincipalType::User,
+            principal_type: citadel_identity::AuthenticatedPrincipalType::User,
             credential_id: None,
             roles: vec!["Admin".to_owned()],
         };

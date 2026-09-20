@@ -1,7 +1,7 @@
 use super::*;
-use citadel_adapters::container_mutation_store::PostgresContainerMutationStore;
-use citadel_domain::ResourceType;
+use citadel_adapters::container_mutation_store::PostgresContainerRepository;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
+use citadel_primitives::ResourceType;
 use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 
@@ -60,7 +60,7 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
     let mut f = fixture().await;
     let runtime = Arc::new(Runtime::default());
     let service = Arc::new(ContainerMutationService::new(
-        Arc::new(PostgresContainerMutationStore::new(f.pool.clone())),
+        Arc::new(PostgresContainerRepository::new(f.pool.clone())),
         runtime.clone(),
     ));
     let mut state = f.lookup_state.platforms.clone();
@@ -256,7 +256,7 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
     let runtime = Arc::new(Runtime::default());
     let mut state = f.lookup_state.platforms.clone();
     state.containers = Arc::new(ContainerMutationService::new(
-        Arc::new(PostgresContainerMutationStore::new(f.pool.clone())),
+        Arc::new(PostgresContainerRepository::new(f.pool.clone())),
         runtime.clone(),
     ));
     f.app = platforms_http::router(state);
@@ -390,7 +390,7 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_claims_are_atomic_parent_aware_and_recovered_without_replaying_commands() {
     let f = fixture().await;
-    let store = Arc::new(PostgresContainerMutationStore::new(f.pool.clone()));
+    let store = Arc::new(PostgresContainerRepository::new(f.pool.clone()));
     let actor = f.administrator.actor_id;
     let container: Uuid = sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1")
         .bind(f.platform_id)

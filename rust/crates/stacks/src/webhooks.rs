@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;

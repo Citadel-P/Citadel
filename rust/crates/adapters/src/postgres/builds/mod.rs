@@ -15,7 +15,7 @@ use citadel_builds::{
     BuildProject, BuildProjectConfiguration, BuildRepository, BuildRun,
 };
 
-use citadel_domain::{ActorId, ResourceType};
+use citadel_primitives::{ActorId, ResourceType};
 
 use futures_util::future::BoxFuture;
 

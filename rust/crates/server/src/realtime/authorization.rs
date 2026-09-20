@@ -2,9 +2,10 @@ use super::{
     PLATFORM_RESOURCE_TYPE, REALTIME_PROTOCOL_VERSION, RealtimeError, RealtimeService,
     protocol::ClientMessage,
 };
-use citadel_domain::{PermissionLevel, ResourceType};
+use crate::platforms_http::views::{ContainerView, PlatformView};
 use citadel_identity::{ActorPrincipal, IdentityService};
-use citadel_platforms::{ContainerView, PlatformReadService, PlatformView};
+use citadel_platforms::PlatformReadService;
+use citadel_primitives::{PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -89,6 +90,7 @@ impl RealtimeReadPort for IdentityRealtimeReader {
             self.platforms
                 .get_platform(platform_id)
                 .await
+                .map(|value| value.map(crate::platforms_http::views::PlatformView::from))
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })
@@ -102,6 +104,12 @@ impl RealtimeReadPort for IdentityRealtimeReader {
             self.platforms
                 .list_containers(platform_id)
                 .await
+                .map(|value| {
+                    value
+                        .into_iter()
+                        .map(crate::platforms_http::views::ContainerView::from)
+                        .collect::<Vec<_>>()
+                })
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))
         })
     }
