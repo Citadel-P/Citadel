@@ -168,7 +168,7 @@ fn shared_scope_keeps_nested_checks_and_excludes_other_resources() {
 #[test]
 fn deployment_architecture_keeps_presentation_out_of_feature_and_persistence() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let feature = crates.join("deployments");
+    let feature = crates.join("features/deployments");
     let manifest = std::fs::read_to_string(feature.join("Cargo.toml")).unwrap();
     for dependency in ["utoipa", "axum", "citadel-server", "citadel-adapters"] {
         assert!(
@@ -178,14 +178,14 @@ fn deployment_architecture_keeps_presentation_out_of_feature_and_persistence() {
     }
     for directory in [
         feature.join("src"),
-        crates.join("adapters/src/postgres/deployments"),
+        crates.join("infrastructure/adapters/src/postgres/deployments"),
     ] {
         check_resource_boundary(&directory);
     }
     for removed in [
-        "deployments/src/model.rs",
-        "deployments/src/service.rs",
-        "adapters/src/deployment_store.rs",
+        "features/deployments/src/model.rs",
+        "features/deployments/src/service.rs",
+        "infrastructure/adapters/src/deployment_store.rs",
         "server/src/deployments_http.rs",
     ] {
         assert!(

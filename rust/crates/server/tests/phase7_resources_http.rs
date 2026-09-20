@@ -112,7 +112,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let _subscriber = hub.subscribe();
     let edge = citadel_adapters::edge::EdgeRegistry::default();
     let cancellation = CancellationToken::new();
-    let build_tasks = citadel_application::DynamicTasks::new(cancellation.clone());
+    let build_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
     let builds = Arc::new(
         BuildService::new(
             Arc::new(citadel_server::api::builds::TrackedBuildTasks::new(

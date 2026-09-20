@@ -1,6 +1,6 @@
 //! Adapt the process-owned tracker to the Deployment feature's admission port.
-use citadel_application::DynamicTasks;
 use citadel_deployments::{DeploymentError, DeploymentTaskSpawner};
+use citadel_runtime::DynamicTasks;
 use futures_util::future::BoxFuture;
 
 pub struct TrackedDeploymentTasks(DynamicTasks);

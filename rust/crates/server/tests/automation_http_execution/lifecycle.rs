@@ -6,7 +6,7 @@ pub(super) async fn verify_request_drop_during_claim(
     actor: ActorId,
     id: Uuid,
     db: &PgPool,
-    tasks: &citadel_application::DynamicTasks,
+    tasks: &citadel_runtime::DynamicTasks,
 ) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while tasks.active() != 0 {
@@ -66,7 +66,7 @@ pub(super) async fn verify(
     actor: ActorId,
     id: Uuid,
     shutdown: &tokio_util::sync::CancellationToken,
-    tasks: &citadel_application::DynamicTasks,
+    tasks: &citadel_runtime::DynamicTasks,
 ) {
     let mut progress = service
         .run(

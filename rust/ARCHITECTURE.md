@@ -6,6 +6,50 @@ in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8, followed b
 Automation and Alerts in Phase 9, then Platforms, Identity and shared Resources in
 Phase 10.
 
+## Workspace groups
+
+The workspace has exactly three directories under `rust/crates`:
+
+```text
+crates/
+  server/                         # API and executable composition root
+  features/
+    deployments/, git/, stacks/, ...
+    primitives/                   # shared actor/permission/redaction vocabulary
+    execution/                    # process requests/results and ProcessRunner port
+    application/                  # remaining activity/license service coordination
+  infrastructure/
+    adapters/                     # existing concrete integration crate
+    database/                     # schema, migrations and migration runner
+    docker-api/                   # generated Docker protocol client
+    contracts/                    # generated Agent protocol definitions
+    processes/                    # bounded OS process execution
+    runtime/                      # task supervision, queues, metrics and I/O budgets
+```
+
+Each existing feature remains a separate Cargo crate. Directory grouping does not
+merge the features into one application crate. Existing package names remain stable;
+`citadel-processes` and `citadel-runtime` explicitly own the extracted implementations.
+Features may depend only on other Features workspace packages. Infrastructure may
+depend on Features and other Infrastructure packages, never Server. Server may
+depend on both to compose implementations. The architecture test checks actual Cargo
+metadata, including build, target-specific and development dependencies.
+
+Git and Automation receive a `ProcessRunner` implementation through constructors.
+Git retains its `GitProcessPort` name as an alias for that shared port. Production
+composition injects Infrastructure's `SystemProcess`. Process cancellation, output
+limits, child termination/reaping and redaction retain their existing behavior.
+Real subprocess/Git integration tests live with Infrastructure; feature unit tests
+use injected process doubles. Runtime utilities have moved out of application services,
+and no Feature depends on the concrete process or hosting runtime crates.
+
+This grouping establishes crate dependency direction. Remaining Phase 11 work includes
+distributing the activity/license coordinator and removing its presentation types.
+Remaining source-level cleanup includes existing SQL in HTTP handlers and feature
+filesystem operations; the folder move does not claim those have been eliminated.
+Historical reports retain the paths recorded at their audit dates. Generators,
+build inputs, development instructions and active architecture checks use current paths.
+
 ## Ownership and dependency direction
 
 Organize by feature-oriented bounded contexts, not workspace-wide domain/application
@@ -26,8 +70,9 @@ consumer-owned port or an existing coordinator for workflows spanning features.
 Do not create common/shared junk drawers, a generic service locator, or an authorization
 framework. `citadel-domain` has been removed: actor/permission/redaction primitives,
 audit models, licensing models and feature vocabulary now have explicit owners.
-`citadel-application` remains a transitional service/process umbrella for the rest
-of Phase 11; it consumes those owners directly.
+`citadel-application` remains a transitional activity/license service crate under
+Features for the rest of Phase 11. Its process-lifecycle utilities now belong to
+`citadel-runtime` under Infrastructure.
 
 Server builds explicit typed components, handing narrow state to routes and separate
 handles to jobs. Configuration is read and validated at startup, then passed as typed
@@ -105,7 +150,7 @@ feature data types, including future resource migrations.
 ## Implemented reference resource: Deployment
 
 ```text
-crates/deployments/src/
+crates/features/deployments/src/
   lib.rs                         # selective exports
   model/{mod,resource,spec,operations}.rs
   repository.rs                  # DeploymentRepository, atomic durable operations
@@ -116,7 +161,7 @@ crates/deployments/src/
   runtime.rs                     # DeploymentRuntime and consumed runtime ports
   tasks.rs                       # DeploymentTaskSpawner, consumer-owned port
   adoption.rs                    # semantic adoption previews and port
-crates/adapters/src/
+crates/infrastructure/adapters/src/
   postgres/deployments/
     mod.rs                       # selective exports
     repository.rs                # PostgresDeploymentRepository, trait delegation
@@ -177,7 +222,7 @@ feature/persistence separation without a legacy exemption.
 ## Implemented multi-resource anatomy: Builds
 
 ```text
-crates/builds/src/
+crates/features/builds/src/
   lib.rs
   projects/{mod,model,commands,patch}.rs
   runs/{mod,model,logs}.rs
@@ -188,7 +233,7 @@ crates/builds/src/
   tasks.rs                       # process-owned pool-test admission port
   permissions.rs                 # named operation requirements
   jobs/completion.rs             # durable Build completion consumers
-crates/adapters/src/
+crates/infrastructure/adapters/src/
   postgres/builds/
     mod.rs
     repository.rs                # trait delegation
@@ -232,7 +277,7 @@ business behavior. `adapters::docker` translates feature models/ports to generat
 DTOs and back, and owns transport, daemon compatibility, streaming and semantic error
 translation. Do not expose generated Docker DTOs through feature ports or API Views.
 Phase 3 generates and tests the crate alongside the existing Docker implementation;
-Phase 4 owns production adapter migration. See `crates/docker-api/README.md` for
+Phase 4 owns production adapter migration. See `crates/infrastructure/docker-api/README.md` for
 generation pins, compatibility patches and streaming boundaries.
 
 ## Error and runtime ownership
@@ -338,7 +383,7 @@ The reviewed Phase 8 cross-feature contracts are:
 | Builds → Alerts | `AlertEventSink`, `AlertObservation` | Publish execution outcomes through the observation contract owned by Alerts. |
 | Builds → Tags | `TagSummary` | Tags owns the shared tag projection. |
 | Builds → Git | webhook validation and evaluation | Git owns webhook semantics directly. |
-| Git → Execution | bounded process requests, results and runner | Git CLI execution uses the existing cancellation/output-limit owner; runtime reorganization remains Phase 12. |
+| Git → Execution | bounded process requests, results and `ProcessRunner` | Git receives the concrete Infrastructure runner through its process port. |
 
 These are explicit consumed contracts, not exceptions permitting feature-owned HTTP Views.
 
@@ -374,7 +419,7 @@ and worker runs remain independent of viewers and retain durable recovery.
 | Automation → Alerts | `AlertEventSink`, `AlertObservation` | Report failed execution through the semantic observation contract. |
 | Automation → Git | `RepoWebhookConfig` | Share validated webhook configuration without sharing API schemas. |
 | Automation → Tags | `TagSummary` | Tags owns the shared tag summary projection; server maps it to the wire DTO. |
-| Automation → Execution | bounded process runner | Preserve Deno sandbox, cancellation and output limits; runtime placement remains Phase 12. |
+| Automation → Execution | `ProcessRunner` and bounded process contracts | Infrastructure executes Deno with the existing sandbox, cancellation and output limits. |
 
 No new architecture exemptions are introduced for either feature. Their architecture
 guards cover resource ownership, HTTP separation, persistence projection and detached tasks.
@@ -489,8 +534,8 @@ The separate `citadel-application` cleanup remains for Phase 11:
 |---|---|
 | `activities` ports/service/filter/projections | Activities; public JSON sanitization/mapping to server |
 | `licenses` services/ports/transition jobs | Licensing; request/View/schema types to server |
-| `service_account_last_used` | Identity usage job and bounded notification adapter |
-| bounded_queue, supervisor, polling, dynamic_tasks, io_budget, runtime_signal, runtime_metrics | Dedicated process-runtime support crate |
+| `service_account_last_used` | Moved to `infrastructure/runtime`; implements Identity usage ports |
+| bounded_queue, supervisor, polling, dynamic_tasks, io_budget, runtime_signal, runtime_metrics | Moved to `infrastructure/runtime` |
 
 This correction does not claim completion of all Phase 11 work. Phase 12 still owns
 final process lifecycle/shutdown auditing.

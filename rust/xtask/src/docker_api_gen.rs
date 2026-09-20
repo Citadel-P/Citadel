@@ -29,7 +29,7 @@ struct Patch {
 
 pub fn generate(check: bool) -> Result<()> {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let crate_dir = workspace.join("crates/docker-api");
+    let crate_dir = workspace.join("crates/infrastructure/docker-api");
     let codegen = crate_dir.join("codegen");
     let source: Source = serde_json::from_slice(&fs::read(codegen.join("source.json"))?)?;
     let bytes = fs::read(workspace.join(&source.schema_path))?;

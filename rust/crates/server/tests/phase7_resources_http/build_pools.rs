@@ -477,7 +477,7 @@ async fn verify_edits(
 // Phase 8: the process owns claimed pool tests through shutdown and closes admission.
 async fn verify_shutdown_ownership(db: &sqlx::PgPool, id: Uuid, actor: ActorId) {
     let cancellation = CancellationToken::new();
-    let tasks = citadel_application::DynamicTasks::new(cancellation.clone());
+    let tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
     let checker = Arc::new(WaitingChecker {
         started: tokio::sync::Notify::new(),
     });

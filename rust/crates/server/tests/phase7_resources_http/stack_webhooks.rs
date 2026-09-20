@@ -28,7 +28,7 @@ pub fn service(pool: sqlx::PgPool) -> (Arc<StackService>, Arc<Entitlement>) {
     .unwrap();
     let service = StackService::new(
         Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(
-            citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
         Arc::new(citadel_adapters::postgres::stacks::PostgresStackRepository::new(pool.clone())),
         Arc::new(citadel_adapters::stack_runtime::StackRuntimeRouter::new(

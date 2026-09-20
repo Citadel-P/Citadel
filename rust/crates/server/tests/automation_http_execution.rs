@@ -62,10 +62,11 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     let store = Arc::new(PostgresAutomationRepository::new(db.clone()));
     let webhook_license = Arc::new(webhooks::Entitlement::default());
     let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
 
     let service = Arc::new(
         AutomationService::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
             Arc::new(
                 citadel_server::api::automation::TrackedAutomationTasks::new(
                     automation_tasks.clone(),

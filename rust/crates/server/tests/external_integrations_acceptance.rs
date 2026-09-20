@@ -175,7 +175,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
             .bind(repository).bind(SYSTEM_ACTOR_ID).bind(repo_name).bind(clone_url).bind(account.id).execute(&pool).await.unwrap();
         let git = Arc::new(GitRepositoryExecutionService::new(
             Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())), accounts,
-            Arc::new(GitCli::new(Duration::from_secs(30))), root.join("git"), Duration::from_secs(120)));
+            Arc::new(GitCli::new(std::sync::Arc::new(citadel_processes::SystemProcess), Duration::from_secs(30))), root.join("git"), Duration::from_secs(120)));
         let token = shutdown.child_token();
         let worker_git = git.clone();
         tasks.spawn(async move {
@@ -195,7 +195,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'citadel/acceptance','api_key',1)")
             .bind(secret).bind(secret.to_string()).bind(provider.id).execute(&pool).await.unwrap();
         let stacks = Arc::new(StackService::new(
-Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_application::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
+Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
             Arc::new(StackRuntimeRouter::new(pool.clone(),docker.clone(),None)),
             Arc::new(PostgresStackBindingResolver::new(pool.clone(),protector).unwrap()),
             Arc::new(NoopStackChangeNotifier),shutdown.child_token())
@@ -223,9 +223,9 @@ Arc::new(citadel_server::api::stacks::TrackedStackTasks::new(citadel_application
         inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "one").await;
 
     let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
 
-        let automation=Arc::new(AutomationService::new(
+        let automation=Arc::new(AutomationService::new(std::sync::Arc::new(citadel_processes::SystemProcess),
         Arc::new(citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone())),
         automation_shutdown.clone(),Arc::new(PostgresAutomationRepository::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
             deno_path:"deno".into(),work_root:root.join("automation"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));

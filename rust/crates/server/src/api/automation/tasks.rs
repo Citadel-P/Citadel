@@ -1,5 +1,5 @@
-use citadel_application::DynamicTasks;
 use citadel_automation::{AutomationError, AutomationTaskSpawner};
+use citadel_runtime::DynamicTasks;
 use futures_util::future::BoxFuture;
 
 pub struct TrackedAutomationTasks(DynamicTasks);

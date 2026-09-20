@@ -150,9 +150,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         DeploymentService::new(
             Arc::new(
                 citadel_server::api::deployments::TrackedDeploymentTasks::new(
-                    citadel_application::DynamicTasks::new(
-                        tokio_util::sync::CancellationToken::new(),
-                    ),
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 ),
             ),
             Arc::new(PostgresDeploymentRepository::new(pool.clone())),

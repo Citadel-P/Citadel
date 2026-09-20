@@ -4,7 +4,7 @@ use sqlx::PgPool;
 
 #[derive(Default)]
 pub struct Metrics {
-    dynamic_tasks: Option<citadel_application::DynamicTasks>,
+    dynamic_tasks: Option<citadel_runtime::DynamicTasks>,
     active_tasks: AtomicI64,
     event_queue_depth: AtomicI64,
     docker_events_total: AtomicU64,
@@ -25,7 +25,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn with_dynamic_tasks(mut self, tasks: citadel_application::DynamicTasks) -> Self {
+    pub fn with_dynamic_tasks(mut self, tasks: citadel_runtime::DynamicTasks) -> Self {
         self.dynamic_tasks = Some(tasks);
         self
     }
@@ -180,12 +180,12 @@ impl Metrics {
             pool.size(),
             pool.num_idle(),
         );
-        citadel_application::runtime_metrics::render_runtime_metrics(&mut output);
+        citadel_runtime::runtime_metrics::render_runtime_metrics(&mut output);
         output.push_str(&format!(
             "citadel_dynamic_tasks {}\n",
             self.dynamic_tasks
                 .as_ref()
-                .map_or(0, citadel_application::DynamicTasks::active)
+                .map_or(0, citadel_runtime::DynamicTasks::active)
         ));
         output.push_str("# EOF\n");
         output

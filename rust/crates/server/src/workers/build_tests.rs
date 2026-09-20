@@ -48,7 +48,7 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
     let token = CancellationToken::new();
     let service = Arc::new(BuildService::new(
         Arc::new(crate::api::builds::TrackedBuildTasks::new(
-            citadel_application::DynamicTasks::new(token.clone()),
+            citadel_runtime::DynamicTasks::new(token.clone()),
         )),
         token.clone(),
         store.clone(),
@@ -248,7 +248,7 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
     let token = CancellationToken::new();
     let service = BuildService::new(
         Arc::new(crate::api::builds::TrackedBuildTasks::new(
-            citadel_application::DynamicTasks::new(token.clone()),
+            citadel_runtime::DynamicTasks::new(token.clone()),
         )),
         token.clone(),
         store.clone(),

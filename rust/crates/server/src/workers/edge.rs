@@ -1,8 +1,8 @@
 use crate::realtime::RealtimeHub;
 use citadel_adapters::edge::{EdgeRegistry, EdgeRuntime, EdgeSession, PostgresEdgeStore};
-use citadel_application::IoBudget;
 use citadel_contracts::citadel::edge::v1::EdgeCommandKind;
 use citadel_platforms::jobs::{InventoryCollectionTarget, collect_inventory};
+use citadel_runtime::IoBudget;
 use futures_util::StreamExt;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};

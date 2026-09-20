@@ -2,7 +2,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 #[path = "../support/workload_queries.rs"]
 mod query_counts;
 use super::*;
-use citadel_application::DynamicTasks;
+use citadel_runtime::DynamicTasks;
 use citadel_server::api::swarm_services::TrackedSwarmServiceTasks;
 
 pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {

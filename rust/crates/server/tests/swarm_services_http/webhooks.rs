@@ -64,9 +64,7 @@ pub(super) async fn verify(
         SwarmServiceService::new(
             Arc::new(
                 citadel_server::api::swarm_services::TrackedSwarmServiceTasks::new(
-                    citadel_application::DynamicTasks::new(
-                        tokio_util::sync::CancellationToken::new(),
-                    ),
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 ),
             ),
             Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
@@ -358,14 +356,18 @@ fn router(
             Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             Arc::new(AesGcmSecretProtector::new(&[59; 32]).unwrap()),
         )),
-        Arc::new(citadel_git::GitCli::new(std::time::Duration::from_secs(5))),
+        Arc::new(citadel_git::GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            std::time::Duration::from_secs(5),
+        )),
         std::env::temp_dir().join(format!("unused-service-webhook-git-{}", Uuid::now_v7())),
         std::time::Duration::from_secs(60),
     ));
     let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_application::DynamicTasks::new(automation_shutdown.clone());
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
 
     let automation = Arc::new(citadel_automation::AutomationService::new(
+        std::sync::Arc::new(citadel_processes::SystemProcess),
         Arc::new(
             citadel_server::api::automation::TrackedAutomationTasks::new(automation_tasks.clone()),
         ),

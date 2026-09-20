@@ -18,7 +18,7 @@ fn sources(path: &Path) -> Vec<PathBuf> {
 fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for feature in ["builds", "git", "backups", "automation", "alerts"] {
-        for path in sources(&crates.join(feature).join("src")) {
+        for path in sources(&crates.join("features").join(feature).join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
                 "AutomationActionView",
@@ -46,7 +46,9 @@ fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
                 );
             }
         }
-        let facade = std::fs::read_to_string(crates.join(feature).join("src/lib.rs")).unwrap();
+        let facade =
+            std::fs::read_to_string(crates.join("features").join(feature).join("src/lib.rs"))
+                .unwrap();
         assert!(
             !facade
                 .lines()
@@ -66,6 +68,7 @@ fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
         for resource in resources {
             assert!(
                 crates
+                    .join("features")
                     .join(feature)
                     .join("src")
                     .join(resource)
@@ -79,7 +82,11 @@ fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
 fn migrated_postgres_maps_semantic_data_without_http_projection() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for feature in ["builds", "git", "backups", "automation", "alerts"] {
-        for path in sources(&crates.join("adapters/src/postgres").join(feature)) {
+        for path in sources(
+            &crates
+                .join("infrastructure/adapters/src/postgres")
+                .join(feature),
+        ) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
                 "AutomationActionView",

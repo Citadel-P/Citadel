@@ -16,7 +16,7 @@ pub(super) async fn local_container_stats(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
-        let _cycle = citadel_application::runtime_metrics::RuntimeWork::LocalStats.start();
+        let _cycle = citadel_runtime::runtime_metrics::RuntimeWork::LocalStats.start();
         let Some(platform_id) = context
             .targets
             .snapshot()
