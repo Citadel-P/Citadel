@@ -92,7 +92,13 @@ pub(crate) async fn capture(
         |s| (&s.config_ids, &s.config_mounts),
     )?);
     let mut tx = pool.begin().await.map_err(runtime_error)?;
-    let row = sqlx::query("SELECT p.clusterid,p.platformdescriptor FROM platforms p JOIN stacks s ON s.id=$2 JOIN stackreleases r ON r.id=$3 AND r.stackid=s.id AND r.platformid=p.id WHERE p.id=$1 AND s.currentstackreleaseid=r.id AND s.rowversion=$4 AND s.controlstate='Processing' AND r.status='Applying' FOR UPDATE OF p,s,r")
+    // Match inventory: acquire the platform before resource/child rows.
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(claim.platform_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(runtime_error)?;
+    let row = sqlx::query("SELECT p.clusterid,p.platformdescriptor FROM platforms p JOIN stacks s ON s.id=$2 JOIN stackreleases r ON r.id=$3 AND r.stackid=s.id AND r.platformid=p.id WHERE p.id=$1 AND s.currentstackreleaseid=r.id AND s.rowversion=$4 AND s.controlstate='Processing' AND r.status='Applying' FOR NO KEY UPDATE OF s,r")
         .bind(claim.platform_id).bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(runtime_error)?
         .ok_or_else(|| StackError::Conflict("The Stack operation changed before immutable resources could be recorded.".into()))?;
     if !citadel_platforms::swarm_mutations::manager_matches(

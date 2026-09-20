@@ -30,7 +30,7 @@ RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry
 
 FROM docker.io/library/docker@sha256:f7d048590d889e00868920f658e807ecbc4ef662d51c9af67eb5534a447d58d6 AS docker-cli
 FROM docker.io/denoland/deno@sha256:b0e1bf78aea23abe03edf5c411cb9db3e1011d8659bfdeafcb80c1f53cdd71d7 AS deno
-FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime-base
 
 WORKDIR /app
 ARG TARGETARCH
@@ -46,14 +46,16 @@ RUN chmod +x install-server-deps.sh \
     && rm install-server-deps.sh
 
 RUN mkdir -p /app/data && chown -R 65532:0 /app
-COPY --from=build --chown=65532:0 /tmp/citadel-server /app/citadel-server
-
-COPY --from=frontend-build /source/frontend/dist /app/wwwroot
-ENV CITADEL_RUST_STATIC_ROOT=/app/wwwroot
-
 USER 65532:0
 EXPOSE 8000 8001
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \
     CMD ["/app/citadel-server", "healthcheck"]
 ENTRYPOINT ["/app/citadel-server"]
 CMD ["serve"]
+
+# Development mounts the local Cargo binary into runtime-base, reusing its cache.
+# The default production image still contains the release binary and built UI.
+FROM runtime-base AS final
+COPY --from=build --chown=65532:0 /tmp/citadel-server /app/citadel-server
+COPY --from=frontend-build /source/frontend/dist /app/wwwroot
+ENV CITADEL_RUST_STATIC_ROOT=/app/wwwroot

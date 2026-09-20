@@ -2,6 +2,32 @@ use citadel_docker_api::models::*;
 use serde_json::{Value, json};
 
 #[test]
+fn container_inspection_preserves_unpublished_and_published_port_bindings() {
+    // Docker returns null for an exposed port without a host binding (e.g. Redis).
+    let ports = json!({
+        "6379/tcp": null,
+        "6380/tcp": [],
+        "8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18080"}]
+    });
+    let inspected: ContainerInspectResponse = serde_json::from_value(json!({
+        "Id": "redis-fixture",
+        "State": {"Status": "running", "Running": true},
+        "NetworkSettings": {"Ports": ports},
+        "HostConfig": {"PortBindings": ports}
+    }))
+    .expect("unpublished ports must not break post-start inspection");
+    let encoded = serde_json::to_value(inspected).unwrap();
+    assert_eq!(encoded["NetworkSettings"]["Ports"], ports);
+    assert_eq!(encoded["HostConfig"]["PortBindings"], ports);
+    assert!(
+        serde_json::from_value::<ContainerInspectResponse>(json!({
+            "NetworkSettings": {"Ports": {"6379/tcp": "invalid"}}
+        }))
+        .is_err()
+    );
+}
+
+#[test]
 fn task_name_and_unknown_response_properties_are_compatible() {
     let task: Task = serde_json::from_value(json!({
         "ID": "task-1", "ServiceID": "service-1", "FutureDaemonField": {"enabled": true}

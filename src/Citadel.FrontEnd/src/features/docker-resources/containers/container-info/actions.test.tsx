@@ -49,12 +49,12 @@ const ContainerActionContext = ({
 );
 
 describe('container detail management action', () => {
-  it('opens deployment adoption with the persisted container id', async () => {
+  it('opens adoption for an unassigned container with old ownership labels', async () => {
     const user = userEvent.setup();
 
     render(
       <ContainerActionContext>
-        <ContainerInfoActions.adopt resource={standaloneContainer} />
+        <ContainerInfoActions.adopt resource={{ ...standaloneContainer, hasCitadelOwnershipLabels: true }} />
         <LocationProbe />
       </ContainerActionContext>,
     );
@@ -75,7 +75,9 @@ describe('container detail management action', () => {
       getContainerManagementAction({ ...standaloneContainer, deploymentId: 'deployment-id' }, PlatformType.Docker),
     ).toBeUndefined();
     expect(getContainerManagementAction(standaloneContainer, PlatformType.DockerSwarm)).toBeUndefined();
-    expect(getContainerManagementAction(composeContainer, PlatformType.DockerSwarm)).toBe(ContainerInfoActions.importStack);
+    expect(getContainerManagementAction(composeContainer, PlatformType.DockerSwarm)).toBe(
+      ContainerInfoActions.importStack,
+    );
   });
 
   it('opens stack import with the container platform and Compose project', async () => {

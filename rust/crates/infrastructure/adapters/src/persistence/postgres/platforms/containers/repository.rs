@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -64,6 +64,21 @@ impl ContainerRepository for PostgresContainerRepository {
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            // Inventory takes an exclusive Platform lock before its child rows.
+            // Take shared Platform locks first, including for Deployment selectors.
+            let platforms = match selection {
+                ContainerSelectionKind::Containers => {
+                    "SELECT p.id FROM platforms p WHERE p.id IN (SELECT platformid FROM containers WHERE id=ANY($1::uuid[])) ORDER BY p.id FOR SHARE OF p"
+                }
+                ContainerSelectionKind::Deployments => {
+                    "SELECT p.id FROM platforms p WHERE p.id IN (SELECT platformid FROM deployments WHERE id=ANY($1::uuid[])) ORDER BY p.id FOR SHARE OF p"
+                }
+            };
+            sqlx::query(platforms)
+                .bind(ids)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(storage)?;
             let selected_deployments = if selection == ContainerSelectionKind::Deployments {
                 ids
             } else {
@@ -266,14 +281,21 @@ impl ContainerRepository for PostgresContainerRepository {
         state: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR SHARE")
+                .bind(target.platform_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(storage)?;
             if let Some(state) = state {
                 sqlx::query("UPDATE containers SET state=initcap($3),updated=$4,projectionstalesince=NULL,projectionstalereason=NULL,rowversion=rowversion+1 WHERE id=$1 AND containeroperationid=$2 AND dockercontainerid=$5 AND dockernodeid IS NOT DISTINCT FROM $6")
                     .bind(target.id).bind(claim).bind(state).bind(chrono::Utc::now().timestamp()).bind(&target.docker_id).bind(&target.node_id)
-                    .execute(&self.pool).await.map_err(storage)?;
+                    .execute(&mut *tx).await.map_err(storage)?;
             } else {
                 sqlx::query("DELETE FROM containers WHERE id=$1 AND containeroperationid=$2 AND dockercontainerid=$3 AND dockernodeid IS NOT DISTINCT FROM $4")
-                    .bind(target.id).bind(claim).bind(&target.docker_id).bind(&target.node_id).execute(&self.pool).await.map_err(storage)?;
+                    .bind(target.id).bind(claim).bind(&target.docker_id).bind(&target.node_id).execute(&mut *tx).await.map_err(storage)?;
             }
+            tx.commit().await.map_err(storage)?;
             Ok(())
         })
     }
@@ -281,6 +303,7 @@ impl ContainerRepository for PostgresContainerRepository {
     fn finish(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            lock_claim_resources(&mut tx, claim).await?;
             // Parent state is derived from *all* owned containers, not from the requested command.
             sqlx::query("UPDATE deployments d SET status=CASE WHEN EXISTS(SELECT 1 FROM containers c WHERE c.deploymentid=d.id AND lower(c.state)='paused') THEN 'Paused' WHEN EXISTS(SELECT 1 FROM containers c WHERE c.deploymentid=d.id AND lower(c.state)='running') THEN 'Healthy' ELSE 'Stopped' END WHERE containeroperationid=$1")
                 .bind(claim).execute(&mut *tx).await.map_err(storage)?;
@@ -304,6 +327,7 @@ impl ContainerRepository for PostgresContainerRepository {
     fn abandon(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            lock_claim_resources(&mut tx, claim).await?;
             sqlx::query("UPDATE deployments SET status='Unknown' WHERE containeroperationid=$1")
                 .bind(claim)
                 .execute(&mut *tx)
@@ -367,6 +391,38 @@ fn target(row: sqlx::postgres::PgRow) -> ContainerTarget {
         node_id: row.get("dockernodeid"),
     }
 }
+async fn lock_claim_resources(
+    tx: &mut Transaction<'_, Postgres>,
+    claim: Uuid,
+) -> Result<(), RuntimeCapabilityError> {
+    // Include parents: deletion may have already removed every claimed container.
+    // Stable ordering also protects operations spanning multiple Platforms.
+    sqlx::query(
+        "SELECT p.id FROM platforms p WHERE p.id IN (
+            SELECT platformid FROM containers WHERE containeroperationid=$1
+            UNION SELECT platformid FROM deployments WHERE containeroperationid=$1
+            UNION SELECT r.platformid FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.containeroperationid=$1
+        ) ORDER BY p.id FOR SHARE OF p",
+    )
+    .bind(claim)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(storage)?;
+    // Match claim acquisition and Stack operations: parents before release or
+    // container rows, including when finalizing an uncertain runtime outcome.
+    for table in ["deployments", "stacks"] {
+        let statement = format!(
+            "SELECT id FROM {table} WHERE containeroperationid=$1 ORDER BY id FOR NO KEY UPDATE"
+        );
+        sqlx::query(sqlx::AssertSqlSafe(statement))
+            .bind(claim)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(storage)?;
+    }
+    Ok(())
+}
+
 fn conflict() -> RuntimeCapabilityError {
     error(
         RuntimeErrorKind::Conflict,

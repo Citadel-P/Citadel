@@ -123,6 +123,10 @@ pub fn import_runtime_fingerprint(claim: &StackImportClaim) -> String {
     compose_digest(&[
         claim.platform_id.to_string(),
         claim.project_name.clone(),
+        claim
+            .orphaned_owner_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
         format!("{:?}", claim.import_kind),
         claim.service_names.join("\n"),
         claim.runtime_fingerprint.clone(),

@@ -42,7 +42,7 @@ impl PostgresStackRepository {
                 },
             )
             .await?;
-            let row=sqlx::query("SELECT s.*,r.platformid,r.status release_status,r.version,r.spec,p.status platform_status,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR UPDATE OF s,r")
+            let row=sqlx::query("SELECT s.*,r.platformid,r.status release_status,r.version,r.spec,p.status platform_status,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
             ensure_idle(&row)?;
             if options
@@ -213,10 +213,27 @@ impl PostgresStackRepository {
         source: Option<&'a StackReleaseSource>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.stackupdatestate,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' AND s.rowversion=$3 FOR UPDATE OF s,r")
-                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| StackError::Conflict("The Stack operation was superseded.".to_owned()))?;
             let source = source.filter(|_| claim.service_names.is_empty());
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row=sqlx::query("SELECT s.name,s.description,s.stacksource,s.driftpolicy,s.stackupdatestate,r.spec,r.version FROM stacks s JOIN stackreleases r ON r.id=$2 AND r.stackid=s.id WHERE s.id=$1 AND s.currentstackreleaseid=$2 AND s.controlstate='Processing' AND s.rowversion=$3 FOR NO KEY UPDATE OF s,r")
+                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?;
+            let Some(row) = row else {
+                // A committed completion can be retried after its acknowledgement
+                // is lost. Accept only the same version and persisted outcome.
+                let completed: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 AND r.id=$2 AND s.rowversion=$3 AND s.controlstate='Idle' AND r.status=$4 AND r.spec=$5::jsonb AND r.resourcebindings::jsonb=$6::jsonb AND ($7::jsonb IS NULL OR r.source::jsonb=$7::jsonb))")
+                    .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version + 1)
+                    .bind(result.status.as_str()).bind(claim.spec.to_storage_value()?)
+                    .bind(ResourceBindingSnapshot::list_to_storage_value(bindings)?)
+                    .bind(source.map(StackReleaseSource::to_storage_value).transpose()?)
+                    .fetch_one(&mut *tx).await.map_err(storage)?;
+                return if completed {
+                    Ok(())
+                } else {
+                    Err(StackError::Conflict(
+                        "The Stack operation was superseded.".into(),
+                    ))
+                };
+            };
             let update_state = if let Some(source) =
                 source.filter(|source| source.source_type == StackSource::Git)
             {
@@ -302,7 +319,7 @@ impl PostgresStackRepository {
             let status = if unknown { "Applying" } else { "Failed" };
             let control = if unknown { "Processing" } else { "Idle" };
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND rowversion=$3 AND controlstate='Processing' FOR UPDATE")
+            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND rowversion=$3 AND controlstate='Processing' FOR NO KEY UPDATE")
                 .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?.is_none() {
                 return Err(StackError::Conflict("The Stack operation was superseded.".into()));
             }

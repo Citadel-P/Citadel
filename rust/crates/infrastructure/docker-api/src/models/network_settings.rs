@@ -64,7 +64,7 @@ pub struct NetworkSettings {
     pub networks: Option<std::collections::HashMap<String, models::EndpointSettings>>,
     /// PortMap describes the mapping of container ports to host ports, using the container's port-number and protocol as key in the format `<port>/<protocol>`, for example, `80/udp`.  If a container's port is mapped for multiple protocols, separate entries are added to the mapping table.
     #[serde(rename = "Ports", skip_serializing_if = "Option::is_none")]
-    pub ports: Option<std::collections::HashMap<String, Vec<models::PortBinding>>>,
+    pub ports: Option<std::collections::HashMap<String, Option<Vec<models::PortBinding>>>>,
     /// SandboxID uniquely represents a container's network stack.
     #[serde(rename = "SandboxID", skip_serializing_if = "Option::is_none")]
     pub sandbox_id: Option<String>,

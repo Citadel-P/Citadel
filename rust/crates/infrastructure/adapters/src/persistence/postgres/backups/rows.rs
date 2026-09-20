@@ -18,10 +18,12 @@ pub(super) async fn release(
         .execute(&mut **tx)
         .await
         .map_err(storage)?;
-    sqlx::query("UPDATE backuprepositories SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(repo).bind(run).execute(&mut **tx).await.map_err(storage)?;
+    // Match enqueue: policy before repository. Releasing the repository
+    // first can deadlock with a concurrent request holding the policy.
     if let Some(policy) = policy {
         sqlx::query("UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,firstsuccessfulrunat=CASE WHEN $3 THEN COALESCE(firstsuccessfulrunat,CURRENT_TIMESTAMP) ELSE firstsuccessfulrunat END,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(policy).bind(run).bind(success).execute(&mut **tx).await.map_err(storage)?;
     }
+    sqlx::query("UPDATE backuprepositories SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(repo).bind(run).execute(&mut **tx).await.map_err(storage)?;
     Ok(())
 }
 

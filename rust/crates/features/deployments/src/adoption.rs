@@ -227,17 +227,17 @@ pub fn map_draft(
         .as_object()
         .cloned()
         .unwrap_or_default();
-    for key in labels.keys() {
+    if labels.keys().any(|key| {
         let lower = key.to_ascii_lowercase();
-        if lower.starts_with("com.citadel.") || lower.starts_with("x-citadel.") {
-            issue(
-                &mut issues,
-                "CITADEL_OWNERSHIP_LABEL",
-                "Container has existing Citadel ownership labels.",
-                true,
-                Some("spec.labels"),
-            );
-        }
+        lower.starts_with("com.citadel.") || lower.starts_with("x-citadel.")
+    }) {
+        issue(
+            &mut issues,
+            "CITADEL_OWNERSHIP_LABEL",
+            "Previous Citadel ownership labels will not be copied to the deployment.",
+            false,
+            Some("spec.labels"),
+        );
     }
     if labels
         .get("com.docker.compose.project")
@@ -592,7 +592,11 @@ pub fn map_draft(
     let labels: BTreeMap<_, _> = labels
         .into_iter()
         .filter(|(key, _)| {
-            !key.starts_with("com.docker.compose.") && !key.starts_with("com.citadel.")
+            let key = key.to_ascii_lowercase();
+            !key.starts_with("com.docker.compose.")
+                && key != "#extensions"
+                && !key.starts_with("com.citadel.")
+                && !key.starts_with("x-citadel.")
         })
         .collect();
     let spec:DeploymentSpec=serde_json::from_value(json!({

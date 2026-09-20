@@ -120,7 +120,6 @@ async fn exercise_adoption(external: bool) {
     for (system, swarm_task, ownership, control, stack) in [
         (true, false, false, "Idle", None),
         (false, true, false, "Idle", None),
-        (false, false, true, "Idle", None),
         (false, false, false, "Processing", None),
         (false, false, false, "Idle", Some("compose-project")),
     ] {
@@ -137,9 +136,39 @@ async fn exercise_adoption(external: bool) {
         );
         assert!(requests.lock().await.is_empty());
     }
-    sqlx::query("UPDATE containers SET issystem=false,isswarmtask=false,hascitadelownershiplabels=false,controlstate='Idle',stack=NULL WHERE id=$1")
+    sqlx::query("UPDATE containers SET issystem=false,isswarmtask=false,hascitadelownershiplabels=true,controlstate='Idle',stack=NULL WHERE id=$1")
         .bind(id).execute(&f.pool).await.unwrap();
+    for labels in [
+        json!({"com.citadel.managed":"true"}),
+        json!({"com.citadel.managed":"true","com.citadel.deployment-id":"invalid"}),
+        json!({"com.citadel.managed":"true","com.citadel.stack-id":Uuid::now_v7().to_string()}),
+    ] {
+        document.write().await["Config"]["Labels"] = labels;
+        assert_eq!(
+            send(&f, &draft_url, Some(f.administrator.clone()))
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+    }
+    // Labels from a previous installation do not create a current owner.
+    document.write().await["Config"]["Labels"] = json!({
+        "com.citadel.managed": "true",
+        "com.citadel.deployment-id": Uuid::now_v7().to_string(),
+        "example.label": "preserved"
+    });
     let draft = json_body(send(&f, &draft_url, Some(f.administrator.clone())).await).await;
+    assert!(
+        draft["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|issue| issue["severity"] != "Blocker")
+    );
+    assert_eq!(
+        draft["draft"]["spec"]["labels"],
+        json!({"example.label":"preserved"})
+    );
     assert!(!draft.to_string().contains("keep-me-private"));
     assert_eq!(draft["canImportSensitiveEnvironmentValues"], true);
     assert_eq!(draft["draft"]["spec"]["ports"], json!(["8080:80/tcp"]));
@@ -297,6 +326,20 @@ async fn exercise_adoption(external: bool) {
             .expect("Deployment realtime row");
         assert_eq!(realtime, &http);
     }
+    assert_eq!(
+        send(&f, &draft_url, Some(f.administrator.clone()))
+            .await
+            .status(),
+        StatusCode::CONFLICT
+    );
+    // Even if the inventory link is absent, a label naming a live owner must block recovery.
+    sqlx::query("UPDATE containers SET deploymentid=NULL WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    document.write().await["Config"]["Labels"] =
+        json!({"com.citadel.managed":"true","com.citadel.deployment-id":deployment_id.to_string()});
     assert_eq!(
         send(&f, &draft_url, Some(f.administrator.clone()))
             .await

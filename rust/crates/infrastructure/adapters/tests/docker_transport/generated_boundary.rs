@@ -2,6 +2,59 @@ use super::*;
 use citadel_adapters::connectors::docker::DockerError;
 
 #[tokio::test]
+async fn starting_a_container_can_observe_an_unpublished_exposed_port() {
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        for (expected, status, body) in [
+            (
+                "GET /version ",
+                "200 OK",
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
+            ),
+            (
+                "POST /v1.49/containers/redis-fixture/start ",
+                "204 No Content",
+                "",
+            ),
+            (
+                "GET /v1.49/containers/redis-fixture/json ",
+                "200 OK",
+                r#"{"Id":"redis-fixture","State":{"Status":"running","Running":true},"NetworkSettings":{"Ports":{"6379/tcp":null}}}"#,
+            ),
+        ] {
+            let (request, _) = read_terminal_request(&mut socket).await;
+            assert!(request.starts_with(expected), "{request}");
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    client
+        .change_container_state(
+            "redis-fixture",
+            citadel_platforms::containers::ContainerAction::Start,
+        )
+        .await
+        .unwrap();
+    let observed = client.inspect_container("redis-fixture").await.unwrap();
+    assert_eq!(observed.id, "redis-fixture");
+    assert_eq!(observed.state.status, "running");
+    assert!(observed.state.running);
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
 async fn generated_calls_share_a_connection_and_renegotiate_after_bounded_400() {
     let path = temp_socket();
     let listener = UnixListener::bind(&path).unwrap();

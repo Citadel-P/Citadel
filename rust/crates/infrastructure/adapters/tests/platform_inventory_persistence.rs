@@ -18,6 +18,97 @@ use uuid::Uuid;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn inventory_commits_while_a_deployment_is_locked_and_reconciliation_catches_up() {
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    seed_platform(&pool, platform, actor, Uuid::now_v7()).await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,'{}','Created','Idle',$4)")
+        .bind(deployment).bind(format!("concurrent-{deployment}")).bind(platform).bind(actor).execute(&pool).await.unwrap();
+    let mut inventory = snapshot(platform, false);
+    inventory.swarm = None;
+    inventory.info.swarm = None;
+    inventory.containers[0].is_swarm_task = false;
+    inventory.containers[0]
+        .labels
+        .insert("com.citadel.deployment-id".into(), deployment.to_string());
+    inventory.containers[0]
+        .labels
+        .insert("com.citadel.managed".into(), "true".into());
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    sqlx::query("UPDATE deployments SET status='Healthy' WHERE id=$1")
+        .bind(deployment)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut apply = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM deployments WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(deployment)
+        .fetch_one(&mut *apply)
+        .await
+        .unwrap();
+    inventory.containers[0].state = "exited".into();
+    let mut replacement = inventory.containers[0].clone();
+    replacement.id = "replacement".into();
+    inventory.containers.push(replacement);
+    inventory.observed_at += chrono::Duration::seconds(2);
+    tokio::time::timeout(std::time::Duration::from_secs(5), store.persist(&inventory))
+        .await
+        .unwrap()
+        .unwrap();
+    let state: String = sqlx::query_scalar("SELECT state FROM containers WHERE deploymentid=$1")
+        .bind(deployment)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        state, "Exited",
+        "observations commit independently of the deployment lock"
+    );
+    let associated: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM containers WHERE deploymentid=$1")
+            .bind(deployment)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        associated, 2,
+        "a new container's foreign-key check must not block on the deployment lock"
+    );
+    // Simulate a process stopping before reconciliation. A fresh sweep must
+    // derive the status from the committed observation without replaying Docker.
+    apply.commit().await.unwrap();
+    let changed =
+        citadel_adapters::persistence::postgres::platforms::status::reconcile_deployments(
+            &pool, platform, None, false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(changed, 1);
+    let state: String = sqlx::query_scalar("SELECT status FROM deployments WHERE id=$1")
+        .bind(deployment)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "Stopped");
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
         .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
@@ -640,6 +731,115 @@ async fn deployment_status_tracks_container_inventory_without_overwriting_active
         .await
         .unwrap();
     assert_eq!(status, "Applying");
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn removing_replaced_container_preserves_current_deployment_runtime_status() {
+    use citadel_adapters::persistence::postgres::platforms::status::container_event;
+
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    for event in [false, true] {
+        for (state, expected) in [
+            ("running", "Healthy"),
+            ("exited", "Stopped"),
+            ("paused", "Pending"),
+        ] {
+            let platform = Uuid::now_v7();
+            let actor = Uuid::now_v7();
+            seed_platform(&pool, platform, actor, Uuid::now_v7()).await;
+            sqlx::query(
+                "UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1",
+            )
+            .bind(platform)
+            .execute(&pool)
+            .await
+            .unwrap();
+            let deployment = Uuid::now_v7();
+            sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,'{}','Healthy','Idle',$4)")
+                .bind(deployment).bind(format!("replacement-{deployment}")).bind(platform).bind(actor)
+                .execute(&pool).await.unwrap();
+            let store = PostgresInventoryProjectionStore::new(pool.clone());
+            let mut inventory = snapshot(platform, false);
+            inventory.swarm = None;
+            inventory.info.swarm = None;
+            let mut replacement = inventory.containers[0].clone();
+            replacement.id = "replacement".into();
+            replacement.state = state.into();
+            inventory.containers.push(replacement);
+            store.persist(&inventory).await.unwrap();
+            // Apply has linked the replacement before cleanup observes the old
+            // container's removal. Both inventory rows still exist at this point.
+            sqlx::query("UPDATE containers SET deploymentid=$2 WHERE platformid=$1")
+                .bind(platform)
+                .bind(deployment)
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("UPDATE deployments SET status='Healthy' WHERE id=$1")
+                .bind(deployment)
+                .execute(&pool)
+                .await
+                .unwrap();
+            inventory.observed_at += chrono::Duration::seconds(1);
+            if event {
+                container_event(
+                    &pool,
+                    platform,
+                    None,
+                    "container-1",
+                    None,
+                    None,
+                    inventory.observed_at.timestamp(),
+                )
+                .await
+                .unwrap();
+            } else {
+                inventory
+                    .containers
+                    .retain(|container| container.id == "replacement");
+                store.persist(&inventory).await.unwrap();
+            }
+            let actual: String = sqlx::query_scalar("SELECT status FROM deployments WHERE id=$1")
+                .bind(deployment)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(
+                actual, expected,
+                "replacement state={state}, deletion event={event}"
+            );
+            let false_degradations: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='DeploymentDegraded'")
+                .bind(deployment).fetch_one(&pool).await.unwrap();
+            assert_eq!(false_degradations, 0);
+
+            // Removing the final runtime really does degrade the deployment.
+            container_event(
+                &pool,
+                platform,
+                None,
+                "replacement",
+                None,
+                None,
+                inventory.observed_at.timestamp() + 1,
+            )
+            .await
+            .unwrap();
+            let actual: String = sqlx::query_scalar("SELECT status FROM deployments WHERE id=$1")
+                .bind(deployment)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(actual, "Degraded");
+        }
+    }
     pool.close().await;
 }
 
@@ -1949,5 +2149,89 @@ async fn stack_namespace_claims_are_checked_and_imported_associations_are_preser
     let owner: Option<Uuid> = sqlx::query_scalar("SELECT stackid FROM swarmserviceprojections WHERE platformid=$1 AND dockerserviceid='new-namespace-claim'")
         .bind(platform).fetch_one(&pool).await.unwrap();
     assert_eq!(owner, Some(stack));
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn stack_inventory_skips_busy_resources_and_reconciles_on_the_next_sweep() {
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    seed_platform(&pool, platform, actor, Uuid::now_v7()).await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let stack = Uuid::now_v7();
+    let release = Uuid::now_v7();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,driftpolicy,stacksource,stackupdatestate) VALUES($1,$2,$3,'{}','WebEditor','{}')")
+        .bind(stack).bind(stack.to_string()).bind(actor).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,'{}','Healthy','1')")
+        .bind(release).bind(stack).bind(platform).bind(actor).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$2 WHERE id=$1")
+        .bind(stack)
+        .bind(release)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut inventory = snapshot(platform, false);
+    inventory.swarm = None;
+    inventory.info.swarm = None;
+    inventory.containers[0].is_swarm_task = false;
+    inventory.containers[0]
+        .labels
+        .insert("com.citadel.managed".into(), "true".into());
+    inventory.containers[0]
+        .labels
+        .insert("com.citadel.stack-id".into(), stack.to_string());
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    let mut operation = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM stacks WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(stack)
+        .fetch_one(&mut *operation)
+        .await
+        .unwrap();
+    inventory.containers[0].state = "exited".into();
+    let mut replacement = inventory.containers[0].clone();
+    replacement.id = "new-stack-container".into();
+    inventory.containers.push(replacement);
+    inventory.observed_at += chrono::Duration::seconds(2);
+    tokio::time::timeout(std::time::Duration::from_secs(5), store.persist(&inventory))
+        .await
+        .unwrap()
+        .unwrap();
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM containers WHERE stackid=$1 AND state='Exited'")
+            .bind(stack)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 2,
+        "observations must commit while their resource is busy"
+    );
+    let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
+        .bind(release)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "Healthy");
+    operation.commit().await.unwrap();
+    store.persist(&inventory).await.unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
+        .bind(release)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "Stopped");
     pool.close().await;
 }

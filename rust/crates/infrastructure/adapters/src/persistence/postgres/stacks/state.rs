@@ -9,7 +9,9 @@ impl PostgresStackRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let mut claims = Vec::with_capacity(ids.len());
-            for id in ids {
+            let mut ids = ids.to_vec();
+            ids.sort_unstable();
+            for id in &ids {
                 ensure_access(
                     &mut tx,
                     actor,
@@ -18,7 +20,7 @@ impl PostgresStackRepository {
                     policy::ChangeStackState::REQUIREMENT,
                 )
                 .await?;
-                let row = sqlx::query("SELECT s.name,s.controlstate,s.currentstackreleaseid,r.platformid,r.status,r.spec,p.status platform_status,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR UPDATE OF s,r")
+                let row = sqlx::query("SELECT s.name,s.controlstate,s.currentstackreleaseid,r.platformid,r.status,r.spec,p.status platform_status,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR NO KEY UPDATE OF s,r")
                     .bind(id)
                     .fetch_optional(&mut *tx)
                     .await
@@ -116,7 +118,7 @@ impl PostgresStackRepository {
                 }
             };
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let locked = sqlx::query_scalar::<_, String>("SELECT name FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR UPDATE")
+            let locked = sqlx::query_scalar::<_, String>("SELECT name FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR NO KEY UPDATE")
                 .bind(claim.stack_id)
                 .bind(claim.release_id)
                 .bind(claim.actor_id)
@@ -168,7 +170,7 @@ impl PostgresStackRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             for claim in claims {
-                let locked = sqlx::query_scalar::<_, Uuid>("SELECT currentstackreleaseid FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR UPDATE")
+                let locked = sqlx::query_scalar::<_, Uuid>("SELECT currentstackreleaseid FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR NO KEY UPDATE")
                     .bind(claim.stack_id)
                     .bind(claim.release_id)
                     .bind(claim.actor_id)

@@ -103,7 +103,7 @@ describe('system containers', () => {
     expect(isUnmanagedContainer({ isSystem: false, isSwarmTask: true, deploymentId: null, stackId: null })).toBe(false);
   });
 
-  it('does not classify containers with orphaned Citadel ownership labels as unmanaged', () => {
+  it('classifies unassigned containers with old Citadel labels as unmanaged', () => {
     expect(
       isUnmanagedContainer({
         isSystem: false,
@@ -111,7 +111,7 @@ describe('system containers', () => {
         deploymentId: null,
         stackId: null,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('blocks lifecycle actions and mixed bulk selections containing a System container', () => {

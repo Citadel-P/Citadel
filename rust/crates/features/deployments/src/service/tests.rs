@@ -174,6 +174,32 @@ fn operational_guardrails_policy_detects_only_new_auto_deploy_authority() {
 }
 
 #[test]
+fn deployment_error_redaction_preserves_kind_and_formats_runtime_context_once() {
+    let values = vec!["private-token".to_owned(), String::new()];
+    let error = redact_error(
+        DeploymentError::Runtime("Docker rejected private-token".to_owned()),
+        &values,
+    );
+    assert_eq!(
+        error.to_string(),
+        "Deployment runtime is unavailable: Docker rejected ********"
+    );
+    assert!(matches!(error, DeploymentError::Runtime(_)));
+    let error = redact_error(
+        DeploymentError::Validation("Invalid private-token".to_owned()),
+        &values,
+    );
+    assert!(
+        matches!(&error, DeploymentError::Validation(message) if message == "Invalid ********")
+    );
+    assert_eq!(deployment_error_code(&error), 400);
+    assert!(matches!(
+        redact_error(DeploymentError::Cancelled, &values),
+        DeploymentError::Cancelled
+    ));
+}
+
+#[test]
 fn deployment_environment_injects_only_referenced_bindings_and_masks_secrets() {
     let configured = vec![
         "LOG_LEVEL=${LOG_LEVEL}".to_owned(),
@@ -307,6 +333,7 @@ struct TimeoutStore {
     releases: Arc<AtomicUsize>,
     apply_claim: Option<ApplyClaim>,
     apply_completions: Arc<AtomicUsize>,
+    completion_storage_failures: usize,
     apply_failures: Arc<AtomicUsize>,
 }
 
@@ -423,12 +450,25 @@ impl DeploymentRepository for TimeoutStore {
         &'a self,
         _: ActorId,
         _: &'a ApplyClaim,
-        _: &'a RuntimeDeploymentResult,
-        _: Option<&'a str>,
+        result: &'a RuntimeDeploymentResult,
+        digest: Option<&'a str>,
         _: &'a [DeploymentBindingSnapshot],
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
-        self.apply_completions.fetch_add(1, Ordering::Relaxed);
-        async { Ok(()) }.boxed()
+        let attempt = self.apply_completions.fetch_add(1, Ordering::Relaxed);
+        if self.completion_storage_failures > 0 {
+            assert_eq!(result.docker_container_id, "container");
+            assert_eq!(digest, Some("repo@sha256:applied"));
+        }
+        async move {
+            if attempt < self.completion_storage_failures {
+                Err(DeploymentError::Storage(
+                    "database temporarily unavailable".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        .boxed()
     }
 
     fn fail_apply<'a>(
@@ -512,7 +552,7 @@ impl DeploymentRuntime for SuccessfulApplyRuntime {
         async {
             Ok(PreparedDeploymentImage {
                 docker_image_id: "sha256:image".to_owned(),
-                digest: None,
+                digest: Some("repo@sha256:applied".into()),
                 resolved_build: None,
             })
         }
@@ -634,6 +674,7 @@ async fn timed_out_delete_releases_its_claim() {
             releases: Arc::clone(&releases),
             apply_claim: None,
             apply_completions: Arc::new(AtomicUsize::new(0)),
+            completion_storage_failures: 0,
             apply_failures: Arc::new(AtomicUsize::new(0)),
         }),
         Arc::new(PendingRuntime),
@@ -673,6 +714,7 @@ async fn dropping_the_request_does_not_cancel_claim_recovery() {
             releases: Arc::clone(&releases),
             apply_claim: None,
             apply_completions: Arc::new(AtomicUsize::new(0)),
+            completion_storage_failures: 0,
             apply_failures: Arc::new(AtomicUsize::new(0)),
         }),
         Arc::new(SignalledPendingRuntime(Arc::clone(&started))),
@@ -849,6 +891,7 @@ fn apply_store(
             existing_docker_container_id: None,
         }),
         apply_completions: completions,
+        completion_storage_failures: 0,
         apply_failures: failures,
     }
 }
@@ -872,6 +915,7 @@ async fn create_rejects_new_auto_deploy_without_its_entitlement() {
             releases: Arc::new(AtomicUsize::new(0)),
             apply_claim: None,
             apply_completions: Arc::new(AtomicUsize::new(0)),
+            completion_storage_failures: 0,
             apply_failures: Arc::new(AtomicUsize::new(0)),
         }),
         Arc::new(PendingRuntime),
@@ -963,4 +1007,90 @@ async fn rejected_task_admission_releases_delete_and_apply_claims_without_runtim
     assert_eq!(failures.load(Ordering::Relaxed), 1);
     assert_eq!(completions.load(Ordering::Relaxed), 0);
     assert_eq!(service.apply_slots.available_permits(), 4);
+}
+
+#[tokio::test]
+async fn completion_retries_preserve_successful_docker_work_and_do_not_fail_the_claim() {
+    for failures_before_success in [2, usize::MAX] {
+        let id = Uuid::now_v7();
+        let completions = Arc::new(AtomicUsize::new(0));
+        let failures = Arc::new(AtomicUsize::new(0));
+        let commands = Arc::new(Mutex::new(Vec::new()));
+        let mut store = apply_store(id, completions.clone(), failures.clone());
+        store.completion_storage_failures = failures_before_success;
+        let service = DeploymentService::new(
+            Arc::new(TestTasks::default()),
+            Arc::new(store),
+            Arc::new(SuccessfulApplyRuntime {
+                commands: commands.clone(),
+            }),
+            Arc::new(AllowEntitlements),
+            CancellationToken::new(),
+        );
+        let mut progress = service
+            .apply(ActorId::new(Uuid::now_v7()), true, id, true)
+            .await
+            .unwrap();
+        let mut messages = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while let Some(message) = progress.recv().await {
+                messages.push(message);
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(completions.load(Ordering::Relaxed), 3);
+        assert_eq!(failures.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            commands.lock().unwrap().len(),
+            1,
+            "completion retries must never recreate the container"
+        );
+        let output = format!("{messages:?}");
+        if failures_before_success == 2 {
+            assert!(output.contains("Deployment is now running."), "{output}");
+        } else {
+            assert!(
+                output.contains("Container is running, but saving the deployment result failed."),
+                "{output}"
+            );
+        }
+    }
+}
+
+struct UnavailableObservationRuntime;
+impl DeploymentRuntime for UnavailableObservationRuntime {
+    fn delete_container<'a>(
+        &'a self,
+        _: Uuid,
+        _: &'a str,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), DeploymentError>> {
+        unreachable!("recovery must only observe Docker")
+    }
+    fn observe_deployment<'a>(
+        &'a self,
+        _: Uuid,
+        _: Uuid,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<RuntimeDeploymentResult>, DeploymentError>> {
+        async { Err(DeploymentError::Runtime("daemon unavailable".into())) }.boxed()
+    }
+}
+
+#[tokio::test]
+async fn stale_apply_keeps_its_claim_when_the_runtime_cannot_be_observed() {
+    let id = Uuid::now_v7();
+    let completions = Arc::new(AtomicUsize::new(0));
+    let failures = Arc::new(AtomicUsize::new(0));
+    let service = DeploymentService::new(
+        Arc::new(TestTasks::default()),
+        Arc::new(apply_store(id, completions.clone(), failures.clone())),
+        Arc::new(UnavailableObservationRuntime),
+        Arc::new(AllowEntitlements),
+        CancellationToken::new(),
+    );
+    assert_eq!(service.reconcile_stale_applies(1, 10).await.unwrap(), 0);
+    assert_eq!(completions.load(Ordering::Relaxed), 0);
+    assert_eq!(failures.load(Ordering::Relaxed), 0);
 }

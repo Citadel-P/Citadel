@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
 use citadel_adapters::persistence::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
@@ -14,6 +15,85 @@ use citadel_primitives::ActorId;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+async fn apply_completion_does_not_block_unrelated_inventory_on_the_same_platform() {
+    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let store = PostgresDeploymentRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'local','Local',1,0,1048576,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(platform).bind(format!("deployment-concurrency-{platform}")).execute(&pool).await.unwrap();
+    let mut resources = Vec::new();
+    for name in ["first", "second"] {
+        let resource = store
+            .create(actor, true, &external_input(platform, name))
+            .await
+            .unwrap();
+        let claim = store.claim_apply(actor, true, resource.id).await.unwrap();
+        let runtime = RuntimeDeploymentResult {
+            docker_container_id: format!("runtime-{}", resource.id),
+            docker_image_id: "sha256:test".into(),
+            state: RuntimeContainerState::Running,
+        };
+        store
+            .complete_apply(
+                actor,
+                &claim,
+                &runtime,
+                Some("example/web@sha256:current"),
+                &[],
+            )
+            .await
+            .unwrap();
+        resources.push((resource, runtime));
+    }
+    let (first, _) = &resources[0];
+    let (second, runtime) = &resources[1];
+    let claim = store.claim_apply(actor, true, second.id).await.unwrap();
+    let mut inventory = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(platform)
+        .fetch_one(&mut *inventory)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE containers SET state='Exited' WHERE deploymentid=$1")
+        .bind(first.id)
+        .execute(&mut *inventory)
+        .await
+        .unwrap();
+
+    // Completion must finish while inventory still owns another container on
+    // the same platform. A platform-wide gate would time out here.
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        store.complete_apply(actor, &claim, runtime, Some("example/web@sha256:next"), &[]),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    inventory.commit().await.unwrap();
+    assert_eq!(
+        deployment_state(&pool, second.id).await,
+        ("Healthy".into(), "Idle".into())
+    );
+    assert_activity(&pool, second.id, "Success", None).await;
+    let digest: Option<String> =
+        sqlx::query_scalar("SELECT spec->'Image'->>'ResolvedDigest' FROM deployments WHERE id=$1")
+            .bind(second.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(digest.as_deref(), Some("example/web@sha256:next"));
+    pool.close().await;
+}
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
@@ -105,6 +185,58 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
             .and_then(Value::as_str),
         Some("example/web@sha256:current")
     );
+
+    let before: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='DeploymentApplied'",
+    )
+    .bind(completed.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    store
+        .complete_apply(
+            actor,
+            &claim,
+            &running,
+            Some("example/web@sha256:current"),
+            &[],
+        )
+        .await
+        .unwrap();
+    let after: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='DeploymentApplied'",
+    )
+    .bind(completed.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        after, before,
+        "a repeated completion must not duplicate audit history"
+    );
+    let next_claim = store.claim_apply(actor, true, completed.id).await.unwrap();
+    assert!(matches!(
+        store
+            .complete_apply(
+                actor,
+                &claim,
+                &running,
+                Some("example/web@sha256:current"),
+                &[]
+            )
+            .await,
+        Err(DeploymentError::Conflict(_))
+    ));
+    store
+        .complete_apply(
+            actor,
+            &next_claim,
+            &running,
+            Some("example/web@sha256:current"),
+            &[],
+        )
+        .await
+        .unwrap();
 
     let failed = store
         .create(actor, true, &create_input(platform_id, "failed"))

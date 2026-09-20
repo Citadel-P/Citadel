@@ -14,7 +14,9 @@ pub(crate) async fn reconcile(
     let owners: std::collections::HashMap<String, Uuid> = sqlx::query_as(
         "SELECT dockerserviceid,stackid FROM swarmserviceprojections WHERE platformid=$1 AND ownership='CitadelStack' AND stackid IS NOT NULL AND NOT isstale",
     ).bind(snapshot.platform_id).fetch_all(&mut **tx).await?.into_iter().collect();
-    let rows = sqlx::query("SELECT s.id,s.stacksource,s.stackupdatestate,r.id releaseid,r.status,r.spec,r.source FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1 AND s.controlstate='Idle' AND r.status IN ('Unknown','Healthy','Pending','Paused','Degraded','Stopped','TimedOut') ORDER BY s.id FOR UPDATE OF s,r")
+    // Do not wait for a resource while holding its observation rows.
+    // Busy releases are revisited by the next inventory sweep.
+    let rows = sqlx::query("SELECT s.id,s.stacksource,s.stackupdatestate,r.id releaseid,r.status,r.spec,r.source FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1 AND s.controlstate='Idle' AND r.status IN ('Unknown','Healthy','Pending','Paused','Degraded','Stopped','TimedOut') ORDER BY s.id FOR NO KEY UPDATE OF s,r SKIP LOCKED")
         .bind(snapshot.platform_id).fetch_all(&mut **tx).await?;
     for row in rows {
         let stack_id: Uuid = row.try_get("id")?;

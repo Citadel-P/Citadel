@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::time::Duration;
 
 use citadel_adapters::connectors::docker::DockerClient;
@@ -7,10 +8,9 @@ use citadel_database::MigrationRunner;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
 use citadel_stacks::{
-    ComposeProjectRuntimeService, CreateStack, ImportComposeProject, StackDriftPolicy, StackFilter,
-    StackImportClaim, StackImportKind, StackReleaseSource, StackReleaseStatus, StackRepository,
-    StackRuntime, StackRuntimeResult, StackSource, StackSpec, StackSpecCommon, StackUpdateBehavior,
-    UpdateStack,
+    CreateStack, ImportComposeProject, StackDriftPolicy, StackFilter, StackImportClaim,
+    StackImportKind, StackReleaseSource, StackReleaseStatus, StackRepository, StackRuntime,
+    StackRuntimeResult, StackSource, StackSpec, StackSpecCommon, StackUpdateBehavior, UpdateStack,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -328,6 +328,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 detected_secret_values: Default::default(),
             },
             &StackImportClaim {
+                orphaned_owner_id: None,
                 platform_id,
                 platform_name: format!("stack-platform-{suffix}"),
                 project_name: format!("missing-project-{suffix}"),
@@ -395,11 +396,15 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     .execute(&pool)
     .await
     .unwrap();
-    let runtime = StackRuntimeRouter::new(
-        pool.clone(),
-        DockerClient::new("unused", Duration::from_secs(1)).unwrap(),
-        None,
-    );
+    let old_owner = Uuid::now_v7();
+    let docker = ImportDocker::new(json!([{
+        "Id": compose_container_id, "Names": [format!("/{namespace}-compose-1")],
+        "Image":"nginx:alpine", "ImageID":"sha256:image", "State":"running",
+        "Labels": {"com.docker.compose.project":namespace, "com.docker.compose.service":"web",
+            "com.citadel.managed":"true", "com.citadel.stack-id":old_owner}
+    }]))
+    .await;
+    let runtime = StackRuntimeRouter::new(pool.clone(), docker.client.clone(), None);
     let compose_claim = runtime
         .import_claim(
             swarm_platform_id,
@@ -410,7 +415,137 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .await
         .unwrap();
     assert_eq!(compose_claim.import_kind, StackImportKind::ComposeProject);
-    assert_eq!(compose_claim.container_ids, [compose_container_id]);
+    assert_eq!(
+        compose_claim.container_ids.as_slice(),
+        std::slice::from_ref(&compose_container_id)
+    );
+    assert_eq!(compose_claim.service_names, ["web"]);
+    assert_eq!(compose_claim.orphaned_owner_id, Some(old_owner));
+    for labels in [
+        json!({"com.citadel.managed":"true", "com.citadel.stack-id": created.id}),
+        json!({"com.citadel.managed":"true", "com.citadel.stack-id": "invalid"}),
+        json!({"com.citadel.managed":"true", "com.citadel.deployment-id": old_owner}),
+    ] {
+        let mut document = docker.document.write().await;
+        document[0]["Labels"] = labels;
+        document[0]["Labels"]["com.docker.compose.project"] = json!(namespace);
+        document[0]["Labels"]["com.docker.compose.service"] = json!("web");
+        drop(document);
+        assert!(
+            runtime
+                .import_claim(
+                    swarm_platform_id,
+                    &namespace,
+                    Some(StackImportKind::ComposeProject),
+                    &CancellationToken::new()
+                )
+                .await
+                .is_err()
+        );
+    }
+    let compose_input = ImportComposeProject {
+        name: format!("compose-import-{suffix}"),
+        platform_id: swarm_platform_id,
+        project_name: namespace.clone(),
+        description: None,
+        spec: spec("nginx:alpine", Some(&namespace)),
+        tag_ids: Vec::new(),
+        import_kind: StackImportKind::ComposeProject,
+        preview_fingerprint: "fixture".into(),
+        detected_secret_values: Default::default(),
+    };
+    // Commit must recheck a claim's owner and the container's current eligibility.
+    let mut active_owner_claim = compose_claim.clone();
+    active_owner_claim.orphaned_owner_id = Some(created.id);
+    assert!(
+        store
+            .import(actor, true, &compose_input, &active_owner_claim)
+            .await
+            .is_err()
+    );
+    for (state, system) in [("Processing", false), ("Idle", true)] {
+        sqlx::query("UPDATE containers SET controlstate=$2,issystem=$3 WHERE dockercontainerid=$1")
+            .bind(&compose_container_id)
+            .bind(state)
+            .bind(system)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            store
+                .import(actor, true, &compose_input, &compose_claim)
+                .await
+                .is_err()
+        );
+    }
+    sqlx::query(
+        "UPDATE containers SET controlstate='Idle',issystem=false WHERE dockercontainerid=$1",
+    )
+    .bind(&compose_container_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let compose_imported = store
+        .import(actor, true, &compose_input, &compose_claim)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .import(actor, true, &compose_input, &compose_claim)
+            .await
+            .is_err()
+    );
+    let compose_delete = store
+        .claim_delete(actor, true, &[compose_imported.id])
+        .await
+        .unwrap();
+    store.complete_delete(actor, &compose_delete).await.unwrap();
+    // Native stacks accept one orphaned owner, but reject mixed and existing owners.
+    for owner in [created.id, old_owner] {
+        let labels = json!({"com.citadel.managed":"true", "com.citadel.stack-id":owner});
+        sqlx::query("UPDATE swarmserviceprojections SET labels=$2 WHERE platformid=$1")
+            .bind(swarm_platform_id)
+            .bind(labels)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let claim = runtime
+            .import_claim(
+                swarm_platform_id,
+                &namespace,
+                Some(StackImportKind::SwarmStack),
+                &CancellationToken::new(),
+            )
+            .await;
+        if owner == created.id {
+            assert!(claim.is_err());
+        } else {
+            assert_eq!(claim.unwrap().orphaned_owner_id, Some(old_owner));
+        }
+    }
+    sqlx::query("UPDATE swarmserviceprojections SET labels='{}' WHERE platformid=$1 AND name=$2")
+        .bind(swarm_platform_id)
+        .bind(format!("{namespace}_worker"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        runtime
+            .import_claim(
+                swarm_platform_id,
+                &namespace,
+                Some(StackImportKind::SwarmStack),
+                &CancellationToken::new()
+            )
+            .await
+            .is_err()
+    );
+    sqlx::query("UPDATE swarmserviceprojections SET labels=$2 WHERE platformid=$1")
+        .bind(swarm_platform_id)
+        .bind(json!({"com.citadel.managed":"true","com.citadel.stack-id":old_owner}))
+        .execute(&pool)
+        .await
+        .unwrap();
     let swarm_claim = runtime
         .import_claim(
             swarm_platform_id,
@@ -437,30 +572,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 preview_fingerprint: "sha256:fixture".to_owned(),
                 detected_secret_values: Default::default(),
             },
-            &StackImportClaim {
-                platform_id: swarm_platform_id,
-                platform_name: format!("swarm-platform-{suffix}"),
-                project_name: namespace.clone(),
-                import_kind: StackImportKind::SwarmStack,
-                runtime_fingerprint: "sha256:fixture".to_owned(),
-                service_names: vec!["api".to_owned(), "worker".to_owned()],
-                container_ids: Vec::new(),
-                container_names: Vec::new(),
-                services: vec![
-                    ComposeProjectRuntimeService {
-                        name: "api".to_owned(),
-                        image: Some("nginx:alpine".to_owned()),
-                        container_count: 1,
-                        states: vec!["completed".to_owned()],
-                    },
-                    ComposeProjectRuntimeService {
-                        name: "worker".to_owned(),
-                        image: Some("nginx:alpine".to_owned()),
-                        container_count: 1,
-                        states: vec!["completed".to_owned()],
-                    },
-                ],
-            },
+            &swarm_claim,
         )
         .await
         .unwrap();
@@ -622,4 +734,283 @@ fn spec(image: &str, project_name: Option<&str>) -> StackSpec {
             ..Default::default()
         },
     }
+}
+
+struct ImportDocker {
+    client: DockerClient,
+    document: std::sync::Arc<tokio::sync::RwLock<serde_json::Value>>,
+    task: tokio::task::JoinHandle<()>,
+    path: std::path::PathBuf,
+}
+impl ImportDocker {
+    async fn new(document: serde_json::Value) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let path = std::env::temp_dir().join(format!("stack-import-{}.sock", Uuid::now_v7()));
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let document = std::sync::Arc::new(tokio::sync::RwLock::new(document));
+        let response = document.clone();
+        let task = tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 2048];
+                while !bytes.windows(4).any(|window| window == b"\r\n\r\n") {
+                    let n = stream.read(&mut buffer).await.unwrap();
+                    assert!(n > 0 && bytes.len() < 8192);
+                    bytes.extend_from_slice(&buffer[..n]);
+                }
+                let request = String::from_utf8(bytes).unwrap();
+                assert!(request.starts_with("GET "), "Import must not mutate Docker");
+                let body = if request.starts_with("GET /version ") {
+                    json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})
+                } else {
+                    assert!(request.starts_with("GET /v1.49/containers/json?"));
+                    response.read().await.clone()
+                }
+                .to_string();
+                stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+            }
+        });
+        Self {
+            client: DockerClient::new(&path, Duration::from_secs(2)).unwrap(),
+            document,
+            task,
+            path,
+        }
+    }
+}
+impl Drop for ImportDocker {
+    fn drop(&mut self) {
+        self.task.abort();
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+async fn concurrency_fixture() -> (
+    sqlx::PgPool,
+    PostgresStackRepository,
+    ActorId,
+    citadel_stacks::StackDetails,
+) {
+    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let store = PostgresStackRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',1,0,1024,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(platform).bind(format!("stack-concurrency-{platform}")).execute(&pool).await.unwrap();
+    let stack = store
+        .create(
+            actor,
+            true,
+            &CreateStack {
+                name: format!("stack-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                stack_source: StackSource::WebEditor,
+                spec: spec("nginx:alpine", None),
+                drift_policy: None,
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    (pool, store, actor, stack)
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+async fn stack_completion_allows_inventory_and_is_idempotent() {
+    let (pool, store, actor, stack) = concurrency_fixture().await;
+    let claim = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    let result = StackRuntimeResult {
+        status: StackReleaseStatus::Healthy,
+        messages: vec![],
+    };
+    let mut inventory = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(claim.platform_id)
+        .fetch_one(&mut *inventory)
+        .await
+        .unwrap();
+    // An uncommitted observation takes a foreign-key KEY SHARE lock on Stack.
+    sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,stackid,state,updated) VALUES($1,0,$2,'image','web',$3,'[]',$4,'Running',0)")
+        .bind(Uuid::now_v7()).bind(format!("container-{}", stack.id)).bind(claim.platform_id).bind(stack.id).execute(&mut *inventory).await.unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        store.complete_apply(actor, &claim, &result, &[], None),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    inventory.commit().await.unwrap();
+    store
+        .complete_apply(actor, &claim, &result, &[], None)
+        .await
+        .unwrap();
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='StackApplied'",
+    )
+    .bind(stack.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1);
+    let current = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert_eq!(current.status, StackReleaseStatus::Healthy);
+    assert_eq!(current.control_state, "Idle");
+    let next = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    assert!(matches!(
+        store
+            .complete_apply(actor, &claim, &result, &[], None)
+            .await,
+        Err(citadel_stacks::StackError::Conflict(_))
+    ));
+    store
+        .complete_apply(actor, &next, &result, &[], None)
+        .await
+        .unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+async fn stack_deletion_waits_for_inventory_without_locking_its_parent() {
+    let (pool, store, actor, stack) = concurrency_fixture().await;
+    let claims = store.claim_delete(actor, true, &[stack.id]).await.unwrap();
+    let container = Uuid::now_v7();
+    sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,stackid,state,updated) VALUES($1,0,$2,'image','web',$3,'[]',$4,'Running',0)")
+        .bind(container).bind(format!("delete-{}", stack.id)).bind(claims[0].platform_id).bind(stack.id).execute(&pool).await.unwrap();
+    let mut inventory = pool.begin().await.unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *inventory)
+        .await
+        .unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(claims[0].platform_id)
+        .fetch_one(&mut *inventory)
+        .await
+        .unwrap();
+    // Deletion must wait before owning Stack: its FK cleanup needs the
+    // existing container row that inventory is already updating.
+    sqlx::query("UPDATE containers SET state='Exited' WHERE id=$1")
+        .bind(container)
+        .execute(&mut *inventory)
+        .await
+        .unwrap();
+    let completion = store.complete_delete(actor, &claims);
+    tokio::pin!(completion);
+    tokio::select! {
+        result = &mut completion => panic!("deletion bypassed inventory: {result:?}"),
+        () = async {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))").bind(pid).fetch_one(&pool).await.unwrap();
+                    if waiting { break; }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }).await.unwrap();
+        } => {}
+    }
+    sqlx::query("SELECT id FROM stacks WHERE id=$1 FOR NO KEY UPDATE NOWAIT")
+        .bind(stack.id)
+        .fetch_one(&mut *inventory)
+        .await
+        .unwrap();
+    inventory.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), completion)
+        .await
+        .unwrap()
+        .unwrap();
+    let linked: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM containers WHERE stackid=$1)")
+            .bind(stack.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(!linked);
+    assert!(matches!(
+        store.get_authorized(actor, true, stack.id).await,
+        Err(citadel_stacks::StackError::NotFound)
+    ));
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+async fn container_completion_locks_stack_before_release() {
+    use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
+    use citadel_platforms::containers::ContainerRepository;
+    let (pool, _, _, stack) = concurrency_fixture().await;
+    let store = PostgresContainerRepository::new(pool.clone());
+    for abandon in [false, true] {
+        let operation = Uuid::now_v7();
+        sqlx::query(
+            "UPDATE stacks SET containeroperationid=$2,controlstate='Processing' WHERE id=$1",
+        )
+        .bind(stack.id)
+        .bind(operation)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut request = pool.begin().await.unwrap();
+        let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+            .fetch_one(&mut *request)
+            .await
+            .unwrap();
+        sqlx::query("SELECT id FROM stacks WHERE id=$1 FOR NO KEY UPDATE")
+            .bind(stack.id)
+            .fetch_one(&mut *request)
+            .await
+            .unwrap();
+        let completion = if abandon {
+            store.abandon(operation)
+        } else {
+            store.finish(operation)
+        };
+        tokio::pin!(completion);
+        tokio::select! {
+            result = &mut completion => panic!("completion bypassed Stack: {result:?}"),
+            () = async {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    loop {
+                        let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+                            .bind(pid).fetch_one(&pool).await.unwrap();
+                        if waiting { break; }
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                }).await.unwrap();
+            } => {}
+        }
+        // Completion must not own the child while waiting for its parent.
+        sqlx::query("SELECT id FROM stackreleases WHERE stackid=$1 FOR NO KEY UPDATE NOWAIT")
+            .bind(stack.id)
+            .fetch_all(&mut *request)
+            .await
+            .unwrap();
+        request.commit().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), completion)
+            .await
+            .unwrap()
+            .unwrap();
+        let state: String = sqlx::query_scalar("SELECT controlstate FROM stacks WHERE id=$1")
+            .bind(stack.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(state, "Idle");
+    }
+    pool.close().await;
 }

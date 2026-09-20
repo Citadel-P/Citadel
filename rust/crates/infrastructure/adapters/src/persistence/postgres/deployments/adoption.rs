@@ -1,4 +1,5 @@
 use super::*;
+use crate::connectors::containers::ownership::{Owner, owner};
 use crate::connectors::routing::containers::ContainerRuntimeRouter;
 use crate::connectors::routing::containers::Runtime;
 use citadel_deployments::adoption::*;
@@ -86,6 +87,7 @@ impl PostgresContainerAdoption {
                 "Container identity changed. Reload the adoption draft.".into(),
             ));
         }
+        ensure_orphaned_owner(&self.pool, &inspection).await?;
         let image_id: Option<Uuid> = row.get("originalimageid");
         let defaults = if image_id.is_some() {
             self.image_defaults(&target, &row.get::<String, _>("dockerimageid"), cancel)
@@ -388,6 +390,7 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
             let locked=sqlx::query("SELECT c.*,p.status platformstatus,p.platformdescriptor FROM containers c JOIN platforms p ON p.id=c.platformid WHERE c.id=$1 FOR UPDATE OF c")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(DeploymentError::NotFound)?;
             eligible(&locked)?;
+            ensure_orphaned_owner(&mut *tx, &context.inspection).await?;
             if locked.get::<String, _>("dockercontainerid") != context.target.docker_id
                 || locked.get::<String, _>("state") != context.source.state
             {
@@ -494,12 +497,9 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
     }
 }
 fn eligible(row: &PgRow) -> Result<(), DeploymentError> {
-    if row.get::<bool, _>("issystem")
-        || row.get::<bool, _>("isswarmtask")
-        || row.get::<bool, _>("hascitadelownershiplabels")
-    {
+    if row.get::<bool, _>("issystem") || row.get::<bool, _>("isswarmtask") {
         return Err(DeploymentError::Conflict(
-            "System, Swarm task, or Citadel-owned containers cannot be adopted.".into(),
+            "System or Swarm task containers cannot be adopted.".into(),
         ));
     }
     if row.get::<Option<Uuid>, _>("deploymentid").is_some()
@@ -527,6 +527,43 @@ fn eligible(row: &PgRow) -> Result<(), DeploymentError> {
     if platform_kind(&row.get::<Value, _>("platformdescriptor")) != "Docker" {
         return Err(DeploymentError::Validation(
             "Only containers on Docker Standalone platforms can be adopted.".into(),
+        ));
+    }
+    Ok(())
+}
+async fn ensure_orphaned_owner<'e>(
+    executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+    inspection: &Value,
+) -> Result<(), DeploymentError> {
+    let labels = field(field(inspection, "Config"), "Labels")
+        .as_object()
+        .map(|labels| {
+            labels
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|value| (key.clone(), value.to_owned()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let Some(owner) =
+        owner(&labels).map_err(|message| DeploymentError::Conflict(message.into()))?
+    else {
+        return Ok(());
+    };
+    let Owner::Deployment(id) = owner else {
+        return Err(DeploymentError::Conflict(
+            "Import the former Stack as a Stack instead.".into(),
+        ));
+    };
+    if sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM deployments WHERE id=$1)")
+        .bind(id)
+        .fetch_one(executor)
+        .await
+        .map_err(storage)?
+    {
+        return Err(DeploymentError::Conflict(
+            "Container is owned by an existing Citadel Deployment.".into(),
         ));
     }
     Ok(())

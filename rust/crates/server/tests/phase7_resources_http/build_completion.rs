@@ -105,15 +105,38 @@ pub async fn verify(pool: &sqlx::PgPool, run: Uuid, ids: &Consumers) {
         .execute(pool)
         .await
         .unwrap();
+    // Inventory's foreign-key checks must not block provenance propagation.
+    // Hold real inserts open while the consumer updates both resource types.
+    let platform: Uuid = sqlx::query_scalar("SELECT platformid FROM deployments WHERE id=$1")
+        .bind(ids.manual)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let mut inventory = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(platform)
+        .execute(&mut *inventory)
+        .await
+        .unwrap();
+    for (deployment, stack) in [(Some(ids.manual), None), (None, Some(ids.stack))] {
+        let id = Uuid::now_v7();
+        sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,deploymentid,stackid,state,updated) VALUES($1,0,$2,'image','consumer',$3,'[]',$4,$5,'Running',0)")
+            .bind(id).bind(id.to_string()).bind(platform).bind(deployment).bind(stack)
+            .execute(&mut *inventory).await.unwrap();
+    }
     // Provenance still propagates without an automatic-execution license, but
     // busy resources are not modified and no Docker mutation is dispatched.
     assert_eq!(
-        service
-            .process_batch(&CancellationToken::new())
-            .await
-            .unwrap(),
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            service.process_batch(&CancellationToken::new())
+        )
+        .await
+        .expect("inventory FK checks must not block Build consumers")
+        .unwrap(),
         2
     );
+    inventory.commit().await.unwrap();
     assert!(runtime.applied.lock().unwrap().is_empty());
     entitlement.0.store(true, Ordering::Relaxed);
     sqlx::query("UPDATE deployments SET controlstate='Idle' WHERE id=$1")

@@ -16,7 +16,7 @@ impl PostgresDeploymentRepository {
                               ORDER BY container.updated DESC,container.id DESC
                           ) AS dockercontainerids
                    FROM deployments d
-                   WHERE d.id=ANY($1::uuid[]) ORDER BY d.id FOR UPDATE OF d"#,
+                   WHERE d.id=ANY($1::uuid[]) ORDER BY d.id FOR NO KEY UPDATE OF d"#,
             )
             .bind(ids)
             .fetch_all(&mut *tx)
@@ -81,6 +81,8 @@ impl PostgresDeploymentRepository {
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let ids = claims.iter().map(|claim| claim.id).collect::<Vec<_>>();
+            lock_delete_platforms(&mut tx, &ids).await?;
             for claim in claims {
                 let locked = sqlx::query_scalar::<_, Uuid>(
                     "SELECT id FROM deployments WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR UPDATE",
@@ -114,7 +116,6 @@ impl PostgresDeploymentRepository {
                 )
                 .await?;
             }
-            let ids = claims.iter().map(|claim| claim.id).collect::<Vec<_>>();
             sqlx::query("DELETE FROM resourcetags WHERE resourcetype='Deployment' AND resourceid=ANY($1::uuid[])")
                 .bind(&ids).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("DELETE FROM resourcebindings WHERE scope='Deployment' AND resourceid=ANY($1::uuid[])")
@@ -212,7 +213,7 @@ impl PostgresDeploymentRepository {
                        SELECT id,dockercontainerid,platformid FROM containers
                        WHERE deploymentid=d.id ORDER BY updated DESC,id DESC LIMIT 1
                    ) c ON TRUE
-                   WHERE d.id=$1 FOR UPDATE OF d"#,
+                   WHERE d.id=$1 FOR NO KEY UPDATE OF d"#,
             )
             .bind(id)
             .fetch_optional(&mut *tx)
@@ -286,8 +287,6 @@ impl PostgresDeploymentRepository {
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            lock_apply_claim(&mut tx, actor_id, claim).await?;
-            let container_id = upsert_apply_container(&mut tx, claim, result).await?;
             let mut spec = claim.spec.clone();
             if let DeploymentImageInfo::External {
                 registry_id,
@@ -304,6 +303,27 @@ impl PostgresDeploymentRepository {
                 };
             }
             let spec_value = spec.to_storage_value()?;
+            if let Err(error) = lock_apply_claim(&mut tx, actor_id, claim).await {
+                if !matches!(error, DeploymentError::Conflict(_)) {
+                    return Err(error);
+                }
+                // A lost commit acknowledgement may cause the same completion
+                // to be retried. Accept only this exact completed version/result;
+                // a later operation must still reject the stale claim.
+                let completed: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM deployments d WHERE d.id=$1 AND d.rowversion=$2 AND d.controlstate='Idle' AND d.status='Healthy' AND d.spec::jsonb=$3::jsonb AND EXISTS(SELECT 1 FROM containers c WHERE c.deploymentid=d.id AND c.dockercontainerid=$4 AND c.dockerimageid=$5))",
+                )
+                .bind(claim.id)
+                .bind(claim.row_version + 1)
+                .bind(&spec_value)
+                .bind(&result.docker_container_id)
+                .bind(&result.docker_image_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(storage)?;
+                return if completed { Ok(()) } else { Err(error) };
+            }
+            let container_id = upsert_apply_container(&mut tx, claim, result).await?;
             let affected = sqlx::query(
                 "UPDATE deployments SET status='Healthy',spec=$4,controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,rowversion=rowversion+1,autoupdatestate_status=CASE WHEN $5::text IS NOT NULL THEN 'UpToDate' ELSE autoupdatestate_status END,autoupdatestate_currentdigest=COALESCE($5,autoupdatestate_currentdigest),autoupdatestate_remotedigest=COALESCE($5,autoupdatestate_remotedigest),autoupdatestate_lasterror=CASE WHEN $5 IS NOT NULL THEN NULL ELSE autoupdatestate_lasterror END WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3",
             )
@@ -453,7 +473,7 @@ pub(super) async fn lock_apply_claim(
     claim: &ApplyClaim,
 ) -> Result<(), DeploymentError> {
     let found = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM deployments WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR UPDATE",
+        "SELECT id FROM deployments WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' AND controltriggeredby=$3 FOR NO KEY UPDATE",
     )
     .bind(claim.id)
     .bind(claim.row_version)

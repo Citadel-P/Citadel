@@ -163,3 +163,34 @@ fn sensitive_classifier_matches_dotnet_boundaries_and_name_normalization() {
     assert!(valid_binding_name("API_KEY"));
     assert!(!valid_binding_name("1TOKEN"));
 }
+
+#[test]
+fn adoption_warns_about_old_ownership_and_does_not_copy_reserved_labels() {
+    let mut inspection = inspect();
+    inspection["Config"]["Labels"] = json!({
+        "com.citadel.managed": "true",
+        "com.citadel.deployment-id": Uuid::now_v7().to_string(),
+        "X-Citadel.release-id": "old-release",
+        "COM.CITADEL.release-id": "old-release",
+        "example.label": "preserved"
+    });
+    let mapped = draft(&inspection);
+    assert!(
+        mapped
+            .issues
+            .iter()
+            .all(|issue| issue.severity != "Blocker")
+    );
+    assert_eq!(
+        mapped
+            .issues
+            .iter()
+            .filter(|issue| issue.code == "CITADEL_OWNERSHIP_LABEL" && issue.severity == "Warning")
+            .count(),
+        1
+    );
+    assert_eq!(
+        serde_json::to_value(mapped.draft.spec).unwrap()["labels"],
+        json!({"example.label":"preserved"})
+    );
+}

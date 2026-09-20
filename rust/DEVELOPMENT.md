@@ -1,8 +1,9 @@
 # Rust development environment
 
 On Windows, prefer **VS Code in WSL Ubuntu**, with the repository on the Linux
-filesystem. Rust and Vite run directly in Ubuntu; Docker Desktop supplies Docker
-and PostgreSQL. The Dev Container remains a supported fallback.
+filesystem. Ctrl+Shift+B runs Core and PostgreSQL together in Docker Compose;
+Cargo builds and Vite run directly in Ubuntu. F5 runs Core natively for debugging.
+The Dev Container remains a supported fallback for native run/debug tasks.
 
 This removes the workspace container and Windows bind-mount file watching from
 the normal development loop. It does not remove WSL's VM or guarantee a memory
@@ -36,8 +37,9 @@ are preserved.
    The repository pins the Rust toolchain in `rust-toolchain.toml`. Docker
    Desktop integration must also provide `docker compose`. Verify `cargo`,
    `node`, and `npm` resolve to Linux installations, not `/mnt/c/...`.
-   Features that execute external tools also need their Linux executables
-   (for example Deno for Automations and Restic for backups).
+   Native debugging of features that execute external tools also needs their
+   Linux executables (for example Deno for Automations and Restic for backups).
+   The Compose Core image includes these tools.
 4. Put the checkout under `~/projects/Citadel`, **not `/mnt/d`**. For a clean
    checkout, clone recursively from your remote. For an existing dirty checkout,
    copy the repository **including `.git` and submodule metadata** into a new,
@@ -73,21 +75,26 @@ If you change the Docker socket, update both `CITADEL_RUST_DOCKER_SOCKET` and
 `DOCKER_HOST` so API calls and external Docker CLI operations use the same engine.
 Default keys are **development-only**, never suitable for production.
 
-In WSL, preparation starts only PostgreSQL, with project name `citadel-wsl`,
-exposing it on `127.0.0.1:15432`. This is a **new development database**, separate
-from the devcontainer's existing database. Runtime data lives under
-`~/.local/share/citadel-wsl`; compiler artifacts remain under `rust/target`.
+In WSL, preparation starts PostgreSQL, with project name `citadel-wsl`,
+exposing it on `127.0.0.1:15432`. The normal run task adds Core to the same project
+and preserves the existing `citadel-wsl_postgres-data` volume. This database is
+separate from the devcontainer's database. Runtime data lives under
+`~/.local/share/citadel-wsl`, mounted at the same path inside Core to preserve
+signing keys and Docker bind-mount paths. Compiler artifacts remain under
+`rust/target` (or the configured Cargo target directory).
 Nothing deletes or migrates your old database, volumes, or checkout. To retain
 an existing Citadel instance, use its backup/restore procedure and preserve its
 encryption/signing keys and runtime data; don't merely point at an old database
-with newly generated keys. A custom `DATABASE_URL` skips starting PostgreSQL.
+with newly generated keys. The Compose task uses this development database and
+connects to it as `postgres:5432` inside the project. A custom `DATABASE_URL` is
+supported by native run/debug tasks, which skip starting PostgreSQL; the Compose
+task rejects it to avoid accidentally switching your database.
 
 Stop the old devcontainer API/UI before running WSL to avoid port conflicts.
-To stop the WSL development database without deleting its data:
+To stop Core and the WSL development database without deleting data:
 
 ```bash
-docker compose -p citadel-wsl -f .devcontainer/compose.yaml \
-  -f .devcontainer/compose.wsl.yaml stop postgres
+bash rust/scripts/dev.sh compose-stop
 ```
 
 Docker socket access does **not** require a container bind mount when the API
@@ -118,6 +125,11 @@ installed inside the development container.
 Use **Dev Containers: Rebuild Container** after changing `.devcontainer/`.
 Ordinary source changes do not require a rebuild. PostgreSQL, Cargo, npm, and
 frontend dependency data use named volumes and survive a rebuild.
+
+Inside the Dev Container, use **Citadel: Debug application** (F5), or
+**Citadel: Run Rust API** and **Citadel: Run UI only**. The default Compose task
+requires the WSL checkout because its binary and runtime bind mounts use host
+paths; it rejects execution inside the workspace container.
 
 Both the API and Docker CLI use the feature-mounted `/var/run/docker-host.sock`
 directly. The feature's `/var/run/docker.sock` proxy can truncate delayed Docker
@@ -186,8 +198,17 @@ Preserve this private file across restarts and never share it with Agents.
 Installation instructions do not install an Agent or configure its connection.
 
 For normal browser testing, press `Ctrl+Shift+B`. This runs the default
-**Citadel: Run application (API + UI)** task. The task waits for the API to be
-ready before starting Vite.
+**Citadel: Run application (API + UI)** task. It builds Core and exports OpenAPI,
+starts the `core` and `postgres` services in Docker Compose project `citadel-wsl`,
+and waits for both to be healthy before starting Vite on the host. Core listens
+on port 8000 (and reserves 8001 for Agent transport).
+
+The development image uses the production Dockerfile's `runtime-base` stage,
+including Docker CLI, Deno and backup tools. It mounts the local debug binary
+read-only, avoiding a second Rust build cache in Docker. Normal runs omit debug
+symbols and incremental artifacts; F5 retains debugger information. Each run
+recreates Core so the container picks up the latest binary and environment,
+without restarting PostgreSQL. The first run downloads/builds the runtime image.
 
 Open these addresses from the host:
 
@@ -195,27 +216,37 @@ Open these addresses from the host:
 - API health: <http://localhost:8000/health>
 
 The task creates separate **citadel-api** and **citadel-ui** terminal panels.
-The API is ready when its panel reports `Rust foundation server listening`.
+The API is ready when its panel reports that the Compose services are running.
+View Core logs with `docker logs -f citadel-wsl-core-1` or Docker Desktop.
 
 Only the Dev Container enables file-watcher polling at one-second intervals so Vite
 detects edits made on the Windows host. Without polling, mounted files can change
 while Vite continues serving an older transformed module, even after a browser
 refresh.
 
-To stop both processes, run **Tasks: Terminate Task** from the Command Palette
-and select **Citadel: Run application (API + UI)**. Closing or rebuilding the
-development container also stops them.
+Run **Citadel: Stop Core + PostgreSQL (Compose)** to stop the containers while
+preserving data. Use **Tasks: Terminate Task** to stop the Vite task separately.
+Compose services run detached and continue running when VS Code closes.
+
+To start only the Compose services from a WSL terminal:
+
+```bash
+bash rust/scripts/dev.sh compose-up
+```
 
 ## Debug Rust
 
-1. Open **Run and Debug** with `Ctrl+Shift+D`.
+1. Stop the Compose services and Vite task if running, then open **Run and Debug**
+   with `Ctrl+Shift+D`.
 2. Select **Citadel: Debug application**.
 3. Add breakpoints in the Rust source.
 4. Press `F5`.
 
 This launch configuration starts Vite and the unoptimized Rust API under
 CodeLLDB. Press `Shift+F5` to stop both. Do not start the normal application
-task at the same time because both workflows use ports 5173 and 8000.
+task at the same time because both workflows use ports 5173 and 8000 and Core
+requires an exclusive background-job lease on its database. Stop the debugger
+before returning to Ctrl+Shift+B.
 
 ## Run one process manually
 

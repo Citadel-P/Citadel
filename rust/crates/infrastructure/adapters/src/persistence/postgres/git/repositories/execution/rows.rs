@@ -113,6 +113,13 @@ pub(super) async fn finish_sync(
     error: Option<&str>,
 ) -> Result<(), GitRepositoryExecutionError> {
     let mut transaction = pool.begin().await.map_err(storage)?;
+    let rerun_requested = sqlx::query_scalar::<_, bool>(
+        "SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1 FOR NO KEY UPDATE",
+    )
+    .bind(claim.repository.id)
+    .fetch_one(&mut *transaction)
+    .await
+    .map_err(storage)?;
     let (status, commit) = if let Some(result) = result {
         ("Healthy", Some(result.commit.as_str()))
     } else {
@@ -132,13 +139,6 @@ pub(super) async fn finish_sync(
     if affected != 1 {
         return Err(GitRepositoryExecutionError::Conflict);
     }
-    let rerun_requested = sqlx::query_scalar::<_, bool>(
-        "SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1 FOR UPDATE",
-    )
-    .bind(claim.repository.id)
-    .fetch_one(&mut *transaction)
-    .await
-    .map_err(storage)?;
     if rerun_requested {
         sqlx::query("UPDATE gitrepositoryrefs SET status='Pending' WHERE id=$1")
             .bind(claim.reference_id)
