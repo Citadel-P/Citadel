@@ -1,4 +1,4 @@
-//! Preserve .NET's documented parameter names while registering equivalent Axum paths.
+//! Preserve documented API parameter names when registering Axum paths.
 //!
 //! Axum requires `/resources/{id}` and `/resources/{resourceId}/config` to use
 //! the same capture name. Extractors in Citadel read captures positionally.

@@ -27,6 +27,23 @@
       }
     },
     {
+      "label": "Citadel: Run release (Compose)",
+      "detail": "Builds the release image with the bundled UI and starts Core and PostgreSQL in the citadel Compose project using rust/.env.",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--project-name", "citadel",
+        "--env-file", "${workspaceFolder}/rust/.env",
+        "-f", "${workspaceFolder}/rust/docker-compose.yml",
+        "up", "--detach", "--build", "--wait", "--wait-timeout", "120"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "citadel-release" },
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
       "label": "Citadel: Run Core + PostgreSQL (Compose)",
       "detail": "Builds Core using the local Cargo cache and starts the citadel-wsl Compose project.",
       "type": "process",

@@ -34,7 +34,7 @@ pub enum LookupError {
 impl LookupQuery {
     pub fn validate(&self, administrator: bool) -> Result<(), LookupError> {
         use Kind::*;
-        // Preserve the security precedence of the .NET handler.
+        // Preserve authorization precedence before looking up resources.
         if !administrator
             && (self.source == Some(User)
                 || matches!(

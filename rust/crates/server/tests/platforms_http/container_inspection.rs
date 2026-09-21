@@ -118,7 +118,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         );
         assert!(!result.to_string().contains("not-for-browser"));
     }
-    // The .NET /info and /data routes require Read, not the raw Inspect grant.
+    // The /info and /data routes require Read, not the raw Inspect grant.
     let info_reader = super::lookup::subject(&f).await;
     super::lookup::grant(
         &f,
@@ -314,7 +314,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
     .execute(&f.pool)
     .await
     .unwrap();
-    // .NET grants this route through Stack Read + Inspect, without Platform ACL.
+    // This route requires Stack Read + Inspect, without Platform ACL.
     let scoped = json_body(send(&f, &scoped_url, Some(scoped_reader.clone())).await).await;
     assert_eq!(
         scoped["config"]["env"],

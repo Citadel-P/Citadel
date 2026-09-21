@@ -27,6 +27,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
     let mut state = f.lookup_state.platforms.clone();
     state.docker = docker;
     let app = platforms_http::router(state).layer(axum::Extension(EdgeHttpContext {
+        node_agent_policy: Default::default(),
         store: PostgresEdgeStore::new(f.pool.clone()),
         registry: EdgeRegistry::default(),
         core_url: "https://core.example.test".into(),
@@ -137,7 +138,10 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
             .await
             .is_err()
     );
-    let first = store.bootstrap(&claim).await.unwrap();
+    let first = store
+        .bootstrap(&claim, std::time::Duration::from_secs(600))
+        .await
+        .unwrap();
     store
         .secret_created(&claim, first.id, &format!("secret-{}", first.id))
         .await
@@ -150,7 +154,10 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
     assert_ne!(row.0, String::from_utf8(first.token.to_vec()).unwrap());
     assert_eq!(row.1, 1);
     assert!(row.2);
-    let second = store.bootstrap(&claim).await.unwrap();
+    let second = store
+        .bootstrap(&claim, std::time::Duration::from_secs(600))
+        .await
+        .unwrap();
     assert!(
         sqlx::query_scalar::<_, bool>(
             "SELECT revokedatutc IS NOT NULL FROM swarmnodeagentbootstraps WHERE id=$1"
@@ -181,7 +188,12 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
         .claim_setup(f.administrator.actor_id, id, info, SetupKind::Repair)
         .await
         .unwrap();
-    assert!(store.bootstrap(&claim).await.is_err());
+    assert!(
+        store
+            .bootstrap(&claim, std::time::Duration::from_secs(600))
+            .await
+            .is_err()
+    );
     assert!(
         store
             .secret_created(&claim, second.id, "stale")
@@ -366,6 +378,7 @@ async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
         .await
         .unwrap();
     let spec = SystemAgentSpec {
+        limits: Default::default(),
         name: "agent".into(),
         image: format!("agent@sha256:{}", "a".repeat(64)),
         environment: vec![],

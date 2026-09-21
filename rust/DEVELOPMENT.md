@@ -44,7 +44,7 @@ are preserved.
    checkout, clone recursively from your remote. For an existing dirty checkout,
    copy the repository **including `.git` and submodule metadata** into a new,
    empty directory; preserve staged, unstaged and untracked source files. Skip
-   disposable `node_modules`, Rust `target`, and .NET `bin`/`obj` artifacts.
+   disposable `node_modules`, Rust `target`, and `bin`/`obj` artifacts.
    Compare Git status and diffs before using the copy. Keep the original until
    verified; do not replace it with a remote clone that loses local work.
 5. In Ubuntu, open the Linux checkout:
@@ -219,6 +219,31 @@ The task creates separate **citadel-api** and **citadel-ui** terminal panels.
 The API is ready when its panel reports that the Compose services are running.
 View Core logs with `docker logs -f citadel-wsl-core-1` or Docker Desktop.
 
+For a release build, run **Citadel: Run release (Compose)** with `Ctrl+Shift+R`.
+This builds Core with `cargo build --release`, bundles the frontend into the
+image, and starts Core and PostgreSQL in Compose project `citadel`. The task uses
+`rust/.env` and waits for both services to be healthy. With the default settings,
+open <http://localhost:18000> for the application. This project has its own data
+volumes, separate from the development project `citadel-wsl`.
+
+VS Code stores custom shortcuts in user settings. On a new installation, open
+**Preferences: Open Keyboard Shortcuts (JSON)** and add this entry to the array:
+
+```json
+{
+  "key": "ctrl+shift+r",
+  "command": "workbench.action.tasks.runTask",
+  "args": "Citadel: Run release (Compose)",
+  "when": "workspaceFolderCount > 0"
+}
+```
+
+The equivalent command from the repository root is:
+
+```bash
+docker compose --project-name citadel --env-file rust/.env -f rust/docker-compose.yml up --detach --build --wait --wait-timeout 120
+```
+
 Only the Dev Container enables file-watcher polling at one-second intervals so Vite
 detects edits made on the Windows host. Without polling, mounted files can change
 while Vite continues serving an older transformed module, even after a browser
@@ -350,8 +375,72 @@ paths, and the PostgreSQL archive signature before changing the database. It
 then performs a single-transaction `pg_restore --clean`; a failed restore rolls
 back instead of leaving a partially replaced schema. Keep every Core instance
 offline until the command succeeds. The restored database still requires the
-same `Jwt__Key` and `Secrets__EncryptionKey` external configuration recorded by
-the recovery manifest.
+original signing and encryption keys. Restore file-backed keys from the bundle's
+`recovery/` directory into `CITADEL_DATA_ROOT` before running the command, and
+supply any external keys listed in the recovery manifest.
+
+## Application configuration
+
+`rust/.env.example` lists user-facing Core settings. Copy it to the
+ignored `rust/.env`, fill in `PG_PASSWORD`, and use
+`docker compose --env-file rust/.env -f rust/docker-compose.yml up -d --build`. The Compose service
+passes these settings into Core. Entries use plain `KEY=value` without shell
+expansion or surrounding quotes. Restart/recreate Core after changing settings.
+
+The container entrypoint detects the mounted Docker socket's group and then
+starts Core as user 65532 with access to that group. No socket group setting is
+needed, and the host socket's ownership and permissions are left unchanged.
+An explicit non-root container user retains its configured groups; the
+development launcher supplies the socket group automatically for that workflow.
+
+For the VS Code run/debug workflows, put overrides in `rust/.env.development`;
+that file is intentionally separate from the production Compose `.env`, so a
+production database or signing key cannot accidentally replace development data.
+The same application settings work in both files. Native `cargo run` reads its
+process environment; it does not automatically load an env file.
+
+The env template covers installation, transport, authentication, logging,
+monitoring, automation, builds, backups and Agent connections. Internal queue
+sizes, polling intervals, lease durations, buffers and executable paths use code
+defaults and are omitted from the template. Advanced overrides remain supported
+for development and troubleshooting; see `crates/server/src/config.rs` and
+`config/execution.rs` for their definitions.
+
+`CITADEL_IMAGE` selects the Core image. When building a versioned image locally,
+`CITADEL_VERSION` sets build metadata; `CITADEL_IMAGE_TAG` is a fallback for both
+when their explicit overrides are unset.
+
+For Direct TLS, add `-f rust/compose.direct-tls.yml` after the main Compose file; it mounts
+`CITADEL_TLS_HOST_DIRECTORY` read-only at `/etc/citadel/tls`. Configure HTTPS
+public URLs and the mounted certificate/key paths. The built-in health probe
+uses the configured API port and, in Direct mode, trusts Core's configured
+certificate for the loopback connection.
+
+An unset/blank `Jwt__Key` or `Secrets__EncryptionKey` is generated once in
+`CITADEL_DATA_ROOT` (`jwtsecret` and `secret-encryption-key`). Existing explicit
+keys always take precedence. Keep this data volume across container recreation.
+System backups include file-backed keys from `Backups__CoreDataPath`, including
+the Rust Agent signing key at `agent/signing-key`; explicitly configured JWT and
+encryption keys remain external requirements in the recovery manifest. Before
+offline recovery, restore the bundle's `recovery/` contents to the data root and
+retain any external keys. Recovery never generates replacement keys.
+
+`AgentTransport__CaCertificatePath` accepts a mounted PEM CA bundle for HTTPS
+connections to direct Agents. HTTPS also uses native roots and validates the
+Agent hostname. Setting `AgentTransport__AllowInsecure=false` rejects HTTP Agent
+connections. This CA is separate from Core's listener certificate and from the
+CA distributed to node agents through `CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH`.
+
+`Backups__AllowedCorePaths__0`, `__1`, etc. restrict Core filesystem repository
+locations; the default is `<CITADEL_DATA_ROOT>/backups/repositories`. Add roots
+for existing repositories outside that directory. Paths must be available in the
+Core container. `Backups__DefaultTimeoutSeconds` controls repository operations
+and restores; backup policies retain their individual execution timeouts.
+
+`EnableLogColor=false` keeps structured JSON logs; `true` enables colored console
+logs. `citadel-server print-effective-config` reports effective non-secret values
+without connecting to PostgreSQL. The Agent TLS integration test requires OpenSSL
+to create a temporary certificate; no test keys are committed.
 
 ## Troubleshooting
 
@@ -407,7 +496,7 @@ Daemon container events update the persisted runtime identity and its Deployment
 or Compose Stack status in one transaction. Local Core inspects the affected
 container; Direct and Edge Agents supply the observed container state. Confirmed
 deletions preserve the resource binding long enough to mark the owner degraded.
-Status-change activities use the .NET payload names, and realtime invalidations
+Status-change activities use the persisted payload names, and realtime invalidations
 are published after commit. Duplicate observations do not create duplicate activities.
 
 Full inventory reconciliation remains the recovery path for missed events and
@@ -434,13 +523,13 @@ continues to respect active execution deadlines and operation claims.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `JobConfiguration__FlashInterval` | `60` seconds | Flush CPU/RAM threshold observations even when sample input is idle; matches shipped .NET settings |
+| `JobConfiguration__FlashInterval` | `60` seconds | Flush CPU/RAM threshold observations even when sample input is idle |
 | `JobConfiguration__BatchSize` | `500` | Flush threshold observations early at this persisted sample count |
 | `EdgeAgent__NodeAgentRemovalGraceMinutes` | `10` | Revoke credentials only for absent Swarm nodes beyond this grace period |
 | `EdgeAgent__SupportedNodeArchitectures__0`, `__1`, … | `amd64`, `arm64` | Architectures requiring node-agent coverage; `x86_64`/`aarch64` aliases normalize |
 | `Builds__MaxParallelRuns` | `4` | Concurrent build executions |
 | `Builds__RunCleanupEnabled` | `true` | Scheduled build retention |
-| `Builds__RunRetentionDays` | `90` | Terminal build retention; nonpositive disables cleanup |
+| `Builds__RunRetentionDays` | `90` | Terminal build retention in days; disable cleanup with `Builds__RunCleanupEnabled=false` |
 | `Backups__Enabled` | `true` | Backup/restore dispatch and policy scheduling |
 | `Backups__MaxParallelRuns` | `2` | Slots in each backup and restore worker; repository/source leases still serialize conflicting work |
 | `Backups__PollIntervalSeconds` | `2` | Minimum queue polling delay |

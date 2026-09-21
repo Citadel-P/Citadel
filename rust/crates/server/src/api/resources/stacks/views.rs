@@ -325,7 +325,7 @@ impl Serialize for StackStreamItem {
         item.serialize_entry("type", &self.event_type)?;
         if let Some(message) = &self.message {
             // Docker also writes normal progress to stderr. The public `message`
-            // field is reserved for errors; .NET uses `progressMessage` otherwise.
+            // field is reserved for errors; use `progressMessage` otherwise.
             let field = if self.exit_code.is_some_and(|code| code != 0) {
                 "message"
             } else {

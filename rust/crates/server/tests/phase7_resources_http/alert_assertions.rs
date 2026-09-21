@@ -83,7 +83,7 @@ pub(super) async fn rule_set(pool: &sqlx::PgPool) -> Value {
         .fetch_one(pool).await.unwrap()
 }
 
-// Replacement for .NET's cache.Current assertions: use the SAME long-lived
+// Verify committed changes through the same long-lived
 // store held by the HTTP router and exercise its next evaluation after commit.
 pub(super) async fn runtime_rule(
     pool: &sqlx::PgPool,
@@ -224,7 +224,7 @@ async fn compatibility_problem(
 }
 
 // Validation explanations must be visible to the frontend, including cases
-// without a named .NET field snapshot. Not-found keeps its existing envelope.
+// without a named field snapshot. Not-found keeps its existing envelope.
 pub(super) async fn problem(response: axum::response::Response, status: StatusCode, detail: &str) {
     assert_eq!(response.status(), status);
     assert_eq!(

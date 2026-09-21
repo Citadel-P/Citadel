@@ -7,18 +7,28 @@ use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    init_tracing();
+    init_tracing()?;
     cli::run().await
 }
 
-fn init_tracing() {
+fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("citadel_server=info,citadel_adapters=info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .json()
-        .with_current_span(false)
-        .init();
+    let color = citadel_server::config::log_color_from_env()?;
+    if color {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_ansi(true)
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .json()
+            .with_ansi(false)
+            .with_current_span(false)
+            .init();
+    }
+    Ok(())
 }
 
 pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {

@@ -37,7 +37,7 @@ async fn get_container_ports_the_complete_dotnet_summary_snapshot_without_deploy
         .await;
         assert_eq!(response.status(), StatusCode::OK);
         let mut body = json_body(response).await;
-        // The .NET verified snapshot omits null/empty optional collections.
+        // The response omits null/empty optional collections.
         // All nonempty fields (including unexpected additions) remain compared.
         omit_empty(&mut body);
         assert_eq!(body, expected);

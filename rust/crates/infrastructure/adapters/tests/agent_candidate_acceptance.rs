@@ -35,7 +35,7 @@ async fn docker(args: &[&str]) -> Vec<u8> {
     output.stdout
 }
 
-// Real published .NET Agent, not a protobuf test peer. The fixture creates only
+// Exercise a published Agent. The fixture creates only
 // uniquely named containers and never prunes or changes existing workloads.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_AGENT_IMAGE and CITADEL_PHASE7_AGENT_NETWORK; run Test-Phase7AgentCandidate.ps1"]

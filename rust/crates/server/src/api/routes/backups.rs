@@ -1687,7 +1687,7 @@ async fn get_backup_events(
         &h,
     )
     .await?;
-    // .NET exposes an empty events collection. Execution output remains in /logs.
+    // Expose an empty events collection. Execution output remains in /logs.
     Ok(no_store(
         Json(Events {
             run_id: id,

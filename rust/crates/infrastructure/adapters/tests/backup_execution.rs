@@ -77,7 +77,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
 
-    let store = PostgresBackupPersistence::new(pool.clone());
+    let store = PostgresBackupPersistence::new(pool.clone()).with_lease_options(60, 90, 30);
     let mut repository_input = BackupRepositoryConfiguration {
         name: format!("backup-repository-{}", Uuid::now_v7().simple()),
         description: None,
@@ -175,6 +175,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let claims = [left.unwrap(), right.unwrap()];
     assert_eq!(claims.iter().filter(|claim| claim.is_some()).count(), 1);
     let first_claim = claims.into_iter().flatten().next().unwrap();
+    assert_eq!(
+        lease_durations(&pool, first_claim.run.id).await,
+        (180.0, 210.0)
+    );
     let guarded_claim = first_claim.clone();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
@@ -250,6 +254,37 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
     let completed = store.get_run(first_claim.run.id).await.unwrap();
     assert_eq!(completed.items[0].status, "Succeeded");
+    store
+        .enqueue_restore(citadel_backups::BackupRestoreRequest {
+            actor,
+            backup_run_id: first_claim.run.id,
+            target_platform_id: platform,
+            target_volume_name: "configured-lease-restore".into(),
+            overwrite_existing: false,
+            target_docker_node_id: None,
+            source_backup_run_item_id: Some(completed.items[0].id),
+        })
+        .await
+        .unwrap();
+    let restore = store
+        .claim_restore(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(lease_durations(&pool, restore.run.id).await, (120.0, 150.0));
+    store
+        .finish_restore(
+            &restore,
+            &citadel_backups::RestoreExecutionResult {
+                status: "Succeeded",
+                exit_code: Some(0),
+                error_code: None,
+                error_message: None,
+                logs: vec![],
+            },
+        )
+        .await
+        .unwrap();
 
     let late_claim = store
         .claim_backup(Utc::now() - Duration::minutes(5))
@@ -404,6 +439,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM backuprestoreruns WHERE id=$1")
+        .bind(restore.run.id)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM backupruns WHERE backuprepositoryid=$1")
         .bind(repository.id)
         .execute(&pool)
@@ -533,7 +573,7 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     assert_eq!(selected.pending_count(), 0);
 }
 
-// Extends .NET BackupRestoreRunExecutionTests with cross-connector root parity.
+// Verify that restore resolves the saved snapshot root across connectors.
 // The peer validates canonical Agent commands, not a real Restic installation.
 async fn edge_restore_uses_the_saved_snapshot_root(
     pool: &sqlx::PgPool,
@@ -754,4 +794,9 @@ fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult 
             .into_iter()
             .collect(),
     }
+}
+
+async fn lease_durations(pool: &sqlx::PgPool, owner: Uuid) -> (f64, f64) {
+    sqlx::query_as("SELECT (SELECT EXTRACT(EPOCH FROM expiresat-createdat)::float8 FROM backuprepositoryleases WHERE ownerrunid=$1), (SELECT EXTRACT(EPOCH FROM expiresat-createdat)::float8 FROM backupsourceleases WHERE ownerrunid=$1)")
+        .bind(owner).fetch_one(pool).await.unwrap()
 }

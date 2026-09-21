@@ -17,7 +17,7 @@ pub enum WebhookAuthScheme {
     BearerToken,
 }
 
-/// Shared wire configuration, matching .NET's WebhookConfig defaults.
+/// Shared webhook wire configuration and defaults.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RepoWebhookConfig {

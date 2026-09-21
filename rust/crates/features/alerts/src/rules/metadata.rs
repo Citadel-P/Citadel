@@ -23,7 +23,7 @@ impl RenameAlertRuleInput {
 }
 
 // Preserve merge-patch's distinction between an omitted description and null.
-// Other metadata (including tags) is not persisted on Alert Rules by .NET.
+// Other metadata (including tags) is not persisted on Alert Rules.
 pub fn description_patch(patch: &Value) -> Result<Option<Option<&str>>, AlertError> {
     let object = patch
         .as_object()

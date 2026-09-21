@@ -272,7 +272,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(automation_action["tags"][0]["id"], action_tags[0]["id"]);
     assert_eq!(automation_action["capabilities"]["canExecute"], true);
     assert!(automation_action["latestRun"].is_null());
-    // .NET configuration policy: paid triggers cannot be enabled by an
+    // Paid triggers cannot be enabled by an
     // unlicensed administrator; ordinary manual Actions remain available.
     assert_eq!(
         request(
@@ -1101,7 +1101,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(provider_response.status(), StatusCode::OK);
     let provider = response_json(provider_response).await;
     let provider_id = provider["id"].as_str().unwrap();
-    // .NET Vault connection/reference commands require Binding.Write even though
+    // Vault connection/reference commands require Binding.Write even though
     // they do not persist anything. Authorization must precede provider access.
     for uri in [
         "/api/v1/resourceBindings/secret-providers/vault-kv2/test",

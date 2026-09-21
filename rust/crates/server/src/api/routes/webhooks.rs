@@ -783,7 +783,7 @@ async fn receive_service_webhook(
     let mut webhook = WebhookConfiguration::from_value(Some(&value))
         .map_err(webhook_auth_error)?
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
-    // A Service follows an image tag, not a Git branch (.NET compatibility).
+    // A Service follows an image tag, not a Git branch.
     webhook.branch_filter = None;
     if let Some(reason) = webhook
         .evaluate(auth_type, headers, body)

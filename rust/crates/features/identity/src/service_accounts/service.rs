@@ -13,6 +13,7 @@ pub struct ServiceAccountService {
     tokens: Arc<dyn ServiceAccountTokenCodec>,
     entitlements: Arc<dyn EntitlementService>,
     clock: Arc<dyn Clock>,
+    limits: ServiceAccountLimitsDetails,
 }
 
 impl ServiceAccountService {
@@ -28,7 +29,27 @@ impl ServiceAccountService {
             tokens,
             entitlements,
             clock,
+            limits: ServiceAccountLimitsDetails::default(),
         }
+    }
+
+    pub fn with_limits(
+        mut self,
+        limits: ServiceAccountLimitsDetails,
+    ) -> Result<Self, IdentityError> {
+        if limits.default_token_lifetime_days <= 0
+            || limits.maximum_token_lifetime_days < limits.default_token_lifetime_days
+            || limits.maximum_token_lifetime_days > 365_000
+            || limits.maximum_active_tokens_per_account <= 0
+        {
+            return Err(IdentityError::Validation("Service-account limits require positive values, a maximum lifetime at least as long as the default, and at most 365000 days.".into()));
+        }
+        self.limits = limits;
+        Ok(self)
+    }
+
+    pub fn limits(&self) -> ServiceAccountLimitsDetails {
+        self.limits
     }
 
     pub async fn list(
@@ -241,7 +262,7 @@ impl ServiceAccountService {
             Some(
                 request
                     .expires_at_utc
-                    .unwrap_or(now + Duration::days(DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS)),
+                    .unwrap_or(now + Duration::days(self.limits.default_token_lifetime_days)),
             )
         };
         if expires_at.is_some_and(|expires| expires <= now) {
@@ -250,10 +271,11 @@ impl ServiceAccountService {
             ));
         }
         if expires_at.is_some_and(|expires| {
-            expires > now + Duration::days(MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS)
+            expires > now + Duration::days(self.limits.maximum_token_lifetime_days)
         }) {
             return Err(IdentityError::Validation(format!(
-                "Token expiration cannot exceed {MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS} days."
+                "Token expiration cannot exceed {} days.",
+                self.limits.maximum_token_lifetime_days
             )));
         }
         let id = Uuid::now_v7();
@@ -270,7 +292,7 @@ impl ServiceAccountService {
                     created_by_actor_id: actor_id,
                     created_at_utc: now,
                 },
-                MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS,
+                self.limits.maximum_active_tokens_per_account,
             )
             .await?;
         Ok(CreatedServiceAccountTokenDetails {

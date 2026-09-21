@@ -15,6 +15,7 @@ pub struct BackupService {
     active_backups: Mutex<HashMap<Uuid, CancellationToken>>,
     active_restores: Mutex<HashMap<Uuid, CancellationToken>>,
     stale_after: chrono::Duration,
+    repository_operation_lease: chrono::Duration,
     authorizer: Arc<dyn BackupRunAuthorizer>,
     entitlements: Option<Arc<dyn BackupEntitlements>>,
 }
@@ -97,9 +98,15 @@ impl BackupService {
             active_backups: Mutex::new(HashMap::new()),
             active_restores: Mutex::new(HashMap::new()),
             stale_after,
+            repository_operation_lease: chrono::Duration::minutes(16),
             authorizer,
             entitlements: None,
         }
+    }
+
+    pub fn with_repository_operation_lease(mut self, lease: chrono::Duration) -> Self {
+        self.repository_operation_lease = lease;
+        self
     }
 
     pub fn store(&self) -> &Arc<dyn BackupPersistence> {

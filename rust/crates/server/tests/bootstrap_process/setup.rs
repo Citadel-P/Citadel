@@ -179,8 +179,8 @@ async fn deleting_initial_user_does_not_reopen_setup_after_restart() {
     assert_eq!(fixture.ready(&mut server).await["requiresSetup"], true);
     assert_eq!(initialize(&fixture, &server, "owner").await.status(), 200);
     let pool = PgPool::connect(&fixture.database_url).await.unwrap();
-    // Match the .NET test's direct persistence removal, not an authorized User
-    // delete request (which must retain the last-administrator safety guard).
+    // Remove the fixture directly to exercise setup recovery. The User delete
+    // endpoint must retain its last-administrator safety guard.
     let removed = sqlx::query("DELETE FROM users WHERE name='owner'")
         .execute(&pool)
         .await

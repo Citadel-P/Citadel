@@ -67,7 +67,7 @@ impl DockerClient {
             .refreshed
             .is_none_or(|at| at.elapsed() >= Duration::from_secs(60))
         {
-            // Preserve last successful totals on a transient error, as the .NET provider does.
+            // Preserve the last successful totals on a transient error.
             // Cancellation drops this future before advancing the retry deadline.
             match self
                 .system_data_usage(vec!["image".into(), "volume".into()])

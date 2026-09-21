@@ -146,7 +146,7 @@ async fn service_log_reads_preserve_tail_truncation_and_reject_oversized_agent_o
     }
 }
 
-// Ports the .NET EdgeAgentConnectorTests interactive-session contract and
+// Verify the Edge Agent interactive-session contract and
 // ExecSessionManagerTests disposal requirement; no manager fallback is possible.
 #[tokio::test]
 async fn terminal_routes_open_input_resize_to_exact_node_and_drop_cancels() {

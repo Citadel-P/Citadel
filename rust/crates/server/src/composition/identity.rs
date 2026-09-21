@@ -59,7 +59,7 @@ pub(super) fn build(
         identity_store.clone(),
         config.identity.service_account_last_used_capacity,
         Duration::from_secs(30),
-        Duration::from_secs(5 * 60),
+        config.identity.service_account_last_used_interval,
     );
     let identity = Arc::new(IdentityService::new(
         identity_store.clone(),
@@ -100,12 +100,15 @@ pub(super) fn build(
         clock.clone(),
         chrono::Duration::minutes(10),
     ));
-    let service_accounts = Arc::new(ServiceAccountService::new(
-        Arc::new(PostgresServiceAccountRepository::new(pool.clone())),
-        service_account_tokens,
-        entitlements.clone(),
-        clock.clone(),
-    ));
+    let service_accounts = Arc::new(
+        ServiceAccountService::new(
+            Arc::new(PostgresServiceAccountRepository::new(pool.clone())),
+            service_account_tokens,
+            entitlements.clone(),
+            clock.clone(),
+        )
+        .with_limits(config.identity.service_account_limits)?,
+    );
     let profiles = Arc::new(ProfileService::new(
         Arc::new(PostgresProfileRepository::new(pool.clone())),
         Arc::clone(&identity),

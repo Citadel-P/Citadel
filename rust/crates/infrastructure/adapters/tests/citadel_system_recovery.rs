@@ -88,7 +88,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .unwrap();
     target.close().await;
     // ControlPlaneRecoveryTests.Restore_ShouldRejectDatabaseArchiveWithoutSecretEncryptionKey:
-    // Rust keeps key material in external configuration, not a .NET key file.
+    // This fixture supplies key material through external configuration.
     // Reject before pg_restore can alter the target, even with a valid bundle.
     let sentinel = PgPoolOptions::new()
         .max_connections(1)

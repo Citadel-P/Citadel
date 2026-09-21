@@ -1,4 +1,4 @@
-# Build the same frontend assets as the .NET image.
+# Build the frontend assets served by Core.
 FROM node:24-alpine AS frontend-build
 WORKDIR /source/frontend
 COPY src/Citadel.FrontEnd/package.json src/Citadel.FrontEnd/package-lock.json ./
@@ -33,6 +33,7 @@ FROM docker.io/denoland/deno@sha256:b0e1bf78aea23abe03edf5c411cb9db3e1011d8659bf
 FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime-base
 
 WORKDIR /app
+ENV HOME=/app
 ARG TARGETARCH
 LABEL com.citadel.system="true" \
       com.citadel.system-role="core"
@@ -46,11 +47,11 @@ RUN chmod +x install-server-deps.sh \
     && rm install-server-deps.sh
 
 RUN mkdir -p /app/data && chown -R 65532:0 /app
-USER 65532:0
+COPY --chmod=0755 rust/scripts/docker-entrypoint.sh /usr/local/bin/citadel-entrypoint
 EXPOSE 8000 8001
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \
-    CMD ["/app/citadel-server", "healthcheck"]
-ENTRYPOINT ["/app/citadel-server"]
+    CMD ["/usr/local/bin/citadel-entrypoint", "healthcheck"]
+ENTRYPOINT ["/usr/local/bin/citadel-entrypoint"]
 CMD ["serve"]
 
 # Development mounts the local Cargo binary into runtime-base, reusing its cache.

@@ -150,7 +150,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .await
         .unwrap();
     assert_eq!(store.get_run(queued.id).await.unwrap().status, "Succeeded");
-    // Port the .NET queued/started/terminal Activity contract. Late completion
+    // Verify queued/started/terminal Activities. Late completion
     // must neither alter the result nor duplicate the terminal Activity.
     assert!(!store.finish(&claim, &success_result('a')).await.unwrap());
     let events: Vec<String> = sqlx::query_scalar(

@@ -1,5 +1,5 @@
-//! Ports the shared-secret and body-limit cases from .NET WebhookListenerTests,
-//! then exercises durable Automation dispatch through the real Deno worker.
+//! Verify shared-secret authentication and webhook body limits,
+//! then exercise durable Automation dispatch through the real Deno worker.
 use super::*;
 use citadel_automation::{AutomationEntitlements, AutomationError};
 use futures_util::future::BoxFuture;

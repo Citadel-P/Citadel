@@ -1,4 +1,4 @@
-//! Shared event and reconciliation rules, matching the .NET container work items.
+//! Shared container event and reconciliation rules.
 use citadel_activities::{ActivityEvent, ActivityEventInfo, ActivityStatus};
 use citadel_primitives::ActorId;
 use sqlx::{PgPool, Postgres, Row, Transaction};

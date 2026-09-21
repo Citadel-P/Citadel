@@ -49,6 +49,28 @@ filesystem operations; the folder move does not claim those have been eliminated
 Historical reports retain the paths recorded at their audit dates. Generators,
 build inputs, development instructions and active architecture checks use current paths.
 
+## Runtime configuration
+
+Server parses environment settings once in `config.rs` and `config/execution.rs`,
+validates them before service construction, and injects typed options through
+composition. Features and adapters do not look up these hosting settings.
+`rust/.env.example` documents settings for installing and operating Citadel;
+`DEVELOPMENT.md` explains production and development env-file selection.
+Keep env templates focused on operator decisions. Queue capacities, polling and
+lease intervals, buffer limits, tool paths and implementation-specific tuning
+belong in developer documentation or code defaults.
+
+Comments and current documentation explain Citadel's behavior and constraints,
+without referring to the language or framework of an earlier implementation.
+
+Service-account limits are shared by token issuance and the API's limits response.
+Node-agent setup receives its configured timing, architecture and resource policy.
+Direct Agent clients retain TLS trust settings when retargeted to a Platform.
+Backup execution receives path restrictions, log bounds and timeouts; durable
+leases cover the operation plus configured padding, without retaining a database
+connection during external work. Unset identity keys are generated atomically and
+persisted in the data volume. Offline recovery must use the original keys.
+
 ## Ownership and dependency direction
 
 Organize by feature-oriented bounded contexts, not workspace-wide domain/application

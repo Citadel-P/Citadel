@@ -83,7 +83,7 @@ async fn collect_swarm_inventory(
                     && task.state.eq_ignore_ascii_case("running")
             })
             .count();
-        // Match the .NET active Task projection limit. Services/nodes remain
+        // Apply the active Task projection limit. Services/nodes remain
         // complete so absence and replica-count reconciliation stay authoritative.
         tasks.sort_by_key(|task| std::cmp::Reverse(task.status_timestamp));
         tasks.truncate(500);

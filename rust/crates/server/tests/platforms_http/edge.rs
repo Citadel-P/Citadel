@@ -8,6 +8,7 @@ use citadel_server::api::routes::platforms::EdgeHttpContext;
 async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_and_permissions() {
     let fixture = fixture().await;
     let app = fixture.app.clone().layer(axum::Extension(EdgeHttpContext {
+        node_agent_policy: Default::default(),
         store:
             citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
                 fixture.pool.clone(),

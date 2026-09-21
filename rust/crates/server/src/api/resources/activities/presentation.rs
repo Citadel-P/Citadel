@@ -1,4 +1,4 @@
-/// Convert persisted .NET activity property names to the public HTTP/realtime contract.
+/// Convert persisted activity property names to the public HTTP/realtime contract.
 pub fn public_activity_info(value: serde_json::Value) -> serde_json::Value {
     use serde_json::{Map, Value};
     match value {

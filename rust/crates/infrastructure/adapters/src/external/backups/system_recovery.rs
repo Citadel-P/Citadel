@@ -27,6 +27,15 @@ pub struct PgDumpSystemBackupBuilder {
     pg_dump: OsString,
     staging_root: PathBuf,
     maximum_output: usize,
+    recovery_assets: Option<RecoveryAssets>,
+}
+
+/// File-backed keys are archived; explicitly configured keys stay external.
+#[derive(Clone)]
+pub struct RecoveryAssets {
+    pub core_data_path: PathBuf,
+    pub jwt_key_is_external: bool,
+    pub encryption_key_is_external: bool,
 }
 
 #[derive(Clone)]
@@ -93,7 +102,13 @@ impl PgDumpSystemBackupBuilder {
             pg_dump: pg_dump.into(),
             staging_root,
             maximum_output,
+            recovery_assets: None,
         }
+    }
+
+    pub fn with_recovery_assets(mut self, assets: RecoveryAssets) -> Self {
+        self.recovery_assets = Some(assets);
+        self
     }
 
     async fn build_bundle(
@@ -164,6 +179,10 @@ impl PgDumpSystemBackupBuilder {
             "database/citadel.dump".to_owned(),
             sha256_file(&dump).await?,
         );
+        let (recovery_files, required_external_configuration) = match &self.recovery_assets {
+            Some(assets) => copy_recovery_assets(assets, directory, &mut checksums).await?,
+            None => (vec![], vec!["Jwt__Key", "Secrets__EncryptionKey"]),
+        };
         let manifest = RecoveryManifest {
             format_version: 1,
             product: "citadel",
@@ -175,7 +194,8 @@ impl PgDumpSystemBackupBuilder {
                 path: "database/citadel.dump",
                 sha256: checksums["database/citadel.dump"].clone(),
             },
-            required_external_configuration: vec!["Jwt__Key", "Secrets__EncryptionKey"],
+            required_external_configuration,
+            recovery_files,
         };
         write_json(&directory.join("manifest.json"), &manifest).await?;
         checksums.insert(
@@ -185,6 +205,53 @@ impl PgDumpSystemBackupBuilder {
         write_json(&directory.join("checksums.json"), &checksums).await?;
         Ok(())
     }
+}
+
+const RECOVERY_FILES: &[&str] = &[
+    "recovery/jwtsecret",
+    "recovery/secret-encryption-key",
+    "recovery/agent/signing-key",
+];
+
+async fn copy_recovery_assets(
+    assets: &RecoveryAssets,
+    directory: &Path,
+    checksums: &mut BTreeMap<String, String>,
+) -> Result<(Vec<String>, Vec<&'static str>), BackupError> {
+    let mut files = Vec::new();
+    let mut external = Vec::new();
+    for (name, setting, configured) in [
+        ("jwtsecret", "Jwt__Key", assets.jwt_key_is_external),
+        (
+            "secret-encryption-key",
+            "Secrets__EncryptionKey",
+            assets.encryption_key_is_external,
+        ),
+        ("agent/signing-key", "", false),
+    ] {
+        if configured {
+            external.push(setting);
+            continue;
+        }
+        let root = assets.core_data_path.canonicalize().map_err(storage)?;
+        let source = checked_bundle_file(&root, name).await?;
+        if tokio::fs::metadata(&source).await.map_err(storage)?.len() > 16 * 1024 {
+            return Err(BackupError::Validation(format!(
+                "Recovery key '{name}' is too large."
+            )));
+        }
+        let relative = format!("recovery/{name}");
+        let target = directory.join(&relative);
+        ensure_private_root(target.parent().expect("recovery subdirectory")).await?;
+        let bytes = Zeroizing::new(tokio::fs::read(source).await.map_err(storage)?);
+        tokio::fs::write(&target, bytes.as_slice())
+            .await
+            .map_err(storage)?;
+        set_private_file(&target)?;
+        checksums.insert(relative.clone(), sha256_file(&target).await?);
+        files.push(relative);
+    }
+    Ok((files, external))
 }
 
 async fn cleanup_stale_staging(root: &Path) -> Result<(), BackupError> {
@@ -245,6 +312,8 @@ struct RecoveryManifest<'a> {
     created_at: chrono::DateTime<chrono::Utc>,
     database: DatabaseManifest<'a>,
     required_external_configuration: Vec<&'a str>,
+    #[serde(default)]
+    recovery_files: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -402,7 +471,21 @@ async fn validate_recovery_bundle(root: &Path) -> Result<PathBuf, BackupError> {
         &tokio::fs::read(&checksums_path).await.map_err(storage)?,
     )
     .map_err(|error| BackupError::Validation(format!("Recovery checksums are invalid: {error}")))?;
-    if checksums.len() != 2
+    if manifest
+        .recovery_files
+        .iter()
+        .any(|name| !RECOVERY_FILES.contains(&name.as_str()))
+        || manifest
+            .recovery_files
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            != manifest.recovery_files.len()
+        || checksums.len() != 2 + manifest.recovery_files.len()
+        || manifest
+            .recovery_files
+            .iter()
+            .any(|name| !checksums.contains_key(name))
         || !checksums.contains_key("manifest.json")
         || !checksums.contains_key(manifest.database.path)
     {
@@ -572,6 +655,76 @@ mod parity_tests;
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn file_backed_keys_are_archived_and_external_keys_are_never_copied() {
+        let root = std::env::temp_dir().join(format!("citadel-recovery-{}", Uuid::now_v7()));
+        let data = root.join("custom-data");
+        tokio::fs::create_dir_all(data.join("agent")).await.unwrap();
+        for file in ["jwtsecret", "secret-encryption-key", "agent/signing-key"] {
+            tokio::fs::write(data.join(file), b"original-key")
+                .await
+                .unwrap();
+        }
+        let assets = RecoveryAssets {
+            core_data_path: data.clone(),
+            jwt_key_is_external: false,
+            encryption_key_is_external: false,
+        };
+        let bundle = root.join("bundle");
+        let mut checksums = BTreeMap::new();
+        let (files, external) = copy_recovery_assets(&assets, &bundle, &mut checksums)
+            .await
+            .unwrap();
+        assert_eq!(files.len(), 3);
+        assert!(external.is_empty());
+        for file in files {
+            assert_eq!(
+                tokio::fs::read(bundle.join(&file)).await.unwrap(),
+                b"original-key"
+            );
+            assert_eq!(
+                checksums[&file],
+                sha256_file(&bundle.join(&file)).await.unwrap()
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(
+                    std::fs::metadata(bundle.join(&file))
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                    0o600
+                );
+            }
+        }
+        let external_bundle = root.join("external");
+        let (files, external) = copy_recovery_assets(
+            &RecoveryAssets {
+                jwt_key_is_external: true,
+                encryption_key_is_external: true,
+                ..assets.clone()
+            },
+            &external_bundle,
+            &mut BTreeMap::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(files, ["recovery/agent/signing-key"]);
+        assert_eq!(external, ["Jwt__Key", "Secrets__EncryptionKey"]);
+        assert!(!external_bundle.join("recovery/jwtsecret").exists());
+        tokio::fs::remove_file(data.join("secret-encryption-key"))
+            .await
+            .unwrap();
+        assert!(
+            copy_recovery_assets(&assets, &root.join("missing"), &mut BTreeMap::new())
+                .await
+                .is_err()
+        );
+        tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
     #[test]
     fn postgres_credentials_are_passed_in_environment_not_arguments() {
         let (arguments, environment) = pg_dump_request(
@@ -632,6 +785,9 @@ mod tests {
         let dump = database.join("citadel.dump");
         tokio::fs::write(&dump, b"PGDMPfixture").await.unwrap();
         let dump_hash = sha256_file(&dump).await.unwrap();
+        tokio::fs::create_dir(root.join("recovery")).await.unwrap();
+        let key = root.join("recovery/jwtsecret");
+        tokio::fs::write(&key, b"original-key").await.unwrap();
         let manifest = RecoveryManifest {
             format_version: 1,
             product: "citadel",
@@ -644,11 +800,16 @@ mod tests {
                 sha256: dump_hash.clone(),
             },
             required_external_configuration: vec!["Jwt__Key", "Secrets__EncryptionKey"],
+            recovery_files: vec!["recovery/jwtsecret".into()],
         };
         write_json(&root.join("manifest.json"), &manifest)
             .await
             .unwrap();
         let checksums = BTreeMap::from([
+            (
+                "recovery/jwtsecret".to_owned(),
+                sha256_file(&key).await.unwrap(),
+            ),
             ("database/citadel.dump".to_owned(), dump_hash),
             (
                 "manifest.json".to_owned(),
@@ -663,6 +824,15 @@ mod tests {
             dump.canonicalize().unwrap()
         );
 
+        tokio::fs::write(&key, b"tampered-key").await.unwrap();
+        assert!(
+            validate_recovery_bundle(&root)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("does not match")
+        );
+        tokio::fs::write(&key, b"original-key").await.unwrap();
         tokio::fs::write(&dump, b"PGDMPtampered").await.unwrap();
         let error = validate_recovery_bundle(&root).await.unwrap_err();
         assert!(error.to_string().contains("does not match"));

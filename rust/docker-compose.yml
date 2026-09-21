@@ -2,25 +2,23 @@ name: ${COMPOSE_PROJECT_NAME:-citadel-rust}
 
 services:
   server:
-    image: ${CITADEL_IMAGE:-citadel-rust:local}
+    image: ${CITADEL_IMAGE:-citadel-rust:${CITADEL_IMAGE_TAG:-local}}
     build:
       context: ..
       dockerfile: rust/Dockerfile
       args:
-        VERSION: ${CITADEL_VERSION:-0.0.0-local}
-        INFORMATIONAL_VERSION: ${CITADEL_VERSION:-0.0.0-local}
+        VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
+        INFORMATIONAL_VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     environment:
-      PG_HOST: pg_db
-      PG_PORT: "5432"
-      Jwt__Key: ${Jwt__Key:?Set Jwt__Key in .env}
-      Secrets__EncryptionKey: ${Secrets__EncryptionKey:?Set Secrets__EncryptionKey in .env}
+      PG_HOST: ${PG_HOST:-pg_db}
+      PG_PORT: "${PG_PORT:-5432}"
     depends_on:
       pg_db:
         condition: service_healthy
-    group_add:
-      - "${DOCKER_GID:?Set DOCKER_GID to the host Docker socket group ID}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /:/host:ro
@@ -29,7 +27,7 @@ services:
       - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_HTTP_PORT:-18000}:${Transport__ApiPort:-8000}"
       - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${Transport__EdgeGrpcPort:-8001}"
     healthcheck:
-      test: ["CMD", "/app/citadel-server", "healthcheck"]
+      test: ["CMD", "/usr/local/bin/citadel-entrypoint", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3

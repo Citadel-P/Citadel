@@ -1,6 +1,5 @@
 //! Real Deno and Shoutrrr execution with PostgreSQL and a local HTTP receiver.
-//! Ports the process/result/alert cases of AutomationActionIntegrationTests;
-//! unlike the .NET process mock, this gate executes the packaged tools.
+//! Verify process results and alerts using the packaged tools.
 mod automation_support;
 use axum::{
     Json, Router,
@@ -291,7 +290,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
                     .count(),
                 1
             );
-            // .NET suppresses failure Alerts for Test runs, while retaining their
+            // Suppress failure Alerts for Test runs, while retaining their
             // failed result and Activity history.
             let test_run = store
                 .enqueue(actor, action.id, "Test", &json!({}), None)

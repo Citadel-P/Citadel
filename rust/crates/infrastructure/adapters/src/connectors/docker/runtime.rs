@@ -368,7 +368,7 @@ pub fn container_observation(
     }))
 }
 
-/// Match .NET PlatformService.GetSystemStats: count the containers exposed by
+/// Count the containers exposed by
 /// ContainerList; Docker Desktop /info totals can disagree with this visible list.
 #[derive(Default)]
 pub(super) struct ContainerCounts {

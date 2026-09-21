@@ -3595,6 +3595,7 @@ fn deletion_error(error: PlatformDeletionError) -> ApiError {
 
 #[derive(Clone)]
 pub struct EdgeHttpContext {
+    pub node_agent_policy: citadel_platforms::node_agents::setup::NodeAgentSetupPolicy,
     pub store: PostgresEdgeStore,
     pub registry: EdgeRegistry,
     pub core_url: String,
@@ -3620,6 +3621,7 @@ macro_rules! setup_handler {
                 Some((
                     SetupKind::$kind,
                     SetupOptions {
+                        policy: edge.node_agent_policy,
                         core_url: edge.core_url,
                         image: edge.agent_image,
                         ca_bundle: edge.node_agent_ca_bundle,

@@ -243,7 +243,7 @@ impl PostgresBackupSourcePlanner {
             return Ok(());
         }
         let names = volumes.iter().map(|v| v.name.clone()).collect::<Vec<_>>();
-        // .NET treats Protected and Warning coverage as present: even a disabled
+        // Protected and Warning coverage count as present: even a disabled
         // or never-run readable Volume policy is Warning. Only no policy or the
         // latest Failed run yields false. Never expose an inaccessible policy.
         let query = format!(

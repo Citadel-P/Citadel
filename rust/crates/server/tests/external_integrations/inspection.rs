@@ -29,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-/// The .NET Vault acceptance checks both public inspection routes after actual
+/// Check both public Vault inspection routes after actual
 /// deployment. Use the production collector/store so Stack ownership and the
 /// browser's persisted container ID are not supplied by a hand-written fixture.
 pub async fn verify(

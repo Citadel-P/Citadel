@@ -17,7 +17,7 @@ esac
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install --yes --no-install-recommends \
-  ca-certificates git openssh-client postgresql-client restic curl
+  ca-certificates git openssh-client postgresql-client restic curl util-linux
 
 archive_path=$(mktemp)
 trap 'rm -f "$archive_path"' EXIT HUP INT TERM
