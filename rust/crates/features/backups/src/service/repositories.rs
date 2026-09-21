@@ -21,7 +21,7 @@ impl BackupService {
                 id,
                 operation_id,
                 operation,
-                Utc::now() + chrono::Duration::minutes(16),
+                Utc::now() + self.repository_operation_lease,
             )
             .await?
         {

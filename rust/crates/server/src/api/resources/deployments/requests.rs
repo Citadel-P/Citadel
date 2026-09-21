@@ -21,7 +21,7 @@ pub struct CreateDeploymentInput {
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchDeploymentInput {
-    // The editor submits the full form. Like .NET, configuration PATCH only
+    // The editor submits the full form. Configuration PATCH only
     // applies platform/spec; identity, rename and metadata have their own paths.
     #[serde(rename = "id")]
     pub _id: Option<Uuid>,

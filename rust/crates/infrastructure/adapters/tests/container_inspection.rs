@@ -1,7 +1,7 @@
 use citadel_adapters::connectors::containers::inspection::map_inspection;
 use serde_json::json;
 
-// Ports ContainerInspectionRedactorTests from the .NET implementation.
+// Verify redaction of sensitive container inspection fields.
 #[test]
 fn inspection_masks_sensitive_environment_and_preserves_ordinary_values() {
     let mut env = vec![

@@ -1,6 +1,6 @@
 use crate::*;
 
-/// Match .NET's expansion policy: code/description edits and disabling paid
+/// Code/description edits and disabling paid
 /// triggers remain possible after license expiry.
 pub fn changes_paid_trigger(
     current: Option<&AutomationAction>,

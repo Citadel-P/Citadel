@@ -38,6 +38,7 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 
 #[derive(Clone)]
 pub struct DockerResticBackupExecutor {
+    settings: Option<super::settings::BackupExecutionSettings>,
     progress: Option<Arc<dyn Fn(BackupLog) + Send + Sync>>,
     docker: OsString,
     restic: OsString,
@@ -63,6 +64,7 @@ impl DockerResticBackupExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
+            settings: None,
             progress: None,
             docker: docker.into(),
             restic: "restic".into(),
@@ -73,6 +75,31 @@ impl DockerResticBackupExecutor {
             agent: None,
             edge: EdgeRegistry::default(),
         }
+    }
+
+    pub fn with_settings(mut self, settings: super::settings::BackupExecutionSettings) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+    fn log_line_limit(&self) -> usize {
+        self.settings
+            .as_ref()
+            .map_or(8192, |s| s.maximum_log_line_bytes)
+    }
+    fn repository_timeout(&self) -> Duration {
+        self.settings
+            .as_ref()
+            .map_or(Duration::from_secs(900), |s| s.default_timeout)
+    }
+    fn restore_timeout(&self) -> Duration {
+        self.settings
+            .as_ref()
+            .map_or(Duration::from_secs(14_400), |s| s.default_timeout)
+    }
+    fn core_repository_path(&self, path: &str) -> Result<std::path::PathBuf, String> {
+        self.settings
+            .as_ref()
+            .map_or_else(|| Ok(path.into()), |s| s.repository_path(path))
     }
 
     #[must_use]
@@ -167,7 +194,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
                         platform_id,
                         repository,
                         arguments,
-                        Duration::from_secs(900),
+                        self.repository_timeout(),
                         cancellation,
                     )
                     .await
@@ -197,11 +224,11 @@ impl BackupExecutor for DockerResticBackupExecutor {
                 }
             }
             let output = self
-                .execute(args, env, Duration::from_secs(900), cancellation)
+                .execute(args, env, self.repository_timeout(), cancellation)
                 .await;
             self.cleanup(&name).await;
             output
-                .map(|value| output_logs(&value))
+                .map(|value| output_logs(&value, self.log_line_limit(), self.maximum_output))
                 .map_err(BackupError::Storage)
         })
     }
@@ -315,7 +342,7 @@ impl DockerResticBackupExecutor {
         let mut request = ProcessRequest::new(self.restic.clone())
             .args(arguments)
             .limits(ProcessLimits {
-                timeout: Duration::from_secs(900),
+                timeout: self.repository_timeout(),
                 maximum_stdout_bytes: self.maximum_output,
                 maximum_stderr_bytes: self.maximum_output,
                 output_limit_policy: OutputLimitPolicy::Truncate,
@@ -328,7 +355,11 @@ impl DockerResticBackupExecutor {
             .await
             .map_err(|error| error.to_string())?;
         if output.succeeded() {
-            Ok(output_logs(&output))
+            Ok(output_logs(
+                &output,
+                self.log_line_limit(),
+                self.maximum_output,
+            ))
         } else {
             Err(redact(&String::from_utf8_lossy(&output.stderr)))
         }
@@ -500,12 +531,12 @@ impl DockerResticBackupExecutor {
         let output = match self.run_observed(request, cancellation).await {
             Ok(output) if output.succeeded() => output,
             Ok(output) => {
-                let logs = output_logs(&output);
+                let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
                 return Err((redact(&String::from_utf8_lossy(&output.stderr)), logs));
             }
             Err(error) => return Err((error.to_string(), vec![])),
         };
-        let logs = output_logs(&output);
+        let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
         let summary = parse_restic_summary(&output.stdout).ok_or_else(|| {
             (
                 "Restic completed without returning a summary.".to_owned(),
@@ -580,7 +611,7 @@ impl DockerResticBackupExecutor {
             Ok(output) => output,
             Err(error) => return Err((error, vec![])),
         };
-        let logs = output_logs(&output);
+        let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
         let summary = parse_restic_summary(&output.stdout).ok_or_else(|| {
             (
                 "Restic completed without returning a summary.".to_owned(),
@@ -659,7 +690,12 @@ impl DockerResticBackupExecutor {
                 )
                 .await
                 .map_err(|error| (error.to_string(), Vec::new()))?;
-            let logs = agent_output_logs(&output.stdout, &output.stderr);
+            let logs = agent_output_logs(
+                &output.stdout,
+                &output.stderr,
+                self.log_line_limit(),
+                self.maximum_output,
+            );
             if output.exit_code != 0 {
                 return Err((redact(&String::from_utf8_lossy(&output.stderr)), logs));
             }
@@ -729,7 +765,12 @@ impl DockerResticBackupExecutor {
             if output.exit_code != 0 {
                 return Err(redact(&String::from_utf8_lossy(&output.stderr)));
             }
-            Ok(agent_output_logs(&output.stdout, &output.stderr))
+            Ok(agent_output_logs(
+                &output.stdout,
+                &output.stderr,
+                self.log_line_limit(),
+                self.maximum_output,
+            ))
         }
         .await;
         let _ = agent
@@ -801,7 +842,7 @@ impl DockerResticBackupExecutor {
             )
             .await;
         self.cleanup(&name).await;
-        output.map(|output| output_logs(&output))
+        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
     }
 
     async fn run_direct_retention(
@@ -841,7 +882,11 @@ impl DockerResticBackupExecutor {
             .await
             .map_err(|error| error.to_string())?;
         if output.succeeded() {
-            Ok(output_logs(&output))
+            Ok(output_logs(
+                &output,
+                self.log_line_limit(),
+                self.maximum_output,
+            ))
         } else {
             Err(redact(&String::from_utf8_lossy(&output.stderr)))
         }
@@ -934,7 +979,7 @@ impl DockerResticBackupExecutor {
             "--delete".into(),
         ]);
         let output = self
-            .execute(args, env, Duration::from_secs(14_400), cancellation)
+            .execute(args, env, self.restore_timeout(), cancellation)
             .await;
         self.cleanup(&name).await;
         if output.is_err() && created {
@@ -952,7 +997,7 @@ impl DockerResticBackupExecutor {
                 )
                 .await;
         }
-        output.map(|output| output_logs(&output))
+        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
     }
 
     async fn run_agent_restore(
@@ -974,7 +1019,7 @@ impl DockerResticBackupExecutor {
         if existing && !claim.run.overwrite_existing {
             return Err("Target Volume already exists.".to_owned());
         }
-        let timeout = Duration::from_secs(14_400);
+        let timeout = self.restore_timeout();
         let container_id = self
             .create_agent_helper(
                 agent,
@@ -1045,7 +1090,12 @@ impl DockerResticBackupExecutor {
                 .await
                 .map_err(|error| error.to_string())?;
             if output.exit_code == 0 {
-                Ok(agent_output_logs(&output.stdout, &output.stderr))
+                Ok(agent_output_logs(
+                    &output.stdout,
+                    &output.stderr,
+                    self.log_line_limit(),
+                    self.maximum_output,
+                ))
             } else {
                 Err(redact(&String::from_utf8_lossy(&output.stderr)))
             }
@@ -1317,6 +1367,11 @@ impl DockerResticBackupExecutor {
         match repo.repository_type.as_str() {
             "FileSystem" => {
                 let path = required(&repo.spec, "path")?;
+                let path = if required(&repo.spec, "location")? == "Core" {
+                    self.core_repository_path(path)?.display().to_string()
+                } else {
+                    path.to_owned()
+                };
                 args.extend(["--volume".into(), format!("{path}:/repository").into()]);
                 env.push(("RESTIC_REPOSITORY".into(), "/repository".into()));
             }
@@ -1380,7 +1435,8 @@ impl DockerResticBackupExecutor {
                         "Citadel system backup requires a Core or S3-compatible repository.".into(),
                     );
                 }
-                required(&repository.spec, "path")?.into()
+                self.core_repository_path(required(&repository.spec, "path")?)?
+                    .into_os_string()
             }
             "S3Compatible" => {
                 let endpoint = required(&repository.spec, "endpoint")?.trim_end_matches('/');
@@ -1488,16 +1544,29 @@ impl DockerResticBackupExecutor {
     }
     async fn run_observed(
         &self,
-        request: ProcessRequest,
+        mut request: ProcessRequest,
         cancellation: &CancellationToken,
     ) -> Result<citadel_execution::ProcessOutput, citadel_execution::ProcessError> {
+        if let Some(settings) = &self.settings {
+            tokio::fs::create_dir_all(&settings.working_directory)
+                .await
+                .map_err(citadel_execution::ProcessError::Io)?;
+            if request.current_directory.is_none() {
+                request.current_directory = Some(settings.working_directory.clone());
+            }
+        }
         let Some(progress) = &self.progress else {
             return run(request, cancellation).await;
         };
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let (result, ()) = tokio::join!(
             run(request.output(sender), cancellation),
-            observe_output(receiver, progress)
+            observe_output(
+                receiver,
+                progress,
+                self.log_line_limit(),
+                self.maximum_output
+            )
         );
         result
     }
@@ -1520,7 +1589,12 @@ impl DockerResticBackupExecutor {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let (result, ()) = tokio::join!(
             agent.exec_binary_observed(request, timeout, maximum, cancellation, Some(sender)),
-            observe_output(receiver, progress)
+            observe_output(
+                receiver,
+                progress,
+                self.log_line_limit(),
+                self.maximum_output
+            )
         );
         result
     }
@@ -1546,7 +1620,17 @@ impl DockerResticBackupExecutor {
 async fn observe_output(
     mut receiver: tokio::sync::mpsc::Receiver<citadel_execution::ProcessChunk>,
     progress: &Arc<dyn Fn(BackupLog) + Send + Sync>,
+    line_limit: usize,
+    maximum_log_bytes: usize,
 ) {
+    let mut budget = maximum_log_bytes;
+    let mut emit = |log: BackupLog| {
+        let cost = log.message.len() + log.stream.len();
+        if let Some(remaining) = budget.checked_sub(cost) {
+            budget = remaining;
+            progress(log);
+        }
+    };
     let mut lines = [(Vec::new(), false), (Vec::new(), false)];
     while let Some(chunk) = receiver.recv().await {
         let index = usize::from(chunk.stream == "stderr");
@@ -1558,14 +1642,14 @@ async fn observe_output(
                 } else {
                     redact(&String::from_utf8_lossy(line))
                 };
-                progress(BackupLog {
+                emit(BackupLog {
                     stream: chunk.stream.into(),
                     message,
                 });
                 line.clear();
                 *discard = false;
             } else if !*discard {
-                if line.len() < 8192 {
+                if line.len() < line_limit {
                     line.push(byte);
                 } else {
                     line.clear();
@@ -1576,7 +1660,7 @@ async fn observe_output(
     }
     for (index, (line, discard)) in lines.into_iter().enumerate() {
         if discard || !line.is_empty() {
-            progress(BackupLog {
+            emit(BackupLog {
                 stream: if index == 1 { "stderr" } else { "stdout" }.into(),
                 message: if discard {
                     "[oversized output line omitted]".into()
@@ -1714,26 +1798,35 @@ fn failed_backup(
     }
 }
 
-fn output_logs(output: &citadel_execution::ProcessOutput) -> Vec<BackupLog> {
-    let mut logs = Vec::new();
-    for (stream, data) in [("stdout", &output.stdout), ("stderr", &output.stderr)] {
-        for line in String::from_utf8_lossy(data).lines().take(10_000) {
-            logs.push(BackupLog {
-                stream: stream.into(),
-                message: redact(line),
-            });
-        }
-    }
-    logs
+fn output_logs(
+    output: &citadel_execution::ProcessOutput,
+    line_limit: usize,
+    budget: usize,
+) -> Vec<BackupLog> {
+    agent_output_logs(&output.stdout, &output.stderr, line_limit, budget)
 }
-
-fn agent_output_logs(stdout: &[u8], stderr: &[u8]) -> Vec<BackupLog> {
+fn agent_output_logs(
+    stdout: &[u8],
+    stderr: &[u8],
+    line_limit: usize,
+    mut budget: usize,
+) -> Vec<BackupLog> {
     let mut logs = Vec::new();
     for (stream, data) in [("stdout", stdout), ("stderr", stderr)] {
         for line in String::from_utf8_lossy(data).lines().take(10_000) {
+            let message = if line.len() > line_limit {
+                "[oversized output line omitted]".into()
+            } else {
+                redact(line)
+            };
+            let cost = message.len() + stream.len();
+            if cost > budget {
+                return logs;
+            }
+            budget -= cost;
             logs.push(BackupLog {
                 stream: stream.into(),
-                message: redact(line),
+                message,
             });
         }
     }
@@ -1810,13 +1903,27 @@ mod tests {
             .await
             .unwrap();
         drop(sender);
-        observe_output(receiver, &sink).await;
+        observe_output(receiver, &sink, 8192, 1024 * 1024).await;
         let output = output.lock().unwrap();
         assert_eq!(output.len(), 3);
         assert_eq!(output[0].message, "[redacted]");
         assert_eq!(output[1].message, "[oversized output line omitted]");
         assert_eq!(output[2].message, "complete");
     }
+    #[test]
+    fn configured_log_limits_apply_across_both_output_streams() {
+        let logs = agent_output_logs(b"1234567890\nokay\n", b"last\n", 8, 50);
+        assert_eq!(logs[0].message, "[oversized output line omitted]");
+        assert_eq!(logs[1].message, "okay");
+        assert_eq!(logs.len(), 2);
+        assert!(
+            logs.iter()
+                .map(|log| log.message.len() + log.stream.len())
+                .sum::<usize>()
+                <= 50
+        );
+    }
+
     #[test]
     fn restores_the_recorded_volume_root_not_the_helper_directory() {
         let id = "a".repeat(64);

@@ -186,7 +186,7 @@ fn normalize(value: Value, context: &str) -> Value {
 }
 
 fn field_name(name: &str) -> String {
-    // Acronyms whose .NET property spelling differs from protobuf snake_case.
+    // Acronyms whose public property spelling differs from protobuf snake_case.
     const ACRONYMS: &[&str] = &[
         "execIDs",
         "containerIDFile",

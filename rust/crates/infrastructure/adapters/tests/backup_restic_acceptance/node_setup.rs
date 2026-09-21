@@ -53,6 +53,7 @@ pub(super) async fn verify(
             platform,
             kind,
             SetupOptions {
+                policy: Default::default(),
                 core_url: core_url.into(),
                 image,
                 ca_bundle: None,

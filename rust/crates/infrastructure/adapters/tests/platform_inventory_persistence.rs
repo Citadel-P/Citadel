@@ -226,7 +226,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     assert_eq!(node.running_task_count, 1);
     assert_eq!(
         reads.list_swarm_services(platform_id).await.unwrap()[0].ownership,
-        "Unmanaged" // Missing managed owner must remain adoptable (.NET SwarmReconciliationTests).
+        "Unmanaged" // A missing managed owner must remain adoptable.
     );
     assert_eq!(
         reads
@@ -2036,7 +2036,7 @@ async fn orphaned_stack_labels_do_not_abort_the_swarm_inventory_transaction() {
     pool.close().await;
 }
 
-// .NET NormalizeOrphanedOwnership: a valid owner ID is insufficient when the
+// A valid owner ID is insufficient when the
 // namespace differs; an explicit import association takes precedence over labels.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]

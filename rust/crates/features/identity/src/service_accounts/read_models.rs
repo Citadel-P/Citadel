@@ -58,3 +58,13 @@ pub struct ServiceAccountLimitsDetails {
     pub maximum_token_lifetime_days: i64,
     pub maximum_active_tokens_per_account: i64,
 }
+
+impl Default for ServiceAccountLimitsDetails {
+    fn default() -> Self {
+        Self {
+            default_token_lifetime_days: super::DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
+            maximum_token_lifetime_days: super::MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
+            maximum_active_tokens_per_account: super::MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS,
+        }
+    }
+}

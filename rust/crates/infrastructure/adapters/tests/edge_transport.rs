@@ -431,7 +431,7 @@ async fn verify_node_projection_isolation(
         volumes: vec![],
         swarm: None,
     };
-    // .NET SwarmNodeDataPlaneJobTests: an older snapshot cannot delete a
+    // An older snapshot cannot delete a
     // Container observed by a newer event, nor another Node's resources.
     store.persist_inventory(&session, &snapshot).await.unwrap();
     verify_node_local_resources(pool, store, &session, &snapshot).await;
@@ -830,7 +830,7 @@ async fn enrollment_is_hashed_atomic_expiring_and_revocable() {
     other_pool.close().await;
 }
 
-// Real HTTP/2 bidirectional RPC. Mirrors the .NET acceptance protocol client,
+// Exercise a real HTTP/2 bidirectional RPC with a protocol client,
 // including Ed25519's little-endian timestamp + nonce challenge payload.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]

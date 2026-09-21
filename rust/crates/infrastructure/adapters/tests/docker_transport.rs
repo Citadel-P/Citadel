@@ -788,7 +788,7 @@ async fn terminal_hijacks_generated_exec_route_streams_stdin_resizes_and_closes_
     exercise_terminal_resize("200 OK").await;
 }
 
-// .NET ContainerService.ExecAsync logs a resize failure without disposing the
+// A resize failure is logged without disposing the
 // interactive stream. Docker can reject an initial resize during exec startup.
 #[tokio::test]
 async fn terminal_resize_rejection_does_not_close_the_interactive_session() {

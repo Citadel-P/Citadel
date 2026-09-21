@@ -31,9 +31,7 @@ use axum::{
 };
 
 use citadel_identity::{
-    ActorPrincipal, DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS, IdentityError, IdentityService,
-    MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS, MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
-    PermissionGrant, ServiceAccountService,
+    ActorPrincipal, IdentityError, IdentityService, PermissionGrant, ServiceAccountService,
 };
 
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
@@ -595,12 +593,17 @@ async fn remove_resource_access(
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
 )]
-async fn limits(principal: Option<Extension<ActorPrincipal>>, headers: HeaderMap) -> HttpResult {
+async fn limits(
+    State(state): State<ServiceAccountHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+) -> HttpResult {
     api_result(authenticated_principal(principal), &headers)?;
+    let limits = state.service_accounts.limits();
     Ok(Json(ServiceAccountLimitsView {
-        default_token_lifetime_days: DEFAULT_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
-        maximum_token_lifetime_days: MAXIMUM_SERVICE_ACCOUNT_TOKEN_LIFETIME_DAYS,
-        maximum_active_tokens_per_account: MAXIMUM_ACTIVE_SERVICE_ACCOUNT_TOKENS,
+        default_token_lifetime_days: limits.default_token_lifetime_days,
+        maximum_token_lifetime_days: limits.maximum_token_lifetime_days,
+        maximum_active_tokens_per_account: limits.maximum_active_tokens_per_account,
     })
     .into_response())
 }

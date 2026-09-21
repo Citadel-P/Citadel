@@ -36,26 +36,25 @@ pub(super) fn build(
             !config.execution.edge_agent.allow_insecure,
         ),
     );
-    let agent = if let Some(agent) = &config.agent {
-        Some(AgentClient::lazy(
-            &agent.address,
+    let agent_address = config.agent.as_ref().map(|a| a.address.as_str()).unwrap_or(
+        if config.execution.edge_agent.allow_insecure {
+            "http://localhost"
+        } else {
+            "https://localhost"
+        },
+    );
+    let agent = Some(
+        AgentClient::lazy(
+            agent_address,
             agent_signer.clone(),
-            agent.operation_timeout,
-            agent.allow_insecure,
-        )?)
-    } else if config.execution.edge_agent.allow_insecure {
-        // Persisted Platforms supply the actual endpoint. No job probes
-        // this signing context's placeholder address. Direct TLS is not
-        // supported yet, so keep Direct transport disabled when h2c is off.
-        Some(AgentClient::lazy(
-            "http://localhost",
-            agent_signer.clone(),
-            config.docker_request_timeout,
-            true,
-        )?)
-    } else {
-        None
-    };
+            config
+                .agent
+                .as_ref()
+                .map_or(config.docker_request_timeout, |a| a.operation_timeout),
+            config.execution.edge_agent.allow_insecure,
+        )?
+        .with_ca_certificate(config.execution.edge_agent.ca_certificate.clone())?,
+    );
     let runtime_targets =
         citadel_server::runtime_targets::PlatformRuntimeRegistry::new(pool.clone(), agent.clone());
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
@@ -72,6 +71,7 @@ pub(super) fn build(
         requires_tls: !config.execution.edge_agent.allow_insecure,
     };
     let edge_context = platforms_http::EdgeHttpContext {
+        node_agent_policy: config.execution.edge_agent.setup_policy.clone(),
         node_agent_ca_bundle: config.execution.edge_agent.node_agent_ca_bundle.clone(),
         store:
             citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(

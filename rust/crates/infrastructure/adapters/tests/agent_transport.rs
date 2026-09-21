@@ -358,3 +358,104 @@ async fn cancelled_task_inspection_does_not_issue_an_agent_request() {
     );
     server_cancellation.cancel();
 }
+
+#[tokio::test]
+async fn private_ca_is_required_preserved_on_retarget_and_checks_the_hostname() {
+    let root = std::env::temp_dir().join(format!("citadel-agent-tls-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir(&root).unwrap();
+    let output = std::process::Command::new("openssl")
+        .args([
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "subjectAltName=DNS:localhost",
+            "-addext",
+            "basicConstraints=critical,CA:FALSE",
+            "-keyout",
+            "key.pem",
+            "-out",
+            "cert.pem",
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("openssl is required for the Agent TLS test");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let certificate = std::fs::read(root.join("cert.pem")).unwrap();
+    let key = std::fs::read(root.join("key.pem")).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let incoming = async_stream::stream! {
+        loop { yield listener.accept().await.map(|(stream, _)| stream); }
+    };
+    let stop = CancellationToken::new();
+    let shutdown = stop.clone();
+    let service = FixtureService {
+        behavior: HandshakeBehavior::Delay,
+        attempts: Arc::new(AtomicUsize::new(0)),
+        nonces: Arc::new(Mutex::new(Vec::new())),
+    };
+    let base = AgentClient::lazy(
+        "https://unused.invalid",
+        AgentRequestSigner::from_bytes(&[5; 32]),
+        Duration::from_secs(2),
+        false,
+    )
+    .unwrap()
+    .with_ca_certificate(Some(certificate.clone().into()))
+    .unwrap();
+    let server = tonic::transport::Server::builder()
+        .tls_config(
+            tonic::transport::ServerTlsConfig::new()
+                .identity(tonic::transport::Identity::from_pem(&certificate, key)),
+        )
+        .unwrap()
+        .add_service(PlatformServiceServer::new(service));
+    let task = tokio::spawn(async move {
+        server
+            .serve_with_incoming_shutdown(incoming, shutdown.cancelled())
+            .await
+            .unwrap();
+    });
+    let address = format!("https://localhost:{port}");
+    let untrusted = AgentClient::lazy(
+        &address,
+        AgentRequestSigner::from_bytes(&[5; 32]),
+        Duration::from_secs(2),
+        false,
+    )
+    .unwrap();
+    assert!(untrusted.get_info(&CancellationToken::new()).await.is_err());
+    let trusted = base.at_address(&address).unwrap();
+    trusted.get_info(&CancellationToken::new()).await.unwrap();
+    base.for_address(&address, &CancellationToken::new())
+        .await
+        .unwrap()
+        .get_info(&CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(
+        base.at_address(&format!("https://127.0.0.1:{port}"))
+            .unwrap()
+            .get_info(&CancellationToken::new())
+            .await
+            .is_err()
+    );
+    assert!(
+        base.at_address(&format!("http://localhost:{port}"))
+            .is_err()
+    );
+    stop.cancel();
+    task.await.unwrap();
+}

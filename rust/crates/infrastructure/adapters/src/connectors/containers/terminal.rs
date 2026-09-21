@@ -104,7 +104,7 @@ pub(crate) fn local_session(
                     let result = result.map_err(|_|failure("Docker terminal input timed out.")).and_then(|result| result);
                     if let Err(error) = result {
                         if is_resize {
-                            // Match .NET ExecAsync: a rejected/failed resize is
+                            // A rejected or failed resize is
                             // best-effort and must not tear down the shell.
                             tracing::warn!(%error, "Docker terminal resize failed");
                         } else {

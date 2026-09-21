@@ -40,7 +40,7 @@ impl WebhookAuthScheme {
     }
 }
 
-/// Shared wire configuration, matching .NET's WebhookConfig defaults.
+/// Shared webhook wire configuration and defaults.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RepoWebhookConfig {

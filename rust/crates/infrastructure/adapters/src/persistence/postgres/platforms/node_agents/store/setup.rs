@@ -19,6 +19,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
     fn bootstrap<'a>(
         &'a self,
         claim: &'a NodeAgentRemovalClaim,
+        lifetime: std::time::Duration,
     ) -> BoxFuture<'a, Result<Bootstrap, RuntimeCapabilityError>> {
         Box::pin(async move {
             let mut tx = self.0.begin().await.map_err(storage)?;
@@ -35,8 +36,8 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
                 claim.platform_id.simple()
             );
             sqlx::query("UPDATE swarmnodeagentbootstraps SET revokedatutc=COALESCE(revokedatutc,now()),updatedatutc=now() WHERE platformid=$1").bind(claim.platform_id).execute(&mut *tx).await.map_err(storage)?;
-            sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,platformid,clusterid,version,tokenhash,dockersecretname,expiresatutc,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,now()+interval '10 minutes',$7)")
-                .bind(id).bind(claim.platform_id).bind(&claim.cluster_id).bind(version).bind(hash).bind(&name).bind(claim.actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,platformid,clusterid,version,tokenhash,dockersecretname,expiresatutc,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,now()+make_interval(secs=>$8),$7)")
+                .bind(id).bind(claim.platform_id).bind(&claim.cluster_id).bind(version).bind(hash).bind(&name).bind(claim.actor.value()).bind(lifetime.as_secs_f64()).execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(Bootstrap {
                 id,

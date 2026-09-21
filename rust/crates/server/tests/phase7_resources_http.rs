@@ -216,6 +216,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
         citadel_server::api::routes::platforms::EdgeHttpContext {
+        node_agent_policy: Default::default(),
             node_agent_ca_bundle: None,
             store: citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()),
             registry: edge.clone(),

@@ -29,7 +29,7 @@ pub fn description_patch(patch: &Value) -> Result<Option<&str>, BackupError> {
         .as_object()
         .ok_or_else(|| BackupError::Validation("Metadata must be an object.".into()))?;
     match object.get("description") {
-        // The .NET metadata document is applied to an empty description.
+        // The metadata document is applied to an empty description.
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(value)) if value.chars().count() <= 600 => {
             Ok((!value.trim().is_empty()).then_some(value.trim()))

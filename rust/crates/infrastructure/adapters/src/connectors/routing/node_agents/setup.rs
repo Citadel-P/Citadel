@@ -210,9 +210,9 @@ impl NodeAgentSetupRuntime for NodeAgentRuntimeRouter {
                 bootstrap_secret_name: spec.secret_name.clone(),
                 ca_config_id: spec.ca_config_id.clone().unwrap_or_default(),
                 ca_config_name: spec.ca_config_name.clone().unwrap_or_default(),
-                limit_nano_cpus: 500_000_000,
-                limit_memory_bytes: 512 * 1024 * 1024,
-                pids_limit: 256,
+                limit_nano_cpus: spec.limits.nano_cpus,
+                limit_memory_bytes: spec.limits.memory_bytes,
+                pids_limit: spec.limits.pids,
                 stop_grace_period_nanoseconds: 30_000_000_000,
                 supported_architectures: spec.architectures.clone(),
             };
@@ -318,14 +318,14 @@ fn system_docker_spec(spec: &SystemAgentSpec) -> Value {
             "Mounts":[{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock","ReadOnly":false},{"Type":"volume","Source":spec.volume_name,"Target":"/app/data"},{"Type":"tmpfs","Target":"/tmp","TmpfsOptions":{"SizeBytes":67108864,"Mode":448}}],
             "Secrets":[{"SecretID":spec.secret_id,"SecretName":spec.secret_name,"File":{"Name":"citadel-edge-bootstrap","UID":"0","GID":"0","Mode":256}}],"Configs":configs,
             "Healthcheck":{"Test":["CMD-SHELL","wget -q -O - http://127.0.0.1:9000/health >/dev/null || exit 1"],"Interval":30_000_000_000i64,"Timeout":5_000_000_000i64,"Retries":3,"StartPeriod":10_000_000_000i64}},
-            "Resources":{"Limits":{"NanoCPUs":500_000_000,"MemoryBytes":536870912,"Pids":256}},"Placement":{"Constraints":["node.platform.os == linux",format!("node.id != {}",spec.manager_node_id)],"Platforms":spec.architectures.iter().map(|a|json!({"OS":"linux","Architecture":a})).collect::<Vec<_>>()},"RestartPolicy":{"Condition":"any","Delay":5_000_000_000i64},"LogDriver":{"Name":"json-file","Options":{"max-size":"10m","max-file":"3"}}},
+            "Resources":{"Limits":{"NanoCPUs":spec.limits.nano_cpus,"MemoryBytes":spec.limits.memory_bytes,"Pids":spec.limits.pids}},"Placement":{"Constraints":["node.platform.os == linux",format!("node.id != {}",spec.manager_node_id)],"Platforms":spec.architectures.iter().map(|a|json!({"OS":"linux","Architecture":a})).collect::<Vec<_>>()},"RestartPolicy":{"Condition":"any","Delay":5_000_000_000i64},"LogDriver":{"Name":"json-file","Options":{"max-size":"10m","max-file":"3"}}},
         "UpdateConfig":{"Parallelism":1,"FailureAction":"rollback","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"},"RollbackConfig":{"Parallelism":1,"FailureAction":"pause","Monitor":30_000_000_000i64,"MaxFailureRatio":0,"Order":"stop-first"}})
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    // Ports both GetLinuxArchitectures .NET unit tests: single OCI manifest and multi-arch index.
+    // Cover architecture discovery from a single OCI manifest and a multi-arch index.
     #[test]
     fn distribution_unions_linux_manifest_and_descriptor_platforms() {
         let descriptor = json!({"Descriptor":{"digest":"sha256:abc","platform":{"os":"linux","architecture":"x86_64"}}});
@@ -344,6 +344,11 @@ mod tests {
     #[test]
     fn system_service_has_bounded_resources_and_valid_read_only_file_targets() {
         let spec = SystemAgentSpec {
+            limits: NodeAgentLimits {
+                nano_cpus: 1_000_000_000,
+                memory_bytes: 1_073_741_824,
+                pids: 512,
+            },
             name: "agent".into(),
             image: "agent@sha256:pinned".into(),
             environment: vec![],
@@ -370,7 +375,9 @@ mod tests {
             json!({"Name":"citadel-core-ca.crt","UID":"0","GID":"0","Mode":292})
         );
         assert_eq!(container["Mounts"][1]["Source"], "durable-state");
-        assert_eq!(task["Resources"]["Limits"]["MemoryBytes"], 536870912);
+        assert_eq!(task["Resources"]["Limits"]["MemoryBytes"], 1_073_741_824);
+        assert_eq!(task["Resources"]["Limits"]["NanoCPUs"], 1_000_000_000);
+        assert_eq!(task["Resources"]["Limits"]["Pids"], 512);
         assert_eq!(
             task["Placement"]["Constraints"],
             json!(["node.platform.os == linux", "node.id != manager"])

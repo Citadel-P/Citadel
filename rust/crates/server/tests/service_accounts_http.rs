@@ -444,6 +444,13 @@ async fn concurrent_names_are_case_sensitive_and_exact_duplicates_conflict() {
 }
 
 async fn fixture(custom_access: bool) -> Fixture {
+    fixture_with_limits(custom_access, Default::default()).await
+}
+
+async fn fixture_with_limits(
+    custom_access: bool,
+    limits: citadel_identity::ServiceAccountLimitsDetails,
+) -> Fixture {
     let guard = TEST_LOCK
         .get_or_init(|| Arc::new(Mutex::new(())))
         .clone()
@@ -480,12 +487,16 @@ async fn fixture(custom_access: bool) -> Fixture {
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let service_accounts = Arc::new(ServiceAccountService::new(
-        Arc::new(PostgresServiceAccountRepository::new(pool.clone())),
-        token_codec,
-        entitlements,
-        clock,
-    ));
+    let service_accounts = Arc::new(
+        ServiceAccountService::new(
+            Arc::new(PostgresServiceAccountRepository::new(pool.clone())),
+            token_codec,
+            entitlements,
+            clock,
+        )
+        .with_limits(limits)
+        .unwrap(),
+    );
     let app = service_accounts_http::router(ServiceAccountHttpState {
         identity: identity.clone(),
         service_accounts,
@@ -646,4 +657,70 @@ async fn send_json(
 
 async fn json(response: Response<Body>) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+async fn custom_limits_are_advertised_and_enforced_when_issuing_tokens() {
+    let f = fixture_with_limits(
+        true,
+        citadel_identity::ServiceAccountLimitsDetails {
+            default_token_lifetime_days: 7,
+            maximum_token_lifetime_days: 14,
+            maximum_active_tokens_per_account: 1,
+        },
+    )
+    .await;
+    let response = send(
+        &f,
+        Method::GET,
+        "/api/v1/serviceAccounts/limits",
+        None,
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json(response).await,
+        serde_json::json!({
+            "defaultTokenLifetimeDays":7, "maximumTokenLifetimeDays":14, "maximumActiveTokensPerAccount":1,
+        })
+    );
+    let account = create_account(&f, &format!("limits-{}", Uuid::now_v7()), true).await;
+    let path = format!("/api/v1/serviceAccounts/{account}/tokens");
+    let response = send_json(
+        &f,
+        Method::POST,
+        &path,
+        serde_json::json!({
+            "name":"too-long", "expiresAtUtc": Utc::now() + Duration::days(15),
+        }),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let before = Utc::now();
+    let response = send_json(
+        &f,
+        Method::POST,
+        &path,
+        serde_json::json!({"name":"default"}),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let value = json(response).await;
+    let expires =
+        chrono::DateTime::parse_from_rfc3339(value["expiresAtUtc"].as_str().unwrap()).unwrap();
+    assert!(expires >= before + Duration::days(7));
+    assert!(expires <= Utc::now() + Duration::days(7));
+    let response = send_json(
+        &f,
+        Method::POST,
+        &path,
+        serde_json::json!({"name":"over-limit"}),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }

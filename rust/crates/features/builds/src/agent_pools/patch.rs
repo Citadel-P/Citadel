@@ -93,7 +93,7 @@ impl BuildAgentPool {
                     "Unsupported Build Agent Pool update field '{key}'."
                 )));
             }
-            // .NET nullable update fields retain their current value; an explicit
+            // Nullable update fields retain their current value; an explicit
             // null description clears it. Provider specs are replaced as a unit.
             if !update.is_null() || key == "description" {
                 value[&key] = update;

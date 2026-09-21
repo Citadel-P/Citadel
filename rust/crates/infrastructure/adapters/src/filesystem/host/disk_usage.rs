@@ -1,4 +1,4 @@
-//! Read the filesystem containing Docker's data root, as in the .NET provider.
+//! Read the filesystem containing Docker's data root.
 use citadel_platforms::HostDiskUsage;
 use std::{
     path::{Path, PathBuf},

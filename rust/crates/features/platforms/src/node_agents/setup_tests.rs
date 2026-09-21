@@ -9,6 +9,11 @@ use std::sync::{
 
 fn options() -> SetupOptions {
     SetupOptions {
+        policy: NodeAgentSetupPolicy {
+            bootstrap_lifetime: Duration::from_secs(180),
+            setup_timeout: Duration::from_secs(30),
+            ..Default::default()
+        },
         core_url: "https://core.example.test".into(),
         image: "registry.example:5000/citadel/agent:latest".into(),
         ca_bundle: None,
@@ -73,9 +78,13 @@ fn image_pin_preserves_registry_port_and_requires_digest_and_architecture_covera
 #[test]
 fn system_identity_and_credentials_use_scoped_labels_and_file_mounts() {
     let c = claim();
+    let mut configured = options();
+    configured.policy.limits.nano_cpus = 1_000_000_000;
+    configured.policy.limits.memory_bytes = 1_073_741_824;
+    configured.policy.limits.pids = 512;
     let spec = system_spec(
         &c,
-        &options(),
+        &configured,
         "agent@digest".into(),
         "secret-id".into(),
         "secret-name".into(),
@@ -83,6 +92,9 @@ fn system_identity_and_credentials_use_scoped_labels_and_file_mounts() {
         Some("ca-name".into()),
         BTreeSet::from(["amd64".into()]),
     );
+    assert_eq!(spec.limits.nano_cpus, 1_000_000_000);
+    assert_eq!(spec.limits.memory_bytes, 1_073_741_824);
+    assert_eq!(spec.limits.pids, 512);
     assert_eq!(spec.labels.len(), 4);
     assert_eq!(
         spec.labels["com.citadel.platform-id"],
@@ -161,8 +173,10 @@ impl NodeAgentSetupStore for Fixture {
     fn bootstrap<'a>(
         &'a self,
         _: &'a NodeAgentRemovalClaim,
+        lifetime: Duration,
     ) -> BoxFuture<'a, Result<Bootstrap, RuntimeCapabilityError>> {
-        Box::pin(async {
+        Box::pin(async move {
+            assert_eq!(lifetime, Duration::from_secs(180));
             self.record("bootstrap");
             Ok(Bootstrap {
                 id: Uuid::now_v7(),
@@ -471,7 +485,9 @@ async fn old_connected_task_cannot_complete_upgrade_and_times_out() {
         stale_binding: true,
         ..Default::default()
     });
+    let started = tokio::time::Instant::now();
     let p = run(f.clone()).await;
+    assert_eq!(started.elapsed(), Duration::from_secs(30));
     assert!(
         p.last()
             .unwrap()

@@ -31,7 +31,41 @@ impl SetupKind {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct NodeAgentSetupPolicy {
+    pub bootstrap_lifetime: Duration,
+    pub setup_timeout: Duration,
+    pub supported_architectures: Vec<String>,
+    pub limits: NodeAgentLimits,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct NodeAgentLimits {
+    pub nano_cpus: i64,
+    pub memory_bytes: i64,
+    pub pids: i64,
+}
+impl Default for NodeAgentLimits {
+    fn default() -> Self {
+        Self {
+            nano_cpus: 500_000_000,
+            memory_bytes: 512 * 1024 * 1024,
+            pids: 256,
+        }
+    }
+}
+impl Default for NodeAgentSetupPolicy {
+    fn default() -> Self {
+        Self {
+            bootstrap_lifetime: Duration::from_secs(600),
+            setup_timeout: Duration::from_secs(300),
+            supported_architectures: vec!["amd64".into(), "arm64".into()],
+            limits: NodeAgentLimits::default(),
+        }
+    }
+}
+
 pub struct SetupOptions {
+    pub policy: NodeAgentSetupPolicy,
     pub core_url: String,
     pub image: String,
     pub ca_bundle: Option<Arc<[u8]>>,
@@ -46,6 +80,7 @@ pub struct Bootstrap {
     pub token: zeroize::Zeroizing<Vec<u8>>,
 }
 pub struct SystemAgentSpec {
+    pub limits: NodeAgentLimits,
     pub name: String,
     pub image: String,
     pub environment: Vec<String>,
@@ -69,6 +104,7 @@ pub trait NodeAgentSetupStore: NodeAgentLifecycleStore {
     fn bootstrap<'a>(
         &'a self,
         claim: &'a NodeAgentRemovalClaim,
+        lifetime: Duration,
     ) -> BoxFuture<'a, Result<Bootstrap, RuntimeCapabilityError>>;
     fn secret_created<'a>(
         &'a self,
@@ -190,7 +226,7 @@ impl NodeAgentSetupService {
         (self.changed)(id);
         let result = tokio::select! {
             () = cancel.cancelled() => Err(fail("Node-agent setup canceled. Repair coverage can reconcile partial state.")),
-            result = tokio::time::timeout(Duration::from_secs(300), self.execute(&claim, &options, &sender, &cancel)) => {
+            result = tokio::time::timeout(options.policy.setup_timeout, self.execute(&claim, &options, &sender, &cancel)) => {
                 result.unwrap_or_else(|_| Err(fail("Node-agent setup timed out. Repair coverage after checking missing nodes.")))
             }
         };
@@ -247,7 +283,10 @@ impl NodeAgentSetupService {
                     && n.status.eq_ignore_ascii_case("ready")
                     && n.availability.eq_ignore_ascii_case("active")
                     && n.operating_system.eq_ignore_ascii_case("linux")
-                    && matches!(architecture(&n.architecture).as_str(), "amd64" | "arm64")
+                    && options
+                        .policy
+                        .supported_architectures
+                        .contains(&architecture(&n.architecture))
             })
             .map(|n| (n.id.clone(), architecture(&n.architecture)))
             .collect();
@@ -298,7 +337,10 @@ impl NodeAgentSetupService {
             false,
             None,
         ));
-        let mut bootstrap = self.store.bootstrap(claim).await?;
+        let mut bootstrap = self
+            .store
+            .bootstrap(claim, options.policy.bootstrap_lifetime)
+            .await?;
         let secret = self
             .runtime
             .create_material(
@@ -551,6 +593,7 @@ fn system_spec(
         environment.push("CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH=/citadel-core-ca.crt".into());
     }
     SystemAgentSpec {
+        limits: options.policy.limits,
         name: format!("citadel-node-agent-{}", claim.platform_id.simple()),
         image,
         environment,

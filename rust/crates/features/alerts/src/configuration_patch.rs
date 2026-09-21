@@ -27,7 +27,7 @@ pub fn apply_rule(
             "quietHours",
         ],
     )?;
-    // AlertRule's .NET JSON constructor normalizes null collections to empty.
+    // Alert Rule inputs normalize null collections to empty.
     for field in ["channelIds", "limitedTo", "quietHours"] {
         if value[field].is_null() {
             value[field] = Value::Array(Vec::new());

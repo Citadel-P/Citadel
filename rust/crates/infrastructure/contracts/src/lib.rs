@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-// Mirrors Hosting.Common.Constants while .NET Agents share this wire contract.
+// Protocol version shared by Core and Agents.
 pub const EDGE_AGENT_PROTOCOL_VERSION: i32 = 2;
 
 pub mod citadel {

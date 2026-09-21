@@ -76,7 +76,7 @@ use prost::Message;
 use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 use tonic::metadata::MetadataValue;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
 use tonic::{Code, Request, Status};
 use url::Url;
 use zeroize::Zeroizing;
@@ -422,6 +422,7 @@ pub struct AgentClient {
     operation_timeout: Duration,
     address: String,
     allow_insecure: bool,
+    ca_certificate: Option<std::sync::Arc<[u8]>>,
 }
 
 pub(crate) struct AgentBuildCommand {
@@ -451,15 +452,14 @@ impl AgentClient {
             return Err(invalid_address("Agent timeout must be positive"));
         }
         let address = validate_address(address, allow_insecure)?;
-        let endpoint = Endpoint::from_shared(address.clone())
-            .map_err(|error| invalid_address(error.to_string()))?
-            .connect_timeout(operation_timeout);
+        let endpoint = agent_endpoint(&address, operation_timeout, None)?;
         Ok(Self {
             channel: endpoint.connect_lazy(),
             signer,
             operation_timeout,
             address,
             allow_insecure,
+            ca_certificate: None,
         })
     }
 
@@ -477,9 +477,7 @@ impl AgentClient {
             ));
         }
         let address = validate_address(address, allow_insecure)?;
-        let endpoint = Endpoint::from_shared(address.clone())
-            .map_err(|error| invalid_address(error.to_string()))?
-            .connect_timeout(operation_timeout);
+        let endpoint = agent_endpoint(&address, operation_timeout, None)?;
         let channel = tokio::time::timeout(operation_timeout, endpoint.connect())
             .await
             .map_err(|_| timeout_error("connecting to the Agent"))?
@@ -496,6 +494,7 @@ impl AgentClient {
             operation_timeout,
             address,
             allow_insecure,
+            ca_certificate: None,
         })
     }
 
@@ -513,10 +512,31 @@ impl AgentClient {
         if self.address == address {
             return Ok(self.clone());
         }
-        tokio::select! {
-            () = cancellation.cancelled() => Err(cancelled_error()),
-            result = Self::connect(&address, self.signer.clone(), self.operation_timeout, self.allow_insecure) => result,
-        }
+        let mut client = self.at_address(&address)?;
+        let endpoint = agent_endpoint(
+            &address,
+            self.operation_timeout,
+            self.ca_certificate.as_deref(),
+        )?;
+        client.channel = tokio::select! {
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            result = tokio::time::timeout(self.operation_timeout, endpoint.connect()) => {
+                result.map_err(|_| timeout_error("connecting to the Agent"))?
+                    .map_err(|error| RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, format!("failed to connect to the Agent: {error}"), true))?
+            }
+        };
+        Ok(client)
+    }
+
+    /// Apply additional private CA trust and retain it when selecting another Platform.
+    pub fn with_ca_certificate(
+        mut self,
+        ca: Option<std::sync::Arc<[u8]>>,
+    ) -> Result<Self, RuntimeCapabilityError> {
+        self.channel =
+            agent_endpoint(&self.address, self.operation_timeout, ca.as_deref())?.connect_lazy();
+        self.ca_certificate = ca;
+        Ok(self)
     }
 
     /// Resolve a persisted Platform address without opening a second eager connection.
@@ -527,15 +547,18 @@ impl AgentClient {
         if self.address == address {
             return Ok(self.clone());
         }
-        let endpoint = Endpoint::from_shared(address.clone())
-            .map_err(|e| invalid_address(e.to_string()))?
-            .connect_timeout(self.operation_timeout);
+        let endpoint = agent_endpoint(
+            &address,
+            self.operation_timeout,
+            self.ca_certificate.as_deref(),
+        )?;
         Ok(Self {
             channel: endpoint.connect_lazy(),
             signer: self.signer.clone(),
             operation_timeout: self.operation_timeout,
             address,
             allow_insecure: self.allow_insecure,
+            ca_certificate: self.ca_certificate.clone(),
         })
     }
 
@@ -2410,6 +2433,28 @@ pub(crate) fn map_platform_stats(
     }
 }
 
+fn agent_endpoint(
+    address: &str,
+    timeout: Duration,
+    ca: Option<&[u8]>,
+) -> Result<Endpoint, RuntimeCapabilityError> {
+    let mut endpoint = Endpoint::from_shared(address.to_owned())
+        .map_err(|error| invalid_address(error.to_string()))?
+        .connect_timeout(timeout);
+    if address.starts_with("https://") {
+        // Keep the same provider as Core's TLS listener when dependencies enable both.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let mut tls = ClientTlsConfig::new().with_native_roots();
+        if let Some(ca) = ca {
+            tls = tls.ca_certificate(Certificate::from_pem(ca));
+        }
+        endpoint = endpoint
+            .tls_config(tls)
+            .map_err(|error| invalid_address(error.to_string()))?;
+    }
+    Ok(endpoint)
+}
+
 fn validate_address(address: &str, allow_insecure: bool) -> Result<String, RuntimeCapabilityError> {
     let url = Url::parse(address).map_err(|error| invalid_address(error.to_string()))?;
     if !url.username().is_empty()
@@ -2430,11 +2475,7 @@ fn validate_address(address: &str, allow_insecure: bool) -> Result<String, Runti
             false,
         )),
         "http" => Ok(url.to_string().trim_end_matches('/').to_owned()),
-        "https" => Err(RuntimeCapabilityError::new(
-            RuntimeErrorKind::InvalidRequest,
-            "direct Agent TLS is deferred to the transport-security phase; use the current h2c Agent only when AgentTransport__AllowInsecure=true",
-            false,
-        )),
+        "https" => Ok(url.to_string().trim_end_matches('/').to_owned()),
         _ => Err(invalid_address(
             "the Agent address scheme must be http or https",
         )),

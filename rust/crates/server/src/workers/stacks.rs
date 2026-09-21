@@ -126,7 +126,7 @@ pub(super) async fn stack_drift_monitor(
     }
 }
 
-/// The .NET drift monitor also consumes stop/pause events. Notifications are
+/// The drift monitor consumes stop/pause events. Notifications are
 /// transactional and originate from the shared Local/Direct/Edge event store.
 pub(super) async fn event_drift(
     cancellation: CancellationToken,

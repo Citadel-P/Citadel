@@ -50,12 +50,12 @@ enum Command {
         #[arg(long)]
         private_key_path: std::path::PathBuf,
     },
-    /// Prove signed .NET Agent handshake, read, stream, cancellation, and Local equivalence.
+    /// Verify signed Agent handshake, reads, streams, cancellation, and Local equivalence.
     Phase0AgentSmoke,
     /// Probe an already-running Phase 0A server without curl in the image.
     Healthcheck {
-        #[arg(long, default_value = "http://127.0.0.1:8000/health")]
-        url: String,
+        #[arg(long)]
+        url: Option<String>,
     },
 }
 
@@ -100,13 +100,32 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Phase0AgentSmoke => phase0_agent_smoke(Config::from_env()?).await,
         Command::Healthcheck { url } => {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(2))
-                .build()?
-                .get(url)
-                .send()
-                .await?
-                .error_for_status()?;
+            let mut client = reqwest::Client::builder().timeout(Duration::from_secs(2));
+            let url = match url {
+                Some(url) => url,
+                None => {
+                    let port: u16 = std::env::var("Transport__ApiPort")
+                        .unwrap_or_else(|_| "8000".into())
+                        .parse()?;
+                    let direct = std::env::var("Transport__Mode")
+                        .is_ok_and(|mode| mode.eq_ignore_ascii_case("Direct"));
+                    if direct {
+                        let certificate =
+                            std::fs::read(std::env::var("Transport__Certificate__Path")?)?;
+                        // Local liveness probe: trust only Core's configured certificate chain.
+                        // Its public DNS name need not include the loopback IP.
+                        client = client
+                            .no_proxy()
+                            .tls_certs_only(reqwest::Certificate::from_pem_bundle(&certificate)?)
+                            .tls_danger_accept_invalid_hostnames(true);
+                    }
+                    format!(
+                        "{}://127.0.0.1:{port}/health",
+                        if direct { "https" } else { "http" }
+                    )
+                }
+            };
+            client.build()?.get(url).send().await?.error_for_status()?;
             Ok(())
         }
     }
@@ -116,7 +135,7 @@ async fn restore_system(
     database: DatabaseConfig,
     bundle: std::path::PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (_, encryption_key) = citadel_server::config::identity_keys_from_env()?;
+    let encryption_key = citadel_server::config::recovery_encryption_key_from_env()?;
     let cancellation = CancellationToken::new();
     let signal_token = cancellation.clone();
     let signal = tokio::spawn(async move {
@@ -221,13 +240,13 @@ async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Er
         config.docker_request_timeout,
         &config.execution.paths.host_root,
     )?;
-    let agent = AgentClient::connect(
+    let agent = AgentClient::lazy(
         &agent_config.address,
         AgentRequestSigner::from_file(&agent_config.private_key_path)?,
         agent_config.operation_timeout,
         agent_config.allow_insecure,
-    )
-    .await?;
+    )?
+    .with_ca_certificate(config.execution.edge_agent.ca_certificate.clone())?;
     let cancellation = CancellationToken::new();
     let local_info = local.get_info(&cancellation).await?;
     let agent_info = agent.get_info(&cancellation).await?;

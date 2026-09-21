@@ -77,13 +77,13 @@ impl PostgresBackupPersistence {
             let target_volume: String = row.try_get("targetvolumename").map_err(storage)?;
             let source_key =
                 docker_volume_key(target_platform, target_node.as_deref(), &target_volume);
-            let leased = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+INTERVAL '4 hours') ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP").bind(repo_id).bind(id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let leased = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3)) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP").bind(repo_id).bind(id).bind(self.restore_timeout_seconds * 2 + self.repository_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if leased == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(None);
             }
-            let source_leased = sqlx::query("INSERT INTO backupsourceleases(sourcekey,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+INTERVAL '4 hours 5 minutes') ON CONFLICT(sourcekey) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backupsourceleases.expiresat<=CURRENT_TIMESTAMP")
-                .bind(source_key).bind(id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let source_leased = sqlx::query("INSERT INTO backupsourceleases(sourcekey,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3)) ON CONFLICT(sourcekey) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backupsourceleases.expiresat<=CURRENT_TIMESTAMP")
+                .bind(source_key).bind(id).bind(self.restore_timeout_seconds * 2 + self.source_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if source_leased == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(None);

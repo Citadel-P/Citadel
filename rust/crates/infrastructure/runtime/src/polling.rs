@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-/// .NET WorkerPollingDelay: reset after work, back off idle polling to ten seconds.
+/// Reset after work; back off idle polling to ten seconds.
 pub fn worker_poll_delay(current: Duration, minimum: Duration, dispatched: bool) -> Duration {
     if dispatched {
         minimum

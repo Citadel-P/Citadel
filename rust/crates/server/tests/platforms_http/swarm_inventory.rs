@@ -364,7 +364,7 @@ async fn native_swarm_mutations_persist_nodes_materials_and_restarted_services()
     )
     .await;
     assert_eq!(node["runningTaskCount"], 1);
-    // .NET NativeSwarmServiceValidation rejects managed Services, not native
+    // Service validation rejects managed Services, not native
     // Stack members. Their inventory Restart action remains available.
     sqlx::query("UPDATE swarmserviceprojections SET ownership='CitadelStack' WHERE platformid=$1")
         .bind(f.platform_id)

@@ -1,7 +1,6 @@
 use super::*;
 
-// Ports the requested-window and batched-history behavior from .NET
-// PlatformsStatsWriterJobTests / ContainerStatsWriterJobTests through HTTP.
+// Verify requested windows and batched Platform/Container history through HTTP.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples() {

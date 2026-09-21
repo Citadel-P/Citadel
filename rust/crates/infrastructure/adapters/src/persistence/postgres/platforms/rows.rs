@@ -109,7 +109,7 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
         .try_get::<Option<String>, _>("deployment_name")
         .map_err(storage)?
         .map(|name| {
-            // Match the .NET container projection: only identity/name/status are
+            // Only identity/name/status are
             // joined. It must not expose Deployment configuration to Platform readers.
             let minimum = chrono::DateTime::from_timestamp(-62_135_596_800, 0)
                 .expect("valid .NET minimum timestamp");

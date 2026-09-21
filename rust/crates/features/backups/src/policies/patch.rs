@@ -35,7 +35,7 @@ pub fn merge(
         "runAsActorId",
     ] {
         if let Some(proposed) = patch.get(field) {
-            // Nullable scalar update fields are no-ops in the .NET update model.
+            // Null scalar update fields retain their current values.
             if proposed.is_null()
                 && !matches!(field, "description" | "cron" | "timeZone" | "webhook")
             {

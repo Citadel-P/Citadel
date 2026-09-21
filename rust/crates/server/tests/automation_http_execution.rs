@@ -1,4 +1,4 @@
-//! .NET AutomationActionIntegrationTests execution cases over Axum, PostgreSQL
+//! Automation execution tests over Axum, PostgreSQL
 //! and real Deno: progress, permissions, cancellation, outcomes and audit state.
 use axum::{
     Router,

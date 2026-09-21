@@ -1,11 +1,30 @@
 #[derive(Clone)]
 pub struct PostgresBackupPersistence {
     pub(super) pool: PgPool,
+    pub(super) repository_lease_seconds: i32,
+    pub(super) source_lease_seconds: i32,
+    pub(super) restore_timeout_seconds: i32,
 }
 
 impl PostgresBackupPersistence {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            repository_lease_seconds: 300,
+            source_lease_seconds: 300,
+            restore_timeout_seconds: 14_400,
+        }
+    }
+    pub fn with_lease_options(
+        mut self,
+        repository_seconds: i32,
+        source_seconds: i32,
+        restore_seconds: i32,
+    ) -> Self {
+        self.repository_lease_seconds = repository_seconds.max(30);
+        self.source_lease_seconds = source_seconds.max(30);
+        self.restore_timeout_seconds = restore_seconds.max(5);
+        self
     }
 }
 use super::*;
