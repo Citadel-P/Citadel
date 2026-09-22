@@ -19,8 +19,30 @@ impl PostgresBackupPersistence {
             )
             .await
             .map_err(backup_tag_error)?;
+            let policy = sqlx::query("SELECT * FROM backuppolicies WHERE id=$1")
+                .bind(id)
+                .fetch_one(&mut *transaction)
+                .await
+                .map_err(storage)
+                .and_then(map_policy)?;
+            let activity = citadel_activities::ActivityEvent::new_backup_policy_event(
+                policy.id,
+                policy.name.clone(),
+                actor,
+                citadel_activities::ActivityEventInfo::BackupPolicyCreated {
+                    policy: policy_metadata::activity_snapshot(&policy)?,
+                },
+                Utc::now(),
+            )
+            .map_err(storage)?;
+            crate::persistence::postgres::activities::store::insert_activity(
+                &mut transaction,
+                &activity,
+            )
+            .await
+            .map_err(storage)?;
             transaction.commit().await.map_err(storage)?;
-            self.get_policy(id).await
+            Ok(policy)
         })
     }
 }

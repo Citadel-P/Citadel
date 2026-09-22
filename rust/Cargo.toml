@@ -26,6 +26,7 @@ members = [
     "crates/infrastructure/docker-api",
     "crates/infrastructure/processes",
     "crates/infrastructure/runtime",
+    "crates/infrastructure/volume-helper",
     "xtask",
 ]
 

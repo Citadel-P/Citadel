@@ -14,11 +14,11 @@ pub(crate) fn gitlab() -> Value {
 }
 
 pub(crate) fn dockerhub() -> Value {
-    json!({"name": "my-dockerhub-registry", "registryHost": "docker.io", "status": "Active", "configuration": {"$type": "DockerHub", "userName": "example-user", "pat": "example-token"}})
+    json!({"name": "my-dockerhub-registry", "status": "Active", "configuration": {"$type": "DockerHub", "userName": "example-user", "pat": "example-token"}})
 }
 
 pub(crate) fn github() -> Value {
-    json!({"name": "my-github-registry", "registryHost": "ghcr.io", "status": "Active", "configuration": {"$type": "GitHub", "nameSpace": "citadel-p", "ghcrAuthEnabled": true, "pat": "example-token"}})
+    json!({"name": "my-github-registry", "status": "Active", "configuration": {"$type": "GitHub", "nameSpace": "citadel-p", "ghcrAuthEnabled": true, "pat": "example-token"}})
 }
 
 pub(crate) fn custom() -> Value {

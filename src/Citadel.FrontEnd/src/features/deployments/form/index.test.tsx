@@ -7,6 +7,7 @@ import {
   DeploymentStatus,
   DeploymentView,
   LatestActivityView,
+  PlatformStatus,
   UpdateBehavior,
 } from '@/api/generated/api.types';
 import { DeploymentFormComponents } from './index';
@@ -30,11 +31,53 @@ function deployment(status: DeploymentStatus, activity = failedApply) {
   return {
     status,
     latestActivityView: activity,
+    dockerContainerId: 'container-id',
+    platformStatus: PlatformStatus.Online,
     spec: { updateBehavior: UpdateBehavior.Disabled },
   } as DeploymentView;
 }
 
 describe('deployment activity header', () => {
+  it.each([null, { ...failedApply, status: ActivityStatus.Success }])(
+    'explains a missing container independently of activity history',
+    (latestActivityView) => {
+      const resource = {
+        ...deployment(DeploymentStatus.Degraded),
+        dockerContainerId: null,
+        latestActivityView,
+      } as DeploymentView;
+      const { rerender } = render(<SubHeader resource={resource} />);
+      expect(screen.getByText('Container missing')).toBeInTheDocument();
+      expect(screen.getByText(/No container is currently linked/)).toBeInTheDocument();
+      rerender(
+        <SubHeader resource={{ ...resource, status: DeploymentStatus.Healthy, dockerContainerId: 'new-container' }} />,
+      );
+      expect(screen.queryByText('Container missing')).not.toBeInTheDocument();
+    },
+  );
+
+  it('reports an offline platform without claiming its container was removed', () => {
+    render(
+      <SubHeader
+        resource={{
+          ...deployment(DeploymentStatus.Degraded),
+          dockerContainerId: null,
+          platformStatus: PlatformStatus.Offline,
+        }}
+      />,
+    );
+    expect(screen.getByText('Platform unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('Container missing')).not.toBeInTheDocument();
+  });
+
+  it.each([DeploymentStatus.Created, DeploymentStatus.Stopped, DeploymentStatus.Healthy])(
+    'does not report a missing container for a %s deployment',
+    (status) => {
+      render(<SubHeader resource={{ ...deployment(status), dockerContainerId: null, latestActivityView: null }} />);
+      expect(screen.queryByText('Container missing')).not.toBeInTheDocument();
+    },
+  );
+
   it('distinguishes a healthy runtime from a previous failed apply', () => {
     render(<SubHeader resource={deployment(DeploymentStatus.Healthy)} />);
     expect(screen.getByText('Previous deployment attempt failed')).toBeInTheDocument();
@@ -56,7 +99,7 @@ describe('deployment activity header', () => {
       info: { $type: 'DeploymentDegraded', reason: 'Container stopped' },
     };
     const { rerender } = render(<SubHeader resource={deployment(DeploymentStatus.Degraded, activity)} />);
-    expect(screen.getByText('Container stopped')).toBeInTheDocument();
+    expect(screen.getAllByText('Container stopped')).toHaveLength(1);
     rerender(<SubHeader resource={deployment(DeploymentStatus.Healthy, activity)} />);
     expect(screen.queryByText('Container stopped')).not.toBeInTheDocument();
   });

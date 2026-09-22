@@ -1285,7 +1285,9 @@ impl DockerResticBackupExecutor {
                     .to_owned(),
             );
         }
-        let endpoint = required(&repository.spec, "endpoint")?.trim_end_matches('/');
+        let endpoint = required(&repository.spec, "endpoint")?
+            .trim()
+            .trim_end_matches('/');
         let bucket = required(&repository.spec, "bucket")?;
         let prefix = repository
             .spec
@@ -1376,7 +1378,9 @@ impl DockerResticBackupExecutor {
                 env.push(("RESTIC_REPOSITORY".into(), "/repository".into()));
             }
             "S3Compatible" => {
-                let endpoint = required(&repo.spec, "endpoint")?.trim_end_matches('/');
+                let endpoint = required(&repo.spec, "endpoint")?
+                    .trim()
+                    .trim_end_matches('/');
                 let bucket = required(&repo.spec, "bucket")?;
                 let prefix = repo
                     .spec
@@ -1439,7 +1443,9 @@ impl DockerResticBackupExecutor {
                     .into_os_string()
             }
             "S3Compatible" => {
-                let endpoint = required(&repository.spec, "endpoint")?.trim_end_matches('/');
+                let endpoint = required(&repository.spec, "endpoint")?
+                    .trim()
+                    .trim_end_matches('/');
                 let bucket = required(&repository.spec, "bucket")?;
                 let prefix = repository
                     .spec
@@ -1488,6 +1494,11 @@ impl DockerResticBackupExecutor {
         location: &str,
         platform_id: Option<Uuid>,
     ) -> Result<(), String> {
+        if repository.repository_type == "FileSystem"
+            && required(&repository.spec, "location")? == "Core"
+        {
+            self.core_repository_path(required(&repository.spec, "path")?)?;
+        }
         match location {
             "Core" if platform_id.is_none() => {}
             "Platform" => {
@@ -1874,6 +1885,67 @@ fn policy_tag(id: Uuid) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn core_repository_paths_are_validated_before_secrets_or_process_execution() {
+        struct NoSecrets;
+        impl BackupSecretResolver for NoSecrets {
+            fn resolve(
+                &self,
+                _: Uuid,
+            ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>> {
+                panic!("Rejected paths must not resolve secrets or run Restic")
+            }
+        }
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+            .unwrap();
+        let executor = DockerResticBackupExecutor::new(
+            "must-not-run",
+            "unused",
+            Arc::new(NoSecrets),
+            4096,
+            pool,
+        )
+        .with_settings(super::super::settings::BackupExecutionSettings {
+            working_directory: std::env::temp_dir(),
+            allowed_core_paths: vec![std::env::temp_dir().join("allowed-backup-root")],
+            default_timeout: Duration::from_secs(120),
+            maximum_log_line_bytes: 8192,
+        });
+        let now = chrono::Utc::now();
+        let repository = BackupRepository {
+            id: Uuid::now_v7(),
+            name: "test".into(),
+            normalized_name: "test".into(),
+            description: None,
+            repository_type: "FileSystem".into(),
+            spec: serde_json::json!({"location":"Core","path":"../outside"}),
+            password_secret_id: Uuid::now_v7(),
+            status: "Unknown".into(),
+            control_state: "Idle".into(),
+            current_run_id: None,
+            control_started_at: None,
+            last_pruned_at: None,
+            last_checked_at: None,
+            created_by_actor_id: Uuid::now_v7(),
+            created_at: now,
+            updated_at: now,
+            archived_at: None,
+            row_version: 1,
+        };
+        let error = executor
+            .repository(
+                &repository,
+                "Initialize",
+                "Core",
+                None,
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, BackupError::Validation(_)));
+    }
+
     #[tokio::test]
     async fn progress_frames_split_credentials_and_bounds_oversized_lines() {
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));

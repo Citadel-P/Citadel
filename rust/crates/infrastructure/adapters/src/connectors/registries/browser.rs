@@ -56,17 +56,7 @@ impl RegistryBrowser {
         name: Option<&str>,
     ) -> Result<Value, RegistryError> {
         let username = field(cfg, &["UserName", "userName", "username"]).unwrap_or_default();
-        let secret = field(cfg, &["PAT", "pat"]).unwrap_or_default();
-        let auth = self
-            .client
-            .post(format!("{}/v2/auth/token", self.docker_hub))
-            .json(&json!({"identifier":username,"secret":secret}));
-        let token = body(auth.send().await.map_err(|_| failure())?).await?;
-        let token = token
-            .get("access_token")
-            .and_then(Value::as_str)
-            .filter(|v| !v.is_empty())
-            .ok_or_else(failure)?;
+        let token = self.docker_token(cfg).await?;
         let namespace = urlencoding::encode(username);
         let path = if kind == RegistryBrowseKind::DockerHubTags {
             format!(
@@ -110,6 +100,29 @@ impl RegistryBrowser {
             }
         }
         Ok(Value::Array(result))
+    }
+    async fn docker_token(&self, cfg: &Value) -> Result<String, RegistryError> {
+        let username = field(cfg, &["UserName", "userName", "username"]).unwrap_or_default();
+        let secret = field(cfg, &["PAT", "pat"]).unwrap_or_default();
+        let response = self
+            .client
+            .post(format!("{}/v2/auth/token", self.docker_hub))
+            .json(&json!({"identifier": username, "secret": secret}))
+            .send()
+            .await
+            .map_err(|_| failure())?;
+        if matches!(response.status().as_u16(), 401 | 403) {
+            return Err(RegistryError::Validation(
+                "Docker Hub rejected these credentials. Check your username and personal access token.".into(),
+            ));
+        }
+        let payload = body(response).await?;
+        payload
+            .get("access_token")
+            .and_then(Value::as_str)
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned)
+            .ok_or_else(failure)
     }
     async fn github(
         &self,
@@ -163,10 +176,43 @@ impl RegistryBrowser {
     }
 }
 
+impl citadel_registries::RegistryConnectionChecker for RegistryBrowser {
+    fn check<'a>(
+        &'a self,
+        configuration: &'a Value,
+    ) -> futures_util::future::BoxFuture<'a, Result<(), RegistryError>> {
+        Box::pin(async move {
+            let github_auth_enabled = configuration
+                .as_object()
+                .and_then(|fields| {
+                    fields.iter().find_map(|(key, value)| {
+                        key.eq_ignore_ascii_case("ghcrAuthEnabled").then_some(value)
+                    })
+                })
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match citadel_registries::registry_type(configuration)?.as_str() {
+                "DockerHub" => self.docker_token(configuration).await.map(|_| ()),
+                "GitHub" if github_auth_enabled => {
+                    self.github(configuration, RegistryBrowseKind::Repositories, None)
+                        .await.map(|_| ()).map_err(|_| RegistryError::Validation(
+                            "GitHub registry connection failed. Check connectivity, namespace, and personal access token permissions (read:packages).".into(),
+                        ))
+                }
+                _ => Ok(()),
+            }
+        })
+    }
+}
+
 fn field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a str> {
-    names
-        .iter()
-        .find_map(|name| value.get(name).and_then(Value::as_str))
+    value.as_object()?.iter().find_map(|(key, value)| {
+        names
+            .iter()
+            .any(|name| key.eq_ignore_ascii_case(name))
+            .then(|| value.as_str())
+            .flatten()
+    })
 }
 fn failure() -> RegistryError {
     RegistryError::Validation(

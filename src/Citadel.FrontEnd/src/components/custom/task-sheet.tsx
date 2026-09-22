@@ -353,6 +353,12 @@ type ActivityInfoRendererMap = {
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
+  BackupPolicyCreated: (info, activity) => (
+    <SpecViewer spec={info.policy} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+  BackupRunQueued: (info) => <BackupRunActivityDetails info={info} />,
+  BackupRunStarted: (info) => <BackupRunActivityDetails info={info} />,
+  BackupRunCompleted: (info) => <BackupRunActivityDetails info={info} />,
   DeploymentUpdated: (info) => (
     <MonacoDiff
       original={info.oldDeployment}
@@ -1169,6 +1175,22 @@ function AlertEventActions({
           {isResolving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
         </Button>
       )}
+    </div>
+  );
+}
+
+function BackupRunActivityDetails({
+  info,
+}: {
+  info: { runId: string; trigger: string; status?: string; durationMs?: number | null; errorMessage?: string | null };
+}) {
+  return (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <KeyValueBlock label="Run ID" value={info.runId} />
+      <KeyValueBlock label="Trigger" value={info.trigger} />
+      {info.status && <KeyValueBlock label="Status" value={formatActivityEvent(info.status)} />}
+      {info.durationMs != null && <KeyValueBlock label="Duration" value={`${info.durationMs} ms`} />}
+      {info.errorMessage && <KeyValueBlock label="Details" value={info.errorMessage} />}
     </div>
   );
 }

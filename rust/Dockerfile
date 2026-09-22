@@ -8,7 +8,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096 \
     VITE_API_BASE_URL=""
 RUN npm run build:image
 
-FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS build
+FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust-source
 
 WORKDIR /source
 ARG VERSION
@@ -22,6 +22,15 @@ COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos \
     ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos
 WORKDIR /source/rust
 ENV SQLX_OFFLINE=true
+
+FROM rust-source AS volume-helper-build
+RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=citadel-volume-helper-target,target=/source/rust/target \
+    cargo build --locked --release -p citadel-volume-helper \
+    && cp target/release/citadel-volume-helper /tmp/citadel-volume-helper
+
+FROM rust-source AS build
 RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=citadel-rust-target,target=/source/rust/target \
@@ -54,6 +63,7 @@ RUN chmod +x install-server-deps.sh \
 
 RUN adduser -D -H -u 65532 -G root -h /app citadel \
     && mkdir -p /app/data && chown -R 65532:0 /app
+COPY --from=volume-helper-build /tmp/citadel-volume-helper /usr/local/bin/citadel-volume-helper
 COPY --chmod=0755 rust/scripts/docker-entrypoint.sh /usr/local/bin/citadel-entrypoint
 EXPOSE 8000 8001
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \

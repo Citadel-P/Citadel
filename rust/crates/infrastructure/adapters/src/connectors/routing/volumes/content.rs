@@ -28,6 +28,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const HELPER_BINARY: &str = "/app/Citadel.Agent.VolumeHelper";
+const CORE_HELPER_BINARY: &str = "/usr/local/bin/citadel-volume-helper";
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(1800);
 type Frames = BoxStream<'static, Result<ExecServerMessage, tonic::Status>>;
 
@@ -37,6 +38,7 @@ pub struct VolumeContentAdapter {
     router: ContainerRuntimeRouter,
     pool: PgPool,
     helper_image: String,
+    core_container: Option<String>,
     slots: Arc<Semaphore>,
     tasks: DynamicTasks,
 }
@@ -55,6 +57,7 @@ enum HelperRuntime {
 
 struct Helper {
     runtime: HelperRuntime,
+    binary: &'static str,
     id: String,
     // Retain capacity until cleanup finishes, not merely until HTTP disconnects.
     permit: Option<OwnedSemaphorePermit>,
@@ -75,9 +78,17 @@ impl VolumeContentAdapter {
             router: ContainerRuntimeRouter::new(pool.clone(), docker, agent, edge),
             pool,
             helper_image,
+            core_container: None,
             slots: Arc::new(Semaphore::new(4)),
             tasks,
         }
+    }
+
+    /// Use the running Core's immutable image for local helpers. Remote Agents
+    /// keep their own image and helper protocol on the owning daemon.
+    pub fn with_core_container(mut self, container: String) -> Self {
+        self.core_container = Some(container);
+        self
     }
 
     async fn open(
@@ -134,21 +145,33 @@ impl VolumeContentAdapter {
                 HelperRuntime::Agent(AgentExecutionClient::Edge(r.session))
             }
         };
-        let image = if node.is_some() {
-            sqlx::query_as::<_, (String, String)>("SELECT agentimagereference,agentimagedigest FROM swarmnodeagentinstallations WHERE platformid=$1 AND desiredstate='Installed'")
+        let (image, binary) = if let (HelperRuntime::Local(docker), Some(container)) =
+            (&runtime, &self.core_container)
+        {
+            let document = docker
+                .inspect_container_document(container)
+                .await
+                .map_err(|error| helper_startup_error(error.to_string()))?;
+            (core_image(&document)?, CORE_HELPER_BINARY)
+        } else {
+            let image = if node.is_some() {
+                sqlx::query_as::<_, (String, String)>("SELECT agentimagereference,agentimagedigest FROM swarmnodeagentinstallations WHERE platformid=$1 AND desiredstate='Installed'")
                 .bind(platform).fetch_optional(&self.pool).await.map_err(|_| error(RuntimeErrorKind::Remote,"Could not resolve the Node helper image."))?
                 .map(|(reference, digest)| citadel_platforms::node_agents::setup::pin_image_reference(&reference, &digest))
                 .transpose()?
                 .unwrap_or_else(|| self.helper_image.clone())
-        } else {
-            self.helper_image.clone()
+            } else {
+                self.helper_image.clone()
+            };
+            (image, HELPER_BINARY)
         };
         let name = format!("citadel-volume-helper-{}", Uuid::now_v7().simple());
-        let request = helper_request(platform, volume, &name, &image);
+        let request = helper_request(platform, volume, &name, &image, binary);
         // Own cleanup before sending Create, including an ambiguous response. The
         // name is unique to this operation, and no mutation is retried.
         let mut helper = Helper {
             runtime,
+            binary,
             id: name,
             permit: Some(permit),
             cancellation: cancellation.clone(),
@@ -158,22 +181,25 @@ impl VolumeContentAdapter {
             HelperRuntime::Local(r) => r
                 .create_container(&request.name, &local_request(&request))
                 .await
-                .map_err(crate::connectors::docker::runtime::normalize_docker_error)?,
-            HelperRuntime::Agent(r) => r.create_container(request, cancellation).await?,
+                .map_err(|error| helper_startup_error(error.to_string()))?,
+            HelperRuntime::Agent(r) => r
+                .create_container(request, cancellation)
+                .await
+                .map_err(|error| helper_startup_error(error.message))?,
         };
         match &helper.runtime {
             HelperRuntime::Local(r) => r
                 .start_container(&helper.id)
                 .await
-                .map_err(crate::connectors::docker::runtime::normalize_docker_error)?,
-            HelperRuntime::Agent(r) => {
-                r.change_containers_state(
+                .map_err(|error| helper_startup_error(error.to_string()))?,
+            HelperRuntime::Agent(r) => r
+                .change_containers_state(
                     std::slice::from_ref(&helper.id),
                     AgentContainerAction::Start,
                     cancellation,
                 )
-                .await?
-            }
+                .await
+                .map_err(|error| helper_startup_error(error.message))?,
         }
         Ok(helper)
     }
@@ -325,7 +351,7 @@ impl VolumeContentAdapter {
 impl Helper {
     async fn exec(&self, operation: &str, path: &str) -> Result<Frames, RuntimeCapabilityError> {
         let mut cmd: Vec<String> = [
-            HELPER_BINARY,
+            self.binary,
             "volume-helper",
             operation,
             "--root",
@@ -442,7 +468,42 @@ async fn cleanup(runtime: HelperRuntime, id: String, _permit: OwnedSemaphorePerm
     drop(guard);
 }
 
-fn helper_request(platform: Uuid, volume: &str, name: &str, image: &str) -> CreateContainerRequest {
+fn helper_startup_error(message: String) -> RuntimeCapabilityError {
+    error(
+        RuntimeErrorKind::Unavailable,
+        &format!("Volume browser could not start: {message}"),
+    )
+}
+
+fn core_image(document: &serde_json::Value) -> Result<String, RuntimeCapabilityError> {
+    if document
+        .pointer("/Config/Labels/com.citadel.system-role")
+        .and_then(serde_json::Value::as_str)
+        != Some("core")
+    {
+        return Err(helper_startup_error(
+            "The running Core container could not be identified.".into(),
+        ));
+    }
+    document
+        .get("Image")
+        .and_then(serde_json::Value::as_str)
+        .filter(|image| {
+            image.starts_with("sha256:")
+                && image.len() == 71
+                && image[7..].bytes().all(|b| b.is_ascii_hexdigit())
+        })
+        .map(str::to_owned)
+        .ok_or_else(|| helper_startup_error("The running Core image could not be resolved.".into()))
+}
+
+fn helper_request(
+    platform: Uuid,
+    volume: &str,
+    name: &str,
+    image: &str,
+    binary: &str,
+) -> CreateContainerRequest {
     CreateContainerRequest {
         image_id: image.into(),
         name: name.into(),
@@ -467,7 +528,7 @@ fn helper_request(platform: Uuid, volume: &str, name: &str, image: &str) -> Crea
         .into_iter()
         .map(|(k, v)| (k.into(), v))
         .collect(),
-        entry_point: vec![HELPER_BINARY.into()],
+        entry_point: vec![binary.into()],
         command: vec!["volume-helper".into(), "idle".into()],
         mounts: vec![Mount {
             target: Some("/data".into()),
@@ -485,6 +546,7 @@ fn helper_request(platform: Uuid, volume: &str, name: &str, image: &str) -> Crea
 
 fn local_request(request: &CreateContainerRequest) -> serde_json::Value {
     serde_json::json!({"Image":request.image_id,"User":"0","Labels":request.labels,"Entrypoint":request.entry_point,"Cmd":request.command,
+        "Healthcheck":{"Test":["NONE"]},
         "HostConfig":{"AutoRemove":true,"ReadonlyRootfs":true,"NetworkMode":"none","Privileged":false,"Memory":request.memory_limit,"MemorySwap":request.memory_swap,"PidsLimit":request.pids_limit,
         "CapAdd":request.cap_add,"CapDrop":request.cap_drop,"SecurityOpt":request.security_opt,
         "Mounts":[{"Type":"volume","Source":request.mounts[0].source,"Target":"/data","ReadOnly":true}]}})

@@ -147,6 +147,11 @@ pub(super) fn map_run(row: sqlx::postgres::PgRow) -> Result<BuildRun, BuildError
         build_project_id: row.try_get("buildprojectid").map_err(storage)?,
         project_name_snapshot: row.try_get("projectnamesnapshot").map_err(storage)?,
         git_repository_id: row.try_get("gitrepositoryid").map_err(storage)?,
+        git_repository_name_snapshot: row.try_get("gitrepositorynamesnapshot").map_err(storage)?,
+        platform_snapshot: serde_json::from_value(
+            row.try_get("platformsnapshot").map_err(storage)?,
+        )
+        .map_err(storage)?,
         branch: row.try_get("branch").map_err(storage)?,
         resolved_commit_sha: row.try_get("resolvedcommitsha").map_err(storage)?,
         context_path: row.try_get("contextpath").map_err(storage)?,

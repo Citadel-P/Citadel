@@ -54,41 +54,6 @@ pub(super) async fn load_registries_tx(
         .collect()
 }
 
-pub(super) fn merge_json_patch(
-    patch: &citadel_registries::MetadataPatch<Value>,
-    current: Option<&Value>,
-) -> Option<Value> {
-    match patch {
-        citadel_registries::MetadataPatch::Missing => current.cloned(),
-        citadel_registries::MetadataPatch::Null => None,
-        citadel_registries::MetadataPatch::Value(patch) => {
-            let mut value = current.cloned().unwrap_or(Value::Null);
-            apply_json_merge_patch(&mut value, patch);
-            Some(value)
-        }
-    }
-}
-
-pub(crate) fn apply_json_merge_patch(target: &mut Value, patch: &Value) {
-    let Value::Object(patch) = patch else {
-        *target = patch.clone();
-        return;
-    };
-    if !target.is_object() {
-        *target = Value::Object(serde_json::Map::new());
-    }
-    let target = target
-        .as_object_mut()
-        .expect("target was initialized as an object");
-    for (key, value) in patch {
-        if value.is_null() {
-            target.remove(key);
-        } else {
-            apply_json_merge_patch(target.entry(key.clone()).or_insert(Value::Null), value);
-        }
-    }
-}
-
 pub(crate) fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
     let mut ids = ids.to_vec();
     ids.sort_unstable();
@@ -122,40 +87,4 @@ pub(crate) fn database_error(error: sqlx::Error) -> RegistryError {
 
 pub(crate) fn storage(error: impl std::fmt::Display) -> RegistryError {
     RegistryError::Storage(error.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use citadel_registries::MetadataPatch;
-    use serde_json::json;
-
-    use super::merge_json_patch;
-
-    #[test]
-    fn nested_catalog_configuration_uses_json_merge_patch_semantics() {
-        let current = json!({
-            "$type":"Custom",
-            "authEnabled":true,
-            "userName":"operator",
-            "password":"old-secret"
-        });
-        let patch = MetadataPatch::Value(json!({"password":"new-secret"}));
-        assert_eq!(
-            merge_json_patch(&patch, Some(&current)).unwrap(),
-            json!({
-                "$type":"Custom",
-                "authEnabled":true,
-                "userName":"operator",
-                "password":"new-secret"
-            })
-        );
-
-        let patch = MetadataPatch::Value(json!({"password":null}));
-        assert!(
-            merge_json_patch(&patch, Some(&current))
-                .unwrap()
-                .get("password")
-                .is_none()
-        );
-    }
 }

@@ -16,6 +16,7 @@ pub(super) struct CatalogComponents {
     pub activities: Arc<ActivityService>,
     pub tags: Arc<dyn citadel_tags::TagRepository>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
+    pub registry_connections: Arc<dyn citadel_registries::RegistryConnectionChecker>,
     pub secrets: Arc<SecretService>,
     pub git_accounts: Arc<GitAccountService>,
     pub git_execution: Arc<GitRepositoryExecutionService>,
@@ -91,6 +92,9 @@ pub(super) fn build(
         activities,
         tags,
         registries,
+        registry_connections: Arc::new(
+            citadel_adapters::connectors::registries::browser::RegistryBrowser::new()?,
+        ),
         secrets,
         git_accounts,
         git_execution,

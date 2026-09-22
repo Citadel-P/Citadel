@@ -71,16 +71,25 @@ pub(super) fn build(
                 }
             }),
     );
+    let mut volume_content = VolumeContentAdapter::new(
+        pool.clone(),
+        docker.clone(),
+        agent.clone(),
+        edge_registry.clone(),
+        config
+            .execution
+            .volume_helper_image
+            .clone()
+            .unwrap_or_else(|| config.execution.edge_agent.image.clone()),
+        runtime.dynamic_tasks.clone(),
+    );
+    if config.execution.volume_helper_image.is_none() {
+        volume_content =
+            volume_content.with_core_container(std::env::var("HOSTNAME").unwrap_or_default());
+    }
     let platform_state = platforms_http::PlatformsHttpState {
         tasks: runtime.dynamic_tasks.clone(),
-        volume_content: Arc::new(VolumeContentAdapter::new(
-            pool.clone(),
-            docker.clone(),
-            agent.clone(),
-            edge_registry.clone(),
-            config.execution.volume_helper_image.clone(),
-            runtime.dynamic_tasks.clone(),
-        )),
+        volume_content: Arc::new(volume_content),
         containers: container_mutations.clone(),
         identity: Arc::clone(identity),
         platforms: Arc::clone(&platform_reads),

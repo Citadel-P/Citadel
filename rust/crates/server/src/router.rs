@@ -45,6 +45,7 @@ pub fn router(
         secrets,
         tags,
         registries,
+        registry_connections,
         git_accounts,
         git_execution,
         agent_setup,
@@ -198,6 +199,7 @@ pub fn router(
     .merge(registries::router(registries::RegistriesHttpState {
         identity: Arc::clone(&identity),
         registries,
+        registry_connections,
         realtime: realtime_hub.clone(),
     }))
     .merge(bindings::router(bindings::BindingsHttpState {

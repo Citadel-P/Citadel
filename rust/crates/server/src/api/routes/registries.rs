@@ -45,6 +45,7 @@ use uuid::Uuid;
 pub struct RegistriesHttpState {
     pub identity: Arc<IdentityService>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
+    pub registry_connections: Arc<dyn citadel_registries::RegistryConnectionChecker>,
     pub realtime: Option<RealtimeHub>,
 }
 
@@ -278,13 +279,15 @@ async fn create_registry(
         &headers,
     )
     .await?;
-    api_result(input.validate().map_err(metadata_error), &headers)?;
     let registry = api_result(
-        state
-            .registries
-            .create_registry(principal.actor_id, &input)
-            .await
-            .map_err(metadata_error),
+        citadel_registries::create_registry(
+            state.registries.as_ref(),
+            state.registry_connections.as_ref(),
+            principal.actor_id,
+            &mut input,
+        )
+        .await
+        .map_err(metadata_error),
         &headers,
     )?;
     publish_resource_change(&state.realtime, "Registry", "registryChanged");
@@ -371,11 +374,16 @@ async fn mutate_registry(
     .await?;
     prevent_default_registry(id, &headers)?;
     let registry = api_result(
-        state
-            .registries
-            .update_registry(principal.actor_id, id, &input, kind)
-            .await
-            .map_err(metadata_error),
+        citadel_registries::update_registry(
+            state.registries.as_ref(),
+            state.registry_connections.as_ref(),
+            principal.actor_id,
+            id,
+            &input,
+            kind,
+        )
+        .await
+        .map_err(metadata_error),
         &headers,
     )?;
     publish_resource_change(&state.realtime, "Registry", "registryChanged");

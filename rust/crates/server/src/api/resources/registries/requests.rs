@@ -6,6 +6,8 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct NewRegistry {
     pub name: String,
+    /// Required for custom registry addresses; inferred for Docker Hub and GitHub.
+    #[serde(default)]
     pub registry_host: String,
     pub status: RegistryStatus,
     pub configuration: Value,
@@ -78,5 +80,52 @@ impl From<citadel_registries::RegistryPatch> for RegistryPatch {
             description: value.description.into(),
             tag_ids: value.tag_ids,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::resources::registries::examples;
+
+    #[test]
+    fn known_registry_hosts_are_inferred_when_omitted_from_requests() {
+        for (mut payload, expected) in [
+            (examples::dockerhub(), "docker.io"),
+            (examples::github(), "ghcr.io"),
+        ] {
+            payload.as_object_mut().unwrap().remove("registryHost");
+            let request: NewRegistry = serde_json::from_value(payload).unwrap();
+            let mut input: citadel_registries::NewRegistry = request.into();
+            input.validate().unwrap();
+            assert_eq!(input.registry_host, expected);
+        }
+    }
+
+    #[test]
+    fn other_registry_providers_still_require_a_host() {
+        for mut payload in [
+            examples::custom(),
+            examples::azure(),
+            examples::aws(),
+            examples::gitlab(),
+        ] {
+            payload.as_object_mut().unwrap().remove("registryHost");
+            let request: NewRegistry = serde_json::from_value(payload).unwrap();
+            let mut input: citadel_registries::NewRegistry = request.into();
+            assert!(input.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn registry_request_schema_allows_an_omitted_host() {
+        let schema =
+            serde_json::to_value(<NewRegistry as utoipa::PartialSchema>::schema()).unwrap();
+        assert!(
+            !schema["required"]
+                .as_array()
+                .unwrap()
+                .contains(&Value::from("registryHost"))
+        );
     }
 }

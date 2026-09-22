@@ -184,6 +184,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         realtime: None,
     })
     .merge(registries::router(registries::RegistriesHttpState {
+        registry_connections: Arc::new(citadel_adapters::connectors::registries::browser::RegistryBrowser::with_endpoints("http://127.0.0.1:1", "http://127.0.0.1:1").unwrap()),
         identity: identity.clone(),
         registries: Arc::new(
             citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(
@@ -1356,13 +1357,20 @@ impl BackupRunAuthorizer for AllowBackupExecution {
 impl BackupExecutor for FakeBackupExecutor {
     fn repository<'a>(
         &'a self,
-        _: &'a BackupRepository,
+        repository: &'a BackupRepository,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
-        Box::pin(async { Ok(vec![]) })
+        Box::pin(async move {
+            if repository.spec["path"] == "/outside-allowed-backup-path" {
+                return Err(BackupError::Validation(
+                    "Core repository path is outside Backups__AllowedCorePaths.".into(),
+                ));
+            }
+            Ok(vec![])
+        })
     }
     fn backup<'a>(
         &'a self,
@@ -1430,4 +1438,62 @@ impl AlertDelivery for FakeAlertDelivery {
     ) -> BoxFuture<'a, Result<(), AlertError>> {
         Box::pin(async { Ok(()) })
     }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn build_run_api_preserves_queued_resource_snapshots() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(3)
+        .connect(&url)
+        .await
+        .unwrap();
+    let principal = seed_administrator(&pool).await;
+    let fixture = seed_dependencies(&pool, principal.actor_id).await;
+    let store = PostgresBuildRepository::new(pool.clone());
+    let mut input: citadel_builds::BuildProjectConfiguration = serde_json::from_value(json!({
+        "name": "snapshot-build", "enabled": true,
+        "gitRepositoryId": fixture.git_repository,
+        "platformId": fixture.platform, "registryId": fixture.registry,
+        "imageRepository": "citadel/test"
+    }))
+    .unwrap();
+    input.validate().unwrap();
+    let project = store.create(principal.actor_id, &input).await.unwrap();
+    let queued = store
+        .enqueue(principal.actor_id, project.id, "Manual")
+        .await
+        .unwrap();
+    sqlx::query("UPDATE platforms SET name='Renamed platform' WHERE id=$1")
+        .bind(fixture.platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE gitrepositories SET name='Renamed repository' WHERE id=$1")
+        .bind(fixture.git_repository)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let persisted = store.get_run(queued.id).await.unwrap();
+    for run in [queued, persisted] {
+        let response = serde_json::to_value(
+            citadel_server::api::resources::builds::views::BuildRunView::from(run),
+        )
+        .unwrap();
+        assert_eq!(
+            response["platformSnapshot"]["id"],
+            fixture.platform.to_string()
+        );
+        assert_eq!(
+            response["platformSnapshot"]["name"],
+            format!("phase7-platform-{}", fixture.platform.simple())
+        );
+        assert_eq!(
+            response["gitRepositoryNameSnapshot"],
+            format!("phase7-git-{}", fixture.git_repository.simple())
+        );
+    }
+    pool.close().await;
 }

@@ -16,32 +16,34 @@ export const useGitRepoGroup = (id: string | undefined) => {
     }
   }, [data?.data]);
 
-  const handleDeploymentInfoUpdated = useCallback((repo: GitRepositoryView) => {
-    const info = (repo.latestActivityView?.info as any)?.[1]; // realtime poly mapping
-    if (info) info.$type = (repo.latestActivityView?.info as any)?.[0];
+  const handleGitRepositoryInfoUpdated = useCallback(
+    (repo: GitRepositoryView) => {
+      if (repo.id !== id) return;
+      const activityInfo = repo.latestActivityView?.info;
+      const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
 
-    setGitRepo((prev) => {
-      if (!prev) return prev;
-      return {
+      setGitRepo((prev) => ({
         ...prev,
         ...repo,
+        capabilities: repo.capabilities ?? prev?.capabilities,
         latestActivityView: repo.latestActivityView ? { ...repo.latestActivityView, info } : null,
-      };
-    });
-  }, []);
+      }));
+    },
+    [id],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.on('GitRepositoryInfoUpdated', handleDeploymentInfoUpdated);
+      hubConnection.on('GitRepositoryInfoUpdated', handleGitRepositoryInfoUpdated);
     },
-    [handleDeploymentInfoUpdated],
+    [handleGitRepositoryInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.off('GitRepositoryInfoUpdated', handleDeploymentInfoUpdated);
+      hubConnection.off('GitRepositoryInfoUpdated', handleGitRepositoryInfoUpdated);
     },
-    [handleDeploymentInfoUpdated],
+    [handleGitRepositoryInfoUpdated],
   );
 
   useRealtimeGroup({

@@ -133,6 +133,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         realtime: None,
     })
     .merge(registries::router(registries::RegistriesHttpState {
+        registry_connections: Arc::new(citadel_adapters::connectors::registries::browser::RegistryBrowser::with_endpoints("http://127.0.0.1:1", "http://127.0.0.1:1").unwrap()),
         identity: Arc::clone(&identity),
         registries: Arc::new(
             citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),

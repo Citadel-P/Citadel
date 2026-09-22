@@ -24,6 +24,34 @@ pub enum ActivityEventInfo {
         #[serde(rename = "NewRule")]
         new_rule: AlertRuleActivitySnapshot,
     },
+    BackupPolicyCreated {
+        #[serde(rename = "Policy")]
+        policy: BackupPolicyActivitySnapshot,
+    },
+    BackupRunQueued {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    BackupRunStarted {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+    },
+    BackupRunCompleted {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Trigger")]
+        trigger: String,
+        #[serde(rename = "Status")]
+        status: String,
+        #[serde(rename = "DurationMs")]
+        duration_ms: Option<i64>,
+        #[serde(rename = "ErrorMessage")]
+        error_message: Option<String>,
+    },
     BackupPolicyRenamed {
         #[serde(rename = "OldName")]
         old_name: String,
@@ -1225,6 +1253,10 @@ impl ActivityEventInfo {
             }
             Self::AlertRuleCreated { .. } => ActivityEventType::AlertRuleCreated,
             Self::AlertRuleUpdated { .. } => ActivityEventType::AlertRuleUpdated,
+            Self::BackupPolicyCreated { .. } => ActivityEventType::BackupPolicyCreated,
+            Self::BackupRunQueued { .. } => ActivityEventType::BackupRunQueued,
+            Self::BackupRunStarted { .. } => ActivityEventType::BackupRunStarted,
+            Self::BackupRunCompleted { .. } => ActivityEventType::BackupRunCompleted,
             Self::BackupPolicyRenamed { .. } => ActivityEventType::BackupPolicyRenamed,
             Self::BackupPolicyUpdated { .. } => ActivityEventType::BackupPolicyUpdated,
             Self::RegistryDeleted { .. } => ActivityEventType::RegistryDeleted,

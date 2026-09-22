@@ -62,6 +62,13 @@ impl BackupService {
         let (repository, validation) = recorded?;
         released?;
         self.changed();
+        // Validate returns the recorded readiness result. Mutating operations
+        // must preserve configuration errors as client errors after releasing the lease.
+        if operation != "Validate"
+            && let Err(BackupError::Validation(message)) = &result
+        {
+            return Err(BackupError::Validation(message.clone()));
+        }
         Ok(BackupRepositoryOperationResult {
             repository,
             validation,

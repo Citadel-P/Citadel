@@ -180,6 +180,9 @@ database_string_enum! {
         BackupPolicyUpdated,
         BackupPolicyRenamed,
         BackupPolicyArchived,
+        BackupRunQueued,
+        BackupRunStarted,
+        BackupRunCompleted,
         SwarmServiceCreated,
         SwarmServiceAdopted,
         SwarmServiceUpdated,
@@ -320,7 +323,10 @@ impl ActivityEventType {
             Self::BackupPolicyCreated
             | Self::BackupPolicyUpdated
             | Self::BackupPolicyRenamed
-            | Self::BackupPolicyArchived => ActivityResourceType::BackupPolicy,
+            | Self::BackupPolicyArchived
+            | Self::BackupRunQueued
+            | Self::BackupRunStarted
+            | Self::BackupRunCompleted => ActivityResourceType::BackupPolicy,
             Self::SwarmServiceCreated
             | Self::SwarmServiceAdopted
             | Self::SwarmServiceUpdated

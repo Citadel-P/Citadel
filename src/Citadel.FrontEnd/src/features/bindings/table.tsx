@@ -348,7 +348,7 @@ const EntryEditorDialog = ({
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className='bg-background'>
                     {secrets.map((secret) => (
                       <SelectItem key={secret.id} value={secret.id}>
                         {secret.name}

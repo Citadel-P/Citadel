@@ -173,6 +173,9 @@
           "BackupPolicyUpdated",
           "BackupPolicyRenamed",
           "BackupPolicyArchived",
+          "BackupRunQueued",
+          "BackupRunStarted",
+          "BackupRunCompleted",
           "SwarmServiceCreated",
           "SwarmServiceAdopted",
           "SwarmServiceUpdated",
@@ -2785,6 +2788,43 @@
         ],
         "type": "object"
       },
+      "BuildPlatformSnapshot": {
+        "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "buildAgentPoolId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "builderKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "BuildProjectBuilderKind": {
         "enum": [
           "Platform",
@@ -3136,6 +3176,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "gitRepositoryNameSnapshot": {
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -3154,6 +3197,9 @@
           },
           "imageRepository": {
             "type": "string"
+          },
+          "platformSnapshot": {
+            "$ref": "#/components/schemas/BuildPlatformSnapshot"
           },
           "projectNameSnapshot": {
             "type": "string"
@@ -3208,6 +3254,8 @@
           "buildProjectId",
           "projectNameSnapshot",
           "gitRepositoryId",
+          "gitRepositoryNameSnapshot",
+          "platformSnapshot",
           "branch",
           "contextPath",
           "dockerfilePath",
@@ -8995,6 +9043,7 @@
             "type": "string"
           },
           "registryHost": {
+            "description": "Required for custom registry addresses; inferred for Docker Hub and GitHub.",
             "type": "string"
           },
           "status": {
@@ -9010,7 +9059,6 @@
         },
         "required": [
           "name",
-          "registryHost",
           "status",
           "configuration"
         ],
@@ -11468,7 +11516,7 @@
         "type": "object"
       },
       "RepoWebhookConfig": {
-        "description": "Shared wire configuration, matching .NET's WebhookConfig defaults.",
+        "description": "Shared webhook wire configuration and defaults.",
         "properties": {
           "authScheme": {
             "default": "GitHubHmacSha256",
@@ -50345,7 +50393,6 @@
                       "userName": "example-user"
                     },
                     "name": "my-dockerhub-registry",
-                    "registryHost": "docker.io",
                     "status": "Active"
                   }
                 },
@@ -50358,7 +50405,6 @@
                       "pat": "example-token"
                     },
                     "name": "my-github-registry",
-                    "registryHost": "ghcr.io",
                     "status": "Active"
                   }
                 },
@@ -50781,7 +50827,6 @@
                       "userName": "example-user"
                     },
                     "name": "my-dockerhub-registry",
-                    "registryHost": "docker.io",
                     "status": "Active"
                   }
                 },
@@ -50794,7 +50839,6 @@
                       "pat": "example-token"
                     },
                     "name": "my-github-registry",
-                    "registryHost": "ghcr.io",
                     "status": "Active"
                   }
                 },
@@ -50865,7 +50909,6 @@
                       "userName": "example-user"
                     },
                     "name": "my-dockerhub-registry",
-                    "registryHost": "docker.io",
                     "status": "Active"
                   }
                 },
@@ -50878,7 +50921,6 @@
                       "pat": "example-token"
                     },
                     "name": "my-github-registry",
-                    "registryHost": "ghcr.io",
                     "status": "Active"
                   }
                 },

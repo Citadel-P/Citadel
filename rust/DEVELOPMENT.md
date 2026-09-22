@@ -205,10 +205,22 @@ on port 8000 (and reserves 8001 for Agent transport).
 
 The development image uses the production Dockerfile's `runtime-base` stage,
 including Docker CLI, Deno and backup tools. It mounts the local debug binary
-read-only, avoiding a second Rust build cache in Docker. Normal runs omit debug
+read-only, avoiding a second Core build in Docker. Normal runs omit debug
 symbols and incremental artifacts; F5 retains debugger information. Each run
 recreates Core so the container picks up the latest binary and environment,
 without restarting PostgreSQL. The first run downloads/builds the runtime image.
+
+Local volume browsing uses the small `citadel-volume-helper` binary bundled in
+both development and release images. Core resolves its container using Docker's
+default `HOSTNAME` and launches a read-only helper from that container's immutable
+image ID; browsing does not pull an Agent image. Keep the default container
+hostname when running Core. The helper has no network access, follows no symlink
+paths, and is removed when the operation finishes. Remote volumes continue to
+use the Agent helper on their owning node.
+
+When running Core directly on the host, `CITADEL_VOLUME_HELPER_IMAGE` can select
+an already installed Agent image containing `/app/Citadel.Agent.VolumeHelper`.
+Containerized Core requires no helper-image configuration.
 
 Open these addresses from the host:
 
@@ -433,7 +445,11 @@ CA distributed to node agents through `CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH`.
 
 `Backups__AllowedCorePaths__0`, `__1`, etc. restrict Core filesystem repository
 locations; the default is `<CITADEL_DATA_ROOT>/backups/repositories`. Add roots
-for existing repositories outside that directory. Paths must be available in the
+for existing repositories outside that directory. Relative paths use the first
+allowed root, so `daily/core` resolves to
+`<CITADEL_DATA_ROOT>/backups/repositories/daily/core` with the defaults. Absolute
+paths must stay within an allowed root; parent traversal and symlink escapes are
+rejected. Paths must be available in the
 Core container. `Backups__DefaultTimeoutSeconds` controls repository operations
 and restores; backup policies retain their individual execution timeouts.
 

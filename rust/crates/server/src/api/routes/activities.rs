@@ -36,7 +36,13 @@ pub fn router(state: ActivitiesHttpState) -> Router {
 }
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ActivitiesHttpState> {
-    utoipa_axum::router::OpenApiRouter::new()
+    #[derive(utoipa::OpenApi)]
+    #[openapi(components(schemas(crate::api::resources::vocabulary::ActivityEventTypeSchema)))]
+    struct ActivitySchemas;
+
+    utoipa_axum::router::OpenApiRouter::with_openapi(
+        <ActivitySchemas as utoipa::OpenApi>::openapi(),
+    )
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(get_by_id))
 }

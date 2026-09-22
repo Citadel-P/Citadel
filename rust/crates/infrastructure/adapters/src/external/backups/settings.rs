@@ -13,7 +13,19 @@ pub struct BackupExecutionSettings {
 
 impl BackupExecutionSettings {
     pub(crate) fn repository_path(&self, path: &str) -> Result<PathBuf, String> {
-        let path = resolve(Path::new(path))?;
+        let path = Path::new(path.trim());
+        if path.as_os_str().is_empty() {
+            return Err("Core repository path is required.".into());
+        }
+        let path = if path.is_absolute() {
+            resolve(path)?
+        } else {
+            let root = self
+                .allowed_core_paths
+                .first()
+                .ok_or("No allowed Core backup repository directory is configured.")?;
+            resolve(&root.join(path))?
+        };
         for allowed in &self.allowed_core_paths {
             if path.starts_with(resolve(allowed)?) {
                 return Ok(path);
@@ -43,6 +55,11 @@ fn resolve(path: &Path) -> Result<PathBuf, String> {
                 return Ok(resolved);
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(ancestor)
+                    .is_ok_and(|metadata| metadata.file_type().is_symlink())
+                {
+                    return Err("Core repository path contains a dangling symlink.".into());
+                }
                 missing.push(
                     ancestor
                         .file_name()
@@ -76,6 +93,13 @@ mod tests {
                 .repository_path(root.join("allowed/new/repository").to_str().unwrap())
                 .is_ok()
         );
+        assert_eq!(
+            settings.repository_path(" daily/core ").unwrap(),
+            root.join("allowed/daily/core")
+        );
+        for path in ["", "  ", "../outside", "daily/../../outside"] {
+            assert!(settings.repository_path(path).is_err(), "{path}");
+        }
         for path in ["allowed-other", "allowed/../outside"] {
             assert!(
                 settings
@@ -91,7 +115,27 @@ mod tests {
                     .repository_path(root.join("allowed/link/new").to_str().unwrap())
                     .is_err()
             );
+            assert!(settings.repository_path("link/new").is_err());
+            std::os::unix::fs::symlink(root.join("missing"), root.join("allowed/dangling"))
+                .unwrap();
+            assert!(settings.repository_path("dangling/new").is_err());
         }
+        let mut settings = settings;
+        settings.allowed_core_paths.push(root.join("outside"));
+        assert_eq!(
+            settings.repository_path("daily/core").unwrap(),
+            root.join("allowed/daily/core")
+        );
+        assert!(
+            settings
+                .repository_path(root.join("outside/repository").to_str().unwrap())
+                .is_ok()
+        );
+        settings.allowed_core_paths = vec![root.join("not-created/repositories")];
+        assert_eq!(
+            settings.repository_path("daily/core").unwrap(),
+            root.join("not-created/repositories/daily/core")
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }

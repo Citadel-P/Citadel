@@ -85,7 +85,7 @@ const columns = (
     cell: ({ row }) => {
       const run = latestRuns.get(row.original.id);
       const isPoolBuild = row.original.builderKind === BuildProjectBuilderKind.BuildAgentPool;
-      const label = isPoolBuild ? row.original.buildAgentPoolId : (run?.platformSnapshot.name ?? row.original.platformId);
+      const label = isPoolBuild ? row.original.buildAgentPoolId : (run?.platformSnapshot?.name ?? row.original.platformId);
       return (
         <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm">
           <Server className="size-3.5 shrink-0 text-muted-foreground" />

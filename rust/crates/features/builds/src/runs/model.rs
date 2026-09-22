@@ -6,6 +6,8 @@ pub struct BuildRun {
     pub build_project_id: Uuid,
     pub project_name_snapshot: String,
     pub git_repository_id: Uuid,
+    pub git_repository_name_snapshot: String,
+    pub platform_snapshot: BuildPlatformSnapshot,
     pub branch: String,
     pub resolved_commit_sha: Option<String>,
     pub context_path: String,
@@ -50,4 +52,14 @@ pub struct BuildExecutionResult {
 pub struct BuildLog {
     pub stream: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildPlatformSnapshot {
+    pub id: Option<Uuid>,
+    pub name: Option<String>,
+    pub address: Option<String>,
+    pub builder_kind: Option<String>,
+    pub build_agent_pool_id: Option<Uuid>,
 }
