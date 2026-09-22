@@ -96,6 +96,8 @@ pub struct BuildRunView {
     pub build_project_id: Uuid,
     pub project_name_snapshot: String,
     pub git_repository_id: Uuid,
+    pub git_repository_name_snapshot: String,
+    pub platform_snapshot: BuildPlatformSnapshot,
     pub branch: String,
     pub resolved_commit_sha: Option<String>,
     pub context_path: String,
@@ -125,6 +127,8 @@ impl From<citadel_builds::BuildRun> for BuildRunView {
             build_project_id: value.build_project_id,
             project_name_snapshot: value.project_name_snapshot,
             git_repository_id: value.git_repository_id,
+            git_repository_name_snapshot: value.git_repository_name_snapshot,
+            platform_snapshot: value.platform_snapshot.into(),
             branch: value.branch,
             resolved_commit_sha: value.resolved_commit_sha,
             context_path: value.context_path,
@@ -294,4 +298,26 @@ pub(crate) struct AuthorizedProject {
     #[serde(flatten)]
     pub(crate) project: BuildProjectView,
     pub(crate) capabilities: ResourceCapabilitiesView,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildPlatformSnapshot {
+    pub id: Option<Uuid>,
+    pub name: Option<String>,
+    pub address: Option<String>,
+    pub builder_kind: Option<String>,
+    pub build_agent_pool_id: Option<Uuid>,
+}
+
+impl From<citadel_builds::BuildPlatformSnapshot> for BuildPlatformSnapshot {
+    fn from(value: citadel_builds::BuildPlatformSnapshot) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            address: value.address,
+            builder_kind: value.builder_kind,
+            build_agent_pool_id: value.build_agent_pool_id,
+        }
+    }
 }

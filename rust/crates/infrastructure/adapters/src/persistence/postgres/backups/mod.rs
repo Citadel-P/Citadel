@@ -4,6 +4,7 @@ mod rows;
 use rows::*;
 mod recovery;
 pub(crate) use recovery::{recover_stale, recover_stale_with_mode};
+mod activity;
 mod policies;
 mod repositories;
 mod restores;

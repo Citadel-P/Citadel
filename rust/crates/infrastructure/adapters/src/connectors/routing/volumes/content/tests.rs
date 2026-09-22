@@ -45,6 +45,7 @@ fn volume_helper_request_is_read_only_and_cannot_execute_user_shell_input() {
         "data",
         "citadel-volume-helper-test",
         "agent@sha256:digest",
+        HELPER_BINARY,
     );
     assert_eq!(request.command, ["volume-helper", "idle"]);
     assert_eq!(request.entry_point, [HELPER_BINARY]);
@@ -57,5 +58,47 @@ fn volume_helper_request_is_read_only_and_cannot_execute_user_shell_input() {
     assert_eq!(local["HostConfig"]["ReadonlyRootfs"], true);
     assert_eq!(local["HostConfig"]["Mounts"][0]["ReadOnly"], true);
     assert_eq!(local["HostConfig"]["NetworkMode"], "none");
+    assert_eq!(local["Healthcheck"]["Test"], serde_json::json!(["NONE"]));
     assert_eq!(local["Labels"]["com.citadel.system"], "true");
+}
+
+#[test]
+fn local_helper_uses_the_running_core_image_and_bundled_binary() {
+    let image = format!("sha256:{}", "a".repeat(64));
+    let document = serde_json::json!({
+        "Image": image, "Config": {"Image": "mutable:tag", "Labels": {"com.citadel.system-role": "core"}}
+    });
+    assert_eq!(core_image(&document).unwrap(), image);
+    let request = helper_request(
+        Uuid::now_v7(),
+        "data",
+        "helper",
+        &core_image(&document).unwrap(),
+        CORE_HELPER_BINARY,
+    );
+    assert_eq!(request.image_id, image);
+    assert_eq!(request.entry_point, [CORE_HELPER_BINARY]);
+    for invalid in [
+        serde_json::json!({"Image": image}),
+        serde_json::json!({"Config":{"Labels":{"com.citadel.system-role":"core"}}, "Image":"mutable:tag"}),
+    ] {
+        assert_eq!(
+            core_image(&invalid).unwrap_err().kind,
+            RuntimeErrorKind::Unavailable
+        );
+    }
+}
+
+#[test]
+fn missing_helper_image_is_unavailable_not_a_missing_volume_path() {
+    assert_eq!(
+        helper_startup_error("No such image".into()).kind,
+        RuntimeErrorKind::Unavailable
+    );
+    assert_eq!(
+        check_helper_error(Some("VolumePathNotFound"))
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::NotFound
+    );
 }

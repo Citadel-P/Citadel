@@ -9,6 +9,38 @@ vi.mock('@/lib/use-profile-date-time', () => ({
 }));
 
 describe('ActivitiesTable', () => {
+  it.each([
+    ['Succeeded', 'Success', null, 'Succeeded'],
+    ['Failed', 'Failure', 'Repository unavailable', 'Failed - Repository unavailable'],
+    [
+      'Interrupted',
+      'Failure',
+      'Backup interrupted before completion.',
+      'Interrupted - Backup interrupted before completion.',
+    ],
+    ['Cancelled', 'Warning', 'Backup cancelled.', 'Cancelled - Backup cancelled.'],
+  ])('shows the %s backup outcome', (status, activityStatus, errorMessage, summary) => {
+    const activity = {
+      id: '019fbf2c-1c80-790f-a50a-11bbec0241d3',
+      resourceId: '019fba8b-3629-7553-8eb1-a7b011f9d5a0',
+      resourceName: 'Daily backup',
+      resourceType: 'BackupPolicy',
+      eventType: 'BackupRunCompleted',
+      status: activityStatus,
+      createdAt: '2026-09-22T00:00:00Z',
+      info: { $type: 'BackupRunCompleted', runId: 'run-id', trigger: 'Manual', status, errorMessage },
+      actorName: 'Administrator',
+      actorType: 'User',
+    } as ActivityView;
+
+    renderCitadel(
+      <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
+    );
+
+    expect(screen.getByText('Backup Run Completed')).toBeVisible();
+    expect(screen.getByText(summary)).toBeVisible();
+  });
+
   it('describes a Swarm task restart without exposing Docker force-update terminology', () => {
     expect(formatActivityEvent('SwarmServiceForceUpdated')).toBe('Swarm Service Tasks Restarted');
   });

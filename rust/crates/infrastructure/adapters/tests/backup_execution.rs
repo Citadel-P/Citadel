@@ -131,6 +131,16 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .await
     .unwrap();
     assert_eq!(persisted_tags, 2);
+    for policy in &policies {
+        let created: (String, Uuid, String) = sqlx::query_as(
+            "SELECT status,createdbyactorid,info FROM activityevents WHERE resourceid=$1 AND eventtype='BackupPolicyCreated'",
+        ).bind(policy.id).fetch_one(&pool).await.unwrap();
+        assert_eq!(created.0, "Success");
+        assert_eq!(created.1, actor.value());
+        let info: serde_json::Value = serde_json::from_str(&created.2).unwrap();
+        assert_eq!(info["Policy"]["Id"], policy.id.to_string());
+        assert_eq!(info["Policy"]["Name"], policy.name);
+    }
     let mut invalid_policy = BackupPolicyConfiguration {
         name: format!("invalid-tag-policy-{}", Uuid::now_v7().simple()),
         description: None,
@@ -158,6 +168,13 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .await
             .unwrap();
     assert!(!rolled_back);
+    let rolled_back_activity: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM activityevents WHERE resourcename=$1)")
+            .bind(&invalid_policy.name)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(!rolled_back_activity);
     let first = store
         .enqueue_backup(actor, policies[0].id, "Manual")
         .await
@@ -254,6 +271,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
     let completed = store.get_run(first_claim.run.id).await.unwrap();
     assert_eq!(completed.items[0].status, "Succeeded");
+    store.finish_backup(&first_claim, &result).await.unwrap();
+    assert_run_activities(&pool, &first_claim.run, "Succeeded", "Success", true).await;
     store
         .enqueue_restore(citadel_backups::BackupRestoreRequest {
             actor,
@@ -303,6 +322,45 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
         .await
         .unwrap();
+    citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
+        .await
+        .unwrap();
+    store
+        .finish_backup(&late_claim, &success_result("late", None))
+        .await
+        .unwrap();
+    assert_run_activities(&pool, &late_claim.run, "Interrupted", "Failure", true).await;
+
+    // The Activities tab reads this authorized, resource-scoped query.
+    use citadel_activities::{
+        ActivityAccess, ActivityFilter, ActivityQueryStore, ActivityResourceType,
+    };
+    let activity_store =
+        citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(
+            pool.clone(),
+        );
+    let page = activity_store
+        .list_authorized(
+            &ActivityAccess {
+                actor_id: actor,
+                administrator: false,
+            },
+            ActivityFilter {
+                resource_id: Some(first_claim.policy.id),
+                resource_type: Some(ActivityResourceType::BackupPolicy),
+                ..Default::default()
+            }
+            .validated()
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.total_count, 4);
+    assert!(
+        page.items
+            .iter()
+            .all(|activity| activity.resource_id == Some(first_claim.policy.id))
+    );
     assert!(
         store
             .backup_logs(late_claim.run.id)
@@ -339,13 +397,14 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     assert_eq!(schedule.0, scheduled_minute);
     assert_eq!(schedule.1, "Schedule");
     assert_eq!(schedule.2, policies[0].run_as_actor_id);
-    sqlx::query(
-        "UPDATE backupruns SET status='Cancelled' WHERE backuppolicyid=$1 AND trigger='Schedule'",
-    )
-    .bind(policies[0].id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    let scheduled = store
+        .list_runs(actor, true, Some(policies[0].id), 1)
+        .await
+        .unwrap()
+        .remove(0);
+    assert!(store.cancel_backup(scheduled.id).await.unwrap());
+    assert!(!store.cancel_backup(scheduled.id).await.unwrap());
+    assert_run_activities(&pool, &scheduled, "Cancelled", "Warning", false).await;
     sqlx::query("UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL WHERE id=$1")
         .bind(policies[0].id)
         .execute(&pool)
@@ -432,6 +491,55 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     );
     edge_failure_cleans_helper_on_the_exact_node(executor, &guarded_claim, platform).await;
     edge_restore_uses_the_saved_snapshot_root(&pool, &guarded_claim, platform).await;
+
+    // Finish the queued scheduled run, then cover the remaining executor outcomes.
+    for (outcome, activity_status) in [
+        ("Failed", "Failure"),
+        ("TimedOut", "Failure"),
+        ("Rejected", "Failure"),
+        ("SucceededWithWarnings", "Warning"),
+    ] {
+        let claim = store
+            .claim_backup(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .unwrap();
+        let mut result = success_result("outcome", None);
+        result.status = outcome;
+        result.snapshot_availability = "Missing";
+        result.error_message = Some("Test outcome".into());
+        store.finish_backup(&claim, &result).await.unwrap();
+        store.finish_backup(&claim, &result).await.unwrap();
+        assert_run_activities(&pool, &claim.run, outcome, activity_status, true).await;
+        if outcome != "SucceededWithWarnings" {
+            store
+                .enqueue_backup(actor, claim.policy.id, "Manual")
+                .await
+                .unwrap();
+        }
+    }
+
+    let webhook = json!({"isEnabled": true});
+    sqlx::query("UPDATE backuppolicies SET webhook=$2 WHERE id=$1")
+        .bind(policies[0].id)
+        .bind(&webhook)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let webhook_run = store
+        .enqueue_webhook(policies[0].id, &webhook)
+        .await
+        .unwrap();
+    assert_eq!(webhook_run.triggered_by_actor_id, SYSTEM_ACTOR_ID);
+    assert_eq!(webhook_run.trigger, "Webhook");
+    assert!(store.cancel_backup(webhook_run.id).await.unwrap());
+    assert_run_activities(&pool, &webhook_run, "Cancelled", "Warning", false).await;
+
+    sqlx::query("DELETE FROM activityevents WHERE resourceid=ANY($1)")
+        .bind(policies.iter().map(|policy| policy.id).collect::<Vec<_>>())
+        .execute(&pool)
+        .await
+        .unwrap();
 
     sqlx::query("DELETE FROM backuprunlogs WHERE backuprunid IN (SELECT id FROM backupruns WHERE backuprepositoryid=$1)").bind(repository.id).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1")
@@ -799,4 +907,38 @@ fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult 
 async fn lease_durations(pool: &sqlx::PgPool, owner: Uuid) -> (f64, f64) {
     sqlx::query_as("SELECT (SELECT EXTRACT(EPOCH FROM expiresat-createdat)::float8 FROM backuprepositoryleases WHERE ownerrunid=$1), (SELECT EXTRACT(EPOCH FROM expiresat-createdat)::float8 FROM backupsourceleases WHERE ownerrunid=$1)")
         .bind(owner).fetch_one(pool).await.unwrap()
+}
+
+async fn assert_run_activities(
+    pool: &sqlx::PgPool,
+    run: &citadel_backups::BackupRun,
+    outcome: &str,
+    activity_status: &str,
+    started: bool,
+) {
+    let events: Vec<(String, String, Uuid, Uuid, String)> = sqlx::query_as(
+        "SELECT eventtype,status,resourceid,createdbyactorid,info FROM activityevents WHERE info::jsonb->>'RunId'=$1 ORDER BY createdat,id",
+    ).bind(run.id.to_string()).fetch_all(pool).await.unwrap();
+    let mut expected = vec![("BackupRunQueued", "Information")];
+    if started {
+        expected.push(("BackupRunStarted", "Information"));
+    }
+    expected.push(("BackupRunCompleted", activity_status));
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| (event.0.as_str(), event.1.as_str()))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    for event in &events {
+        assert_eq!(event.2, run.backup_policy_id);
+        assert_eq!(event.3, run.triggered_by_actor_id);
+        let info: serde_json::Value = serde_json::from_str(&event.4).unwrap();
+        assert_eq!(info["$type"], event.0);
+        assert_eq!(info["Trigger"], run.trigger);
+    }
+    let info: serde_json::Value = serde_json::from_str(&events.last().unwrap().4).unwrap();
+    assert_eq!(info["Status"], outcome);
+    assert_eq!(info["DurationMs"].is_number(), started);
 }

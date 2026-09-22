@@ -185,6 +185,17 @@ mod tests {
     use serde_json::{Value, json};
 
     #[test]
+    fn activity_event_schema_uses_the_current_feature_vocabulary() {
+        for public_only in [false, true] {
+            let doc = serde_json::to_value(document(public_only)).unwrap();
+            assert_eq!(
+                doc["components"]["schemas"]["ActivityEventType"]["enum"],
+                serde_json::to_value(citadel_activities::ActivityEventType::ALL).unwrap(),
+            );
+        }
+    }
+
+    #[test]
     fn full_and_public_documents_preserve_exposure_and_security() {
         let full = serde_json::to_value(document(false)).unwrap();
         let public = serde_json::to_value(document(true)).unwrap();

@@ -79,4 +79,29 @@ describe('TaskSheet activity details', () => {
     expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
     expect(screen.queryByTestId('monaco-diff')).not.toBeInTheDocument();
   });
+
+  it('shows the backup run, trigger, duration and failure details', () => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'BackupPolicy',
+      eventType: 'BackupRunCompleted',
+      status: 'Failure',
+      info: {
+        $type: 'BackupRunCompleted',
+        runId: '019ffb55-f35e-7178-91f2-281696860dca',
+        trigger: 'Schedule',
+        status: 'Failed',
+        durationMs: 1250,
+        errorMessage: 'Backup repository unavailable.',
+      },
+    } as ActivityView;
+
+    renderCitadel(<TaskSheet type="Activity" />);
+
+    expect(screen.getByText('019ffb55-f35e-7178-91f2-281696860dca')).toBeVisible();
+    expect(screen.getByText('Schedule')).toBeVisible();
+    expect(screen.getByText('1250 ms')).toBeVisible();
+    expect(screen.getByText('Backup repository unavailable.')).toBeVisible();
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+  });
 });

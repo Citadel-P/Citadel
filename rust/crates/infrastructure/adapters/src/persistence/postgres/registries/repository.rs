@@ -103,21 +103,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             }
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let old = get_registry_tx(&mut transaction, id, true).await?;
-            let mut updated = NewRegistry {
-                name: patch.name.clone().unwrap_or_else(|| old.name.clone()),
-                registry_host: patch
-                    .registry_host
-                    .clone()
-                    .unwrap_or_else(|| old.registry_host.clone()),
-                status: patch.status.unwrap_or(old.status),
-                configuration: merge_json_patch(&patch.configuration, Some(&old.configuration))
-                    .unwrap_or(Value::Null),
-                description: patch.description.merge_optional(old.description.as_ref()),
-                tag_ids: patch
-                    .tag_ids
-                    .clone()
-                    .unwrap_or_else(|| old.tags.iter().map(|tag| tag.id).collect()),
-            };
+            let mut updated = patch.apply_to(&old);
             match kind {
                 RegistryMutationKind::Update => updated.validate()?,
                 RegistryMutationKind::Metadata => {

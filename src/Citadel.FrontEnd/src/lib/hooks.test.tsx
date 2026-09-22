@@ -1,6 +1,8 @@
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { render, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import {
   ApplyStackInput,
   StackApplyEventType,
@@ -9,7 +11,7 @@ import {
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { useResourceParamType, useStreamProgress } from './hooks';
+import { useResourceParamType, useStreamProgress, useMutate, useSaveResource } from './hooks';
 
 const dockerConflict = 'Error response from daemon: Conflict. The container name is already in use.';
 const stackRequest: ApplyStackInput = {
@@ -238,5 +240,57 @@ describe('useResourceParamType', () => {
     );
 
     expect(view.getByTestId('resource-type')).toHaveTextContent('SwarmService');
+  });
+});
+
+describe('registry save errors', () => {
+  it.each(['add', 'edit'] as const)('does not show success or navigate after a rejected %s', async (mode) => {
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => 'unused');
+    const message = 'Docker Hub rejected these credentials.';
+    const reject = () =>
+      HttpResponse.json({ title: 'Validation failed', status: 400, errors: { '': [message] } }, { status: 400 });
+    server.use(
+      http.post('http://localhost/api/v1/registries', reject),
+      http.patch('http://localhost/api/v1/registries/registry-id', reject),
+    );
+    function Probe() {
+      const create = useMutate('createRegistry');
+      const update = useMutate('updateRegistry');
+      const [failed, setFailed] = useState(false);
+      const location = useLocation();
+      const { save, isPending } = useSaveResource({
+        mode,
+        basePath: 'registries',
+        entityName: 'Registry',
+        onCreate: (payload: any) => create.mutateAsync({ data: payload }),
+        onUpdate: (payload: any) => update.mutateAsync({ id: 'registry-id', data: payload }),
+      });
+      return (
+        <>
+          <button
+            disabled={isPending}
+            onClick={() =>
+              void save({
+                name: 'Private registry',
+                configuration: { $type: 'DockerHub', userName: 'test-user', pat: 'rejected-token' },
+              }).catch(() => setFailed(true))
+            }>
+            Save
+          </button>
+          <div data-testid="failed">{String(failed)}</div>
+          <div data-testid="location">{location.pathname}</div>
+        </>
+      );
+    }
+    try {
+      const view = renderCitadel(<Probe />, { route: '/registries/add' });
+      await view.user.click(view.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(view.getByTestId('failed')).toHaveTextContent('true'));
+      expect(success).not.toHaveBeenCalled();
+      expect(view.getByTestId('location')).toHaveTextContent('/registries/add');
+      expect(view.getByRole('button', { name: 'Save' })).toBeEnabled();
+    } finally {
+      success.mockRestore();
+    }
   });
 });

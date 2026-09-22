@@ -12,7 +12,10 @@ mod validation;
 pub use validation::{registry_type, validate_description, validate_name_identifier};
 
 mod repository;
+pub use repository::RegistryConnectionChecker;
 pub use repository::RegistryRepository;
+mod service;
+pub use service::{create_registry, update_registry};
 mod error;
 pub use error::RegistryError;
 pub use repository::RegistryMutationKind;

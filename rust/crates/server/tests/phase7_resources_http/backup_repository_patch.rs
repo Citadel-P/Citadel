@@ -100,6 +100,48 @@ pub(super) async fn before_ready(
     let changed = response_json(changed).await;
     assert_eq!(changed["spec"]["path"], "/tmp/changed-backups");
     assert_eq!(changed["description"], "updated repository");
+    let mut denied = repository["spec"].clone();
+    denied["path"] = json!("/outside-allowed-backup-path");
+    assert_eq!(
+        request(
+            app,
+            Method::PATCH,
+            &path,
+            Some(admin.clone()),
+            Some(json!({"spec":denied}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    for operation in ["initialize", "check", "prune"] {
+        let response = request(
+            app,
+            Method::POST,
+            &format!("{path}/{operation}"),
+            Some(admin.clone()),
+            Some(json!({"location":"Core","platformId":null})),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        assert!(String::from_utf8_lossy(&body).contains("AllowedCorePaths"));
+        assert_eq!(
+            store.get_repository(repo_id).await.unwrap().control_state,
+            "Idle"
+        );
+    }
+    // Readiness checks still return their recorded validation result.
+    let validation = request(
+        app,
+        Method::POST,
+        &format!("{path}/validate"),
+        Some(admin.clone()),
+        Some(json!({"location":"Core","platformId":null})),
+    )
+    .await;
+    assert_eq!(validation.status(), StatusCode::OK);
+    assert_ne!(response_json(validation).await["status"], "Ready");
     assert_eq!(
         request(
             app,

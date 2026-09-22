@@ -1,3 +1,4 @@
+use super::activity::record_run_activity;
 use super::*;
 
 impl PostgresBackupPersistence {
@@ -35,6 +36,7 @@ impl PostgresBackupPersistence {
                 .await
                 .map_err(storage)?;
             sqlx::query("UPDATE backuppolicies SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(policy_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
+            record_run_activity(&mut tx, id).await?;
             tx.commit().await.map_err(storage)?;
             self.get_run(id).await
         })
@@ -173,6 +175,7 @@ impl PostgresBackupPersistence {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(false);
             }
+            record_run_activity(&mut tx, id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(true)
         })
@@ -223,6 +226,7 @@ impl PostgresBackupPersistence {
                 ));
             }
             sqlx::query("UPDATE backuprepositories SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(repo_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
+            record_run_activity(&mut tx, id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(Some(BackupClaim {
                 policy: self.get_policy(policy_id).await?,
@@ -386,6 +390,7 @@ impl PostgresBackupPersistence {
                 matches!(result.status, "Succeeded" | "SucceededWithWarnings"),
             )
             .await?;
+            record_run_activity(&mut tx, claim.run.id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(())
         })
@@ -471,6 +476,7 @@ impl PostgresBackupPersistence {
                     false,
                 )
                 .await?;
+                record_run_activity(&mut tx, id).await?;
                 tx.commit().await.map_err(storage)?;
                 Ok(true)
             } else {

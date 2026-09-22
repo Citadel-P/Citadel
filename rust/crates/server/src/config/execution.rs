@@ -52,7 +52,7 @@ pub struct ExecutionConfig {
     pub automation: AutomationExecutionConfig,
     pub edge_agent: EdgeAgentConfig,
     pub restic_image: String,
-    pub volume_helper_image: String,
+    pub volume_helper_image: Option<String>,
 }
 
 impl ExecutionConfig {
@@ -231,8 +231,7 @@ impl ExecutionConfig {
             },
             restic_image: string("CITADEL_RESTIC_IMAGE")
                 .unwrap_or_else(|| "restic/restic:0.18.1".into()),
-            volume_helper_image: string("CITADEL_VOLUME_HELPER_IMAGE")
-                .unwrap_or_else(|| "ghcr.io/citadel-p/citadel.agent:latest".into()),
+            volume_helper_image: string("CITADEL_VOLUME_HELPER_IMAGE"),
         })
     }
 }
@@ -327,6 +326,7 @@ mod tests {
         assert_eq!(config.automation.maximum_log_bytes, 1024 * 1024);
         assert_eq!(config.tools.restic, OsString::from("restic"));
         assert_eq!(config.restic_image, "restic/restic:0.18.1");
+        assert!(config.volume_helper_image.is_none());
         assert!(config.edge_agent.allow_insecure);
         assert!(config.edge_agent.node_agent_ca_bundle.is_none());
     }

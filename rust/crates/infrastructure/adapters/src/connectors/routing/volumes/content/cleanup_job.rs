@@ -93,7 +93,7 @@ mod tests {
     fn cleanup_requires_exact_ownership_identity_and_expiry() {
         let platform = Uuid::now_v7();
         let name = format!("citadel-volume-helper-{}", Uuid::now_v7().simple());
-        let request = helper_request(platform, "data", &name, "helper");
+        let request = helper_request(platform, "data", &name, "helper", HELPER_BINARY);
         let mut labels = request
             .labels
             .into_iter()

@@ -2,6 +2,11 @@ use crate::*;
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
+
+pub trait RegistryConnectionChecker: Send + Sync {
+    fn check<'a>(&'a self, configuration: &'a Value) -> BoxFuture<'a, Result<(), RegistryError>>;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistryMutationKind {
     Update,

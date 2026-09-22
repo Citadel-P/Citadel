@@ -137,6 +137,7 @@ pub async fn verify(
         realtime: None,
     })
     .merge(registries::router(registries::RegistriesHttpState {
+        registry_connections: Arc::new(citadel_adapters::connectors::registries::browser::RegistryBrowser::with_endpoints("http://127.0.0.1:1", "http://127.0.0.1:1").unwrap()),
         identity: identity.clone(),
         registries: Arc::new(
             citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),

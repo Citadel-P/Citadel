@@ -12,6 +12,7 @@ import {
   ContainerDataView,
   ResourceBindingScope,
   LatestActivityView,
+  PlatformStatus,
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
@@ -152,9 +153,45 @@ const DeploymentSubHeader = ({
 }) => {
   return (
     <>
+      <DeploymentHealthNotice deployment={deployment} latestActivity={latestActivity} />
       <DeploymentLatestActivity latestActivity={latestActivity} deployment={deployment} />
       <DeploymentUpdateNotice deployment={deployment} />
     </>
+  );
+};
+
+const DeploymentHealthNotice = ({
+  deployment,
+  latestActivity,
+}: {
+  deployment: DeploymentView;
+  latestActivity: LatestActivityView | null;
+}) => {
+  if (deployment.status !== DeploymentStatus.Degraded) return null;
+
+  if (deployment.platformStatus === PlatformStatus.Offline) {
+    return (
+      <AlertMessage type="error" title="Platform unavailable">
+        The platform is offline. Citadel cannot confirm the container state for this deployment.
+      </AlertMessage>
+    );
+  }
+
+  if (!deployment.dockerContainerId) {
+    return (
+      <AlertMessage type="error" title="Container missing">
+        No container is currently linked to this deployment. Its previous container may have been removed or replaced
+        outside Citadel. Redeploy this configuration, or adopt the replacement container as a deployment.
+      </AlertMessage>
+    );
+  }
+
+  return (
+    <AlertMessage type="error" title="Deployment degraded">
+      {latestActivity?.info.$type === 'DeploymentDegraded'
+        ? latestActivity.info.reason
+        : 'The associated container is unavailable. Check the platform and container state.'}
+    </AlertMessage>
   );
 };
 
@@ -169,14 +206,7 @@ const DeploymentLatestActivity = ({
   if (latestActivity?.status === ActivityStatus.Success) {
     return;
   }
-  if (latestActivity?.info.$type === 'DeploymentDegraded') {
-    if (deployment.status !== DeploymentStatus.Degraded) return null;
-    return (
-      <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
-        <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
-      </AlertMessage>
-    );
-  }
+  if (latestActivity.info.$type === 'DeploymentDegraded') return null;
   if (
     deployment.status === DeploymentStatus.Healthy &&
     latestActivity.status === ActivityStatus.Failure &&

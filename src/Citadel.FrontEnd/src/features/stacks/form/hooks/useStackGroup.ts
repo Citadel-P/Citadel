@@ -18,10 +18,9 @@ export const useStackGroup = (stackId: string) => {
 
   const handleStackInfoUpdated = useCallback(
     (stack: StackView) => {
+      if (stack.id !== stackId) return;
       const activityInfo = stack.latestActivityView?.info;
-      const info = Array.isArray(activityInfo)
-        ? { ...activityInfo[1], $type: activityInfo[0] }
-        : activityInfo;
+      const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
 
       setStackUpdate({
         name: stack.name,
@@ -37,7 +36,7 @@ export const useStackGroup = (stackId: string) => {
 
       queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: stack.id }] });
     },
-    [queryClient],
+    [queryClient, stackId],
   );
 
   const setupEventListeners = useCallback(

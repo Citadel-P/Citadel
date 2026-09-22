@@ -117,6 +117,11 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
   if (!info?.$type) return null;
 
   switch (info.$type) {
+    case 'BackupRunQueued':
+    case 'BackupRunStarted':
+      return info.trigger;
+    case 'BackupRunCompleted':
+      return [formatActivityEvent(info.status), info.errorMessage].filter(Boolean).join(' - ');
     case 'GitRepoWebhookReceived':
     case 'StackWebhookReceived':
       return [

@@ -12,8 +12,11 @@ pub(crate) async fn recover_stale_with_mode(
     before: DateTime<Utc>,
     startup: bool,
 ) -> Result<u64, BackupError> {
-    let affected = sqlx::query("UPDATE backupruns r SET status='Interrupted',completedat=CURRENT_TIMESTAMP,errorcode='Interrupted',errormessage='Backup interrupted before completion.' FROM backuppolicies p WHERE p.id=r.backuppolicyid AND r.status IN('Preparing','Running','ApplyingRetention') AND ($2 OR r.startedat<$1) AND ($2 OR r.startedat+make_interval(secs=>p.timeoutseconds*2+300)<CURRENT_TIMESTAMP)").bind(before).bind(startup).execute(&mut **tx).await.map_err(storage)?.rows_affected();
-    let mut changed = affected;
+    let interrupted = sqlx::query("UPDATE backupruns r SET status='Interrupted',completedat=CURRENT_TIMESTAMP,errorcode='Interrupted',errormessage='Backup interrupted before completion.' FROM backuppolicies p WHERE p.id=r.backuppolicyid AND r.status IN('Preparing','Running','ApplyingRetention') AND ($2 OR r.startedat<$1) AND ($2 OR r.startedat+make_interval(secs=>p.timeoutseconds*2+300)<CURRENT_TIMESTAMP) RETURNING r.id").bind(before).bind(startup).fetch_all(&mut **tx).await.map_err(storage)?;
+    let mut changed = interrupted.len() as u64;
+    for row in interrupted {
+        super::activity::record_run_activity(tx, row.try_get("id").map_err(storage)?).await?;
+    }
     let affected = sqlx::query("UPDATE backuprestoreruns SET status='Interrupted',completedat=CURRENT_TIMESTAMP,errorcode='Interrupted',errormessage='Restore interrupted before completion.' WHERE status IN('Preparing','Running') AND ($2 OR startedat<$1) AND ($2 OR startedat+INTERVAL '4 hours 5 minutes'<CURRENT_TIMESTAMP)").bind(before).bind(startup).execute(&mut **tx).await.map_err(storage)?.rows_affected();
     changed += affected;
     let _affected = sqlx::query("DELETE FROM backuprepositoryleases WHERE expiresat<=CURRENT_TIMESTAMP OR ownerrunid IN(SELECT id FROM backupruns WHERE status='Interrupted') OR ownerrunid IN(SELECT id FROM backuprestoreruns WHERE status='Interrupted')").execute(&mut **tx).await.map_err(storage)?.rows_affected();

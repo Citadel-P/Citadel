@@ -48,7 +48,7 @@ fn normalize_spec(spec: &mut Value) {
     if let Some(fields) = spec.as_object_mut() {
         for key in match kind.as_str() {
             "FileSystem" => &["path"][..],
-            "S3Compatible" => &["bucket", "prefix", "region"][..],
+            "S3Compatible" => &["endpoint", "bucket", "prefix", "region"][..],
             _ => &[],
         } {
             if let Some(Value::String(value)) = fields.get_mut(*key) {
@@ -122,12 +122,13 @@ mod tests {
         let changed = apply(
             &current,
             &json!({"description":" backups ","passwordSecretId":Uuid::now_v7(),"spec":{
-                "$type":"S3Compatible","endpoint":"https://s3.example.test","bucket":" citadel ",
+                "$type":"S3Compatible","endpoint":" https://s3.example.test ","bucket":" citadel ",
                 "prefix":" /prod/backups/ ","region":" eu-west-1 ",
                 "accessKeySecretId":Uuid::now_v7(),"secretKeySecretId":Uuid::now_v7()
             }}),
         )
         .unwrap();
+        assert_eq!(changed.spec["endpoint"], "https://s3.example.test");
         assert_eq!(changed.spec["bucket"], "citadel");
         assert_eq!(changed.spec["prefix"], "prod/backups");
         assert_eq!(changed.spec["region"], "eu-west-1");

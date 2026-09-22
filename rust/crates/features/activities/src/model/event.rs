@@ -231,13 +231,23 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
+        let status = match &info {
+            ActivityEventInfo::BackupRunQueued { .. }
+            | ActivityEventInfo::BackupRunStarted { .. } => ActivityStatus::Information,
+            ActivityEventInfo::BackupRunCompleted { status, .. } => match status.as_str() {
+                "Succeeded" => ActivityStatus::Success,
+                "SucceededWithWarnings" | "Cancelled" => ActivityStatus::Warning,
+                _ => ActivityStatus::Failure,
+            },
+            _ => ActivityStatus::Success,
+        };
         Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::BackupPolicy,
             actor_id,
             info,
-            ActivityStatus::Success,
+            status,
             created_at,
         )
     }

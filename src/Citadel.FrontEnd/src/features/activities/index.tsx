@@ -49,7 +49,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.Volume]: 'Volume',
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
-  [ActivityResourceType.BackupPolicy]: 'BackupPolicy',
+  [ActivityResourceType.BackupPolicy]: 'Backup',
   [ActivityResourceType.SwarmService]: 'SwarmService',
   [ActivityResourceType.ServiceAccount]: 'ServiceAccount',
 } satisfies Record<ActivityResourceType, string>;

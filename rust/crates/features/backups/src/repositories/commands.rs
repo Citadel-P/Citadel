@@ -9,6 +9,36 @@ pub struct BackupRepositoryConfiguration {
     pub password_secret_id: Uuid,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn s3_endpoint_whitespace_is_removed_without_bypassing_transport_validation() {
+        let mut input = BackupRepositoryConfiguration {
+            name: "S3 test".into(),
+            description: None,
+            password_secret_id: Uuid::now_v7(),
+            spec: serde_json::json!({
+                "$type": "S3Compatible",
+                "endpoint": " \thttps://host.docker.internal:9000 \n",
+                "bucket": "citadel-bucket",
+                "accessKeySecretId": Uuid::now_v7(),
+                "secretKeySecretId": Uuid::now_v7()
+            }),
+        };
+        input.validate().unwrap();
+        assert_eq!(input.spec["endpoint"], "https://host.docker.internal:9000");
+        input.spec["endpoint"] = " http://host.docker.internal:9000 ".into();
+        assert!(input.validate().is_err());
+        input.spec["allowInsecureHttp"] = true.into();
+        input.validate().unwrap();
+        assert_eq!(input.spec["endpoint"], "http://host.docker.internal:9000");
+        input.spec["endpoint"] = "https://bad host:9000".into();
+        assert!(input.validate().is_err());
+    }
+}
+
 impl BackupRepositoryConfiguration {
     pub fn validate(&mut self) -> Result<(), BackupError> {
         validate_name(&mut self.name, "Backup Repository")?;
@@ -37,6 +67,9 @@ impl BackupRepositoryConfiguration {
                 }
             }
             "S3Compatible" => {
+                if let Some(Value::String(endpoint)) = self.spec.get_mut("endpoint") {
+                    *endpoint = endpoint.trim().to_owned();
+                }
                 let endpoint = required_string(&self.spec, "endpoint")?;
                 let url = reqwest_url(endpoint)?;
                 let insecure = self

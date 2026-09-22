@@ -38654,6 +38654,15 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoServiceAccountTokenRevoked"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupRunQueued"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupRunStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupRunCompleted"
           }
         ],
         "discriminator": {
@@ -38794,7 +38803,10 @@
             "ServiceAccountDisabled": "#/components/schemas/ActivityEventInfoServiceAccountDisabled",
             "ServiceAccountArchived": "#/components/schemas/ActivityEventInfoServiceAccountArchived",
             "ServiceAccountTokenCreated": "#/components/schemas/ActivityEventInfoServiceAccountTokenCreated",
-            "ServiceAccountTokenRevoked": "#/components/schemas/ActivityEventInfoServiceAccountTokenRevoked"
+            "ServiceAccountTokenRevoked": "#/components/schemas/ActivityEventInfoServiceAccountTokenRevoked",
+            "BackupRunQueued": "#/components/schemas/ActivityEventInfoBackupRunQueued",
+            "BackupRunStarted": "#/components/schemas/ActivityEventInfoBackupRunStarted",
+            "BackupRunCompleted": "#/components/schemas/ActivityEventInfoBackupRunCompleted"
           }
         }
       },
@@ -39478,6 +39490,89 @@
             "type": [
               "null",
               "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoBackupRunQueued": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "type": "object",
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupRunQueued"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoBackupRunStarted": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "type": "object",
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupRunStarted"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoBackupRunCompleted": {
+        "required": [
+          "runId",
+          "trigger",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupRunCompleted"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
             ]
           }
         }
@@ -42095,7 +42190,10 @@
           "ServiceAccountDisabled",
           "ServiceAccountArchived",
           "ServiceAccountTokenCreated",
-          "ServiceAccountTokenRevoked"
+          "ServiceAccountTokenRevoked",
+          "BackupRunQueued",
+          "BackupRunStarted",
+          "BackupRunCompleted"
         ]
       },
       "ActivityResourceType": {
