@@ -1,39 +1,48 @@
-use std::sync::Arc;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::alert_store::PostgresAlertStore;
-use citadel_adapters::backup_store::PostgresBackupStore;
-use citadel_adapters::build_store::PostgresBuildStore;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_alerts::{AlertChannelView, AlertDelivery, AlertError, AlertEventView};
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        alerts::PostgresAlertRepository,
+        backups::PostgresBackupPersistence,
+        builds::PostgresBuildRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
+use citadel_alerts::{AlertChannel, AlertDelivery, AlertError, AlertEvent};
 use citadel_backups::{
-    BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog,
-    BackupRepositoryView, BackupRunAuthorizer, BackupService, BackupSourcePlan,
-    BackupSourcePlanner, RestoreClaim, RestoreExecutionResult,
+    BackupClaim, BackupError, BackupExecutionResult, BackupExecutor, BackupLog, BackupRepository,
+    BackupRunAuthorizer, BackupService, BackupSourcePlan, BackupSourcePlanner, RestoreClaim,
+    RestoreExecutionResult,
 };
 use citadel_builds::{
-    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildService, BuildStore,
+    BuildClaim, BuildExecutionResult, BuildExecutor, BuildLog, BuildRepository, BuildService,
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, ResourceType};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::alerts_http::{self, AlertsHttpState};
-use citadel_server::backups_http::{self, BackupsHttpState};
-use citadel_server::builds_http::{self, BuildsHttpState};
-use citadel_server::metrics::Metrics;
-use citadel_server::realtime::{RealtimeHub, change_callback};
+use citadel_primitives::{ActorId, ResourceType};
+use citadel_server::{
+    api::routes::{
+        alerts as alerts_http, alerts::AlertsHttpState, backups as backups_http,
+        backups::BackupsHttpState, bindings, builds as builds_http, builds::BuildsHttpState,
+        git_repositories as git_catalog, registries, tags,
+    },
+    metrics::Metrics,
+    realtime::{RealtimeHub, change_callback},
+};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -42,6 +51,8 @@ use uuid::Uuid;
 mod alert_assertions;
 #[path = "phase7_resources_http/alert_rule_create.rs"]
 mod alert_rule_create;
+#[path = "phase7_resources_http/alert_rule_list.rs"]
+mod alert_rule_list;
 #[path = "phase7_resources_http/alert_rule_metadata.rs"]
 mod alert_rule_metadata;
 #[path = "phase7_resources_http/alert_rule_patch.rs"]
@@ -66,6 +77,8 @@ mod build_webhooks;
 mod git_webhooks;
 #[path = "phase7_resources_http/stack_webhooks.rs"]
 mod stack_webhooks;
+#[path = "phase7_resources_http/validation.rs"]
+mod validation;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
@@ -90,20 +103,26 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let build_store = Arc::new(PostgresBuildStore::new(pool.clone()));
+    let build_store = Arc::new(PostgresBuildRepository::new(pool.clone()));
     let build_entitlement = Arc::new(build_webhooks::Entitlement::default());
-    let backup_store = Arc::new(PostgresBackupStore::new(pool.clone()));
+    let backup_store = Arc::new(PostgresBackupPersistence::new(pool.clone()));
     let backup_entitlement = Arc::new(backup_webhooks::Entitlement::default());
     let backup_planner = Arc::new(FakeBackupPlanner::default());
     let alert_entitlement = Arc::new(alert_rule_create::Entitlement::default());
     let alert_store = Arc::new(
-        PostgresAlertStore::new(pool.clone()).with_entitlements(alert_entitlement.clone()),
+        PostgresAlertRepository::new(pool.clone()).with_entitlements(alert_entitlement.clone()),
     );
     let hub = RealtimeHub::new(128, Arc::new(Metrics::default()));
     let _subscriber = hub.subscribe();
-    let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
+    let cancellation = CancellationToken::new();
+    let build_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
     let builds = Arc::new(
         BuildService::new(
+            Arc::new(citadel_server::tasks::builds::TrackedBuildTasks::new(
+                build_tasks.clone(),
+            )),
+            cancellation.clone(),
             build_store.clone(),
             Arc::new(FakeBuildExecutor { pool: pool.clone() }),
             Duration::minutes(5),
@@ -111,7 +130,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_entitlements(build_entitlement.clone())
         .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
         .with_pool_checker(Arc::new(
-            citadel_adapters::build_pool_checker::AgentBuildPoolChecker {
+            citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
                 agent: None,
                 edge: edge.clone(),
             },
@@ -132,7 +151,6 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy"))
         .with_entitlements(backup_entitlement.clone()),
     );
-    let cancellation = CancellationToken::new();
     let (stacks, stack_entitlement) = stack_webhooks::service(pool.clone());
     let webhook_router = backup_webhooks::router(
         pool.clone(),
@@ -149,32 +167,59 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .merge(backups_http::router(BackupsHttpState {
         identity: Arc::clone(&identity),
         backups: backups.clone(),
-        cancellation,
+        cancellation: cancellation.clone(),
     }))
     .merge(alerts_http::router(AlertsHttpState {
         identity: identity.clone(),
         store: alert_store.clone(),
         delivery: Arc::new(FakeAlertDelivery),
     }))
-    .merge(citadel_server::resources_http::router(
-        citadel_server::resources_http::ResourcesHttpState {
-            identity: identity.clone(),
-            resources: Arc::new(citadel_resources::ResourceMetadataService::new(
+    .merge(tags::router(tags::TagsHttpState {
+        identity: identity.clone(),
+        tags: Arc::new(
+            citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    })
+    .merge(registries::router(registries::RegistriesHttpState {
+        registry_connections: Arc::new(citadel_adapters::connectors::registries::browser::RegistryBrowser::with_endpoints("http://127.0.0.1:1", "http://127.0.0.1:1").unwrap()),
+        identity: identity.clone(),
+        registries: Arc::new(
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    }))
+    .merge(bindings::router(bindings::BindingsHttpState {
+        identity: identity.clone(),
+        secrets: Arc::new(citadel_bindings::SecretService::new(
                 Arc::new(
-                    citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore::new(
+                    citadel_adapters::persistence::postgres::bindings::PostgresBindingRepository::new(
                         pool.clone(),
                     ),
                 ),
-                Arc::new(citadel_adapters::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
+                Arc::new(citadel_adapters::security::identity::crypto::AesGcmSecretProtector::new(&[59; 32]).unwrap()),
             )),
-            realtime: None,
-        },
-    ))
+        realtime: None,
+    }))
+    .merge(git_catalog::catalog_router(git_catalog::GitCatalogHttpState {
+        identity: identity.clone(),
+        git_repositories: Arc::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    })))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
-        citadel_server::platforms_http::EdgeHttpContext {
+        citadel_server::api::routes::platforms::EdgeHttpContext {
+        node_agent_policy: Default::default(),
             node_agent_ca_bundle: None,
-            store: citadel_adapters::edge::PostgresEdgeStore::new(pool.clone()),
+            store: citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()),
             registry: edge.clone(),
             core_url: "https://core.example.test:8001".into(),
             agent_image: "citadel-agent:test".into(),
@@ -194,6 +239,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         "reads/authentication failures do not notify"
     );
     let fixture = seed_dependencies(&pool, principal.actor_id).await;
+    validation::verify_inputs(&app, &principal, fixture.git_repository).await;
     let suffix = Uuid::now_v7().simple().to_string();
 
     let build_pool_response = request(
@@ -450,6 +496,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(rule["channelIds"][0], channel_id);
+    alert_rule_list::verify(&app, &pool, &principal, &rule, &channel).await;
     alert_rule_metadata::verify(&app, &pool, &principal, &rule, &alert_store).await;
     alert_rule_patch::verify(&app, &pool, &principal, &rule, &channel, &hub, &alert_store).await;
     alert_rule_create::verify(
@@ -706,6 +753,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let policy_id = policy["id"].as_str().unwrap();
+    validation::verify_policy(&app, &principal, &policy).await;
     backup_policy_metadata::verify(&app, &pool, &principal, &policy).await;
     backup_summaries::verify(&app, &pool, &principal, &policy).await;
     backup_completion::verify_policy(&app, &pool, &principal, &policy).await;
@@ -879,7 +927,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
     sqlx::query("UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2 AND resourcetype=$4")
         .bind(reader.actor_id.value()).bind(Uuid::parse_str(project_id).unwrap())
-        .bind(citadel_domain::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
+        .bind(citadel_primitives::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
         .execute(&pool).await.unwrap();
     let queued = request(&app, Method::POST, &queue_path, Some(reader.clone()), None).await;
     assert_eq!(queued.status(), StatusCode::OK);
@@ -1042,6 +1090,11 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .await
         .unwrap();
     assert_eq!(status, "Failed");
+    cancellation.cancel();
+    build_tasks
+        .drain(std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 struct FixtureIds {
@@ -1244,19 +1297,21 @@ struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
     fn preview<'a>(
         &'a self,
-        _: citadel_backups::source_preview::BackupPreviewKind,
+        _: citadel_backups::policies::read_models::BackupPreviewKind,
         _: Uuid,
         _: ActorId,
         _: bool,
         _: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<citadel_backups::source_preview::BackupSourcePreview, BackupError>>
-    {
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_backups::policies::read_models::BackupSourcePreview, BackupError>,
+    > {
         Box::pin(async { Err(BackupError::NotFound) })
     }
     fn validate_source<'a>(
         &'a self,
         _: &'a Value,
-        _: &'a citadel_backups::BackupRepositoryView,
+        _: &'a citadel_backups::BackupRepository,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async { Ok(()) })
@@ -1302,13 +1357,20 @@ impl BackupRunAuthorizer for AllowBackupExecution {
 impl BackupExecutor for FakeBackupExecutor {
     fn repository<'a>(
         &'a self,
-        _: &'a BackupRepositoryView,
+        repository: &'a BackupRepository,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
-        Box::pin(async { Ok(vec![]) })
+        Box::pin(async move {
+            if repository.spec["path"] == "/outside-allowed-backup-path" {
+                return Err(BackupError::Validation(
+                    "Core repository path is outside Backups__AllowedCorePaths.".into(),
+                ));
+            }
+            Ok(vec![])
+        })
     }
     fn backup<'a>(
         &'a self,
@@ -1370,10 +1432,68 @@ struct FakeAlertDelivery;
 impl AlertDelivery for FakeAlertDelivery {
     fn send<'a>(
         &'a self,
-        _: &'a AlertChannelView,
-        _: &'a AlertEventView,
+        _: &'a AlertChannel,
+        _: &'a AlertEvent,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), AlertError>> {
         Box::pin(async { Ok(()) })
     }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn build_run_api_preserves_queued_resource_snapshots() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(3)
+        .connect(&url)
+        .await
+        .unwrap();
+    let principal = seed_administrator(&pool).await;
+    let fixture = seed_dependencies(&pool, principal.actor_id).await;
+    let store = PostgresBuildRepository::new(pool.clone());
+    let mut input: citadel_builds::BuildProjectConfiguration = serde_json::from_value(json!({
+        "name": "snapshot-build", "enabled": true,
+        "gitRepositoryId": fixture.git_repository,
+        "platformId": fixture.platform, "registryId": fixture.registry,
+        "imageRepository": "citadel/test"
+    }))
+    .unwrap();
+    input.validate().unwrap();
+    let project = store.create(principal.actor_id, &input).await.unwrap();
+    let queued = store
+        .enqueue(principal.actor_id, project.id, "Manual")
+        .await
+        .unwrap();
+    sqlx::query("UPDATE platforms SET name='Renamed platform' WHERE id=$1")
+        .bind(fixture.platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE gitrepositories SET name='Renamed repository' WHERE id=$1")
+        .bind(fixture.git_repository)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let persisted = store.get_run(queued.id).await.unwrap();
+    for run in [queued, persisted] {
+        let response = serde_json::to_value(
+            citadel_server::api::resources::builds::views::BuildRunView::from(run),
+        )
+        .unwrap();
+        assert_eq!(
+            response["platformSnapshot"]["id"],
+            fixture.platform.to_string()
+        );
+        assert_eq!(
+            response["platformSnapshot"]["name"],
+            format!("phase7-platform-{}", fixture.platform.simple())
+        );
+        assert_eq!(
+            response["gitRepositoryNameSnapshot"],
+            format!("phase7-git-{}", fixture.git_repository.simple())
+        );
+    }
+    pool.close().await;
 }

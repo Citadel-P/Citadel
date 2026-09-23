@@ -1,5 +1,5 @@
-//! Ports the shared-secret and body-limit cases from .NET WebhookListenerTests,
-//! then exercises durable Automation dispatch through the real Deno worker.
+//! Verify shared-secret authentication and webhook body limits,
+//! then exercise durable Automation dispatch through the real Deno worker.
 use super::*;
 use citadel_automation::{AutomationEntitlements, AutomationError};
 use futures_util::future::BoxFuture;
@@ -16,37 +16,45 @@ impl AutomationEntitlements for Entitlement {
 
 pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
     use citadel_adapters::{
-        crypto::AesGcmSecretProtector, git_account_store::PostgresGitAccountStore,
-        git_repository_execution_store::PostgresGitRepositoryExecutionStore,
+        persistence::postgres::git::{
+            accounts::PostgresGitAccountRepository,
+            repositories::PostgresGitRepositoryExecutionPersistence,
+        },
+        security::identity::crypto::AesGcmSecretProtector,
     };
     use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
     let git = Arc::new(GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::new(GitAccountService::new(
-            Arc::new(PostgresGitAccountStore::new(pool)),
+            Arc::new(PostgresGitAccountRepository::new(pool)),
             Arc::new(AesGcmSecretProtector::new(&[33; 32]).unwrap()),
         )),
-        Arc::new(GitCli::new(Duration::from_secs(5))),
+        Arc::new(GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            Duration::from_secs(5),
+        )),
         std::env::temp_dir().join(format!("citadel-webhook-test-{}", Uuid::now_v7())),
         Duration::from_secs(60),
     ));
-    citadel_server::webhooks_http::router(citadel_server::webhooks_http::WebhooksHttpState {
-        git,
-        automation,
-        backups: None,
-        builds: None,
-        stacks: None,
-        services: None,
-        audit: None,
-        alerts: None,
-    })
+    citadel_server::api::routes::webhooks::router(
+        citadel_server::api::routes::webhooks::WebhooksHttpState {
+            git,
+            automation,
+            backups: None,
+            builds: None,
+            stacks: None,
+            services: None,
+            audit: None,
+            alerts: None,
+        },
+    )
 }
 
 pub async fn verify(
     app: &Router,
     admin: &ActorPrincipal,
     db: &PgPool,
-    store: &PostgresAutomationStore,
+    store: &PostgresAutomationRepository,
     service: &AutomationService,
     license: &Entitlement,
 ) {
@@ -59,6 +67,9 @@ pub async fn verify(
     )
     .await;
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();
+    // Older rows may contain a JSON null rather than a SQL NULL.
+    set_config(db, id, &Value::Null).await;
+    assert!(store.get(id).await.unwrap().webhook.is_none());
     let config = json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"fixture-webhook-secret"});
     set_config(db, id, &config).await;
     let url = format!("/listener/generic/automation-action/{id}/run");
@@ -211,7 +222,13 @@ pub async fn verify(
     }
     // The authenticated snapshot is rechecked under the enqueue row lock.
     assert!(matches!(
-        store.enqueue_webhook(id, &config, &json!({})).await,
+        store
+            .enqueue_webhook(
+                id,
+                &serde_json::from_value(config.clone()).unwrap(),
+                &json!({})
+            )
+            .await,
         Err(AutomationError::Conflict(_))
     ));
     set_config(db, id, &json!({"enabled":false})).await;

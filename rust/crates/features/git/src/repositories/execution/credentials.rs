@@ -1,0 +1,168 @@
+use super::*;
+impl GitRepositoryExecutionService {
+    pub(super) async fn prepare_remote(
+        &self,
+        source: &GitRepositorySource,
+    ) -> Result<PreparedRemote, GitRepositoryExecutionError> {
+        let Some(account_id) = source.git_account_id else {
+            return Ok(PreparedRemote::new(normalize_remote_url(
+                &source.url,
+                None,
+            )?));
+        };
+        let account = self
+            .accounts
+            .get_config(account_id)
+            .await
+            .map_err(|_| GitRepositoryExecutionError::Credential)?;
+        let ssh_username = match &account.configuration {
+            GitAuthConfiguration::SshKey { username, .. } => Some(username.as_str()),
+            _ => None,
+        };
+        let url = normalize_remote_url(
+            &source.url,
+            Some((&account.domain, account.transport, ssh_username)),
+        )?;
+        let mut remote = PreparedRemote::new(url);
+        match account.configuration {
+            GitAuthConfiguration::Basic { username, password } => {
+                remote.add_basic_header(&username, &password);
+            }
+            GitAuthConfiguration::Token { token } => {
+                remote.add_basic_header("git", &token);
+            }
+            GitAuthConfiguration::SshKey {
+                private_key,
+                passphrase,
+                ..
+            } => {
+                if passphrase.as_deref().is_some_and(|value| !value.is_empty()) {
+                    return Err(GitRepositoryExecutionError::Validation(
+                        "Passphrase-protected SSH keys are not supported by unattended Git synchronization."
+                            .to_owned(),
+                    ));
+                }
+                remote
+                    .add_ssh_key(&self.cache_root, account_id, &private_key)
+                    .await?;
+            }
+        }
+        Ok(remote)
+    }
+}
+
+pub(super) struct PreparedRemote {
+    pub(super) url: String,
+    pub(super) environment: Vec<(OsString, OsString)>,
+    pub(super) credential_file: Option<PathBuf>,
+}
+
+impl PreparedRemote {
+    fn new(url: String) -> Self {
+        Self {
+            url,
+            environment: Vec::new(),
+            credential_file: None,
+        }
+    }
+
+    fn add_basic_header(&mut self, username: &str, password: &str) {
+        let encoded = STANDARD.encode(format!("{username}:{password}"));
+        self.environment.extend([
+            (OsString::from("GIT_CONFIG_COUNT"), OsString::from("1")),
+            (
+                OsString::from("GIT_CONFIG_KEY_0"),
+                OsString::from("http.extraHeader"),
+            ),
+            (
+                OsString::from("GIT_CONFIG_VALUE_0"),
+                OsString::from(format!("Authorization: Basic {encoded}")),
+            ),
+        ]);
+    }
+
+    async fn add_ssh_key(
+        &mut self,
+        cache_root: &Path,
+        account_id: Uuid,
+        private_key: &str,
+    ) -> Result<(), GitRepositoryExecutionError> {
+        let directory = cache_root.join(".credentials");
+        tokio::fs::create_dir_all(&directory)
+            .await
+            .map_err(storage_error)?;
+        let path = directory.join(format!(
+            "{}-{}.key",
+            account_id.simple(),
+            Uuid::now_v7().simple()
+        ));
+        if path.to_string_lossy().contains(['\"', '\r', '\n']) {
+            return Err(GitRepositoryExecutionError::Credential);
+        }
+        let mut options = tokio::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            options.mode(0o600);
+        }
+        let mut file = options.open(&path).await.map_err(storage_error)?;
+        self.credential_file = Some(path.clone());
+        use tokio::io::AsyncWriteExt;
+        file.write_all(private_key.trim_end().as_bytes())
+            .await
+            .map_err(storage_error)?;
+        file.write_all(b"\n").await.map_err(storage_error)?;
+        file.flush().await.map_err(storage_error)?;
+        drop(file);
+        let command = format!(
+            "ssh -i \"{}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes",
+            path.display()
+        );
+        self.environment
+            .push((OsString::from("GIT_SSH_COMMAND"), OsString::from(command)));
+        Ok(())
+    }
+}
+
+impl Drop for PreparedRemote {
+    fn drop(&mut self) {
+        if let Some(path) = self.credential_file.take()
+            && let Err(error) = std::fs::remove_file(&path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(path = %path.display(), %error, "failed to delete temporary Git SSH key");
+        }
+    }
+}
+
+pub(super) fn normalize_remote_url(
+    url: &str,
+    account: Option<(&str, GitTransport, Option<&str>)>,
+) -> Result<String, GitRepositoryExecutionError> {
+    let url = url.trim();
+    if url.starts_with("http://")
+        || url.starts_with("https://")
+        || url.starts_with("file://")
+        || url.starts_with("git@")
+    {
+        return Ok(url.to_owned());
+    }
+    let Some((domain, transport, username)) = account else {
+        return Err(GitRepositoryExecutionError::Validation(
+            "A complete repository URL is required when no Git account is selected.".to_owned(),
+        ));
+    };
+    let path = url.trim_start_matches('/');
+    let scheme = match transport {
+        GitTransport::Http => "http",
+        GitTransport::Https => "https",
+        GitTransport::Ssh => {
+            let username = username
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("git");
+            return Ok(format!("{username}@{domain}:{path}"));
+        }
+    };
+    Ok(format!("{scheme}://{domain}/{path}"))
+}

@@ -1,15 +1,18 @@
 use super::*;
-use citadel_adapters::{
-    activity_store::PostgresActivityStore, alert_store::PostgresAlertStore,
-    automation_store::PostgresAutomationStore, backup_store::PostgresBackupStore,
-    build_store::PostgresBuildStore, deployment_store::PostgresDeploymentStore,
-    stack_store::PostgresStackStore, swarm_service_store::PostgresSwarmServiceStore,
+use citadel_adapters::persistence::postgres::{
+    activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
+    automation::PostgresAutomationRepository, backups::PostgresBackupPersistence,
+    builds::PostgresBuildRepository, deployments::PostgresDeploymentRepository,
+    stacks::PostgresStackRepository, swarm_services::PostgresSwarmServiceRepository,
 };
-use citadel_domain::ResourceType;
 use citadel_identity::{AccessTokenClaims, SessionTokenCodec};
-use citadel_server::realtime::{IdentityRealtimeReader, RealtimeService};
-use citadel_server::realtime_groups::{ApplicationGroupReader, Group, GroupReadPort};
-use citadel_server::{config::RealtimeConfig, metrics::Metrics};
+use citadel_primitives::ResourceType;
+use citadel_server::{
+    config::RealtimeConfig,
+    metrics::Metrics,
+    realtime::{IdentityRealtimeReader, RealtimeService},
+    realtime_groups::{ApplicationGroupReader, Group, GroupReadPort},
+};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use tokio_util::sync::CancellationToken;
@@ -17,19 +20,23 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        git_repositories: Arc::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                f.pool.clone(),
+            ),
+        ),
         identity: f.lookup_state.platforms.identity.clone(),
         platforms: f.lookup_state.platforms.platforms.clone(),
-        deployments: Arc::new(PostgresDeploymentStore::new(f.pool.clone())),
-        stacks: Arc::new(PostgresStackStore::new(f.pool.clone())),
-        services: Arc::new(PostgresSwarmServiceStore::new(f.pool.clone())),
-        resources: Arc::new(PostgresResourceMetadataStore::new(f.pool.clone())),
-        automation: Arc::new(PostgresAutomationStore::new(f.pool.clone())),
-        builds: Arc::new(PostgresBuildStore::new(f.pool.clone())),
-        backups: Arc::new(PostgresBackupStore::new(f.pool.clone())),
-        activities: Arc::new(citadel_application::ActivityService::new(Arc::new(
+        deployments: Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
+        stacks: Arc::new(PostgresStackRepository::new(f.pool.clone())),
+        services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
+        automation: Arc::new(PostgresAutomationRepository::new(f.pool.clone())),
+        builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
+        backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
+        activities: Arc::new(citadel_activities::ActivityService::new(Arc::new(
             PostgresActivityStore::new(f.pool.clone()),
         ))),
-        alerts: Arc::new(PostgresAlertStore::new(f.pool.clone())),
+        alerts: Arc::new(PostgresAlertRepository::new(f.pool.clone())),
         docker: f.lookup_state.platforms.clone(),
     }
 }
@@ -223,7 +230,7 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
             .unwrap();
         let (mut resize, _) = listener.accept().await.unwrap();
         let (headers, _) = read_terminal_request(&mut resize).await;
-        assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?w=100&h=30 "));
+        assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?h=30&w=100 "));
         resize
             .write_all(b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             .await
@@ -288,16 +295,116 @@ async fn cleanup(f: Fixture) {
     std::fs::remove_file(f.docker_socket).unwrap();
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_logs_flow_while_another_group_snapshot_is_pending() {
+    use citadel_adapters::connectors::edge::EdgeTarget;
+    use citadel_contracts::citadel::containers::v1::ContainerLogResponse;
+    use prost::Message as _;
+    let f = fixture().await;
+    let id: Uuid = sqlx::query_scalar(
+        "UPDATE containers SET dockernodeid='node-1' WHERE platformid=$1 RETURNING id",
+    )
+    .bind(f.platform_id)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let (session, mut commands) = f
+        .lookup_state
+        .platforms
+        .edge
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let cancellation = CancellationToken::new();
+    let _guard = cancellation.clone().drop_guard();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_secs(30),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader(&f)));
+    let hub = service.hub();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    let group = format!("container-log:{id}");
+    assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+    assert!(invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null());
+    let command = commands.recv().await.unwrap();
+    let command_id = Uuid::parse_str(&command.command_id).unwrap();
+    let info = format!("container-info:{id}");
+    assert!(invoke(&mut socket, "JoinGroup", &info).await["error"].is_null());
+    assert_eq!(receive(&mut socket).await["target"], "ReceiveContainerInfo");
+
+    let mut writer = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE containers IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "container", "update", id.to_string());
+    // Wait for the snapshot read to actually block before producing a log.
+    tokio::time::timeout(StdDuration::from_secs(2), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock')")
+                .fetch_one(&f.pool).await.unwrap();
+            if blocked { break; }
+            tokio::time::sleep(StdDuration::from_millis(10)).await;
+        }
+    }).await.expect("the shared connection must be reading its snapshot");
+    let bytes = b"2026-09-08T12:00:00Z live during inventory read\n".to_vec();
+    session.output(
+        command_id,
+        ContainerLogResponse { log: bytes.clone() }.encode_to_vec(),
+    );
+    let output = tokio::time::timeout(StdDuration::from_secs(1), receive(&mut socket))
+        .await
+        .expect("a pending snapshot must not block live log delivery");
+    assert_eq!(output["target"], "SendContainerLogs");
+    assert_eq!(output["arguments"][0], json!(bytes));
+    writer.rollback().await.unwrap();
+    assert_eq!(receive(&mut socket).await["target"], "ReceiveContainerInfo");
+    socket.close(None).await.unwrap();
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}
+
 // Ports ExecSessionManagerTests and the Terminal-specific Swarm permission contract.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::*,
         edge::v1::{EdgeCommandKind, core_envelope},
     };
-    use citadel_domain::SpecificPermission;
+    use citadel_primitives::SpecificPermission;
     use prost::Message as _;
     let f = fixture().await;
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
@@ -474,7 +581,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn terminal_cancels_when_the_container_identity_changes_without_retargeting() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::edge::v1::core_envelope;
     use citadel_platforms::terminal::TerminalShell;
     let f = fixture().await;
@@ -536,7 +643,7 @@ async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn stack_logs_follow_committed_container_replacement_without_replaying_unchanged_streams() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
         edge::v1::core_envelope,
@@ -582,6 +689,14 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         .unwrap();
     let command = commands.recv().await.unwrap();
     let original = Uuid::parse_str(&command.command_id).unwrap();
+    // A ready log must not wait behind an inventory refresh. Model a busy
+    // projection writer while both the log frame and its invalidation are ready.
+    let mut projection_write = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE containers IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *projection_write)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
     session.output(
         original,
         ContainerLogResponse {
@@ -589,12 +704,33 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         }
         .encode_to_vec(),
     );
-    let event = logs.next().await.unwrap().unwrap();
+    let event = tokio::time::timeout(StdDuration::from_secs(1), logs.next())
+        .await
+        .expect("ready logs must not wait for inventory projection reads")
+        .unwrap()
+        .unwrap();
     assert_eq!(event.target, "SendStackLogs");
     assert_eq!(
         event.arguments[0],
         json!(b"2026-09-06T12:00:00Z [web] first\n".to_vec())
     );
+    session.output(
+        original,
+        ContainerLogResponse {
+            log: b"2026-09-06T12:00:00Z second\n".to_vec(),
+        }
+        .encode_to_vec(),
+    );
+    let event = tokio::time::timeout(StdDuration::from_secs(1), logs.next())
+        .await
+        .expect("subsequent logs must flow while a projection refresh is pending")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        event.arguments[0],
+        json!(b"2026-09-06T12:00:00Z [web] second\n".to_vec())
+    );
+    projection_write.rollback().await.unwrap();
     hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
     session.output(
         original,
@@ -655,12 +791,12 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permission_revocation() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
         edge::v1::{EdgeCommandKind, core_envelope},
     };
-    use citadel_domain::SpecificPermission;
+    use citadel_primitives::SpecificPermission;
     use prost::Message as _;
     let f = fixture().await;
     let docker_id = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
@@ -700,7 +836,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     let deployment = Uuid::now_v7();
     let spec:citadel_deployments::DeploymentSpec=serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
     sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("logs-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
-    sqlx::query("UPDATE containers SET deploymentid=$1 WHERE id=$2")
+    sqlx::query("UPDATE containers SET deploymentid=$1,state='Exited' WHERE id=$2")
         .bind(deployment)
         .bind(id)
         .execute(&f.pool)
@@ -720,6 +856,21 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         format!("container-log:{}", &docker_id[..12]),
         "the unchanged Deployment viewer joins a short Docker-ID group"
     );
+    let group = deployment_group.name;
+    super::lookup::grant(
+        &f,
+        principal.actor_id.value(),
+        ResourceType::Deployment,
+        deployment,
+        0,
+    )
+    .await;
+    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
+        .bind(SpecificPermission::Logs as i32)
+        .bind(principal.actor_id.value())
+        .execute(&f.pool)
+        .await
+        .unwrap();
     let registry = &f.lookup_state.platforms.edge;
     let (session, mut commands) = registry
         .register(
@@ -767,13 +918,15 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     assert!(
-        invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_string(),
+        invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+            .is_string(),
         "must join an authorized group first"
     );
     for revoke in [false, true] {
         assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
         assert!(
-            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+                .is_null()
         );
         let command = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
             .await
@@ -790,7 +943,8 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         assert_eq!(request.follow, Some(true));
         assert!(other_commands.try_recv().is_err());
         assert!(
-            invoke(&mut socket, "StartContainerLogs", &id.to_string()).await["error"].is_null()
+            invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
+                .is_null()
         );
         assert!(
             commands.try_recv().is_err(),

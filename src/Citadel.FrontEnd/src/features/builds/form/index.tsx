@@ -13,6 +13,7 @@ import { BuildInfoActions } from '../actions';
 import { isActiveBuildRun, isBuildProjectActive, selectBuildProjectLatestRun } from '../build-run-state';
 import { BuildForm } from './form';
 import { BuildRunsTab } from './runs';
+import { AlertMessage } from '@/components/custom/alert-message';
 
 type BuildFormResource = BuildProjectView & RequiredFormFields;
 
@@ -44,6 +45,18 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
         </div>
       ),
     },
+    SubHeader: ({ resource }) => {
+      const run = resource.latestRun;
+      if (!run || ![BuildRunStatus.Failed, BuildRunStatus.TimedOut, BuildRunStatus.Interrupted].includes(run.status)) {
+        return null;
+      }
+      return (
+        <AlertMessage type="error" title="Build Error">
+          {run.errorMessage ||
+            `Build ${run.status === BuildRunStatus.TimedOut ? 'timed out' : run.status === BuildRunStatus.Interrupted ? 'was interrupted' : 'failed'}. See the run logs for details.`}
+        </AlertMessage>
+      );
+    },
     Tabs: [
       {
         label: 'Config',
@@ -62,7 +75,9 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       },
       {
         label: 'Activities',
-        Content: ({ resource }) => <ActivitiesTab resourceId={(resource as BuildProjectView).id} resourceType="Build" />,
+        Content: ({ resource }) => (
+          <ActivitiesTab resourceId={(resource as BuildProjectView).id} resourceType="Build" />
+        ),
       },
     ],
     useData(id: string) {
@@ -130,7 +145,11 @@ function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
   }
 
   return (
-    <StateIndicator value={latestRun.status} isProcessing={isProjectProcessing && isActiveBuildRun(latestRun)} kind="buildRun" />
+    <StateIndicator
+      value={latestRun.status}
+      isProcessing={isProjectProcessing && isActiveBuildRun(latestRun)}
+      kind="buildRun"
+    />
   );
 }
 

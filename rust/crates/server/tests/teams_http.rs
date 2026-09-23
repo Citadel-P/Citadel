@@ -1,25 +1,29 @@
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, Response, StatusCode};
-use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, Response, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::team_store::PostgresTeamStore;
+use chrono::{Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::identity::{
+        authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        teams::repository::PostgresTeamRepository,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    IdentityService, NoopServiceAccountLastUsedTracker, SystemClock, TeamMutationService,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock, TeamMutationService,
     TeamReadService,
 };
-use citadel_server::teams_http::{self, TeamsHttpState};
+use citadel_primitives::ActorId;
+use citadel_server::api::routes::{teams as teams_http, teams::TeamsHttpState};
 use serde_json::Value;
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -602,7 +606,7 @@ async fn fixture(custom_access: bool) -> Fixture {
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let store = Arc::new(PostgresTeamStore::new(pool.clone()));
+    let store = Arc::new(PostgresTeamRepository::new(pool.clone()));
     let teams = Arc::new(TeamReadService::new(store.clone()));
     let mutations = Arc::new(TeamMutationService::new(store, entitlements, clock));
     let app = teams_http::router(TeamsHttpState {

@@ -1,11 +1,11 @@
 use super::*;
-use citadel_adapters::edge::EdgeTarget;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     containers::v1::InspectContainerRequest,
     edge::v1::{EdgeCommandKind, core_envelope},
     shared_models::v1::{ContainerConfig, InspectContainerResponse},
 };
-use citadel_domain::{ResourceType, SpecificPermission};
+use citadel_primitives::{ResourceType, SpecificPermission};
 use prost::Message;
 
 // Ports SwarmEndpointTests' Task runtime authorization, exact identity and

@@ -479,6 +479,7 @@ type StreamStatus = 'pending' | 'success' | 'warning' | 'error';
 type StreamLogSeverity = 'info' | 'success' | 'warning' | 'error';
 type StreamLogEntry = {
   message: string;
+  composeKey?: string;
   severity?: StreamLogSeverity;
 };
 
@@ -561,12 +562,12 @@ const dockerComposeStatuses = [
 ];
 
 const dockerComposeLinePattern = new RegExp(
-  `^\\s*(?:(Network|Volume|Container)\\s+)?(.+?)\\s+(${dockerComposeStatuses.join('|')})(?:\\s+(.*))?\\s*$`,
+  `^\\s*(?:(Network|Volume|Container|Image)\\s+)?(.+?)\\s+(${dockerComposeStatuses.join('|')})(?:\\s+(.*))?\\s*$`,
   'i',
 );
 
 const dockerComposeSplitPattern = new RegExp(
-  `\\s{2,}(?=(?:(?:Network|Volume|Container)\\s+)?\\S+\\s+(?:${dockerComposeStatuses.join('|')})\\b)`,
+  `\\s{2,}(?=(?:(?:Network|Volume|Container|Image)\\s+)?\\S+\\s+(?:${dockerComposeStatuses.join('|')})\\b)`,
   'i',
 );
 
@@ -606,7 +607,7 @@ function compactDockerComposeLine(value: string): CompactedComposeLine | undefin
     return undefined;
   }
 
-  if (!resourceType && (status === 'pulling' || status === 'pulled')) {
+  if ((!resourceType || resourceType.toLowerCase() === 'image') && (status === 'pulling' || status === 'pulled')) {
     const key = `compose:image:${keyName}`;
     if (status === 'pulling') {
       return { kind: 'active', key, line: `Pulling image ${keyName}...` };
@@ -737,12 +738,18 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
 
           if (compacted.key) {
             activeKeysToDelete.add(compacted.key);
+            updatedActive.delete(compacted.key);
           }
 
-          compacted.deletePrefixes?.forEach((prefix) => activePrefixesToDelete.add(prefix));
+          compacted.deletePrefixes?.forEach((prefix) => {
+            activePrefixesToDelete.add(prefix);
+            for (const key of updatedActive.keys()) {
+              if (key.startsWith(prefix)) updatedActive.delete(key);
+            }
+          });
 
           if (compacted.line) {
-            newHistory.push({ message: compacted.line, severity: severity ?? undefined });
+            newHistory.push({ message: compacted.line, severity: severity ?? undefined, composeKey: compacted.key });
           }
         }
 
@@ -817,6 +824,13 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                 continue;
               }
 
+              if (compactDockerComposeOutput && type === 'CommandCompleted') {
+                activePrefixesToDelete.add('compose:');
+                for (const key of updatedActive.keys()) {
+                  if (key.startsWith('compose:')) updatedActive.delete(key);
+                }
+              }
+
               // Handle simple log messages
               if (
                 addText(progressMessage, messageSeverity) ||
@@ -885,9 +899,19 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
 
       if (newHistory.length > 0) {
         setHistory((previous) => {
-          const incoming = newHistory.slice(-MAX_STREAM_HISTORY_ENTRIES);
-          const retainedCount = Math.max(0, MAX_STREAM_HISTORY_ENTRIES - incoming.length);
-          return [...previous.slice(-retainedCount), ...incoming];
+          const next = [...previous];
+          for (const entry of newHistory) {
+            const last = next.at(-1);
+            if (
+              entry.composeKey &&
+              last?.composeKey === entry.composeKey &&
+              last.message === entry.message &&
+              last.severity === entry.severity
+            )
+              continue;
+            next.push(entry);
+          }
+          return next.slice(-MAX_STREAM_HISTORY_ENTRIES);
         });
       }
       if (updatedActive.size > 0 || activeKeysToDelete.size > 0 || activePrefixesToDelete.size > 0) {

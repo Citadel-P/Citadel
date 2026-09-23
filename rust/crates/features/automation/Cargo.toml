@@ -1,0 +1,28 @@
+[package]
+name = "citadel-automation"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+citadel-tags = { path = "../tags" }
+citadel-primitives = { path = "../primitives" }
+citadel-activities = { path = "../activities" }
+chrono.workspace = true
+chrono-tz.workspace = true
+citadel-alerts = { path = "../alerts" }
+citadel-execution = { path = "../execution" }
+citadel-git = { path = "../git" }
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

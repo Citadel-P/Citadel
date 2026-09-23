@@ -80,8 +80,8 @@ try {
 
     Invoke-Rust @('fmt', '--all', '--', '--check')
     Invoke-Rust @('clippy', '--locked', '-p', 'citadel-execution', '-p', 'citadel-git', '-p', 'citadel-automation', '-p', 'citadel-builds', '-p', 'citadel-alerts', '-p', 'citadel-backups', '-p', 'citadel-adapters', '-p', 'citadel-server', '--lib', '--', '-D', 'warnings')
-    Invoke-Rust @('clippy', '--locked', '-p', 'citadel-execution', '--test', 'process_runner', '-p', 'citadel-adapters', '--test', 'agent_mutations', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'phase7_resources_http', '--', '-D', 'warnings')
-    Invoke-Rust @('test', '--locked', '-p', 'citadel-execution')
+    Invoke-Rust @('clippy', '--locked', '-p', 'citadel-processes', '--test', 'process_runner', '-p', 'citadel-adapters', '--test', 'agent_mutations', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'phase7_resources_http', '--', '-D', 'warnings')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-execution', '-p', 'citadel-processes', '-p', 'citadel-runtime')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-git')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-automation')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-builds')

@@ -1,16 +1,16 @@
 //! Ports BuildRunStartTests' completion propagation and failed post-build Apply
 //! cases through the real Build finish transaction and PostgreSQL queue.
 use super::*;
-use citadel_adapters::{
-    build_completion_store::PostgresBuildCompletionStore,
-    deployment_store::PostgresDeploymentStore, stack_store::PostgresStackStore,
+use citadel_adapters::persistence::postgres::{
+    builds::completion::PostgresBuildCompletionRepository,
+    deployments::PostgresDeploymentRepository, stacks::PostgresStackRepository,
 };
 use citadel_builds::{
-    BuildCompletionService, BuildCompletionStore, BuildConsumerClaim, BuildConsumerRuntime,
+    BuildCompletionRepository, BuildCompletionService, BuildConsumerClaim, BuildConsumerRuntime,
     BuildConsumerType, BuildEntitlements, BuildError,
 };
-use citadel_deployments::DeploymentStore;
-use citadel_stacks::StackStore;
+use citadel_deployments::DeploymentRepository;
+use citadel_stacks::StackRepository;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},
@@ -25,11 +25,17 @@ pub async fn create(pool: &sqlx::PgPool, fixture: &FixtureIds, project: Uuid) ->
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',1,0,1048576,$2,0,'{\"$type\":\"Docker\"}'::json,'Online',0)")
         .bind(platform).bind(format!("build-consumers-{platform}")).execute(pool).await.unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     let mut ids = Vec::new();
     for automatic in [false, true] {
-        let input=serde_json::from_value(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,
-            "spec":{"image":{"$type":"Build","buildProjectId":project,"redeployOnBuild":automatic}}})).unwrap();
+        let input = citadel_deployments::CreateDeployment {
+            name: format!("consumer-{}", Uuid::now_v7()),
+            platform_id: platform,
+            description: None,
+            spec: serde_json::from_value(json!({"image":{"$type":"Build","buildProjectId":project,"redeployOnBuild":automatic}})).unwrap(),
+            tag_ids: Vec::new(),
+            duplicate_source: None,
+        };
         let resource = store
             .create(ActorId::new(SYSTEM_ACTOR_ID), true, &input)
             .await
@@ -38,10 +44,10 @@ pub async fn create(pool: &sqlx::PgPool, fixture: &FixtureIds, project: Uuid) ->
             .bind(resource.id).execute(pool).await.unwrap();
         ids.push(resource.id);
     }
-    let input=serde_json::from_value(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
+    let input=serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("consumer-{}",Uuid::now_v7()),"platformId":platform,"stackSource":"WebEditor",
         "spec":{"$type":"WebEditor","composeFile":"services:\n  web:\n    image: nginx\n  worker:\n    image: nginx\n","registryId":fixture.registry,"updateBehavior":"Disabled",
-            "buildImageBindings":[{"serviceName":"web","buildProjectId":project,"redeployOnBuild":true,"appliedImageReference":"old-image"},{"serviceName":"worker","buildProjectId":project,"redeployOnBuild":false,"appliedImageReference":"old-image"}]}})).unwrap();
-    let stack = PostgresStackStore::new(pool.clone())
+            "buildImageBindings":[{"serviceName":"web","buildProjectId":project,"redeployOnBuild":true,"appliedImageReference":"old-image"},{"serviceName":"worker","buildProjectId":project,"redeployOnBuild":false,"appliedImageReference":"old-image"}]}})).unwrap().try_into().unwrap();
+    let stack = PostgresStackRepository::new(pool.clone())
         .create(ActorId::new(SYSTEM_ACTOR_ID), true, &input)
         .await
         .unwrap();
@@ -74,13 +80,13 @@ struct Entitlement(AtomicBool);
 impl BuildEntitlements for Entitlement {
     fn enabled(
         &self,
-        _: citadel_domain::LicenseCapability,
+        _: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, BuildError>> {
         Box::pin(async { Ok(self.0.load(Ordering::Relaxed)) })
     }
 }
 pub async fn verify(pool: &sqlx::PgPool, run: Uuid, ids: &Consumers) {
-    let store = Arc::new(PostgresBuildCompletionStore::new(pool.clone()));
+    let store = Arc::new(PostgresBuildCompletionRepository::new(pool.clone()));
     let runtime = Arc::new(Runtime::default());
     let entitlement = Arc::new(Entitlement(AtomicBool::new(false)));
     let service = BuildCompletionService::new(store.clone(), runtime.clone(), entitlement.clone());
@@ -99,15 +105,38 @@ pub async fn verify(pool: &sqlx::PgPool, run: Uuid, ids: &Consumers) {
         .execute(pool)
         .await
         .unwrap();
+    // Inventory's foreign-key checks must not block provenance propagation.
+    // Hold real inserts open while the consumer updates both resource types.
+    let platform: Uuid = sqlx::query_scalar("SELECT platformid FROM deployments WHERE id=$1")
+        .bind(ids.manual)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let mut inventory = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(platform)
+        .execute(&mut *inventory)
+        .await
+        .unwrap();
+    for (deployment, stack) in [(Some(ids.manual), None), (None, Some(ids.stack))] {
+        let id = Uuid::now_v7();
+        sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,deploymentid,stackid,state,updated) VALUES($1,0,$2,'image','consumer',$3,'[]',$4,$5,'Running',0)")
+            .bind(id).bind(id.to_string()).bind(platform).bind(deployment).bind(stack)
+            .execute(&mut *inventory).await.unwrap();
+    }
     // Provenance still propagates without an automatic-execution license, but
     // busy resources are not modified and no Docker mutation is dispatched.
     assert_eq!(
-        service
-            .process_batch(&CancellationToken::new())
-            .await
-            .unwrap(),
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            service.process_batch(&CancellationToken::new())
+        )
+        .await
+        .expect("inventory FK checks must not block Build consumers")
+        .unwrap(),
         2
     );
+    inventory.commit().await.unwrap();
     assert!(runtime.applied.lock().unwrap().is_empty());
     entitlement.0.store(true, Ordering::Relaxed);
     sqlx::query("UPDATE deployments SET controlstate='Idle' WHERE id=$1")
@@ -216,7 +245,7 @@ pub async fn verify_lifecycle(
         "two Build Projects targeting the same Stack must not coalesce together"
     );
     assert!(queued.contains(&newest) && queued.contains(&other_run));
-    let store = PostgresBuildCompletionStore::new(pool.clone());
+    let store = PostgresBuildCompletionRepository::new(pool.clone());
     let mut stack_claims = Vec::new();
     while let Some(claim) = store.claim_next().await.unwrap() {
         if claim.resource_type == BuildConsumerType::Stack {
@@ -270,7 +299,7 @@ pub async fn verify_lifecycle(
 // The run must also retain its BuildKit bindings, arguments, and output tags.
 async fn verify_queued_snapshot(pool: &sqlx::PgPool, builds: &BuildService, project: Uuid) {
     let original = builds.store().get(project).await.unwrap();
-    let mut input: citadel_builds::BuildAgentPoolInput = serde_json::from_value(json!({"name":format!("snapshot-{}", Uuid::now_v7()),"enabled":true,"providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}})).unwrap();
+    let mut input: citadel_builds::BuildAgentPoolConfiguration = serde_json::from_value(json!({"name":format!("snapshot-{}", Uuid::now_v7()),"enabled":true,"providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}})).unwrap();
     input.validate().unwrap();
     let changed_pool = builds
         .store()

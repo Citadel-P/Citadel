@@ -1,21 +1,23 @@
-use axum::Json;
-use axum::Router;
-use axum::extract::Extension;
-use axum::http::HeaderMap;
-use axum::response::{IntoResponse, Response};
-use citadel_contracts::http::routes;
-use citadel_identity::ActorPrincipal;
-use citadel_identity::IdentityError;
+use crate::{
+    api::error::{error_response, no_store},
+    openapi::router::OpenApiRouterExt,
+};
+use axum::{
+    Json, Router,
+    extract::Extension,
+    http::HeaderMap,
+    response::{IntoResponse, Response},
+};
+use citadel_identity::{ActorPrincipal, IdentityError};
 use serde::Serialize;
 
-use crate::contract_router::ContractRouterExt;
-use crate::identity_http::{identity_error_response, no_store};
-
 const NAME: &str = "Citadel";
+
 const VERSION: &str = env!("CITADEL_BUILD_VERSION");
+
 const INFORMATIONAL_VERSION: &str = env!("CITADEL_BUILD_INFORMATIONAL_VERSION");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationInfoView {
     pub name: &'static str,
@@ -25,15 +27,28 @@ pub struct ApplicationInfoView {
 }
 
 pub fn router() -> Router {
-    Router::new().contract_route(routes::GET_APPLICATION_INFO, get_application_info)
+    documented_routes().split_for_parts().0
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/application/info",
+    operation_id = "getApplicationInfo",
+    tag = "Application",
+    summary = "Get application information",
+    responses(
+        (status = 200, description = "Success", body = crate::application_info_http::ApplicationInfoView, content_type = "application/json"),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
 async fn get_application_info(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(_principal)) = principal else {
-        return identity_error_response(IdentityError::Unauthenticated, &headers);
+        return error_response(IdentityError::Unauthenticated, &headers);
     };
     no_store(Json(application_info()).into_response())
 }
@@ -46,6 +61,11 @@ pub const fn application_info() -> ApplicationInfoView {
         informational_version: INFORMATIONAL_VERSION,
         realtime_transport: "WebSocketV1",
     }
+}
+
+pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<()> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(get_application_info))
 }
 
 #[cfg(test)]

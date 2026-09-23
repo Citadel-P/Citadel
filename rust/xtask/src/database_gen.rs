@@ -68,7 +68,7 @@ pub fn import_baseline() -> Result<(), Box<dyn std::error::Error>> {
     let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask must be inside the Rust workspace");
-    let database_root = rust_root.join("crates/database");
+    let database_root = rust_root.join("crates/infrastructure/database");
     if database_root.join("generated").exists()
         && migration_files(&database_root.join("generated"))
             .is_ok_and(|migrations| migrations.len() > 1)
@@ -161,7 +161,7 @@ pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
     let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask must be inside the Rust workspace");
-    let database_root = rust_root.join("crates/database");
+    let database_root = rust_root.join("crates/infrastructure/database");
     let generated_root = database_root.join("generated");
     let migrations = migration_files(&generated_root)?;
     if migrations.len() != 1
@@ -176,7 +176,7 @@ pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
     validate_baseline(product_sql, table_count)?;
     let migration = format!(
         "-- @generated pre-release baseline; do not edit.\n\
-         -- Generated from: crates/database/src/schema/schema.sql\n\n{product_sql}"
+         -- Generated from: crates/infrastructure/database/src/schema/schema.sql\n\n{product_sql}"
     );
     write_generated(
         &generated_root.join("0001_initial.sql"),
@@ -195,7 +195,7 @@ pub fn refresh_catalog() -> Result<(), Box<dyn std::error::Error>> {
     let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask must be inside the Rust workspace");
-    let database_root = rust_root.join("crates/database");
+    let database_root = rust_root.join("crates/infrastructure/database");
     let generated_root = database_root.join("generated");
     let existing: serde_json::Value =
         serde_json::from_slice(&fs::read(generated_root.join("migrations.json"))?)?;
@@ -323,7 +323,7 @@ pub fn verify() -> Result<(), Box<dyn std::error::Error>> {
     let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask must be inside the Rust workspace");
-    let database_root = rust_root.join("crates/database");
+    let database_root = rust_root.join("crates/infrastructure/database");
     let schema = fs::read(database_root.join("src/schema/schema.sql"))?;
     let migration = fs::read(database_root.join("generated/0001_initial.sql"))?;
     if product_body(&schema)? != product_body(&migration)? {

@@ -1,14 +1,13 @@
 use super::*;
-use citadel_adapters::node_agent_lifecycle_store::PostgresNodeAgentLifecycleStore;
+use citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore;
 use citadel_platforms::{PlatformRuntimePort, node_agents::lifecycle::NodeAgentLifecycleStore};
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn removal_routes_to_exact_edge_manager_and_checks_ownership_before_each_delete() {
-    use citadel_adapters::{
-        edge::{EdgeRegistry, EdgeTarget},
-        node_agent_runtime::NodeAgentRuntimeRouter,
-    };
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::edge::EdgeTarget;
+    use citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter;
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         shared_models::v1::{PlatformInfoResponse, SwarmInfoMessage},
@@ -217,7 +216,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     )
     .bind(id)
     .bind(fixture.actor_id)
-    .bind(citadel_domain::SpecificPermission::ManageNodeAgents as i32)
+    .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
     .execute(&fixture.pool)
     .await
     .unwrap();
@@ -332,7 +331,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
         .await
         .unwrap()
         .unwrap();
-    let coverage = citadel_adapters::node_agent_coverage::read(
+    let coverage = citadel_adapters::persistence::postgres::platforms::node_agents::coverage::read(
         &fixture.pool,
         &fixture.lookup_state.platforms.edge,
         &platform,

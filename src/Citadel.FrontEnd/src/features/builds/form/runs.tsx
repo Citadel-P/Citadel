@@ -410,10 +410,10 @@ function BuildRunLogsSheet({
                   value={actor ? `${actor.name} (${actor.type})` : actorQuery.isLoading ? 'Loading...' : shortId(run.triggeredByActorId)}
                   title={run.triggeredByActorId}
                 />
-                <MetadataRow icon={GitBranch} label="Repository" value={run.gitRepositoryNameSnapshot} />
+                <MetadataRow icon={GitBranch} label="Repository" value={run.gitRepositoryNameSnapshot ?? shortId(run.gitRepositoryId)} />
                 <MetadataRow icon={GitCommitHorizontal} label="Commit" value={run.resolvedCommitSha?.slice(0, 12) ?? '-'} monospace />
                 <MetadataRow icon={Package} label="Image" value={run.imageRepository} />
-                <MetadataRow icon={Server} label="Platform" value={run.platformSnapshot.name} />
+                <MetadataRow icon={Server} label="Platform" value={run.platformSnapshot?.name ?? 'Not available'} />
                 <MetadataRow icon={FileCode2} label="Dockerfile" value={run.dockerfilePath} monospace />
                 <MetadataRow icon={Folder} label="Context" value={run.contextPath} monospace />
                 <MetadataRow icon={SquareTerminal} label="Exit code" value={run.exitCode ?? '-'} />

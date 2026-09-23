@@ -5,13 +5,62 @@
 Phase 7.5 is still in progress; this workspace is not yet a full replacement
 for the .NET Core. Run `cargo run -p xtask -- parity` from `rust/` to compare all
 .NET operation IDs, HTTP methods, paths, and public/internal exposure with the
-Rust route catalog. The command deliberately fails while omissions remain;
+Utoipa handler contracts. The command deliberately fails while omissions remain;
 there is no allowlist that hides missing operations.
 
 This is separate from `cargo run -p xtask -- openapi --check`, which checks
 generated-artifact freshness and compatibility of the implemented subset.
 Neither command replaces HTTP/persistence tests or live transport acceptance.
 See [Phase 7.5 implementation evidence](reports/phase7-5-api-parity.md).
+
+## OpenAPI generation
+
+Run `bash rust/scripts/build.sh` from the repository root to build the API and
+export `schema/v1.json` and `schema/public-v1.json`. The VS Code build/run and
+debug workflows do this automatically. Plain `cargo build` only compiles.
+
+The API uses Utoipa and utoipa-axum to share route registration and documentation.
+Schemas derive from Rust DTOs; the former central HTTP catalog and handwritten
+schema generator have been removed. See [OpenAPI ownership and migration boundary](crates/server/src/openapi/README.md).
+
+## Server startup ownership
+
+The executable entry point in `crates/server/src/main.rs` calls `app::run()`.
+The executable modules own composition; feature handlers remain in the server
+library and receive their existing, narrowly scoped HTTP state.
+
+- `app.rs`: tracing, application lifecycle, HTTP and edge gRPC serving, signals,
+  worker supervision, and bounded shutdown of listeners, workers, and the pool.
+- `cli.rs`: command parsing and the existing migration, recovery, diagnostics,
+  healthcheck, and smoke commands. These do not build the full application.
+- `state.rs`: explicit database/client/repository/service construction. Shared
+  `AppState` is cloneable; owned worker inputs are returned separately because
+  the service-account usage queue has a single receiver.
+- `startup.rs`: schema migration, unattended bootstrap, and persisted readiness.
+- `api/mod.rs`: feature routes, realtime and Swagger, edge gRPC, and middleware.
+- `jobs/mod.rs`: registration of all jobs with the existing `TaskSupervisor`.
+  Implementations remain in `workers/` and their owning crates.
+
+Serving initializes tracing and loads configuration, migrates the schema,
+builds dependencies, completes bootstrap/readiness, starts supervised jobs,
+composes both routers, and starts both listeners. Migrations precede dependency
+construction; bootstrap completes before jobs or requests can observe setup.
+SIGTERM, Ctrl+C, server failure, or worker exit trigger the existing shared
+cancellation and bounded shutdown. Auxiliary commands retain their individual
+configuration requirements.
+
+Run `cargo check --locked` and `cargo test --locked` from `rust/`. To exercise
+actual startup, all documented route registrations, workers, restart, and Unix
+signal shutdown, use a **disposable** PostgreSQL instance with CREATE DATABASE
+permission:
+
+```bash
+CITADEL_TEST_DATABASE_URL=postgres://user:password@localhost:port/test_database \
+  cargo test --locked -p citadel-server --test bootstrap_process -- --ignored --test-threads=1
+```
+
+These process tests use isolated databases, temporary data directories, ephemeral
+HTTP/gRPC ports, and an absent Docker socket; they do not use development workloads.
 
 ## Unattended first run and recovery
 
@@ -412,3 +461,37 @@ component tags, release jobs, installation, and rollback. The Contracts
 submodule remains authoritative only for active .NET compatibility; the final
 Rust workspace will own the language-neutral contract sources and verify every
 affected binary on contract changes.
+
+## Container build and Compose
+
+Build the Rust server and frontend image from the repository root:
+
+```bash
+docker build -f rust/Dockerfile -t citadel-rust:local .
+```
+
+For a persistent local Compose installation:
+
+```bash
+cd rust
+cp -n .env.example .env
+# Fill the blank credentials and DOCKER_GID in .env (instructions are in the file).
+docker compose config --quiet
+docker compose up -d --build
+```
+
+The ignored `.env` holds database credentials, the JWT key, the persistent secret
+encryption key, Docker socket group, image/version, and transport settings.
+Keep the encryption key with your backups. The defaults bind HTTP to
+`127.0.0.1:18000` and Edge gRPC to `127.0.0.1:18001`, leaving the WSL development
+ports available. The image serves the frontend and API from the same HTTP port.
+
+The server runs as UID 65532 with the Docker socket's supplementary group.
+`citadel_data` persists `/app/data`; `postgres_data` persists PostgreSQL data.
+These belong to the separate `citadel-rust` Compose project. Existing WSL and
+measurement databases are not automatically reused or migrated. Use
+`docker compose down` to stop it while retaining volumes.
+
+`compose.measurement.yml` is exclusively the legacy, isolated Phase 0 test
+fixture, including its 100 MiB memory cap and disposable database. Measurement
+scripts use that file, not the persistent Compose installation.

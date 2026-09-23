@@ -1,0 +1,72 @@
+[package]
+name = "citadel-adapters"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+citadel-runtime = { path = "../runtime" }
+citadel-processes = { path = "../processes" }
+citadel-discovery = { path = "../../features/discovery" }
+citadel-bindings = { path = "../../features/bindings" }
+citadel-registries = { path = "../../features/registries" }
+citadel-tags = { path = "../../features/tags" }
+citadel-primitives = { path = "../../features/primitives" }
+citadel-licensing = { path = "../../features/licensing" }
+citadel-activities = { path = "../../features/activities" }
+citadel-docker-api = { path = "../docker-api" }
+aes-gcm.workspace = true
+async-stream.workspace = true
+argon2.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+citadel-automation = { path = "../../features/automation" }
+citadel-alerts = { path = "../../features/alerts" }
+citadel-builds = { path = "../../features/builds" }
+citadel-backups = { path = "../../features/backups" }
+citadel-execution = { path = "../../features/execution" }
+citadel-contracts = { path = "../contracts" }
+citadel-git = { path = "../../features/git" }
+citadel-deployments = { path = "../../features/deployments" }
+citadel-swarm-services = { path = "../../features/swarm-services" }
+citadel-stacks = { path = "../../features/stacks" }
+citadel-identity = { path = "../../features/identity" }
+citadel-platforms = { path = "../../features/platforms" }
+ed25519-dalek.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+jsonwebtoken.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+sqlx.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tonic = { workspace = true, features = ["tls-ring", "tls-native-roots"] }
+tracing.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+axum.workspace = true
+citadel-database = { path = "../database" }
+tonic = { workspace = true, features = ["router"] }
+
+[lints]
+workspace = true

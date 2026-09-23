@@ -1,3 +1,6 @@
+pub mod execution;
+mod keys;
+
 use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -6,7 +9,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use citadel_domain::MfaPolicy;
+use citadel_identity::MfaPolicy;
 use ipnet::IpNet;
 use serde::Serialize;
 use url::Url;
@@ -49,6 +52,7 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub execution: execution::ExecutionConfig,
     pub listen_address: SocketAddr,
     pub database_url: String,
     pub database_max_connections: u32,
@@ -63,7 +67,34 @@ pub struct Config {
     pub transport: TransportConfig,
     pub identity: IdentityConfig,
     pub automation: citadel_automation::AutomationOptions,
+    pub node_agent_policy:
+        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub stats_flush_interval: Duration,
+    pub retention_interval: Duration,
+    pub stats_batch_size: usize,
+    pub build_parallel_runs: usize,
+    pub build_retention_days: Option<i32>,
+    pub backup_workers: BackupWorkerConfig,
     database_source: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct BackupWorkerConfig {
+    pub enabled: bool,
+    pub parallel_runs: usize,
+    pub poll_interval: Duration,
+    pub schedule_interval: Duration,
+}
+
+fn positive_usize(name: &'static str, default: usize) -> Result<usize, ConfigError> {
+    let value = parse_env(name, default)?;
+    if value == 0 {
+        return Err(ConfigError::Invalid {
+            name,
+            message: "must be positive".into(),
+        });
+    }
+    Ok(value)
 }
 
 #[derive(Clone)]
@@ -84,12 +115,16 @@ impl SecretBytes {
 
 #[derive(Debug, Clone)]
 pub struct IdentityConfig {
+    pub jwt_key_is_external: bool,
+    pub encryption_key_is_external: bool,
     pub jwt_key: SecretBytes,
     pub secret_encryption_key: SecretBytes,
     pub issuer: String,
     pub audience: String,
     pub access_token_lifetime: Duration,
     pub refresh_token_lifetime: Duration,
+    pub service_account_limits: citadel_identity::ServiceAccountLimitsDetails,
+    pub service_account_last_used_interval: Duration,
     pub service_account_last_used_capacity: usize,
     pub mfa: MfaConfig,
 }
@@ -155,6 +190,9 @@ pub struct RealtimeConfig {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectiveConfig {
+    pub service_account_limits: citadel_identity::ServiceAccountLimitsDetails,
+    pub service_account_last_used_interval_seconds: u64,
+    pub execution: serde_json::Value,
     pub listen_address: String,
     pub database_source: &'static str,
     pub database_host: String,
@@ -165,6 +203,7 @@ pub struct EffectiveConfig {
     pub docker_request_timeout_seconds: u64,
     pub probe_interval_seconds: u64,
     pub reconciliation_interval_seconds: u64,
+    pub retention_interval_seconds: u64,
     pub event_queue_capacity: usize,
     pub shutdown_timeout_seconds: u64,
     pub agent_configured: bool,
@@ -249,11 +288,13 @@ impl Config {
             "CITADEL_RUST_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
-        let agent = agent_config()?;
+        let execution = execution::ExecutionConfig::from_env()?;
+        let agent = agent_config(execution.edge_agent.allow_insecure)?;
         let realtime = realtime_config()?;
         let identity = identity_config(&transport)?;
 
         Ok(Self {
+            execution,
             listen_address,
             database_url,
             database_max_connections,
@@ -270,6 +311,52 @@ impl Config {
             transport,
             identity,
             automation: automation_options()?,
+            node_agent_policy:
+                citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy {
+                    removal_grace: Duration::from_secs(
+                        positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
+                    ),
+                    supported_architectures: {
+                        let configured: Vec<_> = (0..32)
+                            .filter_map(|index| {
+                                env::var(format!("EdgeAgent__SupportedNodeArchitectures__{index}"))
+                                    .ok()
+                            })
+                            .collect();
+                        if configured.is_empty() {
+                            vec!["amd64".into(), "arm64".into()]
+                        } else {
+                            configured
+                        }
+                    },
+                },
+            retention_interval: Duration::from_secs(nonzero_seconds(
+                "CITADEL_RUST_RETENTION_INTERVAL_SECONDS",
+                900,
+            )?),
+            stats_flush_interval: Duration::from_secs(positive_usize(
+                "JobConfiguration__FlashInterval",
+                60,
+            )? as u64),
+            stats_batch_size: positive_usize("JobConfiguration__BatchSize", 500)?,
+            build_parallel_runs: positive_usize("Builds__MaxParallelRuns", 4)?,
+            build_retention_days: if parse_env("Builds__RunCleanupEnabled", true)? {
+                Some(i32::try_from(positive_usize("Builds__RunRetentionDays", 90)?).map_err(|_| ConfigError::Invalid { name: "Builds__RunRetentionDays", message: "must fit a positive 32-bit integer".into() })?)
+            } else {
+                None
+            },
+            backup_workers: BackupWorkerConfig {
+                enabled: parse_env("Backups__Enabled", true)?,
+                parallel_runs: positive_usize("Backups__MaxParallelRuns", 2)?,
+                poll_interval: Duration::from_secs(positive_usize(
+                    "Backups__PollIntervalSeconds",
+                    2,
+                )? as u64),
+                schedule_interval: Duration::from_secs(positive_usize(
+                    "Backups__SchedulePollIntervalSeconds",
+                    30,
+                )? as u64),
+            },
             database_source,
         })
     }
@@ -280,6 +367,35 @@ impl Config {
             message: error.to_string(),
         })?;
         Ok(EffectiveConfig {
+            service_account_limits: self.identity.service_account_limits,
+            service_account_last_used_interval_seconds: self
+                .identity
+                .service_account_last_used_interval
+                .as_secs(),
+            execution: serde_json::json!({
+                "agentImage": self.execution.edge_agent.image,
+                "agentCaConfigured": self.execution.edge_agent.ca_certificate.is_some(),
+                "nodeAgent": {
+                    "bootstrapSeconds": self.execution.edge_agent.setup_policy.bootstrap_lifetime.as_secs(),
+                    "setupSeconds": self.execution.edge_agent.setup_policy.setup_timeout.as_secs(),
+                    "architectures": self.execution.edge_agent.setup_policy.supported_architectures,
+                    "nanoCpus": self.execution.edge_agent.setup_policy.limits.nano_cpus,
+                    "memoryBytes": self.execution.edge_agent.setup_policy.limits.memory_bytes,
+                    "pids": self.execution.edge_agent.setup_policy.limits.pids,
+                },
+                "backups": {
+                    "enabled": self.backup_workers.enabled,
+                    "workingDirectory": self.execution.backups.settings.working_directory,
+                    "coreDataPath": self.execution.backups.core_data_path,
+                    "allowedCorePaths": self.execution.backups.settings.allowed_core_paths,
+                    "defaultTimeoutSeconds": self.execution.backups.settings.default_timeout.as_secs(),
+                    "maximumLogLineBytes": self.execution.backups.settings.maximum_log_line_bytes,
+                    "maximumLogBytes": self.execution.backups.maximum_log_bytes,
+                    "repositoryLeaseSeconds": self.execution.backups.repository_lease_seconds,
+                    "sourceLeaseSeconds": self.execution.backups.source_lease_seconds,
+                },
+                "buildRetentionDays": self.build_retention_days,
+            }),
             listen_address: self.listen_address.to_string(),
             database_source: self.database_source,
             database_host: database.host_str().unwrap_or_default().to_owned(),
@@ -290,6 +406,7 @@ impl Config {
             docker_request_timeout_seconds: self.docker_request_timeout.as_secs(),
             probe_interval_seconds: self.probe_interval.as_secs(),
             reconciliation_interval_seconds: self.reconciliation_interval.as_secs(),
+            retention_interval_seconds: self.retention_interval.as_secs(),
             event_queue_capacity: self.event_queue_capacity,
             shutdown_timeout_seconds: self.shutdown_timeout.as_secs(),
             agent_configured: self.agent.is_some(),
@@ -564,40 +681,64 @@ fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, Config
     identity_config_with_keys(transport, jwt_key, secret_encryption_key)
 }
 
-/// Also used by offline recovery, without requiring listener/TLS configuration.
+/// Load explicit keys or persist generated defaults for normal startup.
 pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigError> {
-    let jwt_key = env::var("Jwt__Key").map_err(|_| ConfigError::Invalid {
-        name: "Jwt__Key",
-        message: "must be configured with at least 32 bytes".to_owned(),
-    })?;
+    let root = env::var_os("CITADEL_DATA_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| "/app/data".into());
+    let jwt_key = match env::var("Jwt__Key").ok().filter(|v| !v.trim().is_empty()) {
+        Some(value) => Zeroizing::new(value),
+        None => keys::load_or_create(&root, "jwtsecret", "Jwt__Key")?,
+    };
     if jwt_key.len() < 32 {
         return Err(ConfigError::Invalid {
             name: "Jwt__Key",
             message: "must contain at least 32 bytes".to_owned(),
         });
     }
-    let encrypted_secrets_key =
-        env::var("Secrets__EncryptionKey").map_err(|_| ConfigError::Invalid {
-            name: "Secrets__EncryptionKey",
-            message: "must be a base64-encoded 32-byte key".to_owned(),
-        })?;
-    let secret_encryption_key =
-        STANDARD
-            .decode(encrypted_secrets_key.trim())
-            .map_err(|_| ConfigError::Invalid {
-                name: "Secrets__EncryptionKey",
-                message: "must be a base64-encoded 32-byte key".to_owned(),
-            })?;
-    if secret_encryption_key.len() != 32 {
+    let encrypted_secrets_key = match env::var("Secrets__EncryptionKey")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        Some(value) => Zeroizing::new(value),
+        None => keys::load_or_create(&root, "secret-encryption-key", "Secrets__EncryptionKey")?,
+    };
+    Ok((
+        SecretBytes(Zeroizing::new(jwt_key.as_bytes().to_vec())),
+        decode_encryption_key(&encrypted_secrets_key)?,
+    ))
+}
+
+/// Offline recovery must never generate a replacement for the original encryption key.
+pub fn recovery_encryption_key_from_env() -> Result<SecretBytes, ConfigError> {
+    let root = env::var_os("CITADEL_DATA_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| "/app/data".into());
+    let encoded = match env::var("Secrets__EncryptionKey").ok().filter(|v| !v.trim().is_empty()) {
+        Some(value) => Zeroizing::new(value),
+        None => Zeroizing::new(std::fs::read_to_string(root.join("secret-encryption-key"))
+            .map_err(|_| ConfigError::Invalid { name: "Secrets__EncryptionKey", message: "restore requires the original key: configure it explicitly or restore secret-encryption-key into CITADEL_DATA_ROOT".into() })?),
+    };
+    decode_encryption_key(&encoded)
+}
+
+fn decode_encryption_key(encoded: &str) -> Result<SecretBytes, ConfigError> {
+    let bytes =
+        Zeroizing::new(
+            STANDARD
+                .decode(encoded.trim())
+                .map_err(|_| ConfigError::Invalid {
+                    name: "Secrets__EncryptionKey",
+                    message: "must be a base64-encoded 32-byte key".into(),
+                })?,
+        );
+    if bytes.len() != 32 {
         return Err(ConfigError::Invalid {
             name: "Secrets__EncryptionKey",
-            message: "must decode to exactly 32 bytes".to_owned(),
+            message: "must decode to exactly 32 bytes".into(),
         });
     }
-    Ok((
-        SecretBytes(Zeroizing::new(jwt_key.into_bytes())),
-        SecretBytes(Zeroizing::new(secret_encryption_key)),
-    ))
+    Ok(SecretBytes(bytes))
 }
 
 fn identity_config_with_keys(
@@ -639,6 +780,9 @@ fn identity_config_with_keys(
     }
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
+        jwt_key_is_external: env::var("Jwt__Key").is_ok_and(|v| !v.trim().is_empty()),
+        encryption_key_is_external: env::var("Secrets__EncryptionKey")
+            .is_ok_and(|v| !v.trim().is_empty()),
         jwt_key,
         secret_encryption_key,
         issuer,
@@ -655,6 +799,15 @@ fn identity_config_with_keys(
                 message: "is too large".to_owned(),
             },
         )?),
+        service_account_limits: service_account_limits()?,
+        service_account_last_used_interval: Duration::from_secs(
+            nonzero_seconds("ServiceAccounts__LastUsedWriteIntervalMinutes", 5)?
+                .checked_mul(60)
+                .ok_or(ConfigError::Invalid {
+                    name: "ServiceAccounts__LastUsedWriteIntervalMinutes",
+                    message: "is too large".into(),
+                })?,
+        ),
         service_account_last_used_capacity,
         mfa,
     })
@@ -680,13 +833,15 @@ fn mfa_config() -> Result<MfaConfig, ConfigError> {
         DEFAULT_MFA_CHALLENGE_MINUTES,
     )?;
     let setup_minutes = nonzero_seconds("Mfa__SetupLifetimeMinutes", DEFAULT_MFA_SETUP_MINUTES)?;
-    let maximum_failed_attempts = parse_env(
-        "Mfa__MaximumFailedAttempts",
-        DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS,
-    )?;
+    let attempts_setting = if env::var_os("Mfa__MaxFailedAttempts").is_some() {
+        "Mfa__MaxFailedAttempts"
+    } else {
+        "Mfa__MaximumFailedAttempts" // Historical Rust alias.
+    };
+    let maximum_failed_attempts = parse_env(attempts_setting, DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS)?;
     if maximum_failed_attempts <= 0 {
         return Err(ConfigError::Invalid {
-            name: "Mfa__MaximumFailedAttempts",
+            name: attempts_setting,
             message: "must be greater than zero".to_owned(),
         });
     }
@@ -836,14 +991,13 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
     }))
 }
 
-fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
+fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError> {
     let address = env::var("CITADEL_RUST_AGENT_ADDRESS").ok();
     let private_key_path = env::var_os("CITADEL_RUST_AGENT_PRIVATE_KEY_PATH");
     match (address, private_key_path) {
         (None, None) => Ok(None),
         (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
             let timeout = required_nonzero_seconds("CITADEL_RUST_AGENT_TIMEOUT_SECONDS")?;
-            let allow_insecure = agent_allows_insecure()?;
             Ok(Some(AgentConfig {
                 address,
                 private_key_path: PathBuf::from(private_key_path),
@@ -858,10 +1012,6 @@ fn agent_config() -> Result<Option<AgentConfig>, ConfigError> {
                 .to_owned(),
         }),
     }
-}
-
-pub fn agent_allows_insecure() -> Result<bool, ConfigError> {
-    parse_env("AgentTransport__AllowInsecure", true)
 }
 
 fn database_url() -> Result<(String, &'static str), ConfigError> {
@@ -957,6 +1107,37 @@ fn validate_database_url(value: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
+fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDetails, ConfigError> {
+    let limits = citadel_identity::ServiceAccountLimitsDetails {
+        default_token_lifetime_days: parse_env("ServiceAccounts__DefaultTokenLifetimeDays", 90)?,
+        maximum_token_lifetime_days: parse_env("ServiceAccounts__MaximumTokenLifetimeDays", 365)?,
+        maximum_active_tokens_per_account: parse_env(
+            "ServiceAccounts__MaximumActiveTokensPerAccount",
+            10,
+        )?,
+    };
+    for (name, valid) in [
+        (
+            "ServiceAccounts__DefaultTokenLifetimeDays",
+            limits.default_token_lifetime_days > 0,
+        ),
+        (
+            "ServiceAccounts__MaximumTokenLifetimeDays",
+            limits.maximum_token_lifetime_days >= limits.default_token_lifetime_days
+                && limits.maximum_token_lifetime_days <= 365_000,
+        ),
+        (
+            "ServiceAccounts__MaximumActiveTokensPerAccount",
+            limits.maximum_active_tokens_per_account > 0,
+        ),
+    ] {
+        if !valid {
+            return Err(ConfigError::Invalid { name, message: "limits must be positive, maximum lifetime must be at least the default and no more than 365000 days".into() });
+        }
+    }
+    Ok(limits)
+}
+
 fn automation_options() -> Result<citadel_automation::AutomationOptions, ConfigError> {
     let options = citadel_automation::AutomationOptions {
         enabled: parse_env("Automations__Enabled", true)?,
@@ -1016,6 +1197,11 @@ fn required_nonzero_seconds(name: &'static str) -> Result<u64, ConfigError> {
         });
     }
     Ok(value)
+}
+
+/// Keep structured container logs by default; opt into colored console output.
+pub fn log_color_from_env() -> Result<bool, ConfigError> {
+    parse_env("EnableLogColor", false)
 }
 
 #[cfg(test)]

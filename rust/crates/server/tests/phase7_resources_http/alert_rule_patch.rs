@@ -9,7 +9,7 @@ pub(super) async fn verify(
     rule: &Value,
     channel: &Value,
     hub: &RealtimeHub,
-    store: &PostgresAlertStore,
+    store: &PostgresAlertRepository,
 ) {
     let mut changes = hub.subscribe();
     let id = rule["id"].as_str().unwrap();
@@ -71,6 +71,7 @@ pub(super) async fn verify(
     for invalid in [
         json!({"cooldownSeconds":5}),
         json!({"severity":"not-a-severity"}),
+        json!({"requiredMatches":"bad"}),
         json!({"channelIds":[Uuid::now_v7()]}),
         json!([]),
     ] {
@@ -91,6 +92,14 @@ pub(super) async fn verify(
             .await;
         } else {
             assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = validation::problem_json(response).await;
+            assert!(body["errors"].is_object(), "{body}");
+            if invalid.get("requiredMatches").is_some() {
+                assert!(
+                    body["errors"].to_string().contains("requiredMatches"),
+                    "{body}"
+                );
+            }
         }
         assert_eq!(alert_assertions::rule_set(pool).await, before_rules);
         let after =

@@ -18,23 +18,42 @@ pub fn router(
     stacks: Arc<citadel_stacks::StackService>,
 ) -> Router {
     use citadel_adapters::{
-        automation_store::PostgresAutomationStore,
-        automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
-        git_account_store::PostgresGitAccountStore,
-        git_repository_execution_store::PostgresGitRepositoryExecutionStore,
+        persistence::postgres::{
+            automation::PostgresAutomationRepository,
+            git::{
+                accounts::PostgresGitAccountRepository,
+                repositories::PostgresGitRepositoryExecutionPersistence,
+            },
+        },
+        security::identity::{
+            automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
+        },
     };
     let git = Arc::new(citadel_git::GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::new(citadel_git::GitAccountService::new(
-            Arc::new(PostgresGitAccountStore::new(pool.clone())),
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             Arc::new(AesGcmSecretProtector::new(&[59; 32]).unwrap()),
         )),
-        Arc::new(citadel_git::GitCli::new(std::time::Duration::from_secs(5))),
+        Arc::new(citadel_git::GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            std::time::Duration::from_secs(5),
+        )),
         std::env::temp_dir().join(format!("webhook-git-{}", Uuid::now_v7())),
         std::time::Duration::from_secs(60),
     ));
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+
     let automation = Arc::new(citadel_automation::AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        std::sync::Arc::new(citadel_processes::SystemProcess),
+        Arc::new(
+            citadel_server::tasks::automation::TrackedAutomationTasks::new(
+                automation_tasks.clone(),
+            ),
+        ),
+        automation_shutdown.clone(),
+        Arc::new(PostgresAutomationRepository::new(pool.clone())),
         Arc::new(IdentityAutomationRunTokenIssuer::new(identity)),
         citadel_automation::AutomationRuntimeConfig {
             deno_path: "deno".into(),
@@ -45,7 +64,7 @@ pub fn router(
             stale_after: std::time::Duration::from_secs(60),
         },
     ));
-    citadel_server::webhooks_http::router(citadel_server::webhooks_http::WebhooksHttpState {
+    citadel_server::api::routes::webhooks::router(citadel_server::api::routes::webhooks::WebhooksHttpState {
         git,
         automation,
         backups: Some(backups),
@@ -53,7 +72,9 @@ pub fn router(
         stacks: Some(stacks),
         services: None,
         audit: Some(Arc::new(
-            citadel_adapters::activity_store::PostgresActivityStore::new(pool),
+            citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(
+                pool,
+            ),
         )),
         alerts: None,
     })

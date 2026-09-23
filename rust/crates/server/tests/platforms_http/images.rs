@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::EdgeTarget;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     images::v1::{
@@ -167,7 +167,7 @@ async fn image_inspect_authorizes_and_uses_the_exact_node_with_existing_ui_shape
     super::lookup::grant(
         &f,
         principal.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::{EdgeRegistry, EdgeTarget};
+use citadel_adapters::connectors::edge::{EdgeRegistry, EdgeTarget};
 use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     images::v1::CheckBuildHostResponse,
@@ -159,6 +159,7 @@ pub(super) async fn verify(
         StatusCode::CONFLICT
     );
     sqlx::query("UPDATE buildagentpools SET provider='SelfManagedVm',providerspec='{\"$type\":\"SelfManagedVm\",\"connectionMode\":\"EdgeAgent\"}' WHERE id=$1").bind(id).execute(db).await.unwrap();
+    verify_shutdown_ownership(db, id, principal.actor_id).await;
 }
 
 async fn verify_health_persistence(db: &sqlx::PgPool, builds: &Arc<BuildService>, id: Uuid) {
@@ -275,7 +276,7 @@ async fn verify_capabilities(
         .await
         .unwrap();
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
-        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(id).bind(citadel_domain::ResourceType::BuildAgentPool as i32).execute(db).await.unwrap();
+        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(id).bind(citadel_primitives::ResourceType::BuildAgentPool as i32).execute(db).await.unwrap();
     let response = request(
         app,
         Method::GET,
@@ -471,4 +472,89 @@ async fn verify_edits(
             .description
             .is_none()
     );
+}
+
+// Phase 8: the process owns claimed pool tests through shutdown and closes admission.
+async fn verify_shutdown_ownership(db: &sqlx::PgPool, id: Uuid, actor: ActorId) {
+    let cancellation = CancellationToken::new();
+    let tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
+    let checker = Arc::new(WaitingChecker {
+        started: tokio::sync::Notify::new(),
+    });
+    let service = Arc::new(
+        BuildService::new(
+            Arc::new(citadel_server::tasks::builds::TrackedBuildTasks::new(
+                tasks.clone(),
+            )),
+            cancellation.clone(),
+            Arc::new(PostgresBuildRepository::new(db.clone())),
+            Arc::new(FakeBuildExecutor { pool: db.clone() }),
+            Duration::minutes(5),
+        )
+        .with_pool_checker(checker.clone()),
+    );
+    let caller = {
+        let service = service.clone();
+        tokio::spawn(async move { service.test_pool(id, actor).await })
+    };
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        checker.started.notified(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(tasks.active(), 1);
+    assert_eq!(
+        service.store().get_pool(id).await.unwrap().control_state,
+        "Processing"
+    );
+    caller.abort();
+    assert!(caller.await.unwrap_err().is_cancelled());
+    assert_eq!(
+        tasks.active(),
+        1,
+        "dropping the HTTP caller must not abort the claim owner"
+    );
+    cancellation.cancel();
+    tasks
+        .drain(std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(tasks.active(), 0);
+    let stored = service.store().get_pool(id).await.unwrap();
+    assert_eq!(stored.control_state, "Idle");
+    assert_eq!(stored.last_validation_status, "Invalid");
+    assert!(
+        stored
+            .last_validation_message
+            .as_deref()
+            .unwrap()
+            .contains("shutting down")
+    );
+    assert!(stored.control_triggered_by.is_none());
+    let version = stored.row_version;
+    assert!(matches!(
+        service.test_pool(id, actor).await,
+        Err(citadel_builds::BuildError::Conflict(_))
+    ));
+    assert_eq!(
+        service.store().get_pool(id).await.unwrap().row_version,
+        version,
+        "rejected admission must not claim a pool"
+    );
+}
+struct WaitingChecker {
+    started: tokio::sync::Notify,
+}
+impl citadel_builds::BuildPoolChecker for WaitingChecker {
+    fn check<'a>(
+        &'a self,
+        _: &'a citadel_builds::BuildAgentPool,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_builds::BuildPoolCheck, citadel_builds::BuildError>> {
+        Box::pin(async move {
+            self.started.notify_one();
+            std::future::pending().await
+        })
+    }
 }

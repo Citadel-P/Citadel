@@ -159,9 +159,4 @@ export const isUnmanagedContainer = (container: {
   hasCitadelOwnershipLabels?: boolean;
   deploymentId?: string | null;
   stackId?: string | null;
-}) =>
-  container.isSystem !== true &&
-  container.isSwarmTask !== true &&
-  container.hasCitadelOwnershipLabels !== true &&
-  !container.deploymentId &&
-  !container.stackId;
+}) => container.isSystem !== true && container.isSwarmTask !== true && !container.deploymentId && !container.stackId;

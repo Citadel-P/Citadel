@@ -1,5 +1,5 @@
 use super::*;
-use citadel_domain::{ResourceType, SpecificPermission};
+use citadel_primitives::{ResourceType, SpecificPermission};
 
 pub(super) async fn subject(f: &Fixture) -> ActorPrincipal {
     let actor = Uuid::now_v7();
@@ -412,13 +412,13 @@ async fn run_as_lookup_requires_use_permission_and_license_and_returns_actor_ids
     assert_eq!(rows[0]["id"], actor.to_string());
     assert_eq!(rows[0]["group"], "Service Accounts");
     f.lookup_state.entitlements = Arc::new(StaticEntitlementService::new(false));
-    f.app = citadel_server::lookup_http::router(f.lookup_state.clone());
+    f.app = citadel_server::api::routes::lookup::router(f.lookup_state.clone());
     assert_eq!(
         ids(&lookup(&f, &reader, "TargetResourceType=RunAsActor").await),
         vec![reader.actor_id.value()]
     );
     f.lookup_state.entitlements = Arc::new(StaticEntitlementService::new(true));
-    f.app = citadel_server::lookup_http::router(f.lookup_state.clone());
+    f.app = citadel_server::api::routes::lookup::router(f.lookup_state.clone());
     sqlx::query("UPDATE actors SET isenabled=false WHERE id=$1")
         .bind(actor)
         .execute(&f.pool)

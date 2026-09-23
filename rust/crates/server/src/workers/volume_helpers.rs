@@ -1,4 +1,4 @@
-use citadel_adapters::volume_content::VolumeContentAdapter;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
 use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -12,6 +12,7 @@ pub(super) async fn reconcile(
     let mut after = Uuid::nil();
     loop {
         tokio::select! { ()=cancellation.cancelled()=>break,_=tick.tick()=>{} }
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::VolumeRecovery.start();
         match volumes.reap_expired(after, &cancellation).await {
             Ok(next) => after = next,
             Err(error) => tracing::warn!(%error,"Volume helper recovery failed"),

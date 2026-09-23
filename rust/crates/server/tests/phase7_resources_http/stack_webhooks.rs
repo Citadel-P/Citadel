@@ -21,18 +21,25 @@ impl StackBindingResolverPort for Bindings {
 }
 pub fn service(pool: sqlx::PgPool) -> (Arc<StackService>, Arc<Entitlement>) {
     let entitlement = Arc::new(Entitlement::default());
-    let docker = citadel_adapters::docker::DockerClient::new(
+    let docker = citadel_adapters::connectors::docker::DockerClient::new(
         "/no-webhook-http-docker.sock",
         std::time::Duration::from_secs(1),
     )
     .unwrap();
     let service = StackService::new(
-        Arc::new(citadel_adapters::stack_store::PostgresStackStore::new(
-            pool.clone(),
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         )),
-        Arc::new(citadel_adapters::stack_runtime::StackRuntimeRouter::new(
-            pool, docker, None,
-        )),
+        Arc::new(
+            citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(
+                pool.clone(),
+            ),
+        ),
+        Arc::new(
+            citadel_adapters::connectors::routing::stacks::StackRuntimeRouter::new(
+                pool, docker, None,
+            ),
+        ),
         Arc::new(Bindings),
         Arc::new(citadel_stacks::NoopStackChangeNotifier),
         CancellationToken::new(),
@@ -61,18 +68,18 @@ pub async fn verify(
     stacks: &StackService,
     entitlement: &Entitlement,
 ) {
-    use citadel_domain::ActorId;
     use citadel_identity::SYSTEM_ACTOR_ID;
+    use citadel_primitives::ActorId;
     let platform = Uuid::now_v7();
     let repository = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform).bind(platform.to_string()).execute(pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/team/repository.git','Idle')")
         .bind(repository).bind(SYSTEM_ACTOR_ID).bind(repository.to_string()).execute(pool).await.unwrap();
-    let input=serde_json::from_value(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
+    let input=serde_json::from_value::<citadel_server::api::resources::stacks::requests::CreateStackInput>(json!({"name":format!("webhook-http-{platform}"),"platformId":platform,"stackSource":"Git","spec":{
         "$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yml"],"updateBehavior":"StackAutoDeploy",
         "webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"disposable-stack-hook"}
-    }})).unwrap();
+    }})).unwrap().try_into().unwrap();
     let stack = stacks
         .create(ActorId::new(SYSTEM_ACTOR_ID), true, input)
         .await
@@ -146,7 +153,7 @@ pub async fn verify(
         .await
         .unwrap();
     assert!(
-        duplicate.draft["spec"]["webhook"].get("secret").is_none(),
+        matches!(&duplicate.draft.spec, citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. } if webhook.secret.is_none()),
         "duplicate config must not copy authentication credentials"
     );
 }

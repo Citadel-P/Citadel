@@ -244,7 +244,7 @@ const PlatformResourceSummaryContent = ({
             title={
               currentDisk
                 ? `Docker storage filesystem, ${formatPercent(currentDisk.usagePercent)} used`
-                : 'Disk metrics unavailable. Mount the host root at /host as read-only in the Citadel Core or Agent container.'
+                : 'Disk metrics unavailable. Expose the Docker host filesystem through CITADEL_HOST_ROOT (default /host). In Core or Agent containers, mount /:/host:ro. Native Core connected to Docker Desktop needs an Agent on that host.'
             }
           />
           <SystemMetric icon={PlugZap} label="Connector" value={formatPlatformConnector(platform)} />
@@ -444,7 +444,7 @@ export const DiskUsageChart = ({
   );
   const unavailable = (
     <DiskChartState compact={hasHistoricalData} title="Disk metrics unavailable">
-      Mount the host root at /host as read-only in the Citadel Core or Agent container.
+      Expose the Docker host filesystem through CITADEL_HOST_ROOT (default /host). In Core or Agent containers, mount /:/host:ro. Native Core connected to Docker Desktop needs an Agent on that host.
     </DiskChartState>
   );
   const noHistory = (

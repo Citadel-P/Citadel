@@ -10,6 +10,7 @@ pub async fn reconcile(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { biased; ()=cancellation.cancelled()=>break, _=interval.tick()=>{} }
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ContainerRecovery.start();
         if let Err(error) = service.reconcile(&cancellation).await {
             tracing::warn!(%error, "Container operation reconciliation failed");
         }

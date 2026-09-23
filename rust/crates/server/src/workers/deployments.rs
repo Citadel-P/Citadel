@@ -12,7 +12,10 @@ pub(super) async fn image_updates(
     cancellation: CancellationToken,
     deployments: Arc<DeploymentService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(Duration::from_secs(2 * 60 * 60));
+    let mut ticker = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_secs(2 * 60 * 60),
+        Duration::from_secs(2 * 60 * 60),
+    );
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }
@@ -34,6 +37,7 @@ pub(super) async fn deployment_apply_reconciliation(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DeploymentRecovery.start();
         let started_before = chrono::Utc::now().timestamp()
             - i64::try_from(STALE_AFTER.as_secs()).unwrap_or(i64::MAX);
         if let Err(error) = deployments.recover_update_checks().await {

@@ -1,7 +1,9 @@
 use super::*;
 use citadel_adapters::{
-    edge::{EdgeRegistry, PostgresEdgeStore},
-    node_agent_lifecycle_store::PostgresNodeAgentLifecycleStore,
+    connectors::edge::EdgeRegistry,
+    persistence::postgres::platforms::{
+        edge::store::PostgresEdgeStore, node_agents::store::PostgresNodeAgentLifecycleStore,
+    },
 };
 use citadel_platforms::{
     PlatformRuntimePort,
@@ -10,7 +12,7 @@ use citadel_platforms::{
         setup::{NodeAgentSetupStore, SetupKind},
     },
 };
-use citadel_server::platforms_http::EdgeHttpContext;
+use citadel_server::api::routes::platforms::EdgeHttpContext;
 
 // Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair/upgrade
 // permission theory through actual HTTP handlers and PostgreSQL transactions.
@@ -25,6 +27,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
     let mut state = f.lookup_state.platforms.clone();
     state.docker = docker;
     let app = platforms_http::router(state).layer(axum::Extension(EdgeHttpContext {
+        node_agent_policy: Default::default(),
         store: PostgresEdgeStore::new(f.pool.clone()),
         registry: EdgeRegistry::default(),
         core_url: "https://core.example.test".into(),
@@ -65,7 +68,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
         )
         .bind(id)
         .bind(f.actor_id)
-        .bind(citadel_domain::SpecificPermission::ManageNodeAgents as i32)
+        .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
         .execute(&f.pool)
         .await
         .unwrap();
@@ -135,7 +138,10 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
             .await
             .is_err()
     );
-    let first = store.bootstrap(&claim).await.unwrap();
+    let first = store
+        .bootstrap(&claim, std::time::Duration::from_secs(600))
+        .await
+        .unwrap();
     store
         .secret_created(&claim, first.id, &format!("secret-{}", first.id))
         .await
@@ -148,7 +154,10 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
     assert_ne!(row.0, String::from_utf8(first.token.to_vec()).unwrap());
     assert_eq!(row.1, 1);
     assert!(row.2);
-    let second = store.bootstrap(&claim).await.unwrap();
+    let second = store
+        .bootstrap(&claim, std::time::Duration::from_secs(600))
+        .await
+        .unwrap();
     assert!(
         sqlx::query_scalar::<_, bool>(
             "SELECT revokedatutc IS NOT NULL FROM swarmnodeagentbootstraps WHERE id=$1"
@@ -179,7 +188,12 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
         .claim_setup(f.administrator.actor_id, id, info, SetupKind::Repair)
         .await
         .unwrap();
-    assert!(store.bootstrap(&claim).await.is_err());
+    assert!(
+        store
+            .bootstrap(&claim, std::time::Duration::from_secs(600))
+            .await
+            .is_err()
+    );
     assert!(
         store
             .secret_created(&claim, second.id, "stale")
@@ -202,7 +216,9 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
-    use citadel_adapters::{edge::EdgeTarget, node_agent_runtime::NodeAgentRuntimeRouter};
+    use citadel_adapters::connectors::{
+        edge::EdgeTarget, routing::node_agents::NodeAgentRuntimeRouter,
+    };
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         images::v1::*,
@@ -362,6 +378,7 @@ async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
         .await
         .unwrap();
     let spec = SystemAgentSpec {
+        limits: Default::default(),
         name: "agent".into(),
         image: format!("agent@sha256:{}", "a".repeat(64)),
         environment: vec![],

@@ -1,35 +1,49 @@
-use std::sync::Arc;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::{Duration, Utc};
-use citadel_adapters::automation_store::PostgresAutomationStore;
-use citadel_adapters::automation_token::IdentityAutomationRunTokenIssuer;
-use citadel_adapters::crypto::{
-    AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
-    OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::git_account_store::PostgresGitAccountStore;
-use citadel_adapters::git_repository_execution_store::PostgresGitRepositoryExecutionStore;
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
-use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
+use chrono::{Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::{
+        automation::PostgresAutomationRepository,
+        bindings::PostgresBindingRepository,
+        git::{
+            accounts::PostgresGitAccountRepository,
+            repositories::PostgresGitRepositoryExecutionPersistence,
+        },
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::{
+        automation_token::IdentityAutomationRunTokenIssuer,
+        crypto::{
+            AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
+            OpaqueServiceAccountTokenCodec,
+        },
+    },
+};
+use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
+use citadel_bindings::SecretService;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_resources::ResourceMetadataService;
-use citadel_server::automation_http::{self, AutomationHttpState};
-use citadel_server::git_accounts_http::{self, GitAccountsHttpState};
-use citadel_server::git_repositories_http::{self, GitRepositoriesHttpState};
-use citadel_server::resources_http::{self, ResourcesHttpState};
-use citadel_server::webhooks_http::{self, WebhooksHttpState};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_server::api::routes::{
+    automation as automation_http,
+    automation::AutomationHttpState,
+    bindings, git_accounts as git_accounts_http,
+    git_accounts::GitAccountsHttpState,
+    git_repositories as git_repositories_http,
+    git_repositories::{GitCatalogHttpState, GitRepositoriesHttpState},
+    registries, tags, webhooks as webhooks_http,
+    webhooks::WebhooksHttpState,
+};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -62,12 +76,12 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     ));
     let secret_protector = Arc::new(AesGcmSecretProtector::new(&[29_u8; 32]).unwrap());
     let resources = Arc::new(
-        ResourceMetadataService::new(
-            Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        SecretService::new(
+            Arc::new(PostgresBindingRepository::new(pool.clone())),
             secret_protector.clone(),
         )
         .with_secret_provider_tester(Arc::new(
-            citadel_adapters::secret_value_resolver::PostgresSecretValueResolver::new(
+            citadel_adapters::persistence::postgres::bindings::secret_resolver::PostgresSecretValueResolver::new(
                 pool.clone(),
                 secret_protector.clone(),
             )
@@ -75,20 +89,33 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         )),
     );
     let git_accounts = Arc::new(GitAccountService::new(
-        Arc::new(PostgresGitAccountStore::new(pool.clone())),
+        Arc::new(PostgresGitAccountRepository::new(pool.clone())),
         secret_protector,
     ));
     let git_cache = std::env::temp_dir().join(format!("citadel-phase7-{}", Uuid::now_v7()));
     let git_execution = Arc::new(GitRepositoryExecutionService::new(
-        Arc::new(PostgresGitRepositoryExecutionStore::new(pool.clone())),
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::clone(&git_accounts),
-        Arc::new(GitCli::new(std::time::Duration::from_secs(5))),
+        Arc::new(GitCli::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            std::time::Duration::from_secs(5),
+        )),
         git_cache.clone(),
         std::time::Duration::from_secs(60),
     ));
     let cancellation = tokio_util::sync::CancellationToken::new();
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+
     let automation = Arc::new(AutomationService::new(
-        Arc::new(PostgresAutomationStore::new(pool.clone())),
+        std::sync::Arc::new(citadel_processes::SystemProcess),
+        Arc::new(
+            citadel_server::tasks::automation::TrackedAutomationTasks::new(
+                automation_tasks.clone(),
+            ),
+        ),
+        automation_shutdown.clone(),
+        Arc::new(PostgresAutomationRepository::new(pool.clone())),
         Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
         AutomationRuntimeConfig {
             deno_path: "deno".into(),
@@ -100,11 +127,33 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             stale_after: std::time::Duration::from_secs(60),
         },
     ));
-    let app = resources_http::router(ResourcesHttpState {
+    let app = tags::router(tags::TagsHttpState {
         identity: Arc::clone(&identity),
-        resources: Arc::clone(&resources),
+        tags: Arc::new(citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(pool.clone())),
         realtime: None,
     })
+    .merge(registries::router(registries::RegistriesHttpState {
+        registry_connections: Arc::new(citadel_adapters::connectors::registries::browser::RegistryBrowser::with_endpoints("http://127.0.0.1:1", "http://127.0.0.1:1").unwrap()),
+        identity: Arc::clone(&identity),
+        registries: Arc::new(
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        realtime: None,
+    }))
+    .merge(bindings::router(bindings::BindingsHttpState {
+        identity: Arc::clone(&identity),
+        secrets: Arc::clone(&resources),
+        realtime: None,
+    }))
+    .merge(git_repositories_http::catalog_router(GitCatalogHttpState {
+        identity: Arc::clone(&identity),
+        git_repositories: Arc::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
+        realtime: None,
+    }))
     .merge(git_accounts_http::router(GitAccountsHttpState {
         identity: Arc::clone(&identity),
         accounts: git_accounts,
@@ -112,7 +161,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     }))
     .merge(git_repositories_http::router(GitRepositoriesHttpState {
         identity: Arc::clone(&identity),
-        resources,
+        repository: Arc::new(
+            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
+                pool.clone(),
+            ),
+        ),
         execution: Arc::clone(&git_execution),
         realtime: None,
         cancellation,
@@ -220,7 +273,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(automation_action["tags"][0]["id"], action_tags[0]["id"]);
     assert_eq!(automation_action["capabilities"]["canExecute"], true);
     assert!(automation_action["latestRun"].is_null());
-    // .NET configuration policy: paid triggers cannot be enabled by an
+    // Paid triggers cannot be enabled by an
     // unlicensed administrator; ordinary manual Actions remain available.
     assert_eq!(
         request(
@@ -353,7 +406,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(unsupported_update.status(), StatusCode::BAD_REQUEST);
     // Keep this fixture's run queued for the cancellation endpoint. Actual HTTP
     // execution/progress is covered with real Deno by automation_http_execution.
-    let queued = PostgresAutomationStore::new(pool.clone())
+    let queued = PostgresAutomationRepository::new(pool.clone())
         .enqueue(
             administrator.actor_id,
             automation_uuid,
@@ -1049,7 +1102,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(provider_response.status(), StatusCode::OK);
     let provider = response_json(provider_response).await;
     let provider_id = provider["id"].as_str().unwrap();
-    // .NET Vault connection/reference commands require Binding.Write even though
+    // Vault connection/reference commands require Binding.Write even though
     // they do not persist anything. Authorization must precede provider access.
     for uri in [
         "/api/v1/resourceBindings/secret-providers/vault-kv2/test",

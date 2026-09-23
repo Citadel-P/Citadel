@@ -82,9 +82,51 @@ prepare() {
   bash "$repo_root/.devcontainer/clean-build-cache.sh"
 }
 
+development_compose() {
+  docker --host "unix://$CITADEL_RUST_DOCKER_SOCKET" compose \
+    --project-name citadel-wsl \
+    -f "$repo_root/.devcontainer/compose.yaml" \
+    -f "$repo_root/.devcontainer/compose.wsl.yaml" \
+    -f "$repo_root/rust/compose.development.yml" "$@"
+}
+
+configure_compose() {
+  configure
+  load_environment
+  if [[ -f /.dockerenv ]]; then
+    echo 'Run the Compose task from the WSL checkout. Inside a Dev Container, use Citadel: Debug application or Citadel: Run Rust API.' >&2
+    exit 1
+  fi
+  if [[ "$DATABASE_URL" != postgres://citadel:citadel@127.0.0.1:15432/citadel ]]; then
+    echo 'The Compose task uses the citadel-wsl database. For a custom DATABASE_URL, use Citadel: Run Rust API or the debugger.' >&2
+    exit 1
+  fi
+  export CITADEL_DEV_UID="$(id -u)" CITADEL_DEV_GID="$(id -g)"
+  export CITADEL_DEV_DOCKER_GID="$(stat -c %g "$CITADEL_RUST_DOCKER_SOCKET")"
+  local target_dir
+  target_dir="$(cd "$repo_root/rust" && cargo metadata --locked --offline --no-deps --format-version 1 | \
+    node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).target_directory))')"
+  export CITADEL_DEV_BINARY="$target_dir/debug/citadel-server"
+}
+
+compose_up() {
+  configure_compose
+  prepare
+  # Reuse the WSL Cargo cache instead of compiling a second tree in Docker.
+  CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false bash "$repo_root/rust/scripts/build.sh"
+  development_compose build core
+  development_compose up -d --wait --wait-timeout 90 postgres
+  # Cargo replaces the binary inode. Recreate Core to remount the new executable,
+  # without restarting PostgreSQL or discarding either service's data.
+  development_compose up -d --no-deps --force-recreate --wait --wait-timeout 90 core
+  echo 'Core and PostgreSQL are running in Docker Compose project citadel-wsl.'
+}
+
 case "${1:-}" in
   configure) configure ;;
   prepare) prepare ;;
+  compose-up) compose_up ;;
+  compose-stop) configure_compose; development_compose stop core postgres ;;
   exec) shift; load_environment; exec "$@" ;;
-  *) echo 'Usage: bash rust/scripts/dev.sh {configure|prepare|exec COMMAND...}' >&2; exit 2 ;;
+  *) echo 'Usage: bash rust/scripts/dev.sh {configure|prepare|compose-up|compose-stop|exec COMMAND...}' >&2; exit 2 ;;
 esac

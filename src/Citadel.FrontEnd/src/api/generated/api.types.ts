@@ -980,6 +980,9 @@ export enum ActivityEventType {
   ServiceAccountArchived = "ServiceAccountArchived",
   ServiceAccountTokenCreated = "ServiceAccountTokenCreated",
   ServiceAccountTokenRevoked = "ServiceAccountTokenRevoked",
+  BackupRunQueued = "BackupRunQueued",
+  BackupRunStarted = "BackupRunStarted",
+  BackupRunCompleted = "BackupRunCompleted",
 }
 
 export enum ActionRunTrigger {
@@ -1858,6 +1861,18 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "ServiceAccountTokenRevoked",
         ActivityEventInfoServiceAccountTokenRevoked
       >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupRunQueued",
+        ActivityEventInfoBackupRunQueued
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupRunStarted",
+        ActivityEventInfoBackupRunStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupRunCompleted",
+        ActivityEventInfoBackupRunCompleted
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -2086,6 +2101,31 @@ export interface ActivityEventInfoBuildRunFailed {
    */
   durationMs: null | number | string;
   errorMessage: null | string;
+}
+
+export interface ActivityEventInfoBackupRunQueued {
+  $type?: "BackupRunQueued";
+  /** @format uuid */
+  runId: string;
+  trigger: string;
+}
+
+export interface ActivityEventInfoBackupRunStarted {
+  $type?: "BackupRunStarted";
+  /** @format uuid */
+  runId: string;
+  trigger: string;
+}
+
+export interface ActivityEventInfoBackupRunCompleted {
+  $type?: "BackupRunCompleted";
+  /** @format uuid */
+  runId: string;
+  trigger: string;
+  status: string;
+  /** @format int64 */
+  durationMs?: number | null;
+  errorMessage?: string | null;
 }
 
 export interface ActivityEventInfoBuildRunQueued {

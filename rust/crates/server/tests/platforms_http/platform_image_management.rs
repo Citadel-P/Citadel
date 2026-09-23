@@ -1,6 +1,6 @@
 use super::*;
-use citadel_adapters::agent::AgentRequestSigner;
-use citadel_server::platforms_http::AgentSetupContext;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_server::api::routes::platforms::AgentSetupContext;
 
 async fn daemon(
     handler: impl Fn(&str) -> (u16, String) + Send + Sync + 'static,
@@ -58,6 +58,7 @@ async fn platform_header_config_and_key_rotation_preserve_authorization_and_stat
         .await
         .unwrap();
     let (docker,server,socket)=daemon(move |line| {
+        if line.contains("/containers/json") { return (200,"[]".into()); }
         assert!(line.contains("/info")||line.contains("/swarm"),"{line}");
         if line.contains("/swarm") {(200,json!({"ID":cluster,"CreatedAt":"2026-01-01T00:00:00Z"}).to_string())}
         else {(200,json!({"ID":daemon_id,"NCPU":2,"MemTotal":1048576,"OSType":"linux","Swarm":{"NodeID":"node-1","LocalNodeState":"active","ControlAvailable":true,"Nodes":1,"Managers":1,"Cluster":{"ID":cluster}}}).to_string())}
@@ -306,7 +307,7 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn edge_platform_prune_and_pull_stream_route_and_persist_without_local_fallback() {
-    use citadel_adapters::edge::EdgeTarget;
+    use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         edge::v1::{EdgeCommandKind, core_envelope},
         images::v1::{PullImageRequest, PullImageResponse},

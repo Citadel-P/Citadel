@@ -1,0 +1,57 @@
+name: ${COMPOSE_PROJECT_NAME:-citadel-rust}
+
+services:
+  server:
+    image: ${CITADEL_IMAGE:-citadel-rust:${CITADEL_IMAGE_TAG:-local}}
+    build:
+      context: ..
+      dockerfile: rust/Dockerfile
+      args:
+        VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
+        INFORMATIONAL_VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        format: raw
+    environment:
+      PG_HOST: ${PG_HOST:-pg_db}
+      PG_PORT: "${PG_PORT:-5432}"
+    depends_on:
+      pg_db:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro
+      - citadel_data:/app/data
+    ports:
+      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_HTTP_PORT:-18000}:${Transport__ApiPort:-8000}"
+      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${Transport__EdgeGrpcPort:-8001}"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/citadel-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
+
+  pg_db:
+    image: postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:?Set PG_USER in .env}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?Set PG_PASSWORD in .env}
+      POSTGRES_DB: ${PG_DATABASE:?Set PG_DATABASE in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "database"
+
+volumes:
+  citadel_data:
+  postgres_data:

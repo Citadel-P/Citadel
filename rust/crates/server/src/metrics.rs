@@ -4,6 +4,7 @@ use sqlx::PgPool;
 
 #[derive(Default)]
 pub struct Metrics {
+    dynamic_tasks: Option<citadel_runtime::DynamicTasks>,
     active_tasks: AtomicI64,
     event_queue_depth: AtomicI64,
     docker_events_total: AtomicU64,
@@ -24,6 +25,10 @@ pub struct Metrics {
 }
 
 impl Metrics {
+    pub fn with_dynamic_tasks(mut self, tasks: citadel_runtime::DynamicTasks) -> Self {
+        self.dynamic_tasks = Some(tasks);
+        self
+    }
     pub fn task_guard(&self) -> TaskGuard<'_> {
         self.active_tasks.fetch_add(1, Ordering::Relaxed);
         TaskGuard { metrics: self }
@@ -113,7 +118,7 @@ impl Metrics {
 
     #[must_use]
     pub fn render(&self, pool: &PgPool) -> String {
-        format!(
+        let mut output = format!(
             concat!(
                 "# TYPE citadel_active_tasks gauge\n",
                 "citadel_active_tasks {}\n",
@@ -153,7 +158,6 @@ impl Metrics {
                 "citadel_postgres_pool_size {}\n",
                 "# TYPE citadel_postgres_pool_idle gauge\n",
                 "citadel_postgres_pool_idle {}\n",
-                "# EOF\n",
             ),
             self.active_tasks.load(Ordering::Relaxed),
             self.event_queue_depth.load(Ordering::Relaxed),
@@ -175,7 +179,16 @@ impl Metrics {
             self.realtime_send_timeouts_total.load(Ordering::Relaxed),
             pool.size(),
             pool.num_idle(),
-        )
+        );
+        citadel_runtime::runtime_metrics::render_runtime_metrics(&mut output);
+        output.push_str(&format!(
+            "citadel_dynamic_tasks {}\n",
+            self.dynamic_tasks
+                .as_ref()
+                .map_or(0, citadel_runtime::DynamicTasks::active)
+        ));
+        output.push_str("# EOF\n");
+        output
     }
 }
 

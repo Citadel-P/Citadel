@@ -1,30 +1,43 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::extract::ConnectInfo;
-use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
-use axum::http::{Method, Request, Response, StatusCode};
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    extract::ConnectInfo,
+    http::{
+        Method, Request, Response, StatusCode,
+        header::{CONTENT_TYPE, COOKIE, SET_COOKIE},
+    },
+};
 use chrono::{DateTime, Duration, Utc};
-use citadel_adapters::crypto::{
-    AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
-    OpaqueServiceAccountTokenCodec,
+use citadel_adapters::{
+    persistence::postgres::identity::{
+        authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        mfa::store::PostgresMfaStore,
+    },
+    security::identity::{
+        crypto::{
+            AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
+            OpaqueServiceAccountTokenCodec,
+        },
+        mfa::HmacRecoveryCodeService,
+    },
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::mfa::{HmacRecoveryCodeService, PostgresMfaStore};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, MfaPolicy};
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    IdentityError, IdentityService, MfaConfiguration, MfaService,
-    NoopServiceAccountLastUsedTracker, PasswordHasher, SystemClock, TotpService, TotpSetup,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityError, IdentityService,
+    MfaConfiguration, MfaPolicy, MfaService, NoopServiceAccountLastUsedTracker, PasswordHasher,
+    SYSTEM_ACTOR_ID, SystemClock, TotpService, TotpSetup,
 };
-use citadel_server::Readiness;
-use citadel_server::identity_http::{self, IdentityHttpState};
+use citadel_primitives::ActorId;
+use citadel_server::{
+    Readiness,
+    api::routes::{authentication as identity_http, authentication::IdentityHttpState},
+};
 use serde_json::{Value, json};
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, OnceLock},
+};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;

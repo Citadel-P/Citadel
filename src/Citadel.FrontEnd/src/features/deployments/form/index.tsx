@@ -12,6 +12,7 @@ import {
   ContainerDataView,
   ResourceBindingScope,
   LatestActivityView,
+  PlatformStatus,
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
@@ -152,21 +153,68 @@ const DeploymentSubHeader = ({
 }) => {
   return (
     <>
-      <DeploymentLatestActivity latestActivity={latestActivity} />
+      <DeploymentHealthNotice deployment={deployment} latestActivity={latestActivity} />
+      <DeploymentLatestActivity latestActivity={latestActivity} deployment={deployment} />
       <DeploymentUpdateNotice deployment={deployment} />
     </>
   );
 };
 
-const DeploymentLatestActivity = ({ latestActivity }: { latestActivity: LatestActivityView | null }) => {
+const DeploymentHealthNotice = ({
+  deployment,
+  latestActivity,
+}: {
+  deployment: DeploymentView;
+  latestActivity: LatestActivityView | null;
+}) => {
+  if (deployment.status !== DeploymentStatus.Degraded) return null;
+
+  if (deployment.platformStatus === PlatformStatus.Offline) {
+    return (
+      <AlertMessage type="error" title="Platform unavailable">
+        The platform is offline. Citadel cannot confirm the container state for this deployment.
+      </AlertMessage>
+    );
+  }
+
+  if (!deployment.dockerContainerId) {
+    return (
+      <AlertMessage type="error" title="Container missing">
+        No container is currently linked to this deployment. Its previous container may have been removed or replaced
+        outside Citadel. Redeploy this configuration, or adopt the replacement container as a deployment.
+      </AlertMessage>
+    );
+  }
+
+  return (
+    <AlertMessage type="error" title="Deployment degraded">
+      {latestActivity?.info.$type === 'DeploymentDegraded'
+        ? latestActivity.info.reason
+        : 'The associated container is unavailable. Check the platform and container state.'}
+    </AlertMessage>
+  );
+};
+
+const DeploymentLatestActivity = ({
+  latestActivity,
+  deployment,
+}: {
+  latestActivity: LatestActivityView | null;
+  deployment: DeploymentView;
+}) => {
   if (!latestActivity) return;
   if (latestActivity?.status === ActivityStatus.Success) {
     return;
   }
-  if (latestActivity?.info.$type === 'DeploymentDegraded') {
+  if (latestActivity.info.$type === 'DeploymentDegraded') return null;
+  if (
+    deployment.status === DeploymentStatus.Healthy &&
+    latestActivity.status === ActivityStatus.Failure &&
+    latestActivity.info.$type === 'DeploymentApplied'
+  ) {
     return (
-      <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
-        <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
+      <AlertMessage title="Previous deployment attempt failed" date={latestActivity.createdAt} type="warning">
+        The container is currently healthy. The last deployment attempt failed; see Activities for details.
       </AlertMessage>
     );
   }
@@ -174,7 +222,7 @@ const DeploymentLatestActivity = ({ latestActivity }: { latestActivity: LatestAc
     <ActivityAlertZone
       info={latestActivity?.info as any}
       activity={latestActivity as any}
-      title="Error"
+      title={latestActivity.status === ActivityStatus.Failure ? 'Last operation failed' : 'Last operation warning'}
       date={latestActivity?.createdAt}
     />
   );

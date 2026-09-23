@@ -1,4 +1,5 @@
 import { memo, ReactNode, useCallback, useEffect, useMemo } from 'react';
+import type { AutomationActionTestDraftInput } from '@/api/automation-draft';
 import {
   Calendar,
   Check,
@@ -52,7 +53,6 @@ import {
   RunAutomationActionInput,
   QueueBackupRunInput,
   RestoreVolumeInput,
-  TestAutomationActionInput,
   StackReleaseStatus,
   StackReleaseSource,
   StackSnapshot,
@@ -108,7 +108,7 @@ type BackupRestoreRunLogsParams = {
 type AutomationActionRunParams = {
   id: string;
   name: string;
-} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & TestAutomationActionInput));
+} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & AutomationActionTestDraftInput));
 
 type BackupRestoreRunStreamItem = {
   restoreRunId: string;
@@ -353,6 +353,12 @@ type ActivityInfoRendererMap = {
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
+  BackupPolicyCreated: (info, activity) => (
+    <SpecViewer spec={info.policy} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+  BackupRunQueued: (info) => <BackupRunActivityDetails info={info} />,
+  BackupRunStarted: (info) => <BackupRunActivityDetails info={info} />,
+  BackupRunCompleted: (info) => <BackupRunActivityDetails info={info} />,
   DeploymentUpdated: (info) => (
     <MonacoDiff
       original={info.oldDeployment}
@@ -1173,6 +1179,22 @@ function AlertEventActions({
   );
 }
 
+function BackupRunActivityDetails({
+  info,
+}: {
+  info: { runId: string; trigger: string; status?: string; durationMs?: number | null; errorMessage?: string | null };
+}) {
+  return (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <KeyValueBlock label="Run ID" value={info.runId} />
+      <KeyValueBlock label="Trigger" value={info.trigger} />
+      {info.status && <KeyValueBlock label="Status" value={formatActivityEvent(info.status)} />}
+      {info.durationMs != null && <KeyValueBlock label="Duration" value={`${info.durationMs} ms`} />}
+      {info.errorMessage && <KeyValueBlock label="Details" value={info.errorMessage} />}
+    </div>
+  );
+}
+
 function PullImageTaskRenderer({ payload, type }: { payload: PullImageParams; type: ResourceType }) {
   const state = useImagePullProgress(payload);
   return <TaskStreamLayout title="Pull Image" refName={payload.imageTag} type={type} state={state as any} />;
@@ -1590,15 +1612,15 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
   const { id, mode } = params;
   const queryClient = useQueryClient();
 
-  const request: RunAutomationActionInput | TestAutomationActionInput = useMemo(() => {
+  const request: RunAutomationActionInput | AutomationActionTestDraftInput = useMemo(() => {
     if (params.mode === 'run') {
       return { argsJson: params.argsJson, timeoutSeconds: params.timeoutSeconds };
     }
 
-    return { argsJson: params.argsJson };
+    return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<RunAutomationActionInput | TestAutomationActionInput, AutomationActionRunStreamItem>({
+  const state = useStreamProgress<RunAutomationActionInput | AutomationActionTestDraftInput, AutomationActionRunStreamItem>({
     endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
     request,
     successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',

@@ -1,4 +1,4 @@
-//! .NET AutomationActionIntegrationTests execution cases over Axum, PostgreSQL
+//! Automation execution tests over Axum, PostgreSQL
 //! and real Deno: progress, permissions, cancellation, outcomes and audit state.
 use axum::{
     Router,
@@ -6,19 +6,23 @@ use axum::{
     http::{Method, Request, StatusCode},
 };
 use citadel_adapters::{
-    automation_store::PostgresAutomationStore,
-    automation_token::IdentityAutomationRunTokenIssuer,
-    crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
-    identity_store::{PostgresIdentityStore, StaticEntitlementService},
+    persistence::postgres::{
+        automation::PostgresAutomationRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::{
+        automation_token::IdentityAutomationRunTokenIssuer,
+        crypto::{Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec},
+    },
 };
-use citadel_automation::{AutomationRuntimeConfig, AutomationService, AutomationStore};
+use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::automation_http::{self, AutomationHttpState};
+use citadel_primitives::ActorId;
+use citadel_server::api::routes::{automation as automation_http, automation::AutomationHttpState};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -26,6 +30,13 @@ use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "automation_http_execution/lifecycle.rs"]
+mod lifecycle;
+
+#[path = "automation_http_execution/drafts.rs"]
+mod drafts;
+#[path = "automation_http_execution/patches.rs"]
+mod patches;
 #[path = "automation_http_execution/webhooks.rs"]
 mod webhooks;
 
@@ -51,10 +62,20 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         chrono::Duration::days(30),
     ));
     let root = std::env::temp_dir().join(format!("citadel-automation-http-{}", Uuid::now_v7()));
-    let store = Arc::new(PostgresAutomationStore::new(db.clone()));
+    let store = Arc::new(PostgresAutomationRepository::new(db.clone()));
     let webhook_license = Arc::new(webhooks::Entitlement::default());
+    let automation_shutdown = tokio_util::sync::CancellationToken::new();
+    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+
     let service = Arc::new(
         AutomationService::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            Arc::new(
+                citadel_server::tasks::automation::TrackedAutomationTasks::new(
+                    automation_tasks.clone(),
+                ),
+            ),
+            automation_shutdown.clone(),
             store.clone(),
             Arc::new(IdentityAutomationRunTokenIssuer::new(identity.clone())),
             AutomationRuntimeConfig {
@@ -75,11 +96,16 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .merge(webhooks::router(db.clone(), service.clone()));
     let admin = actor(&db, true).await;
     let denied = actor(&db, false).await;
+    patches::verify(&app, &admin, &denied, &store).await;
     let defaulted = request(&app, Method::POST, "/api/v1/automation/actions", Some(admin.clone()), Some(json!({
-        "name":format!("default-timeout-{}",Uuid::now_v7()),"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false
+        "name":format!("default-timeout-{}",Uuid::now_v7()),"webhook":{},"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false
     }))).await;
     assert_eq!(defaulted.status(), StatusCode::OK);
-    assert_eq!(body(defaulted).await["timeoutSeconds"], 300);
+    let defaulted = body(defaulted).await;
+    assert_eq!(defaulted["timeoutSeconds"], 300);
+    assert_eq!(defaulted["webhook"]["enabled"], false);
+    assert_eq!(defaulted["webhook"]["provider"], "GitHub");
+    assert_eq!(defaulted["webhook"]["authScheme"], "GitHubHmacSha256");
     let oversized = request(&app, Method::POST, "/api/v1/automation/actions", Some(admin.clone()), Some(json!({
         "name":format!("invalid-timeout-{}",Uuid::now_v7()),"code":"console.log('ok');","enabled":true,"scheduleEnabled":false,"alertOnFailure":false,"timeoutSeconds":1801
     }))).await;
@@ -252,6 +278,8 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         10,
         ".NET Test uses the saved timeout, not a request override"
     );
+    let draft_action = create(&app, &admin, "console.log('disabled test');", false, 10).await;
+    drafts::verify(&app, &db, &admin, &store, &draft_action).await;
 
     let action = create(
         &app,
@@ -326,7 +354,31 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .await
     .expect("A stalled progress consumer must be cancelled and persisted");
     drop(response);
-    std::fs::remove_dir(&root).unwrap();
+    lifecycle::verify_request_drop_during_claim(
+        &service,
+        &store,
+        admin.actor_id,
+        Uuid::parse_str(draft_action["id"].as_str().unwrap()).unwrap(),
+        &db,
+        &automation_tasks,
+    )
+    .await;
+    lifecycle::verify(
+        &service,
+        &store,
+        admin.actor_id,
+        Uuid::parse_str(draft_action["id"].as_str().unwrap()).unwrap(),
+        &automation_shutdown,
+        &automation_tasks,
+    )
+    .await;
+    automation_shutdown.cancel();
+    automation_tasks
+        .drain(Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(automation_tasks.active(), 0);
+    std::fs::remove_dir_all(&root).unwrap();
 }
 
 async fn create(

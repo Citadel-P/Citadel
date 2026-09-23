@@ -1,12 +1,13 @@
 use super::*;
 use citadel_adapters::{
-    container_mutations::ContainerRuntimeRouter,
-    crypto::AesGcmSecretProtector,
-    deployment_runtime::DeploymentRuntimeRouter,
-    deployment_store::{PostgresContainerAdoption, PostgresDeploymentStore},
+    connectors::routing::{
+        containers::ContainerRuntimeRouter, deployments::DeploymentRuntimeRouter,
+    },
+    persistence::postgres::deployments::{PostgresContainerAdoption, PostgresDeploymentRepository},
+    security::identity::crypto::AesGcmSecretProtector,
 };
 use citadel_deployments::DeploymentService;
-use citadel_server::deployments_http::{self, DeploymentsHttpState};
+use citadel_server::api::routes::deployments::{self, DeploymentsHttpState};
 use tokio_util::sync::CancellationToken;
 
 // Ports ContainerAdoptionDraftFactoryTests + adoption endpoint persistence,
@@ -74,7 +75,12 @@ async fn exercise_adoption(external: bool) {
     let docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
     let protector = Arc::new(AesGcmSecretProtector::new(&[11; 32]).unwrap());
     let service = DeploymentService::new(
-        Arc::new(PostgresDeploymentStore::new(f.pool.clone())),
+        Arc::new(
+            citadel_server::tasks::deployments::TrackedDeploymentTasks::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
+        ),
+        Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
         Arc::new(DeploymentRuntimeRouter::new(
             f.pool.clone(),
             docker.clone(),
@@ -94,7 +100,7 @@ async fn exercise_adoption(external: bool) {
         protector.clone(),
         &[11; 32],
     )));
-    f.app = f.app.merge(deployments_http::router(DeploymentsHttpState {
+    f.app = f.app.merge(deployments::router(DeploymentsHttpState {
         identity: f.lookup_state.platforms.identity.clone(),
         deployments: Arc::new(service),
     }));
@@ -114,7 +120,6 @@ async fn exercise_adoption(external: bool) {
     for (system, swarm_task, ownership, control, stack) in [
         (true, false, false, "Idle", None),
         (false, true, false, "Idle", None),
-        (false, false, true, "Idle", None),
         (false, false, false, "Processing", None),
         (false, false, false, "Idle", Some("compose-project")),
     ] {
@@ -131,9 +136,39 @@ async fn exercise_adoption(external: bool) {
         );
         assert!(requests.lock().await.is_empty());
     }
-    sqlx::query("UPDATE containers SET issystem=false,isswarmtask=false,hascitadelownershiplabels=false,controlstate='Idle',stack=NULL WHERE id=$1")
+    sqlx::query("UPDATE containers SET issystem=false,isswarmtask=false,hascitadelownershiplabels=true,controlstate='Idle',stack=NULL WHERE id=$1")
         .bind(id).execute(&f.pool).await.unwrap();
+    for labels in [
+        json!({"com.citadel.managed":"true"}),
+        json!({"com.citadel.managed":"true","com.citadel.deployment-id":"invalid"}),
+        json!({"com.citadel.managed":"true","com.citadel.stack-id":Uuid::now_v7().to_string()}),
+    ] {
+        document.write().await["Config"]["Labels"] = labels;
+        assert_eq!(
+            send(&f, &draft_url, Some(f.administrator.clone()))
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+    }
+    // Labels from a previous installation do not create a current owner.
+    document.write().await["Config"]["Labels"] = json!({
+        "com.citadel.managed": "true",
+        "com.citadel.deployment-id": Uuid::now_v7().to_string(),
+        "example.label": "preserved"
+    });
     let draft = json_body(send(&f, &draft_url, Some(f.administrator.clone())).await).await;
+    assert!(
+        draft["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|issue| issue["severity"] != "Blocker")
+    );
+    assert_eq!(
+        draft["draft"]["spec"]["labels"],
+        json!({"example.label":"preserved"})
+    );
     assert!(!draft.to_string().contains("keep-me-private"));
     assert_eq!(draft["canImportSensitiveEnvironmentValues"], true);
     assert_eq!(draft["draft"]["spec"]["ports"], json!(["8080:80/tcp"]));
@@ -259,6 +294,52 @@ async fn exercise_adoption(external: bool) {
     assert_eq!(activity["ContainerId"], container);
     assert_eq!(activity["ContainerName"], "/nginx");
     assert!(!activity.to_string().contains("keep-me-private"));
+    // HTTP and realtime must expose the same enriched public representation,
+    // including capabilities and camelCase activity, without persistence metadata.
+    let response = send(
+        &f,
+        &format!("/api/v1/deployments/{deployment_id}"),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let http = json_body(response).await;
+    assert!(http.get("rowVersion").is_none());
+    assert!(http.get("effectivePermission").is_none());
+    assert_eq!(http["capabilities"]["canWrite"], true);
+    assert_eq!(http["latestActivityView"]["info"]["containerId"], container);
+    let groups = super::realtime_groups::reader(&f);
+    for name in [
+        format!("deployment:{deployment_id}"),
+        "deployments".to_owned(),
+    ] {
+        use citadel_server::realtime_groups::{Group, GroupReadPort};
+        let snapshot = groups
+            .read(&f.administrator, &Group::parse(&name).unwrap(), None)
+            .await
+            .unwrap();
+        let realtime = snapshot
+            .rows
+            .iter()
+            .flat_map(|group| &group.rows)
+            .find(|row| row["id"] == http["id"])
+            .expect("Deployment realtime row");
+        assert_eq!(realtime, &http);
+    }
+    assert_eq!(
+        send(&f, &draft_url, Some(f.administrator.clone()))
+            .await
+            .status(),
+        StatusCode::CONFLICT
+    );
+    // Even if the inventory link is absent, a label naming a live owner must block recovery.
+    sqlx::query("UPDATE containers SET deploymentid=NULL WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    document.write().await["Config"]["Labels"] =
+        json!({"com.citadel.managed":"true","com.citadel.deployment-id":deployment_id.to_string()});
     assert_eq!(
         send(&f, &draft_url, Some(f.administrator.clone()))
             .await

@@ -5,9 +5,9 @@ import {
   LicenseCapability,
   LookupResourceType,
   ResourceControlState,
-  TestAutomationActionInput,
   UpdateAutomationActionInput,
 } from '@/api/generated/api.types';
+import type { AutomationActionTestDraftInput } from '@/api/automation-draft';
 import {
   defineField,
   defineGroupField,
@@ -30,7 +30,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TestTube2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { toast } from 'sonner';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
@@ -86,15 +85,14 @@ export function AutomationActionForm({
   const original = useMemo(() => toFormValue(resource), [resource]);
   const current = useMemo(() => ({ ...original, ...update }), [original, update]);
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
-  const hasUnsavedChanges = metadataChanged === true || Object.keys(update).length > 0;
   const testDisabledReason =
     resource?.capabilities?.canExecute !== true
       ? 'Execute permission is required to test this Action.'
       : resource.controlState === ResourceControlState.Processing
         ? 'Wait for the current run to finish.'
-        : hasUnsavedChanges
-          ? 'Save your changes before testing the Action.'
-        : undefined;
+        : !current.code.trim()
+          ? 'Code is required to test this Action.'
+          : (validateJsonObject(current.defaultArgsJson, 'Default args') ?? undefined);
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`automation-action:${id ?? 'new'}`);
@@ -113,14 +111,11 @@ export function AutomationActionForm({
   });
 
   const handleTestDraft = useCallback(() => {
-    if (mode !== 'edit' || !id) return;
-    if (hasUnsavedChanges) {
-      toast.error('Save your changes before testing the Action.');
-      return;
-    }
+    if (mode !== 'edit' || !id || testDisabledReason) return;
 
-    const payload: TestAutomationActionInput = {
-      argsJson: null,
+    const payload: AutomationActionTestDraftInput = {
+      argsJson: current.defaultArgsJson || '{}',
+      ...(current.code !== original.code ? { code: current.code } : {}),
     };
 
     openSheet({
@@ -132,7 +127,17 @@ export function AutomationActionForm({
         ...payload,
       },
     });
-  }, [current.name, hasUnsavedChanges, id, mode, openSheet, resource?.name]);
+  }, [
+    current.name,
+    current.code,
+    current.defaultArgsJson,
+    original.code,
+    testDisabledReason,
+    id,
+    mode,
+    openSheet,
+    resource?.name,
+  ]);
 
   const schema = useMemo(
     () => ({
@@ -420,13 +425,7 @@ export function AutomationActionForm({
   );
 }
 
-function TestDraftButton({
-  disabledReason,
-  onClick,
-}: {
-  disabledReason?: string;
-  onClick: () => void;
-}) {
+function TestDraftButton({ disabledReason, onClick }: { disabledReason?: string; onClick: () => void }) {
   const button = (
     <Button type="button" variant="outline" disabled={disabledReason !== undefined} onClick={onClick}>
       <TestTube2 className="size-3.5" />

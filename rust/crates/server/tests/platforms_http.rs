@@ -1,30 +1,30 @@
 #![cfg(unix)]
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration as StdDuration;
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
+};
 use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use citadel_adapters::{
+    connectors::{
+        docker::DockerClient, routing::platforms::registration::PlatformRegistrationRuntimeRouter,
+    },
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        platforms::{
+            PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
+            registration::PostgresPlatformRegistrationRepository,
+        },
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
 };
-use citadel_adapters::docker::DockerClient;
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::inventory_projection_store::PostgresInventoryProjectionStore;
-use citadel_adapters::platform_read_store::PostgresPlatformReadStore;
-use citadel_adapters::platform_registration::{
-    PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore,
-};
-use citadel_adapters::resource_metadata_store::PostgresResourceMetadataStore;
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
@@ -32,25 +32,35 @@ use citadel_platforms::{
     RuntimePlatformInfo, RuntimeSwarmConfig, RuntimeSwarmInventory, RuntimeSwarmNode,
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
 };
-use citadel_server::platforms_http::{self, PlatformsHttpState};
-use citadel_server::realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
+use citadel_primitives::ActorId;
+use citadel_server::{
+    api::routes::{platforms as platforms_http, platforms::PlatformsHttpState},
+    realtime::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort},
+};
 use serde_json::{Value, json};
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixListener;
-use tokio::sync::{Mutex, OwnedMutexGuard};
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::collections::BTreeMap;
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+    time::Duration as StdDuration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::UnixListener,
+    sync::{Mutex, OwnedMutexGuard},
+};
 use tower::ServiceExt;
 use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
-#[path = "platforms_http/swarm_overview.rs"]
-mod swarm_overview;
-#[path = "platforms_http/swarm_inventory.rs"]
-mod swarm_inventory;
 #[path = "platforms_http/service_adoption.rs"]
 mod service_adoption;
+#[path = "platforms_http/swarm_inventory.rs"]
+mod swarm_inventory;
+#[path = "platforms_http/swarm_overview.rs"]
+mod swarm_overview;
 #[path = "platforms_http/task_runtime.rs"]
 mod task_runtime;
 
@@ -66,10 +76,6 @@ mod edge;
 mod get_container;
 #[path = "platforms_http/images.rs"]
 mod images;
-#[path="platforms_http/platform_image_management.rs"]
-mod platform_image_management;
-#[path="platforms_http/registry_browsing.rs"]
-mod registry_browsing;
 #[path = "platforms_http/logs.rs"]
 mod logs;
 #[path = "platforms_http/lookup.rs"]
@@ -82,8 +88,12 @@ mod node_agent_setup;
 mod node_coverage;
 #[path = "platforms_http/node_resources.rs"]
 mod node_resources;
+#[path = "platforms_http/platform_image_management.rs"]
+mod platform_image_management;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
+#[path = "platforms_http/registry_browsing.rs"]
+mod registry_browsing;
 #[path = "platforms_http/search.rs"]
 mod search;
 #[path = "platforms_http/statistics.rs"]
@@ -101,7 +111,7 @@ struct Fixture {
     realtime: IdentityRealtimeReader,
     docker_server: tokio::task::JoinHandle<()>,
     docker_socket: PathBuf,
-    lookup_state: citadel_server::lookup_http::LookupHttpState,
+    lookup_state: citadel_server::api::routes::lookup::LookupHttpState,
     _guard: OwnedMutexGuard<()>,
 }
 
@@ -448,7 +458,7 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
 }
 
 async fn fixture() -> Fixture {
-    fixture_for_cluster("cluster-test".into()).await
+    fixture_for_cluster(String::new()).await
 }
 
 async fn fixture_for_cluster(cluster: String) -> Fixture {
@@ -466,6 +476,11 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .await
         .unwrap();
     let platform_id = Uuid::now_v7();
+    let cluster = if cluster.is_empty() {
+        format!("cluster-{platform_id}")
+    } else {
+        cluster
+    };
     let actor_id = Uuid::now_v7();
     let tag_id = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,'Local',0,0,0,$3,0,'{\"$type\":\"DockerSwarm\"}','Online',0)")
@@ -475,8 +490,10 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .execute(&pool)
         .await
         .unwrap();
+    let mut initial = snapshot(platform_id);
+    initial.info.swarm.as_mut().unwrap().cluster_id = Some(cluster.clone());
     PostgresInventoryProjectionStore::new(pool.clone())
-        .persist(&snapshot(platform_id))
+        .persist(&initial)
         .await
         .unwrap();
     seed_reader_access(&pool, platform_id, actor_id, tag_id).await;
@@ -530,51 +547,63 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     };
     let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(10, cluster).await;
     let platforms = Arc::new(PlatformReadService::new(Arc::new(
-        PostgresPlatformReadStore::new(pool.clone()),
+        PostgresPlatformReader::new(pool.clone()),
     )));
     let realtime = IdentityRealtimeReader::new(identity.clone(), platforms.clone());
     let registrations = Arc::new(PlatformRegistrationService::new(
-        Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+        Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
         Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
     ));
-    let edge = citadel_adapters::edge::EdgeRegistry::default();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let platform_state = PlatformsHttpState {
-        volume_content: Arc::new(citadel_adapters::volume_content::VolumeContentAdapter::new(
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
             edge.clone(),
             "citadel-agent:test".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
-            citadel_adapters::container_mutations::ContainerRuntimeRouter::new(
+            citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
                 pool.clone(),
                 docker.clone(),
                 None,
                 edge.clone(),
             )
-            .into_service(),
+            .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity,
         platforms,
         registrations,
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker,
         agent: None,
         edge,
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
     };
-    let lookup_state = citadel_server::lookup_http::LookupHttpState {
-        store: Arc::new(citadel_adapters::lookup_store::PostgresLookupStore::new(
-            pool.clone(),
-        )),
+    let lookup_state = citadel_server::api::routes::lookup::LookupHttpState {
+        store: Arc::new(
+            citadel_adapters::persistence::postgres::discovery::lookup::PostgresLookupStore::new(
+                pool.clone(),
+            ),
+        ),
         entitlements: Arc::new(StaticEntitlementService::new(true)),
         platforms: platform_state.clone(),
     };
-    let app = platforms_http::router(platform_state)
-        .merge(citadel_server::lookup_http::router(lookup_state.clone()));
+    let app = platforms_http::router(platform_state).merge(
+        citadel_server::api::routes::lookup::router(lookup_state.clone()),
+    );
     Fixture {
         app,
         pool,
@@ -717,7 +746,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
     RuntimeInventorySnapshot {
         platform_id,
         info: RuntimePlatformInfo {
-            daemon_id: "daemon-1".into(),
+            daemon_id: "daemon-test".into(),
             server_version: "28.0.0".into(),
             operating_system: "Linux".into(),
             os_type: "linux".into(),
@@ -731,7 +760,13 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             api_version: "1.49".into(),
             minimum_api_version: "1.24".into(),
             agent_version: None,
-            swarm: None,
+            swarm: Some(citadel_platforms::RuntimeSwarmInfo {
+                node_id: "manager-node".into(),
+                cluster_id: Some(format!("cluster-{platform_id}")),
+                local_node_state: "active".into(),
+                control_available: true,
+                ..Default::default()
+            }),
         },
         containers: vec![RuntimeContainerSummary {
             id: "container-1".into(),
@@ -777,6 +812,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             ..Default::default()
         }],
         swarm: Some(RuntimeSwarmInventory {
+            running_task_count: 1,
             nodes: vec![RuntimeSwarmNode {
                 id: "node-1".into(),
                 version_index: 1,

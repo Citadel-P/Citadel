@@ -16,6 +16,77 @@ permissions:
   contents: read
 
 jobs:
+  rust-openapi:
+    name: Rust validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: rust
+    env:
+      SQLX_OFFLINE: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.ACCESS_TOKEN || github.token }}
+
+      - name: Install Rust build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Install pinned Rust toolchain
+        run: |
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$toolchain" --profile minimal
+
+      - name: Set up Java for pinned Docker API generation
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify generated Docker API crate
+        run: cargo run --locked -p xtask -- docker-api --check
+
+      - name: Verify database schema
+        run: cargo run --locked -p xtask -- database verify
+
+      - name: Verify committed OpenAPI artifacts
+        run: cargo run --locked -p xtask -- openapi --check
+
+      - name: Run Rust workspace tests
+        run: cargo test --locked --workspace
+
+      - name: Run Deployment authorization database regressions
+        run: |
+          set -euo pipefail
+          container=citadel-authorization-postgres
+          trap 'docker rm -f -v "$container" >/dev/null' EXIT
+          docker run --detach --name "$container" \
+            --publish 127.0.0.1::5432 \
+            --env POSTGRES_USER=citadel_test \
+            --env POSTGRES_PASSWORD=citadel_test \
+            --env POSTGRES_DB=citadel_authorization \
+            postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44 \
+            -c shared_preload_libraries=pg_stat_statements
+          for attempt in {1..60}; do
+            if docker exec "$container" pg_isready -h 127.0.0.1 -U citadel_test -d citadel_authorization; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d citadel_authorization \
+            -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
+          port=$(docker port "$container" 5432/tcp | cut -d: -f2)
+          export CITADEL_PHASE6_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_authorization"
+          export CITADEL_PHASE3_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
+          export CITADEL_REQUIRE_QUERY_COUNTS=1
+          cargo test --locked -p citadel-server --test deployments_http \
+            deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture
+          cargo test --locked -p citadel-adapters --test identity_authorization_differential -- --ignored --test-threads=1
+          cargo test --locked -p citadel-adapters --test deployment_apply_persistence -- --ignored --test-threads=1
+
   backend-tests:
     name: Backend unit and integration tests
     runs-on: ubuntu-latest
@@ -79,7 +150,7 @@ jobs:
   release-image:
     name: Publish release image
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [backend-tests, frontend-tests]
+    needs: [backend-tests, frontend-tests, rust-openapi]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

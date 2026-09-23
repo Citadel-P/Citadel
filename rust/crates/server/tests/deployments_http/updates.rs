@@ -1,7 +1,7 @@
 //! Ports CheckDeploymentUpdates/DeploymentAutoUpdateJob tests with real HTTP
 //! authorization and PostgreSQL leases, plus cancellation and late-result races.
 use super::*;
-use citadel_deployments::{DeploymentEntitlementPort, DeploymentStore};
+use citadel_deployments::{DeploymentEntitlementPort, DeploymentRepository};
 use std::sync::atomic::{AtomicU8, AtomicUsize};
 
 pub(super) async fn verify_automatic_apply(
@@ -11,7 +11,7 @@ pub(super) async fn verify_automatic_apply(
     id: Uuid,
     fail: &AtomicBool,
 ) {
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     for (should_fail, expected) in [(true, "Failed"), (false, "UpToDate")] {
         sqlx::query("UPDATE deployments SET spec=jsonb_set(jsonb_set(spec::jsonb,'{UpdateBehavior}','\"AutoDeploy\"'::jsonb),'{Image,ResolvedDigest}',to_jsonb($2::text))::json WHERE id=$1")
             .bind(id).bind(format!("sha256:{}", "a".repeat(64))).execute(pool).await.unwrap();
@@ -25,7 +25,7 @@ pub(super) async fn verify_automatic_apply(
             .await
             .unwrap();
         assert_eq!(current.control_state, "Idle");
-        let update = current.auto_update_state.unwrap();
+        let update = current.auto_update_state.as_ref().unwrap();
         assert_eq!(update.status, expected);
         assert_eq!(update.last_error.is_some(), should_fail);
         assert_eq!(
@@ -80,7 +80,7 @@ impl Entitlements {
 impl DeploymentEntitlementPort for Entitlements {
     fn enabled(
         &self,
-        _: citadel_domain::LicenseCapability,
+        _: citadel_licensing::LicenseCapability,
     ) -> BoxFuture<'_, Result<bool, DeploymentError>> {
         Box::pin(async { Ok(self.0.load(Ordering::Relaxed)) })
     }
@@ -180,7 +180,7 @@ pub(super) async fn verify(
     })
     .await
     .unwrap();
-    let store = PostgresDeploymentStore::new(pool.clone());
+    let store = PostgresDeploymentRepository::new(pool.clone());
     let snapshot = store
         .get_authorized(admin.actor_id, true, id)
         .await
@@ -230,7 +230,10 @@ pub(super) async fn verify(
         .get_authorized(admin.actor_id, true, id)
         .await
         .unwrap();
-    assert_eq!(checked.auto_update_state.unwrap().status, "UpdateAvailable");
+    assert_eq!(
+        checked.auto_update_state.as_ref().unwrap().status,
+        "UpdateAvailable"
+    );
     assert_eq!(checked.status, "Created", "Notify must not Apply");
     assert!(
         store

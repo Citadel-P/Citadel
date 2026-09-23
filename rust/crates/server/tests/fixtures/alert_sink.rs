@@ -1,4 +1,4 @@
-use citadel_alerts::{AlertError, AlertEventSink, AlertEventView, AlertObservation};
+use citadel_alerts::{AlertError, AlertEvent, AlertEventSink, AlertObservation};
 use futures_util::future::BoxFuture;
 use std::sync::Mutex;
 
@@ -8,7 +8,7 @@ impl AlertEventSink for RecordedAlerts {
     fn observe<'a>(
         &'a self,
         observation: &'a AlertObservation,
-    ) -> BoxFuture<'a, Result<Option<AlertEventView>, AlertError>> {
+    ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
             let mut observations = self.0.lock().unwrap();
             assert!(

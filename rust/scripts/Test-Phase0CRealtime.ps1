@@ -50,7 +50,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     throw 'Node.js with the built-in WebSocket API is required for the language-neutral Phase 0C client.'
 }
 if (-not $SkipBuild) {
-    & docker build --file (Join-Path $repoRoot 'rust\Dockerfile.phase0a') --tag $CoreImage $repoRoot
+    & docker build --file (Join-Path $repoRoot 'rust\Dockerfile') --tag $CoreImage $repoRoot
     if ($LASTEXITCODE -ne 0) { throw 'Phase 0C Rust image build failed.' }
     & docker build --file (Join-Path $agentRoot 'Dockerfile') --tag $AgentImage $agentRoot
     if ($LASTEXITCODE -ne 0) { throw 'Active .NET Agent image build failed.' }

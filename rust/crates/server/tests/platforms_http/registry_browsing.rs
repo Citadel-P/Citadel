@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::registry_images::RegistryBrowser;
+use citadel_adapters::connectors::registries::browser::RegistryBrowser;
 
 // Ports RegistryImageQueryAuthorizationTests and ImageEndpointTests for all four
 // browse routes: real authorized Registry rows and controlled external HTTP servers.
@@ -88,7 +88,7 @@ async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Registry,
+        citadel_primitives::ResourceType::Registry,
         docker,
         0,
     )
@@ -96,7 +96,7 @@ async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
-        citadel_domain::ResourceType::Registry,
+        citadel_primitives::ResourceType::Registry,
         github,
         0,
     )

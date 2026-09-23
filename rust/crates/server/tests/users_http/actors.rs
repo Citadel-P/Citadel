@@ -1,6 +1,6 @@
 use super::*;
-use citadel_adapters::actor_store::PostgresActorStore;
-use citadel_identity::ActorStore;
+use citadel_adapters::persistence::postgres::identity::actors::repository::PostgresActorRepository;
+use citadel_identity::ActorRepository;
 
 // Ports ActorEndpointTests.ActorEndpoints_ShouldReadAndPersistEnabledState and
 // extends the AdministratorGuard concurrency/last-administrator scenarios.
@@ -8,7 +8,9 @@ use citadel_identity::ActorStore;
 #[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
 async fn actors_read_and_patch_use_actor_ids_and_preserve_administrator_access() {
     let mut f = fixture().await;
-    f.app = citadel_server::actors_http::router(Arc::new(PostgresActorStore::new(f.pool.clone())));
+    f.app = citadel_server::api::routes::actors::router(Arc::new(PostgresActorRepository::new(
+        f.pool.clone(),
+    )));
     let (user, actor) = seed_user_record(&f.pool, &format!("actor-{}", Uuid::now_v7()), true).await;
     let path = format!("/api/v1/actors/{actor}");
     let value = json(send(&f, &path, Some(f.administrator.clone())).await).await;
@@ -127,7 +129,7 @@ async fn concurrent_actor_disables_cannot_remove_both_administrators() {
         seed_user_record(&f.pool, &format!("other-admin-{}", Uuid::now_v7()), true).await;
     demote_other_administrators(&f.pool, f.administrator.actor_id.value()).await;
     assign_role(&f.pool, actor, ADMIN_ROLE_ID).await;
-    let store = PostgresActorStore::new(f.pool.clone());
+    let store = PostgresActorRepository::new(f.pool.clone());
     let (a, b) = tokio::join!(
         store.set_enabled(actor, false),
         store.set_enabled(f.administrator.actor_id.value(), false)

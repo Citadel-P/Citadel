@@ -1,7 +1,6 @@
 use super::*;
 
-// Ports the requested-window and batched-history behavior from .NET
-// PlatformsStatsWriterJobTests / ContainerStatsWriterJobTests through HTTP.
+// Verify requested windows and batched Platform/Container history through HTTP.
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples() {
@@ -71,13 +70,13 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn service_history_survives_task_replacement_without_double_counting_or_crossing_nodes() {
-    use citadel_adapters::{
-        container_stats_store::PostgresContainerStatsStore,
-        edge::{EdgeRegistry, EdgeTarget, PostgresEdgeStore},
-        statistics_read_store::PostgresStatisticsReadStore,
-    };
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::edge::EdgeTarget;
+    use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{
-        ContainerStatsStore, RuntimeContainerStat, ServiceStatIdentity, StatisticsReadStore,
+        ContainerStatsStore, RuntimeContainerStat, ServiceStatIdentity, StatisticsReader,
         StatsWindow,
     };
     let f = fixture().await;
@@ -94,7 +93,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     // Node session here to exercise the production Node statistics writer.
     sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,profile,dockernodeid,lastconnectedatutc) VALUES($1,$2,$1,'fixture','Connected',$3,$3,'SwarmNode','node-1',$4)")
         .bind(session.agent_id).bind(session.agent_id.to_string()).bind(f.platform_id).bind(session.connected_at).execute(&f.pool).await.unwrap();
-    let reader = PostgresStatisticsReadStore::new(f.pool.clone());
+    let reader = PostgresStatisticsReader::new(f.pool.clone());
     let container: Uuid =
         sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
             .bind(f.platform_id)
@@ -155,9 +154,36 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         .persist_stats(&session, std::slice::from_ref(&sample))
         .await
         .unwrap();
-    // Same Docker ID on a different node must not be attributed to this Task.
-    sqlx::query("UPDATE containers SET dockernodeid='other-node' WHERE id=$1")
+    // A delayed sample still belongs to the managed task after its container
+    // projection has been deleted (ContainerStatsWriterJobTests parity).
+    sqlx::query("DELETE FROM containers WHERE id=$1")
         .bind(container)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sample.created = bucket + 25;
+    sample.cpu_usage = 20.0;
+    sample.memory_active = 20.0;
+    assert_eq!(
+        writer
+            .persist_stats(&session, std::slice::from_ref(&sample))
+            .await
+            .unwrap(),
+        0,
+        "no container row is resurrected for a delayed service sample"
+    );
+    let retained: (f64, f64) = sqlx::query_as(
+        "SELECT cpuusage,memoryactive FROM swarmservicestats WHERE platformid=$1 AND created=$2",
+    )
+    .bind(f.platform_id)
+    .bind(sample.created)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(retained, (20.0, 20.0));
+    // Same Docker ID on a different node must not be attributed to this Task.
+    sqlx::query("UPDATE swarmtaskprojections SET dockernodeid='other-node' WHERE platformid=$1")
+        .bind(f.platform_id)
         .execute(&f.pool)
         .await
         .unwrap();
@@ -346,7 +372,7 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn workload_history_requires_its_own_permission_and_preserves_stack_grouping() {
-    use citadel_domain::ResourceType;
+    use citadel_primitives::ResourceType;
     let f = fixture().await;
     let deployment = Uuid::now_v7();
     let stack = Uuid::now_v7();
@@ -562,8 +588,8 @@ async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguit
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
-async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_tables() {
-    use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_sample_tables() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
     let f = fixture().await;
     let writer = PostgresContainerStatsStore::new(f.pool.clone());
@@ -607,9 +633,36 @@ async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_
     .await
     .unwrap();
     assert_eq!(
-        remaining, 1,
-        "one transaction prunes at most 5000 expired rows"
+        remaining, 5001,
+        "statistics writes must leave historical retention to maintenance"
     );
+    let expired = || async {
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM containerstats WHERE created<$1")
+            .bind(now - 7 * 24 * 3600)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap()
+    };
+    let before = expired().await;
+    citadel_adapters::persistence::postgres::maintenance::cleanup(&f.pool, None)
+        .await
+        .unwrap();
+    let removed = before - expired().await;
+    assert!(
+        (1..=5000).contains(&removed),
+        "a maintenance pass is bounded: {removed}"
+    );
+    // Other test Platforms may also have old history. Drain bounded global
+    // batches before checking this Platform's fresh sample survived.
+    for _ in 0..20 {
+        if citadel_adapters::persistence::postgres::maintenance::cleanup(&f.pool, None)
+            .await
+            .unwrap()
+            == 0
+        {
+            break;
+        }
+    }
     writer.persist(f.platform_id, &[sample]).await.unwrap();
     let remaining: i64 =
         sqlx::query_scalar("SELECT count(*) FROM containerstats WHERE containerid=$1")
@@ -619,7 +672,7 @@ async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_
             .unwrap();
     assert_eq!(
         remaining, 1,
-        "subsequent write prunes the remainder but keeps the fresh sample"
+        "maintenance keeps the fresh sample and a subsequent upsert stays idempotent"
     );
     f.docker_server.abort();
     f.pool.close().await;
@@ -629,9 +682,12 @@ async fn statistics_retention_is_batched_and_failed_writes_roll_back_all_sample_
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn connected_manager_history_uses_reported_node_identity_without_replacing_container_ids() {
-    use citadel_adapters::container_stats_store::PostgresContainerStatsStore;
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat, RuntimeSwarmInfo};
     let f = fixture().await;
+    // This case models the connected manager, matching the fake daemon.
+    sqlx::query("UPDATE platforms SET platformdescriptor=jsonb_set(platformdescriptor::jsonb, '{nodeID}', '\"node-1\"') WHERE id=$1")
+        .bind(f.platform_id).execute(&f.pool).await.unwrap();
     let container: Uuid =
         sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
             .bind(f.platform_id)
@@ -643,9 +699,11 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
         node_id: "node-1".into(),
         control_available: true,
         local_node_state: "active".into(),
+        cluster_id: Some(format!("cluster-{}", f.platform_id)),
         ..Default::default()
     });
     observed.containers[0].is_swarm_task = true;
+    observed.swarm.as_mut().unwrap().tasks[0].node_id = "node-1".into();
     observed.swarm.as_mut().unwrap().tasks[0].container_id = Some("container-1".into());
     observed.swarm.as_mut().unwrap().tasks[0].slot = Some(1);
     let inventory = PostgresInventoryProjectionStore::new(f.pool.clone());
@@ -676,19 +734,12 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
     );
     let body = json_body(send(&f, &task_path, Some(f.administrator.clone())).await).await;
     assert_eq!(body["containerProjectionId"], container.to_string());
+    // A changed or absent manager identity must be rejected before overwriting
+    // the accepted projection or attributing samples to another daemon.
     observed.info.swarm.as_mut().unwrap().node_id = "different-manager".into();
-    inventory.persist(&observed).await.unwrap();
-    let body = json_body(send(&f, &service_path, Some(f.administrator.clone())).await).await;
-    assert_eq!(body["complete"], false);
-    assert_eq!(body["observedContainerProjectionIds"], json!([]));
-    assert_eq!(
-        send(&f, &task_path, Some(f.administrator.clone()))
-            .await
-            .status(),
-        StatusCode::CONFLICT
-    );
+    assert!(inventory.persist(&observed).await.is_err());
     observed.info.swarm = None;
-    inventory.persist(&observed).await.unwrap();
+    assert!(inventory.persist(&observed).await.is_err());
     let node: Option<String> = sqlx::query_scalar(
         "SELECT platformdescriptor::jsonb->>'nodeID' FROM platforms WHERE id=$1",
     )
@@ -696,15 +747,16 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
     .fetch_one(&f.pool)
     .await
     .unwrap();
-    assert_eq!(
-        node, None,
-        "a missing daemon identity must clear the previous manager identity"
-    );
+    assert_eq!(node.as_deref(), Some("node-1"));
+    let body = json_body(send(&f, &service_path, Some(f.administrator.clone())).await).await;
+    assert_eq!(body["complete"], true);
+    assert_eq!(body["observedContainerProjectionIds"], json!([container]));
     // Coexisting legacy and explicit node projections must not count one Task twice.
     observed.info.swarm = Some(RuntimeSwarmInfo {
         node_id: "node-1".into(),
         control_available: true,
         local_node_state: "active".into(),
+        cluster_id: Some(format!("cluster-{}", f.platform_id)),
         ..Default::default()
     });
     sqlx::query("UPDATE containers SET dockernodeid='node-1' WHERE id=$1")

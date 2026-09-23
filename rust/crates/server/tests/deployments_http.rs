@@ -1,36 +1,45 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, StatusCode};
-use chrono::Duration;
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
-use citadel_adapters::deployment_store::PostgresDeploymentStore;
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
+use chrono::Duration;
+use citadel_adapters::{
+    persistence::postgres::{
+        deployments::PostgresDeploymentRepository,
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
-    DeploymentError, DeploymentImageInfo, DeploymentRuntimePort, DeploymentService,
+    DeploymentError, DeploymentImageInfo, DeploymentRuntime, DeploymentService,
     PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
     RuntimeDeploymentResult,
 };
-use citadel_domain::{ActorId, AuthenticatedPrincipalType};
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, IdentityService, NoopServiceAccountLastUsedTracker,
-    SYSTEM_ACTOR_ID, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
-use citadel_server::deployments_http::{self, DeploymentsHttpState};
+use citadel_primitives::ActorId;
+use citadel_server::api::routes::deployments::{self, DeploymentsHttpState};
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 #[path = "fixtures/alert_sink.rs"]
 mod alert_sink;
+#[path = "deployments_http/authorization.rs"]
+mod authorization;
 #[path = "deployments_http/updates.rs"]
 mod updates;
 
@@ -41,7 +50,7 @@ struct RecordingRuntime {
     digests: Arc<updates::Digests>,
 }
 
-impl DeploymentRuntimePort for RecordingRuntime {
+impl DeploymentRuntime for RecordingRuntime {
     fn remote_image_digest<'a>(
         &'a self,
         _: Uuid,
@@ -145,7 +154,12 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let service = Arc::new(
         DeploymentService::new(
-            Arc::new(PostgresDeploymentStore::new(pool.clone())),
+            Arc::new(
+                citadel_server::tasks::deployments::TrackedDeploymentTasks::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
+            Arc::new(PostgresDeploymentRepository::new(pool.clone())),
             Arc::new(RecordingRuntime {
                 deleted: Arc::clone(&deleted),
                 fail: Arc::clone(&fail_runtime),
@@ -157,8 +171,8 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         )
         .with_alerts(alerts.clone()),
     );
-    let app = deployments_http::router(DeploymentsHttpState {
-        identity,
+    let app = deployments::router(DeploymentsHttpState {
+        identity: identity.clone(),
         deployments: service.clone(),
     });
 
@@ -439,6 +453,9 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         &format!("/api/v1/deployments/{deployment_id}"),
         Some(admin.clone()),
         Some(json!({
+            "id": deployment_id,
+            "name": "ignored-config-patch-name",
+            "description": "ignored-config-patch-description",
             "platformId": platform_id,
             "spec": {
                 "updateBehavior":"Disabled",
@@ -462,6 +479,10 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let full_patch = response_json(full_patch).await;
     assert_eq!(full_patch["spec"]["lifeCycleSpec"]["restartPolicy"], "No");
     assert_eq!(full_patch["spec"]["labels"]["key1"], "val1");
+    assert_eq!(full_patch["name"], created["name"]);
+    assert_eq!(full_patch["description"], created["description"]);
+    assert_eq!(full_patch["spec"]["resourceSpec"]["nanoCpus"], 0.25);
+    assert_eq!(full_patch["spec"]["resourceSpec"]["memoryLimit"], 256.0);
 
     let partial_patch = request(
         &app,
@@ -476,25 +497,51 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     assert_eq!(partial_patch["spec"]["ports"][0], "2220-27017/tcp");
     assert_eq!(partial_patch["spec"]["updateBehavior"], "Disabled");
 
+    for (input, field, explanation) in [
+        (json!({"platformId":42}), "$.platformId", "invalid type"),
+        (
+            json!({"unknownField":true}),
+            "$.unknownField",
+            "unknown field `unknownField`",
+        ),
+    ] {
+        let response = request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/deployments/{deployment_id}"),
+            Some(admin.clone()),
+            Some(input),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(
+            body["errors"][field][0]
+                .as_str()
+                .is_some_and(|message| message.contains(explanation)),
+            "{body}"
+        );
+        assert!(body["traceId"].is_string());
+    }
+
     for invalid_patch in [
         json!({"platformId":Uuid::now_v7()}),
-        json!({"name":"forged-audit-name"}),
+        json!({"unknownField":"not-supported"}),
         json!([]),
         json!({"spec":{"image":{"$type":"Internal","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}}}),
         json!({"spec":{"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx@sha256:abc"},"updateBehavior":"Notify"}}),
     ] {
-        assert_eq!(
-            request(
-                &app,
-                Method::PATCH,
-                &format!("/api/v1/deployments/{deployment_id}"),
-                Some(admin.clone()),
-                Some(invalid_patch),
-            )
-            .await
-            .status(),
-            StatusCode::BAD_REQUEST
-        );
+        let response = request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/deployments/{deployment_id}"),
+            Some(admin.clone()),
+            Some(invalid_patch),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(!body["errors"].as_object().unwrap().is_empty(), "{body}");
     }
     assert_eq!(
         sqlx::query_scalar::<_, Uuid>("SELECT platformid FROM deployments WHERE id=$1")
@@ -729,6 +776,16 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .status(),
         StatusCode::FORBIDDEN
     );
+    authorization::verify(
+        &app,
+        &pool,
+        &identity,
+        &admin,
+        &reader,
+        deployment_id,
+        &applied,
+    )
+    .await;
     sqlx::query("UPDATE resourceaccesses SET permissionlevel=2 WHERE actorid=$1 AND resourceid=$2")
         .bind(reader_actor_id)
         .bind(deployment_id)
@@ -813,7 +870,8 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     assert_eq!(deleted_response.status(), StatusCode::NO_CONTENT);
     assert_eq!(
         &*deleted.lock().unwrap(),
-        &["docker-container", "older-container"]
+        // The authorization regression also successfully applied this Deployment.
+        &["docker-applied", "docker-container", "older-container"]
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM deployments WHERE id=$1")
@@ -923,6 +981,11 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .unwrap();
     sqlx::query("DELETE FROM actors WHERE id=$1")
         .bind(team_creator_actor_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(reader_actor_id)
         .execute(&pool)
         .await
         .unwrap();

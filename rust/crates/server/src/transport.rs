@@ -1,33 +1,42 @@
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use axum::Router;
-use axum::body::Body;
-use axum::extract::ConnectInfo;
-use axum::http::header::{
-    ACCEPT, AUTHORIZATION, CONTENT_TYPE, HOST, HeaderName, HeaderValue, STRICT_TRANSPORT_SECURITY,
+use crate::{
+    Readiness,
+    config::{TransportConfig, TransportMode},
 };
-use axum::http::uri::Authority;
-use axum::http::{HeaderMap, Method, Request, StatusCode};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
-use axum::routing::any;
-use axum_server::Handle;
-use axum_server::tls_rustls::RustlsConfig;
-use citadel_contracts::http::ROUTES;
+use axum::{
+    Router,
+    body::Body,
+    extract::ConnectInfo,
+    http::{
+        HeaderMap, Method, Request, StatusCode,
+        header::{
+            ACCEPT, AUTHORIZATION, CONTENT_TYPE, HOST, HeaderName, HeaderValue,
+            STRICT_TRANSPORT_SECURITY,
+        },
+        uri::Authority,
+    },
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::any,
+};
+use axum_server::{Handle, tls_rustls::RustlsConfig};
 use serde::Serialize;
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio_util::sync::CancellationToken;
-use tower_http::cors::{AllowOrigin, CorsLayer};
-use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::services::{ServeDir, ServeFile};
-use tower_http::set_header::SetResponseHeaderLayer;
-
-use crate::Readiness;
-use crate::config::{TransportConfig, TransportMode};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
+};
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 
@@ -253,7 +262,7 @@ async fn security_middleware(
         && setup_gated(request.uri().path())
     {
         if state.readiness.is_database_ready() {
-            return crate::identity_http::identity_error_response(
+            return crate::api::error::error_response(
                 citadel_identity::IdentityError::SetupRequired,
                 request.headers(),
             );
@@ -342,9 +351,7 @@ fn is_trusted_peer(transport: &TransportConfig, peer: IpAddr) -> bool {
 }
 
 fn setup_gated(path: &str) -> bool {
-    let explicitly_exempt = ROUTES
-        .iter()
-        .any(|route| route.path == path && route.setup_exempt);
+    let explicitly_exempt = crate::openapi::setup_exempt(path);
     !explicitly_exempt
         && !path.starts_with("/api/v1/setup")
         && (path.starts_with("/api/v1")

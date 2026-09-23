@@ -1,5 +1,5 @@
 use super::*;
-use citadel_adapters::edge::EdgeTarget;
+use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     containers::v1::{ContainerLogRequest, ContainerLogResponse},
     edge::v1::{EdgeCommandKind, core_envelope},
@@ -23,7 +23,7 @@ async fn managed_service_logs_require_both_service_logs_and_parent_platform_acce
     super::lookup::grant(
         &f,
         principal.actor_id.value(),
-        citadel_domain::ResourceType::SwarmService,
+        citadel_primitives::ResourceType::SwarmService,
         id,
         0,
     )
@@ -35,7 +35,7 @@ async fn managed_service_logs_require_both_service_logs_and_parent_platform_acce
     sqlx::query(
         "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
     )
-    .bind(citadel_domain::SpecificPermission::Logs as i32)
+    .bind(citadel_primitives::SpecificPermission::Logs as i32)
     .bind(principal.actor_id.value())
     .bind(id)
     .execute(&f.pool)
@@ -48,7 +48,7 @@ async fn managed_service_logs_require_both_service_logs_and_parent_platform_acce
     super::lookup::grant(
         &f,
         principal.actor_id.value(),
-        citadel_domain::ResourceType::Platform,
+        citadel_primitives::ResourceType::Platform,
         f.platform_id,
         0,
     )
@@ -116,7 +116,7 @@ async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
     sqlx::query(
         "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
     )
-    .bind(citadel_domain::SpecificPermission::Logs as i32)
+    .bind(citadel_primitives::SpecificPermission::Logs as i32)
     .bind(f.actor_id)
     .bind(f.platform_id)
     .execute(&f.pool)

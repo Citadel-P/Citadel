@@ -3,6 +3,8 @@
 **/.dotnet
 **/.dockerignore
 **/.env
+**/.env.*
+!**/.env.example
 **/.git
 **/.gitignore
 **/.next

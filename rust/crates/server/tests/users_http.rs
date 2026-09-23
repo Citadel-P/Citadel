@@ -1,26 +1,29 @@
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::header::CACHE_CONTROL;
-use axum::http::{Method, Request, Response, StatusCode};
-use chrono::{Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, Response, StatusCode, header::CACHE_CONTROL},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::user_store::PostgresUserReadStore;
+use chrono::{Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::identity::{
+        authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        users::repository::PostgresUserRepository,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
+};
 use citadel_database::MigrationRunner;
-use citadel_domain::{ActorId, AuthenticatedPrincipalType, PermissionLevel, ResourceType};
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    IdentityService, NoopServiceAccountLastUsedTracker, PasswordHasher, SystemClock,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
+    NoopServiceAccountLastUsedTracker, PasswordHasher, SYSTEM_ACTOR_ID, SystemClock,
     UserMutationService, UserReadService,
 };
-use citadel_server::users_http::{self, UsersHttpState};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_server::api::routes::{users as users_http, users::UsersHttpState};
 use serde_json::Value;
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -1093,7 +1096,7 @@ async fn fixture_with_custom_access(custom_access_control_enabled: bool) -> Fixt
         Duration::minutes(15),
         Duration::days(30),
     ));
-    let store = Arc::new(PostgresUserReadStore::new(pool.clone()));
+    let store = Arc::new(PostgresUserRepository::new(pool.clone()));
     let users = Arc::new(UserReadService::new(store.clone()));
     let mutations = Arc::new(UserMutationService::new(
         store,

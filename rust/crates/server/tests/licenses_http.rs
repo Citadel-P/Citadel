@@ -1,35 +1,41 @@
-use std::collections::BTreeSet;
-use std::sync::{Arc, OnceLock};
-
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, Response, StatusCode};
-use chrono::{DateTime, Duration, Utc};
-use citadel_adapters::crypto::{
-    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, Response, StatusCode},
 };
-use citadel_adapters::identity_store::{PostgresIdentityStore, StaticEntitlementService};
-use citadel_adapters::license::PostgresLicenseStore;
-use citadel_application::{
-    LicenseService, LicenseTransitionMonitor, LicenseValidationPersistence, LicenseVerifier,
+use chrono::{DateTime, Duration, Utc};
+use citadel_adapters::{
+    persistence::postgres::{
+        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        licensing::store::PostgresLicenseStore,
+    },
+    security::identity::crypto::{
+        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+    },
 };
 use citadel_database::MigrationRunner;
-use citadel_domain::{
-    ActorId, AuthenticatedPrincipalType, CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity,
-    LicenseCapability, LicenseCustomer, LicensePayload, LicenseStatus, LicenseVerificationResult,
-    VerifiedLicense,
-};
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
-    AccessTokenClaims, Clock, IdentityService, NoopServiceAccountLastUsedTracker,
-    SessionTokenCodec, SystemClock,
+    ADMIN_ROLE_ID, AccessTokenClaims, ActorPrincipal, AuthenticatedPrincipalType, Clock,
+    IdentityService, NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SessionTokenCodec,
+    SystemClock,
 };
-use citadel_server::license_http::{self, LicenseHttpState};
-use citadel_server::license_realtime::{LicenseRealtimeHub, LicenseRealtimeService};
+use citadel_licensing::{
+    CURRENT_LICENSE_SCHEMA, CitadelInstanceIdentity, LicenseCapability, LicenseCustomer,
+    LicensePayload, LicenseService, LicenseStatus, LicenseTransitionMonitor,
+    LicenseValidationPersistence, LicenseVerificationResult, LicenseVerifier, VerifiedLicense,
+};
+use citadel_primitives::ActorId;
+use citadel_server::{
+    api::routes::{licensing as license_http, licensing::LicenseHttpState},
+    license_realtime::{LicenseRealtimeHub, LicenseRealtimeService},
+};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, OnceLock},
+};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
@@ -583,7 +589,7 @@ fn license_router(pool: &PgPool) -> Router {
     let licenses = Arc::new(LicenseService::new(
         Arc::new(PostgresLicenseStore::new(pool.clone())),
         Arc::new(FixtureVerifier),
-        Arc::new(SystemClock),
+        Arc::new(Utc::now),
         "1.0.0".to_owned(),
     ));
     license_http::router(LicenseHttpState { identity, licenses })
@@ -687,4 +693,10 @@ async fn send_to(
 
 async fn json(response: Response<Body>) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
+}
+
+impl citadel_licensing::LicenseClock for FixedClock {
+    fn now(&self) -> DateTime<Utc> {
+        self.0
+    }
 }

@@ -1,6 +1,6 @@
 use citadel_builds::{BuildConsumerClaim, BuildConsumerRuntime, BuildConsumerType, BuildError};
 use citadel_deployments::DeploymentService;
-use citadel_domain::ActorId;
+use citadel_primitives::ActorId;
 use citadel_stacks::StackService;
 use futures_util::future::BoxFuture;
 use std::sync::Arc;

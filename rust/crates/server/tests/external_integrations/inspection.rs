@@ -1,31 +1,35 @@
-use std::{sync::Arc, time::Duration};
-
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
 use citadel_adapters::{
-    container_mutations::ContainerRuntimeRouter,
-    docker::DockerClient,
-    edge::EdgeRegistry,
-    inventory_projection_store::PostgresInventoryProjectionStore,
-    platform_read_store::PostgresPlatformReadStore,
-    platform_registration::{PlatformRegistrationRuntimeRouter, PostgresPlatformRegistrationStore},
-    resource_metadata_store::PostgresResourceMetadataStore,
-    volume_content::VolumeContentAdapter,
+    connectors::{
+        docker::DockerClient,
+        edge::EdgeRegistry,
+        routing::{
+            containers::ContainerRuntimeRouter,
+            platforms::registration::PlatformRegistrationRuntimeRouter,
+            volumes::content::VolumeContentAdapter,
+        },
+    },
+    persistence::postgres::platforms::{
+        PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
+        registration::PostgresPlatformRegistrationRepository,
+    },
 };
 use citadel_platforms::{
     InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
     jobs::{InventoryCollectionTarget, collect_inventory},
 };
-use citadel_server::platforms_http::{self, PlatformsHttpState};
+use citadel_server::api::routes::{platforms as platforms_http, platforms::PlatformsHttpState};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-/// The .NET Vault acceptance checks both public inspection routes after actual
+/// Check both public Vault inspection routes after actual
 /// deployment. Use the production collector/store so Stack ownership and the
 /// browser's persisted container ID are not supplied by a hand-written fixture.
 pub async fn verify(
@@ -40,7 +44,7 @@ pub async fn verify(
         docker,
         &InventoryCollectionTarget {
             platform_id: platform,
-            platform_type: "Docker".into(),
+            platform_type: citadel_platforms::PlatformKind::Docker,
         },
         &CancellationToken::new(),
     )
@@ -61,27 +65,36 @@ pub async fn verify(
     let (id, docker_id) = &rows[0];
     let edge = EdgeRegistry::default();
     let app = platforms_http::router(PlatformsHttpState {
+        tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         volume_content: Arc::new(VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
             edge.clone(),
             "unused".into(),
-        )),
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+)),
         containers: Arc::new(
             ContainerRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone())
-                .into_service(),
+                .into_service(std::sync::Arc::new(citadel_server::tasks::platforms::TrackedContainerTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new())))),
         ),
         identity: provider.identity.clone(),
         platforms: Arc::new(PlatformReadService::new(Arc::new(
-            PostgresPlatformReadStore::new(pool.clone()),
+            PostgresPlatformReader::new(pool.clone()),
         ))),
         registrations: Arc::new(PlatformRegistrationService::new(
-            Arc::new(PostgresPlatformRegistrationStore::new(pool.clone())),
+            Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
             Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
         )),
         pool: pool.clone(),
-        resource_metadata: Arc::new(PostgresResourceMetadataStore::new(pool.clone())),
+        registries: Arc::new(
+            citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
+        ),
+        platform_metadata: Arc::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
+                pool.clone(),
+            ),
+        ),
         docker: docker.clone(),
         agent: None,
         edge,
@@ -90,7 +103,7 @@ pub async fn verify(
     })
     .layer(axum::middleware::from_fn_with_state(
         provider.identity.clone(),
-        citadel_server::identity_http::authentication_middleware,
+        citadel_server::api::routes::authentication::authentication_middleware,
     ));
     let data = get(
         &app,
