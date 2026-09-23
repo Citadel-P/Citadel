@@ -4,6 +4,7 @@
     <Copyright>Copyright © Citadel contributors 2024–present</Copyright>
     <Description>Citadel API for managing platforms, containers, registries, images, networks, and volumes.</Description>
     <TargetFramework>net11.0</TargetFramework>
+	<Features>runtime-async=on</Features>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	<PublishAot>true</PublishAot>

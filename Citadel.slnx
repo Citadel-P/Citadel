@@ -12,6 +12,7 @@
     <Project Path="src/Citadel.Domain/Citadel.Domain.csproj" />
     <Project Path="src/Citadel.Infrastructure.Migrations/Citadel.Infrastructure.Migrations.csproj" />
     <Project Path="src/Citadel.Infrastructure/Citadel.Infrastructure.csproj" />
+    <Project Path="src/Citadel.VolumeHelper/Citadel.VolumeHelper.csproj" />
     <Project Path="src/Citadel.WebApi/Citadel.WebApi.csproj" />
   </Folder>
   <Folder Name="/src/submodule/">
