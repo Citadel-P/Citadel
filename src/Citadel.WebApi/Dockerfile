@@ -1,5 +1,5 @@
 # .NET Debug Stage (Kept for Visual Studio compatibility)
-FROM mcr.microsoft.com/dotnet/sdk:11.0.100-preview.7-alpine3.24-aot AS vs.build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-preview-alpine3.24 AS vs.build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 COPY src/Citadel.Contracts/install-deps.sh .
 COPY install-server-deps.sh .
@@ -20,7 +20,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build:image
 
 # Build and publish the application
-FROM mcr.microsoft.com/dotnet/sdk:11.0.100-preview.7-alpine3.24-aot AS restore
+FROM mcr.microsoft.com/dotnet/sdk:11.0-preview-alpine3.24 AS restore
 ENV NBGV_GitEngine=Disabled
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
