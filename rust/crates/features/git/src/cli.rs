@@ -108,6 +108,44 @@ pub struct GitCli {
 }
 
 impl GitCli {
+    pub async fn initialize_submodules(
+        &self,
+        workspace: &Path,
+        origin: &str,
+        environment: &[(OsString, OsString)],
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitError> {
+        validate_remote(origin)?;
+        // A workspace cloned from the local cache needs the upstream origin
+        // to resolve relative submodule URLs.
+        self.success(
+            self.request(["remote", "set-url", "origin", origin])
+                .current_dir(workspace),
+            cancellation,
+        )
+        .await?;
+        self.success(
+            self.remote_request(
+                [
+                    "-c",
+                    "protocol.file.allow=never",
+                    "-c",
+                    "protocol.ext.allow=never",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--recursive",
+                    "--checkout",
+                ],
+                environment,
+            )
+            .current_dir(workspace),
+            cancellation,
+        )
+        .await?;
+        Ok(())
+    }
+
     #[must_use]
     pub fn new(process: Arc<dyn GitProcessPort>, timeout: Duration) -> Self {
         Self::with_process(process, "git", timeout)

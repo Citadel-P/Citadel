@@ -26,10 +26,10 @@ impl GitRepositoryExecutionService {
         let mut remote = PreparedRemote::new(url);
         match account.configuration {
             GitAuthConfiguration::Basic { username, password } => {
-                remote.add_basic_header(&username, &password);
+                remote.add_basic_header(&username, &password)?;
             }
             GitAuthConfiguration::Token { token } => {
-                remote.add_basic_header("git", &token);
+                remote.add_basic_header("git", &token)?;
             }
             GitAuthConfiguration::SshKey {
                 private_key,
@@ -66,19 +66,32 @@ impl PreparedRemote {
         }
     }
 
-    fn add_basic_header(&mut self, username: &str, password: &str) {
+    fn add_basic_header(
+        &mut self,
+        username: &str,
+        password: &str,
+    ) -> Result<(), GitRepositoryExecutionError> {
+        let url =
+            url::Url::parse(&self.url).map_err(|_| GitRepositoryExecutionError::Credential)?;
+        if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+            return Err(GitRepositoryExecutionError::Credential);
+        }
+        // Recursive submodules may point to other hosts. Only send this account's
+        // credentials to the source origin, including its scheme and port.
+        let origin = url.origin().ascii_serialization();
         let encoded = STANDARD.encode(format!("{username}:{password}"));
         self.environment.extend([
             (OsString::from("GIT_CONFIG_COUNT"), OsString::from("1")),
             (
                 OsString::from("GIT_CONFIG_KEY_0"),
-                OsString::from("http.extraHeader"),
+                OsString::from(format!("http.{origin}/.extraHeader")),
             ),
             (
                 OsString::from("GIT_CONFIG_VALUE_0"),
                 OsString::from(format!("Authorization: Basic {encoded}")),
             ),
         ]);
+        Ok(())
     }
 
     async fn add_ssh_key(
@@ -165,4 +178,39 @@ pub(super) fn normalize_remote_url(
         }
     };
     Ok(format!("{scheme}://{domain}/{path}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_credentials_match_sibling_repositories_but_not_other_origins() {
+        let mut remote = PreparedRemote::new("https://github.com/team/source".into());
+        remote.add_basic_header("git", "test-token").unwrap();
+        for (url, expected) in [
+            ("https://github.com/team/contracts", true),
+            ("https://github.com/other/contracts", true),
+            ("https://github.com.evil.test/team/contracts", false),
+            ("http://github.com/team/contracts", false),
+            ("https://github.com:8443/team/contracts", false),
+        ] {
+            let output = std::process::Command::new("git")
+                .args(["config", "--get-urlmatch", "http.extraHeader", url])
+                .envs(remote.environment.iter().cloned())
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()
+                .unwrap();
+            assert_eq!(output.status.success(), expected, "{url}");
+            if expected {
+                assert_eq!(
+                    String::from_utf8(output.stdout).unwrap().trim(),
+                    format!("Authorization: Basic {}", STANDARD.encode("git:test-token"))
+                );
+            } else {
+                assert!(output.stdout.is_empty());
+            }
+        }
+    }
 }

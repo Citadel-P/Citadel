@@ -42,7 +42,7 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 mod output;
 
 pub struct LocalDockerBuildExecutor {
-    git_cache_root: PathBuf,
+    git: Arc<citadel_git::GitRepositoryExecutionService>,
     docker: OsString,
     secrets: Arc<dyn BuildSecretResolver>,
     registries: Arc<dyn BuildRegistryCredentialResolver>,
@@ -446,7 +446,7 @@ impl BuildExecutor for AgentDockerBuildExecutor {
 
 impl LocalDockerBuildExecutor {
     pub fn new(
-        git_cache_root: PathBuf,
+        git: Arc<citadel_git::GitRepositoryExecutionService>,
         docker: impl Into<OsString>,
         secrets: Arc<dyn BuildSecretResolver>,
         registries: Arc<dyn BuildRegistryCredentialResolver>,
@@ -454,7 +454,7 @@ impl LocalDockerBuildExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
-            git_cache_root,
+            git,
             docker: docker.into(),
             secrets,
             registries,
@@ -481,9 +481,7 @@ impl LocalDockerBuildExecutor {
             .require_local(platform_id)
             .await
             .map_err(BuildFailure::Validation)?;
-        let repository = self
-            .git_cache_root
-            .join(claim.run.git_repository_id.to_string());
+        let repository = self.git.cache_path(claim.run.git_repository_id);
         let repository = tokio::fs::canonicalize(&repository)
             .await
             .map_err(|error| BuildFailure::Io(format!("Git cache is unavailable: {error}")))?;
@@ -518,7 +516,13 @@ impl LocalDockerBuildExecutor {
             ));
         }
         let workspace = self
-            .materialize_workspace(&repository, claim.run.id, &commit, cancellation)
+            .materialize_workspace(
+                &repository,
+                claim.run.git_repository_id,
+                claim.run.id,
+                &commit,
+                cancellation,
+            )
             .await?;
         let docker_config = std::env::temp_dir()
             .join("citadel-build-docker-config")
@@ -664,6 +668,7 @@ impl LocalDockerBuildExecutor {
     async fn materialize_workspace(
         &self,
         repository: &Path,
+        repository_id: uuid::Uuid,
         run_id: uuid::Uuid,
         commit: &str,
         cancellation: &CancellationToken,
@@ -726,6 +731,21 @@ impl LocalDockerBuildExecutor {
                 &checked_out.stdout,
                 &checked_out.stderr,
             )));
+        }
+        if let Err(error) = self
+            .git
+            .initialize_submodules(repository_id, &workspace, cancellation)
+            .await
+        {
+            remove_directory_if_present(&workspace).await;
+            return Err(match error {
+                citadel_git::GitRepositoryExecutionError::Git(citadel_git::GitError::Process(
+                    error,
+                )) => BuildFailure::Process(error),
+                error => BuildFailure::Command(format!(
+                    "Build Git submodule initialization failed: {error}"
+                )),
+            });
         }
         Ok(workspace)
     }

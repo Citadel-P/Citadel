@@ -1,5 +1,23 @@
 use super::*;
 impl GitRepositoryExecutionService {
+    /// Initializes pinned submodules with the source repository's Git account.
+    pub async fn initialize_submodules(
+        &self,
+        id: Uuid,
+        workspace: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitRepositoryExecutionError> {
+        if !workspace.join(".gitmodules").is_file() {
+            return Ok(());
+        }
+        let source = self.store.get_source(id).await?;
+        let remote = self.prepare_remote(&source).await?;
+        self.cli
+            .initialize_submodules(workspace, &remote.url, &remote.environment, cancellation)
+            .await?;
+        Ok(())
+    }
+
     pub async fn resolve_commit(
         &self,
         id: Uuid,

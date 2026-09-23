@@ -4,7 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+#[path = "proto/checksum.rs"]
+mod checksum;
 
 #[derive(Deserialize)]
 struct ProtoSource {
@@ -106,11 +107,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn verify_checksum(path: &Path, expected: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let bytes = fs::read(path)?;
-    let actual = Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let contents = fs::read_to_string(path)?;
+    let actual = checksum::normalized_sha256(&contents);
     if actual != expected {
         return Err(format!(
             "protobuf checksum mismatch for {}: expected {expected}, got {actual}",

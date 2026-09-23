@@ -18,26 +18,34 @@ export function formatBuildRunLogEntry(entry: BuildRunLogEntry) {
   return `[${entry.stream}] ${entry.message}`;
 }
 
-export function formatBuildRunLogViewerEntry(entry: BuildRunLogEntry): LogEntry {
-  return {
-    timestamp: formatBuildRunLogTimestamp(entry.createdAt),
-    message: formatBuildRunLogEntry(entry),
-    severity: getBuildRunLogSeverity(entry),
-  };
+export function formatBuildRunLogViewerEntries(entry: BuildRunLogEntry): LogEntry[] {
+  return entry.message
+    .split(/\r\n|\r|\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((message) => ({
+      timestamp: formatBuildRunLogTimestamp(entry.createdAt),
+      message: formatBuildRunLogEntry({ ...entry, message }),
+      severity: getBuildRunLogSeverity(message),
+    }));
 }
 
 function formatBuildRunLogTimestamp(value: unknown): string | undefined {
   return parseCitadelDate(value)?.toISOString();
 }
 
-function getBuildRunLogSeverity(entry: BuildRunLogEntry): LogSeverity | undefined {
-  const stream = entry.stream.toLowerCase();
-  const message = entry.message.toLowerCase();
+function getBuildRunLogSeverity(message: string): LogSeverity | undefined {
+  const plain = message.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').trim();
+  const text = plain.replace(/^#\d+\s+(?:\d+(?:\.\d+)?\s+)?/, '');
 
-  if (stream === 'stderr') return 'error';
-  if (message.includes('completed successfully') || message.includes('succeeded')) return 'success';
-  if (message.includes('failed') || message.includes('timed out') || message.includes('interrupted')) return 'error';
-  if (message.includes('cancelled') || message.includes('canceled')) return 'warning';
-
+  if (
+    /^(?:error(?:\[.*?\])?|fatal|panic)(?:[\s:!]|$)/i.test(text) ||
+    /^(?:npm|yarn|pnpm)\s+(?:ERR!|error)(?:\s|:|$)/i.test(text) ||
+    /^(?:failed to |failed:|build failed\b|process .+ did not complete successfully)/i.test(text) ||
+    /\blevel=(?:error|fatal|panic)\b/i.test(text)
+  )
+    return 'error';
+  if (/^(?:warn(?:ing)?(?:[\s:!]|$)|npm warn\b)/i.test(text) || /^(?:cancell?ed|interrupted|timed out)\b/i.test(text))
+    return 'warning';
+  if (/^(?:build )?(?:completed successfully|succeeded)\b/i.test(text)) return 'success';
   return undefined;
 }
