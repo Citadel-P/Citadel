@@ -20,5 +20,12 @@ serde_json.workspace = true
 sha2.workspace = true
 tonic-prost-build.workspace = true
 
+[dev-dependencies]
+sha2.workspace = true
+
+[[test]]
+name = "proto_checksums"
+path = "proto/checksum.rs"
+
 [lints]
 workspace = true

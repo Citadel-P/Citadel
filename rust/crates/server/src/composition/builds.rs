@@ -43,7 +43,7 @@ pub(super) fn build(
     )?);
     let build_registries = Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));
     let local_builds = Arc::new(LocalDockerBuildExecutor::new(
-        data_root.join("git-repositories"),
+        git_execution.clone(),
         config.execution.tools.docker.clone(),
         build_secrets.clone(),
         build_registries.clone(),

@@ -3,6 +3,8 @@ use citadel_adapters::external::builds::executor::LocalDockerBuildExecutor;
 use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
 use citadel_adapters::persistence::postgres::builds::credentials::PostgresBuildRegistryCredentialResolver;
 use citadel_adapters::persistence::postgres::builds::credentials::PostgresBuildSecretResolver;
+use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::persistence::postgres::stacks::build_images::PostgresStackBuildImageResolver;
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_bindings::SecretProtector;
@@ -11,6 +13,7 @@ use citadel_builds::{
     BuildRegistryCredentialResolver, BuildRepository, BuildSecretResolver,
 };
 use citadel_database::MigrationRunner;
+use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_primitives::ActorId;
 use citadel_stacks::{StackBuildImageBinding, StackBuildImageResolverPort};
 use sqlx::postgres::PgPoolOptions;
@@ -330,8 +333,21 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .await
         .unwrap();
     let target_guard_protector = Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap());
-    let executor = LocalDockerBuildExecutor::new(
+    let git_execution = Arc::new(GitRepositoryExecutionService::new(
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
+        Arc::new(GitAccountService::new(
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
+            target_guard_protector.clone(),
+        )),
+        Arc::new(GitCli::new(
+            Arc::new(citadel_processes::SystemProcess),
+            std::time::Duration::from_secs(10),
+        )),
         std::env::temp_dir().join(Uuid::now_v7().to_string()),
+        std::time::Duration::from_secs(60),
+    ));
+    let executor = LocalDockerBuildExecutor::new(
+        git_execution,
         "docker-command-must-not-run",
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), target_guard_protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),

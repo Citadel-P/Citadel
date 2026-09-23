@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { formatBuildRunLogViewerEntry, mergeBuildRunLogEntries } from '../build-run-logs';
+import { formatBuildRunLogViewerEntries, mergeBuildRunLogEntries } from '../build-run-logs';
 import { isActiveBuildRun, isTerminalBuildRunStatus, pickMostAdvancedBuildRun } from '../build-run-state';
 import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
 
@@ -91,7 +91,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
     const liveLogs = liveLogState.runId === logRunId ? liveLogState.entries : [];
     return mergeBuildRunLogEntries(logs.data?.data.logs ?? [], liveLogs);
   }, [liveLogState, logRunId, logs.data?.data.logs]);
-  const logViewerEntries = useMemo(() => logEntries.map(formatBuildRunLogViewerEntry), [logEntries]);
+  const logViewerEntries = useMemo(() => logEntries.flatMap(formatBuildRunLogViewerEntries), [logEntries]);
 
   const upsertRun = useCallback((run: BuildRunView, action: string) => {
     setRuns((prev) => {
