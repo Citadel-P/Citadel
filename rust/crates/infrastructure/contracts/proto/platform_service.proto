@@ -1,0 +1,118 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "shared_models.proto";
+
+package citadel.platforms.v1;
+
+service PlatformService {
+    rpc GetPlatformInfo (google.protobuf.Empty) returns (citadel.shared_models.v1.PlatformInfoResponse);
+    rpc CheckHealth (google.protobuf.Empty) returns (CheckHealthResponse);
+    rpc Prune (PruneRequest) returns (PruneResponse);
+
+    rpc StreamPlatformStats (PlatformStatsRequest) returns (stream PlatformStatsResponse);
+    rpc StreamDaemonEvent (google.protobuf.Empty) returns (stream DaemonEventResponse);
+}
+
+enum PruneResource {
+    PRUNE_RESOURCE_UNSPECIFIED = 0;
+    PRUNE_RESOURCE_ALL = 1;
+    PRUNE_RESOURCE_VOLUME = 2;
+    PRUNE_RESOURCE_NETWORK = 3;
+    PRUNE_RESOURCE_IMAGE = 4;
+    PRUNE_RESOURCE_BUILD = 5;
+}
+
+message PruneRequest {
+    PruneResource resource = 1;
+}
+
+message PruneResponse {
+    PruneResource resource = 1;
+    int64 spaceReclaimed = 2;
+    repeated string volumesDeleted = 3;
+    repeated string networksDeleted = 4;
+    repeated string imagesDeleted = 5;
+    repeated string buildCacheDeleted = 6;
+}
+
+message PlatformStatsRequest {
+    int32 fetchIntervalMs = 1;
+}
+
+message CheckHealthResponse {
+    bool healthy = 1;
+}
+
+message PlatformStatsResponse {
+	int32 networkCount = 1; 
+    int32 volumeCount = 2;
+	sint64 containerCount = 3;
+    sint64 containersRunning = 4; 
+    sint64 containersPaused = 5;
+    sint64 containersStopped = 6;
+    sint64 imageCount = 7;
+    sint64 memTotal = 8;
+    sint64 cpuCount = 9;
+    string agentVersion = 10;
+	citadel.shared_models.v1.PlatformStatMessage stat = 11;
+    optional int64 imageUsedBytes = 12;
+    optional int64 volumeUsedBytes = 13;
+}
+
+message DaemonEventResponse {
+    oneof kind {
+        DaemonContainerEventResponse daemonContainerEventResponse = 1;
+        DaemonImageEventResponse daemonImageEventResponse = 2;
+        DaemonVolumeEventResponse daemonVolumeEventResponse = 3;
+        DaemonNetworkEventResponse daemonNetworkEventResponse = 4;
+        DaemonResourceEventResponse daemonResourceEventResponse = 5;
+      }
+    DaemonEventScope scope = 6;
+}
+message DaemonContainerEventResponse {
+    string action = 1; 
+    string containerId = 2;
+    citadel.shared_models.v1.ContainerMessage container = 3;
+}
+message DaemonImageEventResponse {
+    string action = 1; 
+    string imageId = 2;
+    citadel.shared_models.v1.ImageReply image = 3;
+}
+message DaemonVolumeEventResponse {
+    string action = 1; 
+    string volumeId = 2;
+    citadel.shared_models.v1.VolumeResponse volume = 3;
+}
+message DaemonNetworkEventResponse {
+    string action = 1; 
+    string networkId = 2;
+    citadel.shared_models.v1.Network network = 3;
+}
+
+enum EventMessageType {
+     Builder = 0;
+     Config = 1;
+     Container = 2;
+     Daemon = 3;
+     Image = 4;
+     Network = 5;
+     Node = 6;
+     Plugin = 7;
+     Secret = 8;
+     Service = 9;
+     Volume = 10;
+}
+
+message DaemonResourceEventResponse {
+    EventMessageType type = 1;
+    string action = 2;
+    string resourceId = 3;
+}
+
+enum DaemonEventScope {
+     UnknownScope = 0;
+     LocalScope = 1;
+     SwarmScope = 2;
+}

@@ -56,9 +56,7 @@ impl EdgeRuntime {
                 Duration::from_secs(3600),
                 true,
             )
-            .map_err(|error| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, error.to_string(), false)
-            })?;
+            .map_err(super::EdgeError::runtime)?;
         let cancellation = cancellation.clone();
         Ok(Box::pin(async_stream::stream! {
             loop {
@@ -70,7 +68,7 @@ impl EdgeRuntime {
                         }
                     }
                     Ok(None) => break,
-                    Err(error) => { yield Err(RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, error.to_string(), false)); break; }
+                    Err(error) => { yield Err(error.runtime()); break; }
                 }
             }
         }))
@@ -132,19 +130,13 @@ impl PlatformRuntimePort for EdgeRuntime {
                     Duration::from_secs(3600),
                     true,
                 )
-                .map_err(|error| {
-                    RuntimeCapabilityError::new(
-                        RuntimeErrorKind::Unavailable,
-                        error.to_string(),
-                        false,
-                    )
-                })?;
+                .map_err(super::EdgeError::runtime)?;
             let cancellation = cancellation.clone();
             Ok(Box::pin(async_stream::stream! {
                 loop { match pending.next(&cancellation).await {
                     Ok(Some(payload)) => yield PlatformStatsResponse::decode(payload.as_slice()).map(agent::map_platform_stats).map_err(|_| RuntimeCapabilityError::new(RuntimeErrorKind::Remote,"Invalid Edge statistics response.",false)),
                     Ok(None) => break,
-                    Err(error) => { yield Err(RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable,error.to_string(),false)); break; }
+                    Err(error) => { yield Err(error.runtime()); break; }
                 } }
             }) as RuntimeStatsStream)
         })

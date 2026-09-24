@@ -1,9 +1,8 @@
 # Docker v1.49 compatibility ledger
 
-The source is the pinned Contracts schema and the manual-edit list at the start of
-`src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/HttpClient/DockerClientApi.cs`.
-`ExtentedDockerClientApi.cs` and the existing Rust adapter's null-collection fixtures
-provide the additional wire cases. None of their generated files is changed here.
+The authoritative source is `codegen/v1.49.yaml`, with reviewed wire corrections
+in `codegen/patches/wire.json`. The cases below preserve the historical client
+behavior and the Rust adapter's null-collection fixtures.
 
 | Historical issue / endpoint | Schema and generated Rust result | Applies? / chosen handling | Evidence / owner |
 |---|---|---|---|

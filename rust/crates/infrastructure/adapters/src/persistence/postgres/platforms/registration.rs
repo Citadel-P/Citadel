@@ -57,7 +57,8 @@ impl PlatformRegistrationRepository for PostgresPlatformRegistrationRepository {
             }
             validate_tags(&mut tx, &input.tag_ids).await?;
             let address = format!("edge://{id}");
-            let descriptor = serde_json::json!({"$type": if input.platform_type == citadel_platforms::PlatformType::DockerSwarm { "DockerSwarm" } else { "DockerStandalone" }, "daemonId": ""});
+            let descriptor =
+                serde_json::json!({"$type": input.platform_type.as_str(), "daemonId": ""});
             sqlx::query("INSERT INTO platforms(id,name,address,description,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount,prunehistoricalswarmtaskcontainers) VALUES($1,$2,$3,$4,'EdgeAgent',0,0,0,0,$5,'Offline',0,$6)")
                 .bind(id).bind(&input.name).bind(&address).bind(&input.description).bind(&descriptor).bind(input.prune_historical_swarm_task_containers).execute(&mut *tx).await.map_err(database_error)?;
             crate::persistence::postgres::tags::links::insert(

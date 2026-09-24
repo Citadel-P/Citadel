@@ -1029,3 +1029,6 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
 
 #[path = "docker_transport/runtime_sampling.rs"]
 mod runtime_sampling;
+
+#[path = "docker_transport/endpoints.rs"]
+mod endpoints;

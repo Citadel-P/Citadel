@@ -48,9 +48,9 @@ impl NodeAgentRuntimeRouter {
             "Agent" => self
                 .agent
                 .as_ref()
-                .filter(|a| a.address().trim_end_matches('/') == address.trim_end_matches('/'))
-                .map(|a| Target::Agent(Arc::new(a.clone())))
-                .ok_or_else(|| failure("The configured Agent is unavailable.")),
+                .ok_or_else(|| failure("The configured Agent is unavailable."))?
+                .at_address(&address)
+                .map(|agent| Target::Agent(Arc::new(agent))),
             "EdgeAgent" => self
                 .edge
                 .get(&EdgeTarget::platform(id))

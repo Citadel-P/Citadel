@@ -37,7 +37,7 @@ impl VolumeContentAdapter {
                     },
                     Runtime::Agent(runtime) => {
                         let value = runtime.inspect_container(&target.docker_id,&cancel).await?;
-                        (HelperRuntime::Agent(AgentExecutionClient::Direct(Arc::new(runtime.clone()))),value.id,value.name.unwrap_or_default(),value.config.map(|config|config.labels.into_iter().collect()).unwrap_or_default())
+                        (HelperRuntime::Agent(AgentExecutionClient::Direct(runtime)),value.id,value.name.unwrap_or_default(),value.config.map(|config|config.labels.into_iter().collect()).unwrap_or_default())
                     },
                     Runtime::Edge(runtime) => {
                         let peer = AgentExecutionClient::Edge(runtime.session);

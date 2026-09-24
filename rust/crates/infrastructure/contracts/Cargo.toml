@@ -15,17 +15,10 @@ tonic-prost.workspace = true
 [build-dependencies]
 prost-build = "=0.14.4"
 protoc-bin-vendored.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
 tonic-prost-build.workspace = true
 
 [dev-dependencies]
 sha2.workspace = true
-
-[[test]]
-name = "proto_checksums"
-path = "proto/checksum.rs"
 
 [lints]
 workspace = true

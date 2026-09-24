@@ -1,0 +1,275 @@
+name: Agent images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+    paths:
+      - 'rust/**'
+      - 'version.json'
+      - '.github/workflows/agent.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'version.json'
+      - '.github/workflows/agent.yml'
+
+concurrency:
+  group: agent-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      informational: ${{ steps.version.outputs.informational }}
+      publish: ${{ steps.version.outputs.publish }}
+      baseline: ${{ steps.version.outputs.baseline }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+      - name: Resolve repository version and validate release ancestry
+        id: version
+        env:
+          PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.CITADEL_RUST_AGENT_RELEASE_ENABLED == 'true' }}
+          BASELINE_IMAGE: ${{ vars.CITADEL_AGENT_ROLLBACK_IMAGE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASELINE_IMAGE" ]]; then
+            [[ "$BASELINE_IMAGE" =~ @sha256:[a-f0-9]{64}$ ]] || { echo "CITADEL_AGENT_ROLLBACK_IMAGE must be pinned by digest." >&2; exit 1; }
+          elif [[ "$PUBLISH" == true ]]; then
+            echo "Release requires CITADEL_AGENT_ROLLBACK_IMAGE." >&2
+            exit 1
+          fi
+          echo "baseline=$BASELINE_IMAGE" >> "$GITHUB_OUTPUT"
+          version=$(python3 -c 'import json; print(json.load(open("version.json"))["version"])')
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            [[ "$GITHUB_REF_NAME" == "v$version" ]]
+            git fetch origin main --no-tags
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+            informational="$version"
+          else
+            [[ "$PUBLISH" != true ]]
+            version="$version-dev.${GITHUB_SHA:0:12}"
+            informational="$version+${GITHUB_SHA}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "informational=$informational" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+
+  image:
+    name: Agent linux/${{ matrix.arch }}
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      SQLX_OFFLINE: "true"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Install Rust validation prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev ripgrep
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
+      - name: Validate Agent, contracts and volume helper
+        working-directory: rust
+        run: |
+          cargo fmt -p citadel-agent -p citadel-contracts -p citadel-volume-helper -- --check
+          cargo clippy --locked -p citadel-agent -p citadel-contracts -p citadel-volume-helper --all-targets -- -D warnings
+          cargo test --locked -p citadel-agent -p citadel-contracts -p citadel-volume-helper
+          cargo test --locked -p citadel-adapters --test agent_mutations --test edge_sessions
+          cargo test --locked -p citadel-adapters --lib connectors::agent::execution::tests
+      - name: Prepare isolated Rust build context
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash rust/scripts/check-source-ownership.sh
+          mkdir "$RUNNER_TEMP/agent-context"
+          tar --exclude=rust/target --exclude=rust/artifacts -c rust version.json \
+            | tar -x -C "$RUNNER_TEMP/agent-context"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build release Agent and helper
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/agent-context
+          file: ${{ runner.temp }}/agent-context/rust/Dockerfile.agent
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: citadel-agent:ci
+          labels: |
+            org.opencontainers.image.title=Citadel Agent
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            INFORMATIONAL_VERSION=${{ needs.version.outputs.informational }}
+          cache-from: type=gha,scope=agent-${{ matrix.arch }}
+          cache-to: type=gha,scope=agent-${{ matrix.arch }},mode=max
+      - name: Smoke-test packaged Agent and runtime tools
+        env:
+          EXPECTED_VERSION: ${{ needs.version.outputs.informational }}
+        run: bash rust/scripts/test-agent-image.sh citadel-agent:ci "$EXPECTED_VERSION"
+      - name: Test Direct, Edge, live Docker and intake against isolated services
+        run: bash rust/scripts/test-agent-compatibility.sh citadel-agent:ci
+      - name: Build Core acceptance image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: rust/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: citadel-core:acceptance
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            INFORMATIONAL_VERSION=${{ needs.version.outputs.informational }}
+          cache-from: type=gha,scope=core-acceptance-${{ matrix.arch }}
+          cache-to: type=gha,scope=core-acceptance-${{ matrix.arch }},mode=max
+      - name: Authenticate for the released Agent baseline
+        if: needs.version.outputs.baseline != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Test complete images, Swarm installation and released Agent compatibility
+        env:
+          BASELINE_IMAGE: ${{ needs.version.outputs.baseline }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASELINE_IMAGE" ]]; then
+            [[ "$BASELINE_IMAGE" =~ @sha256:[a-f0-9]{64}$ ]]
+            docker pull "$BASELINE_IMAGE"
+            bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci "$BASELINE_IMAGE"
+            printf 'Tested rollback Agent: `%s`\n' "$BASELINE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci
+            echo 'Mixed-version gate pending: CITADEL_AGENT_ROLLBACK_IMAGE is not configured.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Login to GHCR for tested architecture images
+        if: needs.version.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Push tested architecture image
+        if: needs.version.outputs.publish == 'true'
+        env:
+          ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel.agent"
+          tag="$repository:build-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
+          docker tag citadel-agent:ci "$tag"
+          docker push "$tag"
+          docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}' > "$RUNNER_TEMP/digest-$ARCH"
+      - uses: actions/upload-artifact@v4
+        if: needs.version.outputs.publish == 'true'
+        with:
+          name: agent-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digest-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    if: needs.version.outputs.publish == 'true'
+    needs: [version, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-digest-*
+          path: ${{ runner.temp }}/agent-digests
+          merge-multiple: true
+      - name: Validate Docker Hub configuration
+        env:
+          NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: test -n "$NAMESPACE" && test -n "$USERNAME" && test -n "$TOKEN"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: metadata
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/citadel.agent
+            docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/citadel-agent
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }}
+      - uses: sigstore/cosign-installer@v3
+      - name: Publish and sign multi-architecture release aliases
+        env:
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel.agent"
+          sources=()
+          for arch in amd64 arm64; do
+            digest=$(cat "$RUNNER_TEMP/agent-digests/digest-$arch")
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            sources+=("$repository@$digest")
+          done
+          expected_digest=''
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            docker buildx imagetools create --tag "$tag" "${sources[@]}"
+            digest=$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')
+            if [[ -z "$expected_digest" ]]; then expected_digest="$digest"; fi
+            [[ "$digest" == "$expected_digest" ]]
+            docker buildx imagetools inspect "$tag" --raw | \
+              jq -e '[.manifests[].platform | .os + "/" + .architecture] | sort == ["linux/amd64", "linux/arm64"]'
+            cosign sign --yes "$tag@$digest"
+            cosign verify \
+              --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/agent.yml@$GITHUB_REF" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "$tag@$digest" >/dev/null
+            printf '%s@%s\n' "$tag" "$digest" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TAGS"

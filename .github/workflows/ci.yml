@@ -25,15 +25,26 @@ jobs:
         working-directory: rust
     env:
       SQLX_OFFLINE: "true"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          token: ${{ secrets.ACCESS_TOKEN || github.token }}
+          submodules: false
 
       - name: Install Rust build prerequisites
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev ripgrep
+
+      - name: Verify Rust source ownership
+        run: bash scripts/check-source-ownership.sh
+
+      - name: Verify Docker build context isolation
+        run: |
+          set -euo pipefail
+          tar --exclude=rust/target --exclude=rust/artifacts -C .. -c rust version.json \
+            | docker build --file rust/Dockerfile --target rust-source -
 
       - name: Install pinned Rust toolchain
         run: |
@@ -55,10 +66,18 @@ jobs:
       - name: Verify committed OpenAPI artifacts
         run: cargo run --locked -p xtask -- openapi --check
 
+      - name: Check Rust workspace without external contracts
+        run: cargo check --locked --workspace
+
+      - name: Check Rust formatting and lints
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+
       - name: Run Rust workspace tests
         run: cargo test --locked --workspace
 
-      - name: Run Deployment authorization database regressions
+      - name: Run authorization and runtime database regressions
         run: |
           set -euo pipefail
           container=citadel-authorization-postgres
@@ -70,7 +89,7 @@ jobs:
             --env POSTGRES_DB=citadel_authorization \
             postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44 \
             -c shared_preload_libraries=pg_stat_statements
-          for attempt in {1..60}; do
+          for _ in {1..60}; do
             if docker exec "$container" pg_isready -h 127.0.0.1 -U citadel_test -d citadel_authorization; then
               break
             fi
@@ -81,11 +100,16 @@ jobs:
           port=$(docker port "$container" 5432/tcp | cut -d: -f2)
           export CITADEL_PHASE6_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_authorization"
           export CITADEL_PHASE3_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
+          export CITADEL_PHASE4_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
+          export CITADEL_PHASE7_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
           export CITADEL_REQUIRE_QUERY_COUNTS=1
           cargo test --locked -p citadel-server --test deployments_http \
             deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture
           cargo test --locked -p citadel-adapters --test identity_authorization_differential -- --ignored --test-threads=1
           cargo test --locked -p citadel-adapters --test deployment_apply_persistence -- --ignored --test-threads=1
+          cargo test --locked -p citadel-adapters --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
+          cargo test --locked -p citadel-server --test platforms_http node_coverage -- --ignored --test-threads=1
+          cargo test --locked -p citadel-adapters --test edge_transport -- --ignored --test-threads=1
 
   backend-tests:
     name: Backend unit and integration tests

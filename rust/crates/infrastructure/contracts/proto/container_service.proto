@@ -1,0 +1,190 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "shared_models.proto";
+
+package citadel.containers.v1;
+
+service ContainerService {
+  rpc List (ListContainersRequest) returns (ListContainersResponse);
+  rpc Start (ContainerIds) returns (google.protobuf.Empty);
+  rpc Stop (ContainerIds) returns (google.protobuf.Empty);
+  rpc Pause (ContainerIds) returns (google.protobuf.Empty);
+  rpc Unpause (ContainerIds) returns (google.protobuf.Empty);
+  rpc Restart (ContainerIds) returns (google.protobuf.Empty);
+  rpc Delete (DeleteContainerRequest) returns (google.protobuf.Empty);
+  rpc Inspect (InspectContainerRequest) returns (citadel.shared_models.v1.InspectContainerResponse);
+  rpc Create (CreateContainerRequest) returns (CreateContainerResponse);
+
+  rpc Exec (stream ExecClientMessage) returns (stream ExecServerMessage);
+  rpc ExecBinary (ExecBinaryRequest) returns (stream ExecServerMessage);
+  rpc StreamContainerLogs (ContainerLogRequest) returns (stream ContainerLogResponse);
+  rpc StreamContainersStats (StreamContainersStatsRequest) returns (stream ContainersStatsResponse);
+  rpc StreamContainerStats (StreamContainerStatsRequest) returns (stream citadel.shared_models.v1.ContainerMessage);
+}
+
+message ListContainersRequest {
+    google.protobuf.BoolValue all = 1;
+    google.protobuf.Int32Value limit= 2; 
+    google.protobuf.BoolValue size = 3;
+    map<string, OptionChain> filters = 4;
+}
+
+message ContainerLogRequest {
+    string containerId = 1;
+    optional bool follow = 2;
+    int32 tail = 3;
+}
+
+message StreamContainersStatsRequest {
+    int32 fetchIntervalMs = 1;
+}
+
+message StreamContainerStatsRequest {
+    string containerId = 1;
+    int32 fetchIntervalMs = 2;
+}
+
+message ContainersStatsResponse {
+    map<string, citadel.shared_models.v1.ContainerStatMessage> containers = 1;
+}
+
+message InspectContainerRequest {
+    string containerId = 1;
+}
+
+message ContainerLogResponse {
+    bytes log = 1;
+}
+
+message StreamLogsMessage {
+    string containerId = 1;
+    string requestId = 2;
+    RequestedLogAction requestedLogAction = 3;
+}
+
+message ContainerIds {
+    repeated string ids = 1;
+}
+
+message ContainersActionReply {
+}
+
+message OptionChain {
+    map<string, bool> options = 1;
+}
+
+enum RequestedLogAction {
+    START = 0;
+    STOP = 1;
+}
+
+message ListContainersResponse {
+    map<string, citadel.shared_models.v1.ContainerMessage> containers = 1;
+}
+
+message DeleteContainerRequest {
+    repeated string ids = 1;
+    google.protobuf.BoolValue v = 2;
+    google.protobuf.BoolValue force = 3;
+    google.protobuf.BoolValue link = 4;
+}
+
+message CreateContainerRequest {
+    string platformAddress = 1;
+    string imageId = 2;
+    string name = 3;
+    google.protobuf.StringValue workingDir = 4;
+    google.protobuf.StringValue user = 5;
+    google.protobuf.Int64Value MemoryLimit = 6;
+    google.protobuf.Int64Value CpuQuota = 7;
+    google.protobuf.Int64Value MemoryReservation = 8;
+    google.protobuf.BoolValue AutoRemove = 9;
+    RestartPolicy RestartPolicy = 10;
+    map<string, string> Labels = 11;
+    repeated string EnvVars = 12;
+    repeated string Ports = 13;
+    repeated string Volumes = 14;
+    map<string, citadel.shared_models.v1.EndpointSettings> Networks = 15;
+    repeated string EntryPoint = 16;
+    repeated string Command = 17;
+    google.protobuf.Int64Value MemorySwap = 18;
+    google.protobuf.Int64Value PidsLimit = 19;
+    google.protobuf.BoolValue Privileged = 20;
+    google.protobuf.BoolValue ReadonlyRootfs = 21;
+    repeated citadel.shared_models.v1.Mount Mounts = 22;
+    repeated string CapAdd = 23;
+    repeated string CapDrop = 24;
+    repeated string SecurityOpt = 25;
+    google.protobuf.StringValue NetworkMode = 26;
+}
+
+message ExecClientMessage {
+  oneof msg {
+    ExecOpen open = 1;
+    ExecStdin stdin = 2;
+    ExecResize resize = 3;
+  }
+}
+
+message ExecOpen {
+  string container_id = 1;
+  repeated string cmd = 2;
+  bool tty = 3;
+}
+
+message ExecStdin {
+  bytes data = 1;
+}
+
+message ExecResize {
+  int32 cols = 1;
+  int32 rows = 2;
+}
+
+message ExecBinaryRequest {
+  string container_id = 1;
+  repeated string cmd = 2;
+  map<string, string> env = 3;
+  google.protobuf.BoolValue attach_stdout = 4;
+  google.protobuf.BoolValue attach_stderr = 5;
+  bool tty = 6;
+}
+
+message ExecServerMessage {
+  oneof msg {
+    ExecOutput output = 1;
+    ExecExit exit = 2;
+    ExecError error = 3;
+  }
+}
+
+message ExecOutput {
+  bytes data = 1;
+  StreamType stream = 2;
+}
+
+enum StreamType {
+  STDOUT = 0;
+  STDERR = 1;
+}
+
+message ExecExit {
+  int32 exit_code = 1;
+}
+
+message ExecError {
+  string message = 1;
+}
+
+message CreateContainerResponse {
+    string containerId = 1;
+}
+
+enum RestartPolicy {
+    Empty = 0;
+    NO = 1;
+    ALWAYS = 2;
+    ON_FAILURE = 3;
+    UNLESS_STOPPED = 4;
+}

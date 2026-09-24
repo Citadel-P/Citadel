@@ -1,0 +1,296 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "shared_models.proto";
+
+package citadel.images.v1;
+
+service ImageService {
+	rpc Get(GetImageRequest) returns (citadel.shared_models.v1.ImageReply);
+	rpc List (ListImagesRequest) returns (citadel.shared_models.v1.ListImageResponse);
+	rpc Delete (DeleteImageRequest) returns (DeleteImageResponse);
+	rpc Inspect (InspectImageRequest) returns (InspectImageResponse);
+	rpc History (HistoryImageRequest) returns(HistoryImageResponse);
+	rpc GetExposedPorts (GetExposedPortsRequest) returns (GetExposedPortsResponse);
+	rpc DistributionInspect (DistributionInspectRequest) returns (DistributionInspectResponse);
+	rpc CheckBuildHost (google.protobuf.Empty) returns (CheckBuildHostResponse);
+
+	rpc Pull (PullImageRequest) returns (stream PullImageResponse);
+	rpc Build (BuildImageRequest) returns (stream ImageBuildResponse);
+	rpc Push (PushImageRequest) returns (stream ImageBuildResponse);
+}
+message DistributionInspectRequest {
+	string imageName = 1;
+	google.protobuf.StringValue auth = 2;
+}
+message DistributionInspectResponse {
+	OCIDescriptorResponse descriptor = 1;
+	repeated OCIPlatformResponse platforms = 2;
+}
+message OCIDescriptorResponse {
+	string mediaType = 1;
+	string digest = 2;
+	google.protobuf.Int64Value size = 3;
+	OCIPlatformResponse platform = 4;
+	string artifactType = 5;
+}
+message OCIPlatformResponse {
+	string architecture = 1;
+	string os = 2;
+	string osVersion = 3;
+}
+message CheckBuildHostResponse {
+	bool available = 1;
+	string dockerVersion = 2;
+	string apiVersion = 3;
+	string operatingSystem = 4;
+	string architecture = 5;
+	string buildKitVersion = 6;
+}
+message GetImageRequest {
+	string id = 1;
+}
+message ListImagesRequest {
+
+}
+
+message HistoryImageRequest {
+	string id = 1;
+}
+message HistoryImageResponse {
+	repeated HistoryImageItemResponse items = 1;
+}
+message HistoryImageItemResponse {
+	string id = 1;
+	int64 created = 2;
+	string createdBy= 3;
+	int64 size= 4;
+	string comment= 5;
+}
+message GetExposedPortsRequest {
+	string id = 1;
+}
+message GetExposedPortsResponse {
+    repeated string ports = 3;
+}
+
+message PullImageRequest {
+	string fromImage = 1;
+	google.protobuf.StringValue fromSrc = 2;
+	google.protobuf.StringValue repo = 3;
+	google.protobuf.StringValue tag = 4;
+	google.protobuf.StringValue auth = 5;
+	repeated string changes = 6;
+}
+
+message PullImageResponse {
+	google.protobuf.StringValue stream = 1;
+	google.protobuf.StringValue status = 2;
+	google.protobuf.StringValue progressMessage = 3;
+	google.protobuf.StringValue id = 4;
+	google.protobuf.StringValue from = 5;
+	google.protobuf.StringValue errorMessage = 6;
+	JSONProgressReply progress = 7;
+	JSONErrorReply error = 8;
+}
+
+message BuildImageRequest {
+	string contextDirectory = 1;
+	string dockerfilePath = 2;
+	repeated string tags = 3;
+	map<string, string> buildArgs = 4;
+	google.protobuf.StringValue target = 5;
+	google.protobuf.StringValue registryAuth = 6;
+	google.protobuf.StringValue registryHost = 7;
+	int32 timeoutSeconds = 8;
+	int32 maxLineBytes = 9;
+	bytes contextArchive = 10;
+	google.protobuf.StringValue dockerfileArchivePath = 11;
+	repeated BuildImageSecret buildSecrets = 12;
+}
+
+message BuildImageSecret {
+	string id = 1;
+	string value = 2;
+}
+
+message PushImageRequest {
+	string imageReference = 1;
+	google.protobuf.StringValue registryAuth = 2;
+}
+
+message ImageBuildResponse {
+	google.protobuf.StringValue stream = 1;
+	google.protobuf.StringValue status = 2;
+	google.protobuf.StringValue progressMessage = 3;
+	google.protobuf.StringValue id = 4;
+	google.protobuf.StringValue errorMessage = 5;
+	JSONProgressReply progress = 6;
+	JSONErrorReply error = 7;
+}
+
+message JSONProgressReply {
+	google.protobuf.Int64Value current = 1;
+	google.protobuf.Int64Value total = 2;
+	google.protobuf.Int64Value Start = 3;
+	google.protobuf.StringValue Units = 4;
+}
+
+message JSONErrorReply {
+	google.protobuf.Int64Value code = 1;
+	google.protobuf.StringValue message = 2;
+}
+
+message DeleteImageRequest {
+	repeated string ids = 1;
+	bool force = 2;
+	bool noprune = 3;
+}
+
+message DeleteImageResponse {
+	repeated DeleteImageResponseItem items = 1;
+}
+
+message DeleteImageResponseItem {
+	map<string, string> result = 1;
+}
+
+message InspectImageRequest {
+	string id = 1;
+}
+
+message InspectImageResponse {
+	int64 size = 1;
+    string created = 2;
+    repeated string env = 3;
+    repeated string cmd = 4;
+    repeated string repoTags = 5;
+    repeated ContainerImageResult containers = 6;
+    repeated HistoryImageResult layers = 7;
+    repeated string volumes = 8;
+    map<string, string> labels = 9;
+    repeated string exposedPorts= 10;
+	string id = 11;
+	google.protobuf.StringValue os = 12;
+	google.protobuf.StringValue architecture = 13;
+	google.protobuf.StringValue user = 14;
+	google.protobuf.StringValue workingDir = 15;
+	repeated string entryPoint = 16;
+	google.protobuf.StringValue stopSignal = 17;
+}
+
+message ContainerImageResult {
+	string id = 1; 
+    string name = 2;
+    citadel.shared_models.v1.ContainerStateType state = 3;
+    repeated string volumes= 4;
+    map<string, string> networks= 5;
+    map<string, citadel.shared_models.v1.HostPortBindingList> ports= 6;
+}
+
+message HistoryImageResult {
+	string id = 1; 
+	int64 created = 2; 
+	string createdBy = 3;
+	int64 size = 4;
+	string comment = 5;
+}
+
+message DescriptorMessage {
+  string mediaType = 1;
+  string digest = 2;
+  int64 size = 3;
+  repeated string urls = 4;
+  map<string, string> annotations = 5;
+  google.protobuf.StringValue data = 6;
+  PlatformDescriptorMessage platform = 7;
+  string artifactType = 8;
+}
+
+message SizeMessage {
+  google.protobuf.Int64Value total = 1;
+  google.protobuf.Int64Value content = 2;
+  google.protobuf.Int64Value unpacked = 3;
+}
+
+message PlatformDescriptorMessage {
+    string architecture = 1;
+    string os = 2;
+    string os_version = 3;
+    repeated string os_features = 4;
+    string variant = 5;
+  }
+
+message ImageDataMessage {
+  PlatformDescriptorMessage platform = 1;
+  repeated string containers = 2;
+  SizeMessage size = 3;
+}
+
+message AttestationDataMessage {
+  google.protobuf.StringValue for = 1;
+}
+
+message ManifestMessage {
+  string id = 1;
+  DescriptorMessage descriptor = 2;
+  bool available = 3;
+  SizeMessage size = 4;
+  string kind = 5;
+  ImageDataMessage imageData = 6;
+  AttestationDataMessage attestationData = 7;
+}
+
+message ConfigMessage {
+  string hostname = 1;
+  string domainname = 2;
+  string user = 3;
+  bool attachStdin = 4;
+  bool attachStdout = 5;
+  bool attachStderr = 6;
+  map<string, Empty> exposedPorts = 7;
+  bool tty = 8;
+  bool openStdin = 9;
+  bool stdinOnce = 10;
+  repeated string env = 11;
+  repeated string cmd = 12;
+  message HealthcheckMessage {
+    repeated string test = 1;
+    google.protobuf.Int64Value interval = 2;
+    google.protobuf.Int64Value timeout = 3;
+    google.protobuf.Int64Value retries = 4;
+    google.protobuf.Int64Value startPeriod = 5;
+    google.protobuf.Int64Value startInterval = 6;
+  }
+  HealthcheckMessage healthcheck = 13;
+  bool argsEscaped = 14;
+  string image = 15;
+  map<string, Empty> volumes = 16;
+  string workingDir = 17;
+  repeated string entrypoint = 18;
+  repeated string onBuild = 19;
+  map<string, string> labels = 20;
+  string stopSignal = 21;
+  repeated string shell = 22;
+}
+
+message GraphDriverDataMessage {
+  string mergedDir = 1;
+  string upperDir = 2;
+  string workDir = 3;
+}
+
+message GraphDriverMessage {
+  string name = 1;
+  GraphDriverDataMessage data = 2;
+}
+
+message RootFSMessage {
+  string type = 1;
+  repeated string layers = 2;
+}
+
+message MetadataMessage {
+  string lastTagTime = 1;
+}
+message Empty {}

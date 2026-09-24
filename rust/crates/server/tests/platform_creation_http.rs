@@ -247,21 +247,21 @@ impl PlatformInventoryPort for StaticInventory {
 }
 
 struct StaticRegistrationRuntime {
-    inventory: StaticInventory,
+    inventory: Arc<StaticInventory>,
     selections: Mutex<Vec<(PlatformConnectorType, String)>>,
 }
 
 impl PlatformRegistrationRuntime for StaticRegistrationRuntime {
-    fn inventory_for<'a>(
-        &'a self,
+    fn inventory_for(
+        &self,
         connector_type: PlatformConnectorType,
-        address: &'a str,
-    ) -> Result<&'a dyn PlatformInventoryPort, PlatformRegistrationError> {
+        address: &str,
+    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError> {
         self.selections
             .lock()
             .unwrap()
             .push((connector_type, address.to_owned()));
-        Ok(&self.inventory)
+        Ok(self.inventory.clone())
     }
 }
 
@@ -291,7 +291,10 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     ));
     let (administrator, denied) = seed_actors(&pool).await;
     let runtime = Arc::new(StaticRegistrationRuntime {
-        inventory: StaticInventory::standalone(format!("daemon-{}", Uuid::now_v7().simple())),
+        inventory: Arc::new(StaticInventory::standalone(format!(
+            "daemon-{}",
+            Uuid::now_v7().simple()
+        ))),
         selections: Mutex::new(Vec::new()),
     });
     let registrations = Arc::new(PlatformRegistrationService::new(
@@ -809,7 +812,9 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
 
     let rollback_name = format!("rollback-{suffix}");
     let rollback_runtime = Arc::new(StaticRegistrationRuntime {
-        inventory: StaticInventory::standalone(format!("rollback-daemon-{suffix}")),
+        inventory: Arc::new(StaticInventory::standalone(format!(
+            "rollback-daemon-{suffix}"
+        ))),
         selections: Mutex::new(Vec::new()),
     });
     let rollback_service = PlatformRegistrationService::new(
@@ -950,7 +955,7 @@ async fn harness(inventory: StaticInventory) -> TestHarness {
     ));
     let administrator = seed_actor(&pool, true).await;
     let runtime = Arc::new(StaticRegistrationRuntime {
-        inventory,
+        inventory: Arc::new(inventory),
         selections: Mutex::new(Vec::new()),
     });
     let registrations = Arc::new(PlatformRegistrationService::new(

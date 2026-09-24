@@ -8,11 +8,12 @@ Phase 10.
 
 ## Workspace groups
 
-The workspace has exactly three directories under `rust/crates`:
+The workspace separates executable hosts from feature and infrastructure crates:
 
 ```text
 crates/
   server/                         # API and executable composition root
+  agent/                          # Agent executable and transport composition root
   features/
     deployments/, git/, stacks/, ...
     primitives/                   # shared actor/permission/redaction vocabulary
@@ -21,7 +22,7 @@ crates/
     adapters/                     # existing concrete integration crate
     database/                     # schema, migrations and migration runner
     docker-api/                   # generated Docker protocol client
-    contracts/                    # generated Agent protocol definitions
+    contracts/                    # authoritative Agent protobufs and generated bindings
     processes/                    # bounded OS process execution
     runtime/                      # task supervision, queues, metrics and I/O budgets
 ```
@@ -30,8 +31,9 @@ Each existing feature remains a separate Cargo crate. Directory grouping does no
 merge the features into one application crate. Existing package names remain stable;
 `citadel-processes` and `citadel-runtime` explicitly own the extracted implementations.
 Features may depend only on other Features workspace packages. Infrastructure may
-depend on Features and other Infrastructure packages, never Server. Server may
-depend on both to compose implementations. The architecture test checks actual Cargo
+depend on Features and other Infrastructure packages, never Server or Agent.
+Server and Agent may depend on both to compose implementations, but not on each
+other. The architecture test checks actual Cargo
 metadata, including build, target-specific and development dependencies.
 
 Git and Automation receive a `ProcessRunner` implementation through constructors.
@@ -48,6 +50,81 @@ Remaining source-level cleanup includes existing SQL in HTTP handlers and featur
 filesystem operations; the folder move does not claim those have been eliminated.
 Historical reports retain the paths recorded at their audit dates. Generators,
 build inputs, development instructions and active architecture checks use current paths.
+
+## Agent protocol ownership
+
+`infrastructure/contracts/proto` owns the ten Core/Agent protobuf sources.
+`citadel-contracts` generates clients and servers from those files only; feature
+crates do not consume protocol DTOs. The accepted source baseline is covered by
+`contracts/tests/protocol_sources.rs`, and Edge protocol version remains 2.
+Docker API generation similarly consumes the Rust-owned
+`infrastructure/docker-api/codegen/v1.49.yaml` schema.
+
+CI checks Rust without submodules and runs `scripts/check-source-ownership.sh`
+before generation, workspace checks and tests. Historical migration inventories
+are reference evidence, not build inputs.
+
+The Agent migration baseline is in [reports/agent-parity.md](reports/agent-parity.md).
+`contracts/tests/agent_parity.rs` checks its operation inventory against generated
+protobuf descriptors and checks the four Agent environment templates. These
+checks establish coverage of the migration plan; Agent runtime parity remains
+subject to the implementation and interoperability phases.
+
+`citadel-agent` owns configuration, TLS validation, unsigned process health,
+bounded signal-driven shutdown and all 68 Direct RPCs across eight services.
+It composes the shared `DockerClient` without opening a database connection.
+Direct mode binds all IPv4 interfaces. Edge profiles expose health on loopback
+and establish an outbound HTTP/2 connection to Core.
+The shared Docker endpoint supports Unix sockets and explicit TCP/HTTP addresses
+for generated requests, raw streams and Docker CLI execution. The Unix socket
+default is unchanged. Unsupported schemes fail during configuration.
+
+Local execution is reusable without a database: `DockerClient::apply_container_config`
+creates, starts and observes deployments; `external/stacks::LocalStackApply` stages
+and applies Compose/Swarm sources; `external/builds::runtime::DockerBuildSession`
+owns temporary credentials, build/push execution and redacted progress. Core
+routers retain persistence, Git materialization and target selection. Agent
+handlers map wire requests onto these same runtime operations. Transported
+build archives go directly to Docker stdin and are never unpacked by Citadel.
+
+Direct authentication verifies the first raw protobuf message against the existing
+Ed25519 method/body signature before dispatch. This preserves map-field bytes and
+the established signing format. Replay protection is atomic and bounded, with
+expiry at request timestamp + 60 seconds. Health is the only unsigned endpoint.
+The transport enforces message limits and request deadlines; streaming responses
+own their cancellation guards and bounded queues. Dropping build/stack streams
+kills their child process and removes private temporary files. Successful Compose
+secret bind mounts retain their private files until a later successful replacement.
+
+`agent/src/edge` owns durable enrollment identity, Ed25519 challenge signing,
+additive Core TLS trust, Docker identity observation, heartbeats and reconnect
+backoff. Key and identity writes are private and atomic; corrupt state is preserved
+and rejected. Agent hosting owns the Edge future and drops it on shutdown, so no
+independent connection/heartbeat tasks survive the listener. Core authentication
+storage failures return `Unavailable`, preserving enrolled identities on retry.
+Edge dispatch exhaustively maps all 68 commands to the same protobuf operations
+used by Direct RPCs, including shared interactive exec. A session owns at most
+16 command futures; dropping it cancels streams and subprocesses. Each command has
+its own cancellation token/deadline, and interactive input is bounded to 256
+messages. Both queued input and output have shared 32 MiB byte budgets in addition
+to the 16 MiB envelope limit and 512-envelope output capacity. Duplicate active
+command IDs close the session; invalid targets/schemas never reach Docker. Each
+command emits one terminal outcome. Swarm-node execution requires the configured
+node identity and an explicit command allowlist. Helper creation validates mounts,
+ownership, privileges and command arguments; binary exec rechecks the actual
+container configuration and uses its immutable ID. Restore-volume mutations require
+platform ownership and bounded creation settings, and deletion rejects volumes in
+use. These checks run inside the command's cancellation/deadline scope.
+
+Core and Agent share `build/version.rs` for compile-time product version metadata.
+`Dockerfile.agent` owns the Agent image, including its runtime tools and Rust
+volume helper; `Dockerfile` owns Core. The Agent health check calls its loopback
+probe, including Direct TLS. Agent uses Alpine runtime tools with isolated glibc
+libraries from Core's pinned runtime source to run the GNU Rust binaries.
+The independent `agent.yml` workflow validates the
+Agent, contracts and helper, builds native amd64/arm64 release images from an
+isolated Rust-only context, and runs smoke and compatibility tests before optional
+publication. Stable Agent aliases remain gated until compatibility cutover.
 
 ## Runtime configuration
 

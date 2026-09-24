@@ -54,6 +54,87 @@ fn envelope(body: agent_envelope::Body) -> AgentEnvelope {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn manager_inventory_pins_cluster_and_rejects_identity_changes() {
+    use citadel_platforms::{
+        RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmInfo, RuntimeSwarmInventory,
+    };
+    let (pool, store, target) = setup().await;
+    sqlx::query(
+        "UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\"}' WHERE id=$1",
+    )
+    .bind(target.platform_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (_, token, _) = store
+        .create_enrollment(&target, SYSTEM_ACTOR_ID)
+        .await
+        .unwrap();
+    let key = SigningKey::from_bytes(&[29; 32]);
+    let binding = store
+        .enroll(&enrollment(token, &key, Uuid::now_v7().to_string()))
+        .await
+        .unwrap();
+    let (session, _receiver) = EdgeRegistry::default()
+        .register(target.clone(), binding.agent_id)
+        .unwrap();
+    store
+        .connected(&binding, session.connected_at)
+        .await
+        .unwrap();
+    let cluster = Uuid::now_v7().to_string();
+    let snapshot = RuntimeInventorySnapshot {
+        platform_id: target.platform_id,
+        observed_at: chrono::Utc::now(),
+        info: RuntimePlatformInfo {
+            daemon_id: binding.daemon_id,
+            swarm: Some(RuntimeSwarmInfo {
+                node_id: "manager".into(),
+                cluster_id: Some(cluster.clone()),
+                control_available: true,
+                local_node_state: "active".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        containers: vec![],
+        images: vec![],
+        networks: vec![],
+        volumes: vec![],
+        swarm: Some(RuntimeSwarmInventory::default()),
+    };
+    store.persist_inventory(&session, &snapshot).await.unwrap();
+    for change in ["cluster", "manager", "role", "type"] {
+        let mut invalid = snapshot.clone();
+        invalid.observed_at += chrono::Duration::seconds(1);
+        let swarm = invalid.info.swarm.as_mut().unwrap();
+        match change {
+            "cluster" => swarm.cluster_id = Some("different-cluster".into()),
+            "manager" => swarm.node_id = "different-manager".into(),
+            "role" => swarm.control_available = false,
+            _ => {
+                invalid.info.swarm = None;
+                invalid.swarm = None;
+            }
+        }
+        assert!(
+            store.persist_inventory(&session, &invalid).await.is_err(),
+            "{change}"
+        );
+    }
+    let saved: (String, String) =
+        sqlx::query_as("SELECT clusterid,platformdescriptor->>'nodeID' FROM platforms WHERE id=$1")
+            .bind(target.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(saved, (cluster, "manager".into()));
+    store.persist_inventory(&session, &snapshot).await.unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
 async fn build_pool_enrollment_requires_build_capabilities_and_preserves_pool_identity() {
     let (pool, store, _) = setup().await;
     let target = EdgeTarget::build_pool(Uuid::now_v7());

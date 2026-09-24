@@ -1,0 +1,500 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+
+package citadel.shared_models.v1;
+
+//------------------------------containers------------------------------
+message ContainerMessage {
+	string id = 1;
+    string image = 2; 
+    string imageID = 3;
+    string command = 4; 
+    int64 created = 5;
+    sint64 sizeRw = 6;
+    string status = 7;
+    ContainerStateType state = 8;
+    sint64 sizeRootFs = 9;
+    string name = 10;
+    map<string, HostPortBindingList> Ports = 11;
+    ContainerStatMessage containerStatMessage = 12;
+    google.protobuf.StringValue stack = 13;
+    string stackId = 14;
+    bool isSystem = 15;
+    google.protobuf.StringValue systemRole = 16;
+    bool hasCitadelOwnershipLabels = 17;
+    bool isSwarmTask = 18;
+}
+
+message HostPortBindingList {
+    repeated HostPortBinding hostPortBinding = 1;
+}
+message HostPortBinding {
+    google.protobuf.StringValue hostIP = 1;
+    google.protobuf.StringValue hostPort = 2;
+}
+
+message ContainerStatMessage {
+    double memoryActive = 1;
+    double memoryCache = 2;
+    double cpuUsage = 3;
+    double memoryLimit = 4;
+    double rxBytes = 5;
+    double txBytes = 6;
+}
+
+message InspectContainerResponse {
+    string id = 1;
+    string created = 2;
+    google.protobuf.StringValue path = 3;
+    repeated string args = 4;
+    ContainerState state = 5;
+    google.protobuf.StringValue image = 6;
+    google.protobuf.StringValue resolvConfPath = 7;
+    google.protobuf.StringValue hostnamePath = 8;
+    google.protobuf.StringValue hostsPath = 9;
+    google.protobuf.StringValue logPath = 10;
+    google.protobuf.StringValue name = 11;
+    google.protobuf.Int32Value restartCount = 12;
+    google.protobuf.StringValue driver = 13;
+    google.protobuf.StringValue platform = 14;
+    google.protobuf.StringValue mountLabel = 15;
+    google.protobuf.StringValue processLabel = 16;
+    google.protobuf.StringValue appArmorProfile = 17;
+    repeated string execIDs = 18;
+    HostConfig hostConfig = 19;
+    GraphDriverData graphDriver = 20;
+    google.protobuf.Int64Value sizeRw = 21;
+    google.protobuf.Int64Value sizeRootFs = 22;
+    repeated MountPoint mounts = 23;
+    ContainerConfig config = 24;
+    NetworkSettings networkSettings = 25;
+}
+
+message NetworkSettings {
+    string bridge = 1;
+    google.protobuf.StringValue sandboxID = 2;
+    google.protobuf.BoolValue hairpinMode = 3;
+    string linkLocalIPv6Address = 4;
+    google.protobuf.Int64Value linkLocalIPv6PrefixLen = 5;
+    map<string, HostPortBindingList> ports = 6;
+    google.protobuf.StringValue sandboxKey = 7;
+    repeated Address SecondaryIPAddresses = 8;
+    repeated Address SecondaryIPv6Addresses = 9;
+    google.protobuf.StringValue endpointID = 10;
+    google.protobuf.StringValue gateway = 11;
+    google.protobuf.StringValue globalIPv6Address = 12;
+    google.protobuf.Int64Value globalIPv6PrefixLen = 13;
+    google.protobuf.StringValue ipAddress = 14;
+    google.protobuf.Int64Value ipPrefixLen = 15;
+    google.protobuf.StringValue ipv6Gateway = 16;
+    google.protobuf.StringValue macAddress = 17;
+    repeated MapFieldNetwork Networks = 18;
+
+}
+message MapFieldNetwork {
+    string key = 1;
+    EndpointSettings value = 2;
+}
+message EndpointSettings {
+     EndpointIPAMConfig IPAMConfig = 1;
+     repeated string links = 2;
+     google.protobuf.StringValue macAddress = 3;
+     repeated string aliases = 4;
+     google.protobuf.StringValue networkID = 5;
+     google.protobuf.StringValue endpointID = 6;
+     google.protobuf.StringValue gateway = 7;
+     google.protobuf.StringValue ipAddress = 8;
+     google.protobuf.Int32Value ipPrefixLen = 9;
+     google.protobuf.StringValue ipv6Gateway = 10;
+     google.protobuf.StringValue globalIPv6Address = 11;
+     google.protobuf.Int64Value globalIPv6PrefixLen = 12;
+     map<string, string> driverOpts = 13;
+     repeated string DNSNames = 14;
+}
+message EndpointIPAMConfig {
+    google.protobuf.StringValue ipv4Address = 1;
+    google.protobuf.StringValue ipv6Address = 2;
+    repeated string linkLocalIPs = 3;
+
+}
+message Address {
+    google.protobuf.StringValue addr = 1;
+    google.protobuf.Int64Value prefixLen = 2;
+}
+message ContainerConfig {
+    string hostname = 1;
+    google.protobuf.StringValue domainname = 2;
+    google.protobuf.StringValue user = 3;
+    google.protobuf.BoolValue attachStdin = 4;
+    google.protobuf.BoolValue attachStdout = 5;
+    google.protobuf.BoolValue attachStderr = 6;
+    repeated string exposedPorts = 7;
+    google.protobuf.BoolValue tty = 8;
+    google.protobuf.BoolValue openStdin = 9;
+    google.protobuf.BoolValue stdinOnce = 10;
+    repeated string env = 11;
+    repeated string cmd = 12;
+    google.protobuf.StringValue image = 13;
+    repeated string volumes = 14;
+    string workingDir = 16;
+    repeated string entrypoint = 17;
+    google.protobuf.BoolValue networkDisabled = 18;
+    google.protobuf.StringValue macAddress = 19;
+    repeated string onBuild = 20;
+    map<string, string> labels = 21;
+    google.protobuf.StringValue stopSignal = 22;
+    google.protobuf.Int32Value stopTimeout = 23;
+}
+message MountPoint {
+    google.protobuf.StringValue type = 1;
+    google.protobuf.StringValue name = 2;
+    google.protobuf.StringValue source = 3;
+    google.protobuf.StringValue destination = 4;
+    google.protobuf.StringValue driver = 5;
+    google.protobuf.StringValue mode = 6;
+    google.protobuf.BoolValue rW = 7;
+    google.protobuf.StringValue propagation = 8;
+}
+message GraphDriverData {
+    google.protobuf.StringValue name = 1;
+    map<string, string> data = 2;
+}
+message HostConfig {
+    repeated string binds = 1;
+    google.protobuf.StringValue containerIDFile = 2;
+    LogConfig logConfig = 3;
+    google.protobuf.StringValue networkMode = 4;
+    map<string, HostPortBindingList> portBindings = 5;
+    RestartPolicy restartPolicy = 6;
+    google.protobuf.BoolValue autoRemove = 7;
+    google.protobuf.StringValue volumeDriver = 8;
+    repeated string volumesFrom = 9;
+    repeated Mount mounts = 10;
+    repeated int32 consoleSize = 11;
+    map<string, string> annotations = 12;
+    repeated string capAdd = 13;
+    repeated string capDrop = 14;
+    google.protobuf.StringValue cgroupnsMode = 15;
+    repeated string dns = 16;
+    repeated string dnsOptions = 17;
+    repeated string dnsSearch = 18;
+    repeated string extraHosts = 19;
+    repeated string groupAdd = 20;
+    google.protobuf.StringValue ipcMode = 21;
+    google.protobuf.StringValue cgroup = 22;
+    repeated string links = 23;
+    google.protobuf.Int32Value oomScoreAdj = 24;
+    google.protobuf.StringValue pidMode = 25;
+    google.protobuf.BoolValue privileged = 26;
+    google.protobuf.BoolValue publishAllPorts = 27;
+    google.protobuf.BoolValue readonlyRootfs = 28;
+    repeated string securityOpt = 29;
+    map<string, string> storageOpt = 30;
+    map<string, string> tmpfs = 31;
+    google.protobuf.StringValue uTSMode = 32;
+    google.protobuf.StringValue usernsMode = 33;
+    int64 shmSize = 34;
+    map<string, string> sysctls = 35;
+    google.protobuf.StringValue runtime = 36;
+    google.protobuf.StringValue isolation = 37;
+    repeated string maskedPaths = 38;
+    repeated string readonlyPaths = 39;
+    google.protobuf.Int64Value memorySwap = 40;
+    google.protobuf.Int64Value memorySwappiness = 41;
+    google.protobuf.Int64Value nanoCpus = 42;
+    google.protobuf.Int64Value pidsLimit = 43;
+    google.protobuf.Int64Value memory = 44;
+    google.protobuf.Int64Value memoryReservation = 45;
+    google.protobuf.Int64Value IOMaximumBandwidth = 46;
+    google.protobuf.Int64Value cpuPeriod = 47;
+    google.protobuf.Int64Value cpuPercent = 48;
+    google.protobuf.Int64Value CpuCount = 49;
+    repeated Ulimits ulimits = 50;
+    google.protobuf.Int64Value kernelMemoryTCP = 51;
+}
+message Ulimits {
+    google.protobuf.StringValue name = 1;
+    google.protobuf.Int64Value soft = 2;
+    google.protobuf.Int64Value hard = 3;
+}
+message Mount {
+    google.protobuf.StringValue target = 1;
+    google.protobuf.StringValue source = 2;
+    google.protobuf.StringValue type = 3;
+    google.protobuf.BoolValue readOnly = 4;
+    google.protobuf.StringValue consistency = 5;
+    BindOptions bindOptions = 6;
+    VolumeOptions volumeOptions = 7;
+}
+message VolumeOptions {
+    google.protobuf.BoolValue noCopy = 1;
+    map<string, string> labels = 2;
+    DriverConfig driverConfig = 3;
+    google.protobuf.StringValue subpath = 4;
+}
+message DriverConfig {
+    google.protobuf.StringValue name = 1;
+    map<string, string> options = 2;
+}
+message BindOptions {
+   google.protobuf.StringValue propagation = 1;
+   google.protobuf.BoolValue nonRecursive = 2;
+   google.protobuf.BoolValue createMountpoint = 3;
+   google.protobuf.BoolValue readOnlyNonRecursive = 4;
+   google.protobuf.BoolValue readOnlyForceRecursive = 5;
+}
+message RestartPolicy {
+    google.protobuf.StringValue Name = 1;
+    google.protobuf.Int32Value maximumRetryCount = 2;
+}
+message ContainerState {
+
+    ContainerStateType status = 1;
+    google.protobuf.BoolValue running = 2;
+    google.protobuf.BoolValue paused = 3;
+    google.protobuf.BoolValue restarting = 4;
+    google.protobuf.BoolValue OOMKilled = 5;
+    google.protobuf.BoolValue dead = 6;
+    google.protobuf.Int32Value pid = 7;
+    google.protobuf.Int32Value exitCode = 8;
+    google.protobuf.StringValue error = 9;
+    google.protobuf.StringValue startedAt = 10;
+    google.protobuf.StringValue finishedAt = 11;
+    Health health = 12;
+}
+message LogConfig {
+    google.protobuf.StringValue type = 1;
+    map<string, string> config = 2;
+}
+message Health {
+    google.protobuf.StringValue status = 1;
+    google.protobuf.Int32Value failingStreak = 2;
+}
+enum ContainerStateType {
+    Unknown = 0;
+    Created = 1;
+    Running = 2;
+    Paused = 3;
+    Restarting = 4;
+    Exited = 5;
+    Removing = 6;
+    Dead = 7;
+}
+
+//------------------------------volumes.proto------------------------------
+message VolumeResponse {
+  string name = 1;
+  string driver = 2;
+  map<string, string> labels = 3;
+  map<string, string> options = 4;
+  string mountpoint = 5;
+  string createdAt = 6;
+  map<string, string> status = 7;
+  string scope = 8;
+  ClusterVolumeMessage clusterVolume = 9;
+  UsageDataMessage usageData = 10;
+  bool inUse = 11;
+  repeated ContainerVolumeResult containers = 12;
+}
+
+message UsageDataMessage {
+    google.protobuf.Int64Value size = 1;
+    google.protobuf.Int64Value refCount = 2;
+
+}
+
+message ClusterVolumeMessage {
+    string id = 1;
+    VolumVersionMessage version = 2;
+    string createdAt = 3;
+    string updatedAt = 4;
+    VolumeSpecMessage spec = 5;
+    ClusterVolumeInfoMessage info = 6;
+    repeated PublishStatusMessage publishStatus = 7;
+}
+
+message ContainerVolumeResult {
+	string id = 1; 
+    string name = 2;
+    string image = 3;
+    string imageId = 4;
+    ContainerStateType state = 5;
+    map<string, string> networks= 6;
+    map<string, HostPortBindingList> ports= 7;
+}
+
+
+message VolumVersionMessage {
+      google.protobuf.Int64Value index = 1;
+}
+
+
+message VolumeSpecMessage {
+      string group = 1;
+      VolumeAccessModeMessage accessMode = 2;
+}
+
+
+message VolumeAccessModeMessage {
+    VolumeScopeType scope = 1;
+    VolumeSharingType sharing = 2;
+    repeated VolumeSecretMessage secrets = 3;
+    VolumeCapacityRange capacityRange = 4;
+    string availability = 5;
+}
+
+
+message VolumeSecretMessage {
+    string key = 1;
+    string secret = 2;
+}
+
+
+enum VolumeScopeType {
+    single = 0;
+    multi = 1;
+}
+enum VolumeSharingType {
+    NONE = 0;
+    readonly = 1;
+    onewriter = 2;
+    all = 3;
+}
+
+ message VolumeCapacityRange {
+    google.protobuf.Int64Value requiredBytes = 1;
+    google.protobuf.Int64Value limitBytes = 2;
+}
+
+
+message ClusterVolumeInfoMessage {
+    google.protobuf.Int64Value capacityBytes = 1;
+    map<string, string> volumeContext = 2;
+    string volumeID = 3;
+    repeated TopologyEntryMessage accessibleTopology = 4;
+}
+
+message TopologyEntryMessage {
+    map<string, string> labels = 1;
+
+}
+
+
+message PublishStatusMessage {
+    string nodeID = 1;
+    string state = 2;
+    map<string, string> publishContext = 3;
+}
+
+//------------------------------Images ------------------------------
+
+message ListImageResponse {
+	repeated ImageReply images = 1;
+}
+message ImageReply {
+	string id = 1;
+	string parentId = 2;
+	repeated string repoTags = 3;
+	repeated string repoDigests = 4;
+	int64 created = 5;
+	double size = 6;
+	int64 sharedSize = 7;
+	double virtualSize = 8;
+	int32 containers = 9;
+	map<string, string> Labels = 10;
+}
+//------------------------------Networks------------------------------
+message Network {
+	string name = 1;
+	string id = 2;
+	string created = 3;
+	string driver = 4;
+	string scope = 5;
+	bool enableIPv4 = 6;
+	bool enableIPv6 = 7;
+	bool internal = 8;
+	bool attachable = 9;
+	bool ingress = 10;
+	bool configOnly = 11;
+	bool inUse = 12;
+	google.protobuf.StringValue configFrom = 13;
+	IPAMMessage ipam = 14;
+	map<string, string> options = 15;
+	map<string, string> labels = 16;
+}
+
+
+message IPAMMessage {
+	google.protobuf.StringValue driver = 1;
+	repeated IPAMConfigMessage config = 2;
+	map<string, string> options = 3;
+}
+
+
+message IPAMConfigMessage {
+	google.protobuf.StringValue subnet = 1;
+	google.protobuf.StringValue ipRange = 2;
+	google.protobuf.StringValue gateway = 3;
+}
+
+
+/*------------------------------Platforms------------------------------*/
+
+message PlatformInfoResponse {
+    string id = 1;
+    sint64 created = 2; 
+    int32 networkCount = 3; 
+    int32 volumeCount = 4;
+    string agentVersion = 5;
+    sint64 imageCount = 6;
+    string driver = 7;
+    string operatingSystem = 8; 
+    string osVersion = 9;
+    string osType = 10;
+    string architecture = 11; 
+    sint64 cpuCount = 12;
+    sint64 memTotal = 13;
+    string serverVersion = 14; 
+    SwarmInfoMessage swarmInfo = 15;
+    PlatformStatMessage platformStat = 16;
+    string agentRuntimeImage = 17;
+    optional int64 imageUsedBytes = 18;
+    optional int64 volumeUsedBytes = 19;
+    string apiVersion = 20;
+    string minimumApiVersion = 21;
+}
+
+message SwarmInfoMessage {
+    string nodeID = 1;
+    string nodeAddr = 2;
+    string localNodeState = 3;
+    bool controlAvailable = 4;
+    string error = 5;
+    repeated SwarmPeerMessage remoteManagers = 6;
+    sint64 nodes = 7;
+    sint64 managers = 8;
+    string clusterID = 9;
+    google.protobuf.Timestamp clusterCreatedAt = 10;
+    optional sint64 serviceCount = 11;
+    optional sint64 runningTaskCount = 12;
+}
+
+message SwarmPeerMessage {
+    string nodeID = 1;
+    string addr = 2;
+}
+
+message PlatformStatMessage {
+    double memoryUsage = 1;
+    double cpuUsage = 2;
+    double rxBytes = 3;
+    double txBytes = 4;
+    int32 containerCount = 5;
+    int32 containersRunning= 6;
+    int32 containersPaused = 7;
+    int32 containersStopped = 8;
+    optional int64 diskUsedBytes = 9;
+    optional int64 diskTotalBytes = 10;
+    optional double diskUsage = 11;
+}

@@ -117,8 +117,11 @@ impl ContainerService for MutationFixture {
         Ok(Response::new(()))
     }
 
-    async fn stop(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
-        Err(Status::unimplemented("not used"))
+    async fn stop(&self, request: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        require_signature(&request)?;
+        self.container_action_calls.fetch_add(1, Ordering::Relaxed);
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        Ok(Response::new(()))
     }
 
     async fn pause(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
@@ -129,8 +132,8 @@ impl ContainerService for MutationFixture {
         Err(Status::unimplemented("not used"))
     }
 
-    async fn restart(&self, _: Request<ContainerIds>) -> Result<Response<()>, Status> {
-        Err(Status::unimplemented("not used"))
+    async fn restart(&self, request: Request<ContainerIds>) -> Result<Response<()>, Status> {
+        self.stop(request).await
     }
 
     async fn delete(
@@ -850,6 +853,44 @@ async fn signed_agent_inspection_preserves_image_state_and_redacts_secrets() {
             .kind,
         RuntimeErrorKind::Cancelled
     );
+}
+
+#[tokio::test]
+async fn container_shutdown_allows_grace_beyond_transport_timeout_and_remains_cancellable() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (address, shutdown) = start_fixture(MutationFixture {
+        fail_network_create: false,
+        network_create_calls: Arc::default(),
+        container_delete_calls: Arc::default(),
+        deployment_apply_calls: Arc::default(),
+        container_action_calls: calls.clone(),
+        stack_apply_calls: Arc::default(),
+    })
+    .await;
+    let _guard = shutdown.drop_guard();
+    let client = connect(&address).await; // One-second transport budget.
+    let cancellation = CancellationToken::new();
+    for action in [AgentContainerAction::Stop, AgentContainerAction::Restart] {
+        client
+            .change_containers_state(&["container-1".into()], action, &cancellation)
+            .await
+            .unwrap();
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+    cancellation.cancel();
+    assert_eq!(
+        client
+            .change_containers_state(
+                &["container-1".into()],
+                AgentContainerAction::Stop,
+                &cancellation
+            )
+            .await
+            .unwrap_err()
+            .kind,
+        RuntimeErrorKind::Cancelled
+    );
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
 }
 
 async fn connect(address: &str) -> AgentClient {

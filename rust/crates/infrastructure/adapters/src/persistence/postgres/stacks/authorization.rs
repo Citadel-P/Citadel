@@ -58,7 +58,7 @@ pub(super) async fn ensure_platform(
         .get("$type")
         .and_then(Value::as_str)
         .unwrap_or("Docker");
-    if !matches!(kind, "Docker" | "DockerSwarm") {
+    if crate::persistence::postgres::platforms::classification::platform_kind(kind).is_err() {
         return Err(StackError::Validation(
             "Stacks require a Docker or Docker Swarm Platform.".to_owned(),
         ));

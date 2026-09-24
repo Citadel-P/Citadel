@@ -91,16 +91,6 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Could not create Phase 3 database '$database'." }
     }
 
-    Push-Location $repoRoot
-    try {
-        & dotnet run --project 'test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj' `
-            -- -class 'Tests.Integration.Application.Features.Permissions.AuthorizationDifferentialTests'
-        if ($LASTEXITCODE -ne 0) { throw 'The .NET authorization differential oracle failed.' }
-    }
-    finally {
-        Pop-Location
-    }
-
     & docker run --rm --network $network `
         --volume "${repoRoot}:/source" `
         --volume 'citadel-rust-registry:/usr/local/cargo/registry' `

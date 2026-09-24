@@ -54,7 +54,7 @@ pub(crate) fn runtime_hash(spec: &Value) -> String {
     crate::connectors::swarm::runtime_hash::hash(spec)
 }
 
-pub(crate) fn inspect_service_message(
+pub fn inspect_service_message(
     native: SwarmService,
     tasks: &[SwarmTask],
 ) -> Result<SwarmServiceMessage, RuntimeCapabilityError> {

@@ -1,5 +1,31 @@
 # Rust migration commands
 
+Agent release image checks (Bash, Docker and OpenSSL):
+
+```bash
+docker build -t citadel-agent:local -f rust/Dockerfile.agent .
+bash rust/scripts/test-agent-image.sh citadel-agent:local
+bash rust/scripts/test-agent-compatibility.sh citadel-agent:local
+docker build -t citadel-core:acceptance -f rust/Dockerfile .
+bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
+# Optional third argument: an already-pulled released Agent pinned by digest.
+# CI requires this baseline before release publication.
+bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local "$RELEASED_AGENT_IMAGE"
+```
+
+The smoke test removes its disposable containers and build image. The compatibility,
+live Docker and Edge intake suites require the pinned Rust toolchain and share a private registry, database
+and two privileged Docker-in-Docker daemons; it removes only its own fixtures.
+The acceptance test uses the complete Core and Agent images and calls Core's HTTP
+API for setup, Direct/Edge registration, stacks, inventory, reconnect, Core restart
+and revocation. It also exercises Core's three-node Swarm installer and worker
+routing through Direct and Edge managers, including outage recovery, repair,
+upgrade and removal. It needs Rust, creates its own database and Docker daemons,
+and removes only its own containers, volumes and network.
+See
+[Agent development](../DEVELOPMENT.md#agent-development) for runtime configuration
+and the release publication gate.
+
 Run these commands from the repository root in PowerShell.
 
 Docker-based Cargo test suites use a unique `citadel-rust-test-<id>` build
@@ -51,14 +77,10 @@ on the host linker.
 
 ## Phase 1 inventory and contracts
 
-```powershell
-# Regenerate deterministic inventories and contract hashes.
-./rust/scripts/Generate-Phase1Inventory.ps1
-
-# Fail when generated inventories drift or HTTP/protobuf/specification coverage
-# is inconsistent.
-./rust/scripts/Test-Phase1Inventory.ps1
-```
+The original inventories are archived evidence. Their generators have been
+retired. Run `bash rust/scripts/check-source-ownership.sh` to verify source
+ownership and `cargo test --locked -p citadel-contracts` from `rust/` to check
+the accepted protocol baseline.
 
 The selected schema-tool proof imports the generated .NET baseline without EF
 history metadata, retains all product seeds, and proves structural convergence:
@@ -98,9 +120,9 @@ including local identity, authenticated application information, current
 profile, lazy and persisted profile preferences, active browser-session listing
 and revocation, password changes, atomic safe Activity evidence, authorized
 Activity list/detail compatibility, Actor authorization, Service Account ACL/token,
-license administration, concurrency, and restart behavior. The same run executes
-the versioned authorization matrix through the .NET/Dapper and Rust/SQLx
-PostgreSQL implementations. It also runs the dedicated
+license administration, concurrency, and restart behavior. The run executes
+the versioned authorization matrix through the Rust PostgreSQL implementation.
+It also runs the dedicated
 database-backed Axum User, Team, Role, License, MFA, and OIDC endpoint suites for reads and administrator mutations,
 including conflicts, assignments, password/session invalidation, safe Activity
 evidence, rollback, and concurrent last-administrator protection. The HTTP flow

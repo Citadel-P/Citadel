@@ -2,6 +2,55 @@ use super::*;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn node_coverage_uses_the_enrollment_protocol_version() {
+    let fixture = fixture().await;
+    let id = fixture.platform_id;
+    let binding = Uuid::now_v7();
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\"}' WHERE id=$1")
+        .bind(id).execute(&fixture.pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmnodeprojections(platformid,dockernodeid,address,architecture,availability,desiredtaskcount,engineversion,hostname,isleader,labels,observedat,operatingsystem,reachability,role,runningtaskcount,status,versionindex) VALUES($1,'worker-protocol','10.0.0.2','amd64','Active',0,'29','worker',false,'{}',now(),'linux','','Worker',0,'Ready',1)")
+        .bind(id).execute(&fixture.pool).await.unwrap();
+    sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,profile,dockernodeid) VALUES($1,$2,$1,'fixture','Offline',$3,$3,'SwarmNode','worker-protocol')")
+        .bind(binding).bind(binding.to_string()).bind(id).execute(&fixture.pool).await.unwrap();
+    let current = citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION;
+    for (version, compatible) in [(current, true), (current - 1, false), (current + 1, false)] {
+        sqlx::query("UPDATE edgeagentbindings SET protocolversion=$2 WHERE id=$1")
+            .bind(binding)
+            .bind(version)
+            .execute(&fixture.pool)
+            .await
+            .unwrap();
+        let response = send(
+            &fixture,
+            &format!("/api/v1/platforms/{id}/node-agent-coverage"),
+            Some(fixture.administrator.clone()),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = json_body(response).await;
+        let worker = body["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["dockerNodeId"] == "worker-protocol")
+            .unwrap();
+        assert_eq!(
+            worker["compatible"], compatible,
+            "version {version}: {body}"
+        );
+        assert_eq!(
+            worker["agentConnectionState"],
+            if compatible {
+                "Offline"
+            } else {
+                "Incompatible"
+            }
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases() {
     let fixture = fixture().await;
     let id = fixture.platform_id;

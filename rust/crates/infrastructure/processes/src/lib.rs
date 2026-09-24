@@ -91,6 +91,17 @@ pub async fn run(
         })
     });
 
+    // A caller may drop this future when its transport disconnects. Keep pipe
+    // tasks owned by this invocation instead of detaching them with live pipes.
+    let mut tasks = vec![stdout_reader.abort_handle(), stderr_reader.abort_handle()];
+    tasks.extend(
+        stdin_writer
+            .as_ref()
+            .map(tokio::task::JoinHandle::abort_handle),
+    );
+    let _tasks = PipeTasks(tasks);
+    let _output_guard = output_cancellation.clone().drop_guard();
+
     let timeout = tokio::time::sleep(request.limits.timeout);
     tokio::pin!(timeout);
     let completion = tokio::select! {
@@ -210,4 +221,13 @@ async fn join_reader(
         .await
         .map_err(|error| ProcessError::Io(std::io::Error::other(error.to_string())))?
         .map_err(ProcessError::Io)
+}
+
+struct PipeTasks(Vec<tokio::task::AbortHandle>);
+impl Drop for PipeTasks {
+    fn drop(&mut self) {
+        for task in &self.0 {
+            task.abort();
+        }
+    }
 }

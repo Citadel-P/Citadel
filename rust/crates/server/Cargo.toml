@@ -1,5 +1,6 @@
 [package]
 name = "citadel-server"
+build = "../../build/version.rs"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true

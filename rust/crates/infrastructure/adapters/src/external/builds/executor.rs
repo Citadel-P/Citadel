@@ -39,9 +39,14 @@ use crate::connectors::edge::EdgeTarget;
 
 use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuard;
 
-mod output;
+use super::output;
+use super::runtime::{
+    BuildRuntimeError as BuildFailure, DockerBuildOptions, DockerBuildSession, DockerBuildSource,
+    find_digest, limits, logs, normalize_registry_host, redact, redact_values,
+};
 
 pub struct LocalDockerBuildExecutor {
+    endpoint: crate::connectors::docker::DockerEndpoint,
     git: Arc<citadel_git::GitRepositoryExecutionService>,
     docker: OsString,
     secrets: Arc<dyn BuildSecretResolver>,
@@ -447,6 +452,7 @@ impl BuildExecutor for AgentDockerBuildExecutor {
 impl LocalDockerBuildExecutor {
     pub fn new(
         git: Arc<citadel_git::GitRepositoryExecutionService>,
+        endpoint: crate::connectors::docker::DockerEndpoint,
         docker: impl Into<OsString>,
         secrets: Arc<dyn BuildSecretResolver>,
         registries: Arc<dyn BuildRegistryCredentialResolver>,
@@ -455,6 +461,7 @@ impl LocalDockerBuildExecutor {
     ) -> Self {
         Self {
             git,
+            endpoint,
             docker: docker.into(),
             secrets,
             registries,
@@ -524,129 +531,54 @@ impl LocalDockerBuildExecutor {
                 cancellation,
             )
             .await?;
-        let docker_config = std::env::temp_dir()
-            .join("citadel-build-docker-config")
-            .join(claim.run.id.to_string());
         let outcome = async {
-            remove_directory_if_present(&docker_config).await;
-            tokio::fs::create_dir_all(&docker_config)
-                .await
-                .map_err(|error| BuildFailure::Io(error.to_string()))?;
-            let registry_credentials = self
+            let credentials = self
                 .registries
                 .resolve(claim.run.registry_id)
                 .await
                 .map_err(|error| BuildFailure::Validation(error.to_string()))?;
-            if let Some(credentials) = registry_credentials.as_ref() {
-                let login = run(
-                    ProcessRequest::new(self.docker.clone())
-                        .args([
-                            OsString::from("login"),
-                            OsString::from(normalize_registry_host(&claim.run.registry_host)?),
-                            OsString::from("--username"),
-                            OsString::from(&credentials.username),
-                            OsString::from("--password-stdin"),
-                        ])
-                        .env("DOCKER_CONFIG", docker_config.as_os_str())
-                        .stdin(credentials.password.as_bytes().to_vec())
-                        .limits(limits(Duration::from_secs(60), self.maximum_log_bytes)),
-                    cancellation,
-                )
-                .await
-                .map_err(BuildFailure::Process)?;
-                if !login.succeeded() {
-                    return Err(BuildFailure::Command(redact_values(
-                        &logs(&login.stdout, &login.stderr),
-                        &[credentials.password.as_str()],
-                    )));
-                }
-            }
+            let session = DockerBuildSession::open(
+                self.docker.clone(),
+                self.endpoint.clone(),
+                credentials
+                    .as_ref()
+                    .map(|credentials| (claim.run.registry_host.as_str(), credentials)),
+                Duration::from_secs(claim.run.timeout_seconds as u64),
+                self.maximum_log_bytes,
+                cancellation,
+            )
+            .await?;
             let context = safe_child(&workspace, &claim.run.context_path).await?;
             let dockerfile = safe_child(&workspace, &claim.run.dockerfile_path).await?;
             let references = image_references(claim, &commit)?;
-            let mut args = vec![
-                OsString::from("build"),
-                OsString::from("--file"),
-                dockerfile.as_os_str().to_owned(),
-            ];
-            if let Some(target) = claim.run.target.as_deref() {
-                args.extend([OsString::from("--target"), OsString::from(target)]);
-            }
-            for argument in &claim.project.build_args {
-                args.push(OsString::from("--build-arg"));
-                args.push(OsString::from(match argument.value.as_deref() {
-                    Some(value) => format!("{}={value}", argument.name),
-                    None => argument.name.clone(),
-                }));
-            }
-            for reference in &references {
-                args.extend([OsString::from("--tag"), OsString::from(reference)]);
-            }
-            let mut secret_environment = Vec::with_capacity(claim.project.build_secrets.len());
-            for (index, secret) in claim.project.build_secrets.iter().enumerate() {
-                let environment_name = format!("CITADEL_BUILDKIT_SECRET_{index}");
+            let mut secrets = Vec::new();
+            for secret in &claim.project.build_secrets {
                 let value = self
                     .secrets
                     .resolve(secret.secret_id)
                     .await
                     .map_err(|error| BuildFailure::Validation(error.to_string()))?;
-                args.extend([
-                    OsString::from("--secret"),
-                    OsString::from(format!("id={},env={environment_name}", secret.id)),
-                ]);
-                secret_environment.push((environment_name, value));
+                secrets.push((secret.id.clone(), value));
             }
-            args.push(context.as_os_str().to_owned());
-            let mut request = ProcessRequest::new(self.docker.clone())
-                .args(args)
-                .env("DOCKER_BUILDKIT", "1")
-                .env("DOCKER_CONFIG", docker_config.as_os_str())
-                .limits(limits(
-                    Duration::from_secs(claim.run.timeout_seconds as u64),
-                    self.maximum_log_bytes,
-                ));
-            for (name, value) in &secret_environment {
-                request = request.env(name, value.as_str());
-            }
-            let redaction_values = secret_environment
-                .iter()
-                .map(|(_, value)| value.as_str())
-                .chain(
-                    registry_credentials
-                        .as_ref()
-                        .map(|value| value.password.as_str()),
-                )
-                .collect::<Vec<_>>();
-            let built = output::run(request, cancellation, progress, &redaction_values).await?;
-            if !built.succeeded() {
-                return Err(BuildFailure::Command(redact_values(
-                    &logs(&built.stdout, &built.stderr),
-                    &redaction_values,
-                )));
-            }
-            let mut digest = None;
-            for reference in &references {
-                let pushed = output::run(
-                    ProcessRequest::new(self.docker.clone())
-                        .args([OsString::from("push"), OsString::from(reference)])
-                        .env("DOCKER_CONFIG", docker_config.as_os_str())
-                        .limits(limits(
-                            Duration::from_secs(claim.run.timeout_seconds as u64),
-                            self.maximum_log_bytes,
-                        )),
-                    cancellation,
+            session
+                .build(
+                    DockerBuildOptions {
+                        source: DockerBuildSource::Directory {
+                            context: &context,
+                            dockerfile: &dockerfile,
+                        },
+                        tags: &references,
+                        build_args: &claim.project.build_args,
+                        target: claim.run.target.as_deref(),
+                        secrets: &secrets,
+                    },
                     progress,
-                    &redaction_values,
+                    cancellation,
                 )
                 .await?;
-                let push_log = logs(&pushed.stdout, &pushed.stderr);
-                if !pushed.succeeded() {
-                    return Err(BuildFailure::Command(redact_values(
-                        &push_log,
-                        &redaction_values,
-                    )));
-                }
-                digest = digest.or_else(|| find_digest(&push_log));
+            let mut digest = None;
+            for reference in &references {
+                digest = digest.or(session.push(reference, progress, cancellation).await?);
             }
             Ok(BuildExecutionResult {
                 status: "Succeeded",
@@ -660,7 +592,6 @@ impl LocalDockerBuildExecutor {
             })
         }
         .await;
-        remove_directory_if_present(&docker_config).await;
         remove_directory_if_present(&workspace).await;
         outcome
     }
@@ -925,15 +856,6 @@ fn encode_registry_auth(
     Ok(STANDARD.encode(payload))
 }
 
-fn limits(timeout: Duration, maximum: usize) -> ProcessLimits {
-    ProcessLimits {
-        timeout,
-        maximum_stdout_bytes: maximum,
-        maximum_stderr_bytes: maximum,
-        output_limit_policy: OutputLimitPolicy::Truncate,
-    }
-}
-
 async fn safe_child(root: &Path, relative: &str) -> Result<PathBuf, BuildFailure> {
     if relative
         .split(['/', '\\'])
@@ -982,101 +904,6 @@ fn image_references(claim: &BuildClaim, commit: &str) -> Result<Vec<String>, Bui
         references.push(format!("{host}/{}:{tag}", claim.run.image_repository));
     }
     Ok(references)
-}
-
-fn normalize_registry_host(value: &str) -> Result<&str, BuildFailure> {
-    let value = value
-        .strip_prefix("https://")
-        .or_else(|| value.strip_prefix("http://"))
-        .unwrap_or(value)
-        .trim_end_matches('/');
-    if value.is_empty() || value.contains(['/', '\\', '\r', '\n', ' ', '\t']) {
-        Err(BuildFailure::Validation(
-            "Build Registry host is invalid.".to_owned(),
-        ))
-    } else {
-        Ok(value)
-    }
-}
-
-fn find_digest(value: &str) -> Option<String> {
-    value
-        .split_whitespace()
-        .find(|part| part.starts_with("sha256:") && part.len() == 71)
-        .map(|value| value.trim_end_matches(',').to_owned())
-}
-
-fn logs(stdout: &[u8], stderr: &[u8]) -> String {
-    let mut value = String::from_utf8_lossy(stdout).into_owned();
-    if !stderr.is_empty() {
-        if !value.is_empty() {
-            value.push('\n');
-        }
-        value.push_str(&String::from_utf8_lossy(stderr));
-    }
-    value
-}
-
-fn redact(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    let mut redact_next = false;
-    for segment in value.split_inclusive(char::is_whitespace) {
-        let token_end = segment.find(char::is_whitespace).unwrap_or(segment.len());
-        let (part, whitespace) = segment.split_at(token_end);
-        let lower = part.to_ascii_lowercase();
-        if redact_next {
-            output.push_str("[redacted]");
-            redact_next = false;
-        } else if lower == "bearer" {
-            output.push_str(part);
-            redact_next = true;
-        } else if lower.starts_with("password=")
-            || lower.starts_with("token=")
-            || lower.starts_with("secret=")
-            || lower.starts_with("api_key=")
-            || lower.starts_with("apikey=")
-        {
-            output.push_str(part.split_once('=').map_or(part, |(key, _)| key));
-            output.push_str("=[redacted]");
-        } else {
-            output.push_str(part);
-        }
-        output.push_str(whitespace);
-    }
-    output
-}
-
-fn redact_values(value: &str, secrets: &[&str]) -> String {
-    let mut redacted = value.to_owned();
-    for secret in secrets.iter().filter(|secret| !secret.is_empty()) {
-        redacted = redacted.replace(secret, "[redacted]");
-    }
-    redact(&redacted)
-}
-
-#[derive(Debug, thiserror::Error)]
-enum BuildFailure {
-    #[error("{0}")]
-    Validation(String),
-    #[error("{0}")]
-    Io(String),
-    #[error("{0}")]
-    Command(String),
-    #[error(transparent)]
-    Process(ProcessError),
-}
-
-impl BuildFailure {
-    fn code(&self) -> &'static str {
-        match self {
-            Self::Validation(_) => "build.validation",
-            Self::Io(_) => "build.source",
-            Self::Command(_) => "build.command",
-            Self::Process(ProcessError::Cancelled) => "build.cancelled",
-            Self::Process(ProcessError::Timeout(_)) => "build.timeout",
-            Self::Process(_) => "build.process",
-        }
-    }
 }
 
 #[cfg(test)]

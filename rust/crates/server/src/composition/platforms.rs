@@ -85,7 +85,7 @@ pub(super) fn build(
     );
     if config.execution.volume_helper_image.is_none() {
         volume_content =
-            volume_content.with_core_container(std::env::var("HOSTNAME").unwrap_or_default());
+            volume_content.with_core_container(config.execution.core_container_hostname.clone());
     }
     let platform_state = platforms_http::PlatformsHttpState {
         tasks: runtime.dynamic_tasks.clone(),

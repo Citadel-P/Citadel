@@ -138,7 +138,7 @@ impl VolumeContentAdapter {
             }
             Runtime::Agent(r) => {
                 r.inspect_volume(volume, cancellation).await?;
-                HelperRuntime::Agent(AgentExecutionClient::Direct(Arc::new(r.clone())))
+                HelperRuntime::Agent(AgentExecutionClient::Direct(r))
             }
             Runtime::Edge(r) => {
                 r.inspect_volume(volume, cancellation).await?;
