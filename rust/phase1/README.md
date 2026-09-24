@@ -20,12 +20,10 @@ Reviewed files:
 - `breaking-changes.json` is the closed ledger of intentional Rust-cutover
   divergences. An unlisted divergence is a defect.
 
-Regenerate and verify:
-
-```powershell
-./rust/scripts/Generate-Phase1Inventory.ps1
-./rust/scripts/Test-Phase1Inventory.ps1
-```
+These inventories are archived migration evidence. Their source-dependent
+generators have been retired. Current protocols belong to
+`rust/crates/infrastructure/contracts/proto`; Docker API generation uses
+`rust/crates/infrastructure/docker-api/codegen/v1.49.yaml`.
 
 Phase 1 is complete. Pinned `declarative-postgres-migrate` 0.3.2 passed the
 complete 82-table product-schema and convergence proof after the pre-release

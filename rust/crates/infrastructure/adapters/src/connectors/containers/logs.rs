@@ -46,12 +46,12 @@ impl ContainerLogPort for crate::connectors::edge::EdgeRuntime {
                     std::time::Duration::from_secs(24 * 60 * 60),
                     true,
                 )
-                .map_err(|e| failure(&e.to_string()))?;
+                .map_err(crate::connectors::edge::EdgeError::runtime)?;
             let cancel = cancel.clone();
             Ok(Box::pin(async_stream::try_stream! {
                 loop {
                     let next=tokio::select! {biased;()=cancel.cancelled()=>break,next=command.next(&cancel)=>next};
-                    let Some(bytes)=next.map_err(|e|failure(&e.to_string()))? else {break};
+                    let Some(bytes)=next.map_err(crate::connectors::edge::EdgeError::runtime)? else {break};
                     let frame=ContainerLogResponse::decode(bytes.as_slice()).map_err(|_|failure("Invalid Agent log frame."))?;
                     if frame.log.len()>MAX_LOG_FRAME {Err(failure("Agent log frame exceeds the limit."))?;}
                     yield frame.log;
@@ -120,10 +120,10 @@ impl LogReadPort for crate::connectors::edge::EdgeRuntime {
                             std::time::Duration::from_secs(30),
                             true,
                         )
-                        .map_err(|e| failure(&e.to_string()))?;
+                        .map_err(crate::connectors::edge::EdgeError::runtime)?;
                     let cancel = cancel.clone();
                     let stream = Box::pin(async_stream::try_stream! {
-                        while let Some(bytes) = command.next(&cancel).await.map_err(|e|failure(&e.to_string()))? {
+                        while let Some(bytes) = command.next(&cancel).await.map_err(crate::connectors::edge::EdgeError::runtime)? {
                             let response = ContainerLogResponse::decode(bytes.as_slice()).map_err(|_|failure("Invalid Agent log frame."))?;
                             if response.log.len()>MAX_LOG_FRAME {Err(failure("Agent log frame exceeds the limit."))?;}
                             yield response.log;

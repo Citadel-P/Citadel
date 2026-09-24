@@ -14,8 +14,8 @@ cargo xtask docker-api --check
 cargo test --locked -p citadel-docker-api
 ```
 
-Initialize the Contracts submodule first (`git submodule update --init --recursive`).
-`codegen/source.json` pins the existing v1.49 schema path and checksum, and the
+`codegen/v1.49.yaml` is the Rust-owned Docker schema; no submodule is needed.
+`codegen/source.json` pins its path and checksum, and the
 OpenAPI Generator 7.25.0 JAR URL/checksum. The JAR is downloaded only by this explicit
 xtask command and cached in `rust/target/codegen`. Normal Cargo builds use committed
 Rust files and do not run Java, download generators, or regenerate code.

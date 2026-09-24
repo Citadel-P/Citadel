@@ -110,11 +110,11 @@ impl From<RuntimeCapabilityError> for PlatformRegistrationError {
 }
 
 pub trait PlatformRegistrationRuntime: Send + Sync {
-    fn inventory_for<'a>(
-        &'a self,
+    fn inventory_for(
+        &self,
         connector_type: PlatformConnectorType,
-        address: &'a str,
-    ) -> Result<&'a dyn PlatformInventoryPort, PlatformRegistrationError>;
+        address: &str,
+    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError>;
 }
 
 pub trait PlatformRegistrationRepository: Send + Sync {
@@ -188,7 +188,7 @@ impl PlatformRegistrationService {
         validate_platform_type(input.platform_type, info.swarm.as_ref())?;
         normalize_daemon_id(&mut info)?;
         let mut snapshot = collect_inventory_from_info(
-            runtime,
+            runtime.as_ref(),
             &InventoryCollectionTarget {
                 platform_id: id,
                 platform_type: match input.platform_type {

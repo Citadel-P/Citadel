@@ -17,9 +17,6 @@ ENV CITADEL_VERSION=${VERSION} \
     CITADEL_INFORMATIONAL_VERSION=${INFORMATIONAL_VERSION}
 COPY version.json ./version.json
 COPY rust ./rust
-# build.rs compiles and verifies the shared Agent protobuf contracts.
-COPY src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos \
-    ./src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Protos
 WORKDIR /source/rust
 ENV SQLX_OFFLINE=true
 

@@ -83,8 +83,13 @@ impl EdgeAgentService for EdgeIntake {
             };
             let binding = match authentication {
                 Ok(binding) => binding,
-                Err(error) => {
-                    if let EdgeStoreError::Storage(source) = error { tracing::warn!(%source, "Edge authentication persistence failed"); }
+                Err(EdgeStoreError::Storage(source)) => {
+                    tracing::warn!(%source, "Edge authentication persistence failed");
+                    // A retryable storage failure must not tell Agents to discard
+                    // their enrolled identity and consume another enrollment token.
+                    Err(Status::unavailable("Edge authentication is temporarily unavailable."))?
+                }
+                Err(_) => {
                     yield envelope(core_envelope::Body::SessionRejected(SessionRejected { reason: "Edge Agent authentication or enrollment was rejected.".into() }));
                     return;
                 }
@@ -129,8 +134,8 @@ impl EdgeAgentService for EdgeIntake {
                             Some(agent_envelope::Body::CommandCompleted(completed)) => {
                                 if let Ok(id) = Uuid::parse_str(&incoming.command_id) { session.complete(id, completed.status_code == 0); }
                             }
-                            Some(agent_envelope::Body::CommandFailed(_)) => {
-                                if let Ok(id) = Uuid::parse_str(&incoming.command_id) { session.complete(id, false); }
+                            Some(agent_envelope::Body::CommandFailed(failure)) => {
+                                if let Ok(id) = Uuid::parse_str(&incoming.command_id) { session.fail(id, &failure.code); }
                             }
                             _ => Err(Status::invalid_argument("Unexpected Edge message after authentication."))?,
                         }

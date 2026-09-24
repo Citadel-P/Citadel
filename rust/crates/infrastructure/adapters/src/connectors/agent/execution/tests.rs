@@ -7,7 +7,87 @@ use citadel_contracts::citadel::{
     edge::v1::core_envelope,
     images::v1::{BuildImageRequest, ImageBuildResponse, PushImageRequest},
 };
+use futures_util::StreamExt;
 use uuid::Uuid;
+
+#[tokio::test]
+async fn edge_failures_preserve_types_for_unary_and_streaming_commands() {
+    use citadel_platforms::RuntimeErrorKind::*;
+    let registry = EdgeRegistry::default();
+    let (session, mut receiver) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    for (code, kind, grpc) in [
+        ("not_found", NotFound, tonic::Code::NotFound),
+        (
+            "permission_denied",
+            PermissionDenied,
+            tonic::Code::PermissionDenied,
+        ),
+        (
+            "unauthenticated",
+            Authentication,
+            tonic::Code::Unauthenticated,
+        ),
+        (
+            "invalid_argument",
+            InvalidRequest,
+            tonic::Code::InvalidArgument,
+        ),
+        (
+            "failed_precondition",
+            InvalidRequest,
+            tonic::Code::FailedPrecondition,
+        ),
+        ("out_of_range", InvalidRequest, tonic::Code::OutOfRange),
+        ("already_exists", Conflict, tonic::Code::AlreadyExists),
+        ("aborted", Conflict, tonic::Code::Aborted),
+        (
+            "resource_exhausted",
+            ResourceExhausted,
+            tonic::Code::ResourceExhausted,
+        ),
+        ("cancelled", Cancelled, tonic::Code::Cancelled),
+        ("deadline_exceeded", Timeout, tonic::Code::DeadlineExceeded),
+        ("unavailable", Unavailable, tonic::Code::Unavailable),
+        ("unimplemented", Remote, tonic::Code::Unimplemented),
+        ("data_loss", Remote, tonic::Code::DataLoss),
+        ("command_failed", Remote, tonic::Code::Unknown),
+        ("unknown-code-with-secret", Remote, tonic::Code::Unknown),
+    ] {
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            unary::<_, ()>(&session, EdgeCommandKind::NetworkInspect, (), &cancellation),
+            async {
+                let command = receiver.recv().await.unwrap();
+                let id = Uuid::parse_str(&command.command_id).unwrap();
+                // A buffered response cannot turn a terminal failure into success.
+                session.output(id, vec![]);
+                session.fail(id, code);
+                session.complete(id, true);
+            }
+        );
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, kind, "{code}");
+        assert!(!error.to_string().contains("secret"));
+        let mut stream = stream::<_, ()>(
+            &session,
+            EdgeCommandKind::ContainerLogsStream,
+            (),
+            &cancellation,
+        )
+        .unwrap();
+        let command = receiver.recv().await.unwrap();
+        session.fail(Uuid::parse_str(&command.command_id).unwrap(), code);
+        assert_eq!(
+            stream.next().await.unwrap().unwrap_err().code(),
+            grpc,
+            "{code}"
+        );
+        assert!(stream.next().await.is_none());
+        assert_eq!(session.pending_count(), 0);
+    }
+}
 
 #[tokio::test]
 async fn edge_deployment_uses_the_direct_agent_request_and_result_mapping() {

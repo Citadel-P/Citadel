@@ -16,6 +16,10 @@ impl TryFrom<wire::SystemInfo> for DockerInfo {
     type Error = DockerError;
     fn try_from(v: wire::SystemInfo) -> Result<Self, Self::Error> {
         Ok(Self {
+            hostname: v.name.unwrap_or_default(),
+            server_version: v.server_version.unwrap_or_default(),
+            driver: v.driver.unwrap_or_default(),
+            os_version: v.os_version.unwrap_or_default(),
             id: v.id.unwrap_or_default(),
             containers: v.containers.unwrap_or_default().max(0) as u64,
             containers_running: v.containers_running.unwrap_or_default().max(0) as u64,

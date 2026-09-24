@@ -4100,11 +4100,6 @@ impl EdgeHttpContext {
         } else {
             "edge-agent"
         };
-        let host_mount = if target.resource_type == 0 {
-            " -v /:/host:ro --label com.citadel.system=true --label com.citadel.system-role=edge-agent"
-        } else {
-            ""
-        };
         let volume = name.replace('-', "_") + "_data";
         let environment = std::collections::BTreeMap::from([
             ("CITADEL_AGENT_MODE", "edge".to_owned()),
@@ -4119,14 +4114,27 @@ impl EdgeHttpContext {
                 format!("/app/data/{name}.identity.json"),
             ),
         ]);
-        let env = environment
-            .iter()
-            .map(|(key, value)| format!(" -e {}", shell_quote(&format!("{key}={value}"))))
-            .collect::<String>();
-        let command = format!(
-            "docker run -d --name {name} --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock{host_mount} -v {volume}:/app/data{env} {}",
-            shell_quote(&self.agent_image)
+        let mut lines = vec![
+            "docker run -d".to_owned(),
+            format!("  --name {name}"),
+            "  --restart unless-stopped".into(),
+            "  -v /var/run/docker.sock:/var/run/docker.sock".into(),
+        ];
+        if target.resource_type == 0 {
+            lines.extend([
+                "  -v /:/host:ro".into(),
+                "  --label com.citadel.system=true".into(),
+                "  --label com.citadel.system-role=edge-agent".into(),
+            ]);
+        }
+        lines.push(format!("  -v {volume}:/app/data"));
+        lines.extend(
+            environment
+                .iter()
+                .map(|(key, value)| format!("  -e {}", shell_quote(&format!("{key}={value}")))),
         );
+        lines.push(format!("  {}", shell_quote(&self.agent_image)));
+        let command = lines.join(" \\\n");
         Ok(no_store(Json(serde_json::json!({"enrollmentId":enrollment,"platformId":target.platform_id,"token":token,"expiresAtUtc":expires,"instructions":{"coreUrl":self.core_url,"environment":environment,"agentImage":self.agent_image,"dockerRunCommand":command}})).into_response()))
     }
     pub(crate) fn error(error: EdgeStoreError) -> ApiError {

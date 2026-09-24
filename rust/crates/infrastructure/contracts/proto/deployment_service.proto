@@ -1,0 +1,63 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+package citadel.deployments.v1;
+
+service DeploymentService {
+    rpc Apply (ApplyDeploymentRequest) returns (ApplyDeploymentResponse);
+}
+
+message ApplyDeploymentRequest {
+    string imageId = 1;
+    string Name = 2;
+    DeploymentSpec spec = 3;
+}
+
+message DeploymentSpec {
+  string image_id = 1;
+  optional LifeCycleSpec life_cycle_spec = 2;
+  optional ResourceSpec resource_spec = 3;
+  map<string, string> labels = 4;
+  repeated string ports = 5;
+  repeated string env_vars = 6;
+  repeated string volumes = 7;
+  repeated string networks = 8;
+  repeated string command = 9;
+}
+
+message ResourceSpec {
+  optional float nano_cpus = 1;
+  optional float memory_limit = 2;
+}
+
+message LifeCycleSpec {
+  optional int32 stop_timeout = 1;
+  optional StopSignal stop_signal = 2;
+  ContainerRestartPolicy restart_policy = 3;
+}
+
+enum StopSignal {
+  SIGTERM = 0;
+  SIGKILL = 1;
+  SIGINT = 2;
+  SIGQUIT = 3;
+}
+
+enum ContainerRestartPolicy {
+  NO = 0;
+  ALWAYS = 1;
+  ON_FAILURE = 2;
+  UNLESS_STOPPED = 3;
+}
+
+message ApplyDeploymentResponse {
+    string container_id = 1;
+    DeployedContainerState deployed_container_state = 2;
+}
+
+enum DeployedContainerState {
+     Running = 0;
+    Exited = 1;
+    Timeout = 2;
+}

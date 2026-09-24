@@ -1,5 +1,6 @@
+use super::DockerEndpoint;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::time::Duration;
@@ -13,6 +14,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 mod binary_exec;
+pub use binary_exec::{DockerExecError, DockerExecEvent, DockerExecStream};
 
 use super::projection::{ContainerStats, DockerEvent, DockerVersion};
 
@@ -22,6 +24,15 @@ const MAX_JSON_BODY_BYTES: usize = 16 * 1024 * 1024;
 const MAX_STREAM_ITEM_BYTES: usize = 1024 * 1024;
 
 pub type DockerJsonStream<T> = Pin<Box<dyn Stream<Item = Result<T, DockerError>> + Send + 'static>>;
+
+#[derive(Default)]
+pub struct DockerImagePullOptions<'a> {
+    pub from_image: Option<&'a str>,
+    pub from_source: Option<&'a str>,
+    pub repository: Option<&'a str>,
+    pub tag: Option<&'a str>,
+    pub changes: &'a [String],
+}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +65,7 @@ pub struct DockerImagePullProgress {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct DockerImagePullError {
+    pub code: Option<i64>,
     #[serde(default)]
     pub message: String,
 }
@@ -99,6 +111,8 @@ impl FromStr for ApiVersion {
 pub enum DockerError {
     #[error("Docker Unix-socket transport is only available on Unix targets")]
     UnsupportedPlatform,
+    #[error("Invalid Docker endpoint: {0}")]
+    InvalidEndpoint(&'static str),
     #[error("Docker transport failed: {0}")]
     Transport(#[from] reqwest::Error),
     #[error("Docker protocol IO failed: {0}")]
@@ -138,7 +152,8 @@ pub struct DockerClient {
     pub(crate) host_disk:
         std::sync::Arc<crate::filesystem::host::disk_usage::HostDiskUsageProvider>,
     pub(super) client: Client,
-    socket_path: PathBuf,
+    endpoint: DockerEndpoint,
+    pub(super) base_url: String,
     pub(super) request_timeout: Duration,
     pub(super) version: std::sync::Arc<RwLock<Option<ApiVersion>>>,
     negotiation: std::sync::Arc<Mutex<()>>,
@@ -162,18 +177,43 @@ impl DockerClient {
         request_timeout: Duration,
         host_root: impl Into<PathBuf>,
     ) -> Result<Self, DockerError> {
-        let socket_path = socket_path.into();
-        #[cfg(unix)]
-        let client = Client::builder().unix_socket(socket_path.clone()).build()?;
-        #[cfg(not(unix))]
-        let client = Client::builder().build()?;
+        Self::with_endpoint(
+            DockerEndpoint::Unix(socket_path.into()),
+            request_timeout,
+            host_root,
+        )
+    }
 
+    pub fn with_endpoint(
+        endpoint: DockerEndpoint,
+        request_timeout: Duration,
+        host_root: impl Into<PathBuf>,
+    ) -> Result<Self, DockerError> {
+        endpoint.validate()?;
+        let mut builder = Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(request_timeout);
+        if let DockerEndpoint::Unix(path) = &endpoint {
+            #[cfg(unix)]
+            {
+                builder = builder.unix_socket(path.clone());
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = path;
+                return Err(DockerError::UnsupportedPlatform);
+            }
+        }
+        let client = builder.build()?;
+        let base_url = endpoint.http_origin();
         Ok(Self {
             host_disk: std::sync::Arc::new(
                 crate::filesystem::host::disk_usage::HostDiskUsageProvider::new(host_root.into()),
             ),
             client,
-            socket_path,
+            endpoint,
+            base_url,
             request_timeout,
             version: std::sync::Arc::new(RwLock::new(None)),
             negotiation: std::sync::Arc::new(Mutex::new(())),
@@ -186,8 +226,8 @@ impl DockerClient {
     }
 
     #[must_use]
-    pub fn socket_path(&self) -> &Path {
-        &self.socket_path
+    pub fn endpoint(&self) -> &DockerEndpoint {
+        &self.endpoint
     }
 
     pub(crate) async fn open_logs(
@@ -204,7 +244,7 @@ impl DockerClient {
         .await
     }
 
-    pub(crate) async fn open_resource_logs(
+    pub async fn open_resource_logs(
         &self,
         resource: citadel_platforms::logs::LogResource<'_>,
         follow: bool,
@@ -212,30 +252,58 @@ impl DockerClient {
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<citadel_platforms::logs::RuntimeLogStream, DockerError> {
         use citadel_platforms::logs::LogResource;
-        let (id, kind, inspection, tty_path, details) = match resource {
+        let (id, kind, inspection, tty_path) = match resource {
             LogResource::Container(id) => (
                 id,
                 "containers",
                 self.inspect_container_document(id).await?,
                 "/Config/Tty",
-                false,
             ),
             LogResource::Service(id) => (
                 id,
                 "services",
                 serde_json::to_value(self.inspect_swarm_service(id).await?)?,
                 "/Spec/TaskTemplate/ContainerSpec/TTY",
-                true,
             ),
         };
-        validate_identifier(id)?;
-        let version = self.negotiated_version().await?;
         let tty = inspection
             .pointer(tty_path)
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
+        self.log_stream(id, kind, tty, follow, tail, cancel).await
+    }
+
+    pub async fn task_logs(
+        &self,
+        id: &str,
+        tail: u16,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::logs::RuntimeLogStream, DockerError> {
+        validate_identifier(id)?;
+        let task = self
+            .raw_document(&format!("/tasks/{}", urlencoding::encode(id)))
+            .await?;
+        let tty = task
+            .pointer("/Spec/ContainerSpec/TTY")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        self.log_stream(id, "tasks", tty, false, tail, cancel).await
+    }
+
+    async fn log_stream(
+        &self,
+        id: &str,
+        kind: &str,
+        tty: bool,
+        follow: bool,
+        tail: u16,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::logs::RuntimeLogStream, DockerError> {
+        validate_identifier(id)?;
+        let version = self.negotiated_version().await?;
         let path = format!("/{kind}/{}/logs", urlencoding::encode(id));
-        let response=self.client.get(format!("http://localhost/v{version}{path}?stdout=true&stderr=true&timestamps=true&follow={follow}&tail={tail}&details={details}")).send().await?;
+        let details = kind != "containers";
+        let response=self.client.get(format!("{}/v{version}{path}?stdout=true&stderr=true&timestamps=true&follow={follow}&tail={tail}&details={details}", self.base_url)).send().await?;
         if !response.status().is_success() {
             return Err(DockerError::Api {
                 status: response.status(),
@@ -260,14 +328,24 @@ impl DockerClient {
         shell: citadel_platforms::terminal::TerminalShell,
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<citadel_platforms::terminal::TerminalSession, DockerError> {
+        self.execute_terminal(id, &[shell.command().to_owned()], cancel)
+            .await
+    }
+
+    pub async fn execute_terminal(
+        &self,
+        id: &str,
+        command: &[String],
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<citadel_platforms::terminal::TerminalSession, DockerError> {
         validate_identifier(id)?;
-        let created = self.create_exec(id, serde_json::json!({"AttachStdin":true,"AttachStdout":true,"AttachStderr":true,"Tty":true,"Cmd":[shell.command()]})).await?;
+        let created = self.create_exec(id, serde_json::json!({"AttachStdin":true,"AttachStdout":true,"AttachStderr":true,"Tty":true,"Cmd":command})).await?;
         validate_identifier(&created)?;
         let version = self.negotiated_version().await?;
         let start = format!("/exec/{}/start", urlencoding::encode(&created));
         let response = self
             .client
-            .post(format!("http://localhost/v{version}{start}"))
+            .post(format!("{}/v{version}{start}", self.base_url))
             .header("Connection", "Upgrade")
             .header("Upgrade", "tcp")
             .json(&serde_json::json!({"Detach":false,"Tty":true}))
@@ -296,7 +374,6 @@ impl DockerClient {
 
     pub async fn ping(&self) -> Result<(), DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerPing.start();
-        self.ensure_supported()?;
         let response = self.send_unversioned("/_ping").await?;
         let body = bounded_body(response, 64).await?;
         let ping = String::from_utf8_lossy(&body).trim().to_owned();
@@ -378,10 +455,49 @@ impl DockerClient {
         if image.trim().is_empty() || image.len() > 2048 {
             return Err(DockerError::InvalidIdentifier);
         }
-        self.ensure_supported()?;
+        self.pull_image_with_options(
+            DockerImagePullOptions {
+                from_image: Some(image),
+                ..Default::default()
+            },
+            registry_auth,
+        )
+        .await
+    }
+
+    pub async fn pull_image_with_options(
+        &self,
+        options: DockerImagePullOptions<'_>,
+        registry_auth: Option<&str>,
+    ) -> Result<DockerJsonStream<DockerImagePullMessage>, DockerError> {
+        if options
+            .from_image
+            .is_none_or(|value| value.trim().is_empty())
+            && options
+                .from_source
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(DockerError::InvalidIdentifier);
+        }
         let version = self.negotiated_version().await?;
-        let query = format!("fromImage={}", urlencoding::encode(image));
-        let url = format!("http://localhost/v{version}{}?{query}", "/images/create");
+        let query = {
+            let mut query = url::form_urlencoded::Serializer::new(String::new());
+            for (key, value) in [
+                ("fromImage", options.from_image),
+                ("fromSrc", options.from_source),
+                ("repo", options.repository),
+                ("tag", options.tag),
+            ] {
+                if let Some(value) = value {
+                    query.append_pair(key, value);
+                }
+            }
+            for change in options.changes {
+                query.append_pair("changes", change);
+            }
+            query.finish()
+        };
+        let url = format!("{}/v{version}/images/create?{query}", self.base_url);
         let mut request = self.client.post(url);
         if let Some(auth) = registry_auth {
             request = request.header("X-Registry-Auth", auth);
@@ -447,7 +563,7 @@ impl DockerClient {
         let version = self.negotiated_version().await?;
         let response = self
             .client
-            .get(format!("http://localhost/v{version}{path}"))
+            .get(format!("{}/v{version}{path}", self.base_url))
             .timeout(self.request_timeout)
             .send()
             .await?;
@@ -461,7 +577,7 @@ impl DockerClient {
         let query = query.map(|q| format!("?{q}")).unwrap_or_default();
         let response = self
             .client
-            .get(format!("http://localhost/v{version}{path}{query}"))
+            .get(format!("{}/v{version}{path}{query}", self.base_url))
             .send()
             .await?;
         self.checked_response(response).await
@@ -482,10 +598,9 @@ impl DockerClient {
     }
 
     async fn send_unversioned(&self, path: &str) -> Result<Response, DockerError> {
-        self.ensure_supported()?;
         let response = self
             .client
-            .get(format!("http://localhost{path}"))
+            .get(format!("{}{path}", self.base_url))
             .timeout(self.request_timeout)
             .send()
             .await?;
@@ -498,17 +613,6 @@ impl DockerClient {
             status,
             message: String::from_utf8_lossy(&body).into_owned(),
         })
-    }
-
-    fn ensure_supported(&self) -> Result<(), DockerError> {
-        #[cfg(unix)]
-        {
-            Ok(())
-        }
-        #[cfg(not(unix))]
-        {
-            Err(DockerError::UnsupportedPlatform)
-        }
     }
 }
 

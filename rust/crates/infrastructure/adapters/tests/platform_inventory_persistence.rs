@@ -1112,17 +1112,38 @@ async fn stack_sync_preserves_active_releases_and_recovers_stale_processing() {
     inventory.info.swarm = None;
     inventory.containers.clear();
     let store = PostgresInventoryProjectionStore::new(pool.clone());
-    for (status, control, expected_status, expected_control) in [
-        ("Healthy", "Idle", "Degraded", "Idle"),
-        ("Created", "Idle", "Created", "Idle"),
-        ("Applying", "Processing", "Applying", "Processing"),
-        ("Pending", "Processing", "Pending", "Processing"),
-        ("Degraded", "Processing", "Degraded", "Idle"),
+    for (status, control, owner, expected_status, expected_control) in [
+        ("Healthy", "Idle", None, "Degraded", "Idle"),
+        ("Created", "Idle", None, "Created", "Idle"),
+        ("Applying", "Processing", None, "Applying", "Processing"),
+        ("Pending", "Processing", None, "Pending", "Processing"),
+        ("Degraded", "Processing", None, "Degraded", "Idle"),
+        (
+            "Healthy",
+            "Processing",
+            Some(actor),
+            "Healthy",
+            "Processing",
+        ),
+        (
+            "Stopped",
+            "Processing",
+            Some(actor),
+            "Stopped",
+            "Processing",
+        ),
+        (
+            "Degraded",
+            "Processing",
+            Some(actor),
+            "Degraded",
+            "Processing",
+        ),
     ] {
         let stack = Uuid::now_v7();
         let release = Uuid::now_v7();
-        sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,driftpolicy,stacksource,stackupdatestate,controlstate) VALUES($1,$2,$3,'{}','WebEditor','{}',$4)")
-            .bind(stack).bind(stack.to_string()).bind(actor).bind(control).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,driftpolicy,stacksource,stackupdatestate,controlstate,controltriggeredby) VALUES($1,$2,$3,'{}','WebEditor','{}',$4,$5)")
+            .bind(stack).bind(stack.to_string()).bind(actor).bind(control).bind(owner).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,'{}',$5,'1')")
             .bind(release).bind(stack).bind(platform).bind(actor).bind(status).execute(&pool).await.unwrap();
         sqlx::query("UPDATE stacks SET currentstackreleaseid=$2 WHERE id=$1")

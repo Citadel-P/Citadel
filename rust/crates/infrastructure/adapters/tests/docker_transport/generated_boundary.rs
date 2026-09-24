@@ -181,7 +181,9 @@ async fn swarm_update_preserves_unknown_nested_fields_and_64_bit_version() {
             socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
         }
         let (headers, body) = read_terminal_request(&mut socket).await;
-        assert!(headers.starts_with("POST /v1.49/services/service/update?version=5000000000 "));
+        assert!(headers.starts_with(
+            "POST /v1.49/services/service/update?version=5000000000&registryAuthFrom=spec "
+        ));
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
             expected

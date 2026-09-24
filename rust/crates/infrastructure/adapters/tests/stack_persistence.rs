@@ -31,9 +31,10 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     let suffix = Uuid::now_v7().simple().to_string();
     let platform_id = Uuid::now_v7();
+    // Existing standalone platforms must remain valid for Stack CRUD.
     sqlx::query(
         r#"INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
-           VALUES($1,'unix:///var/run/docker.sock','Local',1,0,1048576,$2,0,'{"$type":"Docker"}'::json,'Online',0)"#,
+           VALUES($1,'unix:///var/run/docker.sock','Local',1,0,1048576,$2,0,'{"$type":"DockerStandalone"}'::json,'Online',0)"#,
     )
     .bind(platform_id)
     .bind(format!("stack-platform-{suffix}"))
@@ -279,6 +280,23 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     );
 
     let state_claims = store.claim_state(actor, true, &[created.id]).await.unwrap();
+    sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,stackid,state,updated) VALUES($1,0,'container-one','image','web',$2,'[]',$3,'Running',0)")
+        .bind(Uuid::now_v7()).bind(platform_id).bind(created.id).execute(&pool).await.unwrap();
+    // A stop event can arrive before the Agent sends the RPC response.
+    citadel_adapters::persistence::postgres::platforms::status::container_event(
+        &pool,
+        platform_id,
+        None,
+        "container-one",
+        Some("exited"),
+        None,
+        chrono::Utc::now().timestamp(),
+    )
+    .await
+    .unwrap();
+    let pending = store.get_authorized(actor, true, created.id).await.unwrap();
+    assert_eq!(pending.status, StackReleaseStatus::Pending);
+    assert_eq!(pending.control_state, "Processing");
     store
         .complete_state(
             actor,

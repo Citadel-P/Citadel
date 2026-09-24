@@ -1,42 +1,28 @@
 #![forbid(unsafe_code)]
 
-use std::fs;
-use std::path::{Path, PathBuf};
-
-use serde::Deserialize;
-#[path = "proto/checksum.rs"]
-mod checksum;
-
-#[derive(Deserialize)]
-struct ProtoSource {
-    directory: String,
-    files: Vec<ProtoFile>,
-}
-
-#[derive(Deserialize)]
-struct ProtoFile {
-    name: String,
-    sha256: String,
-}
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let crate_directory = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let source_file = crate_directory.join("proto/source.json");
-    println!("cargo:rerun-if-changed={}", source_file.display());
-
-    let source: ProtoSource = serde_json::from_slice(&fs::read(&source_file)?)?;
-    let proto_directory = normalize(crate_directory.join(source.directory));
-    let mut protos = Vec::with_capacity(source.files.len());
-    let mut edge_protos = Vec::new();
-    for file in source.files {
-        let path = proto_directory.join(&file.name);
+    let proto_directory = crate_directory.join("proto");
+    let output_directory = PathBuf::from(std::env::var("OUT_DIR")?);
+    let protos: Vec<_> = [
+        "shared_models.proto",
+        "platform_service.proto",
+        "container_service.proto",
+        "deployment_service.proto",
+        "stack_service.proto",
+        "image_service.proto",
+        "network_service.proto",
+        "volume_service.proto",
+        "swarm_service.proto",
+    ]
+    .into_iter()
+    .map(|name| proto_directory.join(name))
+    .collect();
+    let edge_protos = [proto_directory.join("edge_agent_service.proto")];
+    for path in protos.iter().chain(&edge_protos) {
         println!("cargo:rerun-if-changed={}", path.display());
-        verify_checksum(&path, &file.sha256)?;
-        if file.name == "edge_agent_service.proto" {
-            edge_protos.push(path);
-        } else {
-            protos.push(path);
-        }
     }
 
     let protoc = protoc_bin_vendored::protoc_bin_path()?;
@@ -75,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     builder
+        .file_descriptor_set_path(output_directory.join("direct.bin"))
         .build_client(true)
         .build_server(true)
         .type_attribute(
@@ -100,25 +87,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut prost = prost_build::Config::new();
     prost.protoc_executable(protoc);
     tonic_prost_build::configure()
+        .file_descriptor_set_path(output_directory.join("edge.bin"))
         .build_transport(false)
         .compile_with_config(prost, &edge_protos, &[proto_directory, protobuf_include])?;
 
     Ok(())
-}
-
-fn verify_checksum(path: &Path, expected: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let contents = fs::read_to_string(path)?;
-    let actual = checksum::normalized_sha256(&contents);
-    if actual != expected {
-        return Err(format!(
-            "protobuf checksum mismatch for {}: expected {expected}, got {actual}",
-            path.display()
-        )
-        .into());
-    }
-    Ok(())
-}
-
-fn normalize(path: PathBuf) -> PathBuf {
-    path.components().collect()
 }

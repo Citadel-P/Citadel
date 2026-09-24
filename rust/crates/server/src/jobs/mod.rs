@@ -109,7 +109,10 @@ pub async fn spawn_all(
             edge_registry.clone(),
             pool.clone(),
             realtime_hub.clone(),
-            config.node_agent_policy.clone(),
+            workers::edge::InventorySettings {
+                node_policy: config.node_agent_policy.clone(),
+                reconciliation_interval: config.reconciliation_interval,
+            },
             runtime_targets.inventory_budget.clone(),
         ),
     );

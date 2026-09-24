@@ -13,6 +13,66 @@ use prost::Message;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+#[tokio::test]
+async fn streaming_resources_preserve_remote_failure_kinds() {
+    use citadel_platforms::{RuntimeErrorKind, image_pull::ImagePullPort, logs::*};
+    let registry = EdgeRegistry::default();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    let mut logs = runtime.container_logs("missing", &cancel).await.unwrap();
+    let envelope = outbound.recv().await.unwrap();
+    session.fail(Uuid::parse_str(&envelope.command_id).unwrap(), "not_found");
+    assert_eq!(
+        logs.next().await.unwrap().unwrap_err().kind,
+        RuntimeErrorKind::NotFound
+    );
+    assert!(logs.next().await.is_none());
+
+    let (result, ()) = tokio::join!(
+        runtime.read_logs(LogResource::Container("missing"), 10, &cancel),
+        async {
+            let envelope = outbound.recv().await.unwrap();
+            session.fail(Uuid::parse_str(&envelope.command_id).unwrap(), "not_found");
+        }
+    );
+    assert_eq!(result.unwrap_err().kind, RuntimeErrorKind::NotFound);
+
+    let mut terminal = runtime
+        .container_terminal("missing", TerminalShell::Sh, &cancel)
+        .await
+        .unwrap();
+    let envelope = outbound.recv().await.unwrap();
+    session.fail(
+        Uuid::parse_str(&envelope.command_id).unwrap(),
+        "permission_denied",
+    );
+    assert_eq!(
+        terminal.output.next().await.unwrap().err().unwrap().kind,
+        RuntimeErrorKind::PermissionDenied
+    );
+
+    let mut pull = runtime
+        .pull_image_stream("private/image", None, &cancel)
+        .await
+        .unwrap();
+    let envelope = outbound.recv().await.unwrap();
+    session.fail(
+        Uuid::parse_str(&envelope.command_id).unwrap(),
+        "unauthenticated",
+    );
+    assert_eq!(
+        pull.next().await.unwrap().err().unwrap().kind,
+        RuntimeErrorKind::Authentication
+    );
+    assert!(pull.next().await.is_none());
+    assert_eq!(session.pending_count(), 0);
+}
+
 #[test]
 fn disconnect_platform_closes_manager_and_nodes_but_preserves_other_targets() {
     let registry = EdgeRegistry::default();

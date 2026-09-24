@@ -1,0 +1,41 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "shared_models.proto";
+
+package citadel.volumes.v1;
+
+service VolumeService {
+  rpc List (ListVolumesRequest) returns (ListVolumesResponse);
+  rpc Inspect (InspectVolumeRequest) returns (citadel.shared_models.v1.VolumeResponse);
+  rpc Create (CreateVolumeRequest) returns (citadel.shared_models.v1.VolumeResponse);
+  rpc Remove (RemoveVolumeRequest) returns (RemoveVolumeResponse);
+}
+message ListVolumesRequest {
+  google.protobuf.BoolValue dangling = 1;
+  google.protobuf.StringValue driver = 2;
+  google.protobuf.StringValue name = 3;
+}
+message ListVolumesResponse {
+  repeated citadel.shared_models.v1.VolumeResponse volumes = 1;
+}
+
+message InspectVolumeRequest {
+  string name = 1;
+}
+
+message CreateVolumeRequest {
+  string name = 1;
+  string driver = 2;
+  map<string, string> labels = 3;
+  map<string, string> options = 4;
+}
+
+message RemoveVolumeRequest {
+  repeated string names = 1;
+  bool force = 2;
+}
+
+message RemoveVolumeResponse {
+}
+

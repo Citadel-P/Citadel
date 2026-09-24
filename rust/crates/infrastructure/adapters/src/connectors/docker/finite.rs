@@ -36,7 +36,7 @@ impl DockerClient {
             return Ok(configuration.clone());
         }
         let configuration = Arc::new(Configuration {
-            base_path: format!("http://localhost/v{version}"),
+            base_path: format!("{}/v{version}", self.base_url),
             client: self.client.clone(),
             request_timeout: Some(self.request_timeout),
             max_response_bytes: 16 * 1024 * 1024,
@@ -108,13 +108,24 @@ impl DockerClient {
     pub async fn list_containers(&self, all: bool) -> Result<Vec<ContainerSummary>, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
         convert_list(
-            self.api_result(
-                ContainerApiClient::new(self.configuration().await?)
-                    .container_list(Some(all), None, None, None)
-                    .await,
-            )
-            .await?,
+            self.list_container_models(Some(all), None, None, None)
+                .await?,
         )
+    }
+
+    pub async fn list_container_models(
+        &self,
+        all: Option<bool>,
+        limit: Option<i32>,
+        size: Option<bool>,
+        filters: Option<&str>,
+    ) -> Result<Vec<models::ContainerSummary>, DockerError> {
+        self.api_result(
+            ContainerApiClient::new(self.configuration().await?)
+                .container_list(all, limit, size, filters)
+                .await,
+        )
+        .await
     }
     pub async fn inspect_container(&self, id: &str) -> Result<ContainerInspect, DockerError> {
         validate_identifier(id)?;
@@ -174,17 +185,27 @@ impl DockerClient {
         id: &str,
         action: citadel_platforms::containers::ContainerAction,
     ) -> Result<(), DockerError> {
+        self.change_container_state_with_options(id, action, None, Some(10))
+            .await
+    }
+    pub async fn change_container_state_with_options(
+        &self,
+        id: &str,
+        action: citadel_platforms::containers::ContainerAction,
+        signal: Option<&str>,
+        timeout: Option<i32>,
+    ) -> Result<(), DockerError> {
         use citadel_platforms::containers::ContainerAction::*;
         validate_identifier(id)?;
         let api = ContainerApiClient::new(self.configuration().await?);
         let result = match action {
             Start => self.api_result(api.container_start(id, None).await).await,
             Stop => {
-                self.api_result(api.container_stop(id, None, Some(10)).await)
+                self.api_result(api.container_stop(id, signal, timeout).await)
                     .await
             }
             Restart => {
-                self.api_result(api.container_restart(id, None, Some(10)).await)
+                self.api_result(api.container_restart(id, signal, timeout).await)
                     .await
             }
             Pause => self.api_result(api.container_pause(id).await).await,
@@ -250,16 +271,19 @@ impl DockerClient {
         .await?
         .try_into()
     }
+    pub async fn list_image_models(
+        &self,
+    ) -> Result<Vec<citadel_docker_api::models::ImageSummary>, DockerError> {
+        self.api_result(
+            ImageApiClient::new(self.configuration().await?)
+                .image_list(Some(true), None, None, None, None)
+                .await,
+        )
+        .await
+    }
     pub async fn list_images(&self) -> Result<Vec<ImageSummary>, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
-        convert_list(
-            self.api_result(
-                ImageApiClient::new(self.configuration().await?)
-                    .image_list(Some(true), None, None, None, None)
-                    .await,
-            )
-            .await?,
-        )
+        convert_list(self.list_image_models().await?)
     }
     pub async fn inspect_image(&self, id: &str) -> Result<ImageInspect, DockerError> {
         validate_identifier(id)?;
@@ -316,16 +340,32 @@ impl DockerClient {
     }
     pub(super) async fn volumes(&self) -> Result<VolumeListResponse, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
+        self.list_volume_models(None).await?.try_into()
+    }
+    pub async fn list_volume_models(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<models::VolumeListResponse, DockerError> {
         self.api_result(
             VolumeApiClient::new(self.configuration().await?)
-                .volume_list(None)
+                .volume_list(filters)
                 .await,
         )
-        .await?
-        .try_into()
+        .await
     }
     pub async fn list_volumes(&self) -> Result<Vec<DockerVolume>, DockerError> {
-        let mut volumes = self.volumes().await?.volumes;
+        self.list_volumes_filtered(None).await
+    }
+    pub async fn list_volumes_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<DockerVolume>, DockerError> {
+        let mut volumes: Vec<DockerVolume> = convert_list(
+            self.list_volume_models(filters)
+                .await?
+                .volumes
+                .unwrap_or_default(),
+        )?;
         if volumes.iter().any(|v| v.usage_data.is_none()) {
             let mut usage = self.volume_usage().await?;
             for volume in &mut volumes {
@@ -395,11 +435,16 @@ impl DockerClient {
         .await
     }
     pub async fn list_networks(&self) -> Result<Vec<DockerNetwork>, DockerError> {
-        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
+        self.list_networks_filtered(None).await
+    }
+    pub async fn list_networks_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<DockerNetwork>, DockerError> {
         convert_list(
             self.api_result(
                 NetworkApiClient::new(self.configuration().await?)
-                    .network_list(None)
+                    .network_list(filters)
                     .await,
             )
             .await?,
@@ -441,10 +486,16 @@ impl DockerClient {
         .await
     }
     pub async fn list_swarm_nodes(&self) -> Result<Vec<SwarmNode>, DockerError> {
+        self.list_swarm_nodes_filtered(None).await
+    }
+    pub async fn list_swarm_nodes_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<SwarmNode>, DockerError> {
         convert_list(
             self.api_result(
                 NodeApiClient::new(self.configuration().await?)
-                    .node_list(None)
+                    .node_list(filters)
                     .await,
             )
             .await?,
@@ -500,10 +551,16 @@ impl DockerClient {
         }
     }
     async fn tasks(&self, filters: &str) -> Result<Vec<SwarmTask>, DockerError> {
+        self.list_swarm_tasks_filtered(Some(filters)).await
+    }
+    pub async fn list_swarm_tasks_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<SwarmTask>, DockerError> {
         convert_list(
             self.api_result(
                 TaskApiClient::new(self.configuration().await?)
-                    .task_list(Some(filters))
+                    .task_list(filters)
                     .await,
             )
             .await?,
@@ -523,10 +580,16 @@ impl DockerClient {
         self.tasks(r#"{"desired-state":["running"]}"#).await
     }
     pub async fn list_swarm_services(&self) -> Result<Vec<SwarmService>, DockerError> {
+        self.list_swarm_services_filtered(None).await
+    }
+    pub async fn list_swarm_services_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<SwarmService>, DockerError> {
         convert_list(
             self.api_result(
                 ServiceApiClient::new(self.configuration().await?)
-                    .service_list(None, Some(true))
+                    .service_list(filters, Some(true))
                     .await,
             )
             .await?,
@@ -553,10 +616,17 @@ impl DockerClient {
         .try_into()
     }
     pub async fn create_swarm_service(&self, spec: &Value) -> Result<Value, DockerError> {
+        self.create_swarm_service_authenticated(spec, None).await
+    }
+    pub async fn create_swarm_service_authenticated(
+        &self,
+        spec: &Value,
+        auth: Option<&str>,
+    ) -> Result<Value, DockerError> {
         document(
             self.api_result(
                 ServiceApiClient::new(self.configuration().await?)
-                    .service_create(body(spec)?, None)
+                    .service_create(body(spec)?, auth)
                     .await,
             )
             .await?,
@@ -568,11 +638,21 @@ impl DockerClient {
         version: i64,
         spec: &Value,
     ) -> Result<Value, DockerError> {
+        self.update_swarm_service_authenticated(id, version, spec, None)
+            .await
+    }
+    pub async fn update_swarm_service_authenticated(
+        &self,
+        id: &str,
+        version: i64,
+        spec: &Value,
+        auth: Option<&str>,
+    ) -> Result<Value, DockerError> {
         validate_identifier(id)?;
         document(
             self.api_result(
                 ServiceApiClient::new(self.configuration().await?)
-                    .service_update(id, version, body(spec)?, None, None, None)
+                    .service_update(id, version, body(spec)?, Some("spec"), None, auth)
                     .await,
             )
             .await?,
@@ -588,10 +668,16 @@ impl DockerClient {
         .await
     }
     pub async fn list_swarm_secrets(&self) -> Result<Vec<SwarmSecret>, DockerError> {
+        self.list_swarm_secrets_filtered(None).await
+    }
+    pub async fn list_swarm_secrets_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<SwarmSecret>, DockerError> {
         convert_list(
             self.api_result(
                 SecretApiClient::new(self.configuration().await?)
-                    .secret_list(None)
+                    .secret_list(filters)
                     .await,
             )
             .await?,
@@ -608,10 +694,16 @@ impl DockerClient {
         .try_into()
     }
     pub async fn list_swarm_configs(&self) -> Result<Vec<SwarmConfig>, DockerError> {
+        self.list_swarm_configs_filtered(None).await
+    }
+    pub async fn list_swarm_configs_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<SwarmConfig>, DockerError> {
         convert_list(
             self.api_result(
                 ConfigApiClient::new(self.configuration().await?)
-                    .config_list(None)
+                    .config_list(filters)
                     .await,
             )
             .await?,
@@ -728,7 +820,7 @@ impl DockerClient {
         )
         .await
     }
-    pub(super) async fn exec_inspect(
+    pub(crate) async fn exec_inspect(
         &self,
         id: &str,
     ) -> Result<models::ExecInspectResponse, DockerError> {

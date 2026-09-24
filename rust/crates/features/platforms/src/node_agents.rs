@@ -82,7 +82,7 @@ pub struct NodeCoverageInput {
     pub runtime_stale: bool,
     pub binding_present: bool,
     pub connected: bool,
-    pub protocol_version: Option<i32>,
+    pub protocol_compatible: bool,
     pub task_state: Option<String>,
     pub heartbeat: Option<DateTime<Utc>>,
     pub reconciled_at: Option<DateTime<Utc>>,
@@ -100,7 +100,7 @@ impl NodeCoverageInput {
         let active = self.availability.eq_ignore_ascii_case("active");
         let schedulable = active && self.status.eq_ignore_ascii_case("ready");
         let eligible = self.manager_source || (supported && active);
-        let compatible = self.protocol_version.is_none_or(|version| version == 1);
+        let compatible = self.manager_source || self.protocol_compatible;
         let stale = self.membership_stale
             || (!self.manager_source
                 && (self.runtime_stale
@@ -270,6 +270,7 @@ mod tests {
             architecture: "x86_64".into(),
             availability: "Active".into(),
             status: "Ready".into(),
+            protocol_compatible: true,
             ..Default::default()
         }
     }
@@ -319,7 +320,7 @@ mod tests {
             NodeCoverageInput {
                 connected: true,
                 reconciled_at: Some(Utc::now()),
-                protocol_version: Some(2),
+                protocol_compatible: false,
                 ..node()
             },
             NodeCoverageInput {

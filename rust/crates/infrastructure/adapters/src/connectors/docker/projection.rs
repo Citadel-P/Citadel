@@ -14,6 +14,12 @@ where
 }
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerVersion {
+    #[serde(
+        rename = "Components",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub components: Vec<citadel_docker_api::models::SystemVersionComponentsInner>,
     #[serde(rename = "Version", default)]
     pub version: String,
     #[serde(rename = "ApiVersion", default)]
@@ -30,6 +36,14 @@ pub struct DockerVersion {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerInfo {
+    #[serde(rename = "Name", default)]
+    pub hostname: String,
+    #[serde(rename = "ServerVersion", default)]
+    pub server_version: String,
+    #[serde(rename = "Driver", default)]
+    pub driver: String,
+    #[serde(rename = "OSVersion", default)]
+    pub os_version: String,
     #[serde(rename = "ID", default)]
     pub id: String,
     #[serde(rename = "Containers", default)]

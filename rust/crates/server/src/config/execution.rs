@@ -53,6 +53,7 @@ pub struct ExecutionConfig {
     pub edge_agent: EdgeAgentConfig,
     pub restic_image: String,
     pub volume_helper_image: Option<String>,
+    pub core_container_hostname: String,
 }
 
 impl ExecutionConfig {
@@ -232,6 +233,7 @@ impl ExecutionConfig {
             restic_image: string("CITADEL_RESTIC_IMAGE")
                 .unwrap_or_else(|| "restic/restic:0.18.1".into()),
             volume_helper_image: string("CITADEL_VOLUME_HELPER_IMAGE"),
+            core_container_hostname: string("HOSTNAME").unwrap_or_default(),
         })
     }
 }

@@ -348,6 +348,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     ));
     let executor = LocalDockerBuildExecutor::new(
         git_execution,
+        citadel_adapters::connectors::docker::DockerEndpoint::Unix("/var/run/docker.sock".into()),
         "docker-command-must-not-run",
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), target_guard_protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),

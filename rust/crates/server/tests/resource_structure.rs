@@ -153,10 +153,11 @@ fn architectural_groups_enforce_inward_dependencies() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect::<Vec<_>>();
     groups.sort();
-    assert_eq!(groups, ["features", "infrastructure", "server"]);
+    assert_eq!(groups, ["agent", "features", "infrastructure", "server"]);
     let features = root.join("features").canonicalize().unwrap();
     let infrastructure = root.join("infrastructure").canonicalize().unwrap();
     let server = root.join("server").canonicalize().unwrap();
+    let agent = root.join("agent").canonicalize().unwrap();
     let output = std::process::Command::new(env!("CARGO"))
         .args(["metadata", "--format-version=1", "--no-deps", "--offline"])
         .current_dir(root.parent().unwrap())
@@ -184,8 +185,15 @@ fn architectural_groups_enforce_inward_dependencies() {
                 }
                 if owner.starts_with(&infrastructure) {
                     assert!(
-                        !target.starts_with(&server),
-                        "{} depends on Server",
+                        !target.starts_with(&server) && !target.starts_with(&agent),
+                        "{} depends on an executable host",
+                        manifest.display()
+                    );
+                }
+                if owner.starts_with(&agent) || owner.starts_with(&server) {
+                    assert!(
+                        target.starts_with(&features) || target.starts_with(&infrastructure),
+                        "{} depends on another executable host",
                         manifest.display()
                     );
                 }

@@ -375,7 +375,7 @@ impl AgentExecutionClient {
                 match pending.next(cancellation).await {
                     Ok(Some(payload)) => yield ImageBuildResponse::decode(payload.as_slice()).map_err(|_| tonic::Status::data_loss("Invalid Edge Build response.")),
                     Ok(None) => break,
-                    Err(error) => { yield Err(tonic::Status::unavailable(error.to_string())); break; }
+                    Err(error) => { yield Err(error.status()); break; }
                 }
             }
         };
@@ -404,7 +404,7 @@ impl AgentExecutionClient {
                     match pending.next(cancellation).await {
                         Ok(Some(payload)) => yield ImageBuildResponse::decode(payload.as_slice()).map_err(|_| tonic::Status::data_loss("Invalid Edge Push response.")),
                         Ok(None) => break,
-                        Err(error) => { yield Err(tonic::Status::unavailable(error.to_string())); break; }
+                        Err(error) => { yield Err(error.status()); break; }
                     }
                 }
             };
@@ -588,7 +588,11 @@ pub(crate) async fn unary<T: Message, R: Message + Default + 'static>(
     cancellation: &CancellationToken,
 ) -> Result<R, RuntimeCapabilityError> {
     if cancellation.is_cancelled() {
-        return Err(remote("Edge command canceled."));
+        return Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::Cancelled,
+            "Edge command canceled.",
+            false,
+        ));
     }
     let mut command = session
         .command(
@@ -627,7 +631,11 @@ pub(crate) fn stream<T: Message, R: Message + Default + Send + 'static>(
     RuntimeCapabilityError,
 > {
     if cancellation.is_cancelled() {
-        return Err(remote("Edge command canceled."));
+        return Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::Cancelled,
+            "Edge command canceled.",
+            false,
+        ));
     }
     let mut pending = session
         .command(
@@ -643,7 +651,7 @@ pub(crate) fn stream<T: Message, R: Message + Default + Send + 'static>(
             match pending.next(&cancellation).await {
                 Ok(Some(payload)) => yield R::decode(payload.as_slice()).map_err(|_| tonic::Status::data_loss("Invalid Edge response.")),
                 Ok(None) => break,
-                Err(error) => { yield Err(tonic::Status::unavailable(error.to_string())); break; }
+                Err(error) => { yield Err(error.status()); break; }
             }
         }
     }))
@@ -652,7 +660,7 @@ fn remote(message: &str) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, message, false)
 }
 fn edge_error(error: EdgeError) -> RuntimeCapabilityError {
-    remote(error.0)
+    error.runtime()
 }
 
 #[cfg(test)]

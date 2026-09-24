@@ -6,6 +6,7 @@ use citadel_platforms::{
 use crate::connectors::agent::client::AgentClient;
 
 use crate::connectors::docker::DockerClient;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct PlatformRegistrationRuntimeRouter {
@@ -21,11 +22,11 @@ impl PlatformRegistrationRuntimeRouter {
 }
 
 impl PlatformRegistrationRuntime for PlatformRegistrationRuntimeRouter {
-    fn inventory_for<'a>(
-        &'a self,
+    fn inventory_for(
+        &self,
         connector_type: PlatformConnectorType,
-        address: &'a str,
-    ) -> Result<&'a dyn PlatformInventoryPort, PlatformRegistrationError> {
+        address: &str,
+    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError> {
         match connector_type {
             PlatformConnectorType::Unknown => Err(PlatformRegistrationError::Runtime(
                 RuntimeCapabilityError::new(
@@ -34,18 +35,22 @@ impl PlatformRegistrationRuntime for PlatformRegistrationRuntimeRouter {
                     false,
                 ),
             )),
-            PlatformConnectorType::Local => Ok(&self.local),
+            PlatformConnectorType::Local => Ok(Arc::new(self.local.clone())),
             PlatformConnectorType::Agent => self
                 .agent
                 .as_ref()
-                .filter(|agent| same_address(agent.address(), address))
-                .map(|agent| agent as &dyn PlatformInventoryPort)
                 .ok_or_else(|| {
                     PlatformRegistrationError::Runtime(RuntimeCapabilityError::new(
                         RuntimeErrorKind::Unavailable,
                         "The requested Agent transport is not configured in the Rust Core.",
                         false,
                     ))
+                })
+                .and_then(|agent| {
+                    agent
+                        .at_address(address)
+                        .map(|agent| Arc::new(agent) as Arc<dyn PlatformInventoryPort>)
+                        .map_err(PlatformRegistrationError::from)
                 }),
             PlatformConnectorType::EdgeAgent => Err(PlatformRegistrationError::Runtime(
                 RuntimeCapabilityError::new(
@@ -56,9 +61,4 @@ impl PlatformRegistrationRuntime for PlatformRegistrationRuntimeRouter {
             )),
         }
     }
-}
-
-fn same_address(left: &str, right: &str) -> bool {
-    left.trim_end_matches('/')
-        .eq_ignore_ascii_case(right.trim_end_matches('/'))
 }

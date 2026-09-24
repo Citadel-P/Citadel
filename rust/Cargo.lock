@@ -539,6 +539,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-agent"
+version = "0.0.0"
+dependencies = [
+ "async-stream",
+ "axum",
+ "axum-server",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "citadel-adapters",
+ "citadel-builds",
+ "citadel-contracts",
+ "citadel-database",
+ "citadel-deployments",
+ "citadel-docker-api",
+ "citadel-identity",
+ "citadel-platforms",
+ "citadel-stacks",
+ "ed25519-dalek 3.0.0",
+ "futures-util",
+ "getrandom 0.4.3",
+ "http-body",
+ "http-body-util",
+ "prost",
+ "prost-types",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sqlx",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-alerts"
 version = "0.0.0"
 dependencies = [
@@ -643,7 +688,6 @@ dependencies = [
  "prost-types",
  "protoc-bin-vendored",
  "serde",
- "serde_json",
  "sha2 0.11.0",
  "tonic",
  "tonic-prost",

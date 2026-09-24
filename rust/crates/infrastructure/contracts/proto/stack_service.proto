@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package citadel.stacks.v1;
+
+service StackService {
+    rpc Apply (StackApplyRequest) returns (stream StackApplyResponse);
+}
+
+message StackApplyRequest {
+    string stack_name = 1;
+    optional string compose_file_content = 2;
+    optional string project_name = 3;
+    optional string environment_file_path = 4;
+    optional string registry_auth = 5;
+    optional string registry_name = 6;
+    optional string registry_host = 7;
+    bool destroy_before_deploy = 8;
+    repeated string environment_variables = 9;
+    StackCommand pre_deploy = 10;
+    StackCommand post_deploy = 11;
+    repeated string service_names = 12;
+    bool pull_images = 13;
+    optional string source_working_directory = 14;
+    repeated string source_compose_file_paths = 15;
+    repeated string source_env_file_paths = 16;
+    optional string labels_override_file_path = 17;
+    optional string generated_files_directory = 18;
+    repeated StackSecretFile secret_files = 19;
+    repeated string secret_target_service_names = 20;
+    StackOrchestrationMode orchestration_mode = 21;
+    repeated StackSourceFile source_files = 22;
+    repeated StackRetainedSwarmSecret retained_swarm_secrets = 23;
+    repeated StackRetainedSwarmConfig retained_swarm_configs = 24;
+    bool convert_compose_project_to_swarm = 25;
+}
+
+enum StackOrchestrationMode {
+    DockerCompose = 0;
+    DockerSwarm = 1;
+}
+
+message StackCommand {
+    repeated string commands = 1;
+    string path = 2;
+}
+
+message StackSecretFile {
+    string name = 1;
+    string target_path = 2;
+    string content = 3;
+}
+
+message StackSourceFile {
+    string relative_path = 1;
+    bytes content = 2;
+}
+
+message StackRetainedSwarmSecret {
+    string compose_resource_name = 1;
+    string docker_resource_name = 2;
+    repeated StackRetainedSwarmSecretMount mounts = 3;
+}
+
+message StackRetainedSwarmSecretMount {
+    string service_name = 1;
+    string target_name = 2;
+}
+
+message StackRetainedSwarmConfig {
+    string compose_resource_name = 1;
+    string docker_resource_name = 2;
+    repeated StackRetainedSwarmConfigMount mounts = 3;
+}
+
+message StackRetainedSwarmConfigMount {
+    string service_name = 1;
+    string target_name = 2;
+}
+
+message StackApplyResponse {
+    StackApplyEventType type = 1;
+    optional string message = 2;
+    optional int32 exit_code = 3;
+    optional string stack_status = 4;
+}
+
+enum StackApplyEventType {
+    Unknown = 0;
+    StdOut = 1;
+    StdErr = 2;
+    SystemMessage = 3;
+    CommandCompleted = 4;
+}

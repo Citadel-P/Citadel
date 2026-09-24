@@ -918,16 +918,25 @@ impl AgentClient {
             AgentContainerAction::Unpause => UNPAUSE_CONTAINERS_METHOD,
             AgentContainerAction::Restart => RESTART_CONTAINERS_METHOD,
         };
-        let request = self.signer.sign(
-            ContainerIds { ids: ids.to_vec() },
-            method,
-            Some(self.operation_timeout),
-        )?;
+        // Shutdown may legitimately consume the full Docker grace period per
+        // container. Keep that separate from the configured transport budget,
+        // including when an Agent processes the batch sequentially.
+        let grace_seconds = match action {
+            AgentContainerAction::Stop => 10,
+            AgentContainerAction::Restart => 5,
+            _ => 0,
+        };
+        let timeout = self
+            .operation_timeout
+            .saturating_add(Duration::from_secs(grace_seconds * ids.len() as u64));
+        let request =
+            self.signer
+                .sign(ContainerIds { ids: ids.to_vec() }, method, Some(timeout))?;
         let mut client = self.container_client();
         tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(cancelled_error()),
-            result = tokio::time::timeout(self.operation_timeout, async {
+            result = tokio::time::timeout(timeout, async {
                 match action {
                     AgentContainerAction::Start => client.start(request).await,
                     AgentContainerAction::Stop => client.stop(request).await,
@@ -2498,7 +2507,7 @@ fn timeout_error(operation: &str) -> RuntimeCapabilityError {
     )
 }
 
-fn normalize_status(status: Status) -> RuntimeCapabilityError {
+pub(crate) fn normalize_status(status: Status) -> RuntimeCapabilityError {
     let (kind, retryable) = match status.code() {
         // Local cancellation is handled by the biased CancellationToken branch. Tonic
         // reports an expired client-side grpc-timeout as Cancelled on this transport.

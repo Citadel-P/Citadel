@@ -89,7 +89,11 @@ WHERE n.platformid=$1 ORDER BY n.dockernodeid LIMIT 10001
                 runtime_stale: row.try_get("runtimestale")?,
                 binding_present: binding.is_some(),
                 connected,
-                protocol_version: row.try_get("protocolversion")?,
+                protocol_compatible: row
+                    .try_get::<Option<i32>, _>("protocolversion")?
+                    .is_none_or(|version| {
+                        version == citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION
+                    }),
                 task_state: row.try_get("taskstate")?,
                 heartbeat: row.try_get("lastheartbeatatutc")?,
                 reconciled_at: row.try_get("lastsuccessfulreconciliationat")?,

@@ -18,6 +18,8 @@
 x64/
 x86/
 build/
+!rust/build/
+!rust/build/version.rs
 bld/
 bin/
 Bin/

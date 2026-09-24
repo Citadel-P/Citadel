@@ -1,11 +1,11 @@
-use super::BuildFailure;
+use super::runtime::BuildRuntimeError as BuildFailure;
 use citadel_builds::BuildLogSink;
 use citadel_execution::SecretRedactor as Redactor;
 use citadel_execution::{ProcessChunk, ProcessOutput, ProcessRequest};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-pub(super) async fn run(
+pub(crate) async fn run(
     request: ProcessRequest,
     cancellation: &CancellationToken,
     progress: &dyn BuildLogSink,
@@ -27,7 +27,7 @@ pub(super) async fn run(
     .await
 }
 
-pub(super) async fn capture<T>(
+pub(crate) async fn capture<T>(
     execution: impl Future<Output = Result<T, BuildFailure>>,
     mut receiver: mpsc::Receiver<ProcessChunk>,
     progress: &dyn BuildLogSink,

@@ -276,7 +276,16 @@ async fn reconcile_stacks(
         .bind(platform).bind(node).bind(&removed.stacks).bind(&removed.affected_stacks).fetch_all(&mut **tx).await?;
     for row in stacks {
         let old: String = row.try_get("status")?;
-        if old == "Applying" || (!activities && old == "Created") {
+        // An owned apply/state/delete operation completes its own claim. Neither
+        // Docker events nor inventory may mistake it for abandoned Processing state.
+        let owned = row.try_get::<String, _>("controlstate")? == "Processing"
+            && row
+                .try_get::<Option<Uuid>, _>("controltriggeredby")?
+                .is_some();
+        if owned
+            || matches!(old.as_str(), "Applying" | "Pending")
+            || (!activities && old == "Created")
+        {
             continue;
         }
         let id: Uuid = row.try_get("id")?;

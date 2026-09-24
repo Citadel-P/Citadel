@@ -159,13 +159,13 @@ impl ImagePullPort for EdgeRuntime {
                     std::time::Duration::from_secs(600),
                     true,
                 )
-                .map_err(|_| failure("Edge image pull dispatch failed."))?;
+                .map_err(crate::connectors::edge::EdgeError::runtime)?;
             let cancel = cancel.clone();
             Ok(Box::pin(async_stream::stream! {
                 loop {match pending.next(&cancel).await {
                     Ok(Some(payload))=>match PullImageResponse::decode(payload.as_slice()){Ok(item)=>yield Ok(map(item)),Err(_)=>{yield Err(failure("Invalid Edge image pull response."));break;}},
                     Ok(None)=>break,
-                    Err(_)=>{yield Err(failure("Edge image pull stream failed."));break;}
+                    Err(error)=>{yield Err(error.runtime());break;}
                 }}
             }) as ImagePullStream)
         })

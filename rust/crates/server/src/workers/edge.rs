@@ -12,6 +12,12 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
+#[derive(Clone)]
+pub struct InventorySettings {
+    pub node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub reconciliation_interval: Duration,
+}
+
 /// One supervised task per authenticated Edge Platform or Node. Reconnects
 /// replace the task; event bursts are coalesced and full scans are bounded.
 pub async fn run(
@@ -19,7 +25,7 @@ pub async fn run(
     registry: EdgeRegistry,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    settings: InventorySettings,
     scans: IoBudget,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
@@ -43,12 +49,12 @@ pub async fn run(
                 for session in registry.current_sessions().into_iter().filter(|session| session.target.resource_type==0) {
                     if active.values().any(|id| *id == session.id) { continue; }
                     let session_id = session.id;
-                    let pool=pool.clone(); let realtime=realtime.clone(); let node_policy=node_policy.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
+                    let pool=pool.clone(); let realtime=realtime.clone(); let settings=settings.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
                     let task = tasks.spawn(async move {
                         tokio::select! {
                             ()=cancellation.cancelled()=>{},
                             ()=session.closed()=>{},
-                            result=monitor(session.clone(),pool,realtime,node_policy,scans,&cancellation)=>{
+                            result=monitor(session.clone(),pool,realtime,settings,scans,&cancellation)=>{
                                 if let Err(error)=result { tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge inventory synchronization interrupted"); }
                             }
                         }
@@ -67,7 +73,7 @@ async fn monitor(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    settings: InventorySettings,
     scans: IoBudget,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -77,7 +83,7 @@ async fn monitor(
             pool.clone(),
             realtime.clone(),
             scans,
-            node_policy,
+            settings,
             cancellation
         ),
         observe_stats(session, pool, realtime, cancellation),
@@ -148,7 +154,7 @@ async fn observe(
     pool: PgPool,
     realtime: Option<RealtimeHub>,
     scans: IoBudget,
-    node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    settings: InventorySettings,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
@@ -168,7 +174,7 @@ async fn observe(
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let store = PostgresEdgeStore::new(pool.clone()).with_node_policy(node_policy.clone());
+    let store = PostgresEdgeStore::new(pool.clone()).with_node_policy(settings.node_policy);
     let mut events = session.command(
         EdgeCommandKind::PlatformDaemonEventsStream,
         vec![],
@@ -210,7 +216,7 @@ async fn observe(
         }
         // Stay on the event path after a targeted update. Only discovery, other
         // resource events, or the periodic deadline require a full scan.
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1800);
+        let deadline = tokio::time::Instant::now() + settings.reconciliation_interval;
         loop {
             let bytes = tokio::select! {
                 ()=cancellation.cancelled()=>return Ok(()),

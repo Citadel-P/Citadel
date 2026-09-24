@@ -1,0 +1,239 @@
+syntax = "proto3";
+
+package citadel.edge.v1;
+
+service EdgeAgentService {
+  rpc Connect (stream AgentEnvelope) returns (stream CoreEnvelope);
+}
+
+enum EdgeCommandKind {
+  EDGE_COMMAND_KIND_UNSPECIFIED = 0;
+  PLATFORM_CHECK_HEALTH = 1;
+  PLATFORM_GET_INFO = 2;
+  PLATFORM_STATS_STREAM = 3;
+  PLATFORM_DAEMON_EVENTS_STREAM = 4;
+  PLATFORM_PRUNE = 5;
+  CONTAINER_LIST = 10;
+  CONTAINER_LOGS_STREAM = 11;
+  CONTAINER_INSPECT = 12;
+  CONTAINER_CREATE = 13;
+  CONTAINER_START = 14;
+  CONTAINER_STOP = 15;
+  CONTAINER_PAUSE = 16;
+  CONTAINER_UNPAUSE = 17;
+  CONTAINER_RESTART = 18;
+  CONTAINER_DELETE = 19;
+  CONTAINER_STATS_STREAM = 20;
+  CONTAINERS_STATS_STREAM = 21;
+  CONTAINER_EXEC = 22;
+  CONTAINER_EXEC_BINARY = 23;
+  IMAGE_GET = 30;
+  IMAGE_LIST = 31;
+  IMAGE_INSPECT = 32;
+  IMAGE_DELETE = 33;
+  IMAGE_HISTORY = 34;
+  IMAGE_EXPOSED_PORTS = 35;
+  IMAGE_DISTRIBUTION_INSPECT = 36;
+  IMAGE_PULL_STREAM = 37;
+  IMAGE_BUILD_STREAM = 38;
+  IMAGE_PUSH_STREAM = 39;
+  IMAGE_CHECK_BUILD_HOST = 40;
+  VOLUME_LIST = 50;
+  VOLUME_INSPECT = 51;
+  VOLUME_CREATE = 52;
+  VOLUME_DELETE = 53;
+  NETWORK_LIST = 60;
+  NETWORK_INSPECT = 61;
+  NETWORK_CREATE = 62;
+  NETWORK_DELETE = 63;
+  STACK_APPLY_STREAM = 70;
+  DEPLOYMENT_APPLY = 80;
+  SWARM_NODE_LIST = 90;
+  SWARM_NODE_INSPECT = 91;
+  SWARM_SERVICE_LIST = 92;
+  SWARM_SERVICE_INSPECT = 93;
+  SWARM_TASK_LIST = 94;
+  SWARM_TASK_INSPECT = 95;
+  SWARM_NETWORK_LIST = 96;
+  SWARM_NETWORK_INSPECT = 97;
+  SWARM_SECRET_LIST = 98;
+  SWARM_SECRET_INSPECT = 99;
+  SWARM_CONFIG_LIST = 100;
+  SWARM_CONFIG_INSPECT = 101;
+  SWARM_SERVICE_LOGS = 102;
+  SWARM_TASK_LOGS = 103;
+  SWARM_SECRET_CREATE = 104;
+  SWARM_SECRET_UPDATE = 105;
+  SWARM_SECRET_DELETE = 106;
+  SWARM_CONFIG_CREATE = 107;
+  SWARM_CONFIG_UPDATE = 108;
+  SWARM_CONFIG_DELETE = 109;
+  SWARM_CONFIG_DATA = 110;
+  SWARM_SERVICE_CREATE = 111;
+  SWARM_SERVICE_UPDATE = 112;
+  SWARM_SERVICE_DELETE = 113;
+  SWARM_SERVICE_RESTART = 114;
+  SWARM_NODE_UPDATE = 115;
+  SWARM_SYSTEM_SERVICE_CREATE = 116;
+  SWARM_SYSTEM_SERVICE_UPDATE = 117;
+}
+
+enum EdgeAgentResourceType {
+  EDGE_AGENT_RESOURCE_TYPE_PLATFORM = 0;
+  EDGE_AGENT_RESOURCE_TYPE_BUILD_AGENT_POOL = 1;
+}
+
+enum EdgeAgentProfile {
+  EDGE_AGENT_PROFILE_ORDINARY = 0;
+  EDGE_AGENT_PROFILE_SWARM_NODE = 1;
+}
+
+message AgentEnvelope {
+  string envelope_id = 1;
+  string session_id = 2;
+  string command_id = 3;
+
+  oneof body {
+    AgentHello hello = 10;
+    EnrollmentRequest enrollment_request = 11;
+    AuthChallengeResponse auth_challenge_response = 12;
+    AgentHeartbeat heartbeat = 13;
+
+    CommandOutput command_output = 20;
+    CommandCompleted command_completed = 21;
+    CommandFailed command_failed = 22;
+  }
+}
+
+message CoreEnvelope {
+  string envelope_id = 1;
+  string session_id = 2;
+  string command_id = 3;
+
+  oneof body {
+    AuthChallenge auth_challenge = 10;
+    SessionAccepted session_accepted = 11;
+    SessionRejected session_rejected = 12;
+
+    EdgeCommand command = 20;
+    StreamInput stream_input = 21;
+    CancelCommand cancel_command = 22;
+
+    Disconnect disconnect = 30;
+  }
+}
+
+message AgentHello {
+  string platform_id = 1;
+  string agent_id = 2;
+  string agent_fingerprint = 3;
+  string hostname = 4;
+  string agent_version = 5;
+  int32 protocol_version = 6;
+  string capabilities_json = 7;
+  EdgeAgentResourceType resource_type = 8;
+  string resource_id = 9;
+  string daemon_id = 10;
+  EdgeAgentProfile profile = 11;
+  string cluster_id = 12;
+  string node_id = 13;
+  string docker_hostname = 14;
+  string swarm_role = 15;
+  string service_id = 16;
+  string task_id = 17;
+}
+
+message EnrollmentRequest {
+  string enrollment_token = 1;
+  bytes public_key = 2;
+  string hostname = 3;
+  string agent_version = 4;
+  int32 protocol_version = 5;
+  string capabilities_json = 6;
+  string daemon_id = 7;
+  EdgeAgentProfile profile = 8;
+  string cluster_id = 9;
+  string node_id = 10;
+  string docker_hostname = 11;
+  string swarm_role = 12;
+  string service_id = 13;
+  string task_id = 14;
+}
+
+message AuthChallenge {
+  bytes nonce = 1;
+  int64 timestamp_unix_seconds = 2;
+}
+
+message AuthChallengeResponse {
+  bytes nonce = 1;
+  int64 timestamp_unix_seconds = 2;
+  bytes signature = 3;
+}
+
+message AgentHeartbeat {
+  bool docker_reachable = 1;
+  string docker_version = 2;
+  string hostname = 3;
+  string agent_version = 4;
+  string capabilities_json = 5;
+  string daemon_id = 6;
+  string cluster_id = 7;
+  string node_id = 8;
+  string docker_hostname = 9;
+  string service_id = 10;
+  string task_id = 11;
+  string swarm_role = 12;
+}
+
+message SessionAccepted {
+  string platform_id = 1;
+  string agent_id = 2;
+  string session_id = 3;
+  EdgeAgentResourceType resource_type = 4;
+  string resource_id = 5;
+  string node_id = 6;
+}
+
+message SessionRejected {
+  string reason = 1;
+}
+
+message EdgeCommand {
+  string command_id = 1;
+  string platform_id = 2;
+  EdgeCommandKind kind = 3;
+  bytes payload = 4;
+  int32 payload_schema_version = 5;
+  int32 timeout_ms = 6;
+  string correlation_id = 7;
+  bool expects_stream = 8;
+  EdgeAgentResourceType resource_type = 9;
+  string resource_id = 10;
+  string node_id = 11;
+}
+
+message StreamInput {
+  bytes payload = 1;
+}
+
+message CancelCommand {
+  string reason = 1;
+}
+
+message Disconnect {
+  string reason = 1;
+}
+
+message CommandOutput {
+  bytes payload = 1;
+}
+
+message CommandCompleted {
+  int32 status_code = 1;
+}
+
+message CommandFailed {
+  string message = 1;
+  string code = 2;
+}

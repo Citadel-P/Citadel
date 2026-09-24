@@ -1,0 +1,91 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "shared_models.proto";
+
+package citadel.networks.v1;
+
+service NetworkService {
+	rpc List (ListNetworksRequest) returns (ListNetworksResponse);
+	rpc Create (CreateNetworkRequest) returns (CreateNetworkResponse);
+	rpc Delete (DeleteNetworkRequest) returns (DeleteNetworkResponse);
+	rpc Inspect (InspectNetworkRequest) returns (InspectNetworkResponse);
+}
+
+message CreateNetworkRequest {
+	string name = 1;
+	google.protobuf.StringValue driver = 2;
+	google.protobuf.StringValue scope = 3;
+	google.protobuf.BoolValue internal = 4;
+	google.protobuf.BoolValue attachable = 5;
+	google.protobuf.BoolValue ingress = 6;
+	google.protobuf.BoolValue configOnly = 7;
+	ConfigFromMessage configFrom = 8;
+	citadel.shared_models.v1.IPAMMessage ipam = 9;
+	google.protobuf.BoolValue enableIPv6 = 10;
+	google.protobuf.BoolValue enableIPv4 = 11;
+	map<string, string> options = 12;
+	map<string, string> labels = 13;
+}
+
+message ConfigFromMessage {
+	string network = 1;
+}
+message CreateNetworkResponse {
+	string id = 1;
+}
+
+message ListNetworksRequest {
+	google.protobuf.BoolValue dangling = 1;
+	google.protobuf.StringValue driver = 2;
+	google.protobuf.StringValue id = 3;
+	google.protobuf.StringValue name = 4;
+}
+
+message ListNetworksResponse {
+	repeated citadel.shared_models.v1.Network networks = 1;
+}
+
+message DeleteNetworkRequest {
+	repeated string ids = 1;
+}
+
+message DeleteNetworkResponse {
+}
+
+message InspectNetworkRequest {
+	string id = 1;
+}
+
+message InspectNetworkResponse {
+	string name = 1;
+	string id = 2;
+	string created = 3;
+	string driver = 4;
+	string scope = 5;
+	bool enableIPv4 = 6;
+	bool enableIPv6 = 7;
+	bool internal = 8;
+	bool attachable = 9;
+	bool ingress = 10;
+	bool configOnly = 11;
+	google.protobuf.StringValue configFrom = 12;
+	citadel.shared_models.v1.IPAMMessage ipam = 13;
+	map<string, string> options = 14;
+	map<string, string> labels = 15;
+	map<string, NetworkContainerMessage> containers = 16;
+	repeated PeerInfoMessage peers = 17;
+}
+
+message NetworkContainerMessage {
+	string name = 1;
+	string endpointId = 2;
+	string macAddress = 3;
+	string ipPv4Address = 4;
+	string ipv6Address = 5;
+}
+
+message PeerInfoMessage {
+	string name = 1;
+	string ip = 2;
+}

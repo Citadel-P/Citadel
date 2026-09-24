@@ -159,7 +159,7 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
     }
 }
 
-async fn validate_snapshot_identity(
+pub(crate) async fn validate_snapshot_identity(
     tx: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
 ) -> Result<(), RuntimeCapabilityError> {

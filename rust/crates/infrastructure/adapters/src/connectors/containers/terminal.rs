@@ -72,20 +72,42 @@ pub(crate) fn local_session(
     let (input, mut receiver) = input_channel();
     let output = Box::pin(async_stream::try_stream! {
         let mut buffer = vec![0;16*1024];
+        let mut input_closed = false;
         loop {
             let event=tokio::select! {
                 biased;
                 ()=cancel.cancelled()=>break,
-                input=receiver.recv()=>Ok(input),
+                input=receiver.recv(), if !input_closed=>Ok(input),
                 read=socket.read(&mut buffer)=>Err(read),
             };
             match event {
                 Err(read)=>{
                     let read=read.map_err(|_|failure("Docker terminal read failed."))?;
-                    if read==0 {break;}
+                    if read==0 {
+                        let state = tokio::select! {
+                            biased;
+                            ()=cancel.cancelled()=>break,
+                            result=client.exec_inspect(&exec_id)=>result.map_err(|_|failure("Could not confirm Docker terminal completion.")),
+                        }?;
+                        if state.running != Some(false) { Err(failure("Docker terminal is still running."))?; }
+                        let code = state.exit_code.ok_or_else(||failure("Docker omitted the terminal exit code."))?;
+                        yield TerminalOutput::Exit(code);
+                        break;
+                    }
                     yield TerminalOutput::Data(buffer[..read].to_vec());
                 },
-                Ok(None)=>break,
+                Ok(None)=>{
+                    input_closed = true;
+                    let result = tokio::select! {
+                        biased;
+                        ()=cancel.cancelled()=>break,
+                        // Docker closes the attached output when its socket input ends.
+                        // Send terminal EOF instead so the PTY can finish and drain.
+                        result=tokio::time::timeout(timeout,socket.write_all(&[4]))=>result,
+                    };
+                    result.map_err(|_|failure("Closing terminal input timed out."))?
+                        .map_err(|_|failure("Closing terminal input failed."))?;
+                },
                 Ok(Some(input))=>{
                     let is_resize = matches!(&input, TerminalInput::Resize { .. });
                     let write=async {
@@ -137,7 +159,7 @@ impl ContainerTerminalPort for crate::connectors::edge::EdgeRuntime {
                     std::time::Duration::from_secs(24 * 60 * 60),
                     true,
                 )
-                .map_err(|e| failure(&e.to_string()))?;
+                .map_err(crate::connectors::edge::EdgeError::runtime)?;
             let (input, mut receiver) = input_channel();
             let cancel = cancel.clone();
             let output = Box::pin(async_stream::try_stream! {
@@ -151,10 +173,10 @@ impl ContainerTerminalPort for crate::connectors::edge::EdgeRuntime {
                     let bytes = match event {
                         Ok(item)=>{
                             let Some(item)=item else {break};
-                            command.send_input(encode_input(item).encode_to_vec()).map_err(|e|failure(&e.to_string()))?;
+                            command.send_input(encode_input(item).encode_to_vec()).map_err(crate::connectors::edge::EdgeError::runtime)?;
                             continue;
                         },
-                        Err(bytes)=>bytes.map_err(|e|failure(&e.to_string()))?,
+                        Err(bytes)=>bytes.map_err(crate::connectors::edge::EdgeError::runtime)?,
                     };
                     let Some(bytes)=bytes else {break};
                     let message=ExecServerMessage::decode(bytes.as_slice()).map_err(|_|failure("Invalid Agent terminal frame."))?;

@@ -424,6 +424,11 @@ impl PostgresEdgeStore {
             .await
             .map_err(|_| EdgeStoreError::Invalid("Node inventory persistence failed."))?;
         } else {
+            crate::persistence::postgres::platforms::inventory::store::validate_snapshot_identity(
+                &mut tx, snapshot,
+            )
+            .await
+            .map_err(|_| EdgeStoreError::Invalid("Edge inventory identity validation failed."))?;
             crate::persistence::postgres::platforms::inventory::store::persist_snapshot(
                 &mut tx,
                 snapshot,

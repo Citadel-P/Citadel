@@ -627,3 +627,258 @@ Supply these environment variables:
 - `CITADEL_PHASE6_DOCKER_SOCKET`: that isolated daemon's socket exposed at a host bind-mount path.
 
 The test explicitly uses the outer Docker socket `/var/run/docker.sock` for fixture management. The Agent mounts only the supplied isolated daemon socket. It creates a uniquely named Agent and workload, restarts that Agent, exercises reconnect/revocation, and removes its containers. It does not restart Core or use a development database. The fixture checks the DinD label before any runtime mutation.
+
+## Agent development
+
+`citadel-agent` is a separate executable in the same workspace. The current
+migration stage provides startup validation, HTTP/HTTPS health, graceful shutdown
+and the complete Direct RPC surface. Edge profiles now enroll, reconnect and send
+heartbeats, and ordinary/Build Pool Edge profiles execute all 68 commands.
+Swarm-node profiles enforce a restricted dispatcher and validate helper operations;
+production cutover still requires the compatibility gates in the migration report.
+
+To run the Edge connection host from `rust/`, supply a Core enrollment token and
+persistent writable state paths (the token is unnecessary after enrollment):
+
+```bash
+CITADEL_AGENT_MODE=edge CITADEL_CORE_URL=http://localhost:8001 \
+CITADEL_EDGE_ENROLLMENT_TOKEN='<enrollment token>' \
+CITADEL_EDGE_AGENT_KEY_PATH=./data/edge-agent.key \
+CITADEL_EDGE_IDENTITY_PATH=./data/edge-agent.identity.json \
+  cargo run --locked -p citadel-agent
+curl http://127.0.0.1:9000/health
+```
+
+`/health` is unsigned process liveness. It does not certify Docker reachability or
+an established Core session. Edge profiles bind only `127.0.0.1`; Direct mode
+binds `0.0.0.0` and requires `HUB_PUBLIC_KEY`. `CITADEL_AGENT_PORT` defaults to 9000.
+Ctrl+C and SIGTERM cancel the outbound connection and drain the health listener,
+with a ten-second shutdown limit. The Core URL must reach its HTTP/2 Edge listener.
+
+Configuration is read from the process environment, with no implicit `.env`
+loading. The four `.env.*.example` Agent templates are intended for deployment
+with Docker's `--env-file`. Build Pool inbound configuration uses the same Direct
+host; Edge Build Pool selects `CITADEL_EDGE_AGENT_PROFILE=edge-build-agent`.
+Swarm-node configuration requires every injected identity field documented in
+[the parity inventory](reports/agent-parity.md).
+
+The shared Docker client uses `/var/run/docker.sock` by default. `DOCKER_HOST`
+can select another Unix socket, `tcp://host:2375` or `http://host:2375`. The selected
+endpoint applies to HTTP requests, streaming/exec and Docker CLI build/stack work;
+there is no fallback to a different daemon. HTTPS and Windows named pipes are not
+supported by this Linux host. The Agent never connects to PostgreSQL. Edge startup
+validates its persisted state before listening; its background connection probes
+Docker and retries if Docker or Core is temporarily unavailable.
+
+Persist both Edge state files across restarts. They are private and atomically
+written; corrupt files fail startup and remain untouched for recovery. A changed
+ordinary enrollment token resets both files only when its fingerprint differs
+from the saved token fingerprint. Swarm-node uses its mounted bootstrap credential
+and does not reset identity merely because that credential rotates.
+
+HTTPS validates normal trusted roots and the Core hostname. A configured
+`CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH` adds trust without disabling those checks.
+HTTP connections log a warning. Heartbeats probe Docker every 30 seconds;
+reconnects back off from 1 to 60 seconds with jitter. Ordinary and Build Pool
+profiles dispatch the full command protocol, including interactive terminal input,
+resize, binary output and live progress. Commands have independent cancellation
+and deadlines, with at most 16 active commands and bounded input/output queues.
+Disconnect and shutdown drop all owned command work. Swarm-node commands must
+target the configured node and satisfy the allowlist in the parity inventory.
+Helper creation and binary exec validate ownership, mounts, privileges and exact
+command patterns. Restore-volume deletion requires ownership and no container
+references, including stopped containers.
+
+`rust/Dockerfile.agent` packages the Agent with the existing Rust volume
+helper at `/usr/local/bin/citadel-volume-helper`. The compatibility alias
+`/app/Citadel.Agent.VolumeHelper` supports Core's current remote helper requests.
+It uses Alpine with the same isolated glibc libraries as Core, preserving the GNU
+Rust build. The pinned library source contributes only glibc and its loader cache.
+Docker CLI, Buildx, Compose, Git, SSH, CA certificates, Bash and Restic remain
+available. Restic is required for the backup helper flow.
+Core-only tools (Deno, PostgreSQL client and notification CLI) are not included.
+The process runs as root by default for Docker socket and helper compatibility;
+an explicit Docker `--user` requires socket access and writable `/app/data`.
+
+From the repository root, build and check the release image with:
+
+```bash
+docker build -t citadel-agent:local -f rust/Dockerfile.agent .
+bash rust/scripts/test-agent-image.sh citadel-agent:local
+bash rust/scripts/test-agent-compatibility.sh citadel-agent:local
+```
+
+The smoke script uses disposable containers, a scratch image build and local data.
+It checks Direct HTTP/TLS and all Edge profiles, health checks on a custom port,
+SIGTERM shutdown, Git submodules, Docker/Compose/Buildx, helper paths and Restic
+backup/restore.
+It needs Docker and OpenSSL on the host. Override
+`CITADEL_AGENT_TEST_DOCKER_SOCKET` only when the test daemon uses another socket.
+
+The compatibility script compiles the compatibility, live Docker and Edge intake
+integration tests with the pinned Rust toolchain. It runs the compatibility test
+alongside the packaged Agent executable, and the other two suites against the
+same isolated services. It creates its
+own PostgreSQL database, authenticated registry, and two privileged Docker-in-Docker
+daemons on a private bridge network with no published ports. It never mounts the
+host Docker socket into those fixtures. All fixture containers, volumes and the
+network are removed on exit, including after a failed test.
+
+Coverage includes Direct and both ordinary/Build Pool Edge connections, durable
+identity reconnect, real image builds with BuildKit secrets, registry authentication,
+push/pull, Compose/Swarm workloads, Swarm mutations, timeout and cancellation.
+The worker-node check uses a real Swarm task with manager-observed identity fixtures;
+it runs the Agent executable against that worker daemon and checks task rejection,
+persisted reconnect and restricted commands. It does not exercise Core's service
+installer or replace mixed-version tests against the existing Agent release.
+The test prints the Agent's resident memory after connection/readiness; these
+local idle samples are not a load benchmark.
+
+To test the complete Core and Agent images through Core's HTTP API:
+
+```bash
+docker build -t citadel-core:acceptance -f rust/Dockerfile .
+bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
+```
+
+This acceptance test initializes the administrator through HTTP, rejects an Agent
+with the wrong signing key, registers Direct and Edge platforms, and applies,
+stops, starts and deletes Compose stacks. It checks container inventory, offline
+errors, network and volume create/read/delete operations, reconnect, Edge identity
+persistence without an enrollment token, recovery after a Core restart, and
+revocation. Missing networks and volumes must return HTTP 404 through both connectors.
+It also creates a three-node Swarm and uses Core's installer through both Direct
+and Edge managers. It verifies digest-pinned node-agent services, worker container
+inventory/statistics and inspection, volume/network routing, volume browsing,
+manager and worker outage recovery, stale projections, repair, upgrade and removal.
+Core has no Docker socket: resource operations must reach the disposable
+Docker-in-Docker daemons through an Agent.
+Only Core's HTTP port is published, on a random loopback port. PostgreSQL, Agent
+data volumes and the network are isolated and removed when the test finishes.
+The host needs Docker, Bash and the pinned Rust toolchain.
+
+To also test candidate Core against an existing released Agent, pull an immutable
+release reference and pass it as the third argument:
+
+```bash
+docker pull "$RELEASED_AGENT_IMAGE"
+bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local "$RELEASED_AGENT_IMAGE"
+```
+
+`RELEASED_AGENT_IMAGE` must use `repository@sha256:...`. Without it, the runner
+explicitly reports that mixed-version compatibility was not tested. Set the
+repository variable `CITADEL_AGENT_ROLLBACK_IMAGE` to that reference for native
+amd64/arm64 CI. Release publishing requires this gate; it also verifies each
+published signature against the publishing workflow identity. Configuring a
+baseline does not enable publication or change installation defaults.
+
+Run the same image for inbound Platform or Build Pool connections:
+
+```bash
+docker run -d --name citadel-agent --env-file rust/.env.agent.example \
+  -p 9000:9000 -v /var/run/docker.sock:/var/run/docker.sock citadel-agent:local
+```
+
+Replace the template public key before running it. For Edge, use a configured
+copy of `rust/.env.edge.example` or `rust/.env.edge-build-agent.example`, mount a
+persistent volume at `/app/data`, and omit the published port. Swarm-node services
+use Core's injected identity/bootstrap settings.
+
+Core and Agent share `build/version.rs`: `CITADEL_INFORMATIONAL_VERSION`, then
+`CITADEL_VERSION`, then repository `version.json` determine compile-time metadata.
+Docker accepts the corresponding `INFORMATIONAL_VERSION` and `VERSION` build args.
+`citadel-agent --version` reports informational metadata; Direct info and Edge
+enrollment/heartbeats report the same display version as Core (without `+metadata`).
+No runtime Git access is required. The built-in `healthcheck` command probes only
+loopback, bypasses proxies and redirects, and supports Direct TLS certificates
+issued for the public hostname. It reports process liveness even while Core or
+Docker is unreachable.
+
+The independent `.github/workflows/agent.yml` pipeline runs on relevant pull
+requests and pushes to `main`, release tags, and manual dispatch. It validates
+the Agent, contracts and volume helper, builds `rust/Dockerfile.agent` on native
+amd64 and arm64 runners, and runs image smoke, isolated compatibility and complete
+Core/Agent HTTP acceptance tests on each before allowing publication. It builds
+Core as a test fixture without depending on the Core publication pipeline.
+`rust/Dockerfile` owns the Core image and contains no Agent stages.
+Its build context contains only `rust/` and `version.json`. Release tags must
+match `version.json` and belong to `main`. Publication stays disabled until the
+Phase 8 compatibility gates pass: then set the repository variable
+`CITADEL_RUST_AGENT_RELEASE_ENABLED=true` and retire the competing Agent publisher.
+The release job promotes the tested images to
+`ghcr.io/<owner>/citadel.agent` and
+`docker.io/<DOCKERHUB_NAMESPACE>/citadel-agent`, with version, major.minor and major
+aliases. It verifies both architectures, matching alias digests and signs them.
+It does not move `latest`. Docker Hub uses the existing namespace/username
+variables and token secret; GHCR uses the main repository's package write access.
+
+An opt-in helper test runs real Docker containers through the restricted node
+dispatcher. It needs no Swarm cluster or database and removes its own containers
+and volumes. From the repository root, build the helper fixture image, then run:
+
+```bash
+docker build --target agent-runtime-base -t citadel-agent-helper:test -f rust/Dockerfile.agent .
+cd rust
+CITADEL_AGENT_HELPER_TEST_IMAGE=citadel-agent-helper:test \
+  cargo test --locked -p citadel-agent --lib \
+  swarm_volume_browsing_runs_packaged_rust_helper_and_cleans_up -- --ignored
+docker image rm citadel-agent-helper:test
+```
+
+This checks listing, binary downloads, symlink rejection, restore-volume guards
+and cleanup using both helper paths. The fixture target contains the helper but
+does not contain the Agent executable; the `agent` target adds that executable.
+
+Shared runtime regression tests use temporary fake daemons and executables:
+
+```bash
+cargo test --locked -p citadel-adapters --test docker_transport --test local_runtime
+```
+
+These tests do not change local containers or require PostgreSQL. Direct transport
+tests exercise authenticated RPCs through a real HTTP/2 listener against temporary
+Docker fixtures, including tampering, replay, map fields, TLS and deadlines.
+
+Run a Direct Agent from `rust/` with Core's public signing key:
+
+```bash
+HUB_PUBLIC_KEY='<base64 public key>' cargo run --locked -p citadel-agent
+```
+
+The local `docker` CLI with its Compose plugin is required for build/stack RPCs.
+Core must be able to reach the listener; configure the public key from that Core
+installation. Do not use the Core private signing key as `HUB_PUBLIC_KEY`.
+
+An opt-in live test requires Docker and a locally available `redis:latest` image.
+It creates uniquely named disposable containers, a network and a volume, then
+removes only its own resources. It exercises Core's client, statistics/events,
+inspection, terminal/binary exec, logs and deployment apply:
+
+```bash
+cargo test --locked -p citadel-agent --test live_docker -- --ignored
+```
+
+Run the configuration, Direct transport, TLS and lifecycle checks with:
+
+```bash
+cargo test --locked -p citadel-agent
+```
+
+TLS tests use `openssl` to create temporary certificates and remove their files
+when finished. The tests use ephemeral ports and need no external services.
+
+The opt-in Edge interoperability test runs the Agent against Core's actual
+`EdgeIntake`. It needs an **isolated disposable database**: it applies migrations
+and creates Platform/Build Pool fixtures. Docker responses are local test fixtures;
+it does not contact the development Core or modify workloads.
+
+```bash
+CITADEL_AGENT_TEST_DATABASE_URL='<isolated PostgreSQL URL>' \
+  cargo test --locked -p citadel-agent --test edge_intake -- --ignored
+```
+
+It verifies enrollment, signed reconnects, process restart without a token,
+resource identity, revocation, and preservation of credentials during a Core
+storage outage. It also checks unary execution, command failures, live events and
+cancel/shutdown cleanup for Platform and Build Pool targets. Ordinary Agent tests
+require no database.

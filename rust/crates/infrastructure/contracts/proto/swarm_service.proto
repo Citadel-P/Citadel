@@ -1,0 +1,317 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+package citadel.swarm.v1;
+
+service SwarmService {
+  rpc ListNodes (ListSwarmNodesRequest) returns (ListSwarmNodesResponse);
+  rpc InspectNode (InspectSwarmNodeRequest) returns (SwarmNodeMessage);
+  rpc UpdateNode (UpdateSwarmNodeRequest) returns (google.protobuf.Empty);
+  rpc ListServices (ListSwarmServicesRequest) returns (ListSwarmServicesResponse);
+  rpc InspectService (InspectSwarmServiceRequest) returns (SwarmServiceMessage);
+  rpc CreateService (CreateManagedSwarmServiceRequest) returns (SwarmServiceMutationResponse);
+  rpc UpdateService (UpdateManagedSwarmServiceRequest) returns (SwarmServiceMutationResponse);
+  rpc RestartService (RestartSwarmServiceRequest) returns (google.protobuf.Empty);
+  rpc DeleteService (DeleteManagedSwarmServiceRequest) returns (google.protobuf.Empty);
+  rpc GetServiceLogs (SwarmLogsRequest) returns (SwarmLogsResponse);
+  rpc ListTasks (ListSwarmTasksRequest) returns (ListSwarmTasksResponse);
+  rpc InspectTask (InspectSwarmTaskRequest) returns (SwarmTaskMessage);
+  rpc GetTaskLogs (SwarmLogsRequest) returns (SwarmLogsResponse);
+  rpc ListNetworks (ListSwarmNetworksRequest) returns (ListSwarmNetworksResponse);
+  rpc InspectNetwork (InspectSwarmNetworkRequest) returns (SwarmNetworkMessage);
+  rpc ListSecrets (ListSwarmSecretsRequest) returns (ListSwarmSecretsResponse);
+  rpc InspectSecret (InspectSwarmSecretRequest) returns (SwarmSecretMessage);
+  rpc CreateSecret (CreateSwarmSecretRequest) returns (SwarmResourceCreateResponse);
+  rpc UpdateSecretLabels (UpdateSwarmResourceLabelsRequest) returns (google.protobuf.Empty);
+  rpc DeleteSecret (DeleteSwarmSecretRequest) returns (google.protobuf.Empty);
+  rpc ListConfigs (ListSwarmConfigsRequest) returns (ListSwarmConfigsResponse);
+  rpc InspectConfig (InspectSwarmConfigRequest) returns (SwarmConfigMessage);
+  rpc GetConfigData (InspectSwarmConfigRequest) returns (SwarmConfigDataResponse);
+  rpc CreateConfig (CreateSwarmConfigRequest) returns (SwarmResourceCreateResponse);
+  rpc UpdateConfigLabels (UpdateSwarmResourceLabelsRequest) returns (google.protobuf.Empty);
+  rpc DeleteConfig (DeleteSwarmConfigRequest) returns (google.protobuf.Empty);
+  rpc CreateSystemService (CreateSystemSwarmServiceRequest) returns (SwarmServiceMutationResponse);
+  rpc UpdateSystemService (UpdateSystemSwarmServiceRequest) returns (SwarmServiceMutationResponse);
+}
+
+message ListSwarmNodesRequest {
+  int32 maxItems = 1;
+  bool includeTaskCounts = 2;
+}
+
+message ListSwarmNodesResponse {
+  repeated SwarmNodeMessage nodes = 1;
+}
+
+message InspectSwarmNodeRequest {
+  string nodeId = 1;
+}
+
+message UpdateSwarmNodeRequest {
+  string nodeId = 1;
+  uint64 versionIndex = 2;
+  string availability = 3;
+  map<string, string> labels = 4;
+}
+
+message SwarmNodeMessage {
+  string id = 1;
+  uint64 versionIndex = 2;
+  string hostname = 3;
+  string role = 4;
+  bool isLeader = 5;
+  string reachability = 6;
+  string status = 7;
+  string statusMessage = 8;
+  string availability = 9;
+  string engineVersion = 10;
+  string operatingSystem = 11;
+  string architecture = 12;
+  string address = 13;
+  map<string, string> labels = 14;
+  int32 runningTaskCount = 15;
+  int32 desiredTaskCount = 16;
+  google.protobuf.Timestamp createdAt = 17;
+  google.protobuf.Timestamp updatedAt = 18;
+}
+
+message ListSwarmServicesRequest { int32 maxItems = 1; }
+message ListSwarmServicesResponse { repeated SwarmServiceMessage services = 1; }
+message InspectSwarmServiceRequest { string serviceId = 1; }
+message SwarmLogsRequest {
+  string resourceId = 1;
+  int32 tail = 2;
+}
+message SwarmLogsResponse {
+  repeated string lines = 1;
+  bool truncated = 2;
+}
+message SwarmServiceMessage {
+  string id = 1;
+  uint64 versionIndex = 2;
+  string name = 3;
+  string mode = 4;
+  string image = 5;
+  int32 runningTaskCount = 6;
+  int32 desiredTaskCount = 7;
+  string updateState = 8;
+  string updateMessage = 9;
+  repeated string ports = 10;
+  repeated string networkIds = 11;
+  repeated string secretIds = 12;
+  repeated string configIds = 13;
+  map<string, string> labels = 14;
+  google.protobuf.Timestamp createdAt = 15;
+  google.protobuf.Timestamp updatedAt = 16;
+  string runtimeHash = 17;
+  int64 forceUpdate = 18;
+  SwarmServiceMutationSpecMessage definition = 19;
+  repeated string adoptionWarnings = 20;
+}
+
+message SwarmServiceMutationSpecMessage {
+  string image = 1;
+  string schedulingMode = 2;
+  optional int32 replicas = 3;
+  repeated string command = 4;
+  repeated string arguments = 5;
+  repeated string environment = 6;
+  string user = 7;
+  string workingDirectory = 8;
+  SwarmHealthCheckSpecMessage healthCheck = 9;
+  optional int64 stopGracePeriodNanoseconds = 10;
+  repeated SwarmPortSpecMessage ports = 11;
+  repeated string networkIds = 12;
+  repeated SwarmMountSpecMessage mounts = 13;
+  repeated SwarmSecretReferenceSpecMessage secrets = 14;
+  repeated SwarmConfigReferenceSpecMessage configs = 15;
+  SwarmResourceSpecMessage resources = 16;
+  repeated string placementConstraints = 17;
+  SwarmRestartPolicySpecMessage restartPolicy = 18;
+  SwarmUpdatePolicySpecMessage updatePolicy = 19;
+  int32 forceUpdate = 20;
+}
+
+message SwarmHealthCheckSpecMessage {
+  repeated string test = 1;
+  optional int64 intervalNanoseconds = 2;
+  optional int64 timeoutNanoseconds = 3;
+  optional int32 retries = 4;
+  optional int64 startPeriodNanoseconds = 5;
+}
+
+message SwarmPortSpecMessage {
+  int32 targetPort = 1;
+  optional int32 publishedPort = 2;
+  string protocol = 3;
+  string publishMode = 4;
+}
+
+message SwarmMountSpecMessage {
+  string kind = 1;
+  string source = 2;
+  string target = 3;
+  bool readOnly = 4;
+}
+
+message SwarmSecretReferenceSpecMessage { string id = 1; string name = 2; string targetName = 3; }
+message SwarmConfigReferenceSpecMessage { string id = 1; string name = 2; string targetName = 3; }
+message SwarmResourceSpecMessage {
+  optional int64 limitNanoCpus = 1;
+  optional int64 limitMemoryBytes = 2;
+  optional int64 reservationNanoCpus = 3;
+  optional int64 reservationMemoryBytes = 4;
+}
+message SwarmRestartPolicySpecMessage {
+  string condition = 1;
+  optional int64 delayNanoseconds = 2;
+  optional int32 maximumAttempts = 3;
+  optional int64 windowNanoseconds = 4;
+}
+message SwarmUpdatePolicySpecMessage {
+  int32 parallelism = 1;
+  optional int64 delayNanoseconds = 2;
+  string order = 3;
+  string failureAction = 4;
+}
+
+message CreateManagedSwarmServiceRequest {
+  string operationId = 1;
+  string dockerName = 2;
+  SwarmServiceMutationSpecMessage spec = 3;
+  map<string, string> labels = 4;
+  string registryAuth = 5;
+}
+
+message UpdateManagedSwarmServiceRequest {
+  string operationId = 1;
+  string serviceId = 2;
+  uint64 versionIndex = 3;
+  SwarmServiceMutationSpecMessage spec = 4;
+  map<string, string> labels = 5;
+  string registryAuth = 6;
+}
+
+message DeleteManagedSwarmServiceRequest { string operationId = 1; string serviceId = 2; }
+message RestartSwarmServiceRequest { string serviceId = 1; }
+message SwarmServiceMutationResponse { string serviceId = 1; repeated string warnings = 2; }
+message SwarmResourceCreateResponse { string resourceId = 1; }
+
+message SystemSwarmServiceSpecMessage {
+  string image = 1;
+  repeated string environment = 2;
+  string managerNodeId = 3;
+  string stateVolumeName = 4;
+  string bootstrapSecretId = 5;
+  string bootstrapSecretName = 6;
+  string caConfigId = 7;
+  string caConfigName = 8;
+  int64 limitNanoCpus = 9;
+  int64 limitMemoryBytes = 10;
+  int64 pidsLimit = 11;
+  int64 stopGracePeriodNanoseconds = 12;
+  repeated string supportedArchitectures = 13;
+}
+
+message CreateSystemSwarmServiceRequest {
+  string dockerName = 1;
+  SystemSwarmServiceSpecMessage spec = 2;
+  map<string, string> labels = 3;
+  map<string, string> containerLabels = 4;
+  string operationId = 5;
+}
+
+message UpdateSystemSwarmServiceRequest {
+  string serviceId = 1;
+  uint64 versionIndex = 2;
+  SystemSwarmServiceSpecMessage spec = 3;
+  map<string, string> labels = 4;
+  map<string, string> containerLabels = 5;
+  string operationId = 6;
+}
+
+message ListSwarmTasksRequest { int32 maxItems = 1; }
+message ListSwarmTasksResponse { repeated SwarmTaskMessage tasks = 1; }
+message InspectSwarmTaskRequest { string taskId = 1; }
+message SwarmTaskMessage {
+  string id = 1;
+  uint64 versionIndex = 2;
+  string name = 3;
+  string serviceId = 4;
+  optional int32 slot = 5;
+  string nodeId = 6;
+  string desiredState = 7;
+  string state = 8;
+  string statusMessage = 9;
+  string error = 10;
+  string image = 11;
+  repeated string ports = 12;
+  google.protobuf.Timestamp statusTimestamp = 13;
+  google.protobuf.Timestamp createdAt = 14;
+  google.protobuf.Timestamp updatedAt = 15;
+  string containerId = 16;
+}
+
+message ListSwarmNetworksRequest { int32 maxItems = 1; }
+message ListSwarmNetworksResponse { repeated SwarmNetworkMessage networks = 1; }
+message InspectSwarmNetworkRequest { string networkId = 1; }
+message SwarmNetworkMessage {
+  string id = 1;
+  string name = 2;
+  string scope = 3;
+  string driver = 4;
+  bool isAttachable = 5;
+  bool isInternal = 6;
+  bool isIngress = 7;
+  bool isEncrypted = 8;
+  bool enableIpv6 = 9;
+  repeated string subnets = 10;
+  map<string, string> labels = 11;
+  google.protobuf.Timestamp createdAt = 12;
+}
+
+message ListSwarmSecretsRequest { int32 maxItems = 1; }
+message ListSwarmSecretsResponse { repeated SwarmSecretMessage secrets = 1; }
+message InspectSwarmSecretRequest { string secretId = 1; }
+message CreateSwarmSecretRequest {
+  string name = 1;
+  bytes data = 2;
+  map<string, string> labels = 3;
+}
+message UpdateSwarmResourceLabelsRequest {
+  string resourceId = 1;
+  uint64 versionIndex = 2;
+  map<string, string> labels = 3;
+}
+message DeleteSwarmSecretRequest { string secretId = 1; }
+message SwarmSecretMessage {
+  string id = 1;
+  uint64 versionIndex = 2;
+  string name = 3;
+  string driver = 4;
+  map<string, string> labels = 5;
+  google.protobuf.Timestamp createdAt = 6;
+  google.protobuf.Timestamp updatedAt = 7;
+}
+
+message ListSwarmConfigsRequest { int32 maxItems = 1; }
+message ListSwarmConfigsResponse { repeated SwarmConfigMessage configs = 1; }
+message InspectSwarmConfigRequest { string configId = 1; }
+message SwarmConfigDataResponse { bytes data = 1; }
+message CreateSwarmConfigRequest {
+  string name = 1;
+  bytes data = 2;
+  map<string, string> labels = 3;
+}
+message DeleteSwarmConfigRequest { string configId = 1; }
+message SwarmConfigMessage {
+  string id = 1;
+  uint64 versionIndex = 2;
+  string name = 3;
+  string templatingDriver = 4;
+  map<string, string> labels = 5;
+  google.protobuf.Timestamp createdAt = 6;
+  google.protobuf.Timestamp updatedAt = 7;
+}

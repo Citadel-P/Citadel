@@ -3,6 +3,7 @@ use citadel_platforms::{
 };
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 use crate::connectors::agent::client::AgentClient;
@@ -22,7 +23,7 @@ pub struct ContainerRuntimeRouter {
 
 pub(crate) enum Runtime<'a> {
     Local(&'a DockerClient),
-    Agent(&'a AgentClient),
+    Agent(Arc<AgentClient>),
     Edge(EdgeRuntime),
 }
 
@@ -92,12 +93,12 @@ impl ContainerRuntimeRouter {
         let address: String = row.get("address");
         let runtime = match connector.as_str() {
             "Local" => Runtime::Local(&self.docker),
-            "Agent" => Runtime::Agent(
+            "Agent" => Runtime::Agent(Arc::new(
                 self.agent
                     .as_ref()
-                    .filter(|a| a.address().trim_end_matches('/') == address.trim_end_matches('/'))
-                    .ok_or_else(unavailable)?,
-            ),
+                    .ok_or_else(unavailable)?
+                    .at_address(&address)?,
+            )),
             "EdgeAgent" => Runtime::Edge(EdgeRuntime {
                 session: self
                     .edge

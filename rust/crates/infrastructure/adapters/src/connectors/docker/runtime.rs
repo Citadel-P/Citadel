@@ -164,7 +164,7 @@ impl PlatformRuntimePort for DockerClient {
     }
 }
 
-pub(super) fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
+pub fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
     let is_swarm_task = container.labels.contains_key("com.docker.swarm.task.id");
     let stack = container
         .labels
@@ -243,6 +243,7 @@ pub(crate) fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityErr
             (RuntimeErrorKind::Unavailable, true)
         }
         DockerError::UnsupportedPlatform
+        | DockerError::InvalidEndpoint(_)
         | DockerError::InvalidVersion(_)
         | DockerError::IncompatibleVersion { .. }
         | DockerError::InvalidPing(_)
