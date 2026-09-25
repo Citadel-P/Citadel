@@ -145,6 +145,17 @@ impl VolumeContentAdapter {
                 HelperRuntime::Agent(AgentExecutionClient::Edge(r.session))
             }
         };
+        // The helper must be available on the owning Agent's daemon. Core's
+        // configured image can differ from the image that Agent actually runs.
+        let agent_image = match &runtime {
+            HelperRuntime::Agent(agent) => Some(
+                agent
+                    .runtime_image(cancellation)
+                    .await
+                    .map_err(|error| helper_startup_error(error.message))?,
+            ),
+            HelperRuntime::Local(_) => None,
+        };
         let (image, binary) = if let (HelperRuntime::Local(docker), Some(container)) =
             (&runtime, &self.core_container)
         {
@@ -153,6 +164,8 @@ impl VolumeContentAdapter {
                 .await
                 .map_err(|error| helper_startup_error(error.to_string()))?;
             (core_image(&document)?, CORE_HELPER_BINARY)
+        } else if let Some(image) = agent_image.filter(|image| !image.trim().is_empty()) {
+            (image, HELPER_BINARY)
         } else {
             let image = if node.is_some() {
                 sqlx::query_as::<_, (String, String)>("SELECT agentimagereference,agentimagedigest FROM swarmnodeagentinstallations WHERE platformid=$1 AND desiredstate='Installed'")

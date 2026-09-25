@@ -23,6 +23,27 @@ impl ContainerRepository for PostgresContainerRepository {
         ids: &'a [String],
     ) -> BoxFuture<'a, Result<Vec<Uuid>, RuntimeCapabilityError>> {
         Box::pin(async move {
+            if let Ok(uuids) = ids
+                .iter()
+                .map(|id| Uuid::parse_str(id))
+                .collect::<Result<Vec<_>, _>>()
+            {
+                let found: BTreeSet<Uuid> =
+                    sqlx::query_scalar("SELECT id FROM containers WHERE id=ANY($1::uuid[])")
+                        .bind(&uuids)
+                        .fetch_all(&self.pool)
+                        .await
+                        .map_err(storage)?
+                        .into_iter()
+                        .collect();
+                if uuids.iter().any(|id| !found.contains(id)) {
+                    return Err(error(
+                        RuntimeErrorKind::NotFound,
+                        "No containers found for the provided ID(s).",
+                    ));
+                }
+                return Ok(uuids);
+            }
             let mut resolved = Vec::with_capacity(ids.len());
             for id in ids {
                 let matches: Vec<Uuid> = if let Ok(id) = Uuid::parse_str(id) {
@@ -131,6 +152,9 @@ impl ContainerRepository for PostgresContainerRepository {
                 .collect();
             let stacks: BTreeSet<Uuid> = parents.iter().filter_map(|r| r.get("stackid")).collect();
             for (table, parent_ids) in [("deployments", &deployments), ("stacks", &stacks)] {
+                if parent_ids.is_empty() {
+                    continue;
+                }
                 let statement = format!(
                     "SELECT id,controlstate FROM {table} WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE"
                 );
@@ -250,6 +274,9 @@ impl ContainerRepository for PostgresContainerRepository {
                 ("stacks", stacks.into_iter().collect()),
                 ("containers", ids.to_vec()),
             ] {
+                if targets.is_empty() {
+                    continue;
+                }
                 let statement = format!(
                     "UPDATE {table} SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,containeroperationid=$4,rowversion=rowversion+1 WHERE id=ANY($1::uuid[])"
                 );

@@ -7,7 +7,7 @@ use citadel_contracts::citadel::{
         ExecExit, ExecOutput, ExecServerMessage, exec_server_message::Msg,
     },
     edge::v1::{EdgeCommandKind as Kind, core_envelope},
-    shared_models::v1::VolumeResponse,
+    shared_models::v1::{PlatformInfoResponse, VolumeResponse},
 };
 use prost::Message;
 
@@ -77,8 +77,8 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
         .status(),
         StatusCode::FORBIDDEN
     );
-    for case in ["list", "symlink", "download", "interrupted"] {
-        let url = if case == "list" || case == "symlink" {
+    for case in ["list", "fallback", "symlink", "download", "interrupted"] {
+        let url = if matches!(case, "list" | "fallback" | "symlink") {
             format!("{base}?path=%2F&dockerNodeId=node-1")
         } else {
             format!("{base}/download?path=%2Fconfig.txt&dockerNodeId=node-1")
@@ -99,7 +99,7 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
             } else {
                 assert_eq!(response.status(), StatusCode::OK);
                 assert_eq!(response.headers()["cache-control"], "no-store");
-                if case == "list" {
+                if matches!(case, "list" | "fallback") {
                     let body: Value = serde_json::from_slice(
                         &to_bytes(response.into_body(), 1024 * 1024).await.unwrap(),
                     )
@@ -125,9 +125,9 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
         };
         let peer = async {
             let count = if matches!(case, "download" | "interrupted") {
-                6
+                7
             } else {
-                5
+                6
             };
             for step in 0..count {
                 let envelope = commands.recv().await.unwrap();
@@ -137,13 +137,28 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
                 };
                 let expected = match step {
                     0 => Kind::VolumeInspect,
-                    1 => Kind::ContainerCreate,
-                    2 => Kind::ContainerStart,
+                    1 => Kind::PlatformGetInfo,
+                    2 => Kind::ContainerCreate,
+                    3 => Kind::ContainerStart,
                     n if n == count - 1 => Kind::ContainerDelete,
                     _ => Kind::ContainerExecBinary,
                 };
                 assert_eq!(command.kind, expected as i32, "{case} step {step}");
                 match expected {
+                    Kind::PlatformGetInfo => {
+                        session.output(
+                            id,
+                            PlatformInfoResponse {
+                                agent_runtime_image: if case == "fallback" {
+                                    String::new()
+                                } else {
+                                    "citadel-agent:installed-on-node".into()
+                                },
+                                ..Default::default()
+                            }
+                            .encode_to_vec(),
+                        );
+                    }
                     Kind::VolumeInspect => {
                         session.output(
                             id,
@@ -159,6 +174,14 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
                         let request =
                             CreateContainerRequest::decode(command.payload.as_slice()).unwrap();
                         assert_eq!(request.readonly_rootfs, Some(true));
+                        assert_eq!(
+                            request.image_id,
+                            if case == "fallback" {
+                                "citadel-agent:test"
+                            } else {
+                                "citadel-agent:installed-on-node"
+                            }
+                        );
                         assert_eq!(request.network_mode.as_deref(), Some("none"));
                         assert_eq!(request.labels["com.citadel.system"], "true");
                         assert_eq!(request.entry_point, ["/app/Citadel.Agent.VolumeHelper"]);

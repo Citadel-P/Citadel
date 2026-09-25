@@ -26,13 +26,12 @@ impl ApplicationGroupReader {
                 .get_authorized(p.actor_id, p.is_administrator(), id)
                 .await
                 .map_err(failure)?;
+            stack
+                .platform_id
+                .ok_or_else(|| failure("The Stack has no applied Platform."))?;
             let containers = self
                 .platforms
-                .list_containers(
-                    stack
-                        .platform_id
-                        .ok_or_else(|| failure("The Stack has no applied Platform."))?,
-                )
+                .list_stack_containers(id)
                 .await
                 .map(|value| {
                     value
@@ -115,7 +114,7 @@ impl ApplicationGroupReader {
         let principal = p.clone();
         let group = g.clone();
         let cancel = cancel.clone();
-        Ok(Some(Box::pin(async_stream::try_stream! {
+        let output: GroupStream = Box::pin(async_stream::try_stream! {
             loop {
                 let (change,item)=tokio::select! {
                     biased;
@@ -157,7 +156,8 @@ impl ApplicationGroupReader {
                         }
                 }
             }
-        })))
+        });
+        Ok(Some(report_log_errors(output, g.name.clone())))
     }
 
     async fn open_log(
@@ -249,6 +249,24 @@ impl ApplicationGroupReader {
     }
 }
 
+fn report_log_errors(mut stream: GroupStream, group: String) -> GroupStream {
+    Box::pin(async_stream::stream! {
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(event) => yield Ok(event),
+                Err(error) => {
+                    tracing::warn!(%group, %error, "Container log stream stopped");
+                    yield Ok(ClientEvent::new("LogStreamError", vec![
+                        json!(group),
+                        json!("Log stream stopped. Reopen the Logs tab to retry."),
+                    ]));
+                    break;
+                }
+            }
+        }
+    })
+}
+
 fn log_identity(container: &ContainerView) -> (String, Option<String>, String) {
     (
         container.container_id.clone(),
@@ -296,6 +314,27 @@ fn log_event(line: &[u8], name: Option<&str>) -> ClientEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn log_failure_is_reported_to_its_group_without_closing_realtime() {
+        let stream: GroupStream = Box::pin(futures_util::stream::iter([
+            Ok(log_event(b"date first\n", None)),
+            Err(failure("Edge output limit exceeded")),
+        ]));
+        let events: Vec<_> = report_log_errors(stream, "container-log:abcdef123456".into())
+            .collect()
+            .await;
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].as_ref().unwrap().target, "SendContainerLogs");
+        let error = events[1].as_ref().unwrap();
+        assert_eq!(error.target, "LogStreamError");
+        assert_eq!(error.arguments[0], "container-log:abcdef123456");
+        assert!(
+            error.arguments[1]
+                .as_str()
+                .unwrap()
+                .contains("Reopen the Logs tab")
+        );
+    }
     #[tokio::test]
     async fn stack_lines_preserve_timestamp_filter_prefix_and_split_utf8_including_final_line() {
         let input = "2026-09-06T12:00:00Z héllo\n2026-09-06T12:00:01Z final".as_bytes();

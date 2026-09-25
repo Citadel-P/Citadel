@@ -10,6 +10,7 @@ fn build_log_events_only_target_the_matching_run_group() {
         resource_id: run,
         event_kind: "buildLogs",
         resource_revision: 1,
+        containers: Default::default(),
         payload: json!({"entries":[]}),
     };
     assert!(
@@ -72,6 +73,7 @@ fn statistics_match_both_node_and_docker_identity() {
         resource_id: worker.platform_id,
         event_kind: "stats",
         resource_revision: 1,
+        containers: Default::default(),
         payload: json!({"dockerNodeId":"worker","stats":[{"dockerContainerId":"same-docker-id","cpuUsage":42}]}),
     };
     let values = map_stats(&event, &[manager.clone(), worker.clone(), other.clone()]);
@@ -95,6 +97,7 @@ fn ordinary_manager_statistics_do_not_update_worker_rows() {
         resource_id: manager.platform_id,
         event_kind: "stats",
         resource_revision: 1,
+        containers: Default::default(),
         payload: json!({"stats":[{"dockerContainerId":"same-docker-id","cpuUsage":12}]}),
     };
     let values = map_stats(&event, &[worker.clone(), manager.clone()]);

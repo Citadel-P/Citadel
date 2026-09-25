@@ -171,6 +171,82 @@ async fn timeout_keeps_unknown_outcome_for_read_only_recovery() {
 }
 
 struct Tasks;
+
+struct BatchRuntime {
+    fail: bool,
+    batches: AtomicUsize,
+    observations: AtomicUsize,
+}
+impl ContainerMutationRuntime for BatchRuntime {
+    fn mutate<'a>(
+        &'a self,
+        _: &'a ContainerTarget,
+        _: ContainerAction,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async { panic!("selection must use the batch operation") })
+    }
+    fn mutate_batch<'a>(
+        &'a self,
+        targets: &'a [ContainerTarget],
+        _: ContainerAction,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            assert_eq!(targets.len(), 6);
+            self.batches.fetch_add(1, Ordering::SeqCst);
+            if self.fail {
+                Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Remote,
+                    "partial remote failure",
+                    false,
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+    fn observe<'a>(
+        &'a self,
+        _: &'a ContainerTarget,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            self.observations.fetch_add(1, Ordering::SeqCst);
+            Ok(Some("exited".into()))
+        })
+    }
+}
+
+#[tokio::test]
+async fn bulk_mutation_verifies_all_targets_and_retains_claims_after_partial_failure() {
+    for fail in [false, true] {
+        let store = Arc::new(Store::default());
+        let runtime = Arc::new(BatchRuntime {
+            fail,
+            batches: AtomicUsize::new(0),
+            observations: AtomicUsize::new(0),
+        });
+        let service =
+            ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
+        let result = service
+            .execute(
+                ActorId::new(Uuid::now_v7()),
+                true,
+                (0..6).map(|_| Uuid::now_v7().to_string()).collect(),
+                ContainerAction::Stop,
+            )
+            .await;
+        assert_eq!(result.is_err(), fail);
+        assert_eq!(runtime.batches.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            runtime.observations.load(Ordering::SeqCst),
+            if fail { 0 } else { 6 }
+        );
+        assert_eq!(store.finished.load(Ordering::SeqCst), usize::from(!fail));
+    }
+}
+
 impl ContainerTaskSpawner for Tasks {
     fn spawn(&self, operation: BoxFuture<'static, Result<(), RuntimeCapabilityError>>) -> bool {
         tokio::spawn(operation);

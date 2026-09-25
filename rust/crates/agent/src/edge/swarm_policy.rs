@@ -126,7 +126,11 @@ pub(super) fn backup_helper(r: &CreateContainerRequest, platform: Uuid) -> bool 
             .strip_prefix("trap 'exit 0' TERM INT; sleep ")
             .and_then(|v| v.parse::<u64>().ok())
             .is_some_and(|v| (300..=86700).contains(&v))
-        && r.cap_add.len() == 2
+        && (r.cap_add.len() == 2
+            || (r.cap_add.len() == 3
+                && r.cap_add.iter().any(|v| v == "CHOWN")
+                && r.mounts.len() == 1
+                && mount(&r.mounts[0], "/target", false)))
         && r.cap_add.iter().any(|v| v == "DAC_READ_SEARCH")
         && r.cap_add.iter().any(|v| v == "FOWNER")
         && (r.mounts.is_empty()
@@ -419,6 +423,22 @@ mod tests {
         helper.cap_add.push("FOWNER".into());
         helper.mounts.clear();
         assert!(backup_helper(&helper, platform));
+        let mut restore = helper.clone();
+        restore.mounts = volume_request(platform).mounts;
+        restore.mounts[0].target = Some("/target".into());
+        restore.mounts[0].read_only = Some(false);
+        restore.cap_add.push("CHOWN".into());
+        assert!(backup_helper(&restore, platform));
+        let mut bad = restore.clone();
+        bad.mounts.clear();
+        assert!(!backup_helper(&bad, platform));
+        let mut bad = restore.clone();
+        bad.mounts[0].target = Some("/source".into());
+        bad.mounts[0].read_only = Some(true);
+        assert!(!backup_helper(&bad, platform));
+        let mut bad = restore;
+        bad.cap_add[2] = "SYS_ADMIN".into();
+        assert!(!backup_helper(&bad, platform));
         for lifetime in ["299", "86701", "300; touch /tmp/exploit"] {
             let mut bad = helper.clone();
             bad.command[1] = format!("trap 'exit 0' TERM INT; sleep {lifetime}");

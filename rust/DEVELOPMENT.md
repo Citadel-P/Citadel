@@ -215,8 +215,16 @@ both development and release images. Core resolves its container using Docker's
 default `HOSTNAME` and launches a read-only helper from that container's immutable
 image ID; browsing does not pull an Agent image. Keep the default container
 hostname when running Core. The helper has no network access, follows no symlink
-paths, and is removed when the operation finishes. Remote volumes continue to
-use the Agent helper on their owning node.
+paths, and is removed when the operation finishes. For Direct and Edge Agents,
+Core uses the running image reported by the Agent to launch the helper on its
+owning node. A locally built Agent therefore needs no registry image for volume
+browsing. The configured helper image is the fallback when the Agent does not
+report its running image.
+
+Remote backup, restore and repository operations also use the running Agent
+image, which includes Restic. They do not require a separate `restic/restic`
+image on the Agent host. Agents that do not report their image use the configured
+backup helper image as a fallback.
 
 When running Core directly on the host, `CITADEL_VOLUME_HELPER_IMAGE` can select
 an already installed Agent image containing `/app/Citadel.Agent.VolumeHelper`.
@@ -230,6 +238,46 @@ Open these addresses from the host:
 The task creates separate **citadel-api** and **citadel-ui** terminal panels.
 The API is ready when its panel reports that the Compose services are running.
 View Core logs with `docker logs -f citadel-wsl-core-1` or Docker Desktop.
+
+For Edge Agents in Docker Desktop, the development environment advertises
+`EdgeAgent__PublicGrpcUrl=http://host.docker.internal:8001`. Generated installation
+commands work on Docker's default bridge network; no `--network` option is needed.
+Existing development environments can set this value in `rust/.env.development`
+and restart Core. A remote Agent needs a hostname or IP that reaches Core from
+that host instead. Set `EdgeAgent__PublicGrpcUrl` accordingly; `localhost` inside
+an ordinary Docker container points to that container. For the release Compose
+project, the default published Edge port is `18001`.
+
+The enrollment API uses `EdgeAgent__PublicGrpcUrl` as the default `CITADEL_CORE_URL`.
+The setup form lets you enter Core's address as reached from the Agent machine
+and updates the Docker command immediately. Public addresses are prefilled;
+local-only defaults leave the field empty until you supply an address. For an
+Agent on the same Docker Desktop host, enter `http://host.docker.internal:8001`.
+For a remote Agent, enter Core's reachable IP or hostname and Edge port, not the
+Agent's address. This choice applies to the displayed/copied command and does
+not require restarting Core or generating a new token. It is not saved as Core
+configuration. The browser's `localhost` address cannot identify Core's network
+address from another machine.
+
+To test an Agent on another machine against the development Compose project,
+set `CITADEL_DEV_EDGE_BIND_ADDRESS=0.0.0.0` in `rust/.env.development` and restart
+the Compose task to recreate Core's port mapping. This publishes only the Edge
+port (`8001`) on the host's network interfaces; API and PostgreSQL ports remain
+local-only. Enter `http://<core-host-lan-ip>:8001` in the enrollment form. Changing
+the command's address alone does not change Docker's port binding. If a host
+firewall blocks inbound TCP port `8001`, allow it from the Agent's network.
+Use TLS for production as described below.
+
+For remote installations, configure `EdgeAgent__PublicGrpcUrl` in Core's deployment
+environment (the release Compose project uses `rust/.env`). For example,
+`EdgeAgent__PublicGrpcUrl=https://edge.example.com` requires a gRPC-capable reverse
+proxy for that hostname forwarding to Core's Edge listener. Configure
+`Transport__Mode=ReverseProxy`, the trusted proxy settings and `AllowedHosts`
+accordingly, or use `Direct` with Core's TLS certificate settings. Ensure the
+listener or proxy is reachable from the Agent host; Compose's default
+`127.0.0.1` port binding is for local access. Restart Core and generate a fresh
+enrollment command after changing the advertised address. Neither
+`host.docker.internal` nor `localhost` identifies a Core running on another host.
 
 For a release build, run **Citadel: Run release (Compose)** with `Ctrl+Shift+R`.
 This builds Core with `cargo build --release`, bundles the frontend into the

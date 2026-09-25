@@ -1,5 +1,15 @@
 import { ContainerView } from '@/api/generated/api.types';
 
+export const applyContainerChange = (
+  previous: ContainerView[],
+  dockerId: string,
+  incoming: ContainerView[],
+): ContainerView[] =>
+  reconcileContainerOrder(previous, [
+    ...previous.filter((container) => container.containerId !== dockerId),
+    ...incoming,
+  ]);
+
 export const reconcileContainerOrder = (
   previousContainers: ContainerView[] | undefined,
   incomingContainers: ContainerView[],

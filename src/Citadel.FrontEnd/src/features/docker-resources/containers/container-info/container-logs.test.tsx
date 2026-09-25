@@ -1,6 +1,6 @@
 import { renderCitadel } from '@/test/render-citadel';
 import { act, screen } from '@testing-library/react';
-import { DeploymentLogs, StackLogs } from './container-logs';
+import { ContainerLogs, DeploymentLogs, StackLogs } from './container-logs';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import type { RealtimeConnection } from '@/lib/realtime-connection';
 
@@ -74,9 +74,37 @@ describe('DeploymentLogs', () => {
     );
     expect(logViewerMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        emptyMessage: expect.stringContaining('Unable to load container logs.'),
+        emptyMessage: 'No logs received.',
       }),
     );
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load container logs.');
     consoleError.mockRestore();
+  });
+});
+
+describe('ContainerLogs stream failures', () => {
+  it('shows failures for its own group while keeping the log viewer mounted', async () => {
+    renderCitadel(<ContainerLogs containerId="abcdef123456" />);
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hub = {
+      on: vi.fn((name, handler) => handlers.set(name, handler)),
+      off: vi.fn(),
+    } as unknown as RealtimeConnection;
+    const options = vi.mocked(useRealtimeGroup).mock.lastCall![0];
+    options.setupEventListeners(hub);
+
+    act(() => handlers.get('LogStreamError')?.('container-log:other', 'Other failure'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    act(() =>
+      handlers.get('LogStreamError')?.(
+        'container-log:abcdef123456',
+        'Log stream stopped. Reopen the Logs tab to retry.',
+      ),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Log stream stopped.');
+    expect(screen.getByText('Log viewer')).toBeVisible();
+    options.removeEventListeners?.(hub);
+    expect(hub.off).toHaveBeenCalledWith('LogStreamError', handlers.get('LogStreamError'));
   });
 });

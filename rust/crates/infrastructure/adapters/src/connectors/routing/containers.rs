@@ -130,72 +130,95 @@ impl ContainerMutationRuntime for ContainerRuntimeRouter {
         action: ContainerAction,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        self.mutate_batch(std::slice::from_ref(target), action, cancellation)
+    }
+
+    fn mutate_batch<'a>(
+        &'a self,
+        targets: &'a [ContainerTarget],
+        action: ContainerAction,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
             let work = async {
-                match self.resolve(target, cancellation).await? {
-                    Runtime::Local(runtime) => runtime
-                        .change_container_state(&target.docker_id, action)
-                        .await
-                        .map_err(crate::connectors::docker::runtime::normalize_docker_error),
-                    Runtime::Agent(runtime) => match action {
-                        ContainerAction::Delete(options) => {
-                            runtime
-                                .delete_container_with_options(
-                                    &target.docker_id,
-                                    options,
-                                    cancellation,
-                                )
-                                .await
+                // IDs are scoped to an owning daemon: never mix nodes or Platforms.
+                let mut groups = std::collections::BTreeMap::new();
+                for target in targets {
+                    groups
+                        .entry((target.platform_id, target.node_id.as_deref()))
+                        .or_insert_with(Vec::new)
+                        .push(target);
+                }
+                for targets in groups.values() {
+                    let ids: Vec<_> = targets
+                        .iter()
+                        .map(|target| target.docker_id.clone())
+                        .collect();
+                    match self.resolve(targets[0], cancellation).await? {
+                        Runtime::Local(runtime) => {
+                            for id in &ids {
+                                runtime.change_container_state(id, action).await.map_err(
+                                    crate::connectors::docker::runtime::normalize_docker_error,
+                                )?;
+                            }
                         }
-                        _ => {
-                            runtime
-                                .change_containers_state(
-                                    std::slice::from_ref(&target.docker_id),
-                                    agent_action(action),
-                                    cancellation,
-                                )
-                                .await
-                        }
-                    },
-                    Runtime::Edge(runtime) => {
-                        use citadel_contracts::citadel::{
-                            containers::v1::{ContainerIds, DeleteContainerRequest},
-                            edge::v1::EdgeCommandKind as Kind,
-                        };
-                        if let ContainerAction::Delete(options) = action {
-                            crate::connectors::agent::execution::unary(
-                                &runtime.session,
-                                Kind::ContainerDelete,
-                                DeleteContainerRequest {
-                                    ids: vec![target.docker_id.clone()],
-                                    v: Some(options.v),
-                                    force: Some(options.force),
-                                    link: Some(options.link),
-                                },
-                                cancellation,
-                            )
-                            .await
-                        } else {
-                            let kind = match action {
-                                ContainerAction::Start => Kind::ContainerStart,
-                                ContainerAction::Stop => Kind::ContainerStop,
-                                ContainerAction::Restart => Kind::ContainerRestart,
-                                ContainerAction::Pause => Kind::ContainerPause,
-                                ContainerAction::Unpause => Kind::ContainerUnpause,
-                                ContainerAction::Delete(_) => unreachable!(),
+                        Runtime::Agent(runtime) => match action {
+                            ContainerAction::Delete(options) => {
+                                for id in &ids {
+                                    runtime
+                                        .delete_container_with_options(id, options, cancellation)
+                                        .await?;
+                                }
+                            }
+                            _ => {
+                                runtime
+                                    .change_containers_state(
+                                        &ids,
+                                        agent_action(action),
+                                        cancellation,
+                                    )
+                                    .await?
+                            }
+                        },
+                        Runtime::Edge(runtime) => {
+                            use citadel_contracts::citadel::{
+                                containers::v1::{ContainerIds, DeleteContainerRequest},
+                                edge::v1::EdgeCommandKind as Kind,
                             };
-                            crate::connectors::agent::execution::unary(
-                                &runtime.session,
-                                kind,
-                                ContainerIds {
-                                    ids: vec![target.docker_id.clone()],
-                                },
-                                cancellation,
-                            )
-                            .await
+                            if let ContainerAction::Delete(options) = action {
+                                crate::connectors::agent::execution::unary::<_, ()>(
+                                    &runtime.session,
+                                    Kind::ContainerDelete,
+                                    DeleteContainerRequest {
+                                        ids,
+                                        v: Some(options.v),
+                                        force: Some(options.force),
+                                        link: Some(options.link),
+                                    },
+                                    cancellation,
+                                )
+                                .await?;
+                            } else {
+                                let kind = match action {
+                                    ContainerAction::Start => Kind::ContainerStart,
+                                    ContainerAction::Stop => Kind::ContainerStop,
+                                    ContainerAction::Restart => Kind::ContainerRestart,
+                                    ContainerAction::Pause => Kind::ContainerPause,
+                                    ContainerAction::Unpause => Kind::ContainerUnpause,
+                                    ContainerAction::Delete(_) => unreachable!(),
+                                };
+                                crate::connectors::agent::execution::unary::<_, ()>(
+                                    &runtime.session,
+                                    kind,
+                                    ContainerIds { ids },
+                                    cancellation,
+                                )
+                                .await?;
+                            }
                         }
                     }
                 }
+                Ok(())
             };
             tokio::select! { biased; ()=cancellation.cancelled()=>Err(cancelled()), result=work=>result }
         })

@@ -310,6 +310,24 @@ schema migration is required. HTTP and realtime use the same server View convers
 The binary's `router.rs` assembles resource routers; the library's `api` namespace owns
 Deployment's inbound adapter.
 
+Realtime container claims and completions publish one invalidation per Platform,
+with all affected Docker IDs. Committed Docker observations are coalesced by
+Platform and action over a fixed 100 ms window, bounded to 1,024 pending IDs.
+Each invalidation shares one persisted container projection across readers;
+authorization is checked separately for every subscriber. This data is retained
+only for delivery of that invalidation, with no TTL or long-lived resource cache.
+Platform summaries update only the affected row. Deployment and Stack detail
+notifications match resource IDs, and unrelated container changes do not reload
+workload lists. Missing container rows still trigger authoritative workload reads
+so deletions cannot hide an unhealthy workload. Logs and audit events are not
+coalesced; reconnects continue to fetch complete authorized snapshots.
+
+Container HTTP selections retain their batch through the mutation runtime. Targets
+are grouped by Platform and owning node, and regular Agent/Edge state commands
+send all IDs for that daemon in one RPC. Core verifies each target's observed state
+before finishing the claim; partial remote failures retain the claim for read-only
+recovery. Database ID resolution uses one query for UUID selections.
+
 Apply uses `ApplyDeployment` (Read + Apply) in both the inbound check and the atomic
 claim transaction. Write/delete/update operations likewise reuse named requirements.
 Capabilities are presentation only; authoritative authorization remains in persistence.

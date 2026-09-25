@@ -16,6 +16,10 @@ configure() (
 DATABASE_URL=${DATABASE_URL:-postgres://citadel:citadel@127.0.0.1:15432/citadel}
 Transport__Mode=${Transport__Mode:-Disabled}
 Transport__PublicUrl=${Transport__PublicUrl:-http://localhost:8000}
+# Local Docker Desktop only; remote Agents need Core's reachable gRPC hostname.
+EdgeAgent__PublicGrpcUrl=${EdgeAgent__PublicGrpcUrl:-http://host.docker.internal:8001}
+# Set to 0.0.0.0 to test Agents connecting from another machine.
+CITADEL_DEV_EDGE_BIND_ADDRESS=${CITADEL_DEV_EDGE_BIND_ADDRESS:-127.0.0.1}
 Cors__0=${Cors__0:-http://localhost:5173}
 Cors__1=${Cors__1:-http://127.0.0.1:5173}
 Jwt__Key=${Jwt__Key:-citadel-development-jwt-key-at-least-32-bytes}

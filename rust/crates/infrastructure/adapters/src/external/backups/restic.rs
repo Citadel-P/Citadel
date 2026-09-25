@@ -1214,12 +1214,28 @@ impl DockerResticBackupExecutor {
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<String, String> {
+        // Packaged Agents include Restic. Use the image already installed on
+        // this daemon instead of requiring Core's helper image on every node.
+        let runtime_image = agent
+            .runtime_image(cancellation)
+            .await
+            .map_err(|error| format!("Could not resolve the Agent backup helper image: {error}"))?;
+        let image = if runtime_image.trim().is_empty() {
+            &self.image
+        } else {
+            &runtime_image
+        };
         let lifetime = timeout.as_secs().saturating_add(300).clamp(300, 86_700);
+        let mut capabilities = vec!["DAC_READ_SEARCH".to_owned(), "FOWNER".to_owned()];
+        if volume.is_some_and(|(_, read_only)| !read_only) {
+            // Restic restores the snapshot's numeric file and symlink owners.
+            capabilities.push("CHOWN".to_owned());
+        }
         agent
             .create_container(
                 CreateContainerRequest {
                     platform_address: String::new(),
-                    image_id: self.image.clone(),
+                    image_id: image.clone(),
                     name: format!("citadel-backup-helper-{}", Uuid::now_v7().simple()),
                     working_dir: Some("/tmp".to_owned()),
                     user: Some("0".to_owned()),
@@ -1259,7 +1275,7 @@ impl DockerResticBackupExecutor {
                         bind_options: None,
                         volume_options: None,
                     }).collect(),
-                    cap_add: vec!["DAC_READ_SEARCH".to_owned(), "FOWNER".to_owned()],
+                    cap_add: capabilities,
                     cap_drop: vec!["ALL".to_owned()],
                     security_opt: vec!["no-new-privileges".to_owned()],
                     network_mode: None,
@@ -1270,7 +1286,7 @@ impl DockerResticBackupExecutor {
             .map_err(|error| {
                 format!(
                     "Backup helper image '{}' is unavailable on the target Agent or the helper could not be created: {error}",
-                    self.image
+                    image
                 )
             })
     }

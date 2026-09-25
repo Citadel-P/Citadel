@@ -203,6 +203,18 @@ GROUP BY requested.id
         })
     }
 
+    fn containers_by_runtime_ids<'a>(
+        &'a self,
+        platform_id: Uuid,
+        docker_ids: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<ContainerDetails>, AuthorizedReadError>> {
+        Box::pin(async move {
+            sqlx::query(AssertSqlSafe(format!("{CONTAINER_SELECT} WHERE container.platformid=$1 AND container.dockercontainerid=ANY($2) ORDER BY container.id")))
+                .bind(platform_id).bind(docker_ids).fetch_all(&self.pool).await.map_err(storage)?
+                .into_iter().map(map_container).collect()
+        })
+    }
+
     fn get_container(
         &self,
         id: Uuid,

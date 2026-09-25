@@ -82,6 +82,26 @@ impl PlatformReadService {
         self.store.get_container(id).await
     }
 
+    pub async fn containers_by_runtime_id(
+        &self,
+        platform_id: Uuid,
+        docker_id: &str,
+    ) -> Result<Vec<ContainerDetails>, AuthorizedReadError> {
+        self.store
+            .containers_by_runtime_id(platform_id, docker_id)
+            .await
+    }
+
+    pub async fn containers_by_runtime_ids(
+        &self,
+        platform_id: Uuid,
+        docker_ids: &[String],
+    ) -> Result<Vec<ContainerDetails>, AuthorizedReadError> {
+        self.store
+            .containers_by_runtime_ids(platform_id, docker_ids)
+            .await
+    }
+
     pub async fn list_stack_containers(
         &self,
         stack_id: Uuid,

@@ -9,6 +9,124 @@ type RuntimeCall = (Uuid, String, Option<String>, ContainerAction);
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn six_container_http_selection_sends_one_edge_mutation_then_verifies_each_target() {
+    use citadel_adapters::connectors::edge::EdgeTarget;
+    use citadel_contracts::citadel::{
+        containers::v1::{ContainerIds, InspectContainerRequest},
+        edge::v1::{EdgeCommandKind as Kind, core_envelope},
+        shared_models::v1::{ContainerState, ContainerStateType, InspectContainerResponse},
+    };
+    use prost::Message;
+    let f = fixture().await;
+    let mut inventory = snapshot(f.platform_id);
+    let template = inventory.containers[0].clone();
+    inventory.containers = (0..6)
+        .map(|i| {
+            let mut container = template.clone();
+            container.id = format!("batch-{i}");
+            container.name = format!("batch-{i}");
+            container
+        })
+        .collect();
+    PostgresInventoryProjectionStore::new(f.pool.clone())
+        .persist(&inventory)
+        .await
+        .unwrap();
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE containers SET dockernodeid='node-1' WHERE platformid=$1 RETURNING id",
+    )
+    .bind(f.platform_id)
+    .fetch_all(&f.pool)
+    .await
+    .unwrap();
+    let store = PostgresContainerRepository::new(f.pool.clone());
+    let references: Vec<_> = ids.iter().map(ToString::to_string).collect();
+    assert_eq!(store.resolve_ids(&references).await.unwrap(), ids);
+    let mut missing = references.clone();
+    missing.push(Uuid::now_v7().to_string());
+    assert!(
+        matches!(store.resolve_ids(&missing).await, Err(error) if error.kind == RuntimeErrorKind::NotFound)
+    );
+    let registry = &f.lookup_state.platforms.edge;
+    let (session, mut commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "node-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (wrong, mut wrong_commands) = registry
+        .register(
+            EdgeTarget::node(f.platform_id, "other-node".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (response, ()) = tokio::join!(
+        send_json(
+            &f,
+            Method::PATCH,
+            "/api/v1/containers/stop",
+            f.administrator.clone(),
+            json!(ids)
+        ),
+        async {
+            let mut inspected = std::collections::BTreeSet::new();
+            for step in 0..7 {
+                let envelope = tokio::time::timeout(StdDuration::from_secs(5), commands.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("expected command")
+                };
+                if step == 0 {
+                    assert_eq!(command.kind, Kind::ContainerStop as i32);
+                    let mut targets = ContainerIds::decode(command.payload.as_slice())
+                        .unwrap()
+                        .ids;
+                    targets.sort();
+                    assert_eq!(
+                        targets,
+                        (0..6).map(|i| format!("batch-{i}")).collect::<Vec<_>>()
+                    );
+                } else {
+                    assert_eq!(command.kind, Kind::ContainerInspect as i32);
+                    let target = InspectContainerRequest::decode(command.payload.as_slice())
+                        .unwrap()
+                        .container_id;
+                    assert!(inspected.insert(target.clone()));
+                    session.output(
+                        id,
+                        InspectContainerResponse {
+                            id: target,
+                            state: Some(ContainerState {
+                                status: ContainerStateType::Exited as i32,
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }
+                        .encode_to_vec(),
+                    );
+                }
+                session.complete(id, true);
+            }
+            assert_eq!(inspected.len(), 6);
+        }
+    );
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert!(commands.try_recv().is_err());
+    assert!(wrong_commands.try_recv().is_err());
+    let finished: i64 = sqlx::query_scalar("SELECT count(*) FROM containers WHERE id=ANY($1) AND state='Exited' AND controlstate='Idle'").bind(&ids).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(finished, 6);
+    registry.remove(&session);
+    registry.remove(&wrong);
+    f.docker_server.abort();
+    f.pool.close().await;
+    let _ = tokio::fs::remove_file(f.docker_socket).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_mutation_transactions_lock_platform_before_inventory_children() {
     let f = fixture().await;
     let store = PostgresContainerRepository::new(f.pool.clone());

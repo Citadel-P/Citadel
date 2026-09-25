@@ -16,7 +16,8 @@ pub const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
 const MAX_COMMANDS: usize = 16;
 const MAX_STREAMS: usize = 8;
 const OUTBOUND_CAPACITY: usize = 32;
-const OUTPUT_CAPACITY: usize = 16;
+// Account for queue nodes and permits even when a frame has an empty payload.
+const OUTPUT_FRAME_OVERHEAD: usize = 256;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{message}")]
@@ -232,7 +233,7 @@ struct QueuedOutput {
     _permit: OwnedSemaphorePermit,
 }
 struct Pending {
-    output: mpsc::Sender<QueuedOutput>,
+    output: mpsc::UnboundedSender<QueuedOutput>,
     failed: CancellationToken,
     failure: Arc<Mutex<Option<EdgeError>>>,
     streaming: bool,
@@ -326,7 +327,9 @@ impl EdgeSession {
                     "Edge queued payload byte budget is exhausted.",
                 )
             })?;
-        let (output, receiver) = mpsc::channel(OUTPUT_CAPACITY);
+        // The shared byte budget bounds this queue. A frame-count limit rejects
+        // normal log history bursts regardless of how little memory they use.
+        let (output, receiver) = mpsc::unbounded_channel();
         let failed = CancellationToken::new();
         let failure = Arc::new(Mutex::new(None));
         let envelope = self.envelope(
@@ -415,11 +418,11 @@ impl EdgeSession {
                 && self
                     .output_budget
                     .clone()
-                    .try_acquire_many_owned(payload.len().max(1) as u32)
+                    .try_acquire_many_owned((payload.len() + OUTPUT_FRAME_OVERHEAD) as u32)
                     .is_ok_and(|permit| {
                         command
                             .output
-                            .try_send(QueuedOutput {
+                            .send(QueuedOutput {
                                 payload,
                                 _permit: permit,
                             })
@@ -456,7 +459,7 @@ impl EdgeSession {
 pub struct EdgeCommandStream {
     session: Arc<EdgeSession>,
     id: Uuid,
-    receiver: mpsc::Receiver<QueuedOutput>,
+    receiver: mpsc::UnboundedReceiver<QueuedOutput>,
     failed: CancellationToken,
     failure: Arc<Mutex<Option<EdgeError>>>,
     deadline: tokio::time::Instant,

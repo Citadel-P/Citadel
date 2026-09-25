@@ -614,8 +614,9 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     use citadel_adapters::connectors::edge::EdgeRegistry;
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
-        containers::v1::CreateContainerResponse,
+        containers::v1::{CreateContainerRequest, CreateContainerResponse},
         edge::v1::{EdgeCommandKind, core_envelope},
+        shared_models::v1::PlatformInfoResponse,
     };
     use prost::Message;
     let registry = EdgeRegistry::default();
@@ -647,6 +648,7 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     let run = executor.backup(claim, &plan, &cancellation);
     let agent = async {
         for kind in [
+            EdgeCommandKind::PlatformGetInfo,
             EdgeCommandKind::ContainerCreate,
             EdgeCommandKind::ContainerStart,
             EdgeCommandKind::ContainerDelete,
@@ -661,7 +663,20 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
             };
             assert_eq!(command.node_id, "node-two");
             assert_eq!(command.kind, kind as i32);
+            if kind == EdgeCommandKind::PlatformGetInfo {
+                selected.output(
+                    id,
+                    PlatformInfoResponse {
+                        agent_runtime_image: "citadel-agent:installed-on-node-two".into(),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                );
+            }
             if kind == EdgeCommandKind::ContainerCreate {
+                let request = CreateContainerRequest::decode(command.payload.as_slice()).unwrap();
+                assert_eq!(request.image_id, "citadel-agent:installed-on-node-two");
+                assert!(!request.cap_add.iter().any(|cap| cap == "CHOWN"));
                 selected.output(
                     id,
                     CreateContainerResponse {
@@ -697,6 +712,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             ExecOutput, ExecServerMessage, exec_server_message,
         },
         edge::v1::{EdgeCommandKind as Kind, core_envelope},
+        shared_models::v1::PlatformInfoResponse,
         volumes::v1::ListVolumesResponse,
     };
     use futures_util::future::BoxFuture;
@@ -767,6 +783,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         let peer = async {
             let mut kinds = vec![
                 Kind::VolumeList,
+                Kind::PlatformGetInfo,
                 Kind::ContainerCreate,
                 Kind::ContainerStart,
                 Kind::ContainerExecBinary,
@@ -789,14 +806,37 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 assert_eq!(command.kind, kind as i32);
                 assert_eq!(command.node_id, "restore-node");
                 match kind {
+                    Kind::PlatformGetInfo => {
+                        session.output(
+                            id,
+                            PlatformInfoResponse {
+                                agent_runtime_image: if root == "/data" {
+                                    String::new()
+                                } else {
+                                    "citadel-agent:installed-on-restore-node".into()
+                                },
+                                ..Default::default()
+                            }
+                            .encode_to_vec(),
+                        );
+                    }
                     Kind::VolumeList => {
                         session.output(id, ListVolumesResponse::default().encode_to_vec());
                     }
                     Kind::ContainerCreate => {
                         let request =
                             CreateContainerRequest::decode(command.payload.as_slice()).unwrap();
+                        assert_eq!(
+                            request.image_id,
+                            if root == "/data" {
+                                "restic:test"
+                            } else {
+                                "citadel-agent:installed-on-restore-node"
+                            }
+                        );
                         assert_eq!(request.mounts[0].source.as_deref(), Some("target"));
                         assert_eq!(request.mounts[0].target.as_deref(), Some("/target"));
+                        assert!(request.cap_add.iter().any(|cap| cap == "CHOWN"));
                         session.output(
                             id,
                             CreateContainerResponse {

@@ -39,6 +39,32 @@ pub trait PlatformReader: Send + Sync {
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ContainerDetails>, AuthorizedReadError>>;
 
+    fn containers_by_runtime_id<'a>(
+        &'a self,
+        platform_id: Uuid,
+        docker_id: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ContainerDetails>, AuthorizedReadError>> {
+        Box::pin(async move {
+            self.containers_by_runtime_ids(platform_id, &[docker_id.to_owned()])
+                .await
+        })
+    }
+
+    fn containers_by_runtime_ids<'a>(
+        &'a self,
+        platform_id: Uuid,
+        docker_ids: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<ContainerDetails>, AuthorizedReadError>> {
+        Box::pin(async move {
+            Ok(self
+                .list_containers(platform_id)
+                .await?
+                .into_iter()
+                .filter(|container| docker_ids.contains(&container.container_id))
+                .collect())
+        })
+    }
+
     fn list_stack_containers(
         &self,
         stack_id: Uuid,
