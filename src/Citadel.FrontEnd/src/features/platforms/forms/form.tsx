@@ -8,6 +8,7 @@ import {
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { EdgeCoreAddress } from '@/components/custom/edge-core-address';
 import {
   defineField,
   defineGroupField,
@@ -357,7 +358,11 @@ export const PlatformForm = ({
                             disabled: false,
                             ignoreFormDisabled: true,
                             hideValidationMessage: true,
-                            render: () => <SetupCommandEditor value={dockerCommand} filename="citadel-edge-agent.sh" />,
+                            render: () => (
+                              <EdgeCoreAddress coreUrl={enrollment.instructions.coreUrl} dockerCommand={dockerCommand}>
+                                {(command) => <SetupCommandEditor value={command} filename="citadel-edge-agent.sh" />}
+                              </EdgeCoreAddress>
+                            ),
                           }),
                         ]
                       : []),

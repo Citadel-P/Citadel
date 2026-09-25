@@ -20,7 +20,7 @@ use ed25519_dalek::Signer;
 use identity::{State, invalid};
 use observation::Observation;
 use outgoing::Outgoing;
-use std::{io, time::Duration};
+use std::{error::Error as _, io, time::Duration};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::{Certificate, ClientTlsConfig, Endpoint};
@@ -100,6 +100,10 @@ impl EdgeAgent {
                 ()=stop.cancelled()=>return Ok(()),
                 result=self.connection(&mut accepted)=>result,
             };
+            if accepted {
+                backoff = Duration::from_secs(1);
+            }
+            let delay = jitter(backoff);
             match result {
                 // Durable-state and protocol errors need intervention; retrying cannot repair them.
                 Err(error)
@@ -110,13 +114,14 @@ impl EdgeAgent {
                 {
                     return Err(error);
                 }
-                Err(error) => tracing::warn!(%error, "Edge connection ended; reconnecting"),
+                Err(error) => tracing::warn!(
+                    core_url = %self.config.core_url,
+                    retry_delay_ms = delay.as_millis() as u64,
+                    %error,
+                    "Edge connection ended; reconnecting"
+                ),
                 Ok(()) => tracing::info!("Edge session disconnected; reconnecting"),
             }
-            if accepted {
-                backoff = Duration::from_secs(1);
-            }
-            let delay = jitter(backoff);
             tokio::select! { ()=stop.cancelled()=>return Ok(()), ()=tokio::time::sleep(delay)=>{} }
             backoff = (backoff * 2).min(Duration::from_secs(60));
         }
@@ -127,11 +132,7 @@ impl EdgeAgent {
         self.docker.invalidate_daemon().await;
         let initial = Observation::read(&self.docker, &self.config).await?;
         let first = self.opening(&initial)?;
-        let channel = self
-            .endpoint
-            .connect()
-            .await
-            .map_err(|_| io::Error::other("Could not connect to Core"))?;
+        let channel = self.endpoint.connect().await.map_err(core_connect_error)?;
         let mut client = EdgeAgentServiceClient::new(channel)
             .max_decoding_message_size(MAX_ENVELOPE)
             .max_encoding_message_size(MAX_ENVELOPE);
@@ -352,6 +353,19 @@ impl EdgeAgent {
         Ok(envelope("", "", body))
     }
 }
+fn core_connect_error(error: tonic::transport::Error) -> io::Error {
+    // Connection setup runs before credentials are sent. Keep its source chain:
+    // tonic's top-level message alone omits DNS, socket and TLS failures.
+    let mut message = format!("Could not connect to Core: {error}");
+    let mut source = error.source();
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    io::Error::other(message)
+}
+
 fn envelope(session: &str, command: &str, body: AgentBody) -> AgentEnvelope {
     AgentEnvelope {
         envelope_id: Uuid::now_v7().to_string(),

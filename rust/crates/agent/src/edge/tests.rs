@@ -24,6 +24,33 @@ pub(super) fn config(profile: EdgeProfile) -> EdgeConfig {
         core_ca_path: None,
     }
 }
+
+#[tokio::test]
+async fn connection_error_preserves_the_socket_failure() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let error = Endpoint::from_shared(format!("http://{address}"))
+        .unwrap()
+        .connect_timeout(Duration::from_secs(1))
+        .connect()
+        .await
+        .unwrap_err();
+    let mut source = error.source();
+    let mut socket_error = None;
+    while let Some(cause) = source {
+        if let Some(error) = cause.downcast_ref::<io::Error>() {
+            socket_error = Some((error.kind(), error.to_string()));
+        }
+        source = cause.source();
+    }
+    let (kind, detail) = socket_error.expect("transport error contains the socket failure");
+    assert_eq!(kind, io::ErrorKind::ConnectionRefused);
+    let diagnostic = core_connect_error(error);
+    assert_eq!(diagnostic.kind(), io::ErrorKind::Other);
+    assert!(diagnostic.to_string().contains(&detail));
+}
+
 struct Files(PathBuf);
 impl Files {
     fn new() -> Self {

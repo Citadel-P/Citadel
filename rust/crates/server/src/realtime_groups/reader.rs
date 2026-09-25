@@ -19,7 +19,8 @@ mod terminal;
 mod tests;
 
 // Reuse the same authorized read models as HTTP. No internal HTTP requests,
-// browser query policy, copied SQL schema, or second resource cache.
+// browser query policy, or copied SQL schema. Container rows are shared only
+// during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
@@ -68,6 +69,32 @@ fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, R
 }
 
 impl ApplicationGroupReader {
+    async fn changed_containers(
+        &self,
+        event: &PublishedRuntimeEvent,
+        platform: Uuid,
+        ids: &[String],
+    ) -> Result<Vec<crate::api::resources::platforms::views::ContainerView>, RealtimeReadError>
+    {
+        if event.platform_id != Some(platform) {
+            return Ok(vec![]);
+        }
+        let containers = event
+            .containers
+            .get_or_try_init(|| async {
+                self.platforms
+                    .containers_by_runtime_ids(platform, ids)
+                    .await
+                    .map_err(failure)
+            })
+            .await?;
+        Ok(containers
+            .iter()
+            .cloned()
+            .map(crate::api::resources::platforms::views::ContainerView::from)
+            .collect())
+    }
+
     async fn deployment_permission<P: citadel_primitives::PermissionPolicy>(
         &self,
         principal: &ActorPrincipal,
@@ -271,6 +298,36 @@ impl ApplicationGroupReader {
             .then_some(SpecificPermission::Restore),
         )
         .await?;
+        if matches!(
+            g.topic(),
+            Topic::Deployment(..)
+                | Topic::Deployments
+                | Topic::Stack(..)
+                | Topic::Stacks
+                | Topic::StackInfo(..)
+        ) && let Some(change) = e
+            && let (Some(platform), Some(references)) = (change.platform_id, change.container_ids())
+        {
+            let containers = self
+                .changed_containers(change, platform, &references)
+                .await?;
+            // A missing row may have belonged to this workload before deletion.
+            // Keep the authoritative refresh in that case.
+            if references
+                .iter()
+                .all(|reference| containers.iter().any(|c| &c.container_id == reference))
+                && !containers.iter().any(|container| {
+                    let owner = if matches!(g.topic(), Topic::Deployment(..) | Topic::Deployments) {
+                        container.deployment_id
+                    } else {
+                        container.stack_id
+                    };
+                    owner.is_some_and(|owner| id.is_none_or(|id| id == owner))
+                })
+            {
+                return Ok(GroupSnapshot::default());
+            }
+        }
         if matches!(g.topic(), Topic::SwarmServices(..)) {
             self.permission(p, Platform, id, None).await?;
         }
@@ -329,6 +386,30 @@ impl ApplicationGroupReader {
                         "containerCount":platform.platform_descriptor["containerCount"],"containersRunning":platform.platform_descriptor["containersRunning"],"containersPaused":platform.platform_descriptor["containersPaused"],"containersStopped":platform.platform_descriptor["containersStopped"]}),
                     );
                 }
+                if let Some(platform_id) = e.and_then(|e| e.platform_id) {
+                    let allowed = match self.permission(p, Platform, Some(platform_id), None).await
+                    {
+                        Ok(()) => true,
+                        Err(RealtimeReadError::Authorization) => false,
+                        Err(error) => return Err(error),
+                    };
+                    let platform = if allowed {
+                        self.platforms
+                            .get_platform(platform_id)
+                            .await
+                            .map_err(failure)?
+                    } else {
+                        None
+                    };
+                    return rows(
+                        "PlatformUpdated",
+                        platform
+                            .into_iter()
+                            .map(crate::api::resources::platforms::views::PlatformView::from)
+                            .collect(),
+                        RowStyle::PlatformPatch(platform_id),
+                    );
+                }
                 rows(
                     "PlatformUpdated",
                     self.platforms
@@ -345,6 +426,19 @@ impl ApplicationGroupReader {
                 )
             }
             Topic::Containers(..) => {
+                if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
+                    let containers = self
+                        .changed_containers(e.unwrap(), id.unwrap(), &references)
+                        .await?;
+                    let mut result = GroupSnapshot::default();
+                    for reference in references {
+                        result.events.extend(event(
+                            "ContainersChanged",
+                            json!({"platformId":id,"containerId":reference,"containers":containers.iter().filter(|c| c.container_id == reference).collect::<Vec<_>>()}),
+                        )?.events);
+                    }
+                    return Ok(result);
+                }
                 let containers = self
                     .platforms
                     .list_containers(id.unwrap())
@@ -374,6 +468,26 @@ impl ApplicationGroupReader {
             Topic::DockerDaemon(..) => {
                 if sample {
                     return Ok(GroupSnapshot::default());
+                }
+                if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
+                    let containers = self
+                        .changed_containers(e.unwrap(), id.unwrap(), &references)
+                        .await?;
+                    let mut result = GroupSnapshot::default();
+                    for reference in references {
+                        result.rows.extend(
+                            rows(
+                                "ContainerEventReceived",
+                                containers
+                                    .iter()
+                                    .filter(|c| c.container_id == reference)
+                                    .collect(),
+                                RowStyle::DockerResourcePatch(reference),
+                            )?
+                            .rows,
+                        );
+                    }
+                    return Ok(result);
                 }
                 let mut result = crate::api::routes::platforms::realtime_daemon_snapshot(
                     &self.docker,
@@ -415,7 +529,16 @@ impl ApplicationGroupReader {
                     )?
                     .rows,
                 );
-                result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
+                if self
+                    .platforms
+                    .get_platform(id.unwrap())
+                    .await
+                    .map_err(failure)?
+                    .is_some_and(|platform| {
+                        matches!(platform.platform_type.as_str(), "DockerSwarm" | "Swarm")
+                    })
+                {
+                    result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
                     "platformId":id,
                     "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmNodeView::from).collect::<Vec<_>>()).map_err(failure)?},
                     "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmServiceView::from).collect::<Vec<_>>()).map_err(failure)?},
@@ -424,6 +547,7 @@ impl ApplicationGroupReader {
                     "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmSecretView::from).collect::<Vec<_>>()).map_err(failure)?},
                     "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmConfigView::from).collect::<Vec<_>>()).map_err(failure)?},
                 })]));
+                }
                 Ok(result)
             }
             Topic::Deployments => rows(
@@ -484,7 +608,7 @@ impl ApplicationGroupReader {
                 }
                 let containers = self
                     .platforms
-                    .list_containers(platform)
+                    .list_stack_containers(id.unwrap())
                     .await
                     .map(|value| {
                         value

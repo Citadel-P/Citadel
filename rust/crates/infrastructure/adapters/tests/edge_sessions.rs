@@ -494,6 +494,51 @@ async fn timeout_and_cancellation_release_pending_without_retrying_mutations() {
 }
 
 #[tokio::test]
+async fn log_history_bursts_are_buffered_in_order_without_exhausting_the_session() {
+    use citadel_contracts::citadel::containers::v1::ContainerLogResponse;
+    use citadel_platforms::logs::ContainerLogPort;
+    let registry = EdgeRegistry::default();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    let mut logs = runtime.container_logs("container", &cancel).await.unwrap();
+    let command = outbound.recv().await.unwrap();
+    let id = Uuid::parse_str(&command.command_id).unwrap();
+    // Docker returns historical lines before the browser starts consuming them.
+    for index in 0..200 {
+        session.output(
+            id,
+            ContainerLogResponse {
+                log: format!("line {index}\n").into_bytes(),
+            }
+            .encode_to_vec(),
+        );
+    }
+    for index in 0..200 {
+        assert_eq!(
+            logs.next().await.unwrap().unwrap(),
+            format!("line {index}\n").into_bytes()
+        );
+    }
+    session.output(
+        id,
+        ContainerLogResponse {
+            log: b"live\n".to_vec(),
+        }
+        .encode_to_vec(),
+    );
+    assert_eq!(logs.next().await.unwrap().unwrap(), b"live\n");
+    session.complete(id, true);
+    assert!(logs.next().await.is_none());
+    assert!(!session.is_closed());
+    assert_eq!(session.pending_count(), 0);
+}
+
+#[tokio::test]
 async fn output_overflow_and_disconnect_fail_commands_and_bound_memory() {
     let registry = EdgeRegistry::default();
     let (session, _outbound) = registry
@@ -508,8 +553,8 @@ async fn output_overflow_and_disconnect_fail_commands_and_bound_memory() {
         )
         .unwrap();
     let id = pending.id();
-    for _ in 0..17 {
-        session.output(id, vec![1]);
+    for _ in 0..33 {
+        session.output(id, vec![1; 1024 * 1024]);
     }
     assert!(pending.next(&CancellationToken::new()).await.is_err());
     assert_eq!(session.pending_count(), 0);

@@ -108,6 +108,18 @@ async fn rustfs_edge_volume_backup_restore_and_retention_use_the_authenticated_s
 
 async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let use_agent = transport != Transport::Local;
+    let fixture_image = if use_agent {
+        std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap()
+    } else {
+        IMAGE.into()
+    };
+    // Remote helpers must use the connected Agent's installed image, without
+    // depending on a separately installed Core-configured helper image.
+    let helper_image = if use_agent {
+        "citadel-missing-backup-helper:does-not-exist"
+    } else {
+        IMAGE
+    };
     let database = std::env::var("CITADEL_PHASE7_LOCAL_BACKUP_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database).await.unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -125,7 +137,7 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let mut edge_server = None;
     let result = AssertUnwindSafe(async {
         for name in [&source, &repository_volume] { docker(&["volume", "create", name], None).await; }
-        docker(&["run", "--rm", "-i", "--volume", &format!("{source}:/fixture"), "--entrypoint", "sh", IMAGE, "-c", "cat > /fixture/payload.txt"], Some(PAYLOAD)).await;
+        docker(&["run", "--rm", "-i", "--volume", &format!("{source}:/fixture"), "--entrypoint", "sh", &fixture_image, "-ec", "cat > /fixture/payload.txt; mkdir -p /fixture/private/nested; cp /fixture/payload.txt /fixture/private/nested/item; ln -s payload.txt /fixture/link; chown -hR 1000:1001 /fixture; chmod 750 /fixture/private /fixture/private/nested; chmod 640 /fixture/payload.txt /fixture/private/nested/item"], Some(PAYLOAD)).await;
         let platform = Uuid::now_v7(); let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
             .bind(platform).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
@@ -174,6 +186,27 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
             sqlx::query("UPDATE platforms SET connectortype='Agent',address=$2 WHERE id=$1").bind(platform).bind(&address).execute(&pool).await.unwrap();
             Some(client)
         } else {None};
+        if use_agent {
+            use citadel_adapters::connectors::{docker::DockerClient, routing::volumes::content::VolumeContentAdapter};
+            use futures_util::StreamExt;
+            let cancel = CancellationToken::new();
+            let browser = VolumeContentAdapter::new(
+                pool.clone(),
+                DockerClient::new("/no-core-docker-allowed.sock", Duration::from_secs(2)).unwrap(),
+                agent.clone(),
+                edge_registry.clone(),
+                "citadel-missing-volume-helper:does-not-exist".into(),
+                citadel_runtime::DynamicTasks::new(cancel.clone()),
+            );
+            let listing = browser.list(platform, &source, "/", None, &cancel).await.unwrap();
+            assert!(listing.entries.iter().any(|entry| entry.name == "payload.txt"));
+            let mut download = browser.download(platform, &source, "/payload.txt", None, &cancel).await.unwrap();
+            let mut bytes = Vec::new();
+            while let Some(chunk) = download.stream.next().await { bytes.extend(chunk.unwrap()); }
+            assert_eq!(bytes, PAYLOAD);
+            let helpers = docker(&["ps", "--all", "--quiet", "--filter", &format!("label=com.citadel.platform-id={platform}"), "--filter", "label=citadel.volume-browser=true"], None).await;
+            assert!(helpers.is_empty(), "Volume browser helpers must be cleaned up");
+        }
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
         if s3_endpoint.is_some() {
@@ -192,7 +225,7 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         }
         input.validate().unwrap();
         let repository = store.create_repository(actor, &input).await.unwrap();
-        let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, IMAGE, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
+        let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
         executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
         store.record_repository_operation(repository.id, "Initialize", "Platform", Some(platform), true, None).await.unwrap();
@@ -223,8 +256,10 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         store.finish_restore(&restore, &restored).await.unwrap();
         assert_eq!(restored.status, "Succeeded", "{:?}", restored.error_message);
         assert_eq!(store.get_restore(queued.id).await.unwrap().status, "Succeeded");
-        let bytes = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "cat", IMAGE, "/fixture/payload.txt"], None).await;
+        let bytes = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "cat", &fixture_image, "/fixture/payload.txt"], None).await;
         assert_eq!(bytes, PAYLOAD);
+        let metadata = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "sh", &fixture_image, "-ec", "stat -c '%u:%g:%a' /fixture/payload.txt /fixture/private /fixture/private/nested /fixture/private/nested/item /fixture/link; readlink /fixture/link; cmp /fixture/payload.txt /fixture/private/nested/item"], None).await;
+        assert_eq!(String::from_utf8(metadata).unwrap(), "1000:1001:640\n1000:1001:750\n1000:1001:750\n1000:1001:640\n1000:1001:777\npayload.txt\n", "Restores must preserve ownership, permissions and symlinks");
         // A second restore cannot overwrite an existing volume without consent.
         assert_eq!(executor.restore(&restore, &cancellation).await.status, "Failed");
     }).catch_unwind().await;

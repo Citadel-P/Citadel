@@ -54,20 +54,18 @@ pub(super) fn build(
             ))
             .with_notifier(move |claim| {
                 if let Some(hub) = &container_hub {
+                    let mut platforms = std::collections::BTreeMap::<_, Vec<_>>::new();
                     for target in &claim.targets {
-                        hub.publish_runtime_change(
-                            target.platform_id,
-                            "container",
-                            "update",
-                            &target.docker_id,
-                        );
+                        platforms
+                            .entry(target.platform_id)
+                            .or_default()
+                            .push(target.docker_id.clone());
                     }
-                    for id in &claim.deployment_ids {
-                        hub.publish_resource_change("Deployment", *id, "updated");
+                    for (platform, ids) in platforms {
+                        hub.publish_container_changes(platform, "update", &ids);
                     }
-                    for id in &claim.stack_ids {
-                        hub.publish_resource_change("Stack", *id, "updated");
-                    }
+                    hub.publish_resource_changes("Deployment", &claim.deployment_ids);
+                    hub.publish_resource_changes("Stack", &claim.stack_ids);
                 }
             }),
     );

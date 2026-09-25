@@ -297,6 +297,229 @@ async fn cleanup(f: Fixture) {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_batch_shares_one_projection_but_rechecks_each_readers_authorization() {
+    let f = fixture().await;
+    let mut inventory = snapshot(f.platform_id);
+    let template = inventory.containers[0].clone();
+    inventory.containers = (0..6)
+        .map(|i| {
+            let mut container = template.clone();
+            container.id = format!("batch-{i}");
+            container.name = format!("batch-{i}");
+            container
+        })
+        .collect();
+    PostgresInventoryProjectionStore::new(f.pool.clone())
+        .persist(&inventory)
+        .await
+        .unwrap();
+    f.docker_server.abort();
+    let reader = reader(&f);
+    let ids: Vec<_> = (0..5).map(|i| format!("batch-{i}")).collect();
+    let hub = citadel_server::realtime::RealtimeHub::new(16, Arc::new(Metrics::default()));
+    let mut first = hub.subscribe();
+    let mut second = hub.subscribe();
+    hub.publish_container_changes(f.platform_id, "update", &ids);
+    let change = first.recv().await.unwrap();
+    let shared = second.recv().await.unwrap();
+    let daemon = Group::parse(&format!("docker-daemon:{}", f.platform_id)).unwrap();
+    let containers = Group::parse(&format!("containers:{}", f.platform_id)).unwrap();
+    let initial = reader
+        .read(&f.administrator, &daemon, Some(&change))
+        .await
+        .unwrap();
+    assert_eq!(initial.rows.len(), 5);
+    assert!(
+        initial
+            .rows
+            .iter()
+            .all(|row| row.rows.len() == 1 && row.rows[0]["containerId"] != "batch-5")
+    );
+    let original_state = initial.rows[0].rows[0]["state"].clone();
+    sqlx::query("UPDATE containers SET state='Exited' WHERE platformid=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    // Another group on another socket reuses this invalidation's projection.
+    // The next invalidation must get fresh rows, rather than a timed cache.
+    let reused = reader
+        .read(&f.administrator, &containers, Some(&shared))
+        .await
+        .unwrap();
+    assert_eq!(reused.events.len(), 5);
+    assert_eq!(
+        reused.events[0].arguments[0]["containers"][0]["state"],
+        original_state
+    );
+    let denied = ActorPrincipal {
+        subject_id: Uuid::now_v7(),
+        actor_id: ActorId::new(Uuid::now_v7()),
+        name: "denied".into(),
+        principal_type: AuthenticatedPrincipalType::User,
+        credential_id: None,
+        roles: vec![],
+    };
+    assert!(matches!(
+        reader.read(&denied, &containers, Some(&shared)).await,
+        Err(RealtimeReadError::Authorization)
+    ));
+    for name in ["deployments", "stacks"] {
+        let result = reader
+            .read(
+                &f.administrator,
+                &Group::parse(name).unwrap(),
+                Some(&change),
+            )
+            .await
+            .unwrap();
+        assert!(
+            result.rows.is_empty() && result.events.is_empty(),
+            "unmanaged containers should not refresh {name}"
+        );
+    }
+    hub.publish_container_changes(f.platform_id, "update", &ids);
+    let fresh = first.recv().await.unwrap();
+    let refreshed = reader
+        .read(&f.administrator, &containers, Some(&fresh))
+        .await
+        .unwrap();
+    assert_eq!(
+        refreshed.events[0].arguments[0]["containers"][0]["state"],
+        "Exited"
+    );
+    let deployment = Uuid::now_v7();
+    let spec: citadel_deployments::DeploymentSpec = serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("batch-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let stack = Uuid::now_v7();
+    let spec: citadel_stacks::StackSpec =
+        serde_json::from_value(json!({"$type":"WebEditor","composeFile":"services: {}"})).unwrap();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate,controlstate) VALUES($1,$2,$3,'WebEditor',$5,$4,'Idle')").bind(stack).bind(format!("batch-{stack}")).bind(SYSTEM_ACTOR_ID).bind(citadel_stacks::StackUpdateState::new(&spec).to_storage_value().unwrap()).bind(citadel_stacks::StackDriftPolicy::default().to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
+    let release = Uuid::now_v7();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,$5,'Healthy','1')").bind(release).bind(stack).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).bind(spec.to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE containers SET deploymentid=$2 WHERE platformid=$1 AND dockercontainerid='batch-0'",
+    )
+    .bind(f.platform_id)
+    .bind(deployment)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE containers SET stackid=$2 WHERE platformid=$1 AND dockercontainerid='batch-1'",
+    )
+    .bind(f.platform_id)
+    .bind(stack)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    for removed in [false, true] {
+        if removed {
+            sqlx::query("DELETE FROM containers WHERE platformid=$1 AND dockercontainerid IN ('batch-0','batch-1')").bind(f.platform_id).execute(&f.pool).await.unwrap();
+        }
+        hub.publish_container_changes(f.platform_id, "update", &ids);
+        let change = first.recv().await.unwrap();
+        for (name, owner) in [("deployments", deployment), ("stacks", stack)] {
+            let result = reader
+                .read(
+                    &f.administrator,
+                    &Group::parse(name).unwrap(),
+                    Some(&change),
+                )
+                .await
+                .unwrap();
+            assert!(
+                result
+                    .rows
+                    .iter()
+                    .flat_map(|batch| &batch.rows)
+                    .any(|row| row["id"] == json!(owner)),
+                "{name} must refresh on owned container changes, including deletion"
+            );
+        }
+    }
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn container_changes_read_only_the_scoped_projection_without_contacting_docker() {
+    let f = fixture().await;
+    let reader = reader(&f);
+    // Any accidental network/volume inventory refresh now fails instead of
+    // allowing this regression to hide behind a working Docker endpoint.
+    f.docker_server.abort();
+    let docker_id: String =
+        sqlx::query_scalar("SELECT dockercontainerid FROM containers WHERE platformid=$1 LIMIT 1")
+            .bind(f.platform_id)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    let hub = citadel_server::realtime::RealtimeHub::new(16, Arc::new(Metrics::default()));
+    let mut changes = hub.subscribe();
+    hub.publish_runtime_change(f.platform_id, "container", "start", &docker_id);
+    let change = changes.recv().await.unwrap();
+    let daemon = Group::parse(&format!("docker-daemon:{}", f.platform_id)).unwrap();
+    let snapshot = reader
+        .read(&f.administrator, &daemon, Some(&change))
+        .await
+        .unwrap();
+    assert!(
+        snapshot.events.is_empty(),
+        "container changes must not refresh Swarm inventory"
+    );
+    assert_eq!(snapshot.rows.len(), 1);
+    assert_eq!(snapshot.rows[0].target, "ContainerEventReceived");
+    assert_eq!(snapshot.rows[0].rows.len(), 1);
+    assert_eq!(snapshot.rows[0].rows[0]["containerId"], docker_id);
+    let containers = Group::parse(&format!("containers:{}", f.platform_id)).unwrap();
+    let snapshot = reader
+        .read(&f.administrator, &containers, Some(&change))
+        .await
+        .unwrap();
+    assert!(snapshot.rows.is_empty());
+    assert_eq!(snapshot.events.len(), 1);
+    assert_eq!(snapshot.events[0].target, "ContainersChanged");
+    assert_eq!(
+        snapshot.events[0].arguments[0]["containers"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let other = Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap();
+    assert!(
+        reader
+            .read(&f.administrator, &other, Some(&change))
+            .await
+            .unwrap()
+            .rows[0]
+            .rows
+            .is_empty()
+    );
+    // A disappeared container produces an empty scoped patch, not a full refresh.
+    hub.publish_runtime_change(f.platform_id, "container", "destroy", "missing-container");
+    let missing = changes.recv().await.unwrap();
+    assert!(
+        reader
+            .read(&f.administrator, &daemon, Some(&missing))
+            .await
+            .unwrap()
+            .rows[0]
+            .rows
+            .is_empty()
+    );
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn container_logs_flow_while_another_group_snapshot_is_pending() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::containers::v1::ContainerLogResponse;

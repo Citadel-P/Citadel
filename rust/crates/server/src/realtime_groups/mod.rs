@@ -66,9 +66,18 @@ impl Group {
                 || (self.reference() == Some("AlertRule") && event.resource_type == "Alert");
             return event.payload["dockerResourceType"] != "containerStats"
                 && resource_matches
-                && (event.resource_id.is_nil() || self.id() == Some(event.resource_id));
+                && event.affects_resource(self.id());
         }
         if let Some(platform) = event.platform_id {
+            if matches!(self.topic(), Topic::Images(..))
+                && event.payload["dockerResourceType"] == "container"
+                && matches!(
+                    event.payload["action"].as_str(),
+                    Some("update" | "start" | "stop" | "die" | "kill" | "pause" | "unpause")
+                )
+            {
+                return false;
+            }
             if event.payload["dockerResourceType"] == "containerStats" {
                 return matches!(
                     self.topic(),
@@ -98,10 +107,12 @@ impl Group {
                 "Platform" | "Deployment" | "Stack" | "SwarmService" | "ResourceTags"
             ),
             Topic::Deployment(..) | Topic::Deployments => {
-                matches!(event.resource_type, "Deployment" | "ResourceTags")
+                event.resource_type == "ResourceTags"
+                    || (event.resource_type == "Deployment" && event.affects_resource(self.id()))
             }
             Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => {
-                matches!(event.resource_type, "Stack" | "ResourceTags")
+                event.resource_type == "ResourceTags"
+                    || (event.resource_type == "Stack" && event.affects_resource(self.id()))
             }
             Topic::SwarmService(..) | Topic::SwarmServices(..) => {
                 event.resource_type == "SwarmService"
@@ -169,14 +180,17 @@ pub struct GroupRows {
     pub rows: Vec<Value>,
     pub style: RowStyle,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum RowStyle {
     Update,
     Daemon,
     DockerResource,
+    // Complete state for one Docker ID, not the entire Platform inventory.
+    DockerResourcePatch(String),
     Activity,
     Notification,
     Platforms,
+    PlatformPatch(Uuid),
 }
 #[derive(Default)]
 pub struct GroupSnapshot {
@@ -254,6 +268,66 @@ impl GroupSubscription {
                     "Realtime snapshot limit exceeded".into(),
                 ));
             }
+            if let RowStyle::PlatformPatch(id) = batch.style {
+                let known = self.known.entry(batch.target).or_default();
+                if batch.rows.is_empty() {
+                    if known.remove(&id.to_string()) {
+                        events.push(ClientEvent::new("PlatformsDeleted", vec![json!(id)]));
+                    }
+                } else {
+                    known.insert(id.to_string());
+                    if known.len() > limit {
+                        return Err(RealtimeReadError::Storage(
+                            "Realtime snapshot limit exceeded".into(),
+                        ));
+                    }
+                    for row in batch.rows {
+                        events.push(ClientEvent::new(batch.target, vec![row]));
+                    }
+                }
+                continue;
+            }
+            if let RowStyle::DockerResourcePatch(reference) = &batch.style {
+                let known = self.known.entry(batch.target).or_default();
+                let saved = self.tombstones.entry(batch.target).or_default();
+                let ids: BTreeSet<_> = batch
+                    .rows
+                    .iter()
+                    .filter_map(|row| row["id"].as_str())
+                    .collect();
+                let removed: Vec<_> = saved
+                    .iter()
+                    .filter(|(id, row)| {
+                        row["containerId"].as_str() == Some(reference.as_str())
+                            && !ids.contains(id.as_str())
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                for id in removed {
+                    known.remove(&id);
+                    if let Some(row) = saved.remove(&id) {
+                        events.push(ClientEvent::new(batch.target, vec![row, json!("destroy")]));
+                    }
+                }
+                for row in batch.rows {
+                    let Some(id) = row["id"].as_str() else {
+                        continue;
+                    };
+                    let action = if known.insert(id.to_owned()) {
+                        "create"
+                    } else {
+                        "update"
+                    };
+                    if known.len() > limit {
+                        return Err(RealtimeReadError::Storage(
+                            "Realtime snapshot limit exceeded".into(),
+                        ));
+                    }
+                    saved.insert(id.to_owned(), docker_tombstone(&row));
+                    events.push(ClientEvent::new(batch.target, vec![row, json!(action)]));
+                }
+                continue;
+            }
             let ids: BTreeSet<_> = batch
                 .rows
                 .iter()
@@ -294,6 +368,7 @@ impl GroupSubscription {
                         batch.target,
                         vec![json!({"id":removed}), json!("delete")],
                     )),
+                    RowStyle::DockerResourcePatch(_) | RowStyle::PlatformPatch(_) => unreachable!(),
                 }
             }
             for row in batch.rows {
@@ -317,23 +392,13 @@ impl GroupSubscription {
                     }
                     RowStyle::Daemon => vec![row.clone(), json!("create"), json!(id)],
                     RowStyle::DockerResource => {
-                        let tombstone = [
-                            "id",
-                            "containerId",
-                            "dockerImageId",
-                            "stackId",
-                            "deploymentId",
-                            "dockerNodeId",
-                        ]
-                        .into_iter()
-                        .filter_map(|key| row.get(key).map(|v| (key.to_owned(), v.clone())))
-                        .collect::<serde_json::Map<_, _>>();
                         self.tombstones
                             .entry(batch.target)
                             .or_default()
-                            .insert(id.into(), Value::Object(tombstone));
+                            .insert(id.into(), docker_tombstone(&row));
                         vec![row, json!("update")]
                     }
+                    RowStyle::DockerResourcePatch(_) | RowStyle::PlatformPatch(_) => unreachable!(),
                     // "update" upserts in the existing hooks and avoids duplicate
                     // creates when the initial REST read and group join overlap.
                     RowStyle::Update => vec![row, json!("update")],
@@ -346,9 +411,183 @@ impl GroupSubscription {
     }
 }
 
+fn docker_tombstone(row: &Value) -> Value {
+    Value::Object(
+        [
+            "id",
+            "containerId",
+            "dockerImageId",
+            "stackId",
+            "deploymentId",
+            "dockerNodeId",
+        ]
+        .into_iter()
+        .filter_map(|key| row.get(key).map(|value| (key.to_owned(), value.clone())))
+        .collect(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn workload_changes_only_refresh_matching_details_and_the_list() {
+        let hub = crate::realtime::RealtimeHub::new(
+            8,
+            std::sync::Arc::new(crate::metrics::Metrics::default()),
+        );
+        let mut receiver = hub.subscribe();
+        let selected = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        for (resource, detail, list) in [
+            ("Deployment", "deployment", "deployments"),
+            ("Stack", "stack", "stacks"),
+        ] {
+            hub.publish_resource_changes(resource, &[selected]);
+            let event = receiver.try_recv().unwrap();
+            assert!(Group::parse(list).unwrap().affected_by(&event));
+            assert!(
+                Group::parse(&format!("{detail}:{selected}"))
+                    .unwrap()
+                    .affected_by(&event)
+            );
+            assert!(
+                !Group::parse(&format!("{detail}:{other}"))
+                    .unwrap()
+                    .affected_by(&event)
+            );
+            assert!(
+                !Group::parse(&format!("activity:{resource}:{other}"))
+                    .unwrap()
+                    .affected_by(&event)
+            );
+            hub.publish_resource_change(resource, selected, "updated");
+            let event = receiver.try_recv().unwrap();
+            assert!(
+                !Group::parse(&format!("{detail}:{other}"))
+                    .unwrap()
+                    .affected_by(&event)
+            );
+            hub.publish_resource_change(resource, Uuid::nil(), "resourceChanged");
+            assert!(
+                Group::parse(&format!("{detail}:{other}"))
+                    .unwrap()
+                    .affected_by(&receiver.try_recv().unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn platform_patch_preserves_other_platforms_and_removes_only_its_revoked_row() {
+        let a = Uuid::now_v7();
+        let b = Uuid::now_v7();
+        let mut subscription = GroupSubscription::new(Group::parse("platforms").unwrap());
+        let snapshot = |rows, style| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "PlatformUpdated",
+                rows,
+                style,
+            }],
+            events: vec![],
+        };
+        subscription
+            .apply(
+                snapshot(vec![json!({"id":a}), json!({"id":b})], RowStyle::Platforms),
+                10,
+            )
+            .unwrap();
+        let changed = subscription
+            .apply(
+                snapshot(
+                    vec![json!({"id":a,"containersStopped":5})],
+                    RowStyle::PlatformPatch(a),
+                ),
+                10,
+            )
+            .unwrap();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].target, "PlatformUpdated");
+        let revoked = subscription
+            .apply(snapshot(vec![], RowStyle::PlatformPatch(a)), 10)
+            .unwrap();
+        assert_eq!(revoked.len(), 1);
+        assert_eq!(revoked[0].arguments, vec![json!(a)]);
+        let remaining = subscription
+            .apply(snapshot(vec![], RowStyle::Platforms), 10)
+            .unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].arguments, vec![json!(b)]);
+    }
+    #[test]
+    fn container_patches_preserve_other_rows_and_track_created_deleted_and_recovered_containers() {
+        let mut subscription = GroupSubscription::new(
+            Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
+        );
+        let snapshot = |rows, style| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "ContainerEventReceived",
+                rows,
+                style,
+            }],
+            events: vec![],
+        };
+        let a = json!({"id":"a","containerId":"docker-a","state":"Running"});
+        let b = json!({"id":"b","containerId":"docker-b","state":"Running"});
+        subscription
+            .apply(
+                snapshot(vec![a.clone(), b.clone()], RowStyle::DockerResource),
+                100,
+            )
+            .unwrap();
+        let stopped = json!({"id":"a","containerId":"docker-a","state":"Exited"});
+        let events = subscription
+            .apply(
+                snapshot(
+                    vec![stopped.clone()],
+                    RowStyle::DockerResourcePatch("docker-a".into()),
+                ),
+                100,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].arguments, vec![stopped, json!("update")]);
+        assert!(subscription.known["ContainerEventReceived"].contains("b"));
+        let c = json!({"id":"c","containerId":"docker-c","environment":["secret"]});
+        let created = subscription
+            .apply(
+                snapshot(vec![c], RowStyle::DockerResourcePatch("docker-c".into())),
+                100,
+            )
+            .unwrap();
+        assert_eq!(created[0].arguments[1], "create");
+        let deleted = subscription
+            .apply(
+                snapshot(vec![], RowStyle::DockerResourcePatch("docker-c".into())),
+                100,
+            )
+            .unwrap();
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(
+            deleted[0].arguments,
+            vec![json!({"id":"c","containerId":"docker-c"}), json!("destroy")]
+        );
+        assert!(
+            subscription
+                .apply(
+                    snapshot(vec![], RowStyle::DockerResourcePatch("docker-c".into())),
+                    100
+                )
+                .unwrap()
+                .is_empty()
+        );
+        let recovered = subscription
+            .apply(snapshot(vec![b], RowStyle::DockerResource), 100)
+            .unwrap();
+        assert_eq!(
+            recovered[0].arguments,
+            vec![json!({"id":"a","containerId":"docker-a"}), json!("destroy")]
+        );
+    }
     #[test]
     fn deployment_groups_refresh_on_container_inventory_but_not_stats() {
         let mut event = PublishedRuntimeEvent {
@@ -357,6 +596,7 @@ mod tests {
             resource_id: Uuid::now_v7(),
             event_kind: "runtimeChanged",
             resource_revision: 1,
+            containers: Default::default(),
             payload: json!({"dockerResourceType":"container"}),
         };
         for name in [
@@ -408,6 +648,7 @@ mod tests {
             resource_id: Uuid::nil(),
             event_kind: "resourceChanged",
             resource_revision: 1,
+            containers: Default::default(),
             payload: json!({}),
         };
         assert!(group.affected_by(&event));

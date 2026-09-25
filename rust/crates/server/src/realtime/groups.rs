@@ -73,6 +73,11 @@ pub(super) async fn run_group_connection(
                     },
                     Err(broadcast::error::RecvError::Closed)=>return Ok(()),
                 };
+                // Background statistics and unrelated resources should not cause
+                // a database authentication read for every open browser socket.
+                if event.resource_type!="License" && !state.groups.values().any(|g|g.group.affected_by(&event)) {
+                    continue;
+                }
                 subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
                 if event.resource_type=="License" {
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("LicenseStateChanged",vec![])).await?;

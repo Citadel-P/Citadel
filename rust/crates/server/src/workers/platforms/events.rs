@@ -365,7 +365,7 @@ pub(super) async fn apply_container_event(
         handled |=
             updated && !(target.platform_type == citadel_platforms::PlatformKind::DockerSwarm);
         if updated && let Some(hub) = realtime {
-            hub.publish_runtime_change(target.id, "container", &event.action, id.to_owned());
+            hub.publish_container_observation(target.id, &event.action, id.to_owned());
         }
     }
     Ok(handled)

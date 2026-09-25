@@ -233,9 +233,8 @@ async fn observe(
                 && store.persist_container_event(&session, &event).await?
             {
                 if let Some(hub) = &realtime {
-                    hub.publish_runtime_change(
+                    hub.publish_container_observation(
                         platform_id,
-                        "container",
                         &event.action,
                         event.container_id.unwrap_or_default(),
                     );

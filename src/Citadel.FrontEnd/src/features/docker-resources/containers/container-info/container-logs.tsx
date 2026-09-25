@@ -3,6 +3,7 @@ import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { LogViewer } from '@/components/custom/common';
 import { normalizeContainerReference } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const MAX_LOGS = 5000;
 const MAX_CACHED_LOG_GROUPS = 8;
@@ -50,10 +51,19 @@ const Logs = memo(
 
     return (
       <div className="flex flex-col gap-3">
+        {errorMessage && (
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        )}
         <LogViewer
           logs={logs}
           emptyMessage={
-            errorMessage ?? (!effectiveGroupName ? 'No container available for logs.' : 'Waiting for logs…')
+            errorMessage
+              ? 'No logs received.'
+              : !effectiveGroupName
+                ? 'No container available for logs.'
+                : 'Waiting for logs…'
           }
           autoScroll={true}
           timeStamps={true}
@@ -262,20 +272,29 @@ export const useContainerLogGroup = ({
     [hubMethodArg, hubMethodName],
   );
 
+  const handleStreamError = useCallback(
+    (failedGroup: string, message: string) => {
+      if (failedGroup === groupName && mountedRef.current) setErrorMessage(message);
+    },
+    [groupName],
+  );
+
   const setupEventListeners = useCallback(
     (hub: RealtimeConnection) => {
       hub.on(logEventName, handleLogs);
       hub.on(logBatchEventName, handleLogs);
+      hub.on('LogStreamError', handleStreamError);
     },
-    [handleLogs, logBatchEventName, logEventName],
+    [handleLogs, handleStreamError, logBatchEventName, logEventName],
   );
 
   const removeEventListeners = useCallback(
     (hub: RealtimeConnection) => {
       hub.off(logEventName, handleLogs);
       hub.off(logBatchEventName, handleLogs);
+      hub.off('LogStreamError', handleStreamError);
     },
-    [handleLogs, logBatchEventName, logEventName],
+    [handleLogs, handleStreamError, logBatchEventName, logEventName],
   );
 
   useRealtimeGroup({

@@ -1,6 +1,6 @@
 import { PlatformView } from '@/api/generated/api.types';
 import { SearchCode, Trash } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useMatch, useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
 export const { dropdown: PlatformDropdownActions, info: PlatformInfoActions } = createActionsBuilder<PlatformView>()
@@ -27,6 +27,16 @@ export const { dropdown: PlatformDropdownActions, info: PlatformInfoActions } = 
     icon: Trash,
     mutateKey: 'deletePlatforms',
     invalidate: 'listPlatforms',
+    useSuccessHandler: ({ resources }) => {
+      const navigate = useNavigate();
+      const editRoute = useMatch('/platforms/edit/:id');
+      const selected = Array.isArray(resources) ? resources : [resources];
+      return () => {
+        if (editRoute && selected.some((platform) => platform.id === editRoute.params.id)) {
+          navigate('/platforms', { replace: true });
+        }
+      };
+    },
     canExecute: () => true,
     separatorBefore: true,
     confirm: true,

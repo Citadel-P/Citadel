@@ -120,6 +120,20 @@ pub trait ContainerMutationRuntime: Send + Sync {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
 
+    fn mutate_batch<'a>(
+        &'a self,
+        targets: &'a [ContainerTarget],
+        action: ContainerAction,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            for target in targets {
+                self.mutate(target, action, cancellation).await?;
+            }
+            Ok(())
+        })
+    }
+
     fn observe<'a>(
         &'a self,
         target: &'a ContainerTarget,
@@ -292,11 +306,11 @@ impl ContainerMutationService {
                 (service.changed)(&claim);
                 let _cancel_on_drop = cancellation.clone().drop_guard();
                 let work = async {
+                    service
+                        .runtime
+                        .mutate_batch(&claim.targets, action, &cancellation)
+                        .await?;
                     for target in &claim.targets {
-                        service
-                            .runtime
-                            .mutate(target, action, &cancellation)
-                            .await?;
                         let state = service.runtime.observe(target, &cancellation).await?;
                         service
                             .store

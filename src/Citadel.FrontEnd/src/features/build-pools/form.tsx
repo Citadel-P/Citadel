@@ -12,6 +12,7 @@ import {
   ResourceControlState,
   UpdateBuildAgentPoolInput,
 } from '@/api/generated/api.types';
+import { EdgeCoreAddress } from '@/components/custom/edge-core-address';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import {
   FieldInput,
@@ -864,7 +865,11 @@ function EdgeBuildPoolEnrollmentPanel({
         </Button>
       </div>
 
-      {dockerCommand && <SetupCommandEditor value={dockerCommand} filename="citadel-edge-build-agent.sh" />}
+      {enrollment && (
+        <EdgeCoreAddress coreUrl={enrollment.instructions.coreUrl} dockerCommand={dockerCommand}>
+          {(command) => <SetupCommandEditor value={command} filename="citadel-edge-build-agent.sh" />}
+        </EdgeCoreAddress>
+      )}
     </div>
   );
 }

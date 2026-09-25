@@ -593,20 +593,25 @@ impl AgentClient {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<RuntimePlatformInfo, RuntimeCapabilityError> {
-        let response = self
-            .retry_unary(cancellation, || async {
-                let request =
-                    self.signer
-                        .sign((), PLATFORM_INFO_METHOD, Some(self.operation_timeout))?;
-                let mut client = self.platform_client();
-                client
-                    .get_platform_info(request)
-                    .await
-                    .map(|value| value.into_inner())
-                    .map_err(normalize_status)
-            })
-            .await?;
-        Ok(map_platform_info(response))
+        Ok(map_platform_info(self.platform_info(cancellation).await?))
+    }
+
+    pub(crate) async fn platform_info(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<PlatformInfoResponse, RuntimeCapabilityError> {
+        self.retry_unary(cancellation, || async {
+            let request =
+                self.signer
+                    .sign((), PLATFORM_INFO_METHOD, Some(self.operation_timeout))?;
+            let mut client = self.platform_client();
+            client
+                .get_platform_info(request)
+                .await
+                .map(|value| value.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
     }
 
     async fn retry_unary<T, F, Fut>(

@@ -23,6 +23,25 @@ pub(crate) enum AgentExecutionClient {
     Edge(Arc<EdgeSession>),
 }
 impl AgentExecutionClient {
+    pub async fn runtime_image(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<String, RuntimeCapabilityError> {
+        let info = match self {
+            Self::Direct(client) => client.platform_info(cancellation).await?,
+            Self::Edge(session) => {
+                unary::<_, citadel_contracts::citadel::shared_models::v1::PlatformInfoResponse>(
+                    session,
+                    EdgeCommandKind::PlatformGetInfo,
+                    (),
+                    cancellation,
+                )
+                .await?
+            }
+        };
+        Ok(info.agent_runtime_image)
+    }
+
     pub async fn apply_deployment(
         &self,
         command: &citadel_deployments::RuntimeDeploymentCommand,
