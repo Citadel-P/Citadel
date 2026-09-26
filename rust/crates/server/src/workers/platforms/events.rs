@@ -78,6 +78,7 @@ pub(super) async fn event_source(
             };
             match event {
                 Some(Ok(event)) => {
+                    RuntimeWork::DockerRawEvent.units(1);
                     if event.time > 0 {
                         // Docker's `since` bound is inclusive. Replaying the final second
                         // after reconnect is preferable to dropping sibling events; the
@@ -185,6 +186,7 @@ pub(super) async fn agent_event_source(
             };
             match event {
                 Some(Ok(event)) => {
+                    RuntimeWork::AgentDaemonEvent.units(1);
                     if sender
                         .send(
                             InventoryEvent {
@@ -278,6 +280,7 @@ pub(super) async fn event_consumer(
             }
             Ok(false) => {}
             Err(error) => {
+                RuntimeWork::ContainerEventApply.failures(1);
                 tracing::warn!(%error, "Container event update failed; scheduling reconciliation")
             }
         }
@@ -299,13 +302,16 @@ pub(super) async fn apply_container_event(
     let Some(id) = event.container_id.as_deref().filter(|id| !id.is_empty()) else {
         return Ok(false);
     };
+    let _event = RuntimeWork::ContainerEventApply.start();
     if event.action.starts_with("exec_") || event.action == "attach" || event.action == "top" {
+        RuntimeWork::ContainerEventIgnored.units(1);
         return Ok(true);
     }
     let destroyed = event.action.eq_ignore_ascii_case("destroy");
     let (state, name, container) = if destroyed {
         (None, None, None)
     } else if matches!(event.source, ReconciliationTrigger::LocalEvent) {
+        let _inspect = RuntimeWork::ContainerEventInspect.start();
         let inspected = tokio::select! {
             () = cancellation.cancelled() => return Ok(true),
             result = docker.inspect_container_document(id) => result?,
@@ -339,6 +345,7 @@ pub(super) async fn apply_container_event(
         if !matches {
             continue;
         }
+        let _projection = RuntimeWork::ContainerEventProjection.start();
         let updated = if let Some(container) = &container {
             citadel_adapters::persistence::postgres::platforms::status::container_observation(
                 pool,
@@ -360,6 +367,7 @@ pub(super) async fn apply_container_event(
             )
             .await?
         };
+        RuntimeWork::ContainerEventProjection.units(u64::from(updated));
         // Swarm task/service relationships require a complete desired set before
         // replica counts can fall. Keep the full fallback for Swarm container events.
         handled |=
@@ -382,10 +390,24 @@ pub(super) fn queue_inventory_reconciliation(
         return;
     }
     tracing::debug!(source=?event.source, resource=%event.resource_type, action=%event.action, "Full inventory refresh requested");
+    let reason = if event.action == "reconnect" {
+        RuntimeWork::InventoryRequestReconnect
+    } else if event.resource_type.eq_ignore_ascii_case("container") {
+        RuntimeWork::InventoryRequestContainer
+    } else if event.resource_type.eq_ignore_ascii_case("network") {
+        RuntimeWork::InventoryRequestNetwork
+    } else {
+        RuntimeWork::InventoryRequestOther
+    };
+    reason.units(1);
     match event.source {
-        ReconciliationTrigger::LocalEvent => {
-            let _ = local.try_send(());
-        }
+        ReconciliationTrigger::LocalEvent => match local.try_send(()) {
+            Ok(()) => {}
+            Err(citadel_runtime::QueueSendError::Full(_)) => {
+                RuntimeWork::InventoryRequestCoalesced.units(1);
+            }
+            Err(_) => RuntimeWork::InventoryRequestCoalesced.failures(1),
+        },
         ReconciliationTrigger::AgentEvent => {
             agent.request(event.platform_id);
         }

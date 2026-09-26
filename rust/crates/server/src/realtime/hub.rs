@@ -302,6 +302,9 @@ impl RealtimeHub {
         event_kind: &'static str,
         payload: Value,
     ) -> u64 {
+        if event_kind == "runtimeChanged" {
+            citadel_runtime::runtime_metrics::RuntimeWork::RealtimeRuntimeInvalidation.units(1);
+        }
         let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
         let event = Arc::new(PublishedRuntimeEvent {
             platform_id,

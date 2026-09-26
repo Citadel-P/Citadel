@@ -10,6 +10,7 @@ use citadel_docker_api::{
     },
     models,
 };
+use citadel_runtime::runtime_metrics::RuntimeWork;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::sync::Arc;
@@ -120,6 +121,12 @@ impl DockerClient {
         size: Option<bool>,
         filters: Option<&str>,
     ) -> Result<Vec<models::ContainerSummary>, DockerError> {
+        let _list = if filters.is_some() {
+            RuntimeWork::DockerFilteredContainerList
+        } else {
+            RuntimeWork::DockerContainerList
+        }
+        .start();
         self.api_result(
             ContainerApiClient::new(self.configuration().await?)
                 .container_list(all, limit, size, filters)
@@ -274,6 +281,7 @@ impl DockerClient {
     pub async fn list_image_models(
         &self,
     ) -> Result<Vec<citadel_docker_api::models::ImageSummary>, DockerError> {
+        let _list = RuntimeWork::DockerImageList.start();
         self.api_result(
             ImageApiClient::new(self.configuration().await?)
                 .image_list(Some(true), None, None, None, None)
@@ -346,6 +354,7 @@ impl DockerClient {
         &self,
         filters: Option<&str>,
     ) -> Result<models::VolumeListResponse, DockerError> {
+        let _list = RuntimeWork::DockerVolumeList.start();
         self.api_result(
             VolumeApiClient::new(self.configuration().await?)
                 .volume_list(filters)
@@ -441,6 +450,7 @@ impl DockerClient {
         &self,
         filters: Option<&str>,
     ) -> Result<Vec<DockerNetwork>, DockerError> {
+        let _list = RuntimeWork::DockerNetworkList.start();
         convert_list(
             self.api_result(
                 NetworkApiClient::new(self.configuration().await?)

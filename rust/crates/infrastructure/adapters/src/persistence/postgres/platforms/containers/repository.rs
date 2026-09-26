@@ -379,6 +379,8 @@ impl ContainerRepository for PostgresContainerRepository {
 
     fn stale(&self) -> BoxFuture<'_, Result<Vec<ContainerClaim>, RuntimeCapabilityError>> {
         Box::pin(async move {
+            let _query =
+                citadel_runtime::runtime_metrics::RuntimeWork::ContainerRecoveryQuery.start();
             let ids: Vec<(Uuid,i64)> = sqlx::query_as("SELECT operationid,min(controlstartedat) FROM (SELECT containeroperationid operationid,controlstartedat FROM containers UNION ALL SELECT containeroperationid,controlstartedat FROM deployments UNION ALL SELECT containeroperationid,controlstartedat FROM stacks) claims WHERE operationid IS NOT NULL AND controlstartedat<$1 GROUP BY operationid ORDER BY min(controlstartedat),operationid LIMIT 10")
                 .bind(chrono::Utc::now().timestamp()-60).fetch_all(&self.pool).await.map_err(storage)?;
             let mut claims = Vec::with_capacity(ids.len());
@@ -405,6 +407,8 @@ impl ContainerRepository for PostgresContainerRepository {
                     .map_err(storage)?,
                 });
             }
+            citadel_runtime::runtime_metrics::RuntimeWork::ContainerRecoveryQuery
+                .units(claims.len() as u64);
             Ok(claims)
         })
     }

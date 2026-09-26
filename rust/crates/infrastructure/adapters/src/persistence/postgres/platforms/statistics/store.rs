@@ -1,6 +1,7 @@
 use citadel_platforms::{
     ContainerStatsStore, RuntimeCapabilityError, RuntimeContainerStat, RuntimeErrorKind,
 };
+use citadel_runtime::runtime_metrics::RuntimeWork;
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -23,6 +24,8 @@ impl PostgresContainerStatsStore {
         let inserted =
             persist_scoped_with_disk(&mut transaction, platform_id, None, stats, disk).await?;
         transaction.commit().await.map_err(storage)?;
+        RuntimeWork::StatsCommit.units(1);
+        RuntimeWork::StatsCommittedSamples.units(inserted as u64);
         Ok(inserted)
     }
     pub async fn persist_with_platform_stats(
@@ -44,6 +47,8 @@ impl PostgresContainerStatsStore {
         )
         .await?;
         transaction.commit().await.map_err(storage)?;
+        RuntimeWork::StatsCommit.units(1);
+        RuntimeWork::StatsCommittedSamples.units(inserted as u64);
         Ok(inserted)
     }
     #[must_use]
@@ -65,6 +70,8 @@ impl ContainerStatsStore for PostgresContainerStatsStore {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let inserted = persist_scoped(&mut transaction, platform_id, None, stats).await?;
             transaction.commit().await.map_err(storage)?;
+            RuntimeWork::StatsCommit.units(1);
+            RuntimeWork::StatsCommittedSamples.units(inserted as u64);
             Ok(inserted)
         }
         .boxed()

@@ -13,6 +13,18 @@ editor runs `cargo check` instead of Clippy on save. Full Clippy checks remain
 available in the check task. Development breakpoints and variable inspection
 are preserved.
 
+## CPU refactor measurements
+
+The architecture/CPU refactor proceeds one phase per change. Phase 0 adds
+fixed-cardinality `RuntimeWork` diagnostics without changing event policy. See
+[the Phase 0 report](reports/cpu-refactor-phase0.md) for the call-site map,
+metric definitions, pinned isolated Docker/PostgreSQL fixture, and release results.
+Run `python3 rust/scripts/measure-cpu-refactor.py /tmp/citadel-cpu-capture` from
+repository root after preparing that fixture. Do not build or run tests during
+accepted CPU captures; short `--idle-seconds`/`--stats-seconds` runs are fixture
+smokes only. The report distinguishes attempted work, committed writes, and
+semantic changes so raw counters are not mistaken for avoided work.
+
 ## Direct WSL setup (recommended)
 
 1. Install the VS Code **WSL** extension. In Docker Desktop, enable

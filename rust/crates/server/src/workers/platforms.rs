@@ -500,8 +500,12 @@ pub(super) async fn persist_stats_retry(
         };
         match result {
             Ok(inserted) => return Ok(inserted),
-            Err(error) if !error.retryable => return Err(error),
+            Err(error) if !error.retryable => {
+                RuntimeWork::StatsRetry.failures(1);
+                return Err(error);
+            }
             Err(error) => {
+                RuntimeWork::StatsRetry.failures(1);
                 tracing::warn!(%error,%platform,"Statistics persistence failed; retaining the batch for retry")
             }
         }
@@ -509,6 +513,7 @@ pub(super) async fn persist_stats_retry(
             ()=cancel.cancelled()=>return Err(RuntimeCapabilityError::new(citadel_platforms::RuntimeErrorKind::Cancelled,"Statistics writer stopped",false)),
             _=tokio::time::sleep(delay)=>{},
         }
+        RuntimeWork::StatsRetry.units(1);
         delay = (delay * 2).min(Duration::from_secs(30));
     }
 }

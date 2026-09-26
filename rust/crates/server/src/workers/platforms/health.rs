@@ -132,6 +132,7 @@ pub(super) async fn resource_health(
                 .or_default();
             // Recover a committed inventory whose process stopped before the
             // separate deployment reconciliation. Observations live in Postgres.
+            let recovery = RuntimeWork::HealthDeploymentRecovery.start();
             match citadel_adapters::persistence::postgres::platforms::status::reconcile_deployments(
                 &pool, target.id, None, false,
             )
@@ -152,6 +153,7 @@ pub(super) async fn resource_health(
                 }
                 _ => {}
             }
+            drop(recovery);
             let Some(online) = state.observe(healthy) else {
                 continue;
             };
