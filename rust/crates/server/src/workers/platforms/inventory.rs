@@ -156,6 +156,12 @@ pub(super) async fn reconcile_inventory(
             };
 
         let Some(_permit) = worker.budget.enter(cancellation).await else { return Ok(()); };
+        let reason = match scope {
+            Some(ReconciliationTrigger::LocalEvent) => RuntimeWork::InventoryLocalEvent,
+            Some(ReconciliationTrigger::AgentEvent) => RuntimeWork::InventoryAgentEvent,
+            None => RuntimeWork::InventoryRecovery,
+        };
+        let _reason = reason.start();
         tracing::debug!(platform_id=%target.id, reason=?scope, "Full inventory reconciliation");
         let started_at = chrono::Utc::now();
         match collect_inventory(

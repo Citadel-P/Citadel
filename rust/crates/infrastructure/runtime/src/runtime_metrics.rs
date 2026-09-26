@@ -46,9 +46,37 @@ pub enum RuntimeWork {
     Pruning,
     AgentStats,
     NotificationReconnect,
+    // Projection units count matched updates, not semantic changes.
+    DockerRawEvent,
+    AgentDaemonEvent,
+    ContainerEventIgnored,
+    ContainerEventInspect,
+    ContainerEventApply,
+    ContainerEventProjection,
+    InventoryRequestContainer,
+    InventoryRequestNetwork,
+    InventoryRequestOther,
+    InventoryRequestReconnect,
+    InventoryRequestCoalesced,
+    InventoryLocalEvent,
+    InventoryAgentEvent,
+    InventoryRecovery,
+    DockerContainerList,
+    DockerFilteredContainerList,
+    DockerImageList,
+    DockerNetworkList,
+    DockerVolumeList,
+    ContainerMutation,
+    ContainerVerification,
+    ContainerRecoveryQuery,
+    HealthDeploymentRecovery,
+    StatsCommit,
+    StatsCommittedSamples,
+    StatsRetry,
+    RealtimeRuntimeInvalidation,
 }
 
-const FAMILIES: [RuntimeWork; 39] = [
+const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::Health,
     RuntimeWork::Inventory,
     RuntimeWork::LocalStats,
@@ -88,6 +116,33 @@ const FAMILIES: [RuntimeWork; 39] = [
     RuntimeWork::Pruning,
     RuntimeWork::AgentStats,
     RuntimeWork::NotificationReconnect,
+    RuntimeWork::DockerRawEvent,
+    RuntimeWork::AgentDaemonEvent,
+    RuntimeWork::ContainerEventIgnored,
+    RuntimeWork::ContainerEventInspect,
+    RuntimeWork::ContainerEventApply,
+    RuntimeWork::ContainerEventProjection,
+    RuntimeWork::InventoryRequestContainer,
+    RuntimeWork::InventoryRequestNetwork,
+    RuntimeWork::InventoryRequestOther,
+    RuntimeWork::InventoryRequestReconnect,
+    RuntimeWork::InventoryRequestCoalesced,
+    RuntimeWork::InventoryLocalEvent,
+    RuntimeWork::InventoryAgentEvent,
+    RuntimeWork::InventoryRecovery,
+    RuntimeWork::DockerContainerList,
+    RuntimeWork::DockerFilteredContainerList,
+    RuntimeWork::DockerImageList,
+    RuntimeWork::DockerNetworkList,
+    RuntimeWork::DockerVolumeList,
+    RuntimeWork::ContainerMutation,
+    RuntimeWork::ContainerVerification,
+    RuntimeWork::ContainerRecoveryQuery,
+    RuntimeWork::HealthDeploymentRecovery,
+    RuntimeWork::StatsCommit,
+    RuntimeWork::StatsCommittedSamples,
+    RuntimeWork::StatsRetry,
+    RuntimeWork::RealtimeRuntimeInvalidation,
 ];
 
 struct Counters {
@@ -100,7 +155,7 @@ struct Counters {
     wait_us: AtomicU64,
     saturated: AtomicU64,
 }
-static COUNTERS: [Counters; 39] = [const {
+static COUNTERS: [Counters; FAMILIES.len()] = [const {
     Counters {
         started: AtomicU64::new(0),
         finished: AtomicU64::new(0),
@@ -111,7 +166,7 @@ static COUNTERS: [Counters; 39] = [const {
         wait_us: AtomicU64::new(0),
         saturated: AtomicU64::new(0),
     }
-}; 39];
+}; FAMILIES.len()];
 
 impl RuntimeWork {
     pub fn permit_wait(self, duration: std::time::Duration, saturated: bool) {
@@ -165,7 +220,7 @@ impl Drop for RuntimeTimer {
 }
 
 pub fn render_runtime_metrics(output: &mut String) {
-    for family in FAMILIES {
+    for &family in FAMILIES {
         let counters = &COUNTERS[family as usize];
         let started = counters.started.load(Ordering::Relaxed);
         let finished = counters.finished.load(Ordering::Relaxed);
@@ -196,5 +251,54 @@ pub fn render_runtime_metrics(output: &mut String) {
                 "citadel_runtime_{name}{{family=\"{family:?}\"}} {value}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counters_keep_units_failures_waits_and_in_flight_distinct() {
+        // No runtime unit test produces Agent daemon events; use that isolated slot.
+        let family = RuntimeWork::AgentDaemonEvent;
+        family.units(3);
+        family.failures(1);
+        family.permit_wait(std::time::Duration::from_micros(25), true);
+        let timer = family.start();
+        let mut active = String::new();
+        render_runtime_metrics(&mut active);
+        assert!(active.contains("citadel_runtime_in_flight{family=\"AgentDaemonEvent\"} 1\n"));
+        drop(timer);
+        let mut finished = String::new();
+        render_runtime_metrics(&mut finished);
+        for (name, value) in [
+            ("units_total", 3),
+            ("failures_total", 1),
+            ("permit_wait_microseconds_total", 25),
+            ("saturation_total", 1),
+            ("iterations_total", 1),
+            ("in_flight", 0),
+        ] {
+            assert!(finished.contains(&format!(
+                "citadel_runtime_{name}{{family=\"AgentDaemonEvent\"}} {value}\n"
+            )));
+        }
+    }
+
+    #[test]
+    fn exported_families_are_unique_and_match_counter_slots() {
+        let mut names = std::collections::HashSet::new();
+        let mut rendered = String::new();
+        render_runtime_metrics(&mut rendered);
+        for (index, family) in FAMILIES.iter().enumerate() {
+            assert_eq!(*family as usize, index);
+            let name = format!("{family:?}");
+            assert!(names.insert(name.clone()));
+            assert!(
+                rendered.contains(&format!("citadel_runtime_units_total{{family=\"{name}\"}}"))
+            );
+        }
+        assert_eq!(rendered.lines().count(), FAMILIES.len() * 8);
     }
 }

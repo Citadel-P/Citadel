@@ -1,6 +1,7 @@
 use citadel_platforms::{
     PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, containers::*,
 };
+use citadel_runtime::runtime_metrics::RuntimeWork;
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
@@ -141,6 +142,8 @@ impl ContainerMutationRuntime for ContainerRuntimeRouter {
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
             let work = async {
+                let _mutation = RuntimeWork::ContainerMutation.start();
+                RuntimeWork::ContainerMutation.units(targets.len() as u64);
                 // IDs are scoped to an owning daemon: never mix nodes or Platforms.
                 let mut groups = std::collections::BTreeMap::new();
                 for target in targets {
@@ -231,6 +234,7 @@ impl ContainerMutationRuntime for ContainerRuntimeRouter {
     ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>> {
         Box::pin(async move {
             let work = async {
+                let _verification = RuntimeWork::ContainerVerification.start();
                 let observed = match self.resolve(target, cancellation).await? {
                     Runtime::Local(runtime) => runtime
                         .inspect_container(&target.docker_id)
