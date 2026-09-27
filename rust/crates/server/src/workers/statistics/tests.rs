@@ -127,3 +127,32 @@ async fn one_discovery_cycle_has_one_complete_total_across_completion_seconds() 
     );
     assert_eq!(pq.try_recv().unwrap().memory_active, 100.0);
 }
+
+#[tokio::test]
+async fn invalid_sample_cannot_poison_writes_or_publish_a_partial_host_total() {
+    let (containers, mut cq) = writer::channel(8, RuntimeWork::ContainerStatsIngress);
+    let (platforms, mut pq) = writer::channel(8, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+    };
+    let mut bad = sample("bad", 10);
+    bad.cpu_usage = f64::NAN;
+    assert!(
+        ingress
+            .submit(
+                scope(None),
+                vec![sample("valid", 10), bad],
+                None,
+                &CancellationToken::new()
+            )
+            .await
+    );
+    assert_eq!(cq.try_recv().unwrap().sample.docker_container_id, "valid");
+    assert!(cq.try_recv().is_err());
+    assert!(
+        pq.try_recv().is_err(),
+        "partial host total must not masquerade as complete"
+    );
+}

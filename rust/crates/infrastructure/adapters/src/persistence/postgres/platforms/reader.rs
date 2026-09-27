@@ -13,6 +13,59 @@ impl PostgresPlatformReader {
 }
 
 impl PlatformReader for PostgresPlatformReader {
+    fn container_identities(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<citadel_platforms::ContainerIdentity>, AuthorizedReadError>> {
+        Box::pin(async move {
+            sqlx::query(
+                "SELECT id,platformid,deploymentid,stackid,dockercontainerid,dockernodeid FROM containers WHERE platformid=$1",
+            )
+            .bind(platform)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(|r| {
+                Ok(citadel_platforms::ContainerIdentity {
+                    id: r.try_get("id").map_err(storage)?,
+                    platform_id: r.try_get("platformid").map_err(storage)?,
+                    deployment_id: r.try_get("deploymentid").map_err(storage)?,
+                    stack_id: r.try_get("stackid").map_err(storage)?,
+                    container_id: r.try_get("dockercontainerid").map_err(storage)?,
+                    docker_node_id: r.try_get("dockernodeid").map_err(storage)?,
+                })
+            })
+            .collect()
+        })
+    }
+    fn platform_telemetry(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<Option<citadel_platforms::PlatformTelemetryContext>, AuthorizedReadError>,
+    > {
+        Box::pin(async move {
+            let Some(row) = sqlx::query("SELECT cpucount::bigint cpucount,memtotal,networkcount,volumecount,imagecount::bigint imagecount,platformdescriptor FROM platforms WHERE id=$1")
+                .bind(platform)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+            else {
+                return Ok(None);
+            };
+            Ok(Some(citadel_platforms::PlatformTelemetryContext {
+                cpu_count: row.try_get("cpucount").map_err(storage)?,
+                mem_total: row.try_get("memtotal").map_err(storage)?,
+                network_count: row.try_get("networkcount").map_err(storage)?,
+                volume_count: row.try_get("volumecount").map_err(storage)?,
+                image_count: row.try_get("imagecount").map_err(storage)?,
+                descriptor: row.try_get("platformdescriptor").map_err(storage)?,
+            }))
+        })
+    }
+
     fn swarm_summary(
         &self,
         platform: Uuid,

@@ -1,7 +1,49 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
+use citadel_identity::{UserRepository, UserResourceAccessInput};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
-use citadel_primitives::ResourceType;
+use citadel_primitives::{PermissionLevel, ResourceType};
+
+async fn grant_access(
+    f: &Fixture,
+    actor: &ActorPrincipal,
+    kind: ResourceType,
+    resource: Uuid,
+    old: Option<PermissionLevel>,
+    level: PermissionLevel,
+) {
+    let users = PostgresUserRepository::new(f.pool.clone());
+    let mut access = UserResourceAccessInput {
+        resource_type: kind,
+        resource_id: resource,
+        permission_level: level,
+        specific_permissions: vec![],
+    };
+    if let Some(old) = old {
+        access.permission_level = old;
+        users
+            .remove_resource_access(
+                actor.subject_id,
+                &access,
+                f.administrator.actor_id,
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        access.permission_level = level;
+    }
+    users
+        .add_resource_access(
+            actor.subject_id,
+            &access,
+            f.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
+}
 use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 
@@ -44,8 +86,11 @@ async fn six_container_http_selection_sends_one_edge_mutation_then_verifies_each
     assert_eq!(store.resolve_ids(&references).await.unwrap(), ids);
     let mut missing = references.clone();
     missing.push(Uuid::now_v7().to_string());
+    // UUID resolution avoids a preliminary read; the atomic claim validates existence.
+    let resolved = store.resolve_ids(&missing).await.unwrap();
     assert!(
-        matches!(store.resolve_ids(&missing).await, Err(error) if error.kind == RuntimeErrorKind::NotFound)
+        matches!(store.claim(f.administrator.actor_id, true, &resolved, ContainerAction::Start).await,
+        Err(error) if error.kind == RuntimeErrorKind::NotFound)
     );
     let registry = &f.lookup_state.platforms.edge;
     let (session, mut commands) = registry
@@ -343,11 +388,16 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
         .execute(&f.pool)
         .await
         .unwrap();
-    let denied = ActorPrincipal {
-        actor_id: ActorId::new(f.actor_id),
-        roles: vec![],
-        ..f.administrator.clone()
-    };
+    let denied = super::lookup::subject(&f).await;
+    grant_access(
+        &f,
+        &denied,
+        ResourceType::Platform,
+        f.platform_id,
+        None,
+        PermissionLevel::Read,
+    )
+    .await;
     for (route, action, expected) in [
         ("start", ContainerAction::Start, "Running"),
         ("stop", ContainerAction::Stop, "Exited"),
@@ -464,12 +514,15 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
     }
     assert_eq!(runtime.calls.lock().await.len(), 5);
     // Execute implies Write, but Read alone did not grant it.
-    sqlx::query("UPDATE resourceaccesses SET permissionlevel=4 WHERE actorid=$1 AND resourceid=$2")
-        .bind(f.actor_id)
-        .bind(f.platform_id)
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    grant_access(
+        &f,
+        &denied,
+        ResourceType::Platform,
+        f.platform_id,
+        Some(PermissionLevel::Read),
+        PermissionLevel::Execute,
+    )
+    .await;
     assert_eq!(
         send_json(
             &f,
@@ -549,15 +602,7 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
         .execute(&f.pool)
         .await
         .unwrap();
-    let actor_id = Uuid::now_v7();
-    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
-        .bind(actor_id)
-        .execute(&f.pool)
-        .await
-        .unwrap();
-    let mut writer = f.administrator.clone();
-    writer.actor_id = ActorId::new(actor_id);
-    writer.roles.clear();
+    let writer = super::lookup::subject(&f).await;
     assert_eq!(
         send_json(
             &f,
@@ -570,11 +615,18 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
         .status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourcetype,resourceid,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,2,0)")
-        .bind(Uuid::now_v7()).bind(actor_id).bind(ResourceType::Deployment as i32).bind(deployment).execute(&f.pool).await.unwrap();
+    grant_access(
+        &f,
+        &writer,
+        ResourceType::Deployment,
+        deployment,
+        None,
+        PermissionLevel::Write,
+    )
+    .await;
     for (name, action, status) in [
         ("start", ContainerAction::Start, "Healthy"),
-        ("pause", ContainerAction::Pause, "Paused"),
+        ("pause", ContainerAction::Pause, "Pending"),
         ("resume", ContainerAction::Unpause, "Healthy"),
         ("restart", ContainerAction::Restart, "Healthy"),
         ("stop", ContainerAction::Stop, "Stopped"),
@@ -1082,7 +1134,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                     token.cancel();
                 }
             );
-            assert!(matches!(result,Err(error) if error.kind==RuntimeErrorKind::Cancelled));
+            assert!(matches!(result,Err(error) if error.kind==RuntimeErrorKind::Unavailable));
             tokio::time::sleep(StdDuration::from_millis(600)).await;
             assert_eq!(
                 calls.load(Ordering::SeqCst),
@@ -1199,6 +1251,7 @@ async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_gener
         .targets
         .iter()
         .map(|target| ContainerObservation {
+            generation: None,
             target: target.clone(),
             state: Some("exited".into()),
         })
@@ -1257,6 +1310,7 @@ async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_gener
         .targets
         .iter()
         .map(|target| ContainerObservation {
+            generation: None,
             target: target.clone(),
             state: None,
         })
@@ -1285,6 +1339,7 @@ async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_gener
                 .targets
                 .iter()
                 .map(|target| ContainerObservation {
+                    generation: None,
                     target: target.clone(),
                     state: None,
                 })

@@ -257,3 +257,63 @@ async fn failing_volume_does_not_repeat_or_delay_other_recovery_scopes() {
     cancel.cancel();
     worker.await.unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn hung_platform_does_not_delay_the_same_resource_on_another_platform() {
+    let cancel = CancellationToken::new();
+    let (sender, receivers) = event_refresh_channels(4);
+    let failing = request(uuid::Uuid::now_v7(), ReconciliationScope::Containers);
+    let healthy = request(uuid::Uuid::now_v7(), ReconciliationScope::Containers);
+    let image = request(failing.platform_id, ReconciliationScope::Images);
+    let committed = Arc::new(Mutex::new(Vec::new()));
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let worker_cancel = cancel.clone();
+    let writes = committed.clone();
+    let reads = calls.clone();
+    let worker = tokio::spawn(async move {
+        run_refresh_workers(
+            &worker_cancel,
+            receivers,
+            Duration::from_secs(10),
+            |key| {
+                reads.lock().unwrap().push(key);
+                async move {
+                    if key == failing {
+                        std::future::pending::<Result<Option<()>, &str>>().await
+                    } else {
+                        Ok(Some(()))
+                    }
+                }
+            },
+            |key, ()| {
+                writes.lock().unwrap().push(key);
+                async { Ok::<_, &str>(true) }
+            },
+        )
+        .await;
+    });
+    sender.send(failing, &cancel).await.unwrap();
+    sender.send(image, &cancel).await.unwrap();
+    sender.send(healthy, &cancel).await.unwrap();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_secs(1)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert!(committed.lock().unwrap().contains(&image));
+    assert!(committed.lock().unwrap().contains(&healthy));
+    assert!(!committed.lock().unwrap().contains(&failing));
+    assert_eq!(
+        calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|&&key| key == failing)
+            .count(),
+        1
+    );
+    cancel.cancel();
+    worker.await.unwrap();
+}

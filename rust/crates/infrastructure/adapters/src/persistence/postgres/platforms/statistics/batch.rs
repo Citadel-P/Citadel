@@ -18,14 +18,27 @@ impl PostgresStatsBatchStore {
     }
 }
 
-fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
+fn storage(error: sqlx::Error) -> RuntimeCapabilityError {
+    let permanent = error.as_database_error().is_some_and(|error| {
+        error.code().is_some_and(|code| {
+            code.starts_with("22") || code.starts_with("23") || code.starts_with("42")
+        })
+    });
+    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), !permanent)
 }
 
 async fn lock_scopes(
     tx: &mut Transaction<'_, Postgres>,
     payload: &Value,
 ) -> Result<(), RuntimeCapabilityError> {
+    sqlx::query("SET LOCAL lock_timeout = '500ms'")
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
+    sqlx::query("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
     // Stable parent order also prevents metadata lock upgrades between writers.
     sqlx::query("SELECT p.id FROM platforms p WHERE p.id IN (SELECT platform_id FROM jsonb_to_recordset($1) AS i(platform_id uuid)) ORDER BY p.id FOR NO KEY UPDATE")
         .bind(payload).fetch_all(&mut **tx).await.map_err(storage)?;
@@ -54,6 +67,9 @@ fn prune_closed<'a>(payload: &mut Value, mut scopes: impl Iterator<Item = &'a St
 }
 
 impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
+    fn partition(&self, sample: &ContainerStatsSample) -> uuid::Uuid {
+        sample.scope.platform_id
+    }
     fn persist_batch<'a>(
         &'a self,
         samples: &'a [ContainerStatsSample],
@@ -66,7 +82,9 @@ impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
                 .iter()
                 .filter(|s| !s.scope.closed.as_ref().is_some_and(|t| t.is_cancelled()))
                 .collect();
-            let mut payload = serde_json::to_value(&live).map_err(storage)?;
+            let mut payload = serde_json::to_value(&live).map_err(|e| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::InvalidRequest, e.to_string(), false)
+            })?;
             let mut tx = self.pool.begin().await.map_err(storage)?;
             lock_scopes(&mut tx, &payload).await?;
             prune_closed(&mut payload, live.iter().map(|s| &s.scope));
@@ -87,6 +105,9 @@ impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
 }
 
 impl StatsBatchStore<PlatformStatsSample> for PostgresStatsBatchStore {
+    fn partition(&self, sample: &PlatformStatsSample) -> uuid::Uuid {
+        sample.scope.platform_id
+    }
     fn persist_batch<'a>(
         &'a self,
         samples: &'a [PlatformStatsSample],
@@ -99,7 +120,9 @@ impl StatsBatchStore<PlatformStatsSample> for PostgresStatsBatchStore {
                 .iter()
                 .filter(|s| !s.scope.closed.as_ref().is_some_and(|t| t.is_cancelled()))
                 .collect();
-            let mut payload = serde_json::to_value(&live).map_err(storage)?;
+            let mut payload = serde_json::to_value(&live).map_err(|e| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::InvalidRequest, e.to_string(), false)
+            })?;
             for (value, sample) in payload.as_array_mut().unwrap().iter_mut().zip(live.iter()) {
                 if let Some(metadata) = value.get_mut("metadata").and_then(Value::as_object_mut) {
                     let disk = sample.metadata.as_ref().and_then(|m| m.disk());

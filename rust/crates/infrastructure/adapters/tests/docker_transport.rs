@@ -1069,5 +1069,8 @@ async fn platform_metadata_is_narrow_while_live_stats_follow_visible_lists() {
 #[path = "docker_transport/runtime_sampling.rs"]
 mod runtime_sampling;
 
+#[path = "docker_transport/image_usage.rs"]
+mod image_usage;
+
 #[path = "docker_transport/endpoints.rs"]
 mod endpoints;

@@ -147,6 +147,7 @@ pub async fn register(
             cancellation.child_token(),
         ),
     );
+    let job_alerts = alerts.clone();
     let alerts: Arc<dyn AlertEventSink> = alerts;
     let stats = super::statistics::register(
         supervisor,
@@ -166,11 +167,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "job-alert-observations",
-        super::alerts::observations(
-            cancellation.child_token(),
-            alerts.clone(),
-            job_alert_listener,
-        ),
+        super::alerts::observations(cancellation.child_token(), job_alerts, job_alert_listener),
     );
     supervisor.spawn(
         "volume-helper-recovery",

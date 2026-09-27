@@ -36,6 +36,23 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Some(patches) = event
+            .payload
+            .get("containerPatches")
+            .and_then(Value::as_array)
+        {
+            return match self.topic() {
+                Topic::Containers(..) | Topic::DockerDaemon(..) => self.id() == event.platform_id,
+                Topic::ContainerInfo(reference) => patches.iter().any(|p| {
+                    p["id"]
+                        .as_str()
+                        .and_then(|id| Uuid::parse_str(id).ok())
+                        .is_some_and(|id| Uuid::parse_str(reference).ok() == Some(id))
+                }),
+                _ => false,
+            };
+        }
+
         if matches!(self.topic(), Topic::ContainerLog(..) | Topic::StackLog(..))
             || matches!(
                 self.topic(),
@@ -69,6 +86,20 @@ impl Group {
                 && event.affects_resource(self.id());
         }
         if let Some(platform) = event.platform_id {
+            if event.event_kind == "updated"
+                && matches!(event.resource_type, "Deployment" | "Stack")
+            {
+                return match self.topic() {
+                    Topic::Platforms => true,
+                    Topic::Deployments | Topic::Deployment(..) => {
+                        event.resource_type == "Deployment" && event.affects_resource(self.id())
+                    }
+                    Topic::Stacks | Topic::Stack(..) | Topic::StackInfo(..) => {
+                        event.resource_type == "Stack" && event.affects_resource(self.id())
+                    }
+                    _ => false,
+                };
+            }
             if matches!(self.topic(), Topic::Images(..))
                 && event.payload["dockerResourceType"] == "container"
                 && matches!(
@@ -79,11 +110,14 @@ impl Group {
                 return false;
             }
             if event.payload["dockerResourceType"] == "containerStats" {
-                return matches!(
-                    self.topic(),
-                    Topic::Platforms | Topic::ContainerInfo(..) | Topic::StackInfo(..)
-                ) || (matches!(self.topic(), Topic::Containers(..))
-                    && self.id() == Some(platform));
+                return (matches!(self.topic(), Topic::Platforms)
+                    && event.payload["platformSample"].is_object())
+                    || matches!(
+                        self.topic(),
+                        Topic::ContainerInfo(..) | Topic::StackInfo(..)
+                    )
+                    || (matches!(self.topic(), Topic::Containers(..))
+                        && self.id() == Some(platform));
             }
             return match self.topic() {
                 Topic::Platforms

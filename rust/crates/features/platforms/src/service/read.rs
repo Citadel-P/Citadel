@@ -12,6 +12,19 @@ pub struct PlatformReadService {
 }
 
 impl PlatformReadService {
+    pub async fn container_identities(
+        &self,
+        platform: Uuid,
+    ) -> Result<Vec<ContainerIdentity>, AuthorizedReadError> {
+        self.store.container_identities(platform).await
+    }
+    pub async fn platform_telemetry(
+        &self,
+        platform: Uuid,
+    ) -> Result<Option<PlatformTelemetryContext>, AuthorizedReadError> {
+        self.store.platform_telemetry(platform).await
+    }
+
     #[must_use]
     pub fn new(store: Arc<dyn PlatformReader>) -> Self {
         Self {

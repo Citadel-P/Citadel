@@ -192,6 +192,14 @@ impl PostgresAlertRepository {
         &'a self,
         observation: &'a AlertObservation,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
+        self.process_observation(observation, None)
+    }
+
+    pub(super) fn process_observation<'a>(
+        &'a self,
+        observation: &'a AlertObservation,
+        receipt: Option<Uuid>,
+    ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
             let rules = self.configured_rules(&observation.alert_type).await?;
             let advanced_alerting = !rules
@@ -214,11 +222,11 @@ impl PostgresAlertRepository {
                 if observation_matches(rule, observation) {
                     winner.get_or_insert(rule);
                 } else {
-                    self.process_rule(rule, observation).await?;
+                    self.process_rule(rule, observation, receipt).await?;
                 }
             }
             match winner {
-                Some(rule) => self.process_rule(rule, observation).await,
+                Some(rule) => self.process_rule(rule, observation, receipt).await,
                 None => Ok(None),
             }
         })

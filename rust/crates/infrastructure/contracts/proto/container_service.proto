@@ -28,6 +28,8 @@ message ListContainersRequest {
     google.protobuf.Int32Value limit= 2; 
     google.protobuf.BoolValue size = 3;
     map<string, OptionChain> filters = 4;
+    // Default false preserves legacy list-with-statistics behavior.
+    bool metadata_only = 5;
 }
 
 message ContainerLogRequest {
@@ -47,6 +49,7 @@ message StreamContainerStatsRequest {
 
 message ContainersStatsResponse {
     map<string, citadel.shared_models.v1.ContainerStatMessage> containers = 1;
+    optional int64 captured_at = 2;
 }
 
 message InspectContainerRequest {

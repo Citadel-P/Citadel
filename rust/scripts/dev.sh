@@ -110,14 +110,20 @@ configure_compose() {
   local target_dir
   target_dir="$(cd "$repo_root/rust" && cargo metadata --locked --offline --no-deps --format-version 1 | \
     node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).target_directory))')"
-  export CITADEL_DEV_BINARY="$target_dir/debug/citadel-server"
+  case "${CITADEL_COMPOSE_PROFILE:-release}" in
+    release) export CITADEL_DEV_BINARY="$target_dir/release/citadel-server" ;;
+    dev) export CITADEL_DEV_BINARY="$target_dir/debug/citadel-server" ;;
+    *) echo 'CITADEL_COMPOSE_PROFILE must be release or dev.' >&2; exit 2 ;;
+  esac
 }
 
 compose_up() {
   configure_compose
   prepare
   # Reuse the WSL Cargo cache instead of compiling a second tree in Docker.
-  CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false bash "$repo_root/rust/scripts/build.sh"
+  local build_args=()
+  if [[ "${CITADEL_COMPOSE_PROFILE:-release}" == release ]]; then build_args+=(--release); fi
+  CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false bash "$repo_root/rust/scripts/build.sh" "${build_args[@]}"
   development_compose build core
   development_compose up -d --wait --wait-timeout 90 postgres
   # Cargo replaces the binary inode. Recreate Core to remount the new executable,

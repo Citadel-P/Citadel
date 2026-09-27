@@ -108,6 +108,8 @@ pub struct ContainerClaim {
 pub struct ContainerObservation {
     pub target: ContainerTarget,
     pub state: Option<String>,
+    /// Captured before inspection, retained until its conditional commit.
+    pub generation: Option<Arc<crate::jobs::SnapshotGeneration>>,
 }
 
 #[derive(Debug, Default)]
@@ -125,6 +127,7 @@ impl ContainerObservations {
             Ok(state) => self.observed.push(ContainerObservation {
                 target: target.clone(),
                 state,
+                generation: None,
             }),
             Err(error) => self.errors.push((target.id, error)),
         }
@@ -155,6 +158,12 @@ pub fn container_batch_result(
 }
 
 pub trait ContainerRepository: Send + Sync {
+    fn finish_claim<'a>(
+        &'a self,
+        claim: &'a ContainerClaim,
+    ) -> BoxFuture<'a, Result<ContainerCompletion, RuntimeCapabilityError>> {
+        self.finish_committed(claim.operation_id)
+    }
     fn coordinator(&self) -> Option<Arc<ContainerOperationCoordinator>> {
         None
     }
@@ -476,7 +485,7 @@ impl ContainerMutationService {
                 if result.is_ok() {
                     let completion = tokio::time::timeout(
                         Duration::from_secs(5),
-                        service.store.finish_committed(claim.operation_id),
+                        service.store.finish_claim(&claim),
                     )
                     .await
                     .map_err(|_| {
@@ -523,18 +532,56 @@ impl ContainerMutationService {
         registration: Option<&mut OperationRegistration>,
         cancellation: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
-        let missing = match registration {
-            Some(registration) => registration.wait_missing(cancellation).await?,
-            None => claim.targets.clone(),
-        };
-        if missing.is_empty() {
-            return Ok(());
+        let mut registration = registration;
+        // A lifecycle event may arrive while a slow inspection is in flight.
+        // Retry only the still-unconfirmed selection, with a bounded attempt count.
+        for attempt in 0..3 {
+            let missing = match registration.as_deref_mut() {
+                Some(registration) => registration.wait_missing(cancellation).await?,
+                None => claim.targets.clone(),
+            };
+            if missing.is_empty() {
+                return Ok(());
+            }
+            let mut stamps = std::collections::BTreeMap::new();
+            for target in &missing {
+                let key = (target.platform_id, target.node_id.clone());
+                if !stamps.contains_key(&key) {
+                    let stamp = crate::jobs::SnapshotGeneration::capture(
+                        target.platform_id,
+                        target.node_id.as_deref(),
+                        crate::jobs::ProjectionKind::Containers,
+                    )
+                    .await;
+                    stamps.insert(key, Arc::new(stamp));
+                }
+            }
+            let mut observations = self.runtime.observe_batch(&missing, cancellation).await;
+            for observation in &mut observations.observed {
+                observation.generation = stamps
+                    .get(&(
+                        observation.target.platform_id,
+                        observation.target.node_id.clone(),
+                    ))
+                    .cloned();
+            }
+            match self
+                .store
+                .observed_batch(claim.operation_id, &observations.observed)
+                .await
+            {
+                Err(error)
+                    if error.kind == RuntimeErrorKind::Conflict
+                        && error.retryable
+                        && attempt < 2 =>
+                {
+                    continue;
+                }
+                result => result?,
+            }
+            return observations.result();
         }
-        let observations = self.runtime.observe_batch(&missing, cancellation).await;
-        for batch in observations.observed.chunks(MAX_CONTAINER_BATCH) {
-            self.store.observed_batch(claim.operation_id, batch).await?;
-        }
-        observations.result()
+        unreachable!("the final attempt returns its result")
     }
 
     pub async fn reconcile(
@@ -550,7 +597,7 @@ impl ContainerMutationService {
                 if cancellation.is_cancelled() {
                     return Err(error(RuntimeErrorKind::Unavailable, "Recovery canceled."));
                 }
-                let completion = self.store.finish_committed(claim.operation_id).await?;
+                let completion = self.store.finish_claim(&claim).await?;
                 let mut finished = claim.clone();
                 finished.deployment_ids = completion.deployment_ids;
                 finished.stack_ids = completion.stack_ids;

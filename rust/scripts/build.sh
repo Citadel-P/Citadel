@@ -5,5 +5,5 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 export SQLX_OFFLINE=true
 
-cargo build --locked -p citadel-server -p xtask --bins
+cargo build --locked -p citadel-server --bins "$@"
 cargo run --locked -p xtask -- openapi

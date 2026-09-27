@@ -7,6 +7,7 @@ use citadel_contracts::citadel::{
     },
 };
 use prost::Message;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
@@ -56,11 +57,16 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
                 } else {
                     (200, json!([{"Deleted":a}]))
                 }
+            } else if line.starts_with("GET /v1.49/containers/json?all=true ") {
+                (
+                    200,
+                    json!([{"Id":"stopped-container","ImageID":b,"State":"exited"}]),
+                )
             } else {
                 assert!(line.starts_with("GET /v1.49/images/json"));
                 (
                     200,
-                    json!([{"Id":b,"RepoTags":[],"RepoDigests":[],"Created":0,"Size":0,"Containers":1}]),
+                    json!([{"Id":b,"RepoTags":[],"RepoDigests":[],"Created":0,"Size":0,"Containers":-1}]),
                 )
             };
             let body = body.to_string();
@@ -70,6 +76,7 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
     });
     let mut state = f.lookup_state.platforms.clone();
     state.docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
+    let docker = state.docker.clone();
     let mut f = f;
     f.app = platforms_http::router(state);
     let body = json!({"platformId":f.platform_id,"ids":[first,second],"force":true,"noPrune":true});
@@ -132,7 +139,41 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
     );
     assert_eq!(deleted.lock().await.len(), 2);
     let rows:Vec<(String,String)>=sqlx::query_as("SELECT dockerimageid,controlstate FROM images WHERE platformid=$1 AND dockerimageid=ANY($2)").bind(f.platform_id).bind(&[first.clone(),second.clone()]).fetch_all(&f.pool).await.unwrap();
-    assert_eq!(rows, vec![(second, "Idle".into())]);
+    assert_eq!(rows, vec![(second.clone(), "Idle".into())]);
+    // Deletion confirmation removes missing identities; the inventory worker
+    // owns summary fields. Exercise its Docker -> projection -> HTTP path.
+    let snapshot = citadel_platforms::jobs::collect_event_scope(
+        citadel_platforms::jobs::ResourceCollector::Images(&docker),
+        f.platform_id,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    PostgresInventoryProjectionStore::new(f.pool.clone())
+        .persist_resource(&snapshot)
+        .await
+        .unwrap();
+    let response = json_body(
+        send_json(
+            &f,
+            Method::GET,
+            &format!("/api/v1/images/{}", f.platform_id),
+            f.administrator.clone(),
+            Value::Null,
+        )
+        .await,
+    )
+    .await;
+    let image = response["images"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|image| image["dockerImageId"] == second)
+        .unwrap();
+    assert_eq!(
+        image["isInUse"], true,
+        "stopped containers still use their images; Docker -1 is unknown, not unused"
+    );
     sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,$2,$3,now(),'[]')")
         .bind(Uuid::now_v7()).bind(&first).bind(f.platform_id).execute(&f.pool).await.unwrap();
     let success = json_body(

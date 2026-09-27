@@ -102,6 +102,7 @@ impl citadel_platforms::ContainerInventoryPort for EdgeRuntime {
                 &self.session,
                 EdgeCommandKind::ContainerList,
                 ListContainersRequest {
+                    metadata_only: true,
                     all: Some(true),
                     size: Some(false),
                     ..Default::default()

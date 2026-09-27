@@ -64,7 +64,8 @@ pub(super) fn build(
             docker.clone(),
             agent.clone(),
             edge_registry.clone(),
-        );
+        )
+        .with_agent_resolver(runtime_targets.clone());
     let agent_setup_context = platforms_http::AgentSetupContext {
         signer: agent_signer,
         image: agent_image.clone(),

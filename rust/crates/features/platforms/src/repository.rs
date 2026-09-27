@@ -6,6 +6,45 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub trait PlatformReader: Send + Sync {
+    fn container_identities(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<ContainerIdentity>, AuthorizedReadError>> {
+        Box::pin(async move {
+            Ok(self
+                .list_containers(platform)
+                .await?
+                .into_iter()
+                .map(|c| ContainerIdentity {
+                    id: c.id,
+                    platform_id: c.platform_id,
+                    deployment_id: c.deployment_id,
+                    stack_id: c.stack_id,
+                    container_id: c.container_id,
+                    docker_node_id: c.docker_node_id,
+                })
+                .collect())
+        })
+    }
+    fn platform_telemetry(
+        &self,
+        platform: Uuid,
+    ) -> BoxFuture<'_, Result<Option<PlatformTelemetryContext>, AuthorizedReadError>> {
+        Box::pin(async move {
+            Ok(self
+                .get_platform(platform)
+                .await?
+                .map(|p| PlatformTelemetryContext {
+                    cpu_count: p.cpu_count,
+                    mem_total: p.mem_total,
+                    network_count: p.network_count,
+                    volume_count: p.volume_count,
+                    image_count: p.image_count,
+                    descriptor: p.platform_descriptor,
+                }))
+        })
+    }
+
     fn list_authorized<'a>(
         &'a self,
         actor_id: ActorId,

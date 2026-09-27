@@ -26,6 +26,17 @@ impl PostgresContainerRepository {
 }
 
 impl ContainerRepository for PostgresContainerRepository {
+    fn finish_claim<'a>(
+        &'a self,
+        claim: &'a ContainerClaim,
+    ) -> BoxFuture<'a, Result<ContainerCompletion, RuntimeCapabilityError>> {
+        Box::pin(super::completion::finish(
+            &self.pool,
+            claim.operation_id,
+            Some(claim),
+        ))
+    }
+
     fn coordinator(&self) -> Option<std::sync::Arc<ContainerOperationCoordinator>> {
         Some(self.coordinator.clone())
     }
@@ -33,7 +44,7 @@ impl ContainerRepository for PostgresContainerRepository {
         &self,
         claim: Uuid,
     ) -> BoxFuture<'_, Result<ContainerCompletion, RuntimeCapabilityError>> {
-        Box::pin(super::completion::finish(&self.pool, claim))
+        Box::pin(super::completion::finish(&self.pool, claim, None))
     }
 
     fn resolve_ids<'a>(
@@ -349,6 +360,7 @@ impl ContainerRepository for PostgresContainerRepository {
                 &[ContainerObservation {
                     target: target.clone(),
                     state: state.map(str::to_owned),
+                    generation: None,
                 }],
             )
             .await

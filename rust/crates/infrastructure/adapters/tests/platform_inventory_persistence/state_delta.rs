@@ -278,6 +278,14 @@ async fn six_deltas_reconcile_unique_external_parents_and_defer_owned_effects() 
                 .iter()
                 .all(|r| r.changed && r.accepted && r.defer_parent_effects == owned)
         );
+        if owned {
+            assert!(
+                results
+                    .iter()
+                    .all(|r| r.patch.as_ref().unwrap().control_state.is_none()),
+                "an event delivered after command completion must not restore Processing"
+            );
+        }
         assert_eq!(iterations("ContainerStateDeltaBatch") - before[0], 1);
         assert_eq!(
             iterations("ContainerParentReconcileStack") - before[1],
@@ -656,4 +664,117 @@ async fn container_command_admission_uses_uuid_index_and_cached_authorization() 
         .await
         .unwrap();
     pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn inspection_fence_and_standalone_finish_avoid_stale_state_and_parent_tables() {
+    use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
+    use citadel_platforms::containers::*;
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let id = Uuid::now_v7();
+    let operation = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$1::text,$1::text,'Local',1,0,1024,0,0,'{\"$type\":\"Docker\"}','Online')")
+        .bind(platform).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports,controlstate,containeroperationid) VALUES($1,$2,'fenced','image','fenced',1,1,'Running','[]','Processing',$3)")
+        .bind(id).bind(platform).bind(operation).execute(&pool).await.unwrap();
+    let target = ContainerTarget {
+        id,
+        platform_id: platform,
+        docker_id: "fenced".into(),
+        node_id: None,
+    };
+    let stamp = std::sync::Arc::new(
+        SnapshotGeneration::capture(platform, None, ProjectionKind::Containers).await,
+    );
+    container_state_deltas_committed(
+        &pool,
+        platform,
+        None,
+        &[ContainerStateDelta {
+            docker_id: "fenced".into(),
+            state: State::Exited,
+            observed_at: 42,
+            observed_at_millis: 42000,
+        }],
+    )
+    .await
+    .unwrap();
+    let repository = PostgresContainerRepository::new(pool.clone());
+    let error = repository
+        .observed_batch(
+            operation,
+            &[ContainerObservation {
+                target: target.clone(),
+                state: Some("running".into()),
+                generation: Some(stamp),
+            }],
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, citadel_platforms::RuntimeErrorKind::Conflict);
+    assert!(error.retryable);
+    let state: String = sqlx::query_scalar("SELECT state FROM containers WHERE id=$1")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "Exited");
+    let claim = ContainerClaim {
+        operation_id: operation,
+        started_at: 1,
+        targets: vec![target],
+        deployment_ids: vec![],
+        stack_ids: vec![],
+    };
+    let mut blockers = pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE deployments,stacks,stackreleases,images IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *blockers)
+        .await
+        .unwrap();
+    let reader = citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(
+        pool.clone(),
+    );
+    let (identities, telemetry) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        (
+            reader.container_identities(platform).await.unwrap(),
+            reader.platform_telemetry(platform).await.unwrap().unwrap(),
+        )
+    })
+    .await
+    .expect("live telemetry must not join workload or image tables");
+    assert_eq!(identities.len(), 1);
+    assert_eq!(identities[0].id, id);
+    assert_eq!(telemetry.cpu_count, 1);
+    let completed = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        repository.finish_claim(&claim),
+    )
+    .await
+    .expect("standalone finish must not touch parent tables")
+    .unwrap();
+    assert_eq!(completed.container_patches.len(), 1);
+    assert_eq!(
+        completed.container_patches[0].state.as_deref(),
+        Some("Exited")
+    );
+    assert!(completed.deployment_ids.is_empty() && completed.stack_ids.is_empty());
+    blockers.rollback().await.unwrap();
+    sqlx::query("DELETE FROM containers WHERE platformid=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
 }

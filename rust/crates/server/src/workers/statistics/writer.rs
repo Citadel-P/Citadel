@@ -1,4 +1,4 @@
-//! One bounded queue and one retained retry batch per writer, across all sources.
+//! Bounded telemetry buffering with independent per-platform retries.
 use citadel_platforms::stats_ingestion::StatsBatchStore;
 use citadel_runtime::runtime_metrics::RuntimeWork;
 use std::{sync::Arc, time::Duration};
@@ -57,14 +57,24 @@ pub async fn run<T: Send + Sync + 'static>(
     flush: RuntimeWork,
     stale: RuntimeWork,
 ) -> Result<(), std::convert::Infallible> {
-    let mut batch = Vec::with_capacity(settings.batch_size.max(1));
+    struct Pending<T> {
+        key: uuid::Uuid,
+        combined: bool,
+        rows: Vec<T>,
+        at: Instant,
+        expires: Instant,
+        delay: Duration,
+    }
+    let limit = settings.batch_size.max(1);
+    // Retain at most four batches in addition to the bounded producer queue.
+    // Telemetry older than two minutes is explicitly expired, never retried forever.
+    let mut pending = std::collections::VecDeque::<Pending<T>>::new();
+    let mut batch = Vec::with_capacity(limit);
     let mut deadline = None;
     let mut shutdown = None;
     let mut closed = false;
     loop {
         if cancel.is_cancelled() && shutdown.is_none() {
-            // Producer admission observes the same cancellation before reserving.
-            // Close now, retain accepted rows, then drain under one total deadline.
             receiver.close();
             shutdown = Some(Instant::now() + settings.shutdown_timeout);
         }
@@ -72,90 +82,163 @@ pub async fn run<T: Send + Sync + 'static>(
             break;
         }
         if shutdown.is_some() {
-            while batch.len() < settings.batch_size.max(1) {
+            while batch.len() < limit {
                 match receiver.try_recv() {
-                    Ok(sample) => batch.push(sample),
-                    Err(mpsc::error::TryRecvError::Disconnected) => {
+                    Ok(row) => batch.push(row),
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                         closed = true;
                         break;
                     }
-                    Err(mpsc::error::TryRecvError::Empty) => break,
+                    Err(_) => break,
                 }
             }
-            deadline = Some(Instant::now());
         }
         let due = deadline.is_some_and(|end| Instant::now() >= end);
-        if !batch.is_empty() && (batch.len() >= settings.batch_size.max(1) || due || closed) {
-            let mut delay = Duration::from_secs(1);
-            loop {
-                if cancel.is_cancelled() && shutdown.is_none() {
-                    receiver.close();
-                    shutdown = Some(Instant::now() + settings.shutdown_timeout);
-                }
-                let result = tokio::select! {
-                    biased;
-                    () = cancel.cancelled(), if shutdown.is_none() => continue,
-                    () = until(shutdown) => break,
-                    result = async {
-                        let _timer = flush.start();
-                        store.persist_batch(&batch).await
-                    } => result,
+        if !batch.is_empty() && (batch.len() >= limit || due || closed || shutdown.is_some()) {
+            let combined = pending.is_empty();
+            let mut groups = std::collections::BTreeMap::<uuid::Uuid, Vec<T>>::new();
+            for row in batch.drain(..) {
+                let key = if combined {
+                    uuid::Uuid::nil()
+                } else {
+                    store.partition(&row)
                 };
-                match result {
-                    Ok(outcome) => {
-                        flush.success();
-                        flush.units(outcome.persisted as u64);
-                        stale.units(outcome.stale as u64);
-                        batch.clear();
-                        deadline = None;
-                        break;
+                groups.entry(key).or_default().push(row);
+            }
+            for (key, rows) in groups {
+                pending.push_back(Pending {
+                    key,
+                    combined,
+                    rows,
+                    at: Instant::now(),
+                    expires: Instant::now() + Duration::from_secs(120),
+                    delay: Duration::from_secs(1),
+                });
+            }
+            deadline = None;
+        }
+        let now = Instant::now();
+        // The first outstanding batch for a platform always precedes its later batches.
+        let mut seen = std::collections::BTreeSet::new();
+        let ready = pending.iter().position(|p| {
+            seen.insert(p.key) && (p.at <= now || p.expires <= now || shutdown.is_some())
+        });
+        if let Some(index) = ready {
+            let mut work = pending.remove(index).unwrap();
+            flush.age(now.saturating_duration_since(work.expires - Duration::from_secs(120)));
+            if work.expires <= now {
+                RuntimeWork::StatsRetentionDrop.units(work.rows.len() as u64);
+                tracing::warn!(
+                    samples = work.rows.len(),
+                    "Expired retained statistics after two minutes"
+                );
+                continue;
+            }
+            let result = tokio::select! {
+                biased;
+                () = cancel.cancelled(), if shutdown.is_none() => { pending.insert(index, work); continue; },
+                () = until(shutdown) => { pending.insert(index, work); break; },
+                result = async { let _timer = flush.start(); tokio::time::timeout(Duration::from_secs(10), store.persist_batch(&work.rows)).await } => result.unwrap_or_else(|_| Err(citadel_platforms::RuntimeCapabilityError::new(citadel_platforms::RuntimeErrorKind::Timeout, "Statistics flush timed out", true))),
+            };
+            match result {
+                Ok(outcome) => {
+                    flush.success();
+                    flush.units(outcome.persisted as u64);
+                    stale.units(outcome.stale as u64);
+                }
+                Err(error) if work.combined => {
+                    // Preserve cross-platform batching on success; isolate failures only.
+                    flush.failures(1);
+                    RuntimeWork::StatsRetry.units(1);
+                    let mut groups = std::collections::BTreeMap::<uuid::Uuid, Vec<T>>::new();
+                    for row in work.rows {
+                        groups.entry(store.partition(&row)).or_default().push(row);
                     }
-                    Err(error) => {
-                        flush.failures(1);
-                        RuntimeWork::StatsRetry.units(1);
-                        tracing::warn!(%error, ?flush, "Statistics flush failed; retaining bounded batch");
-                        tokio::select! {
-                            biased;
-                            () = cancel.cancelled(), if shutdown.is_none() => {},
-                            () = until(shutdown) => break,
-                            () = tokio::time::sleep(delay) => {},
-                        }
-                        delay = (delay * 2).min(Duration::from_secs(30));
+                    let split = groups.len() > 1;
+                    for (key, rows) in groups.into_iter().rev() {
+                        pending.insert(
+                            index,
+                            Pending {
+                                key,
+                                rows,
+                                combined: false,
+                                at: Instant::now()
+                                    + if split { Duration::ZERO } else { work.delay },
+                                expires: work.expires,
+                                delay: work.delay * 2,
+                            },
+                        );
+                    }
+                    tracing::warn!(%error, "Statistics failure retained by platform");
+                }
+                Err(error) if !error.retryable => {
+                    flush.failures(1);
+                    RuntimeWork::StatsRejected.units(work.rows.len() as u64);
+                    tracing::error!(%error, samples=work.rows.len(), "Rejected permanent statistics write failure");
+                }
+                Err(error) => {
+                    flush.failures(1);
+                    RuntimeWork::StatsRetry.units(1);
+                    tracing::warn!(%error, "Statistics partition retained; other platforms may continue");
+                    work.at = Instant::now() + work.delay;
+                    work.delay = (work.delay * 2).min(Duration::from_secs(30));
+                    pending.insert(index, work);
+                    // Shutdown retries still wait instead of spinning on a failed store.
+                    if shutdown.is_some() {
+                        tokio::select! { ()=until(shutdown)=>break, _=tokio::time::sleep(Duration::from_millis(100))=>{} }
                     }
                 }
             }
-            flush.buffered(batch.len());
-            if shutdown.is_some_and(|end| Instant::now() >= end) {
-                break;
+            // Receive available rows before choosing another due retry.
+            while batch.len() < limit
+                && pending.iter().map(|p| p.rows.len()).sum::<usize>() + batch.len()
+                    < limit.saturating_mul(4)
+            {
+                match receiver.try_recv() {
+                    Ok(row) => {
+                        batch.push(row);
+                        deadline.get_or_insert(Instant::now() + settings.flush_interval);
+                    }
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        closed = true;
+                        break;
+                    }
+                    Err(_) => break,
+                }
             }
             continue;
         }
-        if closed {
+        if closed && pending.is_empty() && batch.is_empty() {
             break;
         }
-        let next = tokio::select! {
+        let retained = pending.iter().map(|p| p.rows.len()).sum::<usize>() + batch.len();
+        flush.buffered(retained);
+        ingress.queued(receiver.len());
+        let mut seen = std::collections::BTreeSet::new();
+        let next_retry = pending
+            .iter()
+            .filter(|p| seen.insert(p.key))
+            .map(|p| p.at.min(p.expires))
+            .min();
+        tokio::select! {
             biased;
-            () = cancel.cancelled(), if shutdown.is_none() => continue,
-            () = until(shutdown) => break,
-            () = until(deadline), if !batch.is_empty() => continue,
-            next = receiver.recv() => next,
-        };
-        match next {
-            Some(sample) => {
-                batch.push(sample);
-                deadline.get_or_insert(Instant::now() + settings.flush_interval);
-                flush.buffered(batch.len());
-                ingress.queued(receiver.len());
-            }
-            None => closed = true,
-        }
-        // During shutdown consume the finite closed queue without waiting for
-        // the normal partial-batch deadline.
-        if shutdown.is_some() {
-            deadline = Some(Instant::now());
+            ()=cancel.cancelled(), if shutdown.is_none()=>{},
+            ()=until(shutdown)=>break,
+            ()=until(deadline), if !batch.is_empty()=>{},
+            ()=until(next_retry)=>{},
+            row=receiver.recv(), if !closed=>match row {
+                Some(row)=>{
+                    if retained >= limit.saturating_mul(4) && let Some(oldest) = pending.pop_front() {
+                        RuntimeWork::StatsRetentionDrop.units(oldest.rows.len() as u64);
+                    }
+                    batch.push(row); deadline.get_or_insert(Instant::now()+settings.flush_interval); },
+                None=>closed=true,
+            },
         }
     }
-    RuntimeWork::StatsShutdownDrop.units((batch.len() + receiver.len()) as u64);
+    RuntimeWork::StatsShutdownDrop.units(
+        (batch.len() + receiver.len() + pending.iter().map(|p| p.rows.len()).sum::<usize>()) as u64,
+    );
     flush.buffered(0);
     ingress.queued(0);
     Ok(())

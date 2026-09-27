@@ -18,7 +18,7 @@ impl ImageService for Runtime {
         Ok(Response::new(ListImageResponse {
             images: self
                 .docker
-                .list_image_models()
+                .list_image_models_with_usage()
                 .await
                 .map_err(docker_error)?
                 .into_iter()
@@ -28,15 +28,11 @@ impl ImageService for Runtime {
     }
     async fn get(&self, r: Request<GetImageRequest>) -> Result<Response<ImageReply>, Status> {
         let id = r.into_inner().id;
-        let image = self.docker.inspect_image(&id).await.map_err(docker_error)?;
         let item = self
             .docker
-            .list_image_models()
+            .image_event_model(&id)
             .await
-            .map_err(docker_error)?
-            .into_iter()
-            .find(|v| v.id == image.id)
-            .ok_or_else(|| Status::not_found("Image not found"))?;
+            .map_err(docker_error)?;
         Ok(Response::new(summary(item)))
     }
     async fn delete(

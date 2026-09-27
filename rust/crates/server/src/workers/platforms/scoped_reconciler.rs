@@ -119,7 +119,7 @@ impl EventRefreshSender {
             None => unreachable!("Swarm uses its dedicated coordinator"),
         };
         // Invalidate even when the bounded queue must wait. At most one active
-        // read per lane lives here; no per-platform cache survives completion.
+        // read per Platform/resource lives here; no cache survives completion.
         if let Some(generation) = self.dirty.lock().unwrap().get(&request) {
             generation.fetch_add(1, Ordering::Relaxed);
         }
@@ -202,80 +202,70 @@ async fn run_scope<S, E, C, CF, P, PF>(
 {
     let debounce = Duration::from_millis(500);
     let mut pending = BTreeMap::<ScopedEventRequest, Pending>::new();
+    let mut active = std::collections::BTreeSet::new();
+    let mut reads = futures_util::stream::FuturesUnordered::new();
     loop {
-        if pending.is_empty() {
-            let Some(request) = receiver.recv(cancel).await else {
-                return;
-            };
-            pending.insert(request, Pending::after(debounce, ReconcileReason::Event));
-        }
-        let (&request, &next) = pending.iter().min_by_key(|(_, work)| work.at).unwrap();
-        tokio::select! {
-            biased;
-            () = cancel.cancelled() => return,
-            () = tokio::time::sleep_until(next.at) => {},
-            incoming = receiver.recv(cancel), if pending.len() < 256 => {
-                let Some(incoming) = incoming else { return; };
-                pending.entry(incoming).or_insert_with(|| Pending::after(debounce, ReconcileReason::Event));
-                continue;
+        let next = pending
+            .iter()
+            .filter(|(request, _)| !active.contains(*request))
+            .min_by_key(|(_, work)| work.at)
+            .map(|(r, p)| (*r, *p));
+        let ready = next.filter(|(_, p)| p.at <= Instant::now());
+        if reads.len() < 2
+            && let Some((request, work)) = ready
+        {
+            pending.remove(&request);
+            active.insert(request);
+            if matches!(work.reason, ReconcileReason::Retry) {
+                outcome_metric(request.refresh, true).units(1);
             }
-        }
-        pending.remove(&request);
-        tracing::debug!(platform_id=%request.platform_id, scope=?request.refresh, reason=?next.reason, "Starting resource reconciliation");
-        if matches!(next.reason, ReconcileReason::Retry) {
-            outcome_metric(request.refresh, true).units(1);
-        }
-
-        let generation = Arc::new(AtomicU64::new(0));
-        dirty.lock().unwrap().insert(request, generation.clone());
-        let read = collect(request);
-        tokio::pin!(read);
-        let result = loop {
-            tokio::select! {
-                () = cancel.cancelled() => return,
-                incoming = receiver.recv(cancel), if pending.len() < 256 => {
-                    let Some(incoming) = incoming else { return; };
-                    pending.entry(incoming).or_insert_with(|| Pending::after(debounce, ReconcileReason::Event));
-                },
-                result = &mut read => break result,
-            }
-        };
-        // Requests received during I/O advance this scope's dirty generation.
-        // Never clear that pending generation when the older read completes.
-        dirty.lock().unwrap().remove(&request);
-        if generation.load(Ordering::Relaxed) != 0 || pending.contains_key(&request) {
-            pending
-                .entry(request)
-                .or_insert_with(|| Pending::after(debounce, ReconcileReason::Event));
-            discarded(request.refresh);
+            let generation = Arc::new(AtomicU64::new(0));
+            dirty.lock().unwrap().insert(request, generation.clone());
+            reads.push(async move {
+                let collected = collect(request).await;
+                let result = if generation.load(Ordering::Relaxed) != 0 {
+                    Ok(false)
+                } else {
+                    match collected {
+                        Ok(Some(snapshot)) => persist(request, snapshot).await,
+                        Ok(None) => Ok(true),
+                        Err(error) => Err(error),
+                    }
+                };
+                (request, result)
+            });
             continue;
         }
-        let result = match result {
-            Ok(Some(snapshot)) => tokio::select! {
-                () = cancel.cancelled() => return,
-                result = persist(request, snapshot) => result,
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => {
+                for request in active { dirty.lock().unwrap().remove(&request); }
+                return;
             },
-            Ok(None) => Ok(true),
-            Err(error) => Err(error),
-        };
-        let (delay, reason) = match result {
-            Ok(true) => continue,
-            Ok(false) => {
-                discarded(request.refresh);
-                (debounce, ReconcileReason::Superseded)
-            }
-            Err(error) => {
-                refresh_metric(request.refresh).failures(1);
-                tracing::warn!(%error, platform_id=%request.platform_id, scope=?request.refresh, "Resource reconciliation failed; retaining only this scope");
-                (
-                    retry.max(Duration::from_millis(250)),
-                    ReconcileReason::Retry,
-                )
-            }
-        };
-        pending
-            .entry(request)
-            .or_insert_with(|| Pending::after(delay, reason));
+            result = reads.next(), if !reads.is_empty() => {
+                let Some((request, result)) = result else { continue; };
+                active.remove(&request);
+                dirty.lock().unwrap().remove(&request);
+                let (delay, reason) = match result {
+                    Ok(true) => continue,
+                    Ok(false) => { discarded(request.refresh); (debounce, ReconcileReason::Superseded) },
+                    Err(error) => {
+                        refresh_metric(request.refresh).failures(1);
+                        tracing::warn!(%error, platform_id=%request.platform_id, scope=?request.refresh, "Resource reconciliation failed");
+                        (retry.max(Duration::from_millis(250)), ReconcileReason::Retry)
+                    }
+                };
+                pending.entry(request).or_insert_with(|| Pending::after(delay, reason));
+            },
+            incoming = receiver.recv(cancel), if pending.len() < 256 => {
+                let Some(incoming) = incoming else {
+                    for request in active { dirty.lock().unwrap().remove(&request); }
+                    return;
+                };
+                pending.entry(incoming).or_insert_with(|| Pending::after(debounce, ReconcileReason::Event));
+            },
+            () = async { match next { Some((_, p)) => tokio::time::sleep_until(p.at).await, None => std::future::pending().await } }, if reads.len() < 2 => {},
+        }
     }
 }
 

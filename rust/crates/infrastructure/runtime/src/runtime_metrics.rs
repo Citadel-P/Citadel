@@ -23,6 +23,8 @@ pub enum RuntimeWork {
     DockerVersion,
     DockerList,
     DockerStats,
+    DockerMetadataRefresh,
+    AgentChannelCreated,
     DockerEvents,
     DockerStorage,
     AutomationClaim,
@@ -111,6 +113,8 @@ pub enum RuntimeWork {
     StatsCommit,
     StatsCommittedSamples,
     StatsRetry,
+    StatsRejected,
+    StatsRetentionDrop,
     PlatformStatsIngress,
     PlatformStatsFlush,
     PlatformStatsStale,
@@ -152,6 +156,8 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::DockerVersion,
     RuntimeWork::DockerList,
     RuntimeWork::DockerStats,
+    RuntimeWork::DockerMetadataRefresh,
+    RuntimeWork::AgentChannelCreated,
     RuntimeWork::DockerEvents,
     RuntimeWork::DockerStorage,
     RuntimeWork::AutomationClaim,
@@ -237,6 +243,8 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::StatsCommit,
     RuntimeWork::StatsCommittedSamples,
     RuntimeWork::StatsRetry,
+    RuntimeWork::StatsRejected,
+    RuntimeWork::StatsRetentionDrop,
     RuntimeWork::PlatformStatsIngress,
     RuntimeWork::PlatformStatsFlush,
     RuntimeWork::PlatformStatsStale,
@@ -271,6 +279,7 @@ struct Counters {
     saturated: AtomicU64,
     buffered: AtomicU64,
     queued: AtomicU64,
+    age_us: AtomicU64,
     successes: AtomicU64,
 }
 static COUNTERS: [Counters; FAMILIES.len()] = [const {
@@ -285,11 +294,19 @@ static COUNTERS: [Counters; FAMILIES.len()] = [const {
         saturated: AtomicU64::new(0),
         buffered: AtomicU64::new(0),
         queued: AtomicU64::new(0),
+        age_us: AtomicU64::new(0),
         successes: AtomicU64::new(0),
     }
 }; FAMILIES.len()];
 
 impl RuntimeWork {
+    /// Age of the most recently observed sample/cache/retry batch for this family.
+    pub fn age(self, duration: std::time::Duration) {
+        COUNTERS[self as usize].age_us.store(
+            u64::try_from(duration.as_micros()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+    }
     pub fn success(self) {
         COUNTERS[self as usize]
             .successes
@@ -372,6 +389,7 @@ pub fn render_runtime_metrics(output: &mut String) {
             ),
             ("buffered", counters.buffered.load(Ordering::Relaxed)),
             ("queued", counters.queued.load(Ordering::Relaxed)),
+            ("age_microseconds", counters.age_us.load(Ordering::Relaxed)),
             (
                 "successes_total",
                 counters.successes.load(Ordering::Relaxed),

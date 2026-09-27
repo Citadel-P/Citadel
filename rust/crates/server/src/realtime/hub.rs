@@ -331,6 +331,24 @@ impl RealtimeHub {
         }
     }
 
+    pub fn publish_scoped_resource_changes(
+        &self,
+        platform: Uuid,
+        resource_type: &'static str,
+        ids: &[Uuid],
+    ) -> u64 {
+        if ids.is_empty() || self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(
+            Some(platform),
+            resource_type,
+            Uuid::nil(),
+            "updated",
+            json!({"resourceIds":ids}),
+        )
+    }
+
     pub fn publish_resource_changes(&self, resource_type: &'static str, ids: &[Uuid]) -> u64 {
         if ids.is_empty() || self.inner.sender.receiver_count() == 0 {
             return self.current_revision();
@@ -358,15 +376,33 @@ impl RealtimeHub {
         node_id: Option<&str>,
         stats: &[citadel_platforms::RuntimeContainerStat],
     ) -> u64 {
+        self.publish_scoped_container_stats_with_total(platform_id, node_id, stats, None)
+    }
+
+    pub fn publish_scoped_container_stats_with_total(
+        &self,
+        platform_id: Uuid,
+        node_id: Option<&str>,
+        stats: &[citadel_platforms::RuntimeContainerStat],
+        total: Option<&citadel_platforms::stats_ingestion::PlatformStatsSample>,
+    ) -> u64 {
         if self.inner.sender.receiver_count() == 0 {
             return self.current_revision();
         }
+        let total = total.map(|sample| {
+            json!({
+                "created":sample.created, "memoryActive":sample.memory_active,
+                "cpuUsage":sample.cpu_usage, "rxBytes":sample.rx_bytes,
+                "txBytes":sample.tx_bytes, "metadata":sample.metadata,
+            })
+        });
         self.publish(
             Some(platform_id),
             PLATFORM_RESOURCE_TYPE,
             platform_id,
             "runtimeChanged",
             json!({
+                "platformSample": total,
                 "dockerResourceType": "containerStats",
                 "dockerNodeId": node_id,
                 "action": "sample",

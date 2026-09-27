@@ -26,7 +26,6 @@ where
         containers
             .into_iter()
             .filter(|container| container.state == "running")
-            .take(1_024)
             .map(|container| {
                 let source = source.clone();
                 let cancellation = cancellation.clone();
@@ -192,5 +191,24 @@ mod tests {
                 .is_err()
         );
         assert_eq!(source.0.active.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn samples_every_container_beyond_the_old_limit_with_bounded_concurrency() {
+        let source = Fixture::default();
+        let containers = (0..1_025)
+            .map(|i| RuntimeContainerSummary {
+                id: i.to_string(),
+                state: "running".into(),
+                ..Default::default()
+            })
+            .collect();
+        let batch =
+            sample_running_container_stats(&source, containers, 3, &CancellationToken::new())
+                .await
+                .unwrap();
+        assert_eq!(batch.stats.len(), 1_025);
+        assert_eq!(batch.failed_samples, 0);
+        assert!(source.0.peak.load(std::sync::atomic::Ordering::SeqCst) <= 3);
     }
 }

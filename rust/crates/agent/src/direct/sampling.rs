@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 pub(super) struct SharedSampler {
     docker: DockerClient,
     epoch: AtomicU64,
+    metadata_changed: std::sync::Arc<tokio::sync::Notify>,
     state: Mutex<State>,
 }
 struct State {
@@ -19,20 +20,46 @@ struct State {
 }
 impl SharedSampler {
     pub fn new(docker: DockerClient) -> Self {
+        let sampler = LocalDockerSampler::new(docker.clone(), 8);
         Self {
+            metadata_changed: sampler.metadata_notification(),
             docker: docker.clone(),
             epoch: AtomicU64::new(0),
             state: Mutex::new(State {
-                sampler: LocalDockerSampler::new(docker, 8),
+                sampler,
                 cached: None,
             }),
         }
+    }
+    pub async fn cached_stats(
+        &self,
+    ) -> std::collections::HashMap<String, citadel_platforms::RuntimeContainerStat> {
+        let state = self.state.lock().await;
+        let Some((at, epoch, generation, sample)) = state.cached.as_ref() else {
+            return Default::default();
+        };
+        if at.elapsed() >= Duration::from_secs(6)
+            || *epoch != self.epoch.load(Ordering::Acquire)
+            || *generation != self.docker.daemon_generation()
+        {
+            return Default::default();
+        }
+        sample
+            .containers
+            .stats
+            .iter()
+            .map(|s| (s.docker_container_id.clone(), s.clone()))
+            .collect()
+    }
+    pub fn metadata_notification(&self) -> std::sync::Arc<tokio::sync::Notify> {
+        self.metadata_changed.clone()
     }
     pub fn invalidate(&self) {
         self.epoch.fetch_add(1, Ordering::AcqRel);
     }
     pub async fn sample(
         &self,
+        max_age: Duration,
         cancel: &CancellationToken,
     ) -> Result<LocalDockerSample, RuntimeCapabilityError> {
         let cancelled = || {
@@ -46,11 +73,13 @@ impl SharedSampler {
         let epoch = self.epoch.load(Ordering::Acquire);
         let generation = self.docker.daemon_generation();
         if let Some((at, old_epoch, old_generation, sample)) = &state.cached
-            && at.elapsed() < Duration::from_secs(6)
+            && at.elapsed() < max_age.min(Duration::from_secs(6))
             && *old_epoch == epoch
             && *old_generation == generation
         {
-            return Ok(sample.clone());
+            let mut sample = sample.clone();
+            state.sampler.enrich_metadata(&mut sample);
+            return Ok(sample);
         }
         let sample = state.sampler.sample(cancel).await?;
         // Never turn failed/partial observations into cached successful zeroes.

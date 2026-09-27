@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import type { ContainerStatePatch } from './container-order';
@@ -67,7 +67,32 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   const containerData = useMemo(() => (data?.data ? toContainerDetailsView(data.data) : undefined), [data]);
   const dockerContainerId = normalizeDockerId(containerData?.id);
 
-  const [liveContainerInfo, setLiveContainerInfo] = useState<Partial<ContainerDataView>>();
+  const identity = JSON.stringify([
+    platformId,
+    containerReference,
+    containerData?.resourceId,
+    containerData?.dockerNodeId,
+  ]);
+  const currentIdentity = useRef(identity);
+  currentIdentity.current = identity;
+  const [live, setLive] = useState<{ identity: string; value: Partial<ContainerDataView> | undefined }>();
+  const liveContainerInfo = live?.identity === identity ? live.value : undefined;
+  const setLiveContainerInfo = useCallback(
+    (
+      update:
+        | Partial<ContainerDataView>
+        | undefined
+        | ((current: Partial<ContainerDataView> | undefined) => Partial<ContainerDataView>),
+    ) => {
+      if (currentIdentity.current !== identity) return;
+      setLive((previous) => ({
+        identity,
+        value:
+          typeof update === 'function' ? update(previous?.identity === identity ? previous.value : undefined) : update,
+      }));
+    },
+    [identity],
+  );
 
   const containerInfo = useMemo(
     () =>
@@ -75,6 +100,9 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         ? ({
             ...containerData,
             ...liveContainerInfo,
+            resourceId: containerData?.resourceId,
+            platformId: containerData?.platformId,
+            id: containerData?.id,
           } as ContainerDetailsView)
         : undefined,
     [containerData, liveContainerInfo],
@@ -131,7 +159,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         // don't map capabilities here
       }));
     },
-    [containerData?.dockerNodeId, dockerContainerId],
+    [containerData?.dockerNodeId, dockerContainerId, setLiveContainerInfo],
   );
 
   const onContainerStateChange = useCallback(
@@ -150,34 +178,52 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         ...(patch.updated !== undefined ? { updated: patch.updated } : {}),
       }));
     },
-    [containerData?.dockerNodeId, dockerContainerId],
+    [containerData?.dockerNodeId, dockerContainerId, setLiveContainerInfo],
   );
 
   useDockerDaemonGroup(platformId, { onContainerEvent, onContainerStateChange });
 
-  const handleContainerInfoUpdated = useCallback((container: ContainerDataView) => {
-    setLiveContainerInfo((current) => mergeContainerRuntimeUpdate(current, container));
-  }, []);
+  const handleContainerInfoUpdated = useCallback(
+    (container: ContainerDataView) => {
+      if (
+        normalizeDockerId(container.id) !== dockerContainerId ||
+        (container.dockerNodeId ?? undefined) !== (containerData?.dockerNodeId ?? undefined)
+      )
+        return;
+      setLiveContainerInfo((current) => mergeContainerRuntimeUpdate(current, container));
+    },
+    [dockerContainerId, containerData?.dockerNodeId, setLiveContainerInfo],
+  );
+
+  const handleContainerInfoPatch = useCallback(
+    (patch: Partial<ContainerDataView> & { resourceId: string }) => {
+      if (patch.resourceId !== containerData?.resourceId) return;
+      setLiveContainerInfo((current) => ({ ...current, ...patch }));
+    },
+    [containerData?.resourceId, setLiveContainerInfo],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.on('ReceiveContainerInfo', handleContainerInfoUpdated);
+      hubConnection.on('ReceiveContainerInfoPatch', handleContainerInfoPatch);
     },
-    [handleContainerInfoUpdated],
+    [handleContainerInfoUpdated, handleContainerInfoPatch],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.off('ReceiveContainerInfo', handleContainerInfoUpdated);
+      hubConnection.off('ReceiveContainerInfoPatch', handleContainerInfoPatch);
     },
-    [handleContainerInfoUpdated],
+    [handleContainerInfoUpdated, handleContainerInfoPatch],
   );
 
   useRealtimeGroup({
-    groupName: containerInfo?.resourceId ? `container-info:${containerInfo.resourceId}` : undefined,
+    groupName: containerData?.resourceId ? `container-info:${containerData.resourceId}` : undefined,
     setupEventListeners,
     removeEventListeners,
-    skip: !containerInfo?.resourceId,
+    skip: !containerData?.resourceId,
   });
 
   return {

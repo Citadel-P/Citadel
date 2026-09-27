@@ -15,6 +15,7 @@ struct Store {
     finished: AtomicUsize,
     persisted: AtomicUsize,
     batches: AtomicUsize,
+    superseded: AtomicUsize,
     coordinator: Arc<ContainerOperationCoordinator>,
     active_claim: std::sync::Mutex<Option<ContainerClaim>>,
 }
@@ -72,6 +73,21 @@ impl ContainerRepository for Store {
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
             self.batches.fetch_add(1, Ordering::SeqCst);
+            if self
+                .superseded
+                .compare_exchange(1, 0, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Conflict,
+                    "superseded inspection",
+                    true,
+                ));
+            }
+            assert!(
+                observations.iter().all(|o| o.generation.is_some()),
+                "inspection fences must be captured before runtime reads"
+            );
             self.persisted
                 .fetch_add(observations.len(), Ordering::SeqCst);
             Ok(())
@@ -454,4 +470,25 @@ async fn task_cancellation_keeps_claim_for_later_read_only_recovery() {
     );
     assert_eq!(store.claimed.load(Ordering::SeqCst), 1);
     assert_eq!(store.finished.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn superseded_inspection_is_retried_before_claim_completion() {
+    let store = Arc::new(Store::default());
+    store.superseded.store(1, Ordering::SeqCst);
+    let runtime = Arc::new(Runtime::new());
+    runtime.release.add_permits(1);
+    let service = ContainerMutationService::new(store.clone(), runtime, Arc::new(Tasks));
+    service
+        .execute(
+            ActorId::new(Uuid::now_v7()),
+            true,
+            vec![Uuid::now_v7().to_string()],
+            ContainerAction::Start,
+        )
+        .await
+        .unwrap();
+    assert_eq!(store.batches.load(Ordering::SeqCst), 2);
+    assert_eq!(store.persisted.load(Ordering::SeqCst), 1);
+    assert_eq!(store.finished.load(Ordering::SeqCst), 1);
 }
