@@ -90,6 +90,12 @@ pub async fn persist(
     registry: Uuid,
     image: &RuntimeImageSummary,
 ) -> Result<(), RuntimeCapabilityError> {
+    let write = citadel_platforms::jobs::ProjectionWrite::begin(
+        platform,
+        None,
+        citadel_platforms::jobs::ProjectionKind::Images,
+    )
+    .await;
     let mut tx = pool.begin().await.map_err(db)?;
     sqlx::query("SET LOCAL lock_timeout = '5s'")
         .execute(&mut *tx)
@@ -104,7 +110,9 @@ pub async fn persist(
     sqlx::query("INSERT INTO images(id,containers,createdat,dockerimageid,name,platformid,registryid,size,tags,controlstate) VALUES($1,$2,to_timestamp($3),$4,$5,$6,$7,$8,$9,'Idle') ON CONFLICT(dockerimageid,platformid) DO UPDATE SET containers=EXCLUDED.containers,name=EXCLUDED.name,registryid=EXCLUDED.registryid,size=EXCLUDED.size,tags=EXCLUDED.tags,updatedat=now(),rowversion=images.rowversion+1")
         .bind(Uuid::now_v7()).bind(i32::try_from(image.containers).unwrap_or(i32::MAX)).bind(image.created as f64).bind(&image.id).bind(image.repo_tags.first().unwrap_or(&image.id)).bind(platform).bind(registry).bind(image.size as f64).bind(serde_json::json!(image.repo_tags)).execute(&mut *tx).await.map_err(db)?;
     sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1").bind(platform).execute(&mut *tx).await.map_err(db)?;
-    tx.commit().await.map_err(db)
+    tx.commit().await.map_err(db)?;
+    write.committed();
+    Ok(())
 }
 impl ImagePullPort for DockerClient {
     fn pull_image_stream<'a>(

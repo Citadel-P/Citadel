@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, TeamActivitySnapshot,
 };
@@ -167,7 +168,13 @@ impl TeamRepository for PostgresTeamRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![team.id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             ensure_team_name_available(&mut transaction, &team.name, None).await?;
             let member_actor_ids = user_actor_ids(&mut transaction, &team.user_ids).await?;
@@ -215,7 +222,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, team.id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -229,7 +239,13 @@ impl TeamRepository for PostgresTeamRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -308,7 +324,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -361,7 +380,13 @@ impl TeamRepository for PostgresTeamRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -402,7 +427,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -415,7 +443,13 @@ impl TeamRepository for PostgresTeamRepository {
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -449,7 +483,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -463,7 +500,13 @@ impl TeamRepository for PostgresTeamRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -507,7 +550,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -520,7 +566,13 @@ impl TeamRepository for PostgresTeamRepository {
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'_, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -556,7 +608,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -573,7 +628,13 @@ impl TeamRepository for PostgresTeamRepository {
             if !custom_access_control_enabled {
                 return Err(IdentityError::LicenseRequired("custom-access-control"));
             }
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -599,7 +660,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -612,7 +676,13 @@ impl TeamRepository for PostgresTeamRepository {
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_team_state(&mut transaction, id)
                 .await?
@@ -641,7 +711,10 @@ impl TeamRepository for PostgresTeamRepository {
             let view = fetch_team_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_team)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -653,7 +726,13 @@ impl TeamRepository for PostgresTeamRepository {
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Teams(ids.to_vec());
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let rows =
                 sqlx::query("SELECT id, name FROM teams WHERE id = ANY($1) ORDER BY name, id")
@@ -690,7 +769,10 @@ impl TeamRepository for PostgresTeamRepository {
                 )
                 .await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(())
         })
     }

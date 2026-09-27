@@ -1,3 +1,5 @@
+use crate::persistence::postgres::identity::authorization_cache::AuthorizationCache;
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use chrono::{DateTime, Utc};
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_identity::AuthenticatedPrincipalType;
@@ -6,9 +8,10 @@ use citadel_identity::{
     IdentityStore, NewSession, PermissionGrant, ServiceAccountCredential,
     ServiceAccountLastUsedStore, SessionMetadata, User, UserAuthentication, UserSessionRecord,
 };
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_primitives::{ActorId, ResourceType};
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::persistence::postgres::activities::store::insert_activity;
@@ -18,13 +21,17 @@ mod default_automations;
 
 #[derive(Clone)]
 pub struct PostgresIdentityStore {
+    authorization: Arc<AuthorizationCache>,
     pool: PgPool,
 }
 
 impl PostgresIdentityStore {
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            authorization: AuthorizationCache::attach(&pool),
+            pool,
+        }
     }
 }
 
@@ -47,7 +54,13 @@ impl IdentityStore for PostgresIdentityStore {
         mode: citadel_identity::SetupInitializationMode,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Actors(vec![administrator.actor_id().value()]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let pending = sqlx::query_scalar::<_, bool>(
                 "SELECT initializedat IS NULL FROM instancesetupstates WHERE id = 1 FOR UPDATE",
             )
@@ -135,7 +148,10 @@ WHERE id = 1 AND initializedat IS NULL
             )
             .map_err(invalid_activity)?;
             insert_activity(&mut transaction, &activity).await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(UserAuthentication {
                 user_id: administrator.id(),
                 actor_id: administrator.actor_id(),
@@ -634,72 +650,33 @@ GROUP BY token.id, sa.id, sa.actorid, sa.name, token.secrethash, token.expiresat
         })
     }
 
+    fn authorization_changes(
+        &self,
+        actor_id: ActorId,
+    ) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+        Some(self.authorization.subscribe(actor_id.value()))
+    }
+
     fn authorization_snapshot(
         &self,
         actor_id: ActorId,
     ) -> BoxFuture<'_, Result<AuthorizationSnapshot, IdentityError>> {
+        Box::pin(async move { self.authorization.snapshot(&self.pool, actor_id).await })
+    }
+
+    fn resource_permissions<'a>(
+        &'a self,
+        actor_id: ActorId,
+        resource_type: ResourceType,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<
+        'a,
+        Result<std::collections::BTreeMap<Uuid, Option<PermissionGrant>>, IdentityError>,
+    > {
         Box::pin(async move {
-            let enabled =
-                sqlx::query_scalar::<_, bool>("SELECT isenabled FROM actors WHERE id = $1")
-                    .bind(actor_id.value())
-                    .fetch_optional(&self.pool)
-                    .await
-                    .map_err(storage)?
-                    .unwrap_or(false);
-            let rows = sqlx::query(
-                r#"
-WITH effective_roles AS (
-    SELECT ar.actorid, ar.roleid
-    FROM actorroles ar
-    WHERE ar.actorid = $1
-    UNION
-    SELECT atm.memberactorid, ar.roleid
-    FROM actorteammemberships atm
-    JOIN teams t ON t.id = atm.teamid
-    JOIN actors team_actor ON team_actor.id = t.actorid AND team_actor.isenabled
-    JOIN actorroles ar ON ar.actorid = t.actorid
-    WHERE atm.memberactorid = $1
-)
-SELECT p.resourcetype, MAX(p.permissionlevel) AS permissionlevel,
-       bit_or(p.specificpermissions) AS specificpermissions
-FROM effective_roles er
-JOIN permissions p ON p.roleid = er.roleid
-GROUP BY p.resourcetype
-ORDER BY p.resourcetype
-"#,
-            )
-            .bind(actor_id.value())
-            .fetch_all(&self.pool)
-            .await
-            .map_err(storage)?;
-            let grants = rows
-                .into_iter()
-                .map(|row| {
-                    let resource = row.try_get::<i32, _>("resourcetype").map_err(storage)?;
-                    let level = row.try_get::<i32, _>("permissionlevel").map_err(storage)?;
-                    Ok(PermissionGrant {
-                        resource_type: ResourceType::from_i32(resource).ok_or_else(|| {
-                            IdentityError::Storage(format!(
-                                "unknown persisted ResourceType value {resource}"
-                            ))
-                        })?,
-                        level: PermissionLevel::from_i32(level).ok_or_else(|| {
-                            IdentityError::Storage(format!(
-                                "unknown persisted PermissionLevel value {level}"
-                            ))
-                        })?,
-                        specifics: citadel_primitives::SpecificPermissions::from_bits_retain(
-                            row.try_get::<i32, _>("specificpermissions")
-                                .map_err(storage)? as u32,
-                        ),
-                    })
-                })
-                .collect::<Result<Vec<_>, IdentityError>>()?;
-            Ok(AuthorizationSnapshot {
-                actor_id,
-                enabled,
-                direct_and_team_permissions: grants,
-            })
+            self.authorization
+                .resources(&self.pool, actor_id, resource_type, ids)
+                .await
         })
     }
 
@@ -710,64 +687,12 @@ ORDER BY p.resourcetype
         resource_id: Uuid,
     ) -> BoxFuture<'a, Result<Option<PermissionGrant>, IdentityError>> {
         Box::pin(async move {
-            let row = sqlx::query(
-                r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT t.actorid
-    FROM actorteammemberships membership
-    JOIN actors member_actor ON member_actor.id = membership.memberactorid AND member_actor.isenabled
-    JOIN teams t ON t.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = t.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), effective_roles AS (
-    SELECT DISTINCT role_assignment.roleid
-    FROM actor_scope scope
-    JOIN actorroles role_assignment ON role_assignment.actorid = scope.actorid
-), candidates AS (
-    SELECT permission.permissionlevel, permission.specificpermissions
-    FROM effective_roles role
-    JOIN permissions permission ON permission.roleid = role.roleid
-    WHERE permission.resourcetype = $2
-    UNION ALL
-    SELECT access.permissionlevel, access.specificpermissions
-    FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid = scope.actorid
-    WHERE access.resourcetype = $2 AND access.resourceid = $3
-)
-SELECT MAX(permissionlevel) AS permissionlevel,
-       bit_or(specificpermissions) AS specificpermissions
-FROM candidates
-"#,
-            )
-            .bind(actor_id.value())
-            .bind(resource_type as i32)
-            .bind(resource_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(storage)?;
-            let level = row
-                .try_get::<Option<i32>, _>("permissionlevel")
-                .map_err(storage)?;
-            let Some(level) = level else {
-                return Ok(None);
-            };
-            Ok(Some(PermissionGrant {
-                resource_type,
-                level: PermissionLevel::from_i32(level).ok_or_else(|| {
-                    IdentityError::Storage(format!(
-                        "unknown persisted PermissionLevel value {level}"
-                    ))
-                })?,
-                specifics: citadel_primitives::SpecificPermissions::from_bits_retain(
-                    row.try_get::<Option<i32>, _>("specificpermissions")
-                        .map_err(storage)?
-                        .unwrap_or_default() as u32,
-                ),
-            }))
+            Ok(self
+                .authorization
+                .resources(&self.pool, actor_id, resource_type, &[resource_id])
+                .await?
+                .remove(&resource_id)
+                .flatten())
         })
     }
 }

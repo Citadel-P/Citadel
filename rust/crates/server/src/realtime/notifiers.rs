@@ -49,6 +49,10 @@ impl StacksRealtimeNotifier {
 }
 
 impl StackChangeNotifier for StacksRealtimeNotifier {
+    fn update_check_duplicate(&self) {
+        citadel_runtime::runtime_metrics::RuntimeWork::StackUpdateDuplicate.units(1);
+    }
+
     fn changed(&self, id: Uuid, event: &'static str) {
         if let Some(realtime) = &self.realtime {
             realtime.publish_resource_change("Stack", id, event);

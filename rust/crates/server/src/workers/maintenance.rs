@@ -13,7 +13,7 @@ pub(super) async fn run(
     // Startup recovery already ran under the exclusive Core lease. Historical
     // retention is independent: its transactions cannot delay operation recovery.
     let recovery = async {
-        let mut tick = super::schedule::interval("recovery", Duration::from_secs(60));
+        let mut tick = super::schedule::interval("recovery", super::recovery::FALLBACK);
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
             match citadel_adapters::persistence::postgres::maintenance::reconcile(&pool).await {

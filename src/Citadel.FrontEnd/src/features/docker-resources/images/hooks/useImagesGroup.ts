@@ -17,7 +17,7 @@ export const useImagesGroup = (platformId?: string) => {
 
   const imagesInfo = useMemo<ImagesView | undefined>(() => {
     const source = realtimeImagesInfo ?? data?.data;
-    return source && nodeSnapshot?.platformId === platformId
+    return source && nodeSnapshot?.platformId === platformId && nodeSnapshot.images
       ? { ...source, images: nodeSnapshot.images }
       : source;
   }, [data, nodeSnapshot, platformId, realtimeImagesInfo]);
@@ -68,11 +68,12 @@ export const useImagesGroup = (platformId?: string) => {
 
   const onSwarmNodeLocalResourcesUpdated = useCallback(
     (snapshot: SwarmNodeLocalResourcesUpdate) => {
-      if (snapshot.platformId !== platformId) return;
+      if (snapshot.platformId !== platformId || !snapshot.images) return;
+      const images = snapshot.images;
       setNodeSnapshot(snapshot);
       setRealtimeImagesInfo((currentInfo) => {
         const source = currentInfo ?? data?.data;
-        return source ? { ...source, images: snapshot.images } : source;
+        return source ? { ...source, images } : source;
       });
     },
     [data, platformId],

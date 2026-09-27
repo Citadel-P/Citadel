@@ -21,6 +21,7 @@ mod disk_tests;
 
 mod maintenance;
 mod notifications;
+mod recovery;
 mod schedule;
 mod unmanaged;
 
@@ -46,3 +47,5 @@ mod stats_alerts;
 
 #[cfg(test)]
 mod runtime_persistence_tests;
+
+pub mod statistics;

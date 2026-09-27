@@ -5,6 +5,7 @@ use citadel_contracts::citadel::swarm::v1::{
     SwarmSecretReferenceSpecMessage, SwarmServiceMessage, SwarmServiceMutationSpecMessage,
     SwarmUpdatePolicySpecMessage, UpdateManagedSwarmServiceRequest,
 };
+use citadel_platforms::PlatformInfoPort;
 
 use citadel_swarm_services::{
     MountKind, PortPublishMode, RuntimeServiceResult, SchedulingMode, ServiceOperationClaim,
@@ -51,7 +52,6 @@ impl SwarmServiceRuntimeRouter {
         cancel: &CancellationToken,
     ) -> Result<SwarmServiceMessage, SwarmServiceError> {
         let work = async {
-            use citadel_platforms::PlatformRuntimePort;
             let pinned: (Option<String>, Value) =
                 sqlx::query_as("SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1")
                     .bind(platform)

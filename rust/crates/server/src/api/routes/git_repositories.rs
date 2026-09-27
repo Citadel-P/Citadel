@@ -493,6 +493,23 @@ async fn list_git_repositories(
             .map_err(metadata_error),
         &headers,
     )?;
+    // SQL has already selected the authorized IDs. Resolve their capability
+    // metadata with one batch of ACL misses, including denied entries.
+    let permission_ids = authorized_repositories
+        .iter()
+        .map(|resource| resource.id)
+        .collect::<Vec<_>>();
+    let row_permissions = if principal.is_administrator() {
+        std::collections::BTreeMap::new()
+    } else {
+        api_result(
+            state
+                .identity
+                .permissions_for_resources(&principal, ResourceType::GitRepository, &permission_ids)
+                .await,
+            &headers,
+        )?
+    };
     let mut git_repositories = Vec::with_capacity(authorized_repositories.len());
     for repository in authorized_repositories.into_iter().filter(|repository| {
         filters
@@ -500,14 +517,10 @@ async fn list_git_repositories(
             .iter()
             .all(|id| repository.tags.iter().any(|tag| tag.id == *id))
     }) {
-        let row_capabilities = capabilities(
-            &state,
+        let row_capabilities = git_capabilities(
             &principal,
-            ResourceType::GitRepository,
-            Some(repository.id),
-            &headers,
-        )
-        .await?;
+            row_permissions.get(&repository.id).copied().flatten(),
+        );
         git_repositories.push(AuthorizedGitRepositoryView {
             repository: repository.into(),
             capabilities: row_capabilities,
@@ -892,35 +905,49 @@ async fn capabilities(
     id: Option<Uuid>,
     headers: &HeaderMap,
 ) -> HttpResult<ResourceCapabilitiesView> {
+    let grant = if principal.is_administrator() {
+        None
+    } else {
+        api_result(
+            match id {
+                Some(id) => {
+                    state
+                        .identity
+                        .permission_for_resource(principal, ResourceType::GitRepository, id)
+                        .await
+                }
+                None => {
+                    state
+                        .identity
+                        .global_permission(principal, ResourceType::GitRepository)
+                        .await
+                }
+            },
+            headers,
+        )?
+    };
+    Ok(git_capabilities(principal, grant))
+}
+
+fn git_capabilities(
+    principal: &ActorPrincipal,
+    grant: Option<citadel_identity::PermissionGrant>,
+) -> ResourceCapabilitiesView {
     use citadel_git::permissions::*;
     use citadel_primitives::{EffectivePermission, PermissionPolicy, SpecificPermissions};
     let permission = if principal.is_administrator() {
         EffectivePermission::Administrator
     } else {
-        let grant = match id {
-            Some(id) => {
-                state
-                    .identity
-                    .permission_for_resource(principal, ResourceType::GitRepository, id)
-                    .await
-            }
-            None => {
-                state
-                    .identity
-                    .global_permission(principal, ResourceType::GitRepository)
-                    .await
-            }
-        };
         EffectivePermission::Granted {
-            level: api_result(grant, headers)?.map_or(PermissionLevel::None, |grant| grant.level),
+            level: grant.map_or(PermissionLevel::None, |grant| grant.level),
             specifics: SpecificPermissions::EMPTY,
         }
     };
-    Ok(ResourceCapabilitiesView {
+    ResourceCapabilitiesView {
         can_read: permission.allows(ReadGitRepository::REQUIREMENT),
         can_write: permission.allows(WriteGitRepository::REQUIREMENT),
         can_execute: permission.allows(ExecuteGitRepository::REQUIREMENT),
-    })
+    }
 }
 
 #[derive(Clone)]

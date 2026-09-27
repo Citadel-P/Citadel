@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use chrono::{DateTime, Utc};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, UserActivitySnapshot,
@@ -321,6 +322,7 @@ RETURNING id, providerid, statehash, nonce, codeverifier, returnurl, createdat, 
         now: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             if let Some((external_login_id, user_id)) = sqlx::query_as::<_, (Uuid, Uuid)>(
@@ -345,7 +347,7 @@ RETURNING id, providerid, statehash, nonce, codeverifier, returnurl, createdat, 
                 .execute(&mut *transaction)
                 .await
                 .map_err(storage)?;
-                transaction.commit().await.map_err(storage)?;
+                authorization.commit(transaction, Impact::Actors(vec![user.actor_id.value()])).await.map_err(storage)?;
                 return Ok(user);
             }
 
@@ -397,7 +399,10 @@ VALUES ($1, $2, $3, $4, $5, $6, $6)
             .execute(&mut *transaction)
             .await
             .map_err(conflict_or_storage)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, Impact::Actors(vec![user.actor_id.value()]))
+                .await
+                .map_err(storage)?;
             Ok(user)
         })
     }

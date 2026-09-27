@@ -874,3 +874,69 @@ async fn completion_waits_for_enqueue_before_locking_the_branch() {
     store.fail(&rerun, "fixture complete").await.unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn committed_git_enqueue_notifies_and_idle_claims_throttle_stale_recovery() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = Uuid::now_v7();
+    insert_repository(&pool, actor, id, "file:///unused", "notify-audit").await;
+    let store = PostgresGitRepositoryExecutionPersistence::new(pool.clone());
+    let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
+    listener.listen("citadel_git_work").await.unwrap();
+    store
+        .enqueue_sync(ActorId::new(actor), id, Some("main"))
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), listener.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let claim = store
+        .claim_next(Utc::now() - chrono::Duration::minutes(10))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claim.repository.id, id);
+    sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=CURRENT_TIMESTAMP-interval '20 minutes' WHERE gitrepositoryid=$1").bind(id).execute(&pool).await.unwrap();
+    assert!(
+        store
+            .claim_next(Utc::now() - chrono::Duration::minutes(10))
+            .await
+            .unwrap()
+            .is_none(),
+        "recovery is not repeated for every claim"
+    );
+    // A fresh process performs startup recovery immediately.
+    let restarted = PostgresGitRepositoryExecutionPersistence::new(pool.clone());
+    assert!(
+        restarted
+            .claim_next(Utc::now() - chrono::Duration::minutes(10))
+            .await
+            .unwrap()
+            .is_some()
+    );
+    sqlx::query("DELETE FROM gitrepositories WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+}

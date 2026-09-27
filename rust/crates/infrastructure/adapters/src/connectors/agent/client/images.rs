@@ -190,6 +190,7 @@ fn map_inspection(image: InspectImageResponse) -> ImageInspection {
     let mut value = ImageInspection {
         id: image.id, size: image.size, os: image.os.unwrap_or_else(|| "unknown".into()),
         created: image.created, architecture: image.architecture.unwrap_or_else(|| "unknown".into()),
+        user: image.user, working_dir: image.working_dir, entry_point: image.entry_point, stop_signal: image.stop_signal,
         env: image.env, cmd: image.cmd, repo_tags: image.repo_tags, volumes: image.volumes,
         exposed_ports: image.exposed_ports, labels: image.labels.into_iter().collect(),
         layers: image.layers.into_iter().map(|layer| ImageLayer {id:layer.id,created:layer.created,created_by:layer.created_by,size:layer.size,comment:layer.comment}).collect(),

@@ -13,6 +13,6 @@ mod dynamic_tasks;
 pub mod runtime_metrics;
 pub use dynamic_tasks::{DynamicTaskReservation, DynamicTasks};
 mod io_budget;
-pub use io_budget::IoBudget;
+pub use io_budget::{IoBudget, IoPermit};
 mod runtime_signal;
 pub use runtime_signal::RuntimeSignal;

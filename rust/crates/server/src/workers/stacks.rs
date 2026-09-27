@@ -4,7 +4,6 @@ use std::time::Duration;
 use citadel_stacks::StackService;
 use tokio_util::sync::CancellationToken;
 
-const RECONCILIATION_INTERVAL: Duration = Duration::from_secs(10);
 // Apply is bounded to fifteen minutes. A shorter age lets the recovery worker
 // race an operation that is still legitimately running and complete its claim
 // from a partially observed runtime. Only recover claims that outlived that
@@ -41,17 +40,29 @@ pub(super) async fn stack_updates(
 pub(super) async fn stack_webhooks(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
+    mut signals: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = super::schedule::interval("stack-webhooks", Duration::from_secs(5));
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        tokio::select! {
-            () = cancellation.cancelled() => return Ok(()),
-            _ = ticker.tick() => {}
+        if cancellation.is_cancelled() {
+            return Ok(());
         }
-        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackWebhooks.start();
-        if let Err(error) = stacks.process_webhooks().await {
-            tracing::warn!(%error,"Stack webhook dispatch failed");
+        let processed = {
+            let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackWebhooks.start();
+            stacks.process_webhooks().await
+        };
+        match processed {
+            Ok(count) if count > 0 => {
+                tokio::task::yield_now().await;
+            }
+            result => {
+                if let Err(error) = result {
+                    tracing::warn!(%error,"Stack webhook dispatch failed");
+                }
+                // Durable retries have availableat deadlines. A lost wakeup or
+                // a retry becoming ready is recovered within thirty seconds.
+                super::notifications::wait(&mut signals, &cancellation, Duration::from_secs(30))
+                    .await;
+            }
         }
     }
 }
@@ -59,15 +70,10 @@ pub(super) async fn stack_webhooks(
 pub(super) async fn stack_operation_reconciliation(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
+    signals: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = tokio::time::interval(RECONCILIATION_INTERVAL);
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        tokio::select! {
-            biased;
-            () = cancellation.cancelled() => return Ok(()),
-            _ = ticker.tick() => {}
-        }
+    let mut wake = super::recovery::RecoveryWake::new("stack-recovery", signals, OBSERVABLE_AFTER);
+    while wake.next(&cancellation).await {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackRecovery.start();
         match stacks
             .reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH)
@@ -78,6 +84,7 @@ pub(super) async fn stack_operation_reconciliation(
             Err(error) => tracing::warn!(%error, "Stack operation reconciliation failed"),
         }
     }
+    Ok(())
 }
 
 pub(super) async fn stack_drift_monitor(

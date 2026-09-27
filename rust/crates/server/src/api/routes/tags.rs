@@ -120,16 +120,24 @@ async fn list_tags(
             .map_err(metadata_error),
         &headers,
     )?;
+    // SQL has already selected the authorized IDs. Resolve their capability
+    // metadata with one batch of ACL misses, including denied entries.
+    let permission_ids = authorized_tags
+        .iter()
+        .map(|resource| resource.id)
+        .collect::<Vec<_>>();
+    let row_permissions = api_result(
+        state
+            .identity
+            .permissions_for_resources(&principal, ResourceType::Tag, &permission_ids)
+            .await,
+        &headers,
+    )?;
     let mut tags = Vec::with_capacity(authorized_tags.len());
     for tag in authorized_tags {
-        let capabilities = capabilities(
-            &state.identity,
-            &principal,
-            ResourceType::Tag,
-            Some(tag.id),
-            &headers,
-        )
-        .await?;
+        let capabilities = crate::api::resource_access::capabilities_from_permission(
+            row_permissions.get(&tag.id).copied().flatten(),
+        );
         tags.push(AuthorizedTagView {
             tag: tag.into(),
             capabilities,

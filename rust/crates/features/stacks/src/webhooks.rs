@@ -151,7 +151,8 @@ impl StackService {
         self.store.enqueue_webhook(expected, commit).await
     }
 
-    /// One bounded batch; Stack's existing Apply claim and recovery own Docker execution.
+    /// One bounded batch; returns jobs consumed (including discarded jobs).
+    /// Stack's existing Apply claim and recovery own Docker execution.
     pub async fn process_webhooks(&self) -> Result<usize, StackError> {
         let jobs = self.store.ready_webhooks(10).await?;
         let mut processed = 0;
@@ -161,6 +162,7 @@ impl StackService {
             }
             if !self.automated_operations_enabled().await? {
                 self.store.discard_webhook(job.id).await?;
+                processed += 1;
                 continue;
             }
             match self
@@ -181,6 +183,7 @@ impl StackService {
                 }
                 Err(StackError::NotFound) => {
                     self.store.discard_webhook(job.id).await?;
+                    processed += 1;
                 }
                 Err(StackError::Conflict(_)) => {} // Busy or claimed concurrently; do not spend a retry.
                 Err(error) => return Err(error),

@@ -52,3 +52,5 @@ pub mod swarm;
 mod authorized_reader;
 pub use authorized_reader::PostgresAuthorizedPlatformReader;
 pub mod classification;
+
+pub mod runtime_index;

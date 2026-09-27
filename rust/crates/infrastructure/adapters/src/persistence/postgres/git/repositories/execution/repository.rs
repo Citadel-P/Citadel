@@ -1,12 +1,16 @@
 #[derive(Clone)]
 pub struct PostgresGitRepositoryExecutionPersistence {
     pub(super) pool: PgPool,
+    pub(super) last_recovery: std::sync::Arc<tokio::sync::Mutex<Option<tokio::time::Instant>>>,
 }
 
 impl PostgresGitRepositoryExecutionPersistence {
     #[must_use]
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            last_recovery: Default::default(),
+        }
     }
 }
 use super::*;

@@ -1,3 +1,4 @@
+use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite};
 use citadel_platforms::{
     InventoryProjectionChange, InventoryProjectionStore, RuntimeCapabilityError, RuntimeErrorKind,
     RuntimeInventorySnapshot, RuntimeSwarmInventory,
@@ -12,8 +13,8 @@ const STALE_RETENTION_HOURS: i32 = 24;
 #[derive(Clone)]
 pub struct PostgresInventoryProjectionStore {
     health_owned: bool,
-    pool: PgPool,
-    node_policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub(super) pool: PgPool,
+    pub(super) node_policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
 }
 
 impl PostgresInventoryProjectionStore {
@@ -79,6 +80,8 @@ impl PostgresInventoryProjectionStore {
         &self,
         snapshot: &RuntimeInventorySnapshot,
     ) -> Result<bool, RuntimeCapabilityError> {
+        let metadata =
+            ProjectionWrite::begin(snapshot.platform_id, None, ProjectionKind::Platform).await;
         let mut tx = self.pool.begin().await.map_err(storage)?;
         let saved = sqlx::query_as::<_, (Option<String>, Value)>(
             "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
@@ -120,8 +123,9 @@ impl PostgresInventoryProjectionStore {
         if initialized {
             return Ok(false);
         }
-        persist_snapshot(&mut tx, snapshot, None).await?;
+        super::resource::persist_swarm_snapshot(&mut tx, snapshot, &self.node_policy).await?;
         tx.commit().await.map_err(storage)?;
+        metadata.committed();
         Ok(true)
     }
 }
@@ -132,6 +136,11 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
         snapshot: &'a RuntimeInventorySnapshot,
     ) -> BoxFuture<'a, Result<InventoryProjectionChange, RuntimeCapabilityError>> {
         async move {
+            let containers =
+                ProjectionWrite::begin(snapshot.platform_id, None, ProjectionKind::Containers)
+                    .await;
+            let images =
+                ProjectionWrite::begin(snapshot.platform_id, None, ProjectionKind::Images).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             validate_snapshot_identity(&mut transaction, snapshot).await?;
             persist_snapshot_with_health(
@@ -141,7 +150,20 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
                 !self.health_owned,
             )
             .await?;
+            let identities = crate::persistence::postgres::platforms::runtime_index::stage_scope(
+                &self.pool,
+                &mut transaction,
+                snapshot.platform_id,
+                None,
+            )
+            .await
+            .map_err(storage)?;
             transaction.commit().await.map_err(storage)?;
+            if let Some(identities) = identities {
+                identities.committed();
+            }
+            containers.committed();
+            images.committed();
             crate::persistence::postgres::platforms::status::reconcile_deployments(
                 &self.pool,
                 snapshot.platform_id,
@@ -163,46 +185,55 @@ pub(crate) async fn validate_snapshot_identity(
     tx: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
 ) -> Result<(), RuntimeCapabilityError> {
+    validate_platform_identity(
+        tx,
+        snapshot.platform_id,
+        &snapshot.info,
+        snapshot.swarm.is_some(),
+    )
+    .await
+}
+
+pub(crate) async fn validate_platform_identity(
+    tx: &mut Transaction<'_, Postgres>,
+    platform_id: uuid::Uuid,
+    info: &citadel_platforms::RuntimePlatformInfo,
+    has_swarm: bool,
+) -> Result<(), RuntimeCapabilityError> {
     let saved: Option<(Option<String>, Value)> = sqlx::query_as(
         "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
     )
-    .bind(snapshot.platform_id)
+    .bind(platform_id)
     .fetch_optional(&mut **tx)
     .await
     .map_err(storage)?;
     let Some((cluster, descriptor)) = saved else {
         return Err(identity_conflict("Platform no longer exists"));
     };
-    validate_identity(
-        &descriptor,
-        cluster.as_deref(),
-        &snapshot.info,
-        snapshot.swarm.is_some(),
-    )?;
+    validate_identity(&descriptor, cluster.as_deref(), info, has_swarm)?;
     // Serialize first-time identity pinning across different Platform rows too.
-    let identity = snapshot
-        .info
+    let identity = info
         .swarm
         .as_ref()
         .and_then(|s| s.cluster_id.as_deref())
-        .filter(|_| snapshot.swarm.is_some())
-        .unwrap_or(&snapshot.info.daemon_id);
+        .filter(|_| has_swarm)
+        .unwrap_or(&info.daemon_id);
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(identity)
         .execute(&mut **tx)
         .await
         .map_err(storage)?;
     let duplicate: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM platforms WHERE id<>$1 AND ((($2::boolean) AND clusterid=$3) OR (NOT $2 AND COALESCE(platformdescriptor->>'daemonId',platformdescriptor->>'DaemonId')=$3)))")
-        .bind(snapshot.platform_id).bind(snapshot.swarm.is_some()).bind(identity)
+        .bind(platform_id).bind(has_swarm).bind(identity)
         .fetch_one(&mut **tx).await.map_err(storage)?;
     if duplicate {
         return Err(identity_conflict(
             "Runtime identity already belongs to another Platform",
         ));
     }
-    if snapshot.swarm.is_some() {
+    if has_swarm {
         sqlx::query("UPDATE platforms SET clusterid=$2 WHERE id=$1 AND clusterid IS NULL")
-            .bind(snapshot.platform_id)
+            .bind(platform_id)
             .bind(identity)
             .execute(&mut **tx)
             .await
@@ -408,8 +439,45 @@ async fn persist_images(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
 ) -> Result<(), RuntimeCapabilityError> {
-    let payload = json(&snapshot.images)?;
-    sqlx::query(
+    persist_image_set(transaction, snapshot.platform_id, &snapshot.images)
+        .await
+        .map(|_| ())
+}
+
+/// Reject ambiguous batches even when ON CONFLICT skips identical rows.
+pub(crate) fn validate_runtime_ids<'a>(
+    ids: impl IntoIterator<Item = &'a str>,
+) -> Result<(), RuntimeCapabilityError> {
+    let mut unique = std::collections::BTreeSet::new();
+    for id in ids {
+        if !unique.insert(id) {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Conflict,
+                "Duplicate runtime identity in resource observation",
+                false,
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) async fn persist_image_set(
+    transaction: &mut Transaction<'_, Postgres>,
+    platform_id: uuid::Uuid,
+    images: &[citadel_platforms::RuntimeImageSummary],
+) -> Result<bool, RuntimeCapabilityError> {
+    persist_image_observations(transaction, platform_id, images, true).await
+}
+
+pub(super) async fn persist_image_observations(
+    transaction: &mut Transaction<'_, Postgres>,
+    platform_id: uuid::Uuid,
+    images: &[citadel_platforms::RuntimeImageSummary],
+    complete: bool,
+) -> Result<bool, RuntimeCapabilityError> {
+    validate_runtime_ids(images.iter().map(|value| value.id.as_str()))?;
+    let payload = json(images)?;
+    let changed: bool = sqlx::query_scalar(
         r#"
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
@@ -431,19 +499,25 @@ WITH incoming AS (
         tags = EXCLUDED.tags,
         updatedat = now(),
         rowversion = images.rowversion + 1
+    WHERE (images.containers,images.name,images.size,images.tags::jsonb)
+        IS DISTINCT FROM (EXCLUDED.containers,EXCLUDED.name,EXCLUDED.size,EXCLUDED.tags::jsonb)
     RETURNING dockerimageid
-)
+), deleted AS (
 DELETE FROM images image
-WHERE image.platformid = $1
+WHERE $3::boolean AND image.platformid = $1
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = image.dockerimageid)
+RETURNING dockerimageid
+)
+SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
 "#,
     )
-    .bind(snapshot.platform_id)
+    .bind(platform_id)
     .bind(payload)
-    .execute(&mut **transaction)
+    .bind(complete)
+    .fetch_one(&mut **transaction)
     .await
     .map_err(storage)?;
-    Ok(())
+    Ok(changed)
 }
 
 pub(crate) async fn persist_containers(
@@ -460,6 +534,7 @@ pub(crate) async fn persist_containers(
         true,
     )
     .await
+    .map(|_| ())
 }
 
 /// A fully inspected container is authoritative for itself, never for absent siblings.
@@ -469,7 +544,7 @@ pub(crate) async fn persist_container_observation(
     node_id: Option<&str>,
     container: &citadel_platforms::RuntimeContainerSummary,
     observed: i64,
-) -> Result<(), RuntimeCapabilityError> {
+) -> Result<bool, RuntimeCapabilityError> {
     persist_container_set(
         transaction,
         platform_id,
@@ -481,14 +556,15 @@ pub(crate) async fn persist_container_observation(
     .await
 }
 
-async fn persist_container_set(
+pub(super) async fn persist_container_set(
     transaction: &mut Transaction<'_, Postgres>,
     platform_id: uuid::Uuid,
     containers: &[citadel_platforms::RuntimeContainerSummary],
     node_id: Option<&str>,
     observed: i64,
     complete: bool,
-) -> Result<(), RuntimeCapabilityError> {
+) -> Result<bool, RuntimeCapabilityError> {
+    validate_runtime_ids(containers.iter().map(|value| value.id.as_str()))?;
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(platform_id)
         .fetch_optional(&mut **transaction)
@@ -519,7 +595,7 @@ async fn persist_container_set(
     } else {
         "(dockercontainerid, platformid) WHERE dockernodeid IS NULL"
     };
-    sqlx::query(sqlx::AssertSqlSafe(format!(
+    let mut changed: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         r#"
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
@@ -532,7 +608,7 @@ WITH incoming AS (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, rowversion,
-        projectionobservedat, dockernodeid, stackid, deploymentid)
+        projectionobservedat, dockernodeid, stackid, deploymentid, imageid)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name,
            CASE WHEN NOT $5::boolean AND incoming."imageId" = ''
                 THEN incoming.image ELSE incoming."imageId" END,
@@ -540,8 +616,10 @@ WITH incoming AS (
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
            COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3, $4,
-           release.stackid, deployment.id
+           release.stackid, deployment.id, image.id
     FROM incoming
+    LEFT JOIN images image
+      ON image.platformid=$1 AND image.dockerimageid=CASE WHEN NOT $5::boolean AND incoming."imageId"='' THEN incoming.image ELSE incoming."imageId" END
     LEFT JOIN stacks stack
       ON stack.id = CASE WHEN incoming.labels->>'com.citadel.stack-id'
           ~* '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'
@@ -560,6 +638,7 @@ WITH incoming AS (
     ON CONFLICT {conflict} DO UPDATE
     SET name = EXCLUDED.name,
         dockerimageid = EXCLUDED.dockerimageid,
+        imageid = COALESCE(EXCLUDED.imageid, containers.imageid),
         state = EXCLUDED.state,
         updated = EXCLUDED.updated,
         stack = EXCLUDED.stack,
@@ -577,13 +656,27 @@ WITH incoming AS (
         projectionstalereason = NULL,
         rowversion = containers.rowversion + 1
     WHERE COALESCE(containers.projectionobservedat, 0) <= EXCLUDED.projectionobservedat
+      AND (containers.name, containers.dockerimageid, containers.state, containers.stack,
+           containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
+           containers.isswarmtask, containers.ports::jsonb, containers.stackid, containers.deploymentid,
+           containers.projectionstalesince, containers.projectionstalereason, containers.imageid)
+          IS DISTINCT FROM
+          (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
+           EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
+           EXCLUDED.isswarmtask, EXCLUDED.ports::jsonb,
+           CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
+           CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
+           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid))
     RETURNING dockercontainerid
-)
+), deleted AS (
 DELETE FROM containers container
 WHERE $5::boolean AND container.platformid = $1
   AND container.dockernodeid IS NOT DISTINCT FROM $4
   AND COALESCE(container.projectionobservedat, 0) <= $3
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = container.dockercontainerid)
+RETURNING dockercontainerid
+)
+SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
 "#
     )))
     .bind(platform_id)
@@ -591,30 +684,16 @@ WHERE $5::boolean AND container.platformid = $1
     .bind(observed)
     .bind(node_id)
     .bind(complete)
-    .execute(&mut **transaction)
+    .fetch_one(&mut **transaction)
     .await
     .map_err(storage)?;
-    sqlx::query(
-        r#"
-UPDATE containers container
-SET imageid = image.id
-FROM images image
-WHERE container.platformid = $1
-  AND container.dockernodeid IS NOT DISTINCT FROM $2
-  AND ($3::boolean OR container.dockercontainerid=ANY($4::text[]))
-  AND image.platformid = container.platformid
-  AND image.dockerimageid = container.dockerimageid
-"#,
-    )
-    .bind(platform_id)
-    .bind(node_id)
-    .bind(complete)
-    .bind(&incoming_ids)
-    .execute(&mut **transaction)
-    .await
-    .map_err(storage)?;
+    // Watermarks are causal bookkeeping, not semantic revisions. Advance even on a no-op.
+    sqlx::query("UPDATE containers SET projectionobservedat=$4 WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=ANY($3) AND COALESCE(projectionobservedat,0)<$4")
+        .bind(platform_id).bind(node_id).bind(&incoming_ids).bind(observed)
+        .execute(&mut **transaction).await.map_err(storage)?;
+    // Recovery also catches up owners skipped while a command held their locks.
     if complete {
-        crate::persistence::postgres::platforms::status::reconcile(
+        changed |= crate::persistence::postgres::platforms::status::reconcile(
             transaction,
             platform_id,
             node_id,
@@ -624,10 +703,10 @@ WHERE container.platformid = $1
         .await
         .map_err(storage)?;
     }
-    Ok(())
+    Ok(changed)
 }
 
-async fn persist_swarm(
+pub(super) async fn persist_swarm(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
     swarm: &RuntimeSwarmInventory,
@@ -1050,7 +1129,7 @@ async fn cleanup_stale(
     Ok(())
 }
 
-pub(crate) fn json(value: &impl Serialize) -> Result<Value, RuntimeCapabilityError> {
+pub(crate) fn json(value: &(impl Serialize + ?Sized)) -> Result<Value, RuntimeCapabilityError> {
     serde_json::to_value(value).map_err(|error| {
         RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
     })

@@ -110,20 +110,30 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .unwrap();
     let targets = PlatformRuntimeRegistry::new(pool.clone(), None);
     assert!(targets.refresh().await.is_err());
+    let (refreshes, scopes) = event_refresh_channels(256);
+    let admin = refreshes.clone();
+    let scoped = tokio::spawn(event_resource_refresh(
+        stop.clone(),
+        scopes,
+        EventRefreshWorker {
+            targets: targets.clone(),
+            refreshes: refreshes.clone(),
+            docker: DockerClient::new(&socket, Duration::from_secs(5)).unwrap(),
+            pool: pool.clone(),
+            realtime: Some(hub),
+            node_policy: Default::default(),
+            retry_delay: Duration::from_millis(250),
+            swarm_interval: Duration::from_secs(3600),
+        },
+    ));
     let worker = tokio::spawn(inventory_reconciliation(
         stop.clone(),
         InventoryReconciliationWorker {
-            node_agent_policy: Default::default(),
-            docker: DockerClient::new(&socket, Duration::from_secs(5)).unwrap(),
             targets: targets.clone(),
-            budget: targets.inventory_budget.clone(),
-            pool: pool.clone(),
+            refreshes,
             local_triggers,
             agent_triggers,
             agent_overflow: Arc::new(AtomicBool::new(false)),
-            realtime: Some(hub),
-            interval: Duration::from_secs(3600),
-            retry_delay: Duration::from_millis(20),
         },
     ));
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -138,7 +148,7 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .unwrap();
     targets.refresh().await.unwrap();
     local.try_send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(5), updates.recv())
+    tokio::time::timeout(Duration::from_secs(5), next_swarm(&mut updates))
         .await
         .unwrap()
         .unwrap();
@@ -146,13 +156,13 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
     for _ in 0..100 {
         let _ = local.try_send(());
     }
-    tokio::time::timeout(Duration::from_secs(5), updates.recv())
+    tokio::time::timeout(Duration::from_secs(5), next_swarm(&mut updates))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(count.load(Ordering::SeqCst), 2);
     assert!(
-        tokio::time::timeout(Duration::from_millis(600), updates.recv())
+        tokio::time::timeout(Duration::from_millis(600), next_swarm(&mut updates))
             .await
             .is_err()
     );
@@ -167,15 +177,15 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         let _ = local.try_send(());
     }
     resume.add_permits(1);
-    for _ in 0..2 {
-        tokio::time::timeout(Duration::from_secs(5), updates.recv())
+    for _ in 0..1 {
+        tokio::time::timeout(Duration::from_secs(5), next_swarm(&mut updates))
             .await
             .unwrap()
             .unwrap();
     }
-    assert_eq!(count.load(Ordering::SeqCst), 4);
+    assert_eq!(count.load(Ordering::SeqCst), 3);
     assert!(
-        tokio::time::timeout(Duration::from_millis(600), updates.recv())
+        tokio::time::timeout(Duration::from_millis(600), next_swarm(&mut updates))
             .await
             .is_err()
     );
@@ -185,12 +195,26 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .execute(&pool)
         .await
         .unwrap();
-    local.try_send(()).unwrap();
+    let refresh = citadel_platforms::jobs::RuntimeRecoveryCoordinator::request(
+        citadel_platforms::jobs::RecoveryReason::AdminResync,
+        citadel_platforms::PlatformKind::DockerSwarm,
+    )
+    .unwrap();
+    admin
+        .send(
+            ScopedEventRequest {
+                platform_id: platform,
+                refresh,
+            },
+            &stop,
+        )
+        .await
+        .unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let fresh: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1 AND NOT isstale)")
                 .bind(platform).fetch_one(&pool).await.unwrap();
-            if fresh && count.load(Ordering::SeqCst) == 5 { break; }
+            if fresh && count.load(Ordering::SeqCst) == 4 { break; }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     }).await.unwrap();
@@ -200,6 +224,7 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .unwrap()
         .unwrap()
         .unwrap();
+    scoped.await.unwrap().unwrap();
     server.await.unwrap();
     std::fs::remove_file(socket).unwrap();
     for (id, connector) in previous {
@@ -216,4 +241,14 @@ async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up
         .await
         .unwrap();
     pool.close().await;
+}
+
+async fn next_swarm(
+    updates: &mut tokio::sync::broadcast::Receiver<Arc<crate::realtime::PublishedRuntimeEvent>>,
+) -> Result<(), tokio::sync::broadcast::error::RecvError> {
+    loop {
+        if updates.recv().await?.payload["dockerResourceType"] == "swarm" {
+            return Ok(());
+        }
+    }
 }

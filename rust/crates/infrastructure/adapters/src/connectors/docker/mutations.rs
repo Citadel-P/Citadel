@@ -1,6 +1,6 @@
 use citadel_platforms::{
-    CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, PlatformResourceMutationPort,
-    RuntimeCapabilityError, RuntimeVolumeSummary,
+    CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, RuntimeCapabilityError,
+    RuntimeVolumeSummary,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use tokio_util::sync::CancellationToken;
@@ -9,7 +9,7 @@ use super::projection::{NetworkCreateRequest, VolumeCreateOptions};
 use super::{DockerClient, DockerError};
 use crate::connectors::docker::inventory::map_volume;
 
-impl PlatformResourceMutationPort for DockerClient {
+impl citadel_platforms::NetworkMutationPort for DockerClient {
     fn create_network<'a>(
         &'a self,
         input: &'a CreateRuntimeNetwork,
@@ -73,7 +73,9 @@ impl PlatformResourceMutationPort for DockerClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeMutationPort for DockerClient {
     fn create_volume<'a>(
         &'a self,
         input: &'a CreateRuntimeVolume,

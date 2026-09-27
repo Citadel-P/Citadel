@@ -22,6 +22,12 @@ pub async fn update(
     } else {
         input.address.as_deref().unwrap_or(&current.address)
     };
+    let write = citadel_platforms::jobs::ProjectionWrite::begin(
+        current.id,
+        None,
+        citadel_platforms::jobs::ProjectionKind::Platform,
+    )
+    .await;
     let mut tx = pool.begin().await.map_err(storage)?;
     sqlx::query("SET LOCAL lock_timeout = '5s'")
         .execute(&mut *tx)
@@ -95,7 +101,15 @@ pub async fn update(
         .execute(&mut *tx)
         .await
         .map_err(storage)?;
-    tx.commit().await.map_err(storage)
+    if !rename && input.prune_historical_swarm_task_containers {
+        sqlx::query("SELECT pg_notify('citadel_swarm_prune','')")
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+    }
+    tx.commit().await.map_err(storage)?;
+    write.committed();
+    Ok(())
 }
 
 fn storage(error: sqlx::Error) -> PlatformRegistrationError {

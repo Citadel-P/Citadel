@@ -1,11 +1,6 @@
 use std::collections::BTreeMap;
 
-use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
-use tokio_util::sync::CancellationToken;
-
-use crate::RuntimeCapabilityError;
-use crate::RuntimeVolumeSummary;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,29 +65,12 @@ pub struct CreateRuntimeVolume {
     pub options: BTreeMap<String, String>,
 }
 
-pub trait PlatformResourceMutationPort: Send + Sync {
-    fn create_network<'a>(
-        &'a self,
-        input: &'a CreateRuntimeNetwork,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<CreatedRuntimeNetwork, RuntimeCapabilityError>>;
-
-    fn delete_network<'a>(
-        &'a self,
-        id: &'a str,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
-
-    fn create_volume<'a>(
-        &'a self,
-        input: &'a CreateRuntimeVolume,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>>;
-
-    fn delete_volume<'a>(
-        &'a self,
-        name: &'a str,
-        force: bool,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
+/// Composite for orchestration only; scoped services use individual capabilities.
+pub trait PlatformResourceMutationPort:
+    crate::NetworkMutationPort + crate::VolumeMutationPort
+{
+}
+impl<T: crate::NetworkMutationPort + crate::VolumeMutationPort + ?Sized>
+    PlatformResourceMutationPort for T
+{
 }

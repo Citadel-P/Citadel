@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone)]
 pub struct PostgresAlertRepository {
     pub(super) pool: PgPool,
+    pub(super) configuration: Arc<super::configuration::ConfigurationCache>,
     pub(super) on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     pub(super) entitlements: Arc<dyn citadel_alerts::AlertEntitlements>,
 }
@@ -15,6 +16,7 @@ impl PostgresAlertRepository {
             )),
             pool,
             on_change: None,
+            configuration: Default::default(),
         }
     }
 }

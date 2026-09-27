@@ -1,4 +1,5 @@
 mod endpoint;
+pub mod events;
 mod images;
 pub(crate) mod inventory;
 mod mutations;

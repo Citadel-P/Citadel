@@ -50,11 +50,18 @@ pub(super) async fn run_group_connection(
                 state.invoke(&text, socket, service, &mut subscription, cancellation).await?;
             },
             _=recheck.tick()=>{
-                subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
-                for name in state.stream_guards.keys() {
-                    if let Some(joined)=state.groups.get(name) {
-                        tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,None)).await
-                            .map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?;
+                subscription.recheck(service).await?;
+                for joined in state.groups.values() {
+                    let read = tokio::time::timeout(service.inner.subscribe_timeout, reader.read_with_lease(&subscription.principal, &joined.group, None, &subscription.lease));
+                    tokio::pin!(read);
+                    loop {
+                        tokio::select! {
+                            ()=cancellation.cancelled()=>return Ok(()),
+                            result=&mut read=>{ result.map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?; break; },
+                            Some((_,item))=state.streams.next(),if !state.streams.is_empty()=>{
+                                send_group_message(socket,service,&item.map_err(map_realtime_read_error)?).await?;
+                            }
+                        }
                     }
                 }
             },
@@ -78,7 +85,9 @@ pub(super) async fn run_group_connection(
                 if event.resource_type!="License" && !state.groups.values().any(|g|g.group.affected_by(&event)) {
                     continue;
                 }
-                subscription.principal=service.inner.reader.authenticate(&subscription.access_token).await.map_err(map_realtime_read_error)?;
+                // Readers without a generation contract retain their conservative
+                // authentication path. Production connections are commit-fenced.
+                if !subscription.lease.tracked() { subscription.recheck(service).await?; }
                 if event.resource_type=="License" {
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("LicenseStateChanged",vec![])).await?;
                     continue;
@@ -86,7 +95,7 @@ pub(super) async fn run_group_connection(
                 for joined in state.groups.values_mut().filter(|g|g.group.affected_by(&event)) {
                     // Inventory I/O must not pause this connection's active streams.
                     let snapshot={
-                        let read=tokio::time::timeout(service.inner.subscribe_timeout,reader.read(&subscription.principal,&joined.group,Some(&event)));
+                        let read=tokio::time::timeout(service.inner.subscribe_timeout,reader.read_with_lease(&subscription.principal,&joined.group,Some(&event),&subscription.lease));
                         tokio::pin!(read);
                         loop {
                             tokio::select! {

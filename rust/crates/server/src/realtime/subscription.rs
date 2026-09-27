@@ -49,6 +49,29 @@ pub(super) async fn run_connection(
     let groups_mode = subscribe.client_mode.as_deref() == Some("groups");
     let mut subscription = validate_subscription(service, subscribe).await?;
 
+    let mut changes = subscription.authorization_changes.take();
+    tokio::select! {
+        biased;
+        () = async {
+            match changes.as_mut() {
+                Some(changes) => { let _ = changes.changed().await; }
+                None => std::future::pending::<()>().await,
+            }
+        } => {
+            citadel_runtime::runtime_metrics::RuntimeWork::RealtimeAuthorizationInvalidation.units(1);
+            Err(RealtimeError::Authorization)
+        },
+        result = run_authorized_connection(socket, service, subscription, groups_mode, cancellation) => result,
+    }
+}
+
+async fn run_authorized_connection(
+    socket: &mut ConnectionIo,
+    service: &RealtimeService,
+    mut subscription: super::authorization::Subscription,
+    groups_mode: bool,
+    cancellation: &CancellationToken,
+) -> Result<(), RealtimeError> {
     if groups_mode {
         return run_group_connection(socket, service, subscription, cancellation).await;
     }
@@ -91,12 +114,12 @@ pub(super) async fn run_connection(
                 }
             }
             _ = authorization_recheck.tick() => {
-                let principal = service.inner.reader.authenticate(&subscription.access_token).await
-                    .map_err(map_realtime_read_error)?;
+                subscription.recheck(service).await?;
+                let principal = &subscription.principal;
                 if let Some(platform_id) = subscription.platform_id {
-                    authorize_platform(service, &principal, platform_id).await?;
+                    authorize_platform(service, principal, platform_id).await?;
                 }
-                subscription.principal = principal;
+
             }
             event = receiver.recv() => {
                 match event {
@@ -110,7 +133,7 @@ pub(super) async fn run_connection(
                         if connection.platform_id.is_none()
                             && let Some(platform_id) = event.platform_id
                         {
-                            let platform = match authorize_platform(service, &subscription.principal, platform_id).await {
+                            let platform = match service.inner.reader.platform_for_event(&subscription.principal, platform_id, &event, &subscription.lease).await.map_err(map_realtime_read_error) {
                                 Ok(platform) => platform,
                                 Err(RealtimeError::Authorization) => continue,
                                 Err(error) => return Err(error),

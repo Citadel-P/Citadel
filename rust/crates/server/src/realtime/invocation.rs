@@ -30,12 +30,7 @@ impl GroupConnection {
         } = self;
         let request = super::protocol::parse_invocation(text)?;
         let invocation = request.id;
-        subscription.principal = service
-            .inner
-            .reader
-            .authenticate(&subscription.access_token)
-            .await
-            .map_err(map_realtime_read_error)?;
+        subscription.recheck(service).await?;
         let name = request
             .arguments
             .as_ref()
@@ -59,7 +54,12 @@ impl GroupConnection {
                 } else if let Some(group) = Group::parse(name) {
                     match tokio::time::timeout(
                         service.inner.subscribe_timeout,
-                        reader.read(&subscription.principal, &group, None),
+                        reader.read_with_lease(
+                            &subscription.principal,
+                            &group,
+                            None,
+                            &subscription.lease,
+                        ),
                     )
                     .await
                     {

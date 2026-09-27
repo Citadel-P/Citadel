@@ -7,12 +7,9 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::PlatformInventoryPort;
 use crate::RuntimeCapabilityError;
 use crate::RuntimeInventorySnapshot;
 use crate::RuntimeSwarmInfo;
-use crate::jobs::InventoryCollectionTarget;
-use crate::jobs::collect_inventory_from_info;
 
 pub const LOCAL_DOCKER_ADDRESS: &str = "http://localhost.docker";
 
@@ -110,11 +107,11 @@ impl From<RuntimeCapabilityError> for PlatformRegistrationError {
 }
 
 pub trait PlatformRegistrationRuntime: Send + Sync {
-    fn inventory_for(
+    fn info_for(
         &self,
         connector_type: PlatformConnectorType,
         address: &str,
-    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError>;
+    ) -> Result<Arc<dyn crate::PlatformInfoPort>, PlatformRegistrationError>;
 }
 
 pub trait PlatformRegistrationRepository: Send + Sync {
@@ -183,25 +180,22 @@ impl PlatformRegistrationService {
                 "A supported Platform connector type is required.".to_owned(),
             ));
         }
-        let runtime = self.runtime.inventory_for(input.connector_type, &address)?;
+        let runtime = self.runtime.info_for(input.connector_type, &address)?;
         let mut info = runtime.get_info(cancellation).await?;
         validate_platform_type(input.platform_type, info.swarm.as_ref())?;
         normalize_daemon_id(&mut info)?;
-        let mut snapshot = collect_inventory_from_info(
-            runtime.as_ref(),
-            &InventoryCollectionTarget {
-                platform_id: id,
-                platform_type: match input.platform_type {
-                    PlatformType::DockerSwarm => crate::PlatformKind::DockerSwarm,
-                    PlatformType::Docker => crate::PlatformKind::Docker,
-                    PlatformType::Kubernetes => unreachable!("validated before inventory"),
-                },
-            },
+        // Registration pins identity atomically. Target-change notification starts
+        // the independent recovery scopes after this new Platform is committed.
+        let snapshot = RuntimeInventorySnapshot {
+            platform_id: id,
             info,
-            cancellation,
-        )
-        .await?;
-        prune_historical_swarm_task_containers(&input, &mut snapshot);
+            observed_at: chrono::Utc::now(),
+            containers: vec![],
+            images: vec![],
+            networks: vec![],
+            volumes: vec![],
+            swarm: None,
+        };
         let swarm = snapshot.info.swarm.as_ref();
         let descriptor = descriptor(input.platform_type, &snapshot, swarm);
         let registration = PlatformRegistration {
@@ -234,24 +228,6 @@ fn normalize_daemon_id(
     }
     info.daemon_id = info.daemon_id.trim().to_owned();
     Ok(())
-}
-
-fn prune_historical_swarm_task_containers(
-    input: &CreatePlatformInput,
-    snapshot: &mut RuntimeInventorySnapshot,
-) {
-    if input.platform_type != PlatformType::DockerSwarm
-        || !input.prune_historical_swarm_task_containers
-    {
-        return;
-    }
-    snapshot.containers.retain(|container| {
-        !container.is_swarm_task
-            || matches!(
-                container.state.to_ascii_lowercase().as_str(),
-                "running" | "restarting" | "paused"
-            )
-    });
 }
 
 fn validate_agent_address(address: Option<&str>) -> Result<String, PlatformRegistrationError> {
@@ -529,77 +505,5 @@ mod tests {
         info.daemon_id = "  daemon-1  ".to_owned();
         normalize_daemon_id(&mut info).unwrap();
         assert_eq!(info.daemon_id, "daemon-1");
-    }
-
-    #[test]
-    fn historical_swarm_task_pruning_respects_the_platform_setting() {
-        let containers = vec![
-            container("current", "running", true),
-            container("restarting", "restarting", true),
-            container("paused", "paused", true),
-            container("historical", "exited", true),
-            container("ordinary-stopped", "exited", false),
-        ];
-        let mut pruned = snapshot(containers.clone());
-        let mut retained = snapshot(containers);
-        let mut input = swarm_input(true);
-
-        prune_historical_swarm_task_containers(&input, &mut pruned);
-        assert_eq!(
-            pruned
-                .containers
-                .iter()
-                .map(|value| value.id.as_str())
-                .collect::<Vec<_>>(),
-            ["current", "restarting", "paused", "ordinary-stopped"]
-        );
-
-        input.prune_historical_swarm_task_containers = false;
-        prune_historical_swarm_task_containers(&input, &mut retained);
-        assert_eq!(retained.containers.len(), 5);
-    }
-
-    fn swarm_input(prune: bool) -> CreatePlatformInput {
-        CreatePlatformInput {
-            name: "swarm-platform".to_owned(),
-            address: Some("https://agent.example.test".to_owned()),
-            description: None,
-            platform_type: PlatformType::DockerSwarm,
-            connector_type: PlatformConnectorType::Agent,
-            prune_historical_swarm_task_containers: prune,
-            tag_ids: Vec::new(),
-        }
-    }
-
-    fn container(id: &str, state: &str, is_swarm_task: bool) -> crate::RuntimeContainerSummary {
-        crate::RuntimeContainerSummary {
-            id: id.to_owned(),
-            name: id.to_owned(),
-            image: "nginx:latest".to_owned(),
-            image_id: "sha256:image".to_owned(),
-            created: 1,
-            state: state.to_owned(),
-            status: state.to_owned(),
-            labels: Default::default(),
-            ports: json!([]),
-            stack: None,
-            is_system: false,
-            system_role: None,
-            has_citadel_ownership_labels: false,
-            is_swarm_task,
-        }
-    }
-
-    fn snapshot(containers: Vec<crate::RuntimeContainerSummary>) -> RuntimeInventorySnapshot {
-        RuntimeInventorySnapshot {
-            platform_id: Uuid::now_v7(),
-            info: crate::RuntimePlatformInfo::default(),
-            containers,
-            images: Vec::new(),
-            networks: Vec::new(),
-            volumes: Vec::new(),
-            swarm: None,
-            observed_at: chrono::Utc::now(),
-        }
     }
 }

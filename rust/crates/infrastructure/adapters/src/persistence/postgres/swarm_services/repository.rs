@@ -193,6 +193,14 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         self.fail_operation_impl(actor_id, claim, message, outcome_unknown)
     }
 
+    fn active_operation_claims(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, ServiceOperationClaim)>, SwarmServiceError>> {
+        self.active_operation_claims_impl(after, limit)
+    }
+
     fn stale_operation_claims(
         &self,
         started_before: i64,

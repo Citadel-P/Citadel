@@ -17,6 +17,10 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
         .execute(&f.pool)
         .await
         .unwrap();
+    use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite, SnapshotGeneration};
+    let containers =
+        SnapshotGeneration::capture(f.platform_id, None, ProjectionKind::Containers).await;
+    let images = SnapshotGeneration::capture(f.platform_id, None, ProjectionKind::Images).await;
     let first = format!("sha256:{}", "a".repeat(64));
     let second = format!("sha256:{}", "b".repeat(64));
     for image in [&first, &second] {
@@ -117,6 +121,14 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
         .await
         .status(),
         StatusCode::CONFLICT
+    );
+    assert!(
+        !images.matches(&ProjectionWrite::begin(f.platform_id, None, ProjectionKind::Images).await)
+    );
+    assert!(
+        containers.matches(
+            &ProjectionWrite::begin(f.platform_id, None, ProjectionKind::Containers).await
+        )
     );
     assert_eq!(deleted.lock().await.len(), 2);
     let rows:Vec<(String,String)>=sqlx::query_as("SELECT dockerimageid,controlstate FROM images WHERE platformid=$1 AND dockerimageid=ANY($2)").bind(f.platform_id).bind(&[first.clone(),second.clone()]).fetch_all(&f.pool).await.unwrap();

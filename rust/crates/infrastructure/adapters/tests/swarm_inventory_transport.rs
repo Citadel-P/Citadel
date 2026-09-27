@@ -11,7 +11,8 @@ use citadel_contracts::citadel::{
     edge::v1::{EdgeCommandKind, core_envelope},
     swarm::v1::*,
 };
-use citadel_platforms::{PlatformInventoryPort, RuntimeErrorKind, swarm_mutations::*};
+use citadel_platforms::SwarmInventoryPort;
+use citadel_platforms::{RuntimeErrorKind, swarm_mutations::*};
 use prost::Message;
 use std::{
     collections::BTreeMap,

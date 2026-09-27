@@ -290,6 +290,11 @@ impl ContainerRepository for PostgresContainerRepository {
                     .map_err(storage)?;
             }
             let targets = rows.into_iter().map(target).collect();
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::ContainerRecovery.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(ContainerClaim {
                 operation_id,
@@ -308,23 +313,27 @@ impl ContainerRepository for PostgresContainerRepository {
         state: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR SHARE")
-                .bind(target.platform_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(storage)?;
-            if let Some(state) = state {
-                sqlx::query("UPDATE containers SET state=initcap($3),updated=$4,projectionstalesince=NULL,projectionstalereason=NULL,rowversion=rowversion+1 WHERE id=$1 AND containeroperationid=$2 AND dockercontainerid=$5 AND dockernodeid IS NOT DISTINCT FROM $6")
-                    .bind(target.id).bind(claim).bind(state).bind(chrono::Utc::now().timestamp()).bind(&target.docker_id).bind(&target.node_id)
-                    .execute(&mut *tx).await.map_err(storage)?;
-            } else {
-                sqlx::query("DELETE FROM containers WHERE id=$1 AND containeroperationid=$2 AND dockercontainerid=$3 AND dockernodeid IS NOT DISTINCT FROM $4")
-                    .bind(target.id).bind(claim).bind(&target.docker_id).bind(&target.node_id).execute(&mut *tx).await.map_err(storage)?;
-            }
-            tx.commit().await.map_err(storage)?;
-            Ok(())
+            self.observed_batch(
+                claim,
+                &[ContainerObservation {
+                    target: target.clone(),
+                    state: state.map(str::to_owned),
+                }],
+            )
+            .await
         })
+    }
+
+    fn observed_batch<'a>(
+        &'a self,
+        claim: Uuid,
+        observations: &'a [ContainerObservation],
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(super::observations::persist(
+            &self.pool,
+            claim,
+            observations,
+        ))
     }
 
     fn finish(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
@@ -385,7 +394,7 @@ impl ContainerRepository for PostgresContainerRepository {
                 .bind(chrono::Utc::now().timestamp()-60).fetch_all(&self.pool).await.map_err(storage)?;
             let mut claims = Vec::with_capacity(ids.len());
             for (operation_id, started_at) in ids {
-                let targets = sqlx::query("SELECT id,platformid,dockercontainerid,dockernodeid FROM containers WHERE containeroperationid=$1 ORDER BY id LIMIT 100")
+                let targets = sqlx::query("SELECT id,platformid,dockercontainerid,dockernodeid FROM containers WHERE containeroperationid=$1 ORDER BY id")
                     .bind(operation_id).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(target).collect();
                 claims.push(ContainerClaim {
                     operation_id,

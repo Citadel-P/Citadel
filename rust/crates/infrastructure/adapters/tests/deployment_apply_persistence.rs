@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
 use citadel_adapters::persistence::postgres::deployments::bindings::PostgresDeploymentBindingResolver;
+use citadel_adapters::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex;
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
@@ -11,6 +12,7 @@ use citadel_deployments::{
     UpdateBehavior,
 };
 use citadel_identity::SYSTEM_ACTOR_ID;
+use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite, SnapshotGeneration};
 use citadel_primitives::ActorId;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
@@ -122,6 +124,11 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
     .await
     .unwrap();
 
+    let index = RuntimeIdentityIndex::attach(pool.clone());
+    index.rebuild().await.unwrap();
+    let before_apply =
+        SnapshotGeneration::capture(platform_id, None, ProjectionKind::Containers).await;
+    let images = SnapshotGeneration::capture(platform_id, None, ProjectionKind::Images).await;
     let completed = store
         .create(actor, true, &external_input(platform_id, "completed"))
         .await
@@ -159,6 +166,14 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
         .unwrap(),
         completed.id
     );
+    assert!(
+        !before_apply
+            .matches(&ProjectionWrite::begin(platform_id, None, ProjectionKind::Containers).await)
+    );
+    assert!(
+        images.matches(&ProjectionWrite::begin(platform_id, None, ProjectionKind::Images).await)
+    );
+    let persisted = index.lookup(platform_id, None, "docker-running").unwrap();
     assert_activity(&pool, completed.id, "Success", None).await;
     let applied_spec: Value = sqlx::query_scalar("SELECT spec FROM deployments WHERE id=$1")
         .bind(completed.id)
@@ -215,6 +230,8 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
         "a repeated completion must not duplicate audit history"
     );
     let next_claim = store.claim_apply(actor, true, completed.id).await.unwrap();
+    let before_failed =
+        SnapshotGeneration::capture(platform_id, None, ProjectionKind::Containers).await;
     assert!(matches!(
         store
             .complete_apply(
@@ -227,6 +244,18 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
             .await,
         Err(DeploymentError::Conflict(_))
     ));
+    assert!(
+        before_failed
+            .matches(&ProjectionWrite::begin(platform_id, None, ProjectionKind::Containers).await)
+    );
+    assert_eq!(
+        index.lookup(platform_id, None, "docker-running"),
+        Some(persisted)
+    );
+    let running = RuntimeDeploymentResult {
+        docker_container_id: "docker-replaced".into(),
+        ..running
+    };
     store
         .complete_apply(
             actor,
@@ -237,6 +266,27 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
         )
         .await
         .unwrap();
+
+    assert_eq!(index.lookup(platform_id, None, "docker-running"), None);
+    assert_eq!(
+        index.lookup(platform_id, None, "docker-replaced"),
+        Some(persisted)
+    );
+    let before_delete =
+        SnapshotGeneration::capture(platform_id, None, ProjectionKind::Containers).await;
+    let claims = store
+        .claim_delete(actor, true, &[completed.id])
+        .await
+        .unwrap();
+    store.complete_delete(actor, &claims).await.unwrap();
+    assert_eq!(index.lookup(platform_id, None, "docker-replaced"), None);
+    assert!(
+        !before_delete
+            .matches(&ProjectionWrite::begin(platform_id, None, ProjectionKind::Containers).await)
+    );
+    assert!(
+        images.matches(&ProjectionWrite::begin(platform_id, None, ProjectionKind::Images).await)
+    );
 
     let failed = store
         .create(actor, true, &create_input(platform_id, "failed"))

@@ -1,14 +1,23 @@
+use citadel_runtime::RuntimeSignal;
 mod agents;
 use agents::*;
 
 mod stats;
 use stats::*;
 
+pub(crate) mod event_refresh;
+use event_refresh::*;
+pub(crate) mod scoped_reconciler;
+pub(crate) mod swarm_reconciliation;
+use scoped_reconciler::*;
+
 mod events;
 use events::*;
 
 mod health;
 use health::*;
+mod lifecycle;
+use lifecycle::*;
 
 mod inventory;
 use inventory::*;
@@ -19,20 +28,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::docker::DockerError;
+use citadel_adapters::connectors::docker::events::{ContainerChange, RuntimeEventKind};
 use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
-use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use citadel_alerts::{AlertDeliveryService, AlertEventSink, AlertObservation};
 use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_builds::BuildService;
 use citadel_deployments::DeploymentService;
 use citadel_git::GitRepositoryExecutionService;
-use citadel_platforms::jobs::{
-    InventoryCollectionTarget, collect_inventory, triggers_inventory_reconciliation,
-};
-use citadel_platforms::{
-    InventoryProjectionStore, PlatformInventoryPort, PlatformRuntimePort, RuntimeCapabilityError,
-};
+use citadel_platforms::jobs::{DeltaOutcome, EventRefresh, ReconciliationDecision, event_decision};
+use citadel_platforms::{PlatformInventoryPort, RuntimeCapabilityError};
 use citadel_runtime::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, TaskSupervisor, bounded_channel,
 };
@@ -44,8 +49,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::Readiness;
 use crate::runtime_targets::{
-    HEALTH_CONCURRENCY, INVENTORY_CONCURRENCY, PlatformRuntimeRegistry,
-    PlatformTarget as ReconciliationTarget, STATS_CONCURRENCY,
+    HEALTH_CONCURRENCY, PlatformRuntimeRegistry, PlatformTarget as ReconciliationTarget,
+    STATS_CONCURRENCY,
 };
 use citadel_platforms::PlatformHealthPort;
 use citadel_runtime::{IoBudget, runtime_metrics::RuntimeWork};
@@ -86,7 +91,7 @@ pub struct WorkerDependencies {
     pub automation: Arc<AutomationService>,
     pub builds: Arc<BuildService>,
     pub backups: Arc<BackupService>,
-    pub alerts: Arc<dyn AlertEventSink>,
+    pub alerts: Arc<citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository>,
     pub alert_deliveries: Arc<AlertDeliveryService>,
 }
 
@@ -95,7 +100,7 @@ pub async fn register(
     cancellation: &CancellationToken,
     dependencies: WorkerDependencies,
     settings: WorkerSettings,
-) -> Result<(), sqlx::Error> {
+) -> Result<super::statistics::StatsIngress, sqlx::Error> {
     // Subscribe before starting inventory/event producers, so initial discovery
     // cannot race past the alert/drift/pruning consumers.
     let unmanaged_listener =
@@ -136,6 +141,23 @@ pub async fn register(
         alert_deliveries,
     } = dependencies;
     supervisor.spawn(
+        "alert-configuration-cache",
+        alerts.clone().watch_configuration(
+            notifications.subscribe(RuntimeSignal::AlertRules),
+            cancellation.child_token(),
+        ),
+    );
+    let alerts: Arc<dyn AlertEventSink> = alerts;
+    let stats = super::statistics::register(
+        supervisor,
+        cancellation,
+        pool.clone(),
+        realtime.clone(),
+        settings.queue_capacity,
+        settings.stats_batch_size,
+        settings.stats_flush_interval,
+    );
+    supervisor.spawn(
         "platform-targets",
         targets.clone().run(
             cancellation.child_token(),
@@ -156,7 +178,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "container-operation-reconciliation",
-        super::containers::reconcile(cancellation.child_token(), containers.clone()),
+        super::containers::reconcile(
+            cancellation.child_token(),
+            containers.clone(),
+            notifications.subscribe(RuntimeSignal::ContainerRecovery),
+        ),
     );
     supervisor.spawn(
         "swarm-task-pruning",
@@ -173,7 +199,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "git-repository-sync",
-        super::git::git_repository_sync(cancellation.child_token(), git),
+        super::git::git_repository_sync(
+            cancellation.child_token(),
+            git,
+            notifications.subscribe(RuntimeSignal::Git),
+        ),
     );
     supervisor.spawn(
         "automation-runs",
@@ -195,6 +225,7 @@ pub async fn register(
             alerts.clone(),
             settings.stats_flush_interval,
             i64::try_from(settings.stats_batch_size).unwrap_or(i64::MAX),
+            notifications.subscribe(RuntimeSignal::PlatformStats),
         ),
     );
     supervisor.spawn(
@@ -265,6 +296,7 @@ pub async fn register(
         super::deployments::deployment_apply_reconciliation(
             cancellation.child_token(),
             Arc::clone(&deployments),
+            notifications.subscribe(RuntimeSignal::DeploymentRecovery),
         ),
     );
     supervisor.spawn(
@@ -276,6 +308,15 @@ pub async fn register(
         super::swarm_services::swarm_service_operation_reconciliation(
             cancellation.child_token(),
             Arc::clone(&swarm_services),
+            notifications.subscribe(RuntimeSignal::SwarmServiceRecovery),
+        ),
+    );
+    supervisor.spawn(
+        "swarm-service-active-operations",
+        super::swarm_services::observe_active_operations(
+            cancellation.child_token(),
+            Arc::clone(&swarm_services),
+            notifications.subscribe(RuntimeSignal::SwarmServiceOperations),
         ),
     );
     supervisor.spawn(
@@ -290,6 +331,7 @@ pub async fn register(
         super::stacks::stack_operation_reconciliation(
             cancellation.child_token(),
             Arc::clone(&stacks),
+            notifications.subscribe(RuntimeSignal::StackRecovery),
         ),
     );
     supervisor.spawn(
@@ -298,7 +340,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-webhooks",
-        super::stacks::stack_webhooks(cancellation.child_token(), stacks.clone()),
+        super::stacks::stack_webhooks(
+            cancellation.child_token(),
+            stacks.clone(),
+            notifications.subscribe(RuntimeSignal::StackWebhooks),
+        ),
     );
     supervisor.spawn(
         "stack-updates",
@@ -334,19 +380,42 @@ pub async fn register(
         queue: agent_reconcile_sender,
         full: agent_overflow.clone(),
     };
+    let (health_transitions, health_receiver) = bounded_channel(256, QueueOverflowPolicy::Wait);
     supervisor.spawn(
-        "platform-resource-health",
-        resource_health(
+        "platform-health-monitor",
+        platform_health_monitor(
             cancellation.child_token(),
             HealthWorker {
                 docker: docker.clone(),
                 targets: targets.clone(),
                 pool: pool.clone(),
+                transitions: health_transitions,
+            },
+        ),
+    );
+    // Lifecycle and missed-commit recovery are independent of probe scheduling.
+    let (event_refresh_sender, event_refresh_receiver) = event_refresh_channels(256);
+    supervisor.spawn(
+        "platform-lifecycle-coordinator",
+        platform_lifecycle(
+            cancellation.child_token(),
+            health_receiver,
+            LifecycleWorker {
+                targets: targets.clone(),
+                pool: pool.clone(),
                 realtime: realtime.clone(),
-                local: local_reconcile_sender.clone(),
-                agent_trigger: agent_reconcile_sender.clone(),
+                refreshes: event_refresh_sender.clone(),
                 alerts: alerts.clone(),
             },
+        ),
+    );
+    supervisor.spawn(
+        "platform-deployment-catch-up",
+        deployment_catch_up(
+            cancellation.child_token(),
+            targets.clone(),
+            pool.clone(),
+            realtime.clone(),
         ),
     );
     supervisor.spawn(
@@ -367,15 +436,31 @@ pub async fn register(
                 sender,
                 StatsWorkerContext {
                     targets: targets.clone(),
-                    pool: pool.clone(),
+                    ingress: stats.clone(),
                     metrics: metrics.clone(),
-                    realtime: realtime.clone(),
                     fetch_interval: settings.probe_interval,
                 },
                 settings.agent_reconnect_delay,
             ),
         );
     }
+    supervisor.spawn(
+        "event-resource-refresh",
+        event_resource_refresh(
+            cancellation.child_token(),
+            event_refresh_receiver,
+            EventRefreshWorker {
+                refreshes: event_refresh_sender.clone(),
+                targets: targets.clone(),
+                docker: docker.clone(),
+                pool: pool.clone(),
+                realtime: realtime.clone(),
+                node_policy: settings.node_agent_policy.clone(),
+                retry_delay: settings.agent_reconnect_delay,
+                swarm_interval: settings.reconciliation_interval,
+            },
+        ),
+    );
     supervisor.spawn(
         "docker-event-consumer",
         event_consumer(
@@ -387,6 +472,7 @@ pub async fn register(
                 pool: pool.clone(),
                 realtime: realtime.clone(),
                 targets: targets.clone(),
+                event_refresh: event_refresh_sender.clone(),
                 local_reconciliation: local_reconcile_sender,
                 agent_reconciliation: agent_reconcile_sender,
             },
@@ -398,16 +484,10 @@ pub async fn register(
             cancellation.child_token(),
             InventoryReconciliationWorker {
                 targets: targets.clone(),
-                budget: targets.inventory_budget.clone(),
-                node_agent_policy: settings.node_agent_policy.clone(),
-                docker: docker.clone(),
-                pool: pool.clone(),
+                refreshes: event_refresh_sender,
                 local_triggers: local_reconcile_receiver,
                 agent_triggers: agent_reconcile_receiver,
                 agent_overflow,
-                realtime: realtime.clone(),
-                interval: settings.reconciliation_interval,
-                retry_delay: settings.agent_reconnect_delay,
             },
         ),
     );
@@ -429,22 +509,20 @@ pub async fn register(
             docker,
             StatsWorkerContext {
                 targets: targets.clone(),
-                pool,
+                ingress: stats.clone(),
                 metrics,
-                realtime,
                 fetch_interval: settings.probe_interval,
             },
         ),
     );
-    Ok(())
+    Ok(stats)
 }
 
 #[derive(Clone)]
 struct StatsWorkerContext {
     targets: Arc<PlatformRuntimeRegistry>,
-    pool: PgPool,
+    ingress: super::statistics::StatsIngress,
     metrics: Arc<Metrics>,
-    realtime: Option<RealtimeHub>,
     fetch_interval: Duration,
 }
 
@@ -474,48 +552,18 @@ impl AgentReconciliationSignal {
 
 #[derive(Debug)]
 struct InventoryEvent {
+    pub resource: Option<citadel_platforms::jobs::ResourceDelta>,
+    stream_recovered: bool,
+    swarm_scope: bool,
+    kind: RuntimeEventKind,
     platform_id: Option<uuid::Uuid>,
     container_id: Option<String>,
     container_state: Option<String>,
     container_name: Option<String>,
     container: Option<citadel_platforms::RuntimeContainerSummary>,
     source: ReconciliationTrigger,
-    resource_type: String,
     action: String,
     event_time_millis: Option<u128>,
-}
-
-pub(super) async fn persist_stats_retry(
-    store: &PostgresContainerStatsStore,
-    platform: uuid::Uuid,
-    stats: &[citadel_platforms::RuntimeContainerStat],
-    disk: Option<&citadel_platforms::RuntimePlatformStats>,
-    cancel: &CancellationToken,
-) -> Result<usize, RuntimeCapabilityError> {
-    let mut delay = Duration::from_secs(2);
-    loop {
-        let result = tokio::select! {
-            ()=cancel.cancelled()=>return Err(RuntimeCapabilityError::new(citadel_platforms::RuntimeErrorKind::Cancelled,"Statistics writer stopped",false)),
-            result=store.persist_with_platform_stats(platform,stats,disk)=>result,
-        };
-        match result {
-            Ok(inserted) => return Ok(inserted),
-            Err(error) if !error.retryable => {
-                RuntimeWork::StatsRetry.failures(1);
-                return Err(error);
-            }
-            Err(error) => {
-                RuntimeWork::StatsRetry.failures(1);
-                tracing::warn!(%error,%platform,"Statistics persistence failed; retaining the batch for retry")
-            }
-        }
-        tokio::select! {
-            ()=cancel.cancelled()=>return Err(RuntimeCapabilityError::new(citadel_platforms::RuntimeErrorKind::Cancelled,"Statistics writer stopped",false)),
-            _=tokio::time::sleep(delay)=>{},
-        }
-        RuntimeWork::StatsRetry.units(1);
-        delay = (delay * 2).min(Duration::from_secs(30));
-    }
 }
 
 #[cfg(test)]
@@ -666,24 +714,30 @@ mod tests {
         )
         .unwrap();
         let event = InventoryEvent {
+            resource: None,
+            stream_recovered: false,
+            swarm_scope: false,
+            kind: RuntimeEventKind::Container(ContainerChange::Exited),
             platform_id: Some(platform),
             container_id: Some("container-event".into()),
             container_state: Some("exited".into()),
             container_name: Some("web".into()),
             container: None,
             source: ReconciliationTrigger::AgentEvent,
-            resource_type: "container".into(),
             action: "die".into(),
             event_time_millis: None,
         };
         let targets = PlatformRuntimeRegistry::new(pool.clone(), None);
         targets.refresh().await.unwrap();
+        let hub =
+            crate::realtime::RealtimeHub::new(16, Arc::new(crate::metrics::Metrics::default()));
+        let mut updates = hub.subscribe();
         assert!(
             apply_container_event(
                 &event,
                 &docker,
                 &pool,
-                None,
+                Some(&hub),
                 &CancellationToken::new(),
                 &targets
             )
@@ -698,6 +752,55 @@ mod tests {
                 .unwrap(),
             "Stopped"
         );
+        tokio::time::timeout(Duration::from_secs(2), updates.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let revision: i64 =
+            sqlx::query_scalar("SELECT rowversion FROM containers WHERE platformid=$1")
+                .bind(platform)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        // Holding the owner lock proves a duplicate does not attempt reconciliation.
+        let mut owner = pool.begin().await.unwrap();
+        sqlx::query("SELECT id FROM deployments WHERE id=$1 FOR NO KEY UPDATE")
+            .bind(deployment)
+            .fetch_one(&mut *owner)
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                apply_container_event(
+                    &event,
+                    &docker,
+                    &pool,
+                    Some(&hub),
+                    &CancellationToken::new(),
+                    &targets,
+                )
+            )
+            .await
+            .expect("duplicate must not wait for the deployment lock")
+            .unwrap(),
+            "no-op is handled without fallback enumeration"
+        );
+        owner.rollback().await.unwrap();
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT rowversion FROM containers WHERE platformid=$1")
+                .bind(platform)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            revision
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), updates.recv())
+                .await
+                .is_err(),
+            "no duplicate realtime event after the coalescing window"
+        );
         pool.close().await;
     }
     #[test]
@@ -709,31 +812,39 @@ mod tests {
             full: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         let local_event = InventoryEvent {
+            resource: None,
+            stream_recovered: true,
+            swarm_scope: false,
+            kind: RuntimeEventKind::Container(ContainerChange::Running),
             platform_id: None,
             container_id: None,
             container_state: None,
             container_name: None,
             container: None,
             source: ReconciliationTrigger::LocalEvent,
-            resource_type: "container".into(),
             action: "start".into(),
             event_time_millis: None,
         };
         let agent_event = InventoryEvent {
+            resource: None,
+            stream_recovered: true,
+            swarm_scope: false,
+            kind: RuntimeEventKind::SwarmDirty(
+                citadel_adapters::connectors::docker::events::SwarmResource::Service,
+            ),
             platform_id: None,
             container_id: None,
             container_state: None,
             container_name: None,
             container: None,
             source: ReconciliationTrigger::AgentEvent,
-            resource_type: "service".into(),
             action: "update".into(),
             event_time_millis: None,
         };
 
-        queue_inventory_reconciliation(&local_event, &local, &agent);
-        queue_inventory_reconciliation(&local_event, &local, &agent);
-        queue_inventory_reconciliation(&agent_event, &local, &agent);
+        queue_stream_recovery(&local_event, &local, &agent);
+        queue_stream_recovery(&local_event, &local, &agent);
+        queue_stream_recovery(&agent_event, &local, &agent);
 
         assert_eq!(local_receiver.try_recv(), Some(()));
         assert_eq!(local_receiver.try_recv(), None);
@@ -815,3 +926,9 @@ mod subscription_tests;
 
 #[cfg(test)]
 mod inventory_tests;
+
+#[cfg(test)]
+mod event_tests;
+
+#[cfg(test)]
+mod event_policy_tests;

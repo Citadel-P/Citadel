@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, UserActivitySnapshot,
 };
@@ -221,7 +222,13 @@ impl UserRepository for PostgresUserRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![user.id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             ensure_user_name_and_email_available(&mut transaction, &user.name, &user.email, None)
                 .await?;
@@ -280,7 +287,10 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
             let view = fetch_user_view(&mut transaction, user.id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -294,7 +304,13 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_user_state(&mut transaction, id)
                 .await?
@@ -391,7 +407,10 @@ WHERE id = $1
             let view = fetch_user_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -445,7 +464,13 @@ WHERE id = $1
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'_, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_user_state(&mut transaction, id)
                 .await?
@@ -490,7 +515,10 @@ WHERE id = $1
             let view = fetch_user_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -503,7 +531,13 @@ WHERE id = $1
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'_, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_user_state(&mut transaction, id)
                 .await?
@@ -538,7 +572,10 @@ WHERE id = $1
             let view = fetch_user_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -555,7 +592,13 @@ WHERE id = $1
             if !custom_access_control_enabled {
                 return Err(IdentityError::LicenseRequired("custom-access-control"));
             }
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_user_state(&mut transaction, id)
                 .await?
@@ -599,7 +642,10 @@ ON CONFLICT (resourcetype, resourceid, actorid) DO NOTHING
             let view = fetch_user_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -612,7 +658,13 @@ ON CONFLICT (resourcetype, resourceid, actorid) DO NOTHING
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let state = load_user_state(&mut transaction, id)
                 .await?
@@ -652,7 +704,10 @@ WHERE actorid = $1 AND resourcetype = $2 AND resourceid = $3
             let view = fetch_user_view(&mut transaction, id)
                 .await?
                 .ok_or_else(missing_persisted_user)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -664,7 +719,13 @@ WHERE actorid = $1 AND resourcetype = $2 AND resourceid = $3
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Users(ids.to_vec());
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let rows =
                 sqlx::query("SELECT id, name FROM users WHERE id = ANY($1) ORDER BY name, id")
@@ -701,7 +762,10 @@ WHERE actorid = $1 AND resourcetype = $2 AND resourceid = $3
                 .map_err(invalid_activity)?;
                 insert_activity(&mut transaction, &activity).await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(())
         })
     }

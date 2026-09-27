@@ -343,7 +343,7 @@ pub struct SwarmSecretSummary {
     pub in_use: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeResourceProjection<T> {
     pub resource: T,
     pub docker_node_id: String,

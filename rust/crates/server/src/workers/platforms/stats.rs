@@ -1,4 +1,5 @@
 use super::*;
+use citadel_platforms::PlatformInfoPort;
 
 pub(super) async fn local_container_stats(
     cancellation: CancellationToken,
@@ -6,7 +7,6 @@ pub(super) async fn local_container_stats(
     context: StatsWorkerContext,
 ) -> Result<(), std::convert::Infallible> {
     let _task = context.metrics.task_guard();
-    let store = PostgresContainerStatsStore::new(context.pool.clone());
     let mut sampler =
         citadel_adapters::connectors::docker::LocalDockerSampler::new(docker, STATS_CONCURRENCY);
     let mut ticker = super::super::schedule::interval("local-stats", context.fetch_interval);
@@ -18,15 +18,25 @@ pub(super) async fn local_container_stats(
             _ = ticker.tick() => {}
         }
         let _cycle = citadel_runtime::runtime_metrics::RuntimeWork::LocalStats.start();
-        let Some(platform_id) = context
+        let Some(target) = context
             .targets
             .snapshot()
             .await
             .iter()
             .find(|target| target.connector_type == citadel_platforms::ConnectorKind::Local)
-            .map(|target| target.id)
+            .cloned()
         else {
             continue;
+        };
+        let platform_id = target.id;
+        let scope = citadel_platforms::stats_ingestion::StatsScope {
+            platform_id,
+            node_id: None,
+            connector: "Local".into(),
+            address: Some(target.address),
+            agent_id: None,
+            connected_at: None,
+            closed: None,
         };
         let sample = match sampler.sample(&cancellation).await {
             Ok(sample) => sample,
@@ -53,18 +63,14 @@ pub(super) async fn local_container_stats(
         }
         let stats = batch.stats;
         let disk = sample.platform;
-        match persist_stats_retry(&store, platform_id, &stats, disk.as_ref(), &cancellation).await {
-            Ok(0) if !stats.is_empty() => continue,
-            Ok(_) => {
-                context.metrics.local_stats_sampled();
-                if let Some(realtime) = context.realtime.as_ref() {
-                    realtime.publish_container_stats(platform_id, &stats);
-                }
-            }
-            Err(error) => {
-                tracing::warn!(%error, %platform_id, "local container statistics persistence failed");
-            }
+        if !context
+            .ingress
+            .submit_cycle(scope, stats, disk, sample.captured_at, &cancellation)
+            .await
+        {
+            return Ok(());
         }
+        context.metrics.local_stats_sampled();
     }
 }
 
@@ -76,7 +82,6 @@ pub(super) async fn agent_container_stats(
     reconnect_delay: Duration,
 ) -> Result<(), RuntimeCapabilityError> {
     let _task = context.metrics.task_guard();
-    let store = PostgresContainerStatsStore::new(context.pool.clone());
     loop {
         let (platform_id, agent) = match agent_subscription(&context.targets, platform).await {
             Ok(Some(target)) => target,
@@ -140,26 +145,23 @@ pub(super) async fn agent_container_stats(
                 Some(Ok(stats)) => {
                     let _iteration = RuntimeWork::AgentStats.start();
                     RuntimeWork::AgentStats.units(stats.len() as u64);
-                    match persist_stats_retry(
-                        &store,
+                    let scope = citadel_platforms::stats_ingestion::StatsScope {
                         platform_id,
-                        &stats,
-                        disk.get(),
-                        &cancellation,
-                    )
-                    .await
+                        node_id: None,
+                        connector: "Agent".into(),
+                        address: Some(agent.address().to_owned()),
+                        agent_id: None,
+                        connected_at: None,
+                        closed: None,
+                    };
+                    if !context
+                        .ingress
+                        .submit(scope, stats, disk.get().cloned(), &cancellation)
+                        .await
                     {
-                        Ok(0) if !stats.is_empty() => continue,
-                        Ok(_) => {
-                            context.metrics.agent_stats_sampled();
-                            if let Some(realtime) = context.realtime.as_ref() {
-                                realtime.publish_container_stats(platform_id, &stats);
-                            }
-                        }
-                        Err(error) => {
-                            tracing::warn!(%error, %platform_id, "Agent container statistics persistence failed");
-                        }
+                        return Ok(());
                     }
+                    context.metrics.agent_stats_sampled();
                 }
                 Some(Err(error)) => {
                     context.metrics.agent_stream_reconnected();

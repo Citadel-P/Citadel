@@ -144,6 +144,33 @@ impl DockerClient {
         .await?
         .try_into()
     }
+
+    /// Event projection needs list metadata, not the full inspection document.
+    /// Match the exact identity: Docker's ID filter also accepts prefixes.
+    pub async fn container_event_observation(
+        &self,
+        id: &str,
+    ) -> Result<Option<citadel_platforms::RuntimeContainerSummary>, DockerError> {
+        validate_identifier(id)?;
+        let filters = serde_json::json!({"id": [id]}).to_string();
+        let Some(container) = self
+            .list_container_models(Some(true), None, None, Some(&filters))
+            .await?
+            .into_iter()
+            .find(|container| container.id.as_deref() == Some(id))
+        else {
+            // A disappearing container is not an authoritative deletion event.
+            return Ok(None);
+        };
+        if container.image_id.as_deref().is_none_or(str::is_empty) {
+            // Match the .NET compatibility fallback for incomplete summaries.
+            let _inspect = RuntimeWork::ContainerEventInspect.start();
+            return Ok(Some(super::container_observation(
+                self.inspect_container_document(id).await?,
+            )?));
+        }
+        Ok(Some(super::runtime::map_container(container.try_into()?)))
+    }
     pub async fn delete_container(
         &self,
         id: &str,
@@ -192,7 +219,13 @@ impl DockerClient {
         id: &str,
         action: citadel_platforms::containers::ContainerAction,
     ) -> Result<(), DockerError> {
-        self.change_container_state_with_options(id, action, None, Some(10))
+        use citadel_platforms::containers::ContainerAction;
+        let (signal, timeout) = match action {
+            ContainerAction::Stop => (Some("SIGTERM"), Some(10)),
+            ContainerAction::Restart => (Some("SIGINT"), Some(5)),
+            _ => (None, None),
+        };
+        self.change_container_state_with_options(id, action, signal, timeout)
             .await
     }
     pub async fn change_container_state_with_options(
@@ -292,6 +325,41 @@ impl DockerClient {
     pub async fn list_images(&self) -> Result<Vec<ImageSummary>, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
         convert_list(self.list_image_models().await?)
+    }
+    /// Lifecycle observations need one image and its usage, never the image set.
+    pub async fn image_event_model(
+        &self,
+        id: &str,
+    ) -> Result<citadel_docker_api::models::ImageSummary, DockerError> {
+        validate_identifier(id)?;
+        let inspect = async {
+            self.api_result(
+                ImageApiClient::new(self.configuration().await?)
+                    .image_inspect(id, None)
+                    .await,
+            )
+            .await
+        };
+        let (image, containers) = tokio::try_join!(inspect, self.image_containers(id))?;
+        Ok(citadel_docker_api::models::ImageSummary {
+            id: image.id.unwrap_or_default(),
+            parent_id: image.parent.unwrap_or_default(),
+            repo_tags: image.repo_tags,
+            repo_digests: image.repo_digests,
+            created: image
+                .created
+                .flatten()
+                .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
+                .map_or(0, |v| {
+                    v.timestamp().clamp(i32::MIN as i64, i32::MAX as i64) as i32
+                }),
+            size: image.size.unwrap_or_default(),
+            virtual_size: image.virtual_size,
+            shared_size: -1,
+            labels: image.config.and_then(|c| c.labels),
+            containers: containers.len().min(i32::MAX as usize) as i32,
+            ..Default::default()
+        })
     }
     pub async fn inspect_image(&self, id: &str) -> Result<ImageInspect, DockerError> {
         validate_identifier(id)?;
@@ -406,6 +474,16 @@ impl DockerClient {
             .filter_map(|v| v.usage_data.flatten().map(|data| (v.name, data)))
             .map(|(name, data)| Ok((name, document(data)?)))
             .collect()
+    }
+    /// Only explicit volume inspection needs its attached containers.
+    pub async fn volume_containers(
+        &self,
+        name: &str,
+    ) -> Result<Vec<models::ContainerSummary>, DockerError> {
+        validate_identifier(name)?;
+        let filters = serde_json::json!({"volume": [name]}).to_string();
+        self.list_container_models(Some(true), None, None, Some(&filters))
+            .await
     }
     pub async fn inspect_volume(&self, name: &str) -> Result<DockerVolume, DockerError> {
         validate_identifier(name)?;

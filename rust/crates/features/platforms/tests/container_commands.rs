@@ -13,6 +13,8 @@ use uuid::Uuid;
 struct Store {
     claimed: AtomicUsize,
     finished: AtomicUsize,
+    persisted: AtomicUsize,
+    batches: AtomicUsize,
 }
 impl ContainerRepository for Store {
     fn resolve_ids<'a>(
@@ -55,6 +57,18 @@ impl ContainerRepository for Store {
         _: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async { Ok(()) })
+    }
+    fn observed_batch<'a>(
+        &'a self,
+        _: Uuid,
+        observations: &'a [ContainerObservation],
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            self.batches.fetch_add(1, Ordering::SeqCst);
+            self.persisted
+                .fetch_add(observations.len(), Ordering::SeqCst);
+            Ok(())
+        })
     }
     fn finish(&self, _: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
         Box::pin(async {
@@ -176,6 +190,7 @@ struct BatchRuntime {
     fail: bool,
     batches: AtomicUsize,
     observations: AtomicUsize,
+    unavailable: Option<Uuid>,
 }
 impl ContainerMutationRuntime for BatchRuntime {
     fn mutate<'a>(
@@ -208,11 +223,18 @@ impl ContainerMutationRuntime for BatchRuntime {
     }
     fn observe<'a>(
         &'a self,
-        _: &'a ContainerTarget,
+        target: &'a ContainerTarget,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>> {
         Box::pin(async move {
             self.observations.fetch_add(1, Ordering::SeqCst);
+            if self.unavailable == Some(target.id) {
+                return Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Unavailable,
+                    "inspection unavailable",
+                    false,
+                ));
+            }
             Ok(Some("exited".into()))
         })
     }
@@ -226,6 +248,7 @@ async fn bulk_mutation_verifies_all_targets_and_retains_claims_after_partial_fai
             fail,
             batches: AtomicUsize::new(0),
             observations: AtomicUsize::new(0),
+            unavailable: None,
         });
         let service =
             ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
@@ -239,10 +262,9 @@ async fn bulk_mutation_verifies_all_targets_and_retains_claims_after_partial_fai
             .await;
         assert_eq!(result.is_err(), fail);
         assert_eq!(runtime.batches.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            runtime.observations.load(Ordering::SeqCst),
-            if fail { 0 } else { 6 }
-        );
+        assert_eq!(runtime.observations.load(Ordering::SeqCst), 6);
+        assert_eq!(store.persisted.load(Ordering::SeqCst), 6);
+        assert_eq!(store.batches.load(Ordering::SeqCst), 1);
         assert_eq!(store.finished.load(Ordering::SeqCst), usize::from(!fail));
     }
 }
@@ -285,4 +307,31 @@ async fn closed_process_admission_creates_no_claim() {
         .await;
     assert!(matches!(result, Err(error) if error.kind == RuntimeErrorKind::ResourceExhausted));
     assert_eq!(store.claimed.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn partial_verification_persists_successful_siblings_in_one_batch_and_retains_claim() {
+    let store = Arc::new(Store::default());
+    let ids: Vec<_> = (0..6).map(|_| Uuid::now_v7()).collect();
+    let runtime = Arc::new(BatchRuntime {
+        fail: false,
+        batches: AtomicUsize::new(0),
+        observations: AtomicUsize::new(0),
+        unavailable: Some(ids[0]),
+    });
+    let service = ContainerMutationService::new(store.clone(), runtime, Arc::new(Tasks));
+    let result = service
+        .execute(
+            ActorId::new(Uuid::now_v7()),
+            true,
+            ids.iter().map(ToString::to_string).collect(),
+            ContainerAction::Stop,
+        )
+        .await;
+    assert!(
+        matches!(result,Err(error) if error.kind==RuntimeErrorKind::Unavailable && error.message.contains(&ids[0].to_string()))
+    );
+    assert_eq!(store.persisted.load(Ordering::SeqCst), 5);
+    assert_eq!(store.batches.load(Ordering::SeqCst), 1);
+    assert_eq!(store.finished.load(Ordering::SeqCst), 0);
 }

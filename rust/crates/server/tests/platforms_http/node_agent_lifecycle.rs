@@ -1,6 +1,6 @@
 use super::*;
 use citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore;
-use citadel_platforms::{PlatformRuntimePort, node_agents::lifecycle::NodeAgentLifecycleStore};
+use citadel_platforms::node_agents::lifecycle::NodeAgentLifecycleStore;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
@@ -305,7 +305,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     denied.actor_id = ActorId::new(Uuid::now_v7());
     assert!(groups.read(&denied, &group, Some(&change)).await.is_err());
     // CAS prevents both a competing operation and a delayed prior completion.
-    let info = PlatformRuntimePort::get_info(
+    let info = citadel_platforms::PlatformInfoPort::get_info(
         &fixture.lookup_state.platforms.docker,
         &tokio_util::sync::CancellationToken::new(),
     )

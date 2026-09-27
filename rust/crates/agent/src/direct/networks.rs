@@ -117,7 +117,7 @@ impl network_service_server::NetworkService for Runtime {
                 .config_from
                 .as_ref()
                 .and_then(|v| v["Network"].as_str().map(str::to_owned)),
-            ipam: Some(ipam(v.ipam.as_ref().unwrap_or(&Value::Null))),
+            ipam: v.ipam.as_ref().map(ipam),
             options: v.options,
             labels: v.labels,
             containers: v
@@ -162,13 +162,11 @@ pub(super) fn network(v: DockerNetwork, in_use: bool) -> Network {
         ingress: v.ingress,
         config_only: v.config_only,
         in_use,
-        config_from: Some(
-            v.config_from
-                .as_ref()
-                .map(|v| text(v, "Network"))
-                .unwrap_or_default(),
-        ),
-        ipam: Some(ipam(v.ipam.as_ref().unwrap_or(&Value::Null))),
+        config_from: v
+            .config_from
+            .as_ref()
+            .and_then(|v| v["Network"].as_str().map(str::to_owned)),
+        ipam: v.ipam.as_ref().map(ipam),
         options: v.options,
         labels: v.labels,
     }

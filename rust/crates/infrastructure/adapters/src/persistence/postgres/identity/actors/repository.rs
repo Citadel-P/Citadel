@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_identity::ActorType;
 use citadel_identity::{ActorDetails, ActorRepository, IdentityError};
 use futures_util::future::BoxFuture;
@@ -26,7 +27,13 @@ impl ActorRepository for PostgresActorRepository {
         enabled: bool,
     ) -> BoxFuture<'_, Result<ActorDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Actors(vec![id]);
+            authorization
+                .capture(&mut tx, &impact)
+                .await
+                .map_err(storage)?;
             // Use the same serialization lock as User/Team/Role administration;
             // two simultaneous disables must not remove the last administrator.
             crate::persistence::postgres::identity::users::repository::lock_identity_mutations(
@@ -44,7 +51,7 @@ impl ActorRepository for PostgresActorRepository {
             if !enabled {
                 crate::persistence::postgres::identity::users::repository::ensure_enabled_administrator_remains(&mut tx).await?;
             }
-            tx.commit().await.map_err(storage)?;
+            authorization.commit(tx, impact).await.map_err(storage)?;
             Ok(actor)
         })
     }

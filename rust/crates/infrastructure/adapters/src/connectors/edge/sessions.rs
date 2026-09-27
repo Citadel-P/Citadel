@@ -252,6 +252,11 @@ pub struct EdgeSession {
     output_budget: Arc<Semaphore>,
 }
 impl EdgeSession {
+    /// Buffered observations must not outlive the authenticated session.
+    pub fn observation_token(&self) -> CancellationToken {
+        self.closed.clone()
+    }
+
     pub fn is_closed(&self) -> bool {
         self.closed.is_cancelled()
     }

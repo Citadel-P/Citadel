@@ -146,13 +146,13 @@ impl StackUpdateRuntime {
                     peer.list_images(cancel).await.map_err(runtime_failure)?,
                 ),
                 None => (
-                    citadel_platforms::PlatformRuntimePort::list_containers(
+                    citadel_platforms::ContainerInventoryPort::list_containers(
                         &self.runtime.docker,
                         cancel,
                     )
                     .await
                     .map_err(runtime_failure)?,
-                    citadel_platforms::PlatformInventoryPort::list_images(
+                    citadel_platforms::ImageInventoryPort::list_images(
                         &self.runtime.docker,
                         cancel,
                     )

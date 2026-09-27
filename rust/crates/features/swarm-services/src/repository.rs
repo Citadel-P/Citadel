@@ -132,6 +132,12 @@ pub trait SwarmServiceRepository: Send + Sync {
         message: &'a str,
         outcome_unknown: bool,
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>>;
+    /// Keyset page of Docker-accepted rollouts; excludes in-flight dispatches.
+    fn active_operation_claims(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, ServiceOperationClaim)>, SwarmServiceError>>;
     fn stale_operation_claims(
         &self,
         started_before: i64,

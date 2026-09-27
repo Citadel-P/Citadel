@@ -2,8 +2,6 @@ use std::collections::BTreeMap;
 
 use std::pin::Pin;
 
-use std::time::Duration;
-
 use chrono::{DateTime, Utc};
 
 use citadel_primitives::ActorId;
@@ -70,7 +68,7 @@ pub struct RuntimeSwarmPeer {
     pub address: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeContainerSummary {
     pub id: String,
@@ -168,22 +166,14 @@ pub trait PlatformHealthPort: Send + Sync {
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
 }
 
-pub trait PlatformRuntimePort: Send + Sync {
-    fn get_info<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>>;
-
-    fn list_containers<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>>;
-
-    fn stream_stats<'a>(
-        &'a self,
-        fetch_interval: Duration,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>>;
+/// Composite for orchestration only; scoped services use individual capabilities.
+pub trait PlatformRuntimePort:
+    crate::PlatformInfoPort + crate::ContainerInventoryPort + crate::PlatformStatsPort
+{
+}
+impl<T: crate::PlatformInfoPort + crate::ContainerInventoryPort + crate::PlatformStatsPort + ?Sized>
+    PlatformRuntimePort for T
+{
 }
 
 /// A complete, validated host filesystem measurement; unavailable is not zero.

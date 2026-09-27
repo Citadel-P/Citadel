@@ -74,7 +74,7 @@ impl EdgeRuntime {
         }))
     }
 }
-impl PlatformRuntimePort for EdgeRuntime {
+impl citadel_platforms::PlatformInfoPort for EdgeRuntime {
     fn get_info<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -90,6 +90,9 @@ impl PlatformRuntimePort for EdgeRuntime {
             Ok(agent::map_platform_info(response))
         })
     }
+}
+
+impl citadel_platforms::ContainerInventoryPort for EdgeRuntime {
     fn list_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -113,6 +116,9 @@ impl PlatformRuntimePort for EdgeRuntime {
                 .collect())
         })
     }
+}
+
+impl citadel_platforms::PlatformStatsPort for EdgeRuntime {
     fn stream_stats<'a>(
         &'a self,
         interval: Duration,
@@ -163,7 +169,7 @@ impl SwarmTaskRuntimePort for EdgeRuntime {
     }
 }
 
-impl PlatformResourceMutationPort for EdgeRuntime {
+impl citadel_platforms::NetworkMutationPort for EdgeRuntime {
     fn create_network<'a>(
         &'a self,
         input: &'a CreateRuntimeNetwork,
@@ -180,6 +186,7 @@ impl PlatformResourceMutationPort for EdgeRuntime {
             Ok(CreatedRuntimeNetwork { id: result.id })
         })
     }
+
     fn delete_network<'a>(
         &'a self,
         id: &'a str,
@@ -197,6 +204,9 @@ impl PlatformResourceMutationPort for EdgeRuntime {
             .await
         })
     }
+}
+
+impl citadel_platforms::VolumeMutationPort for EdgeRuntime {
     fn create_volume<'a>(
         &'a self,
         input: &'a CreateRuntimeVolume,
@@ -218,6 +228,7 @@ impl PlatformResourceMutationPort for EdgeRuntime {
             Ok(agent::map_volume(result))
         })
     }
+
     fn delete_volume<'a>(
         &'a self,
         name: &'a str,
@@ -259,7 +270,7 @@ macro_rules! list {
         }
     };
 }
-impl PlatformInventoryPort for EdgeRuntime {
+impl citadel_platforms::ImageInventoryPort for EdgeRuntime {
     list!(
         list_images,
         RuntimeImageSummary,
@@ -269,6 +280,9 @@ impl PlatformInventoryPort for EdgeRuntime {
         images,
         map_image
     );
+}
+
+impl citadel_platforms::NetworkInventoryPort for EdgeRuntime {
     list!(
         list_networks,
         RuntimeNetworkSummary,
@@ -278,6 +292,9 @@ impl PlatformInventoryPort for EdgeRuntime {
         networks,
         map_network
     );
+}
+
+impl citadel_platforms::VolumeInventoryPort for EdgeRuntime {
     list!(
         list_volumes,
         RuntimeVolumeSummary,
@@ -287,6 +304,9 @@ impl PlatformInventoryPort for EdgeRuntime {
         volumes,
         map_volume
     );
+}
+
+impl citadel_platforms::SwarmInventoryPort for EdgeRuntime {
     list!(
         list_swarm_nodes,
         RuntimeSwarmNode,
@@ -337,6 +357,9 @@ impl PlatformInventoryPort for EdgeRuntime {
         secrets,
         map_swarm_secret
     );
+}
+
+impl citadel_platforms::NetworkObservationPort for EdgeRuntime {
     fn inspect_network<'a>(
         &'a self,
         id: &'a str,
@@ -353,6 +376,9 @@ impl PlatformInventoryPort for EdgeRuntime {
             Ok(agent::map_network_inspect(response))
         })
     }
+}
+
+impl citadel_platforms::VolumeObservationPort for EdgeRuntime {
     fn inspect_volume<'a>(
         &'a self,
         name: &'a str,

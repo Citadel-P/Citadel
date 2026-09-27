@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, RoleActivitySnapshot, RolePermissionActivitySnapshot,
 };
@@ -71,7 +72,13 @@ impl RoleRepository for PostgresRoleRepository {
         role: &'a NewRoleMutation,
     ) -> BoxFuture<'a, Result<RoleDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Roles(vec![role.id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             ensure_role_name_available(&mut transaction, &role.name, None).await?;
             sqlx::query("INSERT INTO roles (id, name, roletype) VALUES ($1, $2, 'Custom')")
@@ -93,7 +100,10 @@ impl RoleRepository for PostgresRoleRepository {
             let view = load_role(&mut transaction, role.id, false)
                 .await?
                 .ok_or_else(missing_persisted_role)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -107,7 +117,13 @@ impl RoleRepository for PostgresRoleRepository {
         custom_access_control_enabled: bool,
     ) -> BoxFuture<'a, Result<RoleDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Roles(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let current = load_role(&mut transaction, id, true)
                 .await?
@@ -142,7 +158,10 @@ impl RoleRepository for PostgresRoleRepository {
             let view = load_role(&mut transaction, id, false)
                 .await?
                 .ok_or_else(missing_persisted_role)?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(view)
         })
     }
@@ -198,7 +217,13 @@ impl RoleRepository for PostgresRoleRepository {
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Roles(ids.to_vec());
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             lock_identity_mutations(&mut transaction).await?;
             let roles = load_roles(&mut transaction, ids, true).await?;
             if roles.is_empty() {
@@ -228,7 +253,10 @@ impl RoleRepository for PostgresRoleRepository {
                 )
                 .await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(())
         })
     }

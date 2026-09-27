@@ -9,10 +9,11 @@ pub(super) async fn subject(f: &Fixture) -> ActorPrincipal {
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO users(id,actorid,name,createdbyactorid) VALUES($1,$2,$3,$2)")
+    sqlx::query("INSERT INTO users(id,actorid,name,createdbyactorid,email) VALUES($1,$2,$3,$2,$4)")
         .bind(user)
         .bind(actor)
         .bind(format!("lookup-{user}"))
+        .bind(format!("{user}@lookup.test"))
         .execute(&f.pool)
         .await
         .unwrap();

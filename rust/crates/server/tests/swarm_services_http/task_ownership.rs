@@ -22,6 +22,49 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
         Arc::new(CompletingRuntime),
         shutdown,
     );
+    // Accepted rollouts finish through observation without replaying Apply.
+    // Prepared/pending dispatches are excluded from this fast path.
+    let claim = repository
+        .claim_operation(
+            actor,
+            true,
+            citadel_swarm_services::ServiceOperationRequest {
+                id,
+                kind: citadel_swarm_services::ServiceOperationKind::Apply,
+                replicas: None,
+                expected_version: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        service.observe_active_operations(None, 25).await.unwrap(),
+        (None, 0)
+    );
+    repository.mark_attempted(&claim).await.unwrap();
+    assert_eq!(
+        service.observe_active_operations(None, 25).await.unwrap(),
+        (None, 0)
+    );
+    let mut accepted = completed(&claim);
+    accepted.rollout_complete = false;
+    repository.mark_accepted(&claim, &accepted).await.unwrap();
+    assert_eq!(
+        service.observe_active_operations(None, 25).await.unwrap(),
+        (None, 1)
+    );
+    assert_eq!(
+        repository
+            .get_authorized(actor, true, id)
+            .await
+            .unwrap()
+            .control_state,
+        "Idle"
+    );
+    assert_eq!(
+        service.observe_active_operations(None, 25).await.unwrap(),
+        (None, 0)
+    );
     let progress = service.apply(actor, true, id);
     assert_eq!(owner.active(), 1);
     drop(progress);

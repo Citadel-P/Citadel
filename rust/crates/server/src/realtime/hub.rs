@@ -65,6 +65,7 @@ pub struct PublishedRuntimeEvent {
     pub(crate) resource_revision: u64,
     pub(crate) payload: Value,
     // Shared only for this committed invalidation; readers still enforce ACLs.
+    pub(crate) reads: Arc<super::shared_reads::CommittedReads>,
     pub(crate) containers: Arc<tokio::sync::OnceCell<Vec<citadel_platforms::ContainerDetails>>>,
 }
 
@@ -110,10 +111,10 @@ struct RealtimeHubInner {
     revision: AtomicU64,
     sender: broadcast::Sender<Arc<PublishedRuntimeEvent>>,
     metrics: Arc<Metrics>,
-    pending_containers: std::sync::Mutex<Option<ContainerChanges>>,
+    pending_observations: std::sync::Mutex<Option<Observations>>,
 }
 
-type ContainerChanges = BTreeMap<(Uuid, String), BTreeSet<String>>;
+type Observations = BTreeMap<(Uuid, String, String), BTreeSet<String>>;
 
 impl RealtimeHub {
     #[must_use]
@@ -125,7 +126,7 @@ impl RealtimeHub {
                 revision: AtomicU64::new(0),
                 sender,
                 metrics,
-                pending_containers: Default::default(),
+                pending_observations: Default::default(),
             }),
         }
     }
@@ -138,6 +139,47 @@ impl RealtimeHub {
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<PublishedRuntimeEvent>> {
         self.inner.sender.subscribe()
+    }
+
+    pub fn publish_resource_observation(
+        &self,
+        platform_id: Uuid,
+        node: Option<&str>,
+        action: &str,
+        delta: &citadel_platforms::jobs::ResourceDelta,
+    ) -> u64 {
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(Some(platform_id), PLATFORM_RESOURCE_TYPE, platform_id, "runtimeChanged",
+            json!({"dockerResourceType":delta.resource_type(), "action":action, "runtimeResourceId":delta.id(), "resourceDelta":delta, "dockerNodeId":node}))
+    }
+    pub fn publish_resource_snapshot(
+        &self,
+        snapshot: &citadel_platforms::jobs::ResourceSnapshot,
+        node: Option<&str>,
+    ) {
+        use citadel_platforms::jobs::ResourceInventory as R;
+        if self.inner.sender.receiver_count() == 0 {
+            return;
+        }
+        let (kind, payload) = match &snapshot.inventory {
+            R::Networks(values) => ("network", json!({"networks":values})),
+            R::Volumes(values) => ("volume", json!({"volumes":values})),
+            R::Images(_) => ("image", Value::Null),
+            _ => {
+                return self.publish_inventory_observation(
+                    snapshot.platform_id,
+                    match &snapshot.inventory {
+                        R::Platform(_) => "platform",
+                        R::Containers(_) => "container",
+                        _ => "swarm",
+                    },
+                );
+            }
+        };
+        self.publish(Some(snapshot.platform_id), PLATFORM_RESOURCE_TYPE, snapshot.platform_id, "runtimeChanged",
+            json!({"dockerResourceType":kind,"action":"update","resourceSnapshot":payload,"dockerNodeId":node}));
     }
 
     pub fn publish_runtime_change(
@@ -185,14 +227,35 @@ impl RealtimeHub {
     /// Coalesce committed Docker observations within a fixed window. This does
     /// not delay mutation claims, audit events, logs, or terminal streams.
     pub fn publish_container_observation(&self, platform_id: Uuid, action: &str, id: String) {
-        if id.is_empty() || self.inner.sender.receiver_count() == 0 {
+        if !id.is_empty() {
+            self.publish_observation(platform_id, "container", action, id);
+        }
+    }
+
+    /// A scoped reconciliation changed an entire committed inventory. An empty
+    /// runtime ID marks a full container read, never a fictitious Docker ID.
+    pub fn publish_inventory_observation(&self, platform_id: Uuid, resource: &str) {
+        if matches!(resource, "container" | "image" | "network" | "volume") {
+            self.publish_observation(platform_id, resource, "update", String::new());
+        } else {
+            self.publish_runtime_change(platform_id, resource, "update", platform_id.to_string());
+        }
+    }
+
+    fn publish_observation(&self, platform_id: Uuid, resource: &str, action: &str, id: String) {
+        if !matches!(resource, "container" | "image" | "network" | "volume") {
+            self.publish_runtime_change(platform_id, resource, action, id);
             return;
         }
-        let mut pending = self.inner.pending_containers.lock().unwrap();
+        if self.inner.sender.receiver_count() == 0 {
+            return;
+        }
+        citadel_runtime::runtime_metrics::RuntimeWork::RealtimeObservationInput.units(1);
+        let mut pending = self.inner.pending_observations.lock().unwrap();
         let schedule = pending.is_none();
         let changes = pending.get_or_insert_with(Default::default);
         changes
-            .entry((platform_id, action.to_owned()))
+            .entry((platform_id, resource.to_owned(), action.to_owned()))
             .or_default()
             .insert(id);
         // Bound retained IDs even during a sustained event burst.
@@ -200,7 +263,7 @@ impl RealtimeHub {
             .then(|| std::mem::take(changes));
         drop(pending);
         if let Some(changes) = flush {
-            self.flush_container_changes(changes);
+            self.flush_observations(changes);
         }
         if schedule {
             let hub = self.clone();
@@ -208,19 +271,28 @@ impl RealtimeHub {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 let changes = hub
                     .inner
-                    .pending_containers
+                    .pending_observations
                     .lock()
                     .unwrap()
                     .take()
                     .unwrap_or_default();
-                hub.flush_container_changes(changes);
+                hub.flush_observations(changes);
             });
         }
     }
 
-    fn flush_container_changes(&self, changes: ContainerChanges) {
-        for ((platform, action), ids) in changes {
-            self.publish_container_changes(platform, &action, &ids.into_iter().collect::<Vec<_>>());
+    fn flush_observations(&self, changes: Observations) {
+        for ((platform, resource, action), ids) in changes {
+            if resource == "container" && !ids.contains("") {
+                self.publish_container_changes(
+                    platform,
+                    &action,
+                    &ids.into_iter().collect::<Vec<_>>(),
+                );
+            } else {
+                // These groups reread the committed inventory for this resource.
+                self.publish_runtime_change(platform, resource, action, "");
+            }
         }
     }
 
@@ -313,6 +385,7 @@ impl RealtimeHub {
             event_kind,
             resource_revision: revision,
             payload,
+            reads: Default::default(),
             containers: Default::default(),
         });
         let _ = self.inner.sender.send(event);
@@ -386,6 +459,62 @@ mod stats_notification_tests {
             .unwrap()
             .unwrap();
         assert_eq!(final_event.container_ids().unwrap(), vec!["1024"]);
+    }
+
+    #[tokio::test]
+    async fn observations_keep_platform_resource_and_action_boundaries() {
+        let hub = RealtimeHub::new(32, Arc::new(Metrics::default()));
+        let mut receiver = hub.subscribe();
+        let platform = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        for _ in 0..100 {
+            for resource in ["image", "network", "volume"] {
+                hub.publish_observation(platform, resource, "update", "one".into());
+            }
+        }
+        hub.publish_observation(platform, "image", "delete", "one".into());
+        hub.publish_observation(other, "image", "update", "one".into());
+        hub.publish_resource_change("License", Uuid::nil(), "updated");
+        assert_eq!(receiver.try_recv().unwrap().resource_type, "License");
+        hub.publish_runtime_change(platform, "image", "processing", "one");
+        assert_eq!(receiver.try_recv().unwrap().payload["action"], "processing");
+        assert!(receiver.try_recv().is_err());
+        let mut keys = BTreeSet::new();
+        for _ in 0..5 {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(2), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            keys.insert((
+                event.platform_id.unwrap(),
+                event.payload["dockerResourceType"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                event.payload["action"].as_str().unwrap().to_owned(),
+            ));
+        }
+        assert_eq!(keys.len(), 5);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn full_inventory_observation_supersedes_targeted_container_ids() {
+        let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
+        let mut receiver = hub.subscribe();
+        let platform = Uuid::now_v7();
+        hub.publish_container_observation(platform, "update", "one".into());
+        hub.publish_inventory_observation(platform, "container");
+        let event = tokio::time::timeout(std::time::Duration::from_secs(2), receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(event.payload["dockerResourceType"], "container");
+        assert!(
+            event.container_ids().is_none(),
+            "full refresh must not be mistaken for a Docker ID"
+        );
+        assert!(receiver.try_recv().is_err());
     }
 
     // ContainerStatsWriterJobTests: no subscribers means no notification payload.

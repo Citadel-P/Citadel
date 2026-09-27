@@ -187,6 +187,7 @@ pub enum RowStyle {
     DockerResource,
     // Complete state for one Docker ID, not the entire Platform inventory.
     DockerResourcePatch(String),
+    DaemonPatch(String),
     Activity,
     Notification,
     Platforms,
@@ -198,6 +199,16 @@ pub struct GroupSnapshot {
     pub events: Vec<ClientEvent>,
 }
 pub trait GroupReadPort: Send + Sync {
+    fn read_with_lease<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        group: &'a Group,
+        event: Option<&'a PublishedRuntimeEvent>,
+        _lease: &'a crate::realtime::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+        self.read(principal, group, event)
+    }
+
     fn terminal_invocation<'a>(
         &'a self,
         _p: &'a ActorPrincipal,
@@ -287,6 +298,31 @@ impl GroupSubscription {
                 }
                 continue;
             }
+            if let RowStyle::DaemonPatch(reference) = &batch.style {
+                let known = self.known.entry(batch.target).or_default();
+                if batch.rows.is_empty() {
+                    if known.remove(reference) {
+                        events.push(ClientEvent::new(
+                            batch.target,
+                            vec![Value::Null, json!("destroy"), json!(reference)],
+                        ));
+                    }
+                } else {
+                    for row in batch.rows {
+                        known.insert(reference.clone());
+                        if known.len() > limit {
+                            return Err(RealtimeReadError::Storage(
+                                "Realtime snapshot limit exceeded".into(),
+                            ));
+                        }
+                        events.push(ClientEvent::new(
+                            batch.target,
+                            vec![row, json!("create"), json!(reference)],
+                        ));
+                    }
+                }
+                continue;
+            }
             if let RowStyle::DockerResourcePatch(reference) = &batch.style {
                 let known = self.known.entry(batch.target).or_default();
                 let saved = self.tombstones.entry(batch.target).or_default();
@@ -368,7 +404,9 @@ impl GroupSubscription {
                         batch.target,
                         vec![json!({"id":removed}), json!("delete")],
                     )),
-                    RowStyle::DockerResourcePatch(_) | RowStyle::PlatformPatch(_) => unreachable!(),
+                    RowStyle::DockerResourcePatch(_)
+                    | RowStyle::DaemonPatch(_)
+                    | RowStyle::PlatformPatch(_) => unreachable!(),
                 }
             }
             for row in batch.rows {
@@ -398,7 +436,9 @@ impl GroupSubscription {
                             .insert(id.into(), docker_tombstone(&row));
                         vec![row, json!("update")]
                     }
-                    RowStyle::DockerResourcePatch(_) | RowStyle::PlatformPatch(_) => unreachable!(),
+                    RowStyle::DockerResourcePatch(_)
+                    | RowStyle::DaemonPatch(_)
+                    | RowStyle::PlatformPatch(_) => unreachable!(),
                     // "update" upserts in the existing hooks and avoids duplicate
                     // creates when the initial REST read and group join overlap.
                     RowStyle::Update => vec![row, json!("update")],
@@ -519,6 +559,53 @@ mod tests {
         assert_eq!(remaining[0].arguments, vec![json!(b)]);
     }
     #[test]
+    fn daemon_resource_patches_keep_siblings_and_replayed_deletes_are_idempotent() {
+        let mut subscription = GroupSubscription::new(
+            Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
+        );
+        let snapshot = |rows, style| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "VolumeEventReceived",
+                rows,
+                style,
+            }],
+            events: vec![],
+        };
+        subscription
+            .apply(
+                snapshot(vec![json!({"id":"a"}), json!({"id":"b"})], RowStyle::Daemon),
+                10,
+            )
+            .unwrap();
+        let events = subscription
+            .apply(snapshot(vec![], RowStyle::DaemonPatch("a".into())), 10)
+            .unwrap();
+        assert_eq!(
+            events[0].arguments,
+            vec![Value::Null, json!("destroy"), json!("a")]
+        );
+        assert!(subscription.known["VolumeEventReceived"].contains("b"));
+        assert!(
+            subscription
+                .apply(snapshot(vec![], RowStyle::DaemonPatch("a".into())), 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = subscription
+            .apply(
+                snapshot(
+                    vec![json!({"id":"a","inUse":true})],
+                    RowStyle::DaemonPatch("a".into()),
+                ),
+                10,
+            )
+            .unwrap();
+        assert_eq!(events[0].arguments[1], "create");
+        assert_eq!(events[0].arguments[2], "a");
+        assert_eq!(subscription.known["VolumeEventReceived"].len(), 2);
+    }
+
+    #[test]
     fn container_patches_preserve_other_rows_and_track_created_deleted_and_recovered_containers() {
         let mut subscription = GroupSubscription::new(
             Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
@@ -596,6 +683,7 @@ mod tests {
             resource_id: Uuid::now_v7(),
             event_kind: "runtimeChanged",
             resource_revision: 1,
+            reads: Default::default(),
             containers: Default::default(),
             payload: json!({"dockerResourceType":"container"}),
         };
@@ -648,6 +736,7 @@ mod tests {
             resource_id: Uuid::nil(),
             event_kind: "resourceChanged",
             resource_revision: 1,
+            reads: Default::default(),
             containers: Default::default(),
             payload: json!({}),
         };

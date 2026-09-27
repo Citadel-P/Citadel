@@ -6,7 +6,9 @@ use citadel_platforms::containers::DeleteContainerOptions;
 
 use sqlx::PgPool;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+#[cfg(test)]
+use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
@@ -16,8 +18,8 @@ pub(super) async fn run(
     containers: Arc<ContainerMutationService>,
     events: sqlx::postgres::PgListener,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick = tokio::time::interval(Duration::from_secs(10));
-    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut tick = super::schedule::interval("pruning", super::recovery::FALLBACK);
+    let mut startup = true;
     let mut listener = Some(events);
     loop {
         if listener.is_none() {
@@ -26,11 +28,16 @@ pub(super) async fn run(
                 Err(error) => tracing::warn!(%error, "Swarm prune event subscription failed"),
             }
         }
-        tokio::select! {
-            ()=token.cancelled()=>return Ok(()),
-            _=tick.tick()=>{},
-            event=async { match listener.as_mut() { Some(l)=>l.recv().await.map(|_|()), None=>std::future::pending().await } } => {
-                if let Err(error) = event { tracing::warn!(%error, "Swarm prune event listener failed"); listener=None; }
+        if token.is_cancelled() {
+            return Ok(());
+        }
+        if !std::mem::take(&mut startup) {
+            tokio::select! {
+                ()=token.cancelled()=>return Ok(()),
+                _=tick.tick()=>{},
+                event=async { match listener.as_mut() { Some(l)=>l.recv().await.map(|_|()), None=>std::future::pending().await } } => {
+                    if let Err(error) = event { tracing::warn!(%error, "Swarm prune event listener failed"); listener=None; }
+                }
             }
         }
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Pruning.start();

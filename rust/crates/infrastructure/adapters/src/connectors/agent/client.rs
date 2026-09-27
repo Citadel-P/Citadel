@@ -1,3 +1,4 @@
+use crate::connectors::docker::events::{self, ContainerChange, RuntimeEventKind};
 use std::fs;
 
 mod containers;
@@ -9,6 +10,7 @@ mod logs;
 mod node_agents;
 mod swarm_inventory;
 mod terminal;
+mod volumes;
 pub(crate) mod workloads;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -60,8 +62,7 @@ use citadel_deployments::{
     RuntimeDeploymentResult, StopSignal,
 };
 use citadel_platforms::{
-    CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, PlatformInventoryPort,
-    PlatformResourceMutationPort, PlatformRuntimePort, RuntimeCapabilityError,
+    CreateRuntimeNetwork, CreateRuntimeVolume, CreatedRuntimeNetwork, RuntimeCapabilityError,
     RuntimeContainerStat, RuntimeContainerStatsStream, RuntimeErrorKind, RuntimeImageSummary,
     RuntimeNetworkSummary, RuntimeStatsStream, RuntimeSwarmConfig, RuntimeSwarmNode,
     RuntimeSwarmSecret, RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
@@ -181,6 +182,9 @@ const STREAM_DAEMON_EVENTS_METHOD: &str = "/citadel.platforms.v1.PlatformService
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentDaemonEvent {
+    pub resource: Option<citadel_platforms::jobs::ResourceDelta>,
+    pub swarm_scope: bool,
+    pub kind: RuntimeEventKind,
     pub container_id: Option<String>,
     pub container_state: Option<String>,
     pub container_name: Option<String>,
@@ -688,7 +692,20 @@ impl AgentClient {
         options: citadel_platforms::containers::DeleteContainerOptions,
         cancellation: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
-        if id.trim().is_empty() || id.len() > 256 {
+        self.delete_containers_with_options(&[id.to_owned()], options, cancellation)
+            .await
+    }
+
+    pub async fn delete_containers_with_options(
+        &self,
+        ids: &[String],
+        options: citadel_platforms::containers::DeleteContainerOptions,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        if ids.is_empty()
+            || ids.len() > citadel_platforms::containers::MAX_CONTAINER_BATCH
+            || ids.iter().any(|id| id.trim().is_empty() || id.len() > 256)
+        {
             return Err(RuntimeCapabilityError::new(
                 RuntimeErrorKind::InvalidRequest,
                 "the Container identifier is invalid",
@@ -697,7 +714,7 @@ impl AgentClient {
         }
         let request = self.signer.sign(
             DeleteContainerRequest {
-                ids: vec![id.to_owned()],
+                ids: ids.to_vec(),
                 v: Some(options.v),
                 force: Some(options.force),
                 link: Some(options.link),
@@ -1392,7 +1409,7 @@ impl AgentClient {
                 };
                 match next {
                     Some(Ok(value)) => {
-                        if let Some(event) = map_daemon_event(value.kind) {
+                        if let Some(event) = map_scoped_daemon_event(value.kind, value.scope) {
                             yield Ok(event);
                         }
                     }
@@ -1409,12 +1426,22 @@ impl AgentClient {
 
 pub fn decode_daemon_event(bytes: &[u8]) -> Result<Option<AgentDaemonEvent>, prost::DecodeError> {
     let response = citadel_contracts::citadel::platforms::v1::DaemonEventResponse::decode(bytes)?;
-    Ok(map_daemon_event(response.kind))
+    Ok(map_scoped_daemon_event(response.kind, response.scope))
 }
 
 pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<AgentDaemonEvent> {
-    let event = match kind? {
+    map_scoped_daemon_event(kind, 0)
+}
+
+fn map_scoped_daemon_event(
+    kind: Option<daemon_event_response::Kind>,
+    scope: i32,
+) -> Option<AgentDaemonEvent> {
+    let mut event = match kind? {
         daemon_event_response::Kind::DaemonContainerEventResponse(value) => AgentDaemonEvent {
+            resource: None,
+            swarm_scope: scope == 2,
+            kind: RuntimeEventKind::Unknown,
             resource_type: "container",
             container_id: Some(value.container_id),
             container_state: value
@@ -1426,6 +1453,12 @@ pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<Age
             action: value.action,
         },
         daemon_event_response::Kind::DaemonImageEventResponse(value) => AgentDaemonEvent {
+            resource: Some(citadel_platforms::jobs::ResourceDelta::Image {
+                id: value.image_id,
+                value: value.image.map(map_image),
+            }),
+            swarm_scope: scope == 2,
+            kind: RuntimeEventKind::Unknown,
             resource_type: "image",
             action: value.action,
             container_id: None,
@@ -1434,6 +1467,12 @@ pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<Age
             container: None,
         },
         daemon_event_response::Kind::DaemonVolumeEventResponse(value) => AgentDaemonEvent {
+            resource: Some(citadel_platforms::jobs::ResourceDelta::Volume {
+                id: value.volume_id,
+                value: value.volume.map(map_volume),
+            }),
+            swarm_scope: scope == 2,
+            kind: RuntimeEventKind::Unknown,
             resource_type: "volume",
             action: value.action,
             container_id: None,
@@ -1442,6 +1481,12 @@ pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<Age
             container: None,
         },
         daemon_event_response::Kind::DaemonNetworkEventResponse(value) => AgentDaemonEvent {
+            resource: Some(citadel_platforms::jobs::ResourceDelta::Network {
+                id: value.network_id,
+                value: value.network.map(map_network),
+            }),
+            swarm_scope: scope == 2,
+            kind: RuntimeEventKind::Unknown,
             resource_type: "network",
             action: value.action,
             container_id: None,
@@ -1450,6 +1495,9 @@ pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<Age
             container: None,
         },
         daemon_event_response::Kind::DaemonResourceEventResponse(value) => AgentDaemonEvent {
+            resource: None,
+            swarm_scope: scope == 2,
+            kind: RuntimeEventKind::Unknown,
             resource_type: daemon_resource_type(value.r#type),
             action: value.action,
             container_id: None,
@@ -1458,7 +1506,31 @@ pub fn map_daemon_event(kind: Option<daemon_event_response::Kind>) -> Option<Age
             container: None,
         },
     };
-    (!event.action.is_empty()).then_some(event)
+    event.kind = events::classify(
+        event.resource_type,
+        &event.action,
+        if scope == 2 { "swarm" } else { "local" },
+    )?;
+    if let RuntimeEventKind::Container(change) = event.kind {
+        if change == ContainerChange::Tombstone {
+            event.container = None;
+            event.container_state = None;
+            event.container_name = None;
+        } else if let Some(state) = change.state() {
+            event.container_state = Some(state.to_owned());
+            if let Some(container) = &mut event.container {
+                container.state = state.to_owned();
+            }
+        }
+    }
+    if event
+        .resource
+        .as_ref()
+        .is_some_and(|delta| !delta.valid_for(event.kind))
+    {
+        event.resource = None;
+    }
+    Some(event)
 }
 
 const fn daemon_resource_type(value: i32) -> &'static str {
@@ -1510,7 +1582,7 @@ pub(crate) fn network_request(input: &CreateRuntimeNetwork) -> CreateNetworkRequ
     }
 }
 
-impl PlatformResourceMutationPort for AgentClient {
+impl citadel_platforms::NetworkMutationPort for AgentClient {
     fn create_network<'a>(
         &'a self,
         input: &'a CreateRuntimeNetwork,
@@ -1564,7 +1636,9 @@ impl PlatformResourceMutationPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeMutationPort for AgentClient {
     fn create_volume<'a>(
         &'a self,
         input: &'a CreateRuntimeVolume,
@@ -1657,14 +1731,16 @@ impl citadel_platforms::PlatformHealthPort for AgentClient {
     }
 }
 
-impl PlatformRuntimePort for AgentClient {
+impl citadel_platforms::PlatformInfoPort for AgentClient {
     fn get_info<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
         self.handshake(cancellation).boxed()
     }
+}
 
+impl citadel_platforms::ContainerInventoryPort for AgentClient {
     fn list_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -1700,7 +1776,9 @@ impl PlatformRuntimePort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::PlatformStatsPort for AgentClient {
     fn stream_stats<'a>(
         &'a self,
         fetch_interval: Duration,
@@ -1761,7 +1839,7 @@ impl PlatformRuntimePort for AgentClient {
     }
 }
 
-impl PlatformInventoryPort for AgentClient {
+impl citadel_platforms::ImageInventoryPort for AgentClient {
     fn list_images<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -1785,7 +1863,9 @@ impl PlatformInventoryPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::NetworkInventoryPort for AgentClient {
     fn list_networks<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -1814,7 +1894,9 @@ impl PlatformInventoryPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::NetworkObservationPort for AgentClient {
     fn inspect_network<'a>(
         &'a self,
         id: &'a str,
@@ -1839,7 +1921,9 @@ impl PlatformInventoryPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeInventoryPort for AgentClient {
     fn list_volumes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -1867,7 +1951,9 @@ impl PlatformInventoryPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeObservationPort for AgentClient {
     fn inspect_volume<'a>(
         &'a self,
         name: &'a str,
@@ -1894,7 +1980,9 @@ impl PlatformInventoryPort for AgentClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::SwarmInventoryPort for AgentClient {
     fn list_swarm_nodes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -2137,10 +2225,7 @@ pub(crate) fn map_volume(
         driver: volume.driver,
         mountpoint: volume.mountpoint,
         created_at: volume.created_at,
-        // Cluster Volume details are not used by Phase 4 reads and the current
-        // protobuf model is richer than the Docker JSON subset. Preserve absence
-        // instead of fabricating a transport-specific shape.
-        cluster_volume: None,
+        cluster_volume: volume.cluster_volume.map(volumes::cluster),
         usage_data: volume.usage_data.map(|usage| {
             serde_json::json!({
                 "Size": usage.size,
@@ -2158,13 +2243,19 @@ pub(crate) fn map_volume(
             .containers
             .into_iter()
             .map(|container| {
+                let state = container.state().as_str_name();
                 serde_json::json!({
                     "id": container.id,
                     "name": container.name,
                     "image": container.image,
                     "imageId": container.image_id,
-                    "state": container.state,
+                    "state": state,
                     "networks": container.networks,
+                    "ports": container.ports.into_iter().map(|(port, bindings)| (port,
+                        serde_json::Value::Array(bindings.host_port_binding.into_iter().map(|binding|
+                            serde_json::json!({"hostIP": binding.host_ip, "hostPort": binding.host_port})
+                        ).collect())
+                    )).collect::<serde_json::Map<String, serde_json::Value>>(),
                 })
             })
             .collect(),
@@ -2748,7 +2839,7 @@ mod tests {
         assert_eq!(container.resource_type, "container");
         assert_eq!(container.action, "start");
         assert_eq!(container.container_id.as_deref(), Some("docker-1"));
-        assert_eq!(container.container_state.as_deref(), Some("exited"));
+        assert_eq!(container.container_state.as_deref(), Some("running"));
         assert_eq!(container.container_name.as_deref(), Some("nginx"));
 
         let service = map_daemon_event(Some(

@@ -2256,3 +2256,644 @@ async fn stack_inventory_skips_busy_resources_and_reconciles_on_the_next_sweep()
     assert_eq!(status, "Stopped");
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity() {
+    use citadel_platforms::jobs::{ResourceInventory, ResourceSnapshot};
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let baseline = snapshot(platform, true);
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&baseline).await.unwrap();
+    let read_counts = || async {
+        sqlx::query_as::<_, (i64,i64,i64)>("SELECT (SELECT count(*) FROM containers WHERE platformid=$1),(SELECT count(*) FROM images WHERE platformid=$1),(SELECT count(*) FROM swarmserviceprojections WHERE platformid=$1 AND NOT isstale)").bind(platform).fetch_one(&pool).await.unwrap()
+    };
+    assert_eq!(read_counts().await, (1, 2, 1));
+    // Platform metadata and post-mutation Swarm observations cannot replace
+    // Container/Image sets or their independently maintained counts.
+    let before: (i32, i32, i32) =
+        sqlx::query_as("SELECT imagecount,networkcount,volumecount FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let mut info = baseline.info.clone();
+    info.cpu_count = 8;
+    info.container_count = 999;
+    store
+        .persist_resource(&ResourceSnapshot {
+            platform_id: platform,
+            observed_at: Utc::now(),
+            inventory: ResourceInventory::Platform(info.clone()),
+        })
+        .await
+        .unwrap();
+    assert_eq!(read_counts().await, (1, 2, 1));
+    let after: (i32, i32, i32) =
+        sqlx::query_as("SELECT imagecount,networkcount,volumecount FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(before, after);
+    info.daemon_id = "wrong-daemon".into();
+    assert!(
+        store
+            .persist_resource(&ResourceSnapshot {
+                platform_id: platform,
+                observed_at: Utc::now(),
+                inventory: ResourceInventory::Platform(info)
+            })
+            .await
+            .is_err()
+    );
+    let mut narrow = baseline.clone();
+    narrow.containers.clear();
+    narrow.images.clear();
+    narrow.volumes.clear();
+    citadel_adapters::persistence::postgres::platforms::swarm::inventory::refresh(&pool, &narrow)
+        .await
+        .unwrap();
+    assert_eq!(read_counts().await, (1, 2, 1));
+    let cpu: i32 = sqlx::query_scalar("SELECT cpucount FROM platforms WHERE id=$1")
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        cpu, 8,
+        "Swarm refresh cannot overwrite newer Platform metadata"
+    );
+    sqlx::query("UPDATE platforms SET prunehistoricalswarmtaskcontainers=true WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut historical = baseline.containers.clone();
+    historical[0].is_swarm_task = true;
+    historical[0].state = "exited".into();
+    store
+        .persist_resource(&ResourceSnapshot {
+            platform_id: platform,
+            observed_at: Utc::now(),
+            inventory: ResourceInventory::Containers(historical),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        read_counts().await,
+        (1, 2, 1),
+        "historical tasks must remain discoverable by the pruning worker"
+    );
+    sqlx::query("UPDATE containers SET imageid=NULL WHERE platformid=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    store
+        .persist_resource(&ResourceSnapshot {
+            platform_id: platform,
+            observed_at: Utc::now(),
+            inventory: ResourceInventory::Images(baseline.images.clone()),
+        })
+        .await
+        .unwrap();
+    let linked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM containers WHERE platformid=$1 AND imageid IS NOT NULL",
+    )
+    .bind(platform)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        linked, 1,
+        "image refresh repairs links without container enumeration"
+    );
+    let mut refresh = ResourceSnapshot {
+        platform_id: platform,
+        observed_at: Utc::now(),
+        inventory: ResourceInventory::Containers(vec![]),
+    };
+    store.persist_resource(&refresh).await.unwrap();
+    assert_eq!(
+        read_counts().await,
+        (0, 2, 1),
+        "container absence cannot delete images or Swarm projections"
+    );
+    refresh.inventory = ResourceInventory::Images(baseline.images[..1].to_vec());
+    store.persist_resource(&refresh).await.unwrap();
+    assert_eq!(read_counts().await, (0, 1, 1));
+    refresh.inventory = ResourceInventory::Networks(vec![]);
+    store.persist_resource(&refresh).await.unwrap();
+    let counts: (i32, i32, i32) =
+        sqlx::query_as("SELECT imagecount,networkcount,volumecount FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(counts, (1, 0, 1));
+    refresh.inventory = ResourceInventory::Volumes(vec![]);
+    store.persist_resource(&refresh).await.unwrap();
+    let mut swarm = baseline.swarm.clone().unwrap();
+    swarm.nodes[0].id = "wrong-manager".into();
+    refresh.inventory = ResourceInventory::Swarm {
+        inventory: swarm,
+        networks: baseline.networks.clone(),
+    };
+    assert!(store.persist_resource(&refresh).await.is_err());
+    assert_eq!(
+        read_counts().await,
+        (0, 1, 1),
+        "invalid identity must not stale the accepted projections"
+    );
+    refresh.inventory = ResourceInventory::Swarm {
+        inventory: baseline.swarm.unwrap(),
+        networks: baseline.networks,
+    };
+    store.persist_resource(&refresh).await.unwrap();
+    assert_eq!(read_counts().await, (0, 1, 1));
+    let counts: (i32, i32, i32) =
+        sqlx::query_as("SELECT imagecount,networkcount,volumecount FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        counts,
+        (1, 0, 0),
+        "Swarm refresh cannot overwrite unrelated platform metadata"
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn scoped_generations_reject_same_timestamp_updates_and_resurrection_without_cross_scope_retries()
+ {
+    use citadel_platforms::jobs::{
+        ProjectionKind, ResourceInventory, ResourceSnapshot, SnapshotGeneration,
+    };
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let baseline = snapshot(platform, true);
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&baseline).await.unwrap();
+    let containers = ResourceSnapshot {
+        platform_id: platform,
+        observed_at: baseline.observed_at,
+        inventory: ResourceInventory::Containers(baseline.containers.clone()),
+    };
+    let images = ResourceSnapshot {
+        platform_id: platform,
+        observed_at: baseline.observed_at,
+        inventory: ResourceInventory::Images(baseline.images.clone()),
+    };
+    let capture_containers =
+        || SnapshotGeneration::capture(platform, None, ProjectionKind::Containers);
+    let capture_images = || SnapshotGeneration::capture(platform, None, ProjectionKind::Images);
+    let old_containers = capture_containers().await;
+    let old_images = capture_images().await;
+    // The exact same persisted second cannot establish ordering; the causal fence can.
+    citadel_adapters::persistence::postgres::platforms::status::container_event(
+        &pool,
+        platform,
+        None,
+        &baseline.containers[0].id,
+        Some("exited"),
+        None,
+        baseline.observed_at.timestamp(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        !store
+            .persist_resource_checked(&containers, Some(&old_containers))
+            .await
+            .unwrap()
+    );
+    assert!(
+        store
+            .persist_resource_checked(&images, Some(&old_images))
+            .await
+            .unwrap(),
+        "container observation must not invalidate an image read"
+    );
+    let state: String = sqlx::query_scalar("SELECT state FROM containers WHERE platformid=$1")
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "Exited");
+    let before_delete = capture_containers().await;
+    citadel_adapters::persistence::postgres::platforms::status::container_event(
+        &pool,
+        platform,
+        None,
+        &baseline.containers[0].id,
+        None,
+        None,
+        baseline.observed_at.timestamp(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        !store
+            .persist_resource_checked(&containers, Some(&before_delete))
+            .await
+            .unwrap(),
+        "an old complete set cannot resurrect a tombstone"
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM containers WHERE platformid=$1")
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    let current_containers = capture_containers().await;
+    let old_images = capture_images().await;
+    store
+        .persist_resource(&ResourceSnapshot {
+            inventory: ResourceInventory::Images(vec![]),
+            ..images.clone()
+        })
+        .await
+        .unwrap();
+    assert!(
+        !store
+            .persist_resource_checked(&images, Some(&old_images))
+            .await
+            .unwrap()
+    );
+    assert!(
+        store
+            .persist_resource_checked(
+                &ResourceSnapshot {
+                    inventory: ResourceInventory::Containers(vec![]),
+                    ..containers
+                },
+                Some(&current_containers)
+            )
+            .await
+            .unwrap(),
+        "image writes must not invalidate container reads"
+    );
+    let current_images = capture_images().await;
+    let mut invalid = baseline.images[0].clone();
+    invalid.id.clear();
+    // A transaction that fails after entering the writer must not advance the fence.
+    let mut invalid_images = images.clone();
+    invalid_images.inventory = ResourceInventory::Images(vec![invalid.clone(), invalid]);
+    assert!(store.persist_resource(&invalid_images).await.is_err());
+    assert!(
+        store
+            .persist_resource_checked(&images, Some(&current_images))
+            .await
+            .unwrap()
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn semantic_container_replays_advance_fences_without_revisions_or_notifications() {
+    use citadel_adapters::persistence::postgres::platforms::status::{
+        container_event_committed, container_observation_committed,
+    };
+    use citadel_platforms::jobs::{ProjectionChange, ResourceInventory, ResourceSnapshot};
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut inventory = snapshot(platform, false);
+    inventory.swarm = None;
+    inventory.info.swarm = None;
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
+    listener.listen("citadel_swarm_prune").await.unwrap();
+    listener.listen("citadel_stack_drift").await.unwrap();
+    let mut container = inventory.containers[0].clone();
+    container.state = "exited".into();
+    container.is_swarm_task = true;
+    let observed = inventory.observed_at.timestamp() + 10;
+    let before: i64 = sqlx::query_scalar(
+        "SELECT rowversion FROM containers WHERE platformid=$1 AND dockercontainerid=$2",
+    )
+    .bind(platform)
+    .bind(&container.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        container_observation_committed(&pool, platform, None, &container, observed)
+            .await
+            .unwrap(),
+        ProjectionChange::Changed
+    );
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+            .await
+            .unwrap()
+            .unwrap()
+            .channel(),
+        "citadel_swarm_prune"
+    );
+    let after: (i64, i64) = sqlx::query_as(
+        "SELECT rowversion,updated FROM containers WHERE platformid=$1 AND dockercontainerid=$2",
+    )
+    .bind(platform)
+    .bind(&container.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        after,
+        (before + 1, observed),
+        "one authoritative metadata/state write"
+    );
+    let activities: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE platformid=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        container_observation_committed(&pool, platform, None, &container, observed + 1)
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    assert_eq!(
+        container_event_committed(
+            &pool,
+            platform,
+            None,
+            &container.id,
+            Some("exited"),
+            None,
+            observed + 2
+        )
+        .await
+        .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    inventory.containers[0] = container.clone();
+    assert_eq!(
+        store
+            .persist_resource_committed(
+                &ResourceSnapshot {
+                    platform_id: platform,
+                    observed_at: chrono::DateTime::from_timestamp(observed + 3, 0).unwrap(),
+                    inventory: ResourceInventory::Containers(inventory.containers.clone()),
+                },
+                None
+            )
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    container.state = "running".into();
+    assert_eq!(
+        container_observation_committed(&pool, platform, None, &container, observed + 2)
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    let saved: (i64,i64,i64,String) = sqlx::query_as("SELECT rowversion,updated,projectionobservedat,state FROM containers WHERE platformid=$1 AND dockercontainerid=$2")
+        .bind(platform).bind(&container.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(saved, (after.0, after.1, observed + 3, "Exited".into()));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM activityevents WHERE platformid=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        activities
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(150), listener.recv())
+            .await
+            .is_err(),
+        "no repeated drift/prune notification"
+    );
+    assert_eq!(
+        store
+            .persist_resource_committed(
+                &ResourceSnapshot {
+                    platform_id: platform,
+                    observed_at: Utc::now(),
+                    inventory: ResourceInventory::Images(inventory.images.clone()),
+                },
+                None
+            )
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn runtime_identity_index_follows_commits_rebuilds_and_repairs_stale_hints() {
+    use citadel_adapters::persistence::postgres::platforms::{
+        runtime_index::RuntimeIdentityIndex, status::container_event_committed,
+    };
+    use citadel_platforms::jobs::{
+        ProjectionKind, ProjectionWrite, ResourceInventory, ResourceSnapshot, SnapshotGeneration,
+    };
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let baseline = snapshot(platform, true);
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&baseline).await.unwrap();
+    let index = RuntimeIdentityIndex::attach(pool.clone());
+    assert!(!index.initialized());
+    assert!(index.rebuild().await.unwrap());
+    let docker = &baseline.containers[0].id;
+    let old = index.lookup(platform, None, docker).unwrap();
+    let expected: Uuid = sqlx::query_scalar(
+        "SELECT id FROM containers WHERE platformid=$1 AND dockercontainerid=$2",
+    )
+    .bind(platform)
+    .bind(docker)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(old, expected);
+    let stamp = SnapshotGeneration::capture(platform, None, ProjectionKind::Containers).await;
+    let invalid = ResourceSnapshot {
+        platform_id: platform,
+        observed_at: baseline.observed_at,
+        inventory: ResourceInventory::Containers(vec![
+            baseline.containers[0].clone(),
+            baseline.containers[0].clone(),
+        ]),
+    };
+    assert!(store.persist_resource(&invalid).await.is_err());
+    assert_eq!(index.lookup(platform, None, docker), Some(old));
+    assert!(
+        stamp.matches(&ProjectionWrite::begin(platform, None, ProjectionKind::Containers).await)
+    );
+
+    // Simulate another process replacing an identity. The stale UUID still exists,
+    // but belongs to a different Docker identity: SQL must not update that row.
+    sqlx::query("UPDATE containers SET dockercontainerid='old-identity' WHERE id=$1")
+        .bind(old)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let replacement = Uuid::now_v7();
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,state,updated,created,ports) VALUES($1,$2,$3,'image','replacement','Running',0,0,'[]')")
+        .bind(replacement).bind(platform).bind(docker).execute(&pool).await.unwrap();
+    container_event_committed(
+        &pool,
+        platform,
+        None,
+        docker,
+        Some("exited"),
+        None,
+        baseline.observed_at.timestamp() + 1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(index.lookup(platform, None, docker), Some(replacement));
+    let old_state: String = sqlx::query_scalar("SELECT state FROM containers WHERE id=$1")
+        .bind(old)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(old_state, "Running");
+    container_event_committed(
+        &pool,
+        platform,
+        None,
+        docker,
+        None,
+        None,
+        baseline.observed_at.timestamp() + 2,
+    )
+    .await
+    .unwrap();
+    assert_eq!(index.lookup(platform, None, docker), None);
+    store
+        .persist_resource(&ResourceSnapshot {
+            platform_id: platform,
+            observed_at: baseline.observed_at + chrono::Duration::seconds(3),
+            inventory: ResourceInventory::Containers(vec![]),
+        })
+        .await
+        .unwrap();
+    assert_eq!(index.lookup(platform, None, "old-identity"), None);
+    drop(index);
+    let restarted = RuntimeIdentityIndex::attach(pool.clone());
+    assert!(!restarted.initialized());
+    assert!(restarted.rebuild().await.unwrap());
+    assert_eq!(restarted.lookup(platform, None, docker), None);
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn six_container_verification_is_sequential_and_keeps_every_authoritative_result() {
+    use axum::{Json, Router, response::IntoResponse};
+    use citadel_adapters::connectors::{
+        docker::DockerClient, edge::EdgeRegistry, routing::containers::ContainerRuntimeRouter,
+    };
+    use citadel_platforms::containers::{ContainerMutationRuntime, ContainerTarget};
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let docker = DockerClient::with_endpoint(
+        format!("http://{}", listener.local_addr().unwrap())
+            .parse()
+            .unwrap(),
+        Duration::from_secs(3),
+        "/host",
+    )
+    .unwrap();
+    let router=Router::new().fallback({let active=active.clone();let peak=peak.clone();let calls=calls.clone();move |req:axum::extract::Request|{let active=active.clone();let peak=peak.clone();let calls=calls.clone();async move {
+        if req.uri().path()=="/version" {return Json(json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response();}
+        assert!(req.uri().path().ends_with("/json"));calls.fetch_add(1,Ordering::SeqCst);let current=active.fetch_add(1,Ordering::SeqCst)+1;peak.fetch_max(current,Ordering::SeqCst);tokio::time::sleep(Duration::from_millis(15)).await;active.fetch_sub(1,Ordering::SeqCst);Json(json!({"Id":req.uri().path().split('/').nth(3).unwrap(),"State":{"Status":"running"}})).into_response()
+    }}});
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let stop = cancel.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, router)
+            .with_graceful_shutdown(stop.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let runtime = ContainerRuntimeRouter::new(pool.clone(), docker, None, EdgeRegistry::default());
+    let targets: Vec<_> = (0..6)
+        .map(|i| ContainerTarget {
+            id: Uuid::now_v7(),
+            platform_id: platform,
+            docker_id: format!("c{i}"),
+            node_id: None,
+        })
+        .collect();
+    let result = runtime.observe_batch(&targets, &cancel).await;
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(result.observed.len(), 6);
+    assert!(
+        result
+            .observed
+            .iter()
+            .all(|o| o.state.as_deref() == Some("running"))
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 6);
+    assert_eq!(peak.load(Ordering::SeqCst), 1);
+    cancel.cancel();
+    server.await.unwrap();
+    pool.close().await;
+}

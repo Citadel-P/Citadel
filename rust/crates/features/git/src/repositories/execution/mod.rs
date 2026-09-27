@@ -1,4 +1,5 @@
 mod browser;
+mod completion;
 mod credentials;
 mod discovery;
 mod materialization;
@@ -26,6 +27,7 @@ pub struct GitRepositoryExecutionService {
     cache_root: PathBuf,
     stale_after: Duration,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
+    completion: tokio::sync::watch::Sender<()>,
 }
 
 impl GitRepositoryExecutionService {
@@ -44,6 +46,7 @@ impl GitRepositoryExecutionService {
             cache_root,
             stale_after,
             on_change: None,
+            completion: tokio::sync::watch::channel(()).0,
         }
     }
 

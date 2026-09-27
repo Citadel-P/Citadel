@@ -3,6 +3,8 @@ use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
 use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
 use citadel_platforms::{HostDiskUsage, StatisticsReader};
 use sqlx::{Connection, PgConnection, PgPool};
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -136,8 +138,6 @@ async fn persisted_disk_samples_drive_builtin_alert_and_history_without_containe
 async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input() {
     use citadel_alerts::{AlertEventSink, AlertObservation};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
-    use tokio_util::sync::CancellationToken;
     #[derive(Default)]
     struct Capture(Mutex<Vec<AlertObservation>>);
     impl AlertEventSink for Capture {
@@ -230,6 +230,7 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
         capture.clone(),
         Duration::from_millis(100),
         200,
+        tokio::sync::watch::channel(()).1,
     ));
     tokio::task::yield_now().await;
     // Delayed delivery must still be evaluated after its timestamp window.
@@ -286,9 +287,7 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
 }
 
 #[tokio::test]
-async fn statistics_failure_is_propagated_and_retry_obeys_shutdown() {
-    use std::time::Duration;
-    use tokio_util::sync::CancellationToken;
+async fn statistics_failure_is_propagated_to_its_writer() {
     let pool = sqlx::postgres::PgPoolOptions::new()
         .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
         .unwrap();
@@ -298,21 +297,6 @@ async fn statistics_failure_is_propagated_and_retry_obeys_shutdown() {
     assert!(
         store.persist_with_disk(platform, &[], None).await.is_err(),
         "a failed persistence attempt must propagate to the writer"
-    );
-    let cancel = CancellationToken::new();
-    let retry = super::platforms::persist_stats_retry(&store, platform, &[], None, &cancel);
-    let stop = async {
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        cancel.cancel();
-    };
-    let (result, ()) = tokio::time::timeout(Duration::from_millis(200), async {
-        tokio::join!(retry, stop)
-    })
-    .await
-    .unwrap();
-    assert_eq!(
-        result.unwrap_err().kind,
-        citadel_platforms::RuntimeErrorKind::Cancelled
     );
 }
 

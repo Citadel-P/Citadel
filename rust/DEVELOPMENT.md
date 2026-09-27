@@ -13,12 +13,7 @@ editor runs `cargo check` instead of Clippy on save. Full Clippy checks remain
 available in the check task. Development breakpoints and variable inspection
 are preserved.
 
-## CPU refactor measurements
 
-The architecture/CPU refactor proceeds one phase per change. Phase 0 adds
-fixed-cardinality `RuntimeWork` diagnostics without changing event policy. See
-[the Phase 0 report](reports/cpu-refactor-phase0.md) for the call-site map,
-metric definitions, pinned isolated Docker/PostgreSQL fixture, and release results.
 Run `python3 rust/scripts/measure-cpu-refactor.py /tmp/citadel-cpu-capture` from
 repository root after preparing that fixture. Do not build or run tests during
 accepted CPU captures; short `--idle-seconds`/`--stats-seconds` runs are fixture
@@ -575,11 +570,29 @@ deletions preserve the resource binding long enough to mark the owner degraded.
 Status-change activities use the persisted payload names, and realtime invalidations
 are published after commit. Duplicate observations do not create duplicate activities.
 
-Full inventory reconciliation remains the recovery path for missed events and
-new resource discovery. It runs at startup, after recovery, and at the configured
-`JobConfiguration__SwarmReconciliationIntervalSeconds` interval (30 minutes by
-default). Platform health is checked every five seconds with a two-second timeout,
+Recovery composes independent resource refreshes after metadata validation at
+startup, on reconnect, and on a six-hour safety pass. Swarm projection recovery
+has its own coordinator: at most 256 pending/in-flight Platforms per coordinator,
+a 1.5-second event debounce, and at most four concurrent refreshes subject to the
+shared inventory I/O budget. Duplicate dirty events occupy no additional slots;
+events during collection retain one follow-up. The independently configured
+`JobConfiguration__SwarmReconciliationIntervalSeconds` (30 minutes by default)
+marks only Swarm projections dirty. Local/Direct targets come from the runtime
+registry; Edge safety work is session-bound and only enabled for a confirmed
+manager. This path reads nodes, services, tasks, networks, configs and secrets;
+only Swarm-scoped networks are persisted in the Swarm projection. It does not
+enumerate standalone images, volumes, or containers.
+
+Platform health is checked every five seconds with a two-second timeout,
 three failures before going offline, and two successes before recovery.
+The monitor only probes and emits confirmed transitions through bounded ingress.
+A separate lifecycle coordinator persists status, requests one metadata-first
+recovery plan, evaluates alerts and publishes committed realtime changes.
+It retains per-Platform retry progress, so an alert failure cannot repeatedly
+queue resource recovery. Direct Agent subscription ownership is woken on Online;
+existing streams remain responsible for reconnecting, and Edge sessions own their
+own bootstrap. Deployment observation crash catch-up runs separately every five
+minutes; stable health probes perform no Deployment reconciliation.
 `JobConfiguration__MonitoringInterval` controls the readiness probe. An unreachable daemon degrades its Deployments; recovery
 refreshes inventory before restoring observed health. Separate node-Agent
 container projections are preserved when the manager disconnects.
@@ -588,7 +601,97 @@ Swarm task health remains owned by Swarm reconciliation. Existing container,
 Deployment Apply, and Stack operation recovery jobs continue to recover expired
 operations; event synchronization does not overwrite active operation claims.
 
+### Recovery worker ownership and wakeups
+
+PostgreSQL operation claims and queue rows are authoritative. One shared LISTEN
+connection fans out twelve fixed, capacity-one watch topics; repeated notifications
+coalesce, and reconnect wakes every topic. Claim/queue notifications commit with
+the state they describe. Workers never replay ambiguous daemon mutations.
+
+| Owner | Normal trigger and bounded work | Missed signal / crash fallback |
+| --- | --- | --- |
+| Container mutation recovery | Claim notification schedules one pass after 65s; up to 10 claims, observations persisted in batches of 100 | Startup, then every 5 minutes; existing 60s stale fence and 300s abandonment age |
+| Deployment recovery | Apply/update-check claims schedule one pass after 65s; 10 Applies and 25 update checks | Startup, then every 5 minutes; Apply fence remains 11 minutes |
+| Stack recovery | Claim notification schedules one pass after the 16-minute Apply fence; 25 claims | Startup, then every 5 minutes |
+| Swarm active rollout observer | Accepted-operation notification; keyset pages of 25 accepted claims, 5s follow-ups while work exists | Startup and every 5 minutes discover missed accepted operations; no 5s scan when idle |
+| Swarm crash janitor | Claim/update-check notification schedules one pass after 65s; 25 claims/checks | Startup, then every 5 minutes; dispatch recovery uses an 11-minute fence |
+| Stack webhook dispatcher | Queue/settlement notification; batches of 10, continue while progress is made | Startup, 30s ready/retry fallback; durable available-at timestamps and Apply claims fence execution |
+| Legacy resource maintenance / volume helpers / historical Swarm task pruning | Existing startup recovery; pruning also consumes terminal-task and setting-change notifications | Staggered 5-minute safety scans |
+
+Each recovery coordinator runs one feature batch at a time; SQL claims retain
+execution ownership and existing mutation admission limits. Swarm observation
+keeps only a keyset cursor and a work flag, not an inventory cache or an ID queue.
+Timers skip missed ticks. Cancellation ends waits immediately and is checked
+between batches; dispatched operations retain their process-owned cancellation
+and timeout behavior. Health/readiness probes keep their correctness cadence,
+lease expiry stays at 30 seconds, and Git/update scheduling is handled separately.
+
+### Statistics ingestion and persistence
+
+Local, Direct Agent and Edge collectors enqueue telemetry through two shared
+writers. Each writer has an independent bounded queue of
+`CITADEL_RUST_EVENT_QUEUE_CAPACITY` rows (default 256), and retains at most
+`JobConfiguration__BatchSize` rows (default 500) in its flush/retry buffer.
+Collection backpressures when a queue fills; sampling ticks skip missed cycles.
+No producer spawns a database retry task. A ten-second sampler does not imply a
+ten-second commit: each writer flushes at its row threshold or after
+`JobConfiguration__FlashInterval` (default 60 seconds) from the first buffered row.
+
+Container rows retain capture timestamps and the owning Platform/node identity.
+Flushes recheck connector/address or the authenticated Edge binding/session,
+filter deleted/replaced container identities in bulk, and persist Container and
+Swarm-task statistics in one transaction across sources. Platform samples retain
+host totals computed at collection time; later inventory deletion does not
+retroactively reduce those totals. Platform history and Container history are
+independently committed telemetry. Platform metadata uses the newest supplied
+sample and cannot replace a newer persisted summary with an older one. Missing
+or invalid disk values stay unavailable, including on empty hosts.
+
+Realtime receives each source sample at ingress; the hub avoids payload creation
+without subscribers. Database latency does not impose per-sample commit latency
+on websocket updates. Platform writer commits wake threshold evaluation through
+`citadel_platform_stats`; durable `alertpending` rows and the configured fallback
+recover missed notifications. Identical retry keys do not re-arm evaluated alerts.
+
+Failures retain one bounded batch per writer with 1–30 second exponential backoff.
+Shutdown cancels collector admission, closes both queues, and drains accepted
+samples with a five-second total final-flush budget per writer (also bounded by
+the process shutdown deadline). Unflushed telemetry may be discarded on shutdown;
+statistics are not durable business operations.
+
+Effective configuration reports `statsFlushIntervalSeconds`,
+`statsBatchSize` and `statsQueueCapacity`. Fixed `PlatformStatsIngress` and
+`ContainerStatsIngress` metrics expose accepted sample counts, queue depth,
+saturation and enqueue wait. `PlatformStatsFlush` and `ContainerStatsFlush` expose
+attempts, successful flushes, persisted logical samples, failures and buffered
+rows; `PlatformStatsStale`/`ContainerStatsStale` count discarded ownership mismatches.
+`StatsShutdownDrop` counts accepted rows left unflushed at writer shutdown.
+
 ### Background job lifecycle and configuration
+
+Platform adapters implement separate info, health, stats, inventory, observation
+and mutation capabilities. Resource collectors receive only their matching port
+through `ResourceCollector`; a Container collector cannot enumerate other
+resources or fetch Platform info. Swarm collection explicitly also receives
+networks, and manager bootstrap additionally receives Platform info. Broad
+Platform traits are method-free composition bounds, not scoped job dependencies.
+Registration uses only info; supplied-container sampling uses only stats.
+
+Stack update checks admit one live check per Stack after authorization and before
+external inspection. A duplicate returns Conflict; distinct Stacks share the
+existing four-operation budget. The key remains held through persistence and is
+released on completion, error, cancellation or request drop. Database version
+checks still fence concurrent edits/Apply. Deployment and Swarm update checks keep
+their existing durable claims before external I/O. `StackUpdateDuplicate` counts
+rejected duplicate Stack checks without resource labels.
+
+Git synchronization waiters use one shared completion generation per execution
+service. Completion/failure commits wake waiters to read authoritative ref state;
+a ten-second fallback recovers missed hints or changes made outside that service.
+The five-minute wait deadline includes enqueue and database reads, and caller
+cancellation stops only that wait. `GitSyncStateRead` counts ref-read attempts.
+The Git worker's existing two-second idle claim cadence is independent of these
+waiters and remains unchanged.
 
 Core holds a PostgreSQL advisory lease for its background jobs for the entire
 process lifetime. A second Core against the same database is rejected before
@@ -599,8 +702,8 @@ continues to respect active execution deadlines and operation claims.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `JobConfiguration__FlashInterval` | `60` seconds | Flush CPU/RAM threshold observations even when sample input is idle |
-| `JobConfiguration__BatchSize` | `500` | Flush threshold observations early at this persisted sample count |
+| `JobConfiguration__FlashInterval` | `60` seconds | Maximum partial stats-batch age and threshold-alert fallback |
+| `JobConfiguration__BatchSize` | `500` | Per-writer row threshold and bounded threshold-alert batch size |
 | `EdgeAgent__NodeAgentRemovalGraceMinutes` | `10` | Revoke credentials only for absent Swarm nodes beyond this grace period |
 | `EdgeAgent__SupportedNodeArchitectures__0`, `__1`, … | `amd64`, `arm64` | Architectures requiring node-agent coverage; `x86_64`/`aarch64` aliases normalize |
 | `Builds__MaxParallelRuns` | `4` | Concurrent build executions |
@@ -942,3 +1045,94 @@ resource identity, revocation, and preservation of credentials during a Core
 storage outage. It also checks unary execution, command failures, live events and
 cancel/shutdown cleanup for Platform and Build Pool targets. Ordinary Agent tests
 require no database.
+
+### Authorization cache ownership (CPU Phase 14)
+
+The PostgreSQL identity adapter owns one process-local authorization cache per
+connection endpoint/database/user. `PostgresIdentityStore` retains it; mutation
+repositories attach to the same weak registry. Actor scope and the global snapshot
+share a generation and immutable entry (1,024 actors). Resource ACL contributions
+include `None` denials (8,192 keys). LRU indexes and generation metadata are bounded
+along with their entries. Both caches have a five-minute safety TTL. Catalog
+visibility and transaction-local container authorization remain authoritative SQL.
+
+All application permission writes must acquire `authorization_cache::Mutation`
+**before acquiring a database connection**, capture `Impact` before changing old
+relationships, and finish through `Mutation::commit`. Commit resolves the new
+relationships too. Actor/Team/Role expansion includes service-account members,
+disabled principals and removed memberships. Only affected actor generations
+change; their scope/snapshot entries are evicted, and old resource entries become
+unusable. Rollbacks do not invalidate. Lost commit acknowledgements invalidate
+conservatively. A detached commit task retains the cache write fence and publishes
+even when its HTTP caller is cancelled. Readers retain the matching read fence
+through SQL and cache publication. Do not hold a pool connection while waiting to
+enter this fence.
+
+`IdentityService::authorize_resource` checks the cached global grant first.
+`permissions_for_resources` deduplicates known IDs, serves hits and resolves all
+ACL misses in one `actorid=ANY(...)` query using cached scope. Use that API for
+known-ID capability batches; never load an unrestricted catalog and apply it as
+an in-memory visibility filter. Git/Registry/Tag catalogs and Build/BuildAgentPool/
+AutomationAction known-ID checks use this batching path.
+
+Realtime binds a watch to the same actor generation before its authoritative
+subscription check. Changed or evicted generations close the connection and drop
+stream guards immediately; periodic authorization checks remain. Cache eviction
+can therefore cause a safe reconnect. Runtime observations reuse the connection
+authorization lease described below.
+
+Fixed-cardinality runtime families expose scope/resource lookups (iterations)
+and hits (units), negative hits, scope/global/resource SQL query counts, and
+resident actor invalidations. Tests are `authorization_cache`,
+`authorization_mutation_conventions` and the `authorization_cache` adapter unit
+module. Database tests require `CITADEL_PHASE3_DATABASE_URL`; the cancellation test
+expects the normal migrated schema. The mutation convention test inventories ACL
+SQL owners and rejects unaudited transaction paths.
+
+Immediate invalidation covers application writes within one Core process, matching
+the existing .NET in-process cache ownership. Independent Core writers or manual
+SQL updates require coordinated invalidation before sharing cached authorization;
+this cache does not provide distributed consistency. Restart Core after manual
+ACL maintenance. TTL is a safety bound, not a replacement for commit publication.
+
+
+### Realtime authorization and committed observation sharing
+
+Each production socket keeps permission decisions for its bound actor generation.
+The lease holds at most 1,024 positive/negative decisions, keyed by resource kind,
+ID, required level and specific permission. At capacity new decisions fail closed;
+no eviction loop turns an event burst into repeated permission SQL. A successful
+global decision can satisfy the same resource requirement. Ownership is still
+resolved from current persisted rows, and authorized catalog queries retain their
+SQL visibility filters. No actor-specific views or permission decisions are shared
+between connections.
+
+Runtime events do not reauthenticate a generation-tracked socket. Explicit client
+invocations and the configured periodic safety interval authenticate again and
+clear the lease; periodic checks revalidate all joined groups, including passive
+ones. Actor generation changes cancel the whole connection, including active
+streams. Custom readers without an invalidation watch retain event authentication
+and uncached permission checks. The process-local consistency restrictions above
+still apply; a periodic check is not an external SQL invalidation mechanism.
+
+A published event shares committed raw Platform, full Container inventory, Image
+inventory and targeted Container reads through fallible `OnceCell`s. Every reader
+checks access before exposing rows, and creates its own view/capability projection.
+Cells last only for that event and only match its Platform. Live daemon network/
+volume reads and actor-filtered catalogs retain their existing read paths.
+
+Committed container/image/network/volume observations coalesce for 100 ms by
+Platform, resource and action. One pending window retains at most 1,024 IDs and
+flushes early at capacity. Full inventory refreshes explicitly supersede targeted
+container references in the same batch. Claims, completions, logs, terminal data,
+security/license notifications and other control changes remain immediate.
+
+Runtime metric families: `RealtimeAuthentication` and `RealtimePermissionMiss`
+count executions in iterations; `RealtimePermissionLookup` counts lookups in
+iterations and hits in units; `RealtimeSharedRead` counts raw read executions;
+`RealtimeAuthorizationInvalidation` counts cancelled connections in units;
+`RealtimeObservationInput` and `RealtimeRuntimeInvalidation` count input
+observations and published runtime invalidations in units. Labels never include
+actor or resource IDs. Run the `platforms_http` tests filtered by `realtime_` with
+`CITADEL_PHASE4_DATABASE_URL` and `--include-ignored --test-threads=1` for the
+cross-connection counters and committed revocation gate.

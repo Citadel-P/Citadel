@@ -199,16 +199,20 @@ pub(crate) async fn capabilities(
         None => identity.global_permission(principal, resource_type).await,
     }
     .map_err(|error| HttpError::from_parts(error, headers))?;
-    Ok(
-        permission.map_or_else(ResourceCapabilitiesView::default, |permission| {
-            ResourceCapabilitiesView {
-                can_read: permission.level.grants(PermissionLevel::Read),
-                can_write: permission.level.grants(PermissionLevel::Write),
-                can_execute: permission.level.grants(PermissionLevel::Execute),
-            }
-        }),
-    )
+    Ok(capabilities_from_permission(permission))
 }
+pub(crate) fn capabilities_from_permission(
+    permission: Option<citadel_identity::PermissionGrant>,
+) -> ResourceCapabilitiesView {
+    permission.map_or_else(ResourceCapabilitiesView::default, |permission| {
+        ResourceCapabilitiesView {
+            can_read: permission.level.grants(PermissionLevel::Read),
+            can_write: permission.level.grants(PermissionLevel::Write),
+            can_execute: permission.level.grants(PermissionLevel::Execute),
+        }
+    })
+}
+
 pub(crate) fn publish_resource_change(
     hub: &Option<RealtimeHub>,
     resource_type: &'static str,

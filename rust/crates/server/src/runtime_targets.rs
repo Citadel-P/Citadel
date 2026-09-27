@@ -25,10 +25,14 @@ pub(crate) struct PlatformTarget {
 pub struct PlatformRuntimeRegistry {
     /// Shared by Direct/Local and Edge inventory: at most two external operations.
     pub inventory_budget: citadel_runtime::IoBudget,
+    identities: Arc<
+        citadel_adapters::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex,
+    >,
     pool: PgPool,
     base: Option<AgentClient>,
     targets: RwLock<Arc<Vec<PlatformTarget>>>,
     changed: watch::Sender<u64>,
+    subscriptions: watch::Sender<()>,
 }
 
 impl PlatformRuntimeRegistry {
@@ -38,10 +42,12 @@ impl PlatformRuntimeRegistry {
                 INVENTORY_CONCURRENCY.try_into().unwrap(),
                 citadel_runtime::runtime_metrics::RuntimeWork::Inventory,
             ),
+            identities: citadel_adapters::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex::attach(pool.clone()),
             pool,
             base,
             targets: RwLock::new(Arc::new(Vec::new())),
             changed: watch::channel(0).0,
+            subscriptions: watch::channel(()).0,
         })
     }
 
@@ -52,7 +58,18 @@ impl PlatformRuntimeRegistry {
         self.changed.subscribe()
     }
 
+    pub(crate) fn subscription_wakes(&self) -> watch::Receiver<()> {
+        self.subscriptions.subscribe()
+    }
+
+    pub(crate) fn ensure_subscriptions(&self) {
+        self.subscriptions.send_modify(|_| {});
+    }
+
     pub(crate) async fn refresh(&self) -> Result<(), sqlx::Error> {
+        if !self.identities.initialized() {
+            self.identities.rebuild().await?;
+        }
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Targets.start();
         let rows = sqlx::query("SELECT id,name,address,connectortype,COALESCE(platformdescriptor->>'$type','Docker') AS platformtype FROM platforms WHERE connectortype IN ('Local','Agent','EdgeAgent') ORDER BY id").fetch_all(&self.pool).await?;
         let previous = self.snapshot().await;

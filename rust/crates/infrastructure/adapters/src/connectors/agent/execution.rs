@@ -12,6 +12,9 @@ use citadel_contracts::citadel::{
     },
     edge::v1::EdgeCommandKind,
 };
+use citadel_platforms::{
+    ContainerInventoryPort, ImageInventoryPort, NetworkInventoryPort, NetworkMutationPort,
+};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use prost::Message;
 use std::{sync::Arc, time::Duration};
@@ -145,7 +148,6 @@ impl AgentExecutionClient {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<Vec<citadel_platforms::RuntimeImageSummary>, RuntimeCapabilityError> {
-        use citadel_platforms::PlatformInventoryPort;
         match self {
             Self::Direct(client) => client.list_images(cancellation).await,
             Self::Edge(session) => {
@@ -162,7 +164,6 @@ impl AgentExecutionClient {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
-        use citadel_platforms::PlatformRuntimePort;
         match self {
             Self::Direct(client) => client.list_containers(cancellation).await,
             Self::Edge(session) => {
@@ -179,7 +180,6 @@ impl AgentExecutionClient {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<Vec<citadel_platforms::RuntimeNetworkSummary>, RuntimeCapabilityError> {
-        use citadel_platforms::PlatformInventoryPort;
         match self {
             Self::Direct(client) => client.list_networks(cancellation).await,
             Self::Edge(session) => {
@@ -197,7 +197,6 @@ impl AgentExecutionClient {
         id: &str,
         cancellation: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
-        use citadel_platforms::PlatformResourceMutationPort;
         match self {
             Self::Direct(client) => client.delete_network(id, cancellation).await,
             Self::Edge(session) => {
@@ -317,7 +316,7 @@ impl AgentExecutionClient {
         cancellation: &CancellationToken,
     ) -> Result<bool, RuntimeCapabilityError> {
         match self {
-            Self::Direct(client) => match citadel_platforms::PlatformInventoryPort::inspect_volume(
+            Self::Direct(client) => match citadel_platforms::VolumeObservationPort::inspect_volume(
                 client.as_ref(),
                 name,
                 cancellation,

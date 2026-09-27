@@ -56,9 +56,11 @@ impl PostgresAlertRepository {
     ) -> BoxFuture<'a, Result<AlertChannel, AlertError>> {
         Box::pin(async move {
             let id = Uuid::now_v7();
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             sqlx::query("INSERT INTO alertchannels(id,name,alertdestination,url,isactive,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6)")
                 .bind(id).bind(&input.name).bind(&input.alert_destination).bind(&input.url).bind(input.is_active).bind(actor.value())
-                .execute(&self.pool).await.map_err(storage)?;
+                .execute(&mut *tx).await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             self.get_channel(id).await
         })
     }
@@ -86,7 +88,7 @@ impl PostgresAlertRepository {
             if changed == 0 {
                 return Err(AlertError::NotFound);
             }
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             self.get_channel(id).await
         })
     }
@@ -106,7 +108,7 @@ impl PostgresAlertRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             Ok(())
         })
     }

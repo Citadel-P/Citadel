@@ -1,34 +1,15 @@
-use futures_util::{StreamExt, future::BoxFuture, stream};
+use futures_util::{StreamExt, stream};
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
-use crate::ContainerStatsStore;
-use crate::PlatformRuntimePort;
 use crate::RuntimeCapabilityError;
 use crate::RuntimeContainerStat;
 
-pub trait ContainerStatsSampler: PlatformRuntimePort {
-    fn sample_container_stats<'a>(
-        &'a self,
-        container_id: &'a str,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeContainerStat, RuntimeCapabilityError>>;
-}
+use crate::ContainerStatsPort;
 
+#[derive(Clone)]
 pub struct ContainerStatsBatch {
     pub stats: Vec<RuntimeContainerStat>,
     pub failed_samples: usize,
-}
-
-pub async fn collect_running_container_stats<S>(
-    source: &S,
-    cancellation: &CancellationToken,
-) -> Result<ContainerStatsBatch, RuntimeCapabilityError>
-where
-    S: ContainerStatsSampler + Clone + 'static,
-{
-    let containers = source.list_containers(cancellation).await?;
-    sample_running_container_stats(source, containers, 8, cancellation).await
 }
 
 /// Sample an already-discovered set. The caller owns discovery and the I/O budget.
@@ -39,7 +20,7 @@ pub async fn sample_running_container_stats<S>(
     cancellation: &CancellationToken,
 ) -> Result<ContainerStatsBatch, RuntimeCapabilityError>
 where
-    S: ContainerStatsSampler + Clone + 'static,
+    S: ContainerStatsPort + Clone + 'static,
 {
     let samples = stream::iter(
         containers
@@ -71,17 +52,6 @@ where
     })
 }
 
-pub async fn persist_container_stats(
-    store: &dyn ContainerStatsStore,
-    platform_id: Uuid,
-    stats: &[RuntimeContainerStat],
-) -> Result<usize, RuntimeCapabilityError> {
-    if stats.is_empty() {
-        return Ok(0);
-    }
-    store.persist(platform_id, stats).await
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -89,7 +59,7 @@ mod tests {
     use futures_util::{FutureExt, future::BoxFuture};
 
     use super::*;
-    use crate::{RuntimeContainerSummary, RuntimePlatformInfo, RuntimeStatsStream};
+    use crate::{ContainerInventoryPort, RuntimeContainerSummary};
 
     #[derive(Default)]
     struct Counters {
@@ -100,14 +70,7 @@ mod tests {
     #[derive(Clone, Default)]
     struct Fixture(std::sync::Arc<Counters>);
 
-    impl PlatformRuntimePort for Fixture {
-        fn get_info<'a>(
-            &'a self,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
-            unreachable!()
-        }
-
+    impl crate::ContainerInventoryPort for Fixture {
         fn list_containers<'a>(
             &'a self,
             _cancellation: &'a CancellationToken,
@@ -152,17 +115,9 @@ mod tests {
                 ])
             })
         }
-
-        fn stream_stats<'a>(
-            &'a self,
-            _fetch_interval: Duration,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>> {
-            unreachable!()
-        }
     }
 
-    impl ContainerStatsSampler for Fixture {
+    impl ContainerStatsPort for Fixture {
         fn sample_container_stats<'a>(
             &'a self,
             container_id: &'a str,
@@ -198,7 +153,10 @@ mod tests {
 
     #[tokio::test]
     async fn samples_only_running_containers() {
-        let batch = collect_running_container_stats(&Fixture::default(), &CancellationToken::new())
+        let source = Fixture::default();
+        let cancellation = CancellationToken::new();
+        let containers = source.list_containers(&cancellation).await.unwrap();
+        let batch = sample_running_container_stats(&source, containers, 8, &cancellation)
             .await
             .unwrap();
         assert_eq!(batch.failed_samples, 0);

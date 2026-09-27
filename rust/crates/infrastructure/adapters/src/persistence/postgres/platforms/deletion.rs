@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use chrono::Utc;
 use citadel_activities::{ActivityEvent, ActivityEventInfo, PlatformActivitySnapshot};
 use citadel_platforms::deletion::{PlatformDeletionError, PlatformDeletionRepository};
@@ -25,7 +26,12 @@ impl PlatformDeletionRepository for PostgresPlatformDeletionRepository {
         ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<(), PlatformDeletionError>> {
         async move {
+            use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite};
+            let writes = ProjectionWrite::begin_many(ids.iter().flat_map(|id| [ProjectionKind::Platform, ProjectionKind::Containers, ProjectionKind::Images, ProjectionKind::Networks, ProjectionKind::Volumes].map(|kind| (*id, None, kind)))).await;
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Resources(ResourceType::Platform as i32, ids.to_vec());
+            authorization.capture(&mut tx, &impact).await.map_err(storage)?;
             // Serialize with registration and Edge enrollment; row locks also protect
             // against concurrent workload FK inserts while validating the whole batch.
             sqlx::query("SELECT pg_advisory_xact_lock(hashtext('citadel-platform-registration'))")
@@ -73,7 +79,10 @@ impl PlatformDeletionRepository for PostgresPlatformDeletionRepository {
             sqlx::query("DELETE FROM platforms WHERE id = ANY($1)")
                 .bind(ids).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("SELECT pg_notify('citadel_platform_targets','')").execute(&mut *tx).await.map_err(storage)?;
-            tx.commit().await.map_err(storage)
+            authorization.commit(tx, impact).await.map_err(storage)?;
+            for id in ids { super::runtime_index::forget_platform(&self.pool, *id); }
+            for write in writes { write.committed(); }
+            Ok(())
         }.boxed()
     }
 }

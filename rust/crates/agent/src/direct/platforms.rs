@@ -1,7 +1,9 @@
 use super::{Runtime, docker_error, runtime_error};
-use citadel_adapters::connectors::docker::LocalDockerSampler;
+use citadel_adapters::connectors::docker::events::{
+    self, ContainerChange, ResourceChange, RuntimeEventKind, SwarmResource,
+};
 use citadel_contracts::citadel::{platforms::v1::*, shared_models::v1::*};
-use citadel_platforms::{PlatformRuntimePort, RuntimePlatformStats, prune::PlatformPrunePort};
+use citadel_platforms::{RuntimePlatformStats, prune::PlatformPrunePort};
 use futures_util::{StreamExt, stream::BoxStream};
 use tonic::{Request, Response, Status};
 
@@ -11,20 +13,13 @@ impl platform_service_server::PlatformService for Runtime {
         &self,
         _: Request<()>,
     ) -> Result<Response<PlatformInfoResponse>, Status> {
-        let info = self
+        let (info, details) = self
             .docker
-            .get_info(&self.shutdown)
+            .get_info_with_details(&self.shutdown)
             .await
             .map_err(runtime_error)?;
-        let details = self.docker.info().await.map_err(docker_error)?;
-        let mut sampler = LocalDockerSampler::new(self.docker.clone(), 8);
-        let stats = aggregate(
-            sampler
-                .sample(&self.shutdown)
-                .await
-                .map_err(runtime_error)?,
-            info.cpu_count,
-        )?;
+        // Dynamic resource counts and usage belong to the statistics stream;
+        // metadata requests must never enumerate all runtime resources.
         let agent_runtime_image = if let Some(id) = &self.runtime_container {
             self.docker
                 .inspect_container_document(id)
@@ -40,34 +35,13 @@ impl platform_service_server::PlatformService for Runtime {
         } else {
             String::new()
         };
-        let manager = info.swarm.as_ref().is_some_and(|s| s.control_available);
-        let (service_count, running_task_count) = if manager {
-            (
-                Some(
-                    self.docker
-                        .list_swarm_services()
-                        .await
-                        .map_err(docker_error)?
-                        .len() as i64,
-                ),
-                Some(
-                    self.docker
-                        .list_swarm_tasks()
-                        .await
-                        .map_err(docker_error)?
-                        .len() as i64,
-                ),
-            )
-        } else {
-            (None, None)
-        };
         Ok(Response::new(PlatformInfoResponse {
             id: info.daemon_id,
             created: chrono::Utc::now().timestamp(),
-            network_count: stats.network_count,
-            volume_count: stats.volume_count,
+            network_count: 0,
+            volume_count: 0,
             agent_version: super::version(),
-            image_count: stats.image_count,
+            image_count: 0,
             driver: details.driver,
             operating_system: info.operating_system,
             os_version: details.os_version,
@@ -99,12 +73,12 @@ impl platform_service_server::PlatformService for Runtime {
                     seconds: t.timestamp(),
                     nanos: t.timestamp_subsec_nanos() as i32,
                 }),
-                service_count,
-                running_task_count,
+                service_count: None,
+                running_task_count: None,
             }),
-            platform_stat: Some(stat(&stats)),
-            image_used_bytes: stats.image_used_bytes,
-            volume_used_bytes: stats.volume_used_bytes,
+            platform_stat: None,
+            image_used_bytes: None,
+            volume_used_bytes: None,
             agent_runtime_image,
         }))
     }
@@ -153,12 +127,12 @@ impl platform_service_server::PlatformService for Runtime {
     ) -> Result<Response<Self::StreamPlatformStatsStream>, Status> {
         let interval = super::interval(request.into_inner().fetch_interval_ms);
         let docker = self.docker.clone();
+        let sampler = self.samples.clone();
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard = guard;
             let info = docker.info().await.map_err(docker_error)?;
-            let mut sampler = LocalDockerSampler::new(docker, 8);
             loop {
                 let sample = tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(&cancel)=>value.map_err(runtime_error) }?;
                 let s = aggregate(sample, info.cpu_count as i64)?;
@@ -179,7 +153,11 @@ impl platform_service_server::PlatformService for Runtime {
         _: Request<()>,
     ) -> Result<Response<Self::StreamDaemonEventStream>, Status> {
         let docker = self.docker.clone();
+        let samples = self.samples.clone();
         let mut events = docker.events(None, None).await.map_err(docker_error)?;
+        // A newly established stream cannot prove that cached running identities
+        // survived the previous connection's gap.
+        samples.invalidate();
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
         Ok(Response::new(Box::pin(async_stream::try_stream! {
@@ -189,45 +167,53 @@ impl platform_service_server::PlatformService for Runtime {
                 let Some(event) = event else { break; };
                 let e = event.map_err(docker_error)?;
                 use daemon_event_response::Kind;
+                let Some(normalized) = events::normalize(&e) else { continue; };
                 let scope = match e.scope.as_str() { "local" => 1, "swarm" => 2, _ => 0 };
                 let id = e.actor.id;
-                let kind = match e.resource_type.as_str() {
-                    "container" => {
-                        if e.action.starts_with("exec_") || matches!(e.action.as_str(), "kill"|"stop") {continue;}
-                        let mut container = if e.action == "destroy" {ContainerMessage { id:id.clone(),..Default::default() }} else {
+                let kind = match normalized {
+                    RuntimeEventKind::Container(change) => {
+                        samples.invalidate();
+                        let mut container = if change == ContainerChange::Tombstone { None } else {
                             let filter=serde_json::json!({"id":[id]}).to_string();
-                            match docker.list_container_models(Some(true),None,None,Some(&filter)).await {
-                                Ok(values)=>values.into_iter().next().map(super::containers::summary).transpose()?.unwrap_or_else(||ContainerMessage{id:id.clone(),..Default::default()}),
-                                Err(_)=>ContainerMessage{id:id.clone(),..Default::default()},
+                            let observed = async {
+                                let Some(mut model) = docker.list_container_models(Some(true),None,None,Some(&filter)).await?
+                                    .into_iter().find(|c| c.id.as_deref() == Some(id.as_str())) else { return Ok(None); };
+                                if model.image_id.as_deref().is_none_or(str::is_empty) {
+                                    let inspected = docker.inspect_container(&id).await?;
+                                    if inspected.id != id || inspected.image.is_empty() { return Ok(None); }
+                                    model.image_id = Some(inspected.image);
+                                }
+                                Ok::<_, citadel_adapters::connectors::docker::DockerError>(Some(model))
+                            }.await;
+                            match observed {
+                                Ok(Some(model)) => Some(super::containers::summary(model)?),
+                                Ok(None) => None,
+                                Err(error) => { tracing::debug!(%error, container_id=%id, "Event metadata unavailable; Core will reconcile"); None }
                             }
                         };
-                        container.state=match e.action.as_str(){"start"|"unpause"=>2,"die"=>5,"pause"=>3,"create"=>1,_=>container.state};
-                        container.is_swarm_task |= e.actor.attributes.contains_key("com.docker.swarm.task.id");
-                        Kind::DaemonContainerEventResponse(DaemonContainerEventResponse{action:e.action,container_id:id,container:Some(container)})
+                        if let Some(container) = &mut container {
+                            if let Some(state) = change.state() { container.state = super::container_mapping::state(state); }
+                            container.is_swarm_task |= e.actor.attributes.contains_key("com.docker.swarm.task.id");
+                        }
+                        Kind::DaemonContainerEventResponse(DaemonContainerEventResponse{action:e.action,container_id:id,container})
                     }
-                    "image"=>{
-                        if !matches!(e.action.as_str(),"delete"|"create"|"pull"){continue;}
-                        let image=if e.action=="delete" {None} else {docker.list_image_models().await.ok().and_then(|images|images.into_iter().find(|v|v.id==id)).map(super::images::summary)};
+                    RuntimeEventKind::Image(change)=>{
+                        let image=if change == ResourceChange::Tombstone {None} else {docker.image_event_model(&id).await.ok().filter(|image|image.id==id).map(super::images::summary)};
                         Kind::DaemonImageEventResponse(DaemonImageEventResponse{action:e.action,image_id:id,image})
                     }
-                    "volume"=>{
-                        if !matches!(e.action.as_str(),"destroy"|"create"){continue;}
-                        let volume=if e.action=="destroy"{None}else{docker.inspect_volume(&id).await.ok().map(super::volumes::volume)};
+                    RuntimeEventKind::Volume(change)=>{
+                        let volume=if change == ResourceChange::Tombstone{None}else{docker.inspect_volume(&id).await.ok().map(super::volumes::volume)};
                         Kind::DaemonVolumeEventResponse(DaemonVolumeEventResponse{action:e.action,volume_id:id,volume})
                     }
-                    "network"=>{
-                        if !matches!(e.action.as_str(),"destroy"|"create"){
-                            if scope!=2 {continue;}
-                            Kind::DaemonResourceEventResponse(DaemonResourceEventResponse{r#type:5,action:e.action,resource_id:id})
-                        }else{
-                            let network=if e.action=="destroy"{None}else{docker.inspect_network(&id).await.ok().map(|v|{let used=!v.containers.is_empty();super::networks::network(v,used)})};
-                            Kind::DaemonNetworkEventResponse(DaemonNetworkEventResponse{action:e.action,network_id:id,network})
-                        }
+                    RuntimeEventKind::Network(change)=>{
+                        let network=if change == ResourceChange::Tombstone {None}else{docker.inspect_network(&id).await.ok().map(|v|{let used=!v.containers.is_empty();super::networks::network(v,used)})};
+                        Kind::DaemonNetworkEventResponse(DaemonNetworkEventResponse{action:e.action,network_id:id,network})
                     }
-                    other => {
-                        let kind = match other { "builder"=>0,"config"=>1,"node"=>6,"secret"=>8,"service"=>9,_=>continue };
+                    RuntimeEventKind::SwarmDirty(resource) => {
+                        let kind = match resource { SwarmResource::Config=>1, SwarmResource::Network=>5, SwarmResource::Node=>6, SwarmResource::Secret=>8, SwarmResource::Service=>9 };
                         Kind::DaemonResourceEventResponse(DaemonResourceEventResponse { r#type: kind, action: e.action, resource_id: id })
                     }
+                    RuntimeEventKind::Unknown => Kind::DaemonResourceEventResponse(DaemonResourceEventResponse { r#type: -1, action: e.action, resource_id: id }),
                 };
                 yield DaemonEventResponse { kind: Some(kind), scope };
             }
@@ -285,3 +271,7 @@ fn aggregate(
     s.transmit_bytes = sample.containers.stats.iter().map(|v| v.tx_bytes).sum();
     Ok(s)
 }
+
+#[cfg(test)]
+#[path = "platforms/event_tests.rs"]
+mod event_tests;

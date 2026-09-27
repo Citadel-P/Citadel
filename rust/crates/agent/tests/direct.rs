@@ -9,7 +9,8 @@ use citadel_agent::{app::Agent, config::AgentConfig};
 use citadel_contracts::citadel::volumes::v1::{
     CreateVolumeRequest, volume_service_client::VolumeServiceClient,
 };
-use citadel_platforms::{CreateRuntimeVolume, PlatformResourceMutationPort};
+use citadel_platforms::CreateRuntimeVolume;
+use citadel_platforms::VolumeMutationPort;
 use ed25519_dalek::{Signer, SigningKey};
 use prost::Message;
 use sha2::{Digest, Sha256};
@@ -107,7 +108,7 @@ async fn mock_docker(
         .requests
         .lock()
         .unwrap()
-        .push((method.clone(), uri, value.clone()));
+        .push((method.clone(), uri.clone(), value.clone()));
     let result=match path.as_str() {
         "/version"|"/v1.49/version" => json!({"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41","Os":"linux","Arch":"amd64","Components":[{"Name":"BuildKit","Version":"v0.20.0"}]}),
         "/_ping"|"/v1.49/_ping"=>return "OK".into_response(),
@@ -120,7 +121,9 @@ async fn mock_docker(
         "/v1.49/containers/created-container/json"=>json!({"Id":"created-container","State":{"Running":true,"Status":"running"}}),
         "/v1.49/containers/slow/start"=>{tokio::time::sleep(Duration::from_secs(5)).await;return axum::http::StatusCode::NO_CONTENT.into_response()},
         "/v1.49/containers/fixture/json"=>json!({"Id":"fixture","SizeRw":9007199254740993i64,"State":{"Status":"running","Running":true,"ExitCode":0},"Config":{"Image":"redis","Env":null,"Labels":null,"ExposedPorts":{"6379/tcp":{}}},"HostConfig":{"ReadonlyRootfs":false,"Memory":0,"PortBindings":{"6379/tcp":[{"HostIp":"127.0.0.1","HostPort":"6379"}]}},"NetworkSettings":{"HairpinMode":false,"Networks":{"frontend":{"NetworkID":"net","Aliases":null,"GlobalIPv6Address":"::1"}}}}),
+        "/v1.49/containers/json" if uri.contains("volume") => json!([{"Id":"web", "Names":["/web"], "Image":"alpine", "ImageID":"image", "State":"running", "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"net"}}}, "Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]),
         "/v1.49/containers/json"=>json!([]),
+        "/v1.49/volumes/data" => json!({"Name":"data", "Scope":"local", "UsageData":{"Size":42,"RefCount":0}, "ClusterVolume":{"ID":"cluster", "Version":{"Index":9007199254740993_i64}, "Spec":{"Group":"g", "AccessMode":{"Scope":"multi", "Sharing":"readonly", "Availability":"active", "Secrets":[{"Key":"key","Secret":"secret"}], "CapacityRange":{"RequiredBytes":4096}}}, "Info":{"VolumeID":"csi", "CapacityBytes":8192, "VolumeContext":{"Mixed.Key":"v"}, "AccessibleTopology":[{"Zone.Name":"z"}]}, "PublishStatus":[{"NodeID":"node", "State":"published", "PublishContext":{"Mount.Path":"/data"}}]}}),
         "/v1.49/images/json"=>json!([{"Id":"sha256:fixture","ParentId":"parent","Created":123,"RepoTags":["redis:latest"],"RepoDigests":["redis@sha256:fixture"],"Size":9876543210i64,"SharedSize":-1,"VirtualSize":9876543210i64,"Containers":2,"Labels":{"test":"yes"}}]),
         "/v1.49/images/redis/json"=>json!({"Id":"sha256:fixture","Created":"2026-01-01T00:00:00Z","Size":9876543210i64,"Os":"linux","Architecture":"amd64","Config":{"User":"1000","WorkingDir":"/data","Entrypoint":["redis-server"],"StopSignal":"SIGTERM","ExposedPorts":{"6379/tcp":{}}}}),
         "/v1.49/images/redis/history"=>json!([{"Id":"layer","Created":123,"Size":9007199254740993i64,"CreatedBy":"RUN true","Comment":"fixture"}]),
@@ -429,6 +432,16 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     assert_eq!(result.entry_point, vec!["redis-server"]);
     assert_eq!(result.stop_signal.as_deref(), Some("SIGTERM"));
     assert_eq!(result.layers[0].size, 9007199254740993);
+    assert_eq!(
+        host.state
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, uri, _)| uri == "/v1.49/images/redis/json")
+            .count(),
+        1
+    );
     let result = client
         .check_build_host(signed(
             (),
@@ -706,5 +719,76 @@ async fn container_batch_attempts_each_id_and_reports_partial_failure() {
         calls
             .iter()
             .any(|(_, p, _)| p == "/v1.49/containers/missing/start")
+    );
+}
+
+#[tokio::test]
+async fn core_volume_inspection_keeps_cluster_metadata_and_attached_container_ports() {
+    use citadel_platforms::VolumeObservationPort;
+    let host = Harness::start().await;
+    let client = AgentClient::connect(
+        &host.address,
+        AgentRequestSigner::from_bytes(&[42; 32]),
+        Duration::from_secs(5),
+        true,
+    )
+    .await
+    .unwrap();
+    let volume = client
+        .inspect_volume("data", &CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(volume.in_use);
+    assert_eq!(volume.containers[0]["state"], "Running");
+    assert_eq!(volume.containers[0]["networks"]["Mixed.Network"], "net");
+    assert_eq!(volume.containers[0]["ports"]["80/tcp"][0]["hostIP"], "::");
+    let cluster = volume.cluster_volume.unwrap();
+    assert_eq!(cluster["Version"]["Index"], 9007199254740993_i64);
+    assert_eq!(cluster["Spec"]["AccessMode"]["Secrets"][0]["Key"], "key");
+    assert_eq!(cluster["Info"]["AccessibleTopology"][0]["Zone.Name"], "z");
+    assert_eq!(
+        cluster["PublishStatus"][0]["PublishContext"]["Mount.Path"],
+        "/data"
+    );
+    let requests = host.state.requests.lock().unwrap();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|(_, uri, _)| uri.starts_with("/v1.49/containers/json?all=true&filters="))
+            .count(),
+        1
+    );
+    assert!(!requests.iter().any(|(_, uri, _)| uri.contains("/stats")));
+}
+
+#[tokio::test]
+async fn core_image_inspection_keeps_launch_fields_with_one_inspection() {
+    use citadel_platforms::images::ImageInspectionPort;
+    let host = Harness::start().await;
+    let client = AgentClient::connect(
+        &host.address,
+        AgentRequestSigner::from_bytes(&[42; 32]),
+        Duration::from_secs(5),
+        true,
+    )
+    .await
+    .unwrap();
+    let image = client
+        .inspect_image("redis", &CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(image.user.as_deref(), Some("1000"));
+    assert_eq!(image.working_dir.as_deref(), Some("/data"));
+    assert_eq!(image.entry_point, ["redis-server"]);
+    assert_eq!(image.stop_signal.as_deref(), Some("SIGTERM"));
+    assert_eq!(
+        host.state
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, uri, _)| uri == "/v1.49/images/redis/json")
+            .count(),
+        1
     );
 }

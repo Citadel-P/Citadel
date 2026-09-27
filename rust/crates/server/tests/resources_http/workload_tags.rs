@@ -1,4 +1,6 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+use citadel_identity::{NewUserMutation, UserRepository, UserResourceAccessInput};
 
 // ResourceTagIntegrationTests: replacement must persist atomically and the
 // resource's own permission controls both reads and writes.
@@ -41,9 +43,25 @@ pub(super) async fn verify(
         let mut reader = admin.clone();
         reader.actor_id = ActorId::new(Uuid::now_v7());
         reader.roles.clear();
-        sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,TRUE,'User')")
-            .bind(reader.actor_id.value())
-            .execute(pool)
+        reader.subject_id = Uuid::now_v7();
+        let users = PostgresUserRepository::new(pool.clone());
+        users
+            .create(
+                &NewUserMutation {
+                    id: reader.subject_id,
+                    actor_id: reader.actor_id,
+                    name: format!("tags-reader-{}", reader.subject_id),
+                    email: format!("{}@tags.test", reader.subject_id),
+                    password_hash: "fixture".into(),
+                    is_enabled: true,
+                    created_by_actor_id: admin.actor_id,
+                    created_at: chrono::Utc::now(),
+                    team_ids: vec![],
+                    role_ids: vec![],
+                    resource_accesses: vec![],
+                },
+                true,
+            )
             .await
             .unwrap();
         for method in [Method::GET, Method::PUT] {
@@ -102,8 +120,23 @@ pub(super) async fn verify(
         let after =
             response_json(request(app, Method::GET, &uri, Some(admin.clone()), None).await).await;
         assert_eq!(after["tags"][0]["id"], tags[1]["id"]);
-        sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
-            .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(id).bind(resource as i32).execute(pool).await.unwrap();
+        // Exercise committed application invalidation after the denied reads
+        // above have warmed the negative permission cache.
+        users
+            .add_resource_access(
+                reader.subject_id,
+                &UserResourceAccessInput {
+                    resource_type: resource,
+                    resource_id: id,
+                    permission_level: PermissionLevel::Read,
+                    specific_permissions: vec![],
+                },
+                admin.actor_id,
+                chrono::Utc::now(),
+                true,
+            )
+            .await
+            .unwrap();
         assert_eq!(
             request(app, Method::GET, &uri, Some(reader.clone()), None)
                 .await

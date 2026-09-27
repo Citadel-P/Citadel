@@ -26,45 +26,17 @@ impl GitRepositoryExecutionService {
         if cancellation.is_cancelled() {
             return Err(GitError::Process(citadel_execution::ProcessError::Cancelled).into());
         }
-        self.store.enqueue_apply(actor, id, branch).await?;
-        self.changed();
+        // Subscribe before enqueue/read: completion racing either await must
+        // remain visible. One coalescing channel serves all refs and waiters.
+        let completion = self.completion.subscribe();
         // Enqueue changes Healthy/Failed to Pending under the repository lock,
         // and a request arriving during Syncing causes another Pending pass.
         let wait = async {
-            loop {
-                if let Some(reference) = self.store.get_ref(id, branch).await? {
-                    match reference.status.as_str() {
-                        "Healthy" => {
-                            let commit = reference
-                                .resolved_commit_sha
-                                .ok_or(GitRepositoryExecutionError::NotSynchronized)?;
-                            if !is_full_object_id(&commit) {
-                                return Err(GitRepositoryExecutionError::Validation(
-                                    "Repository returned an invalid commit ID.".into(),
-                                ));
-                            }
-                            return Ok(commit);
-                        }
-                        "Failed" | "Degraded" => {
-                            return Err(GitRepositoryExecutionError::Validation(
-                                "Repository synchronization failed. See its activity for details."
-                                    .into(),
-                            ));
-                        }
-                        _ => {}
-                    }
-                } else {
-                    return Err(GitRepositoryExecutionError::NotFound);
-                }
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }
+            self.store.enqueue_apply(actor, id, branch).await?;
+            self.changed();
+            completion::wait(completion, || self.store.get_ref(id, branch)).await
         };
-        tokio::select! {
-            () = cancellation.cancelled() => Err(GitError::Process(citadel_execution::ProcessError::Cancelled).into()),
-            result = tokio::time::timeout(Duration::from_secs(300), wait) => {
-                result.unwrap_or_else(|_| Err(GitError::Process(citadel_execution::ProcessError::Timeout(Duration::from_secs(300))).into()))
-            }
-        }
+        completion::bounded(cancellation, wait).await
     }
 
     pub async fn list_refs(
@@ -106,6 +78,9 @@ impl GitRepositoryExecutionService {
                 self.store.fail(&claim, &message).await?;
             }
         }
+        // Persistence has committed before any waiter is awakened. A failed
+        // commit emits no success hint; the coarse fallback still recovers.
+        self.completion.send_modify(|_| {});
         self.changed();
         Ok(true)
     }

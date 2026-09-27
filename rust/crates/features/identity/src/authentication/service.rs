@@ -526,6 +526,24 @@ impl IdentityService {
         }
     }
 
+    pub fn authorization_changes(
+        &self,
+        actor_id: ActorId,
+    ) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+        self.store.authorization_changes(actor_id)
+    }
+
+    pub async fn permissions_for_resources(
+        &self,
+        principal: &ActorPrincipal,
+        resource_type: ResourceType,
+        ids: &[Uuid],
+    ) -> Result<std::collections::BTreeMap<Uuid, Option<PermissionGrant>>, IdentityError> {
+        self.store
+            .resource_permissions(principal.actor_id, resource_type, ids)
+            .await
+    }
+
     pub async fn authorization_snapshot(
         &self,
         principal: &ActorPrincipal,
@@ -572,6 +590,14 @@ impl IdentityService {
         level: PermissionLevel,
         specific: Option<SpecificPermission>,
     ) -> Result<(), IdentityError> {
+        if self
+            .store
+            .authorization_snapshot(principal.actor_id)
+            .await?
+            .permits(resource_type, level, specific)
+        {
+            return Ok(());
+        }
         let permission = self
             .store
             .resource_permission(principal.actor_id, resource_type, resource_id)

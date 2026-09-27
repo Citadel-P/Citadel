@@ -60,7 +60,7 @@ pub async fn spawn_all(
             alert_store.clone(),
         ),
     );
-    workers::register(
+    let stats = workers::register(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
@@ -114,6 +114,7 @@ pub async fn spawn_all(
                 reconciliation_interval: config.reconciliation_interval,
             },
             runtime_targets.inventory_budget.clone(),
+            stats,
         ),
     );
     supervisor.spawn(

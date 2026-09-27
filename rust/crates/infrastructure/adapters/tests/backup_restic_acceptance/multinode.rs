@@ -7,7 +7,7 @@ use citadel_adapters::connectors::edge::EdgeTarget;
 use citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner;
 use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer;
-use citadel_platforms::{PlatformInventoryPort, PlatformRuntimePort};
+use citadel_platforms::PlatformInfoPort;
 
 const DIND: &str = "docker:27.5.1-dind";
 

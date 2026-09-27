@@ -7,7 +7,8 @@ use citadel_adapters::external::backups::system_recovery::CitadelSystemRestoreOp
 use citadel_adapters::external::backups::system_recovery::restore_citadel_system;
 use citadel_adapters::persistence::postgres::platforms::PostgresAuthorizedPlatformReader;
 use citadel_database::MigrationRunner;
-use citadel_platforms::{AuthorizedPlatformReader, PlatformRuntimePort};
+use citadel_platforms::AuthorizedPlatformReader;
+use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort, PlatformStatsPort};
 use citadel_primitives::ActorId;
 use citadel_server::config::{Config, DatabaseConfig};
 use clap::{Parser, Subcommand};
@@ -250,7 +251,8 @@ async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Er
     let cancellation = CancellationToken::new();
     let local_info = local.get_info(&cancellation).await?;
     let agent_info = agent.get_info(&cancellation).await?;
-    let local_containers = PlatformRuntimePort::list_containers(&local, &cancellation).await?;
+    let local_containers =
+        citadel_platforms::ContainerInventoryPort::list_containers(&local, &cancellation).await?;
     let agent_containers = agent.list_containers(&cancellation).await?;
     let local_ids = local_containers
         .iter()

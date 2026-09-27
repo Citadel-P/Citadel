@@ -18,7 +18,7 @@ export const useVolumesGroup = (platformId?: string) => {
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
       lastDataRef.current = data.data;
-      setVolumes(nodeSnapshotRef.current ? { ...data.data, volumes: nodeSnapshotRef.current.volumes } : data.data);
+      setVolumes(nodeSnapshotRef.current ? { ...data.data, volumes: nodeSnapshotRef.current.nodeOnly ? [...data.data.volumes.filter((v) => !v.dockerNodeId), ...(nodeSnapshotRef.current.volumes ?? [])] : (nodeSnapshotRef.current.volumes ?? data.data.volumes) } : data.data);
     }
   }, [data?.data]);
 
@@ -27,7 +27,7 @@ export const useVolumesGroup = (platformId?: string) => {
       if (!prev?.volumes) return prev;
 
       const { volume, eventType, actorId } = event;
-      const existingIndex = prev.volumes.findIndex((v) => v.id === actorId);
+      const existingIndex = prev.volumes.findIndex((v) => v.id === actorId && !v.dockerNodeId);
 
       switch (eventType) {
         case 'create':
@@ -37,13 +37,13 @@ export const useVolumesGroup = (platformId?: string) => {
               volumes: [volume, ...prev.volumes],
             };
           }
-          break;
+          return { ...prev, volumes: prev.volumes.map((value, index) => index === existingIndex ? volume : value) };
 
         case 'destroy':
           if (existingIndex !== -1) {
             return {
               ...prev,
-              volumes: prev.volumes.filter((v) => v.id !== actorId),
+              volumes: prev.volumes.filter((v) => v.id !== actorId || !!v.dockerNodeId),
             };
           }
           break;
@@ -58,9 +58,10 @@ export const useVolumesGroup = (platformId?: string) => {
 
   const onSwarmNodeLocalResourcesUpdated = useCallback(
     (snapshot: SwarmNodeLocalResourcesUpdate) => {
-      if (snapshot.platformId !== platformId) return;
+      if (snapshot.platformId !== platformId || !snapshot.volumes) return;
+      const values = snapshot.volumes;
       nodeSnapshotRef.current = snapshot;
-      setVolumes((current) => (current ? { ...current, volumes: snapshot.volumes } : current));
+      setVolumes((current) => (current ? { ...current, volumes: snapshot.nodeOnly ? [...current.volumes.filter((v) => !v.dockerNodeId), ...values] : values } : current));
     },
     [platformId],
   );

@@ -1,6 +1,6 @@
 use super::*;
 use crate::connectors::containers::ownership::{Owner, owner};
-use citadel_platforms::PlatformRuntimePort;
+use citadel_platforms::ContainerInventoryPort;
 use std::collections::{BTreeMap, BTreeSet};
 
 impl StackRuntimeRouter {
@@ -42,7 +42,7 @@ impl StackRuntimeRouter {
     ) -> Result<StackImportClaim, StackError> {
         let target = self.platform(platform_id).await?;
         let containers = if target.connector == citadel_platforms::ConnectorKind::Local {
-            PlatformRuntimePort::list_containers(&self.docker, cancel).await
+            citadel_platforms::ContainerInventoryPort::list_containers(&self.docker, cancel).await
         } else {
             match self.agent_for(&target)? {
                 crate::connectors::agent::execution::AgentExecutionClient::Direct(agent) => {

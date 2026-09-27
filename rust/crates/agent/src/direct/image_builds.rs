@@ -135,17 +135,18 @@ mod tests {
             Self(root)
         }
         fn runtime(&self) -> Runtime {
-            Runtime {
-                docker: citadel_adapters::connectors::docker::DockerClient::with_endpoint(
+            let mut runtime = Runtime::new(
+                citadel_adapters::connectors::docker::DockerClient::with_endpoint(
                     "tcp://fixture:2375".parse().unwrap(),
                     Duration::from_secs(3),
                     "/host",
                 )
                 .unwrap(),
-                docker_cli: self.0.join("docker").display().to_string(),
-                shutdown: tokio_util::sync::CancellationToken::new(),
-                runtime_container: None,
-            }
+                tokio_util::sync::CancellationToken::new(),
+                None,
+            );
+            runtime.docker_cli = self.0.join("docker").display().to_string();
+            runtime
         }
     }
     impl Drop for Fixture {

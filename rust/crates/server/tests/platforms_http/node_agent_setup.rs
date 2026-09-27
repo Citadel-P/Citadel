@@ -5,12 +5,10 @@ use citadel_adapters::{
         edge::store::PostgresEdgeStore, node_agents::store::PostgresNodeAgentLifecycleStore,
     },
 };
-use citadel_platforms::{
-    PlatformRuntimePort,
-    node_agents::{
-        lifecycle::NodeAgentLifecycleStore,
-        setup::{NodeAgentSetupStore, SetupKind},
-    },
+use citadel_platforms::PlatformInfoPort;
+use citadel_platforms::node_agents::{
+    lifecycle::NodeAgentLifecycleStore,
+    setup::{NodeAgentSetupStore, SetupKind},
 };
 use citadel_server::api::routes::platforms::EdgeHttpContext;
 

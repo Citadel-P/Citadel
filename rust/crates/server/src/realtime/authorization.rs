@@ -12,6 +12,13 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 pub trait RealtimeReadPort: Send + Sync {
+    fn authorization_changes(
+        &self,
+        _actor: citadel_primitives::ActorId,
+    ) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+        None
+    }
+
     fn authenticate<'a>(
         &'a self,
         token: &'a str,
@@ -22,6 +29,16 @@ pub trait RealtimeReadPort: Send + Sync {
         principal: &'a ActorPrincipal,
         platform_id: Uuid,
     ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>>;
+
+    fn platform_for_event<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+        _event: &'a super::PublishedRuntimeEvent,
+        _lease: &'a super::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+        self.authorize_platform(principal, platform_id)
+    }
 
     fn list_containers(
         &self,
@@ -55,11 +72,20 @@ impl IdentityRealtimeReader {
 }
 
 impl RealtimeReadPort for IdentityRealtimeReader {
+    fn authorization_changes(
+        &self,
+        actor: citadel_primitives::ActorId,
+    ) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+        self.identity.authorization_changes(actor)
+    }
+
     fn authenticate<'a>(
         &'a self,
         token: &'a str,
     ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
         Box::pin(async move {
+            let _authentication =
+                citadel_runtime::runtime_metrics::RuntimeWork::RealtimeAuthentication.start();
             crate::token_safety::authenticate_realtime(&self.identity, token)
                 .await
                 .map_err(|error| match error {
@@ -96,6 +122,31 @@ impl RealtimeReadPort for IdentityRealtimeReader {
         })
     }
 
+    fn platform_for_event<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        platform_id: Uuid,
+        event: &'a super::PublishedRuntimeEvent,
+        lease: &'a super::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+        Box::pin(async move {
+            lease
+                .authorize(
+                    &self.identity,
+                    principal,
+                    ResourceType::Platform,
+                    Some(platform_id),
+                    PermissionLevel::Read,
+                    None,
+                )
+                .await?;
+            super::shared_reads::platform(&self.platforms, platform_id, Some(event))
+                .await?
+                .map(PlatformView::from)
+                .ok_or(RealtimeReadError::Authorization)
+        })
+    }
+
     fn list_containers(
         &self,
         platform_id: Uuid,
@@ -116,6 +167,8 @@ impl RealtimeReadPort for IdentityRealtimeReader {
 }
 
 pub(super) struct Subscription {
+    pub(super) lease: super::AuthorizationLease,
+    pub(super) authorization_changes: Option<tokio::sync::watch::Receiver<Uuid>>,
     pub(super) principal: ActorPrincipal,
     pub(super) platform_id: Option<Uuid>,
     pub(super) access_token: Zeroizing<String>,
@@ -145,6 +198,26 @@ pub(super) async fn validate_subscription(
         .authenticate(access_token.as_str())
         .await
         .map_err(map_realtime_read_error)?;
+    let authorization_changes = service
+        .inner
+        .reader
+        .authorization_changes(principal.actor_id);
+    // Bind the watch before the authoritative authentication/authorization read.
+    // A concurrent commit is retained by watch even before the connection loop.
+    let principal = if authorization_changes.is_some() {
+        let checked = service
+            .inner
+            .reader
+            .authenticate(access_token.as_str())
+            .await
+            .map_err(map_realtime_read_error)?;
+        if checked.actor_id != principal.actor_id {
+            return Err(RealtimeError::Authentication);
+        }
+        checked
+    } else {
+        principal
+    };
     let platform_id = match (subscribe.resource_type.as_deref(), subscribe.resource_id) {
         (None, None) => None,
         (Some(PLATFORM_RESOURCE_TYPE), Some(platform_id)) => {
@@ -158,7 +231,15 @@ pub(super) async fn validate_subscription(
             ));
         }
     };
+    if authorization_changes
+        .as_ref()
+        .is_some_and(|changes| changes.has_changed().unwrap_or(true))
+    {
+        return Err(RealtimeError::Authorization);
+    }
     Ok(Subscription {
+        lease: super::AuthorizationLease::new(principal.actor_id, authorization_changes.clone()),
+        authorization_changes,
         principal,
         platform_id,
         access_token,
@@ -187,5 +268,22 @@ pub(super) fn map_realtime_read_error(error: RealtimeReadError) -> RealtimeError
         RealtimeReadError::Authentication => RealtimeError::Authentication,
         RealtimeReadError::Authorization => RealtimeError::Authorization,
         RealtimeReadError::Storage(message) => RealtimeError::AuthorizationStorage(message),
+    }
+}
+
+impl Subscription {
+    pub(super) async fn recheck(&mut self, service: &RealtimeService) -> Result<(), RealtimeError> {
+        let principal = service
+            .inner
+            .reader
+            .authenticate(&self.access_token)
+            .await
+            .map_err(map_realtime_read_error)?;
+        if principal.actor_id != self.principal.actor_id && self.lease.tracked() {
+            return Err(RealtimeError::Authentication);
+        }
+        self.lease.clear();
+        self.principal = principal;
+        Ok(())
     }
 }

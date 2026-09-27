@@ -26,6 +26,11 @@ pub(super) async fn begin(
             "The Deployment changed before the update check.".into(),
         ));
     }
+    sqlx::query("SELECT pg_notify($1, '')")
+        .bind(citadel_runtime::RuntimeSignal::DeploymentRecovery.channel())
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
     tx.commit().await.map_err(storage)?;
     Ok(DeploymentUpdateCheck {
         lease_id,

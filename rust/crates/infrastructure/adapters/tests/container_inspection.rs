@@ -92,10 +92,12 @@ fn inspection_without_configuration_preserves_other_fields() {
 fn inspection_preserves_dictionary_keys_and_the_existing_ui_shape() {
     let result = map_inspection(json!({"Id":"container", "State":{"Status":"running", "OOMKilled":false},
         "Config":{"Labels":{"MixedCase_Label":"Value"}, "ExposedPorts":{"80/tcp":{}}, "Volumes":{"/Data_Path":{}}},
-        "HostConfig":{"PortBindings":{"80/tcp":[{"HostIP":"127.0.0.1","HostPort":"8080"}]}, "LogConfig":{"Type":"json-file", "Config":{"max-size":"1m"}}},
+        "HostConfig":{"UTSMode":"host","IOMaximumBandwidth":123,"PortBindings":{"80/tcp":[{"HostIP":"127.0.0.1","HostPort":"8080"}]}, "LogConfig":{"Type":"json-file", "Config":{"max-size":"1m"}}},
         "NetworkSettings":{"Networks":{"Network_UPPER":{"IPAddress":"10.0.0.2"}}},
         "GraphDriver":{"Data":{"UpperDir":"/some/path"}}
     }), "container").unwrap();
+    assert_eq!(result["hostConfig"]["utsMode"], "host");
+    assert_eq!(result["hostConfig"]["ioMaximumBandwidth"], 123);
     assert_eq!(result["state"]["status"], "Running");
     assert_eq!(result["state"]["oomKilled"], false);
     assert_eq!(result["config"]["labels"]["MixedCase_Label"], "Value");

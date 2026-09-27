@@ -18,8 +18,8 @@ use citadel_adapters::{
     },
 };
 use citadel_platforms::{
-    InventoryProjectionStore, PlatformReadService, PlatformRegistrationService,
-    jobs::{InventoryCollectionTarget, collect_inventory},
+    PlatformReadService, PlatformRegistrationService,
+    jobs::{EventRefresh, ReconciliationScope, collect_event_scope},
 };
 use citadel_server::api::routes::{platforms as platforms_http, platforms::PlatformsHttpState};
 use serde_json::Value;
@@ -40,20 +40,20 @@ pub async fn verify(
     stack: Uuid,
     version: &str,
 ) {
-    let snapshot = collect_inventory(
-        docker,
-        &InventoryCollectionTarget {
-            platform_id: platform,
-            platform_type: citadel_platforms::PlatformKind::Docker,
-        },
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-    PostgresInventoryProjectionStore::new(pool.clone())
-        .persist(&snapshot)
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    for scope in [ReconciliationScope::Images, ReconciliationScope::Containers] {
+        let snapshot = collect_event_scope(
+            citadel_platforms::jobs::ResourceCollector::for_scope(
+                docker,
+                EventRefresh::Resource(scope),
+            ),
+            platform,
+            &CancellationToken::new(),
+        )
         .await
         .unwrap();
+        store.persist_resource(&snapshot).await.unwrap();
+    }
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT id,dockercontainerid FROM containers WHERE stackid=$1 AND state='Running'",
     )

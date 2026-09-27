@@ -116,20 +116,28 @@ async fn list_registries(
             .map_err(metadata_error),
         &headers,
     )?;
+    // SQL has already selected the authorized IDs. Resolve their capability
+    // metadata with one batch of ACL misses, including denied entries.
+    let permission_ids = authorized_registries
+        .iter()
+        .map(|resource| resource.id)
+        .collect::<Vec<_>>();
+    let row_permissions = api_result(
+        state
+            .identity
+            .permissions_for_resources(&principal, ResourceType::Registry, &permission_ids)
+            .await,
+        &headers,
+    )?;
     let mut registries = Vec::with_capacity(authorized_registries.len());
     for registry in authorized_registries.into_iter().filter(|registry| {
         (filters.include_disabled
             || registry.status != citadel_registries::RegistryStatus::Disabled)
             && has_all_tags(&registry.tags, &filters.tags)
     }) {
-        let row_capabilities = capabilities(
-            &state.identity,
-            &principal,
-            ResourceType::Registry,
-            Some(registry.id),
-            &headers,
-        )
-        .await?;
+        let row_capabilities = crate::api::resource_access::capabilities_from_permission(
+            row_permissions.get(&registry.id).copied().flatten(),
+        );
         registries.push(AuthorizedRegistryView {
             is_default: registry.id == Uuid::from_u128(0x100),
             registry: registry.into(),

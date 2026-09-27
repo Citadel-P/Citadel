@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+mod capabilities;
+pub use capabilities::*;
 pub mod model;
 pub use model::{ConnectorKind, PlatformKind};
 pub mod agent_setup;
@@ -61,3 +63,5 @@ pub use runtime::{
 
 mod metadata;
 pub use metadata::{PlatformMetadataError, PlatformMetadataRepository};
+
+pub mod stats_ingestion;

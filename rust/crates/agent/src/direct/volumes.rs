@@ -29,13 +29,56 @@ impl volume_service_server::VolumeService for Runtime {
         &self,
         request: Request<InspectVolumeRequest>,
     ) -> Result<Response<VolumeResponse>, Status> {
-        Ok(Response::new(volume(
-            self.docker
-                .inspect_volume(&request.into_inner().name)
-                .await
-                .map_err(docker_error)?,
-        )))
+        let name = request.into_inner().name;
+        let (value, containers) = tokio::try_join!(
+            self.docker.inspect_volume(&name),
+            self.docker.volume_containers(&name)
+        )
+        .map_err(docker_error)?;
+        let mut result = volume(value);
+        result.in_use |= !containers.is_empty();
+        result.containers = containers
+            .into_iter()
+            .map(|c| {
+                let networks = c
+                    .network_settings
+                    .as_ref()
+                    .and_then(|n| n.networks.as_ref())
+                    .into_iter()
+                    .flatten()
+                    .map(|(name, endpoint)| {
+                        (
+                            name.clone(),
+                            endpoint
+                                .network_id
+                                .as_ref()
+                                .filter(|id| !id.is_empty())
+                                .unwrap_or(name)
+                                .clone(),
+                        )
+                    })
+                    .collect();
+                let name = c
+                    .names
+                    .as_ref()
+                    .and_then(|names| names.first())
+                    .cloned()
+                    .unwrap_or_default();
+                let c = super::containers::summary(c)?;
+                Ok(ContainerVolumeResult {
+                    id: c.id,
+                    name,
+                    image: c.image,
+                    image_id: c.image_id,
+                    state: c.state,
+                    networks,
+                    ports: c.ports,
+                })
+            })
+            .collect::<Result<_, Status>>()?;
+        Ok(Response::new(result))
     }
+
     async fn create(
         &self,
         request: Request<CreateVolumeRequest>,
@@ -92,10 +135,14 @@ pub(super) fn volume(value: DockerVolume) -> VolumeResponse {
             .map(|(key, value)| {
                 (
                     key,
-                    value
-                        .as_str()
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| value.to_string()),
+                    if value.is_null() {
+                        String::new()
+                    } else {
+                        value
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| value.to_string())
+                    },
                 )
             })
             .collect(),
@@ -158,5 +205,20 @@ fn cluster(value: &Value) -> ClusterVolumeMessage {
             state: text(v, "State"),
             publish_context: strings(&v["PublishContext"]),
         }),
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    #[test]
+    fn null_status_is_empty_in_the_agent_contract() {
+        let volume: super::DockerVolume = serde_json::from_value(
+            serde_json::json!({"Name":"data","Status":{"missing":null,"text":"ready","number":42}}),
+        )
+        .unwrap();
+        let mapped = super::volume(volume);
+        assert_eq!(mapped.status["missing"], "");
+        assert_eq!(mapped.status["text"], "ready");
+        assert_eq!(mapped.status["number"], "42");
     }
 }

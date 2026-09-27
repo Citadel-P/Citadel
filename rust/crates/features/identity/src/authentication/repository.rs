@@ -89,6 +89,38 @@ pub trait IdentityStore: Send + Sync {
         credential_id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ServiceAccountCredential>, IdentityError>>;
 
+    /// A generation change or closed channel invalidates actor-bound realtime state.
+    fn authorization_changes(
+        &self,
+        _actor_id: ActorId,
+    ) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+        None
+    }
+
+    fn resource_permissions<'a>(
+        &'a self,
+        actor_id: ActorId,
+        resource_type: ResourceType,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<
+        'a,
+        Result<std::collections::BTreeMap<Uuid, Option<PermissionGrant>>, IdentityError>,
+    > {
+        Box::pin(async move {
+            let mut result = std::collections::BTreeMap::new();
+            for id in ids {
+                if !result.contains_key(id) {
+                    result.insert(
+                        *id,
+                        self.resource_permission(actor_id, resource_type, *id)
+                            .await?,
+                    );
+                }
+            }
+            Ok(result)
+        })
+    }
+
     fn authorization_snapshot(
         &self,
         actor_id: ActorId,
