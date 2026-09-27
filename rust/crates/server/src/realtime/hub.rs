@@ -89,6 +89,15 @@ impl PublishedRuntimeEvent {
             .map(|id| vec![id.to_owned()])
     }
 
+    pub(crate) fn container_state_patches(
+        &self,
+    ) -> Option<Vec<citadel_platforms::containers::ContainerStatePatch>> {
+        if self.payload["dockerResourceType"] != "container" {
+            return None;
+        }
+        serde_json::from_value(self.payload["containerPatches"].clone()).ok()
+    }
+
     pub(crate) fn affects_resource(&self, id: Option<Uuid>) -> bool {
         if let Some(ids) = self.payload["resourceIds"].as_array() {
             return id.is_none_or(|id| ids.contains(&json!(id)));
@@ -221,6 +230,32 @@ impl RealtimeHub {
             platform_id,
             "runtimeChanged",
             json!({"dockerResourceType":"container", "action":action,"runtimeResourceIds":ids}),
+        )
+    }
+
+    pub fn publish_container_state_patches(
+        &self,
+        platform_id: Uuid,
+        patches: &[citadel_platforms::containers::ContainerStatePatch],
+    ) -> u64 {
+        if patches.is_empty() || self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        let ids: Vec<_> = patches
+            .iter()
+            .map(|patch| patch.container_id.as_str())
+            .collect();
+        self.publish(
+            Some(platform_id),
+            PLATFORM_RESOURCE_TYPE,
+            platform_id,
+            "runtimeChanged",
+            json!({
+                "dockerResourceType": "container",
+                "action": "update",
+                "runtimeResourceIds": ids,
+                "containerPatches": patches,
+            }),
         )
     }
 

@@ -173,7 +173,7 @@ impl platform_service_server::PlatformService for Runtime {
                 let kind = match normalized {
                     RuntimeEventKind::Container(change) => {
                         samples.invalidate();
-                        let mut container = if change == ContainerChange::Tombstone { None } else {
+                        let mut container = if change == ContainerChange::Tombstone || change.state_delta().is_some() { None } else {
                             let filter=serde_json::json!({"id":[id]}).to_string();
                             let observed = async {
                                 let Some(mut model) = docker.list_container_models(Some(true),None,None,Some(&filter)).await?

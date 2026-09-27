@@ -59,6 +59,27 @@ fn resource_entry_cannot_outlive_the_scope_it_used() {
 }
 
 #[tokio::test]
+async fn authorization_read_fence_blocks_acl_mutation_until_claim_finishes() {
+    let cache = Arc::new(AuthorizationCache {
+        gate: Arc::new(RwLock::new(())),
+        state: Mutex::new(State::default()),
+    });
+    let fence = cache.read_fence().await;
+    let gate = cache.gate.clone();
+    let mut mutation = tokio::spawn(async move { gate.write_owned().await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), &mut mutation)
+            .await
+            .is_err()
+    );
+    drop(fence);
+    tokio::time::timeout(Duration::from_secs(1), mutation)
+        .await
+        .expect("ACL mutation should proceed after claim commit")
+        .unwrap();
+}
+
+#[tokio::test]
 #[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
 async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
     use citadel_primitives::ActorId;

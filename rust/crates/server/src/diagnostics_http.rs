@@ -5,6 +5,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use citadel_adapters::connectors::docker::DockerClient;
 use serde::Serialize;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ pub struct DiagnosticsHttpState {
     pub readiness: Arc<Readiness>,
     pub metrics: Arc<Metrics>,
     pub pool: PgPool,
+    pub docker: DockerClient,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -56,8 +58,27 @@ async fn health() -> axum::Json<HealthResponse> {
     extensions(("x-citadel-principal" = json!("anonymous")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(true)))
 )]
 async fn ready(State(state): State<DiagnosticsHttpState>) -> Response {
-    let readiness = state.readiness.snapshot();
-    let status = if readiness.database && readiness.docker {
+    let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Readiness.start();
+    let (database, docker) = tokio::join!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            sqlx::query_scalar::<_, i32>("SELECT 1")
+                .fetch_one(&state.pool)
+                .await
+                .is_ok()
+        }),
+        tokio::time::timeout(std::time::Duration::from_secs(2), state.docker.ping()),
+    );
+    let database = matches!(database, Ok(true));
+    let docker = matches!(docker, Ok(Ok(_)));
+    if !database || !docker {
+        state.metrics.readiness_failed();
+    }
+    let mut readiness = state.readiness.snapshot();
+    let is_ready = database && docker;
+    readiness.database = database;
+    readiness.docker = docker;
+    readiness.status = if is_ready { "ready" } else { "not-ready" };
+    let status = if is_ready {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE

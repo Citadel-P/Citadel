@@ -12,6 +12,8 @@ const OBSERVABLE_AFTER: Duration = Duration::from_secs(16 * 60);
 const MAXIMUM_BATCH: i64 = 25;
 const DRIFT_MONITOR_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const DRIFT_MONITOR_BATCH: i64 = 100;
+const DRIFT_EVENT_COALESCE_WINDOW: Duration = Duration::from_millis(50);
+const DRIFT_EVENT_MAX_PENDING: usize = 256;
 
 pub(super) async fn stack_updates(
     cancellation: CancellationToken,
@@ -143,13 +145,17 @@ pub(super) async fn event_drift(
     loop {
         let result = async {
             loop {
-                let notification = tokio::select! { ()=cancellation.cancelled()=>return Ok::<(),sqlx::Error>(()), notification=listener.recv()=>notification? };
-                let Ok(id) = uuid::Uuid::parse_str(notification.payload()) else { continue; };
-                if let Err(error) = stacks.monitor_container_event(id).await {
-                    tracing::warn!(%error, %id, "Event-triggered Stack drift repair failed");
+                let Some(pending) = receive_drift_batch(&mut listener, &cancellation).await? else {
+                    return Ok::<(), sqlx::Error>(());
+                };
+                for id in pending {
+                    if let Err(error) = stacks.monitor_container_event(id).await {
+                        tracing::warn!(%error, %id, "Event-triggered Stack drift repair failed");
+                    }
                 }
             }
-        }.await;
+        }
+        .await;
         if cancellation.is_cancelled() {
             return Ok(());
         }
@@ -157,5 +163,67 @@ pub(super) async fn event_drift(
             tracing::warn!(%error, "Stack drift event listener failed");
         }
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
+    }
+}
+
+async fn receive_drift_batch(
+    listener: &mut sqlx::postgres::PgListener,
+    cancellation: &CancellationToken,
+) -> Result<Option<std::collections::BTreeSet<uuid::Uuid>>, sqlx::Error> {
+    let first = tokio::select! {
+        () = cancellation.cancelled() => return Ok(None),
+        notification = listener.recv() => notification?,
+    };
+    let mut pending = std::collections::BTreeSet::new();
+    insert_drift_id(&mut pending, first.payload());
+    let deadline = tokio::time::Instant::now() + DRIFT_EVENT_COALESCE_WINDOW;
+    while pending.len() < DRIFT_EVENT_MAX_PENDING {
+        tokio::select! {
+            () = cancellation.cancelled() => return Ok(None),
+            _ = tokio::time::sleep_until(deadline) => break,
+            notification = listener.recv() => {
+                let notification = notification?;
+                insert_drift_id(&mut pending, notification.payload());
+            }
+        }
+    }
+    Ok(Some(pending))
+}
+
+fn insert_drift_id(pending: &mut std::collections::BTreeSet<uuid::Uuid>, payload: &str) -> bool {
+    let Ok(id) = uuid::Uuid::parse_str(payload) else {
+        return false;
+    };
+    if pending.contains(&id) {
+        return true;
+    }
+    if pending.len() == DRIFT_EVENT_MAX_PENDING {
+        return false;
+    }
+    pending.insert(id)
+}
+
+#[cfg(test)]
+mod drift_event_tests {
+    use super::*;
+
+    #[test]
+    fn drift_notifications_are_deduplicated_and_pending_work_is_bounded() {
+        let mut pending = std::collections::BTreeSet::new();
+        let first = uuid::Uuid::now_v7();
+        assert!(insert_drift_id(&mut pending, &first.to_string()));
+        assert!(insert_drift_id(&mut pending, &first.to_string()));
+        for _ in 1..DRIFT_EVENT_MAX_PENDING {
+            assert!(insert_drift_id(
+                &mut pending,
+                &uuid::Uuid::now_v7().to_string()
+            ));
+        }
+        assert_eq!(pending.len(), DRIFT_EVENT_MAX_PENDING);
+        assert!(!insert_drift_id(
+            &mut pending,
+            &uuid::Uuid::now_v7().to_string()
+        ));
+        assert!(!insert_drift_id(&mut pending, "invalid"));
     }
 }

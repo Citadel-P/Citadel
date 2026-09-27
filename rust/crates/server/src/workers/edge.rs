@@ -189,28 +189,113 @@ async fn observe_events(
     let safety = Duration::from_secs(6 * 3600);
     let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Keep decode/receive time inside the pinned stream: timer cancellation
+    // never discards a received event or changes its observation timestamp.
+    let decoded = async_stream::stream! {
+        loop {
+            let result: Result<_, Box<dyn std::error::Error + Send + Sync>> = async {
+                let Some(bytes) = events.next(cancellation).await? else { return Ok(None) };
+                let event = citadel_adapters::connectors::agent::client::decode_daemon_event(bytes.as_slice())?;
+                Ok(Some(event.map(|event| (event, chrono::Utc::now().timestamp_millis()))))
+            }.await;
+            match result {
+                Ok(Some(Some(event))) => yield Ok(event),
+                Ok(Some(None)) => continue,
+                Ok(None) => break,
+                Err(error) => { yield Err(error); break; }
+            }
+        }
+    };
+    let decoded = decoded.fuse();
+    tokio::pin!(decoded);
+    let mut pending = None;
     loop {
-        let bytes = tokio::select! {
-            ()=cancellation.cancelled()=>return Ok(()),
-            ()=session.closed()=>return Ok(()),
-            _ = timer.tick() => {
-                let _ = refreshes.send(request(EventRefresh::Platform), cancellation).await;
-                continue;
-            }
-            event=events.next(cancellation)=>{
-                if cancellation.is_cancelled() { return Ok(()); }
-                let Some(bytes)=event? else { return Ok(()); };
-                bytes
+        let event = if let Some(event) = pending.take() {
+            event
+        } else {
+            tokio::select! {
+                ()=cancellation.cancelled()=>return Ok(()),
+                ()=session.closed()=>return Ok(()),
+                _ = timer.tick() => {
+                    let _ = refreshes.send(request(EventRefresh::Platform), cancellation).await;
+                    continue;
+                }
+                event=decoded.next()=>{
+                    let Some(event)=event else { return Ok(()); };
+                    event
+                }
             }
         };
-        let Some(event) =
-            citadel_adapters::connectors::agent::client::decode_daemon_event(bytes.as_slice())?
-        else {
+        // The stream can become ready with its cancellation error in the
+        // same poll as shutdown. Shutdown is a clean completion, not a retry.
+        if cancellation.is_cancelled() || session.is_closed() {
+            return Ok(());
+        }
+        let (event, observed) = event?;
+        if edge_state_event(&event) {
+            use super::container_batch;
+            let Some((batch, carry)) = container_batch::gather(
+                Ok((event, observed)),
+                decoded.as_mut(),
+                |_, next| {
+                    next.as_ref()
+                        .is_ok_and(|(event, _)| edge_state_event(event))
+                },
+                cancellation,
+            )
+            .await
+            else {
+                return Ok(());
+            };
+            pending = carry;
+            let batch = container_batch::coalesce(
+                batch.into_iter().map(Result::unwrap).collect(),
+                |(event, _)| event.container_id.clone().unwrap(),
+                |(_, time)| *time,
+            );
+            let deltas: Vec<_> = batch
+                .into_iter()
+                .map(|(event, time)| {
+                    let RuntimeEventKind::Container(change) = event.kind else {
+                        unreachable!()
+                    };
+                    citadel_platforms::jobs::ContainerStateDelta {
+                        docker_id: event.container_id.unwrap(),
+                        state: change.state_delta().unwrap(),
+                        observed_at: time / 1000,
+                        observed_at_millis: time,
+                    }
+                })
+                .collect();
+            let unavailable = match store
+                .persist_container_state_deltas(&session, &deltas)
+                .await
+            {
+                Ok(results) => {
+                    container_batch::publish(realtime.as_ref(), platform_id, &results);
+                    results.iter().any(|r| !r.accepted)
+                }
+                Err(error) => {
+                    tracing::warn!(%error, %platform_id, "Edge state batch failed; requesting container scope");
+                    true
+                }
+            };
+            container_batch::refresh(
+                platform_id,
+                platform_type == citadel_platforms::PlatformKind::DockerSwarm,
+                unavailable,
+                &refreshes,
+                cancellation,
+            )
+            .await;
             continue;
-        };
+        }
         let mut outcome = DeltaOutcome::Unavailable;
         if matches!(event.kind, RuntimeEventKind::Container(_)) {
-            match store.persist_container_event(&session, &event).await {
+            match store
+                .persist_container_event_at(&session, &event, observed)
+                .await
+            {
                 Ok(updated) => {
                     if updated.accepted()
                         || event.kind == RuntimeEventKind::Container(ContainerChange::Tombstone)
@@ -288,6 +373,11 @@ async fn observe_events(
             return Ok(());
         }
     }
+}
+
+fn edge_state_event(event: &citadel_adapters::connectors::agent::client::AgentDaemonEvent) -> bool {
+    matches!(event.kind, RuntimeEventKind::Container(change) if change.state_delta().is_some())
+        && event.container_id.as_ref().is_some_and(|id| !id.is_empty())
 }
 
 #[cfg(test)]

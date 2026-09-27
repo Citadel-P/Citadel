@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import type { ContainerStatePatch } from './container-order';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import {
@@ -133,7 +134,26 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     [containerData?.dockerNodeId, dockerContainerId],
   );
 
-  useDockerDaemonGroup(platformId, { onContainerEvent });
+  const onContainerStateChange = useCallback(
+    (patches: ContainerStatePatch[]) => {
+      if (!dockerContainerId) return;
+      const patch = patches.find(
+        (item) =>
+          item.containerId.toLowerCase().startsWith(dockerContainerId.toLowerCase()) &&
+          (item.dockerNodeId ?? undefined) === (containerData?.dockerNodeId ?? undefined),
+      );
+      if (!patch) return;
+      setLiveContainerInfo((current) => ({
+        ...current,
+        ...(patch.state !== undefined ? { state: patch.state } : {}),
+        ...(patch.controlState !== undefined ? { controlState: patch.controlState } : {}),
+        ...(patch.updated !== undefined ? { updated: patch.updated } : {}),
+      }));
+    },
+    [containerData?.dockerNodeId, dockerContainerId],
+  );
+
+  useDockerDaemonGroup(platformId, { onContainerEvent, onContainerStateChange });
 
   const handleContainerInfoUpdated = useCallback((container: ContainerDataView) => {
     setLiveContainerInfo((current) => mergeContainerRuntimeUpdate(current, container));

@@ -1,6 +1,28 @@
 use super::*;
 
 impl PostgresAlertRepository {
+    pub(super) fn next_delivery_deadline_impl(
+        &self,
+        stale_after: chrono::Duration,
+    ) -> BoxFuture<'_, Result<Option<DateTime<Utc>>, AlertError>> {
+        Box::pin(async move {
+            let deadline = sqlx::query_scalar(
+                r#"SELECT MIN(CASE
+    WHEN queue.status='Pending' THEN queue.nextattemptat
+    WHEN queue.status='Delivering' THEN queue.claimedat + ($1::double precision * INTERVAL '1 second')
+END)
+FROM alertdeliveryoutbox queue
+JOIN alertchannels channel ON channel.id=queue.alertchannelid AND channel.isactive
+WHERE queue.status IN ('Pending','Delivering')"#,
+            )
+            .bind(stale_after.num_seconds() as f64)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(storage)?;
+            Ok(deadline)
+        })
+    }
+
     pub(super) fn claim_delivery_impl(
         &self,
         owner: Uuid,
@@ -139,7 +161,7 @@ pub(super) async fn enqueue_deliveries(
     event_id: Uuid,
     rule_id: Uuid,
 ) -> Result<(), AlertError> {
-    sqlx::query(
+    let inserted = sqlx::query(
         r#"INSERT INTO alertdeliveryoutbox(id,alerteventid,alertchannelid)
 SELECT gen_random_uuid(),$1,relation.alertchannelid
 FROM alertrulechannels relation
@@ -152,5 +174,12 @@ ON CONFLICT(alerteventid,alertchannelid) DO NOTHING"#,
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    if inserted.rows_affected() > 0 {
+        sqlx::query("SELECT pg_notify($1, '')")
+            .bind(citadel_runtime::RuntimeSignal::AlertDelivery.channel())
+            .execute(&mut **transaction)
+            .await
+            .map_err(storage)?;
+    }
     Ok(())
 }

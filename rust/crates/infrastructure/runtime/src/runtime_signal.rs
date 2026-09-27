@@ -16,9 +16,10 @@ pub enum RuntimeSignal {
     PlatformStats,
     Git,
     AlertRules,
+    AlertDelivery,
 }
 impl RuntimeSignal {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Targets,
         Self::Automation,
         Self::Builds,
@@ -34,6 +35,7 @@ impl RuntimeSignal {
         Self::PlatformStats,
         Self::Git,
         Self::AlertRules,
+        Self::AlertDelivery,
     ];
     pub const fn channel(self) -> &'static str {
         match self {
@@ -51,6 +53,7 @@ impl RuntimeSignal {
             Self::StackWebhooks => "citadel_stack_webhooks",
             Self::Git => "citadel_git_work",
             Self::AlertRules => "citadel_alert_rules",
+            Self::AlertDelivery => "citadel_alert_delivery",
             Self::PlatformStats => "citadel_platform_stats",
         }
     }

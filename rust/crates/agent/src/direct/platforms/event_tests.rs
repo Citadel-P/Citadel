@@ -21,6 +21,10 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
         ("container", "attach", "local"),
         ("container", "top", "local"),
         ("container", "kill", "local"),
+        ("container", "health_status: healthy", "local"),
+        ("container", "oom", "local"),
+        ("container", "resize", "local"),
+        ("container", "update", "local"),
         ("container", "die", "local"),
         ("container", "stop", "local"),
         ("network", "disconnect", "local"),
@@ -111,7 +115,7 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
         if let RuntimeEventKind::Container(change) = expected {
             assert_eq!(decoded.container_id.as_deref(), Some("fixture"));
             assert_eq!(decoded.container_state.as_deref(), change.state());
-            if change == ContainerChange::Tombstone {
+            if change == ContainerChange::Tombstone || change.state_delta().is_some() {
                 assert!(decoded.container.is_none());
             } else {
                 let container = decoded.container.unwrap();
@@ -128,7 +132,7 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
         .iter()
         .filter(|url| url.starts_with("/v1.49/containers/json"))
         .collect();
-    assert_eq!(observations.len(), 5, "{calls:?}");
+    assert_eq!(observations.len(), 1, "{calls:?}");
     for request in observations {
         let url = reqwest::Url::parse(&format!("http://fixture{request}")).unwrap();
         let filters = url
@@ -144,8 +148,8 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
     }
     assert_eq!(
         calls.len(),
-        7,
-        "ignored events and tombstones must not observe Docker: {calls:?}"
+        3,
+        "state-only events, ignored events and tombstones must not observe Docker: {calls:?}"
     );
     stop.cancel();
     server.await.unwrap();
@@ -229,7 +233,7 @@ async fn failed_container_observations_are_absent_and_missing_image_ids_are_insp
         let router=Router::new().fallback({let inspected=inspected.clone();move |req:axum::extract::Request| {let inspected=inspected.clone();async move {
             match req.uri().path() {
                 "/version"=>Json(serde_json::json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response(),
-                "/v1.49/events"=>format!("{}\n",serde_json::json!({"Type":"container","Action":"start","Actor":{"ID":"fixture"}})).into_response(),
+                "/v1.49/events"=>format!("{}\n",serde_json::json!({"Type":"container","Action":"create","Actor":{"ID":"fixture"}})).into_response(),
                 "/v1.49/containers/json"=>match mode {
                     "error"=>(axum::http::StatusCode::INTERNAL_SERVER_ERROR,"failed").into_response(),
                     "missing"=>Json(serde_json::json!([])).into_response(),

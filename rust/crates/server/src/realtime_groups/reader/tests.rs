@@ -108,3 +108,46 @@ fn ordinary_manager_statistics_do_not_update_worker_rows() {
     assert_eq!(values[0]["containerId"], json!(manager.id));
     assert!(container_data(worker, Some(&event))["containerStat"].is_null());
 }
+
+#[test]
+fn committed_container_state_patches_skip_full_reads_for_container_groups() {
+    let platform = Uuid::now_v7();
+    let patch = citadel_platforms::containers::ContainerStatePatch {
+        id: Uuid::now_v7(),
+        platform_id: platform,
+        container_id: "docker-123".into(),
+        state: Some("Exited".into()),
+        control_state: Some("Idle".into()),
+        updated: Some(42),
+        docker_node_id: None,
+    };
+    let hub = crate::realtime::RealtimeHub::new(8, Arc::new(crate::metrics::Metrics::default()));
+    let mut receiver = hub.subscribe();
+    hub.publish_container_state_patches(platform, &[patch.clone()]);
+    let event = receiver.try_recv().unwrap();
+
+    for name in [
+        format!("containers:{platform}"),
+        format!("docker-daemon:{platform}"),
+    ] {
+        let group = crate::realtime_groups::Group::parse(&name).unwrap();
+        assert!(group.affected_by(&event));
+        let snapshot =
+            ApplicationGroupReader::container_patch_snapshot(&group, Some(&event), Some(platform))
+                .unwrap();
+        assert!(snapshot.rows.is_empty());
+        assert_eq!(snapshot.events.len(), 1);
+        assert!(
+            snapshot.events[0].arguments[0]
+                .to_string()
+                .contains("docker-123")
+        );
+    }
+
+    let group =
+        crate::realtime_groups::Group::parse(&format!("deployment:{}", Uuid::now_v7())).unwrap();
+    assert!(
+        ApplicationGroupReader::container_patch_snapshot(&group, Some(&event), Some(platform))
+            .is_none()
+    );
+}

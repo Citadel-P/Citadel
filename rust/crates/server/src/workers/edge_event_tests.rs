@@ -157,7 +157,7 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
                         }).await.expect("delta must commit while the list RPC is still in flight");
                     }
                     ListContainersResponse {
-                        containers: if container_reads == 1 {
+                        containers: if container_reads == 1 && !stale_read {
                             Default::default()
                         } else {
                             [(
@@ -167,7 +167,7 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
                                     image: "alpine".into(),
                                     image_id: "image".into(),
                                     name: "web".into(),
-                                    state: if stale_read && container_reads == 2 {
+                                    state: if stale_read && container_reads <= 2 {
                                         2
                                     } else {
                                         5
@@ -195,7 +195,9 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
                         kind: Some(daemon_event_response::Kind::DaemonContainerEventResponse(
                             DaemonContainerEventResponse {
                                 action: "die".into(),
-                                container_id: "fixture".into(),
+                                // The known row comes from bootstrap. An unknown sibling
+                                // requests the list that will race with its state delta.
+                                container_id: if stale_read { "missing" } else { "fixture" }.into(),
                                 container: None,
                             },
                         )),
@@ -292,6 +294,144 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
     cancel.cancel();
     worker.await.unwrap().unwrap();
     actor.await.unwrap();
+    session.close();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1"]
+async fn edge_six_lifecycle_events_share_one_commit_and_notification() {
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = PgPool::connect(&url).await.unwrap();
+    let target = EdgeTarget::platform(Uuid::now_v7());
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$1::text,$1::text,'EdgeAgent',0,0,0,0,0,'{\"$type\":\"Docker\"}','Online')").bind(target.platform_id).execute(&pool).await.unwrap();
+    let store = PostgresEdgeStore::new(pool.clone());
+    let (_, token, _) = store
+        .create_enrollment(&target, citadel_identity::SYSTEM_ACTOR_ID)
+        .await
+        .unwrap();
+    let mut key_bytes = [0; 32];
+    getrandom::fill(&mut key_bytes).unwrap();
+    let key =
+        citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&key_bytes);
+    let public_key = base64::engine::general_purpose::STANDARD
+        .decode(key.public_key_base64())
+        .unwrap();
+    let binding = store
+        .enroll(&EnrollmentRequest {
+            enrollment_token: token,
+            public_key,
+            protocol_version: 2,
+            capabilities_json:
+                r#"{"commands":["platform.checkHealth","containers.list","containers.logs"]}"#
+                    .into(),
+            daemon_id: target.platform_id.to_string(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let (session, mut receiver) = EdgeRegistry::default()
+        .register(target.clone(), binding.agent_id)
+        .unwrap();
+    store
+        .connected(&binding, session.connected_at)
+        .await
+        .unwrap();
+
+    for i in 0..6 {
+        sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,$3,'image',$3,1,1,'Running','[]')")
+            .bind(Uuid::now_v7()).bind(target.platform_id).bind(format!("batch-{i}")).execute(&pool).await.unwrap();
+    }
+    let cancel = CancellationToken::new();
+    let hub = RealtimeHub::new(32, Arc::new(crate::metrics::Metrics::default()));
+    let mut notifications = hub.subscribe();
+    let (refreshes, _scopes) =
+        super::super::platforms::scoped_reconciler::event_refresh_channels(32);
+    let read_batches = || {
+        let mut metrics = String::new();
+        citadel_runtime::runtime_metrics::render_runtime_metrics(&mut metrics);
+        metrics
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix(
+                    "citadel_runtime_iterations_total{family=\"ContainerStateDeltaBatch\"} ",
+                )
+            })
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
+    };
+    let before = read_batches();
+    let worker_session = session.clone();
+    let worker_pool = pool.clone();
+    let worker_cancel = cancel.clone();
+    let worker = tokio::spawn(async move {
+        observe_events(
+            worker_session,
+            worker_pool,
+            Some(hub),
+            InventorySettings {
+                node_policy: Default::default(),
+                reconciliation_interval: Duration::from_secs(3600),
+            },
+            &worker_cancel,
+            refreshes,
+        )
+        .await
+    });
+    let command = tokio::time::timeout(Duration::from_secs(3), receiver.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let Some(core_envelope::Body::Command(command)) = command.body else {
+        panic!("expected stream command")
+    };
+    assert_eq!(
+        EdgeCommandKind::try_from(command.kind).unwrap(),
+        EdgeCommandKind::PlatformDaemonEventsStream
+    );
+    let stream = Uuid::parse_str(&command.command_id).unwrap();
+    for i in 0..6 {
+        session.output(
+            stream,
+            DaemonEventResponse {
+                scope: 1,
+                kind: Some(daemon_event_response::Kind::DaemonContainerEventResponse(
+                    DaemonContainerEventResponse {
+                        action: "die".into(),
+                        container_id: format!("batch-{i}"),
+                        container: None,
+                    },
+                )),
+            }
+            .encode_to_vec(),
+        );
+    }
+    let notification = tokio::time::timeout(Duration::from_secs(3), notifications.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(notification.platform_id, Some(target.platform_id));
+    assert_eq!(notification.container_ids().unwrap().len(), 6);
+    assert_eq!(read_batches() - before, 1);
+    assert!(notifications.try_recv().is_err());
+    let exited: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM containers WHERE platformid=$1 AND state='Exited'",
+    )
+    .bind(target.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(exited, 6);
+    assert!(
+        receiver.try_recv().is_err(),
+        "known state events must issue no metadata command"
+    );
+    cancel.cancel();
+    worker.await.unwrap().unwrap();
     session.close();
     pool.close().await;
 }

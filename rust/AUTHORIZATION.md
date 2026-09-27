@@ -156,6 +156,31 @@ The mapper and policy tests make this discrepancy explicit without expanding acc
 or changing existing JSON capability values. A separate compatibility decision is
 needed to change those public hints.
 
+## Hot-path authorization classification (CPU refactor Phase 9)
+
+Use the category that matches the decision boundary. A cached admission answers
+whether a known actor may address known IDs; transaction-local authorization
+rechecks a mutation against the rows and relationships it is about to change;
+SQL list visibility filters the returned resource set. Do not move list filtering
+into an in-memory cache pass.
+
+| Repository/service boundary | Classification | Authoritative path and reason |
+|---|---|---|
+| `IdentityService::global_permission`, `resource_permission`, and `permissions_for_resources`; known-ID checks in Git Repository, Registry, Tag, Build Project/Pool, Automation Action, and Platform capabilities | Cached admission | `AuthorizationCache` stores actor scope/global grants and batched per-resource grants, including denials. ACL writes invalidate under the shared mutation fence. Platform capability batches now use this path too. |
+| Container Start/Stop/Pause/Resume/Delete selection | Cached admission + transaction-local authorization | `PostgresContainerRepository` holds the authorization read fence, resolves known IDs through the cache, then locks and validates current Platform/Deployment membership, availability, and operation ownership in the claim transaction. |
+| Deployment, Stack, and Swarm Service mutation claims and binding changes | Transaction-local authorization | Their adapters authorize under the same transaction that locks/changes the resource. This closes revocation and ownership races; do not replace it with an HTTP/cache-only decision. |
+| Platform, Deployment, Stack, Swarm Service, Build, Git, Registry, Tag, Alert, Backup, Activity, and Automation catalogs/lists | SQL list visibility | Authorized collection queries apply actor/team/global grants and resource ACLs while selecting rows. Resource projections/capabilities are batched; there is no per-row authorization loop. |
+| Known-ID detail reads that are not already served by the cache APIs, including resource-bound reads in Deployments, Stacks, Swarm Services, Backups, and Activities | SQL authorized read | The repository query or its named policy checks the requested resource. Keep those checks coupled to the loaded identity and resource relationship. |
+| Role, Team, User, Service Account, OIDC, Platform-deletion, and Deployment-claim ACL writers | Cache mutation/invalidation (writer boundary) | Writers acquire `AuthorizationCache::Mutation`, capture old relationships, and invalidate affected actors after commit. These are not read/admission call sites. |
+| Realtime resource groups and runtime observations | Per-actor authorized subscription/read | Each subscriber retains its own authorization lease. Shared container rows are only reused after each actor's permission check; row sharing never shares a permission decision. |
+
+The Phase 9 audit found one clear repeated known-ID query: `PlatformReader::permissions_for_platforms`
+issued a role/team/ACL aggregate SQL query on every capability check. It now uses
+the same bounded resource cache as other known-ID checks. `list_authorized` and
+`authorized_catalog_query` remain SQL-filtered. Mutation claim checks also remain
+transaction-local. No broader authorization cache conversion was made because
+those boundaries either select a catalog or protect a write race.
+
 Stack state actions previously admitted Write at HTTP and required Execute in the
 transaction. The HTTP precheck now uses `ChangeStackState` (Execute), matching the
 transaction; effective authorization is unchanged. Administrator projections no

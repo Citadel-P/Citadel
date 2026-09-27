@@ -1325,7 +1325,12 @@ async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() 
         container_state: Some("exited".into()),
         container_name: None,
     };
+    // Metadata events still fail closed without a complete observation.
     let mut unavailable = event.clone();
+    unavailable.kind = citadel_platforms::jobs::RuntimeEventKind::Container(
+        citadel_platforms::jobs::ContainerChange::Observe,
+    );
+    unavailable.action = "rename".into();
     unavailable.container = None;
     assert_eq!(
         store
@@ -1344,8 +1349,18 @@ async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() 
             .persist_container_event(&session, &unavailable)
             .await
             .unwrap(),
-        ProjectionChange::Unavailable,
-        "legacy default-filled metadata remains uncertain"
+        ProjectionChange::Unavailable
+    );
+    // State-only events are authoritative about state, never about metadata.
+    let mut state_only = event.clone();
+    state_only.container = None;
+    state_only.container_state = None;
+    assert_eq!(
+        store
+            .persist_container_event(&session, &state_only)
+            .await
+            .unwrap(),
+        ProjectionChange::Changed
     );
     let preserved: (String, String, String) =
         sqlx::query_as("SELECT name,dockerimageid,state FROM containers WHERE platformid=$1")
@@ -1355,7 +1370,7 @@ async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() 
             .unwrap();
     assert_eq!(
         preserved,
-        ("replay".into(), "image".into(), "Running".into())
+        ("replay".into(), "image".into(), "Exited".into())
     );
     let resource_event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
         resource: Some(citadel_platforms::jobs::ResourceDelta::Image {
@@ -1395,7 +1410,7 @@ async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() 
             .persist_container_event(&session, &event)
             .await
             .unwrap(),
-        ProjectionChange::Changed
+        ProjectionChange::Unchanged
     );
     let version: i64 = sqlx::query_scalar("SELECT rowversion FROM containers WHERE platformid=$1")
         .bind(target.platform_id)

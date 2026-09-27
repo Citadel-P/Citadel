@@ -5,6 +5,10 @@ use citadel_primitives::ActorId;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
+mod state_delta;
+pub use state_delta::container_state_deltas_committed;
+pub(crate) use state_delta::{container_state_deltas_in, reconcile_state_deployments};
+
 type Result<T> = std::result::Result<T, sqlx::Error>;
 #[derive(Default)]
 pub(crate) struct RemovedBindings {
@@ -20,6 +24,7 @@ pub(crate) struct ContainerEventChange {
     pub accepted: bool,
     pub identity: Option<Uuid>,
     pub deployments: Vec<Uuid>,
+    pub operation_id: Option<Uuid>,
 }
 
 pub(crate) async fn removed_bindings(
@@ -68,6 +73,29 @@ pub async fn container_event_committed(
     name: Option<&str>,
     observed: i64,
 ) -> Result<ProjectionChange> {
+    container_event_committed_at(
+        pool,
+        platform,
+        node,
+        docker_id,
+        state,
+        name,
+        observed,
+        observed.saturating_mul(1000),
+    )
+    .await
+}
+
+pub async fn container_event_committed_at(
+    pool: &PgPool,
+    platform: Uuid,
+    node: Option<&str>,
+    docker_id: &str,
+    state: Option<&str>,
+    name: Option<&str>,
+    observed: i64,
+    observed_millis: i64,
+) -> Result<ProjectionChange> {
     let write = ProjectionWrite::begin(platform, node, ProjectionKind::Containers).await;
     let mut tx = pool.begin().await?;
     let changed = container_event_in(
@@ -96,6 +124,23 @@ pub async fn container_event_committed(
         );
     }
     write.committed();
+    if changed.changed
+        && state.is_none()
+        && let (Some(operation), Some(id)) = (changed.operation_id, changed.identity)
+    {
+        super::containers::coordination::committed(
+            pool,
+            operation,
+            &citadel_platforms::containers::ContainerTarget {
+                id,
+                platform_id: platform,
+                node_id: node.map(str::to_owned),
+                docker_id: docker_id.into(),
+            },
+            None,
+            observed_millis,
+        );
+    }
     if changed.changed {
         reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
     }
@@ -120,13 +165,13 @@ pub(crate) async fn container_event_in(
         .bind(platform)
         .fetch_optional(&mut **tx)
         .await?;
-    let mut row=sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 AND ($4::uuid IS NULL OR id=$4) FOR UPDATE")
+    let mut row=sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,containeroperationid,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 AND ($4::uuid IS NULL OR id=$4) FOR UPDATE")
         .bind(platform).bind(node).bind(docker_id).bind(hint).fetch_optional(&mut **tx).await?;
     if row.is_none() && hint.is_some() {
         citadel_runtime::runtime_metrics::RuntimeWork::RuntimeIdentityFallback.units(1);
         // Hints may lag another process or a missed invalidation. Never let a
         // cached UUID bypass the daemon/node identity check or hide a real row.
-        row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 FOR UPDATE")
+        row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,containeroperationid,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 FOR UPDATE")
             .bind(platform).bind(node).bind(docker_id).fetch_optional(&mut **tx).await?;
     }
     let Some(row) = row else {
@@ -206,6 +251,17 @@ async fn container_effects(
     row: &sqlx::postgres::PgRow,
     removed: RemovedBindings,
 ) -> Result<ContainerEventChange> {
+    let owned = row.get::<String, _>("controlstate") == "Processing"
+        && row.get::<Option<Uuid>, _>("containeroperationid").is_some();
+    if owned {
+        return Ok(ContainerEventChange {
+            changed: true,
+            accepted: true,
+            identity: Some(row.get("id")),
+            deployments: vec![],
+            operation_id: row.get("containeroperationid"),
+        });
+    }
     if state.is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "exited" | "paused"))
         && let Some(stack) = row.try_get::<Option<Uuid>, _>("stackid")?
     {
@@ -228,6 +284,7 @@ async fn container_effects(
         accepted: true,
         identity: Some(row.try_get("id")?),
         deployments: removed.affected_deployments.unwrap_or_default(),
+        operation_id: None,
     })
 }
 
@@ -268,6 +325,9 @@ pub(crate) async fn reconcile(
     removed: &RemovedBindings,
     activities: bool,
 ) -> Result<bool> {
+    if removed.affected_stacks.as_ref().is_some_and(Vec::is_empty) && removed.stacks.is_empty() {
+        return Ok(false);
+    }
     sqlx::query("SAVEPOINT stack_sync")
         .execute(&mut **tx)
         .await?;
@@ -296,10 +356,16 @@ pub async fn reconcile_deployments(
     ids: Option<&[Uuid]>,
     activities: bool,
 ) -> Result<usize> {
+    if ids.is_some_and(<[Uuid]>::is_empty) {
+        return Ok(0);
+    }
     let deployments: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM deployments WHERE platformid=$1 AND ($2::uuid[] IS NULL OR id=ANY($2)) AND controlstate='Idle' ORDER BY id")
         .bind(platform).bind(ids).fetch_all(pool).await?;
     let mut changed = 0;
     for id in deployments {
+        let _parent =
+            citadel_runtime::runtime_metrics::RuntimeWork::ContainerParentReconcileDeployment
+                .start();
         match reconcile_deployment(pool, platform, id, activities).await {
             Ok(true) => changed += 1,
             Ok(false) => {}
@@ -383,6 +449,8 @@ async fn reconcile_stacks(
         .bind(platform).bind(node).bind(&removed.stacks).bind(&removed.affected_stacks).fetch_all(&mut **tx).await?;
     let mut changed = false;
     for row in stacks {
+        let _parent =
+            citadel_runtime::runtime_metrics::RuntimeWork::ContainerParentReconcileStack.start();
         let old: String = row.try_get("status")?;
         // An owned apply/state/delete operation completes its own claim. Neither
         // Docker events nor inventory may mistake it for abandoned Processing state.
@@ -457,7 +525,7 @@ async fn reconcile_stacks(
     }
     Ok(changed)
 }
-async fn activity(
+pub(super) async fn activity(
     tx: &mut Transaction<'_, Postgres>,
     row: &sqlx::postgres::PgRow,
     platform: Uuid,
@@ -491,7 +559,7 @@ async fn activity(
         .await
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))
 }
-fn deployment_status(state: &str) -> &'static str {
+pub(super) fn deployment_status(state: &str) -> &'static str {
     match state.to_ascii_lowercase().as_str() {
         "running" => "Healthy",
         "exited" => "Stopped",
@@ -501,7 +569,7 @@ fn deployment_status(state: &str) -> &'static str {
         _ => "Failed",
     }
 }
-fn stack_status(states: &[&str]) -> &'static str {
+pub(super) fn stack_status(states: &[&str]) -> &'static str {
     if states.is_empty() || states.contains(&"offline") {
         "Degraded"
     } else if states.iter().all(|s| *s == "running") {
@@ -645,7 +713,7 @@ pub(crate) async fn container_observation_in(
             ..Default::default()
         });
     }
-    let row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3")
+    let row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,containeroperationid FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3")
         .bind(platform).bind(node).bind(&container.id).fetch_one(&mut **tx).await?;
     let removed = RemovedBindings {
         allow_degraded_while_processing: row.try_get::<String, _>("controlstate")? == "Processing",

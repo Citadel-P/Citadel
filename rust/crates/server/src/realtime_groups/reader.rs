@@ -69,6 +69,32 @@ fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, R
 }
 
 impl ApplicationGroupReader {
+    fn container_patch_snapshot(
+        group: &Group,
+        event: Option<&PublishedRuntimeEvent>,
+        platform: Option<Uuid>,
+    ) -> Option<GroupSnapshot> {
+        let event = event.filter(|event| event.platform_id == platform && platform.is_some())?;
+        let patches = event.container_state_patches()?;
+        match group.topic() {
+            Topic::Containers(..) => Some(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "ContainersStateChanged",
+                    vec![json!({"platformId":platform,"patches":patches})],
+                )],
+            }),
+            Topic::DockerDaemon(..) => Some(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "ContainerStateChanged",
+                    vec![json!(patches)],
+                )],
+            }),
+            _ => None,
+        }
+    }
+
     async fn changed_containers(
         &self,
         event: &PublishedRuntimeEvent,
@@ -326,6 +352,9 @@ impl ApplicationGroupReader {
             lease,
         )
         .await?;
+        if let Some(snapshot) = Self::container_patch_snapshot(g, e, id) {
+            return Ok(snapshot);
+        }
         if matches!(
             g.topic(),
             Topic::Deployment(..)

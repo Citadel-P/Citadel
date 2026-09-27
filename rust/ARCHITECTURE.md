@@ -6,6 +6,43 @@ in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8, followed b
 Automation and Alerts in Phase 9, then Platforms, Identity and shared Resources in
 Phase 10.
 
+## Container hot-path alignment (2026-09-27)
+batch the state projection:
+
+- `ContainerChange::state_delta` classifies start/die/pause/unpause. The Agent emits
+  ID/action without enriching these events; Core also accepts older enriched events.
+- `status/state_delta.rs` updates bounded arrays of scoped identities with one
+  narrow SQL statement. It does not serialize inventory JSON, insert containers,
+  resolve image/ownership joins, replace metadata or release operation claims.
+- `ProjectionWrite` and the existing observation watermark remain authoritative;
+  `RuntimeIdentityIndex` supplies verified hints with a bounded stale-hint fallback.
+- Local, Direct and Edge gather at most 256 raw state events within a fixed 20 ms
+  window. Newest observations win per identity; metadata, tombstones, recovery and
+  scope changes flush the batch before proceeding. Edge retains its session fence.
+- Each scope uses one projection guard and set-based state transaction. External
+  parent IDs are deduplicated; Stack reconciliation shares that transaction and
+  Deployment reconciliation retains its separate post-commit lock order.
+- Unmanaged and operation-owned rows skip parent reconciliation. Owned lifecycle
+  observations preserve claims and suppress Stack drift; command completion still
+  owns final parent effects. Changed IDs publish as one realtime invalidation.
+- Metadata and tombstones keep their separate paths. Uncertainty requests only
+  Container reconciliation, and scoped realtime invalidations follow commit.
+- Operation events confirm in-flight commands; durable finish/recovery finalizes
+  parent status and activities once. Missing daemon confirmation uses bounded,
+  read-only Inspect fallback.
+- `Containers` and `DockerDaemon` receive committed state patches without a full
+  Container read. Joined/full resource groups retain authorized shared reads.
+- Known-ID authorization uses the bounded actor/resource cache where safe;
+  mutation claims hold the cache read fence and recheck locked ownership. Catalog
+  visibility remains SQL-filtered.
+- Alert delivery wakes on transactional outbox notifications and retry deadlines;
+  a 60-second fallback recovers missed signals. Platform health transitions are
+  owned by the five-second hysteresis monitor; `/ready` checks dependencies only
+  when requested. The configured monitoring interval belongs to stats sampling.
+- Local, Agent and Edge stats use bounded queues and shared writers.
+  `JobConfiguration__MonitoringInterval` sets sample cadence; the configured
+  flush interval and row threshold set persistence cadence.
+
 ## Workspace groups
 
 The workspace separates executable hosts from feature and infrastructure crates:

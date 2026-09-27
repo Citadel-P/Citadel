@@ -11,6 +11,41 @@ use uuid::Uuid;
 use crate::RuntimeCapabilityError;
 use crate::RuntimeErrorKind;
 
+mod coordination;
+pub use coordination::{
+    ContainerOperationCoordinator, EVENT_CONFIRMATION_WINDOW, OperationRegistration,
+};
+
+#[derive(Debug, Default)]
+pub struct ContainerCompletion {
+    pub deployment_ids: Vec<Uuid>,
+    pub stack_ids: Vec<Uuid>,
+    pub container_patches: Vec<ContainerStatePatch>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatePatch {
+    pub id: Uuid,
+    pub platform_id: Uuid,
+    pub container_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<i64>,
+    #[serde(default)]
+    pub docker_node_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerMutationNotice {
+    Claimed,
+    Completed,
+    Released,
+}
+
 pub const CONTAINER_IO_CONCURRENCY: usize = 8;
 
 pub const MAX_CONTAINER_BATCH: usize = 100;
@@ -120,6 +155,19 @@ pub fn container_batch_result(
 }
 
 pub trait ContainerRepository: Send + Sync {
+    fn coordinator(&self) -> Option<Arc<ContainerOperationCoordinator>> {
+        None
+    }
+    fn finish_committed(
+        &self,
+        claim: Uuid,
+    ) -> BoxFuture<'_, Result<ContainerCompletion, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            self.finish(claim).await?;
+            Ok(ContainerCompletion::default())
+        })
+    }
+
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],
@@ -240,7 +288,9 @@ pub struct ContainerMutationService {
     runtime: Arc<dyn ContainerMutationRuntime>,
     operations: Arc<Semaphore>,
     tasks: Arc<dyn ContainerTaskSpawner>,
-    changed: Arc<dyn Fn(&ContainerClaim) + Send + Sync>,
+    changed:
+        Arc<dyn Fn(&ContainerClaim, ContainerMutationNotice, &[ContainerStatePatch]) + Send + Sync>,
+    coordinator: Arc<ContainerOperationCoordinator>,
 }
 
 impl ContainerMutationService {
@@ -250,17 +300,21 @@ impl ContainerMutationService {
         tasks: Arc<dyn ContainerTaskSpawner>,
     ) -> Self {
         Self {
+            coordinator: store.coordinator().unwrap_or_default(),
             store,
             runtime,
             tasks,
             operations: Arc::new(Semaphore::new(4)),
-            changed: Arc::new(|_| {}),
+            changed: Arc::new(|_, _, _| {}),
         }
     }
 
     pub fn with_notifier(
         mut self,
-        changed: impl Fn(&ContainerClaim) + Send + Sync + 'static,
+        changed: impl Fn(&ContainerClaim, ContainerMutationNotice, &[ContainerStatePatch])
+        + Send
+        + Sync
+        + 'static,
     ) -> Self {
         self.changed = Arc::new(changed);
         self
@@ -390,7 +444,8 @@ impl ContainerMutationService {
                         "Claiming the Container operation timed out.",
                     )
                 })??;
-                (service.changed)(&claim);
+                let mut registration = service.coordinator.register(&claim, action);
+                (service.changed)(&claim, ContainerMutationNotice::Claimed, &[]);
                 let _cancel_on_drop = cancellation.clone().drop_guard();
                 let work = async {
                     // Even a failed/partial mutation can have successful siblings. Verify
@@ -399,7 +454,7 @@ impl ContainerMutationService {
                         .runtime
                         .mutate_batch(&claim.targets, action, &cancellation)
                         .await;
-                    let verification = service.verify(&claim, &cancellation).await;
+                    let verification = service.verify(&claim, registration.as_mut(), &cancellation).await;
                     match (mutation, verification) {
                         (Ok(()), result) | (result, Ok(())) => result,
                         (Err(mutation), Err(verification)) => Err(error(
@@ -408,20 +463,20 @@ impl ContainerMutationService {
                         )),
                     }
                 };
-                let result = tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work)
-                    .await
-                    .unwrap_or_else(|_| {
-                        Err(error(
-                            RuntimeErrorKind::Timeout,
-                            "Container operation timed out; runtime state will be reconciled.",
-                        ))
-                    });
+                let result = tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => Err(error(RuntimeErrorKind::Unavailable,
+                        "Container operation canceled; runtime state will be reconciled.")),
+                    result = tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work) => result.unwrap_or_else(|_| {
+                        Err(error(RuntimeErrorKind::Timeout, "Container operation timed out; runtime state will be reconciled."))
+                    }),
+                };
                 cancellation.cancel();
                 // On partial failure retain the lease until read-only recovery has observed all targets.
                 if result.is_ok() {
-                    tokio::time::timeout(
+                    let completion = tokio::time::timeout(
                         Duration::from_secs(5),
-                        service.store.finish(claim.operation_id),
+                        service.store.finish_committed(claim.operation_id),
                     )
                     .await
                     .map_err(|_| {
@@ -430,7 +485,14 @@ impl ContainerMutationService {
                             "Container operation finalization timed out.",
                         )
                     })??;
-                    (service.changed)(&claim);
+                    let mut finished = claim.clone();
+                    finished.deployment_ids = completion.deployment_ids;
+                    finished.stack_ids = completion.stack_ids;
+                    (service.changed)(
+                        &finished,
+                        ContainerMutationNotice::Completed,
+                        &completion.container_patches,
+                    );
                 }
                 result
             }
@@ -458,12 +520,17 @@ impl ContainerMutationService {
     async fn verify(
         &self,
         claim: &ContainerClaim,
+        registration: Option<&mut OperationRegistration>,
         cancellation: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
-        let observations = self
-            .runtime
-            .observe_batch(&claim.targets, cancellation)
-            .await;
+        let missing = match registration {
+            Some(registration) => registration.wait_missing(cancellation).await?,
+            None => claim.targets.clone(),
+        };
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let observations = self.runtime.observe_batch(&missing, cancellation).await;
         for batch in observations.observed.chunks(MAX_CONTAINER_BATCH) {
             self.store.observed_batch(claim.operation_id, batch).await?;
         }
@@ -479,22 +546,33 @@ impl ContainerMutationService {
                 break;
             }
             let work = async {
-                self.verify(&claim, cancellation).await?;
-                self.store.finish(claim.operation_id).await?;
-                (self.changed)(&claim);
+                self.verify(&claim, None, cancellation).await?;
+                if cancellation.is_cancelled() {
+                    return Err(error(RuntimeErrorKind::Unavailable, "Recovery canceled."));
+                }
+                let completion = self.store.finish_committed(claim.operation_id).await?;
+                let mut finished = claim.clone();
+                finished.deployment_ids = completion.deployment_ids;
+                finished.stack_ids = completion.stack_ids;
+                (self.changed)(
+                    &finished,
+                    ContainerMutationNotice::Completed,
+                    &completion.container_patches,
+                );
                 Ok::<_, RuntimeCapabilityError>(())
             };
             // A disconnected node is not evidence that its containers have stopped or disappeared.
             if !matches!(
                 tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work).await,
                 Ok(Ok(()))
-            ) && chrono::Utc::now()
-                .timestamp()
-                .saturating_sub(claim.started_at)
-                >= 300
+            ) && !cancellation.is_cancelled()
+                && chrono::Utc::now()
+                    .timestamp()
+                    .saturating_sub(claim.started_at)
+                    >= 300
             {
                 self.store.abandon(claim.operation_id).await?;
-                (self.changed)(&claim);
+                (self.changed)(&claim, ContainerMutationNotice::Released, &[]);
             }
         }
         Ok(())

@@ -70,6 +70,15 @@ pub trait NetworkInventoryPort: Send + Sync {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>>;
+
+    /// Swarm relationships need topology, not standalone container usage counts.
+    /// Legacy remote connectors retain their existing compatible list operation.
+    fn list_network_topology<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>> {
+        self.list_networks(cancellation)
+    }
 }
 
 pub trait NetworkObservationPort: Send + Sync {

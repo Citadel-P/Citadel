@@ -101,7 +101,7 @@ pub(super) async fn event_source(
                     } else if event.time > 0 {
                         Some(u128::try_from(event.time).unwrap_or_default() * 1_000)
                     } else {
-                        None
+                        Some(chrono::Utc::now().timestamp_millis().max(0) as u128)
                     };
                     let event = InventoryEvent {
                         resource: None,
@@ -227,7 +227,11 @@ pub(super) async fn agent_event_source(
                                 container_name: event.container_name,
                                 container: event.container,
                                 action: event.action,
-                                event_time_millis: None,
+                                // The current Agent wire contract has no daemon timestamp.
+                                // Stamp receipt before queueing, not after backlog/lock waits.
+                                event_time_millis: Some(
+                                    chrono::Utc::now().timestamp_millis().max(0) as u128,
+                                ),
                             },
                             &cancellation,
                         )
@@ -268,7 +272,7 @@ pub(super) struct EventWorker {
 
 pub(super) async fn event_consumer(
     cancellation: CancellationToken,
-    mut receiver: BoundedReceiver<InventoryEvent>,
+    receiver: BoundedReceiver<InventoryEvent>,
     worker: EventWorker,
 ) -> Result<(), std::convert::Infallible> {
     let EventWorker {
@@ -282,20 +286,54 @@ pub(super) async fn event_consumer(
         agent_reconciliation,
     } = worker;
     let _task = metrics.task_guard();
+    let stream = futures_util::stream::unfold(receiver, |mut receiver| {
+        let cancellation = &cancellation;
+        async move {
+            receiver
+                .recv(cancellation)
+                .await
+                .map(|event| (event, receiver))
+        }
+    })
+    .fuse();
+    tokio::pin!(stream);
+    let mut pending = None;
     loop {
-        let event = match receiver.recv(&cancellation).await {
+        let event = match if pending.is_some() {
+            pending.take()
+        } else {
+            stream.next().await
+        } {
             Some(event) => event,
             None => return Ok(()),
         };
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let lag = event
-            .event_time_millis
-            .map_or(0, |event_time| now.saturating_sub(event_time))
-            .min(u128::from(u64::MAX)) as u64;
-        metrics.event_consumed(lag);
+        if state_event(&event) {
+            let Some((batch, carry)) = super::super::container_batch::gather(
+                event,
+                stream.as_mut(),
+                same_state_scope,
+                &cancellation,
+            )
+            .await
+            else {
+                return Ok(());
+            };
+            pending = carry;
+            for event in &batch {
+                record_consumed(&metrics, event);
+            }
+            apply_state_batch(
+                batch,
+                &pool,
+                realtime.as_ref(),
+                &targets,
+                &event_refresh,
+                &cancellation,
+            )
+            .await;
+            continue;
+        }
+        record_consumed(&metrics, &event);
         if event.stream_recovered {
             queue_stream_recovery(&event, &local_reconciliation, &agent_reconciliation);
             continue;
@@ -322,6 +360,102 @@ pub(super) async fn event_consumer(
     }
 }
 
+fn state_event(event: &InventoryEvent) -> bool {
+    !event.stream_recovered
+        && matches!(event.kind, RuntimeEventKind::Container(change) if change.state_delta().is_some())
+        && event.container_id.as_ref().is_some_and(|id| !id.is_empty())
+}
+
+fn same_state_scope(first: &InventoryEvent, next: &InventoryEvent) -> bool {
+    state_event(next) && first.source == next.source && first.platform_id == next.platform_id
+}
+
+fn record_consumed(metrics: &Metrics, event: &InventoryEvent) {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let lag = event
+        .event_time_millis
+        .map_or(0, |time| now.saturating_sub(time))
+        .min(u128::from(u64::MAX)) as u64;
+    metrics.event_consumed(lag);
+}
+
+async fn apply_state_batch(
+    batch: Vec<InventoryEvent>,
+    pool: &PgPool,
+    realtime: Option<&RealtimeHub>,
+    targets: &PlatformRuntimeRegistry,
+    sender: &EventRefreshSender,
+    cancellation: &CancellationToken,
+) {
+    use super::super::container_batch;
+    use citadel_platforms::jobs::ContainerStateDelta;
+    let source = batch[0].source;
+    let platform = batch[0].platform_id;
+    let batch = container_batch::coalesce(
+        batch,
+        |event| event.container_id.clone().unwrap(),
+        |event| event.event_time_millis,
+    );
+    let deltas: Vec<_> = batch
+        .iter()
+        .map(|event| {
+            let RuntimeEventKind::Container(change) = event.kind else {
+                unreachable!()
+            };
+            ContainerStateDelta {
+                docker_id: event.container_id.clone().unwrap(),
+                state: change.state_delta().unwrap(),
+                observed_at: event
+                    .event_time_millis
+                    .and_then(|time| i64::try_from(time / 1000).ok())
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp()),
+                observed_at_millis: event
+                    .event_time_millis
+                    .and_then(|time| i64::try_from(time).ok())
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
+            }
+        })
+        .collect();
+    let snapshot = targets.snapshot().await;
+    for target in snapshot.iter().filter(|target| match source {
+        ReconciliationTrigger::LocalEvent => {
+            target.connector_type == citadel_platforms::ConnectorKind::Local
+        }
+        ReconciliationTrigger::AgentEvent => {
+            target.connector_type == citadel_platforms::ConnectorKind::Agent
+                && platform == Some(target.id)
+        }
+    }) {
+        let _event = RuntimeWork::ContainerEventApply.start();
+        let _projection = RuntimeWork::ContainerEventProjection.start();
+        let unavailable = match citadel_adapters::persistence::postgres::platforms::status::container_state_deltas_committed(
+            pool, target.id, None, &deltas,
+        ).await {
+            Ok(results) => {
+                RuntimeWork::ContainerEventProjection.units(results.iter().filter(|r| r.changed).count() as u64);
+                container_batch::publish(realtime, target.id, &results);
+                results.iter().any(|r| !r.accepted)
+            }
+            Err(error) => {
+                RuntimeWork::ContainerEventApply.failures(1);
+                tracing::warn!(%error, platform_id=%target.id, "Container state batch failed; requesting container scope");
+                true
+            }
+        };
+        container_batch::refresh(
+            target.id,
+            target.platform_type == citadel_platforms::PlatformKind::DockerSwarm,
+            unavailable,
+            sender,
+            cancellation,
+        )
+        .await;
+    }
+}
+
 pub(super) async fn apply_container_event(
     event: &InventoryEvent,
     docker: &DockerClient,
@@ -338,7 +472,12 @@ pub(super) async fn apply_container_event(
     };
     let _event = RuntimeWork::ContainerEventApply.start();
     let destroyed = change == ContainerChange::Tombstone;
-    let (state, name, container) = if destroyed {
+    let state_delta = change.state_delta();
+    let observed_at = event
+        .event_time_millis
+        .and_then(|millis| i64::try_from(millis / 1_000).ok())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    let (state, name, container) = if destroyed || state_delta.is_some() {
         (None, None, None)
     } else if matches!(event.source, ReconciliationTrigger::LocalEvent) {
         let observed = tokio::select! {
@@ -385,24 +524,41 @@ pub(super) async fn apply_container_event(
             continue;
         }
         let _projection = RuntimeWork::ContainerEventProjection.start();
-        let updated = if let Some(container) = &container {
+        let updated = if let Some(state) = state_delta {
+            use citadel_platforms::jobs::{ContainerStateDelta, ProjectionChange};
+            let result = citadel_adapters::persistence::postgres::platforms::status::container_state_deltas_committed(
+                pool, target.id, None, &[ContainerStateDelta {
+                    docker_id: id.to_owned(), state, observed_at,
+                    observed_at_millis: event.event_time_millis
+                        .and_then(|time| i64::try_from(time).ok())
+                        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
+                }],
+            ).await?.remove(0);
+            if result.accepted {
+                ProjectionChange::committed(result.changed)
+            } else {
+                ProjectionChange::Unavailable
+            }
+        } else if let Some(container) = &container {
             citadel_adapters::persistence::postgres::platforms::status::container_observation_committed(
                 pool,
                 target.id,
                 None,
                 container,
-                chrono::Utc::now().timestamp(),
+                observed_at,
             )
             .await?
         } else {
-            citadel_adapters::persistence::postgres::platforms::status::container_event_committed(
+            citadel_adapters::persistence::postgres::platforms::status::container_event_committed_at(
                 pool,
                 target.id,
                 None,
                 id,
                 state.as_deref(),
                 name.as_deref(),
-                chrono::Utc::now().timestamp(),
+                observed_at,
+                event.event_time_millis.and_then(|time| i64::try_from(time).ok())
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
             )
             .await?
         };
@@ -557,4 +713,58 @@ async fn apply_resource_event(
         }
     }
     Ok(handled)
+}
+
+#[cfg(test)]
+mod batching_tests {
+    use super::*;
+
+    fn event(change: ContainerChange) -> InventoryEvent {
+        InventoryEvent {
+            resource: None,
+            stream_recovered: false,
+            swarm_scope: false,
+            kind: RuntimeEventKind::Container(change),
+            source: ReconciliationTrigger::LocalEvent,
+            platform_id: None,
+            container_id: Some("fixture".into()),
+            container_state: None,
+            container_name: None,
+            container: None,
+            action: String::new(),
+            event_time_millis: Some(1000),
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_tombstone_recovery_and_scope_changes_are_ordering_barriers() {
+        for variant in 0..7 {
+            let first = event(ContainerChange::Exited);
+            let mut barrier = event(ContainerChange::Running);
+            match variant {
+                0 => barrier.kind = RuntimeEventKind::Container(ContainerChange::Created),
+                1 => barrier.kind = RuntimeEventKind::Container(ContainerChange::Observe),
+                2 => barrier.kind = RuntimeEventKind::Container(ContainerChange::Tombstone),
+                3 => barrier.stream_recovered = true,
+                4 => barrier.platform_id = Some(uuid::Uuid::now_v7()),
+                5 => barrier.source = ReconciliationTrigger::AgentEvent,
+                _ => barrier.container_id = None,
+            }
+            let mut stream = Box::pin(futures_util::stream::iter([
+                barrier,
+                event(ContainerChange::Running),
+            ]));
+            let (batch, carry) = super::super::super::container_batch::gather(
+                first,
+                stream.as_mut(),
+                same_state_scope,
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(batch.len(), 1);
+            assert!(carry.is_some());
+            assert!(state_event(&stream.next().await.unwrap()));
+        }
+    }
 }

@@ -660,23 +660,12 @@ impl PostgresEdgeStore {
         ))
     }
 
-    pub async fn persist_container_event(
+    /// One session-fenced projection transaction for an already coalesced batch.
+    pub async fn persist_container_state_deltas(
         &self,
         session: &crate::connectors::edge::EdgeSession,
-        event: &crate::connectors::agent::client::AgentDaemonEvent,
-    ) -> Result<citadel_platforms::jobs::ProjectionChange, EdgeStoreError> {
-        let Some(id) = event.container_id.as_deref() else {
-            return Ok(citadel_platforms::jobs::ProjectionChange::Unavailable);
-        };
-        if event.action != "destroy"
-            && (event.container_state.is_none()
-                || event
-                    .container
-                    .as_ref()
-                    .is_none_or(|container| container.id != id || container.image_id.is_empty()))
-        {
-            return Ok(citadel_platforms::jobs::ProjectionChange::Unavailable);
-        }
+        deltas: &[citadel_platforms::jobs::ContainerStateDelta],
+    ) -> Result<Vec<citadel_platforms::jobs::ContainerDeltaResult>, EdgeStoreError> {
         let write = ProjectionWrite::begin(
             session.target.platform_id,
             session.target.node_id.as_deref(),
@@ -689,10 +678,106 @@ impl PostgresEdgeStore {
         if session.is_closed() || current.is_none() {
             return Err(EdgeStoreError::Unauthorized);
         }
-        let observed = chrono::Utc::now().timestamp();
-        let changed = if event.action != "destroy"
-            && let Some(container) = &event.container
+        let results = super::super::status::container_state_deltas_in(
+            &self.pool,
+            &mut tx,
+            session.target.platform_id,
+            session.target.node_id.as_deref(),
+            deltas,
+        )
+        .await?;
+        tx.commit().await?;
+        for result in &results {
+            super::super::runtime_index::committed_identity(
+                &self.pool,
+                session.target.platform_id,
+                session.target.node_id.as_deref(),
+                &result.docker_id,
+                result.container_id,
+            );
+        }
+        write.committed();
+        super::super::containers::coordination::state_batch(
+            &self.pool,
+            session.target.platform_id,
+            session.target.node_id.as_deref(),
+            deltas,
+            &results,
+        );
+        super::super::status::reconcile_state_deployments(
+            &self.pool,
+            session.target.platform_id,
+            &results,
+        )
+        .await?;
+        Ok(results)
+    }
+
+    pub async fn persist_container_event(
+        &self,
+        session: &crate::connectors::edge::EdgeSession,
+        event: &crate::connectors::agent::client::AgentDaemonEvent,
+    ) -> Result<citadel_platforms::jobs::ProjectionChange, EdgeStoreError> {
+        self.persist_container_event_at(session, event, chrono::Utc::now().timestamp_millis())
+            .await
+    }
+
+    pub async fn persist_container_event_at(
+        &self,
+        session: &crate::connectors::edge::EdgeSession,
+        event: &crate::connectors::agent::client::AgentDaemonEvent,
+        observed_millis: i64,
+    ) -> Result<citadel_platforms::jobs::ProjectionChange, EdgeStoreError> {
+        let Some(id) = event.container_id.as_deref() else {
+            return Ok(citadel_platforms::jobs::ProjectionChange::Unavailable);
+        };
+        let citadel_platforms::jobs::RuntimeEventKind::Container(change) = event.kind else {
+            return Ok(citadel_platforms::jobs::ProjectionChange::Unavailable);
+        };
+        let observed = observed_millis / 1000;
+        if let Some(state) = change.state_delta() {
+            let result = self
+                .persist_container_state_deltas(
+                    session,
+                    &[citadel_platforms::jobs::ContainerStateDelta {
+                        docker_id: id.to_owned(),
+                        state,
+                        observed_at: observed,
+                        observed_at_millis: observed_millis,
+                    }],
+                )
+                .await?
+                .remove(0);
+            return Ok(if result.accepted {
+                citadel_platforms::jobs::ProjectionChange::committed(result.changed)
+            } else {
+                citadel_platforms::jobs::ProjectionChange::Unavailable
+            });
+        }
+        let destroyed = change == citadel_platforms::jobs::ContainerChange::Tombstone;
+        if !destroyed
+            && (event.container_state.is_none()
+                || event
+                    .container
+                    .as_ref()
+                    .is_none_or(|container| container.id != id || container.image_id.is_empty()))
         {
+            return Ok(citadel_platforms::jobs::ProjectionChange::Unavailable);
+        }
+        // Stamp receipt before any projection/session-lock wait.
+        let write = ProjectionWrite::begin(
+            session.target.platform_id,
+            session.target.node_id.as_deref(),
+            ProjectionKind::Containers,
+        )
+        .await;
+        let mut tx = self.pool.begin().await?;
+        let current: Option<Uuid> = sqlx::query_scalar("SELECT agentid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND resourcetype='Platform' AND dockernodeid IS NOT DISTINCT FROM $4 FOR SHARE")
+            .bind(session.agent_id).bind(session.target.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;
+        if session.is_closed() || current.is_none() {
+            return Err(EdgeStoreError::Unauthorized);
+        }
+        let changed = if !destroyed && let Some(container) = &event.container {
             crate::persistence::postgres::platforms::status::container_observation_in(
                 &mut tx,
                 session.target.platform_id,
@@ -707,7 +792,7 @@ impl PostgresEdgeStore {
                 session.target.platform_id,
                 session.target.node_id.as_deref(),
                 id,
-                if event.action == "destroy" {
+                if destroyed {
                     None
                 } else {
                     event.container_state.as_deref()
@@ -730,7 +815,7 @@ impl PostgresEdgeStore {
                 session.target.platform_id,
                 session.target.node_id.as_deref(),
                 id,
-                if event.action == "destroy" && changed.changed {
+                if destroyed && changed.changed {
                     None
                 } else {
                     changed.identity
@@ -738,6 +823,23 @@ impl PostgresEdgeStore {
             );
         }
         write.committed();
+        if destroyed
+            && changed.changed
+            && let (Some(operation), Some(id)) = (changed.operation_id, changed.identity)
+        {
+            super::super::containers::coordination::committed(
+                &self.pool,
+                operation,
+                &citadel_platforms::containers::ContainerTarget {
+                    id,
+                    platform_id: session.target.platform_id,
+                    node_id: session.target.node_id.clone(),
+                    docker_id: event.container_id.clone().unwrap(),
+                },
+                None,
+                observed_millis,
+            );
+        }
         if changed.changed {
             crate::persistence::postgres::platforms::status::reconcile_deployments(
                 &self.pool,

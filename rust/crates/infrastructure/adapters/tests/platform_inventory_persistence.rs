@@ -16,6 +16,9 @@ use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
+#[path = "platform_inventory_persistence/state_delta.rs"]
+mod state_delta;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn inventory_commits_while_a_deployment_is_locked_and_reconciliation_catches_up() {
