@@ -326,6 +326,29 @@ impl DockerClient {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
         convert_list(self.list_image_models().await?)
     }
+
+    /// Docker's image-list Containers field can be -1 (not calculated). Inventory
+    /// needs actual references, including stopped containers, as in the .NET list.
+    /// Keep this separate from raw lists used only to count images in telemetry.
+    pub async fn list_image_models_with_usage(
+        &self,
+    ) -> Result<Vec<citadel_docker_api::models::ImageSummary>, DockerError> {
+        let (mut images, containers) = tokio::try_join!(
+            self.list_image_models(),
+            self.list_container_models(Some(true), None, None, None),
+        )?;
+        let mut counts = std::collections::HashMap::<String, i32>::new();
+        for container in containers {
+            if let Some(id) = container.image_id.filter(|id| !id.is_empty()) {
+                let count = counts.entry(id).or_default();
+                *count = count.saturating_add(1);
+            }
+        }
+        for image in &mut images {
+            image.containers = counts.get(&image.id).copied().unwrap_or_default();
+        }
+        Ok(images)
+    }
     /// Lifecycle observations need one image and its usage, never the image set.
     pub async fn image_event_model(
         &self,

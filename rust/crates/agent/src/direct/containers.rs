@@ -24,6 +24,10 @@ impl Runtime {
         let results = futures_util::stream::iter(ids.ids.into_iter().map(|id| {
             let docker = self.docker.clone();
             async move {
+                let _permit = tokio::select! {
+                    () = self.shutdown.cancelled() => return Err((id, Status::cancelled("Agent shutting down"))),
+                    permit = self.mutations.acquire() => permit.map_err(|_| (id.clone(), Status::cancelled("Agent shutting down")))?,
+                };
                 docker
                     .change_container_state(&id, action)
                     .await
@@ -59,6 +63,7 @@ impl container_service_server::ContainerService for Runtime {
         request: Request<ListContainersRequest>,
     ) -> Result<Response<ListContainersResponse>, Status> {
         let r = request.into_inner();
+        let metadata_only = r.metadata_only;
         let filter = serde_json::to_string(
             &r.filters
                 .into_iter()
@@ -71,16 +76,26 @@ impl container_service_server::ContainerService for Runtime {
             .list_container_models(r.all, r.limit, r.size, Some(&filter))
             .await
             .map_err(docker_error)?;
+        let cached = if metadata_only {
+            Default::default()
+        } else {
+            self.samples.cached_stats().await
+        };
         let values = futures_util::stream::iter(models.into_iter().map(|model| async {
             let mut c = summary(model)?;
-            if c.state == 2 {
-                c.container_stat_message = Some(
-                    self.docker
+            if metadata_only {
+                c.container_stat_message = None;
+            }
+            if c.state == 2 && !metadata_only {
+                c.container_stat_message = Some(match cached.get(&c.id).cloned() {
+                    Some(value) => stat(value),
+                    None => self
+                        .docker
                         .sample_container_stats(&c.id, &self.shutdown)
                         .await
                         .map(stat)
                         .unwrap_or_default(),
-                );
+                });
             }
             Ok::<_, Status>((c.id.clone(), c))
         }))
@@ -250,8 +265,8 @@ impl container_service_server::ContainerService for Runtime {
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard=guard;
             loop {
-                let sample=tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(&cancel)=>value.map_err(runtime_error) }?;
-                yield ContainersStatsResponse {containers:sample.containers.stats.into_iter().map(|s|(s.docker_container_id.clone(),stat(s))).collect()};
+                let sample=tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(interval, &cancel)=>value.map_err(runtime_error) }?;
+                yield ContainersStatsResponse { captured_at: Some(sample.captured_at), containers:sample.containers.stats.into_iter().map(|s|(s.docker_container_id.clone(),stat(s))).collect()};
                 tokio::select! { ()=cancel.cancelled()=>break,()=tokio::time::sleep(interval)=>{} }
             }
         })))

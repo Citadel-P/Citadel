@@ -220,6 +220,7 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
                 citadel_runtime::runtime_metrics::RuntimeWork::Inventory,
             ),
             InventorySettings {
+                monitoring_interval: Duration::from_secs(10),
                 node_policy: Default::default(),
                 reconciliation_interval: Duration::from_secs(3600),
             },
@@ -374,6 +375,7 @@ async fn edge_six_lifecycle_events_share_one_commit_and_notification() {
             worker_pool,
             Some(hub),
             InventorySettings {
+                monitoring_interval: Duration::from_secs(10),
                 node_policy: Default::default(),
                 reconciliation_interval: Duration::from_secs(3600),
             },

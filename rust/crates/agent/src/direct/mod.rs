@@ -33,6 +33,7 @@ pub const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 pub struct Runtime {
     docker: DockerClient,
     samples: Arc<sampling::SharedSampler>,
+    mutations: Arc<tokio::sync::Semaphore>,
     docker_cli: String,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
@@ -45,6 +46,7 @@ impl Runtime {
         runtime_container: Option<String>,
     ) -> Self {
         Self {
+            mutations: Arc::new(tokio::sync::Semaphore::new(8)),
             samples: Arc::new(sampling::SharedSampler::new(docker.clone())),
             docker,
             docker_cli: "docker".into(),

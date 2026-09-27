@@ -19,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 pub struct InventorySettings {
     pub node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
     pub reconciliation_interval: Duration,
+    pub monitoring_interval: Duration,
 }
 
 /// One supervised task per authenticated Edge Platform or Node. Reconnects
@@ -83,6 +84,7 @@ async fn monitor(
     stats: super::statistics::StatsIngress,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let interval = settings.monitoring_interval;
     tokio::try_join!(
         observe(
             session.clone(),
@@ -92,7 +94,7 @@ async fn monitor(
             settings,
             cancellation
         ),
-        observe_stats(session, stats, cancellation),
+        observe_stats(session, stats, interval, cancellation),
     )?;
     Ok(())
 }
@@ -100,13 +102,13 @@ async fn monitor(
 async fn observe_stats(
     session: Arc<EdgeSession>,
     ingress: super::statistics::StatsIngress,
+    interval: Duration,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let mut stream = runtime.stream_container_stats(Duration::from_secs(10), cancellation)?;
-    let interval = Duration::from_secs(10);
+    let mut stream = runtime.stream_container_stats(interval, cancellation)?;
     let mut disk = super::disk::LatestPlatformStats::new(interval);
     let mut disk_updates = if session.target.node_id.is_none() {
         super::disk::samples(runtime, interval, cancellation.clone())

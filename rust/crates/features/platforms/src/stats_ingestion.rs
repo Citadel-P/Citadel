@@ -45,6 +45,9 @@ pub struct StatsWriteOutcome {
 }
 
 pub trait StatsBatchStore<T>: Send + Sync {
+    fn partition(&self, _sample: &T) -> Uuid {
+        Uuid::nil()
+    }
     fn persist_batch<'a>(
         &'a self,
         samples: &'a [T],

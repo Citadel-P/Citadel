@@ -8,6 +8,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Default)]
 pub(crate) struct CommittedReads {
+    identities: OnceCell<Vec<citadel_platforms::ContainerIdentity>>,
+    telemetry: OnceCell<Option<citadel_platforms::PlatformTelemetryContext>>,
     platform: OnceCell<Option<PlatformDetails>>,
     containers: OnceCell<Vec<ContainerDetails>>,
     images: OnceCell<Vec<ImageDetails>>,
@@ -62,4 +64,17 @@ shared_read!(
     node_volumes,
     list_node_volumes,
     Vec<citadel_platforms::NodeResourceProjection<citadel_platforms::RuntimeVolumeSummary>>
+);
+
+shared_read!(
+    identities,
+    identities,
+    container_identities,
+    Vec<citadel_platforms::ContainerIdentity>
+);
+shared_read!(
+    telemetry,
+    telemetry,
+    platform_telemetry,
+    Option<citadel_platforms::PlatformTelemetryContext>
 );

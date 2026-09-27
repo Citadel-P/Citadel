@@ -211,9 +211,11 @@ and waits for both to be healthy before starting Vite on the host. Core listens
 on port 8000 (and reserves 8001 for Agent transport).
 
 The development image uses the production Dockerfile's `runtime-base` stage,
-including Docker CLI, Deno and backup tools. It mounts the local debug binary
-read-only, avoiding a second Core build in Docker. Normal runs omit debug
-symbols and incremental artifacts; F5 retains debugger information. Each run
+including Docker CLI, Deno and backup tools. It mounts the local release binary
+read-only, avoiding a second Core build in Docker. Compose uses `cargo build --release`
+by default so browser CPU measurements use optimized code. Set
+`CITADEL_COMPOSE_PROFILE=dev` for faster, unoptimized Compose builds; F5 retains
+the normal development profile and debugger information. Each run
 recreates Core so the container picks up the latest binary and environment,
 without restarting PostgreSQL. The first run downloads/builds the runtime image.
 
@@ -578,7 +580,7 @@ choose the latest state; equal timestamps use arrival order. Across batches,
 equal-second transitions retain stream order. Resource generations still fence
 snapshots captured before a delta. This is not nanosecond ordering or a new timestamp field in the Agent protocol.
 
-Local, Direct and Edge gather a maximum of 256 raw state events over a fixed 20 ms
+Local, Direct and Edge gather a maximum of 256 raw state events over a fixed 75 ms
 window. Coalescing never crosses metadata/create/destroy, recovery or scope changes.
 Each resulting platform/node batch takes one projection guard and state transaction;
 Edge validates the current authenticated session in that same transaction.
@@ -594,7 +596,18 @@ Container commands register claimed targets before mutation. Committed state eve
 confirm the expected result for a bounded 150 ms window; only missing targets use
 read-only inspection. Parent status, one transition activity, and claim release then
 commit together. The coordinator is a local hint; durable claims and stale recovery
-remain authoritative.
+remain authoritative. Inspections capture a projection generation before Docker I/O;
+a superseding committed event rejects the write and retries missing observations
+up to three times. A standalone claim finishes without reading or locking parent
+tables. Parent claims retain the durable platform/parent lock order, including
+recovery after their last target disappears.
+
+Lifecycle patches route only to the matching Container, DockerDaemon and detail
+subscriptions. Parent status changes publish separately with affected parent and
+Platform IDs. Container statistics share a narrow identity read; Platform telemetry
+uses the current sample plus a narrow Platform context, without loading inventory
+relationships or the last flushed statistics. Detail subscriptions receive partial
+`ReceiveContainerInfoPatch` messages and preserve metadata in the browser.
 
 Recovery composes independent resource refreshes after metadata validation at
 startup, on reconnect, and on a six-hour safety pass. Swarm projection recovery
@@ -663,7 +676,7 @@ stays at 30 seconds, and Git/update scheduling is handled separately.
 Local, Direct Agent and Edge collectors enqueue telemetry through two shared
 writers. Each writer has an independent bounded queue of
 `CITADEL_RUST_EVENT_QUEUE_CAPACITY` rows (default 256), and retains at most
-`JobConfiguration__BatchSize` rows (default 500) in its flush/retry buffer.
+four times `JobConfiguration__BatchSize` rows (default 500 per batch) in its flush/retry buffers.
 Collection backpressures when a queue fills; sampling ticks skip missed cycles.
 No producer spawns a database retry task. A ten-second sampler does not imply a
 ten-second commit: each writer flushes at its row threshold or after
@@ -685,7 +698,15 @@ on websocket updates. Platform writer commits wake threshold evaluation through
 `citadel_platform_stats`; durable `alertpending` rows and the configured fallback
 recover missed notifications. Identical retry keys do not re-arm evaluated alerts.
 
-Failures retain one bounded batch per writer with 1–30 second exponential backoff.
+Successful writes keep set-based batching across sources. A failed mixed batch is
+split by Platform so healthy sources can progress; each Platform retains order and
+retries with 1–30 second backoff. Database scope locks have a 500 ms deadline,
+statements a five-second deadline and a flush a ten-second outer bound. Permanent
+write errors are reported and rejected. Retained telemetry expires after two
+minutes; when retention capacity fills, the oldest retained batch is discarded to
+admit new samples. Both paths increment explicit counters. Non-finite/invalid
+samples are rejected before persistence; partial invalid cycles do not produce
+apparently complete host totals.
 Shutdown cancels collector admission, closes both queues, and drains accepted
 samples with a five-second total final-flush budget per writer (also bounded by
 the process shutdown deadline). Unflushed telemetry may be discarded on shutdown;
@@ -698,6 +719,29 @@ saturation and enqueue wait. `PlatformStatsFlush` and `ContainerStatsFlush` expo
 attempts, successful flushes, persisted logical samples, failures and buffered
 rows; `PlatformStatsStale`/`ContainerStatsStale` count discarded ownership mismatches.
 `StatsShutdownDrop` counts accepted rows left unflushed at writer shutdown.
+`StatsRejected` and `StatsRetentionDrop` distinguish invalid/permanent failures
+from expired/capacity-evicted retry data. `age_microseconds` reports the last observed
+capture age at Container ingress, retained-batch age at flush, and metadata age for
+`DockerMetadataRefresh`. `AgentChannelCreated` counts channel construction, not
+network handshakes.
+
+Local and Agent container collection does not wait for image/network/volume/storage
+metadata. Each sampler owns at most one cancellable metadata task and expires its
+optional result after three minutes; storage usage tracks last success separately
+from retry attempts. Container coverage is no longer truncated at 1,024 identities;
+only concurrency is capped. Agent cache freshness is bounded by the requested
+interval and six seconds, whichever is smaller. Updated Agents return the capture
+timestamp, and metadata-only inventory requests skip per-container statistics.
+Old peers retain protobuf defaults and the legacy receipt-time fallback. Edge
+streams use the same configured monitoring interval as Local/Direct streams.
+
+Committed Git/Swarm failure observations are persisted in `alertobservations` in the
+producer transaction. Notifications only wake processing; startup and a 30-second
+fallback recover missed wakes. Two-minute claims recover interrupted consumers;
+per-rule transactional receipts prevent retries from incrementing match counters
+or delivering the same evaluation twice. Successful acknowledgement deletes the
+observation and its receipts. Alert delivery also backs off on overdue locked work
+and errors, independently of notification volume.
 
 ### Background job lifecycle and configuration
 

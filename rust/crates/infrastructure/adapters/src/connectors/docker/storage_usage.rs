@@ -15,6 +15,7 @@ struct Usage {
 pub(super) struct UsageCache {
     refreshed: Option<Instant>,
     usage: Usage,
+    succeeded: Option<Instant>,
 }
 
 #[derive(Deserialize)]
@@ -73,12 +74,22 @@ impl DockerClient {
                 .system_data_usage(vec!["image".into(), "volume".into()])
                 .await
             {
-                Ok(usage) => cache.usage = DataUsage::from(usage).totals(),
+                Ok(usage) => {
+                    cache.usage = DataUsage::from(usage).totals();
+                    cache.succeeded = Some(Instant::now());
+                }
                 Err(error) => tracing::debug!(%error, "Docker storage usage unavailable"),
             }
             cache.refreshed = Some(Instant::now());
         }
-        cache.usage
+        if cache
+            .succeeded
+            .is_some_and(|at| at.elapsed() < Duration::from_secs(180))
+        {
+            cache.usage
+        } else {
+            Usage::default()
+        }
     }
 
     pub async fn platform_stats(&self) -> Result<RuntimePlatformStats, RuntimeCapabilityError> {
@@ -268,6 +279,13 @@ mod cache_tests {
             client.storage_totals().await,
             expected,
             "failed refresh also has a retry delay"
+        );
+        client.storage_usage.lock().await.succeeded =
+            Some(Instant::now() - Duration::from_secs(181));
+        assert_eq!(
+            client.storage_totals().await,
+            Usage::default(),
+            "failed refreshes must not renew successful usage age"
         );
         client.storage_usage.lock().await.refreshed =
             Some(Instant::now() - Duration::from_secs(61));

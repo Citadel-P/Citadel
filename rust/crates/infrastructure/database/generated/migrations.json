@@ -6,14 +6,14 @@
   },
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "e27dd8db1aa64d07f2fe9f37252d0fbb307bd5b74bef5dd821c45fbe1149fb99"
+    "sha256": "b00ee87ad62da1381d293c143fcb4f906703f9f21edb949c7608e83bf9f318f6"
   },
   "migrations": [
     {
       "id": "0001",
       "name": "initial",
       "file": "0001_initial.sql",
-      "sha256": "1437c9aa54b90e4cb831e9bbf36ce25c9ab504fd3582ed3e3784729e7f1e96d5",
+      "sha256": "f632095789959c56de20f50448f633e939018d1c1d9961662412959781139f87",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

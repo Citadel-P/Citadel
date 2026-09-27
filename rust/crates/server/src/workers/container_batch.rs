@@ -4,7 +4,9 @@ use std::{collections::BTreeMap, pin::Pin, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 pub(super) const MAX_EVENTS: usize = 256;
-const WINDOW: Duration = Duration::from_millis(20);
+// Leave headroom inside the 150 ms command confirmation deadline, while
+// combining Docker completions that arrive tens of milliseconds apart.
+const WINDOW: Duration = Duration::from_millis(75);
 
 /// Never read past a barrier: return it to the caller before consuming more.
 /// Count raw events, including duplicates, so a hot identity cannot starve others.
@@ -64,6 +66,22 @@ pub(super) fn publish(
             .cloned()
             .collect();
         hub.publish_container_state_patches(platform, &patches);
+        let deployments: Vec<_> = results
+            .iter()
+            .filter(|r| r.changed && !r.defer_parent_effects)
+            .filter_map(|r| r.deployment_id)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let stacks: Vec<_> = results
+            .iter()
+            .filter(|r| r.changed && !r.defer_parent_effects)
+            .filter_map(|r| r.stack_id)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        hub.publish_scoped_resource_changes(platform, "Deployment", &deployments);
+        hub.publish_scoped_resource_changes(platform, "Stack", &stacks);
     }
 }
 

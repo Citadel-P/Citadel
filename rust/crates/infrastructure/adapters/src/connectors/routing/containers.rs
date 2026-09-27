@@ -13,6 +13,15 @@ use crate::connectors::edge::EdgeRegistry;
 use crate::connectors::edge::EdgeRuntime;
 use crate::connectors::edge::EdgeTarget;
 
+/// Hosting supplies its existing connection owner; adapters never depend on Server.
+pub trait PlatformAgentResolver: Send + Sync {
+    fn resolve_agent<'a>(
+        &'a self,
+        platform: uuid::Uuid,
+        address: &'a str,
+    ) -> BoxFuture<'a, Result<Arc<AgentClient>, RuntimeCapabilityError>>;
+}
+
 #[derive(Clone)]
 pub struct ContainerRuntimeRouter {
     pool: PgPool,
@@ -20,6 +29,7 @@ pub struct ContainerRuntimeRouter {
     agent: Option<AgentClient>,
     edge: EdgeRegistry,
     local_calls: Arc<tokio::sync::Semaphore>,
+    resolver: Option<Arc<dyn PlatformAgentResolver>>,
 }
 
 pub(crate) enum Runtime<'a> {
@@ -40,8 +50,14 @@ impl ContainerRuntimeRouter {
             docker,
             agent,
             edge,
+            resolver: None,
             local_calls: Arc::new(tokio::sync::Semaphore::new(CONTAINER_IO_CONCURRENCY)),
         }
+    }
+
+    pub fn with_agent_resolver(mut self, resolver: Arc<dyn PlatformAgentResolver>) -> Self {
+        self.resolver = Some(resolver);
+        self
     }
 
     pub fn into_service(
@@ -96,12 +112,15 @@ impl ContainerRuntimeRouter {
         let address: String = row.get("address");
         let runtime = match connector.as_str() {
             "Local" => Runtime::Local(&self.docker),
-            "Agent" => Runtime::Agent(Arc::new(
-                self.agent
-                    .as_ref()
-                    .ok_or_else(unavailable)?
-                    .at_address(&address)?,
-            )),
+            "Agent" => Runtime::Agent(match &self.resolver {
+                Some(resolver) => resolver.resolve_agent(target.platform_id, &address).await?,
+                None => Arc::new(
+                    self.agent
+                        .as_ref()
+                        .ok_or_else(unavailable)?
+                        .at_address(&address)?,
+                ),
+            }),
             "EdgeAgent" => Runtime::Edge(EdgeRuntime {
                 session: self
                     .edge

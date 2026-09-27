@@ -40,6 +40,7 @@ pub(super) async fn probe_health(
     )
 }
 
+#[cfg(test)]
 pub(super) async fn edge_health(
     pool: &PgPool,
     platform: uuid::Uuid,
@@ -83,6 +84,26 @@ pub(super) async fn platform_health_monitor(
     loop {
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
         let targets = registry.snapshot().await;
+        let edge_ids: Vec<_> = targets
+            .iter()
+            .filter(|t| t.connector_type == citadel_platforms::ConnectorKind::EdgeAgent)
+            .map(|t| t.id)
+            .collect();
+        let edge_states = if edge_ids.is_empty() {
+            std::collections::HashMap::new()
+        } else {
+            let result = tokio::select! {
+                ()=cancellation.cancelled()=>return Ok(()),
+                result=sqlx::query_as::<_, (uuid::Uuid,bool)>("SELECT platformid,COALESCE(connectionstatus='Connected' AND lastheartbeatatutc>CURRENT_TIMESTAMP-INTERVAL '90 seconds',false) FROM edgeagentbindings WHERE platformid=ANY($1) AND resourcetype='Platform' AND dockernodeid IS NULL AND revokedatutc IS NULL AND connectionstatus<>'Revoked'").bind(&edge_ids).fetch_all(&pool)=>result,
+            };
+            match result {
+                Ok(rows) => rows.into_iter().collect(),
+                Err(error) => {
+                    tracing::warn!(%error,"Edge health lookup failed");
+                    std::collections::HashMap::new()
+                }
+            }
+        };
         states.retain(|key, (connector, _)| {
             targets
                 .iter()
@@ -92,21 +113,14 @@ pub(super) async fn platform_health_monitor(
             let docker = docker.clone();
             let budget = budget.clone();
             let cancellation = cancellation.clone();
-            let pool = pool.clone();
+            let edge_health = edge_states.get(&target.id).copied();
             async move {
+                if target.connector_type == citadel_platforms::ConnectorKind::EdgeAgent {
+                    return (target, edge_health);
+                }
                 let Some(_permit) = budget.enter(&cancellation).await else {
                     return (target, None);
                 };
-                if target.connector_type == citadel_platforms::ConnectorKind::EdgeAgent {
-                    let health = match edge_health(&pool, target.id).await {
-                        Ok(health) => health,
-                        Err(error) => {
-                            tracing::warn!(%error,"Edge health lookup failed");
-                            None
-                        }
-                    };
-                    return (target, health);
-                }
                 let selected;
                 let runtime: &dyn PlatformHealthPort =
                     if target.connector_type == citadel_platforms::ConnectorKind::Local {

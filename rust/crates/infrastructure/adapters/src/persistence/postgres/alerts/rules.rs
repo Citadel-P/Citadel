@@ -5,8 +5,16 @@ impl PostgresAlertRepository {
         &self,
         rule: &AlertRule,
         observation: &AlertObservation,
+        receipt: Option<Uuid>,
     ) -> Result<Option<AlertEvent>, AlertError> {
         let mut transaction = self.pool.begin().await.map_err(storage)?;
+        if let Some(id) = receipt {
+            let inserted = sqlx::query("INSERT INTO alertobservationreceipts(observationid,ruleid) VALUES($1,$2) ON CONFLICT DO NOTHING")
+                .bind(id).bind(rule.id).execute(&mut *transaction).await.map_err(storage)?;
+            if inserted.rows_affected() == 0 {
+                return Ok(None);
+            }
+        }
         // A snapshot can outlive a concurrent deletion. Hold the parent while
         // applying mutable state so deletion cannot race the foreign key writes.
         let enabled: Option<String> =

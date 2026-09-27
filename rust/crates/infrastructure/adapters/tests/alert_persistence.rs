@@ -14,6 +14,138 @@ use std::sync::{
 };
 use uuid::Uuid;
 
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure() {
+    use citadel_adapters::persistence::postgres::alerts::observations::enqueue;
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = ActorId::new(Uuid::now_v7());
+    let resource = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = PostgresAlertRepository::new(pool.clone()).with_entitlements(Arc::new(
+        citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService::new(true),
+    ));
+    let rule = store
+        .create_rule(
+            actor,
+            &AlertRuleConfiguration {
+                name: format!("durable-{resource}"),
+                description: None,
+                alert_type: "PlatformCpuHigh".into(),
+                severity: "Critical".into(),
+                cooldown_seconds: None,
+                required_matches: Some(2),
+                threshold: Some(80.0),
+                status: "Enabled".into(),
+                channel_ids: vec![],
+                quiet_hours: vec![],
+                limited_to: vec![json!({"resourceId":resource,"resourceType":"Platform"})],
+            },
+        )
+        .await
+        .unwrap();
+    let observation = AlertObservation {
+        alert_type: "PlatformCpuHigh".into(),
+        info: json!({}),
+        resource_id: resource,
+        resource_name: "durable-probe".into(),
+        resource_type: "Platform".into(),
+        deduplication_component: "cpu".into(),
+        observed_at: Utc::now(),
+        value: Some(85.0),
+        matched: true,
+    };
+    let mut tx = pool.begin().await.unwrap();
+    enqueue(&mut tx, &observation).await.unwrap();
+    tx.rollback().await.unwrap();
+    assert!(
+        !store
+            .process_pending_observation(Uuid::now_v7())
+            .await
+            .unwrap()
+    );
+    // No listener exists when the transaction commits: persisted work must suffice.
+    let mut tx = pool.begin().await.unwrap();
+    enqueue(&mut tx, &observation).await.unwrap();
+    tx.commit().await.unwrap();
+    sqlx::raw_sql("CREATE FUNCTION audit_reject_observation_ack() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected ack failure'; END $$; CREATE TRIGGER audit_reject_ack BEFORE DELETE ON alertobservations FOR EACH ROW EXECUTE FUNCTION audit_reject_observation_ack();").execute(&pool).await.unwrap();
+    assert!(
+        store
+            .process_pending_observation(Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    let matches: i32 = sqlx::query_scalar(
+        "SELECT consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
+    )
+    .bind(rule.id)
+    .bind(resource)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(matches, 1);
+    sqlx::raw_sql("DROP TRIGGER audit_reject_ack ON alertobservations; DROP FUNCTION audit_reject_observation_ack(); UPDATE alertobservations SET availableat=CURRENT_TIMESTAMP;").execute(&pool).await.unwrap();
+    assert!(
+        store
+            .process_pending_observation(Uuid::now_v7())
+            .await
+            .unwrap()
+    );
+    let matches: i32 = sqlx::query_scalar(
+        "SELECT consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
+    )
+    .bind(rule.id)
+    .bind(resource)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(matches, 1, "retry must not count the observation twice");
+    let mut tx = pool.begin().await.unwrap();
+    enqueue(&mut tx, &observation).await.unwrap();
+    tx.commit().await.unwrap();
+    assert!(
+        store
+            .process_pending_observation(Uuid::now_v7())
+            .await
+            .unwrap()
+    );
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM alertevents WHERE alertruleid=$1 AND resourceid=$2",
+    )
+    .bind(rule.id)
+    .bind(resource)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1);
+    sqlx::query("DELETE FROM alertrules WHERE id=$1")
+        .bind(rule.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+}
+
 // AlertService.ProcessAsync chooses the highest-severity matching rule before
 // applying cooldown. A suppressed winner must not fall back to a lower rule.
 #[tokio::test]

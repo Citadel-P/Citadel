@@ -387,7 +387,7 @@ pub fn container_observation(
 
 /// Count the containers exposed by
 /// ContainerList; Docker Desktop /info totals can disagree with this visible list.
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(super) struct ContainerCounts {
     pub(super) total: i64,
     pub(super) running: i64,

@@ -120,6 +120,50 @@ async fn cross_platform_batches_filter_stale_identity_and_deduplicate_retry_keys
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
+async fn locked_platform_times_out_retryably_and_healthy_partition_can_commit() {
+    let pool = fixture().await;
+    let a = platform(&pool).await;
+    let b = platform(&pool).await;
+    add_container(&pool, &a, "locked").await;
+    add_container(&pool, &b, "healthy").await;
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(a.platform_id)
+        .fetch_one(&mut *lock)
+        .await
+        .unwrap();
+    let samples = [
+        container(&a, "locked", 10, 1.0),
+        container(&b, "healthy", 10, 2.0),
+    ];
+    let failure = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        store.persist_batch(&samples),
+    )
+    .await
+    .expect("database lock waits must be bounded")
+    .unwrap_err();
+    assert!(failure.retryable);
+    // The writer splits a failed mixed batch; exercise the resulting store calls
+    // while A's original transaction still owns the lock.
+    assert_eq!(
+        store.persist_batch(&samples[1..]).await.unwrap().persisted,
+        1
+    );
+    lock.rollback().await.unwrap();
+    assert_eq!(
+        store.persist_batch(&samples[..1]).await.unwrap().persisted,
+        1
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM containerstats WHERE containerid IN (SELECT id FROM containers WHERE platformid=ANY($1))")
+        .bind(vec![a.platform_id, b.platform_id]).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 2);
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
 async fn platform_batch_updates_latest_metadata_preserves_missing_disk_and_retry_alert_revision() {
     let pool = fixture().await;
     let a = platform(&pool).await;

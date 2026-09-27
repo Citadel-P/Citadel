@@ -128,13 +128,23 @@ impl platform_service_server::PlatformService for Runtime {
         let interval = super::interval(request.into_inner().fetch_interval_ms);
         let docker = self.docker.clone();
         let sampler = self.samples.clone();
+        let metadata_changed = sampler.metadata_notification();
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard = guard;
-            let info = docker.info().await.map_err(docker_error)?;
+            let mut info = docker.info().await.map_err(docker_error)?;
+            let mut generation = docker.daemon_generation();
             loop {
-                let sample = tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(&cancel)=>value.map_err(runtime_error) }?;
+                if generation != docker.daemon_generation() {
+                    info = docker.info().await.map_err(docker_error)?;
+                    generation = docker.daemon_generation();
+                }
+                let sample = tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(interval, &cancel)=>value.map_err(runtime_error) }?;
+                if sample.platform.is_none() {
+                    tokio::select! { ()=cancel.cancelled()=>break, ()=metadata_changed.notified()=>{}, ()=tokio::time::sleep(interval)=>{} }
+                    continue;
+                }
                 let s = aggregate(sample, info.cpu_count as i64)?;
                 yield PlatformStatsResponse {
                     network_count: s.network_count, volume_count: s.volume_count, container_count: s.container_count,

@@ -88,7 +88,9 @@ const MAX_UNARY_ATTEMPTS: usize = 3;
 pub(crate) fn map_container_stats(
     value: citadel_contracts::citadel::containers::v1::ContainersStatsResponse,
 ) -> Vec<RuntimeContainerStat> {
-    let created = chrono::Utc::now().timestamp();
+    let created = value
+        .captured_at
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
     value
         .containers
         .into_iter()
@@ -457,6 +459,7 @@ impl AgentClient {
         }
         let address = validate_address(address, allow_insecure)?;
         let endpoint = agent_endpoint(&address, operation_timeout, None)?;
+        citadel_runtime::runtime_metrics::RuntimeWork::AgentChannelCreated.units(1);
         Ok(Self {
             channel: endpoint.connect_lazy(),
             signer,
@@ -556,6 +559,7 @@ impl AgentClient {
             self.operation_timeout,
             self.ca_certificate.as_deref(),
         )?;
+        citadel_runtime::runtime_metrics::RuntimeWork::AgentChannelCreated.units(1);
         Ok(Self {
             channel: endpoint.connect_lazy(),
             signer: self.signer.clone(),
@@ -1750,6 +1754,7 @@ impl citadel_platforms::ContainerInventoryPort for AgentClient {
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
                         ListContainersRequest {
+                            metadata_only: true,
                             all: Some(true),
                             limit: None,
                             size: Some(false),
@@ -2697,6 +2702,23 @@ fn append_bounded(output: &mut String, value: &str, maximum_bytes: usize) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn statistics_keep_capture_time_and_accept_legacy_responses() {
+        use citadel_contracts::citadel::{
+            containers::v1::ContainersStatsResponse, shared_models::v1::ContainerStatMessage,
+        };
+        let mut wire = ContainersStatsResponse {
+            containers: std::collections::HashMap::from([(
+                "container".into(),
+                ContainerStatMessage::default(),
+            )]),
+            captured_at: Some(123),
+        };
+        assert_eq!(super::map_container_stats(wire.clone())[0].created, 123);
+        wire.captured_at = None;
+        assert!(super::map_container_stats(wire)[0].created > 123);
+    }
+
     use super::*;
     use citadel_contracts::citadel::networks::v1::{NetworkContainerMessage, PeerInfoMessage};
     use citadel_contracts::citadel::platforms::v1::{

@@ -350,3 +350,23 @@ pub struct NodeResourceProjection<T> {
     pub node_hostname: Option<String>,
     pub is_stale: bool,
 }
+
+/// Identity only, for associating live samples without loading resource details.
+#[derive(Debug, Clone)]
+pub struct ContainerIdentity {
+    pub id: Uuid,
+    pub platform_id: Uuid,
+    pub deployment_id: Option<Uuid>,
+    pub stack_id: Option<Uuid>,
+    pub container_id: String,
+    pub docker_node_id: Option<String>,
+}
+#[derive(Debug, Clone)]
+pub struct PlatformTelemetryContext {
+    pub cpu_count: i64,
+    pub mem_total: i64,
+    pub network_count: i32,
+    pub volume_count: i32,
+    pub image_count: i64,
+    pub descriptor: Value,
+}

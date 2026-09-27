@@ -16,7 +16,7 @@ batch the state projection:
   resolve image/ownership joins, replace metadata or release operation claims.
 - `ProjectionWrite` and the existing observation watermark remain authoritative;
   `RuntimeIdentityIndex` supplies verified hints with a bounded stale-hint fallback.
-- Local, Direct and Edge gather at most 256 raw state events within a fixed 20 ms
+- Local, Direct and Edge gather at most 256 raw state events within a fixed 75 ms
   window. Newest observations win per identity; metadata, tombstones, recovery and
   scope changes flush the batch before proceeding. Edge retains its session fence.
 - Each scope uses one projection guard and set-based state transaction. External
@@ -29,9 +29,16 @@ batch the state projection:
   Container reconciliation, and scoped realtime invalidations follow commit.
 - Operation events confirm in-flight commands; durable finish/recovery finalizes
   parent status and activities once. Missing daemon confirmation uses bounded,
-  read-only Inspect fallback.
-- `Containers` and `DockerDaemon` receive committed state patches without a full
-  Container read. Joined/full resource groups retain authorized shared reads.
+  read-only Inspect fallback fenced by the pre-inspection projection generation.
+  Superseded inspections retry at most three times; durable recovery retains failures.
+  Standalone completion skips parent tables; parent claims preserve their lock order.
+- Lifecycle patches route to `Containers`, `DockerDaemon`, and matching Container
+  detail subscriptions. Parent updates carry affected parent and Platform IDs;
+  ordinary state patches do not invalidate Platform/workload summaries.
+- Container telemetry uses a shared narrow identity query, with linear sample
+  mapping. Platform telemetry uses the current sample plus a narrow context query,
+  independent of the statistics flush cadence. Details consume partial patches.
+  Initial snapshots and metadata changes retain authorized full reads.
 - Known-ID authorization uses the bounded actor/resource cache where safe;
   mutation claims hold the cache read fence and recheck locked ownership. Catalog
   visibility remains SQL-filtered.
@@ -42,6 +49,29 @@ batch the state projection:
 - Local, Agent and Edge stats use bounded queues and shared writers.
   `JobConfiguration__MonitoringInterval` sets sample cadence; the configured
   flush interval and row threshold set persistence cadence.
+
+## Runtime review implementation (2026-09-27)
+
+- Fast container sampling and slow metadata refresh have separate lifetimes. One
+  sampler owns one metadata task; generation changes, cancellation, and cache age
+  prevent an old result from becoming fresh telemetry. CPU coverage is complete
+  with bounded concurrency. Wire capture timestamps preserve sample identity.
+- Direct commands resolve Agent clients through the same registered Platform
+  connection owner as workers. Agent lifecycle RPCs share a daemon-wide budget;
+  health has separate capacity. Edge health bindings are read as one batch.
+- Non-Swarm resource lanes allow two active Platform scopes under the existing
+  shared inventory budget. A Platform/resource retains one active collection,
+  generation fencing and bounded coalesced follow-up work.
+- Statistics keep successful cross-source batching, but split failed work by
+  Platform. Retry age/capacity limits and explicit discard counters keep failures
+  finite. Durable operation claims and alert observations are never governed by
+  this lossy telemetry policy.
+- Job alert observations are durable snapshots, with per-rule evaluation receipts;
+  PostgreSQL notifications are wakeups. Container detail patches are scoped to
+  canonical identity, including across navigation and late callbacks.
+
+See [the review](reports/architecture-runtime-review-2026-09-27.md) and
+[implementation validation](reports/architecture-runtime-implementation-2026-09-27.md).
 
 ## Workspace groups
 

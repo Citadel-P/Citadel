@@ -214,3 +214,8 @@ results and rejects an unapproved overwrite. It uses the existing development
 compiler cache and does not build a Citadel image or touch the development DB.
 The test removes its fixture volumes; the script removes its fixture database.
 This does not replace the Agent/Edge, RustFS or multi-node acceptance gates.
+
+Normal browser development (`dev.sh compose-up`) builds and mounts release Core
+by default. Use `CITADEL_COMPOSE_PROFILE=dev` for faster unoptimized builds; use
+the default release profile when comparing CPU/I/O with a production .NET image.
+Native debugger tasks retain their development profile.

@@ -31,6 +31,7 @@ pub struct PlatformRuntimeRegistry {
     pool: PgPool,
     base: Option<AgentClient>,
     targets: RwLock<Arc<Vec<PlatformTarget>>>,
+    refresh_lock: tokio::sync::Mutex<()>,
     changed: watch::Sender<u64>,
     subscriptions: watch::Sender<()>,
 }
@@ -46,6 +47,7 @@ impl PlatformRuntimeRegistry {
             pool,
             base,
             targets: RwLock::new(Arc::new(Vec::new())),
+            refresh_lock: tokio::sync::Mutex::new(()),
             changed: watch::channel(0).0,
             subscriptions: watch::channel(()).0,
         })
@@ -67,6 +69,7 @@ impl PlatformRuntimeRegistry {
     }
 
     pub(crate) async fn refresh(&self) -> Result<(), sqlx::Error> {
+        let _refresh = self.refresh_lock.lock().await;
         if !self.identities.initialized() {
             self.identities.rebuild().await?;
         }
@@ -180,6 +183,50 @@ impl PlatformRuntimeRegistry {
     }
 }
 
+impl citadel_adapters::connectors::routing::containers::PlatformAgentResolver
+    for PlatformRuntimeRegistry
+{
+    fn resolve_agent<'a>(
+        &'a self,
+        platform: uuid::Uuid,
+        address: &'a str,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<Arc<AgentClient>, citadel_platforms::RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            for refresh in [false, true] {
+                if refresh {
+                    self.refresh().await.map_err(|e| {
+                        citadel_platforms::RuntimeCapabilityError::new(
+                            citadel_platforms::RuntimeErrorKind::Remote,
+                            e.to_string(),
+                            true,
+                        )
+                    })?;
+                }
+                if let Some(client) = self
+                    .snapshot()
+                    .await
+                    .iter()
+                    .find(|t| {
+                        t.id == platform
+                            && t.address.trim_end_matches('/') == address.trim_end_matches('/')
+                    })
+                    .and_then(|t| t.agent.clone())
+                {
+                    return Ok(client);
+                }
+            }
+            Err(citadel_platforms::RuntimeCapabilityError::new(
+                citadel_platforms::RuntimeErrorKind::Unavailable,
+                "Platform connection changed or is unavailable",
+                true,
+            ))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,6 +270,15 @@ mod tests {
             .clone()
             .unwrap();
         assert!(Arc::ptr_eq(&first, &unchanged));
+        use citadel_adapters::connectors::routing::containers::PlatformAgentResolver;
+        let command = registry
+            .resolve_agent(id, "http://127.0.0.1:49151")
+            .await
+            .unwrap();
+        assert!(
+            Arc::ptr_eq(&command, &first),
+            "commands reuse the worker connection owner"
+        );
         sqlx::query("UPDATE platforms SET address='http://127.0.0.1:49152' WHERE id=$1")
             .bind(id)
             .execute(&pool)

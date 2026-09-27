@@ -240,12 +240,7 @@ pub(super) async fn finish_sync(
             value: None,
             matched: true,
         };
-        sqlx::query("SELECT pg_notify('citadel_job_alerts',$1)")
-            .bind(
-                serde_json::to_string(&observation)
-                    .map_err(|error| GitRepositoryExecutionError::Storage(error.to_string()))?,
-            )
-            .execute(&mut *transaction)
+        crate::persistence::postgres::alerts::observations::enqueue(&mut transaction, &observation)
             .await
             .map_err(storage)?;
     }

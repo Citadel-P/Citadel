@@ -45,6 +45,18 @@ pub(super) async fn persist(
         )
     }))
     .await;
+    if ordered.iter().any(|observation| {
+        observation
+            .generation
+            .as_ref()
+            .is_some_and(|stamp| !writes.iter().any(|write| stamp.matches(write)))
+    }) {
+        return Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::Conflict,
+            "Container inspection was superseded by a committed observation.",
+            true,
+        ));
+    }
     let ids: Vec<_> = ordered.iter().map(|o| o.target.id).collect();
     let platforms: Vec<_> = ordered.iter().map(|o| o.target.platform_id).collect();
     let nodes: Vec<_> = ordered

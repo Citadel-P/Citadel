@@ -3,7 +3,7 @@ use super::super::status;
 use citadel_activities::ActivityEventInfo;
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind,
-    containers::{ContainerCompletion, ContainerStatePatch},
+    containers::{ContainerClaim, ContainerCompletion, ContainerStatePatch},
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -11,19 +11,51 @@ use uuid::Uuid;
 pub(super) async fn finish(
     pool: &PgPool,
     claim: Uuid,
+    selection: Option<&ContainerClaim>,
 ) -> Result<ContainerCompletion, RuntimeCapabilityError> {
     let mut tx = pool.begin().await.map_err(storage)?;
-    super::repository::lock_claim_resources(&mut tx, claim).await?;
-    let deployments = sqlx::query("SELECT id,name,status,platformid,controltriggeredby FROM deployments WHERE containeroperationid=$1 ORDER BY id")
-        .bind(claim).fetch_all(&mut *tx).await.map_err(storage)?;
-    let stacks = sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.id releaseid,r.status,r.platformid FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.containeroperationid=$1 ORDER BY s.id")
-        .bind(claim).fetch_all(&mut *tx).await.map_err(storage)?;
+    if let Some(selection) =
+        selection.filter(|s| s.deployment_ids.is_empty() && s.stack_ids.is_empty())
+    {
+        let platforms: Vec<_> = selection
+            .targets
+            .iter()
+            .map(|target| target.platform_id)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        sqlx::query("SELECT id FROM platforms WHERE id=ANY($1) ORDER BY id FOR SHARE")
+            .bind(platforms)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(storage)?;
+    } else {
+        // Parent claims can survive deletion of their last target. Resolve
+        // their platforms from durable ownership and retain the lock order.
+        super::repository::lock_claim_resources(&mut tx, claim).await?;
+    }
+    let deployments = if selection.is_some_and(|s| s.deployment_ids.is_empty()) {
+        vec![]
+    } else {
+        sqlx::query("SELECT id,name,status,platformid,controltriggeredby FROM deployments WHERE containeroperationid=$1 AND ($2::uuid[] IS NULL OR id=ANY($2)) ORDER BY id FOR NO KEY UPDATE")
+            .bind(claim).bind(selection.map(|s| &s.deployment_ids)).fetch_all(&mut *tx).await.map_err(storage)?
+    };
+    let stacks = if selection.is_some_and(|s| s.stack_ids.is_empty()) {
+        vec![]
+    } else {
+        sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.id releaseid,r.status,r.platformid FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.containeroperationid=$1 AND ($2::uuid[] IS NULL OR s.id=ANY($2)) ORDER BY s.id FOR NO KEY UPDATE OF s,r")
+            .bind(claim).bind(selection.map(|s| &s.stack_ids)).fetch_all(&mut *tx).await.map_err(storage)?
+    };
     let deployment_ids: Vec<Uuid> = deployments.iter().map(|r| r.get("id")).collect();
     let stack_ids: Vec<Uuid> = stacks.iter().map(|r| r.get("id")).collect();
     // Include unselected siblings when deriving a parent's final status. Match
     // event reconciliation's preference for the latest surviving Deployment row.
-    let containers = sqlx::query("SELECT dockercontainerid,lower(state) state,deploymentid,stackid FROM containers WHERE NOT isswarmtask AND (deploymentid=ANY($1) OR stackid=ANY($2)) ORDER BY updated DESC,id DESC")
-        .bind(&deployment_ids).bind(&stack_ids).fetch_all(&mut *tx).await.map_err(storage)?;
+    let containers = if deployment_ids.is_empty() && stack_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query("SELECT dockercontainerid,lower(state) state,deploymentid,stackid FROM containers WHERE NOT isswarmtask AND (deploymentid=ANY($1) OR stackid=ANY($2)) ORDER BY updated DESC,id DESC")
+        .bind(&deployment_ids).bind(&stack_ids).fetch_all(&mut *tx).await.map_err(storage)?
+    };
     for row in &deployments {
         let id: Uuid = row.get("id");
         let container = containers
@@ -119,7 +151,10 @@ pub(super) async fn finish(
         }
     }
     let mut completion = ContainerCompletion::default();
-    for table in ["deployments", "stacks"] {
+    for (table, parents) in [("deployments", &deployment_ids), ("stacks", &stack_ids)] {
+        if parents.is_empty() {
+            continue;
+        }
         let statement = format!(
             "UPDATE {table} SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,containeroperationid=NULL,rowversion=rowversion+1 WHERE containeroperationid=$1 RETURNING id"
         );

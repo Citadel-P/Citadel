@@ -207,7 +207,9 @@ pub(crate) async fn container_state_deltas_in(
                     }
                     .to_owned(),
                 ),
-                control_state: Some(row.get("controlstate")),
+                // The command owns this field. Its completion can publish Idle
+                // after coordination wakes but before this event is delivered.
+                control_state: (!owned).then(|| row.get("controlstate")),
                 updated: Some(delta.observed_at),
                 docker_node_id: node.map(str::to_owned),
             }),

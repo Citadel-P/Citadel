@@ -430,19 +430,20 @@ impl ApplicationGroupReader {
                         }
                         Err(error) => return Err(error),
                     }
-                    let platform =
-                        crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
+                    let Some(context) =
+                        crate::realtime::shared_reads::telemetry(&self.platforms, platform_id, e)
                             .await?
-                            .map(crate::api::resources::platforms::views::PlatformView::from)
-                            .ok_or(RealtimeReadError::Authorization)?;
-                    let Some(stat) = platform.stats.as_ref().and_then(|s| s.first()) else {
+                    else {
                         return Ok(GroupSnapshot::default());
                     };
-                    return event(
-                        "PlatformStatsUpdated",
-                        json!({"platformId":platform.id,"stat":stat,"memTotal":platform.mem_total,"networkCount":platform.network_count,"imageCount":platform.image_count,"volumeCount":platform.volume_count,
-                        "containerCount":platform.platform_descriptor["containerCount"],"containersRunning":platform.platform_descriptor["containersRunning"],"containersPaused":platform.platform_descriptor["containersPaused"],"containersStopped":platform.platform_descriptor["containersStopped"]}),
-                    );
+                    let Some(payload) = live_platform_stats(
+                        platform_id,
+                        &context,
+                        &e.unwrap().payload["platformSample"],
+                    ) else {
+                        return Ok(GroupSnapshot::default());
+                    };
+                    return event("PlatformStatsUpdated", payload);
                 }
                 if let Some(platform_id) = e.and_then(|e| e.platform_id) {
                     let allowed = match self
@@ -485,6 +486,12 @@ impl ApplicationGroupReader {
                 )
             }
             Topic::Containers(..) => {
+                if sample {
+                    let identities =
+                        crate::realtime::shared_reads::identities(&self.platforms, id.unwrap(), e)
+                            .await?;
+                    return event("ContainersStatsUpdated", map_stats(e.unwrap(), &identities));
+                }
                 if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
                     let containers = self
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
@@ -508,10 +515,6 @@ impl ApplicationGroupReader {
                                 .collect::<Vec<_>>()
                         })
                         .map_err(failure)?;
-                if sample {
-                    let stats = map_stats(e.unwrap(), &containers);
-                    return event("ContainersStatsUpdated", stats);
-                }
                 event("ContainersInfoUpdated", json!({"containers":containers}))
             }
             Topic::Images(..) => {
@@ -934,6 +937,57 @@ impl ApplicationGroupReader {
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         let id = Uuid::parse_str(g.reference().unwrap())
             .map_err(|_| RealtimeReadError::Authorization)?;
+        if let Some(change) = e.filter(|e| {
+            e.payload["dockerResourceType"] == "containerStats"
+                || e.payload["containerPatches"].is_array()
+        }) {
+            let platform = change.platform_id.ok_or(RealtimeReadError::Authorization)?;
+            let identities =
+                crate::realtime::shared_reads::identities(&self.platforms, platform, Some(change))
+                    .await?;
+            let Some(identity) = identities.iter().find(|c| c.id == id) else {
+                return Ok(GroupSnapshot::default());
+            };
+            let mut allowed = p.is_administrator();
+            for (kind, owner) in [
+                (ResourceType::Platform, Some(identity.platform_id)),
+                (ResourceType::Deployment, identity.deployment_id),
+                (ResourceType::Stack, identity.stack_id),
+            ] {
+                if owner.is_some()
+                    && self
+                        .permission_with_lease(p, kind, owner, None, lease)
+                        .await
+                        .is_ok()
+                {
+                    allowed = true;
+                    break;
+                }
+            }
+            if !allowed {
+                return Err(RealtimeReadError::Authorization);
+            }
+            if let Some(patch) = change.payload["containerPatches"]
+                .as_array()
+                .and_then(|patches| patches.iter().find(|patch| patch["id"] == json!(id)))
+            {
+                let mut value = patch.clone();
+                value["id"] = json!(identity.container_id);
+                value["resourceId"] = json!(id);
+                return event("ReceiveContainerInfoPatch", value);
+            }
+            let stats = map_stats(change, &identities);
+            return match stats
+                .into_iter()
+                .find(|stat| stat["containerId"] == json!(id))
+            {
+                Some(stat) => event(
+                    "ReceiveContainerInfoPatch",
+                    json!({"id":identity.container_id,"resourceId":id,"containerStat":stat}),
+                ),
+                None => Ok(GroupSnapshot::default()),
+            };
+        }
         let container = self
             .platforms
             .get_container(id)
@@ -1096,22 +1150,51 @@ fn container_data(
 
 fn map_stats(
     event: &PublishedRuntimeEvent,
-    containers: &[crate::api::resources::platforms::views::ContainerView],
+    containers: &[citadel_platforms::ContainerIdentity],
 ) -> Vec<Value> {
     let Some(stats) = event.payload["stats"].as_array() else {
         return vec![];
     };
+    let identities: std::collections::HashMap<_, _> = containers
+        .iter()
+        .map(|c| ((c.container_id.as_str(), c.docker_node_id.as_deref()), c.id))
+        .collect();
     stats
         .iter()
         .filter_map(|stat| {
             let id = stat["dockerContainerId"].as_str()?;
-            let container = containers.iter().find(|c| {
-                c.container_id == id
-                    && c.docker_node_id.as_deref() == event.payload["dockerNodeId"].as_str()
-            })?;
+            let container = identities.get(&(id, event.payload["dockerNodeId"].as_str()))?;
             let mut mapped = stat.clone();
-            mapped["containerId"] = json!(container.id);
+            mapped["containerId"] = json!(container);
             Some(mapped)
         })
         .collect()
+}
+
+fn live_platform_stats(
+    platform: Uuid,
+    context: &citadel_platforms::PlatformTelemetryContext,
+    sample: &Value,
+) -> Option<Value> {
+    let created = sample["created"].as_i64()?;
+    let metadata = &sample["metadata"];
+    let mem_total = metadata["memTotal"].as_i64().unwrap_or(context.mem_total);
+    let cpu = sample["cpuUsage"].as_f64().unwrap_or_default();
+    let memory = sample["memoryActive"].as_f64().unwrap_or_default();
+    Some(json!({
+        "platformId":platform,
+        "stat": { "created":created, "cpuUsage":if context.cpu_count > 0 {cpu/context.cpu_count as f64} else {cpu},
+            "memoryUsage":if mem_total > 0 {memory/mem_total as f64*100.0} else {0.0},
+            "rxBytes":sample["rxBytes"], "txBytes":sample["txBytes"],
+            "diskUsedBytes":metadata["diskUsedBytes"], "diskTotalBytes":metadata["diskTotalBytes"], "diskUsage":metadata["diskUsage"],
+        },
+        "memTotal":mem_total,
+        "networkCount":metadata["networkCount"].as_i64().unwrap_or(i64::from(context.network_count)),
+        "imageCount":metadata["imageCount"].as_i64().unwrap_or(context.image_count),
+        "volumeCount":metadata["volumeCount"].as_i64().unwrap_or(i64::from(context.volume_count)),
+        "containerCount":metadata.get("containerCount").unwrap_or(&context.descriptor["containerCount"]),
+        "containersRunning":metadata.get("containersRunning").unwrap_or(&context.descriptor["containersRunning"]),
+        "containersPaused":metadata.get("containersPaused").unwrap_or(&context.descriptor["containersPaused"]),
+        "containersStopped":metadata.get("containersStopped").unwrap_or(&context.descriptor["containersStopped"]),
+    }))
 }

@@ -78,7 +78,10 @@ fn statistics_match_both_node_and_docker_identity() {
         containers: Default::default(),
         payload: json!({"dockerNodeId":"worker","stats":[{"dockerContainerId":"same-docker-id","cpuUsage":42}]}),
     };
-    let values = map_stats(&event, &[manager.clone(), worker.clone(), other.clone()]);
+    let values = map_stats(
+        &event,
+        &[identity(&manager), identity(&worker), identity(&other)],
+    );
     assert_eq!(values.len(), 1);
     assert_eq!(values[0]["containerId"], json!(worker.id));
     assert_eq!(
@@ -103,7 +106,7 @@ fn ordinary_manager_statistics_do_not_update_worker_rows() {
         containers: Default::default(),
         payload: json!({"stats":[{"dockerContainerId":"same-docker-id","cpuUsage":12}]}),
     };
-    let values = map_stats(&event, &[worker.clone(), manager.clone()]);
+    let values = map_stats(&event, &[identity(&worker), identity(&manager)]);
     assert_eq!(values.len(), 1);
     assert_eq!(values[0]["containerId"], json!(manager.id));
     assert!(container_data(worker, Some(&event))["containerStat"].is_null());
@@ -150,4 +153,68 @@ fn committed_container_state_patches_skip_full_reads_for_container_groups() {
         ApplicationGroupReader::container_patch_snapshot(&group, Some(&event), Some(platform))
             .is_none()
     );
+}
+
+fn identity(c: &ContainerView) -> citadel_platforms::ContainerIdentity {
+    citadel_platforms::ContainerIdentity {
+        id: c.id,
+        platform_id: c.platform_id,
+        deployment_id: c.deployment_id,
+        stack_id: c.stack_id,
+        container_id: c.container_id.clone(),
+        docker_node_id: c.docker_node_id.clone(),
+    }
+}
+
+#[test]
+fn state_patches_do_not_reload_platform_summaries_or_unrelated_details() {
+    let platform = Uuid::now_v7();
+    let id = Uuid::now_v7();
+    let event = PublishedRuntimeEvent {
+        platform_id: Some(platform),
+        resource_type: "Platform",
+        resource_id: platform,
+        event_kind: "runtimeChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({"dockerResourceType":"container","containerPatches":[{"id":id}]}),
+    };
+    assert!(
+        Group::parse(&format!("container-info:{id}"))
+            .unwrap()
+            .affected_by(&event)
+    );
+    for group in [
+        "platforms".into(),
+        "stacks".into(),
+        "deployments".into(),
+        format!("container-info:{}", Uuid::now_v7()),
+        format!("activity:Stack:{}", Uuid::now_v7()),
+    ] {
+        assert!(
+            !Group::parse(&group).unwrap().affected_by(&event),
+            "{group}"
+        );
+    }
+}
+
+#[test]
+fn platform_stats_use_current_samples_and_preserve_normalization() {
+    let context = citadel_platforms::PlatformTelemetryContext {
+        cpu_count: 4,
+        mem_total: 1024,
+        network_count: 1,
+        volume_count: 2,
+        image_count: 3,
+        descriptor: json!({"containerCount":6}),
+    };
+    let sample = json!({"created":42,"memoryActive":512.0,"cpuUsage":200.0,"rxBytes":100,"txBytes":200,
+        "metadata":{"memTotal":2048,"containersRunning":3,"containerCount":6}});
+    let value = live_platform_stats(Uuid::nil(), &context, &sample).unwrap();
+    assert_eq!(value["stat"]["created"], 42);
+    assert_eq!(value["stat"]["cpuUsage"], 50.0);
+    assert_eq!(value["stat"]["memoryUsage"], 25.0);
+    assert_eq!(value["containersRunning"], 3);
+    assert!(live_platform_stats(Uuid::nil(), &context, &Value::Null).is_none());
 }

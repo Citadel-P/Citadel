@@ -108,6 +108,7 @@ pub async fn spawn_all(
             pool.clone(),
             realtime_hub.clone(),
             workers::edge::InventorySettings {
+                monitoring_interval: config.probe_interval,
                 node_policy: config.node_agent_policy.clone(),
                 reconciliation_interval: config.reconciliation_interval,
             },

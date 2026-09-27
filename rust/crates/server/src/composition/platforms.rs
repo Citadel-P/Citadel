@@ -91,8 +91,24 @@ pub(super) fn build(
                     for (platform, patches) in platforms {
                         hub.publish_container_state_patches(platform, &patches);
                     }
-                    hub.publish_resource_changes("Deployment", &claim.deployment_ids);
-                    hub.publish_resource_changes("Stack", &claim.stack_ids);
+                    let parent_platforms = claim
+                        .targets
+                        .iter()
+                        .map(|target| target.platform_id)
+                        .collect::<std::collections::BTreeSet<_>>();
+                    if parent_platforms.is_empty() {
+                        // Recovery may finish a parent whose last container vanished.
+                        hub.publish_resource_changes("Deployment", &claim.deployment_ids);
+                        hub.publish_resource_changes("Stack", &claim.stack_ids);
+                    }
+                    for platform in parent_platforms {
+                        hub.publish_scoped_resource_changes(
+                            platform,
+                            "Deployment",
+                            &claim.deployment_ids,
+                        );
+                        hub.publish_scoped_resource_changes(platform, "Stack", &claim.stack_ids);
+                    }
                 }
             }),
     );

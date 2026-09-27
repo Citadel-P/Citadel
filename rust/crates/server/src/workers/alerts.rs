@@ -13,30 +13,47 @@ pub async fn deliveries(
         if cancellation.is_cancelled() {
             return Ok(());
         }
-        match service.process_one(&cancellation).await {
+        let failed = match service.process_one(&cancellation).await {
             Ok(true) => continue,
-            Ok(false) => {}
-            Err(error) => tracing::error!(%error, "Alert delivery worker iteration failed"),
-        }
+            Ok(false) => false,
+            Err(error) => {
+                tracing::error!(%error, "Alert delivery worker iteration failed");
+                true
+            }
+        };
         let fallback = if cancellation.is_cancelled() {
             return Ok(());
         } else {
             Duration::from_secs(60)
         };
         let sleep = match service.next_delivery_deadline().await {
-            Ok(Some(deadline)) => deadline
-                .signed_duration_since(chrono::Utc::now())
-                .to_std()
-                .unwrap_or(Duration::ZERO)
-                .min(fallback),
+            Ok(Some(deadline)) => idle_delay(
+                deadline
+                    .signed_duration_since(chrono::Utc::now())
+                    .to_std()
+                    .unwrap_or(Duration::ZERO),
+                fallback,
+            ),
             Ok(None) => fallback,
             Err(error) => {
                 tracing::warn!(%error, "Could not read alert delivery deadline; using recovery fallback");
                 Duration::from_secs(5)
             }
         };
-        wait_for_work(&mut wake, &cancellation, sleep).await;
+        if failed {
+            // Failure backoff cannot be bypassed by an overdue row or repeated notifications.
+            tokio::select! { () = cancellation.cancelled() => return Ok(()), _ = tokio::time::sleep(Duration::from_secs(5)) => {} }
+        } else if sleep <= Duration::from_millis(250) {
+            // Repeated notifications for locked work cannot bypass the idle floor.
+            tokio::select! { () = cancellation.cancelled() => return Ok(()), _ = tokio::time::sleep(sleep) => {} }
+        } else {
+            wait_for_work(&mut wake, &cancellation, sleep).await;
+        }
     }
+}
+
+fn idle_delay(until_due: Duration, fallback: Duration) -> Duration {
+    until_due.min(fallback).max(Duration::from_millis(250))
 }
 
 async fn wait_for_work(
@@ -53,9 +70,49 @@ async fn wait_for_work(
     }
 }
 
+/// Notifications wake a durable queue; startup and fallback recover missed wakes.
+pub(super) async fn observations(
+    cancel: CancellationToken,
+    alerts: Arc<citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository>,
+    mut listener: sqlx::postgres::PgListener,
+) -> Result<(), std::convert::Infallible> {
+    let owner = uuid::Uuid::now_v7();
+    loop {
+        let result = tokio::select! { () = cancel.cancelled() => return Ok(()), result = alerts.process_pending_observation(owner) => result };
+        match result {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(%error, "Job alert evaluation failed; observation retained");
+                tokio::select! { () = cancel.cancelled() => return Ok(()), _ = tokio::time::sleep(Duration::from_secs(5)) => {} }
+            }
+        }
+        tokio::select! {
+            () = cancel.cancelled() => return Ok(()),
+            _ = tokio::time::sleep(Duration::from_secs(30)) => {},
+            result = listener.recv() => if let Err(error) = result {
+                tracing::warn!(%error, "Job alert listener disconnected; queue polling remains active");
+                tokio::select! { () = cancel.cancelled() => return Ok(()), _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overdue_locked_work_keeps_a_minimum_idle_delay() {
+        assert_eq!(
+            idle_delay(Duration::ZERO, Duration::from_secs(60)),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            idle_delay(Duration::from_secs(8), Duration::from_secs(60)),
+            Duration::from_secs(8)
+        );
+    }
 
     #[tokio::test(start_paused = true)]
     async fn idle_delivery_waits_for_signal_or_deadline() {
@@ -93,33 +150,5 @@ mod tests {
             tokio::time::Instant::now() - started,
             Duration::from_secs(30)
         );
-    }
-}
-
-/// Producers notify inside their state transaction; PostgreSQL delivers only after commit.
-/// Carry the failure snapshot, since another operation may already have replaced the row.
-pub(super) async fn observations(
-    cancel: CancellationToken,
-    alerts: Arc<dyn citadel_alerts::AlertEventSink>,
-    mut listener: sqlx::postgres::PgListener,
-) -> Result<(), std::convert::Infallible> {
-    loop {
-        let notification = tokio::select! { biased; ()=cancel.cancelled()=>return Ok(()), result=listener.recv()=>result };
-        match notification {
-            Ok(notification) => match serde_json::from_str::<citadel_alerts::AlertObservation>(
-                notification.payload(),
-            ) {
-                Ok(observation) => {
-                    if let Err(error) = alerts.observe(&observation).await {
-                        tracing::warn!(%error,"Committed job alert evaluation failed");
-                    }
-                }
-                Err(error) => tracing::warn!(%error,"Invalid job alert observation"),
-            },
-            Err(error) => {
-                tracing::warn!(%error,"Job alert listener failed");
-                tokio::select! { ()=cancel.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
-            }
-        }
     }
 }

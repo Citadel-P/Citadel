@@ -27,9 +27,11 @@ impl citadel_platforms::ImageInventoryPort for DockerClient {
             let values = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
-                result = DockerClient::list_images(self) => result.map_err(normalize_docker_error)?,
+                result = self.list_image_models_with_usage() => result.map_err(normalize_docker_error)?,
             };
-            Ok(values.into_iter().map(map_image).collect())
+            values.into_iter().map(|value| {
+                ImageSummary::try_from(value).map(map_image).map_err(normalize_docker_error)
+            }).collect()
         }
         .boxed()
     }

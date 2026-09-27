@@ -1,5 +1,5 @@
 -- @generated pre-release baseline; do not edit.
--- Generated from: crates/database/src/schema/schema.sql
+-- Generated from: crates/infrastructure/database/src/schema/schema.sql
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -2131,3 +2131,20 @@ SELECT setval(
         (SELECT MAX(id) FROM instancesetupstates) + 1,
         nextval(pg_get_serial_sequence('instancesetupstates', 'id'))),
     false);
+
+
+-- Committed failure snapshots; NOTIFY is only a wakeup for durable processing.
+CREATE TABLE alertobservations (
+    id uuid PRIMARY KEY,
+    payload jsonb NOT NULL,
+    availableat timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    claimowner uuid,
+    claimedat timestamptz,
+    attempts integer NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_alertobservations_available ON public.alertobservations (availableat, id);
+CREATE TABLE alertobservationreceipts (
+    observationid uuid NOT NULL REFERENCES public.alertobservations(id) ON DELETE CASCADE,
+    ruleid uuid NOT NULL,
+    PRIMARY KEY (observationid, ruleid)
+);

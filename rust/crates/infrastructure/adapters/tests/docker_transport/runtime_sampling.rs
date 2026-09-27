@@ -70,7 +70,15 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
     );
     let mut sampler = LocalDockerSampler::new(docker.clone(), 2);
     for _ in 0..2 {
-        let sample = sampler.sample(&stop).await.unwrap();
+        let mut sample = sampler.sample(&stop).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while sample.platform.is_none() {
+                sampler.enrich_metadata(&mut sample);
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
         assert_eq!(sample.containers.stats.len(), 1);
         assert_eq!(sample.containers.failed_samples, 0);
         let platform = sample.platform.unwrap();
@@ -101,7 +109,19 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(61)).await;
     tokio::time::resume();
-    let refreshed = sampler.sample(&stop).await.unwrap();
+    let mut refreshed = sampler.sample(&stop).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while refreshed
+            .platform
+            .as_ref()
+            .is_none_or(|v| v.image_count != 1)
+        {
+            sampler.enrich_metadata(&mut refreshed);
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .unwrap();
     assert_eq!(
         refreshed.platform.unwrap().image_count,
         1,
@@ -109,7 +129,15 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
     );
     assert_eq!(requests.lock().unwrap()["/v1.49/containers/json"], 3);
     docker.invalidate_daemon().await;
-    sampler.sample(&stop).await.unwrap();
+    let mut sample = sampler.sample(&stop).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while sample.platform.is_none() {
+            sampler.enrich_metadata(&mut sample);
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .unwrap();
     {
         let calls = requests.lock().unwrap();
         assert_eq!(calls["/version"], 2, "reconnect must renegotiate");

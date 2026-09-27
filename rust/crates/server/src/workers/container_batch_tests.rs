@@ -30,7 +30,7 @@ async fn deadline_is_fixed_and_stream_survives_window() {
     let cancellation = CancellationToken::new();
     let stream = async_stream::stream! {
         for value in 1..=4 {
-            tokio::time::sleep(Duration::from_millis(9)).await;
+            tokio::time::sleep(WINDOW * 2 / 5).await;
             yield value;
         }
     };
