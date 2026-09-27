@@ -1,5 +1,6 @@
 use super::*;
 use citadel_adapters::connectors::edge::EdgeRuntime;
+use citadel_platforms::SwarmInventoryPort;
 use citadel_platforms::logs::{LogReadPort, LogResource};
 use citadel_platforms::terminal::{
     ContainerTerminalPort, TerminalInput, TerminalOutput, TerminalShell,

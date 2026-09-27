@@ -60,6 +60,10 @@ impl PostgresGitRepositoryExecutionPersistence {
                 .await
                 .map_err(storage)?;
             }
+            sqlx::query("SELECT pg_notify('citadel_git_work','')")
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage)?;
             transaction.commit().await.map_err(storage)
         })
     }
@@ -92,6 +96,7 @@ impl PostgresGitRepositoryExecutionPersistence {
         branch: &'a str,
     ) -> BoxFuture<'a, Result<Option<GitRepositoryRef>, GitRepositoryExecutionError>> {
         Box::pin(async move {
+            let _read = citadel_runtime::runtime_metrics::RuntimeWork::GitSyncStateRead.start();
             sqlx::query("SELECT * FROM gitrepositoryrefs WHERE gitrepositoryid=$1 AND branch=$2")
                 .bind(id)
                 .bind(branch)

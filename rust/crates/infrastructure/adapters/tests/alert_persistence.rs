@@ -423,6 +423,9 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .execute(&pool)
         .await
         .unwrap();
+    // This fixture edits configuration directly; production mutations publish
+    // committed invalidation. Simulate receipt of that notification here.
+    free_store.invalidate_configuration();
     let builtin = free_store
         .process_event(&after_downgrade)
         .await

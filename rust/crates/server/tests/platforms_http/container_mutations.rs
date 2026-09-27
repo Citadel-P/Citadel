@@ -965,3 +965,342 @@ async fn container_commands_use_the_owning_edge_node_and_confirm_deletion_withou
     f.docker_server.abort();
     let _ = tokio::fs::remove_file(f.docker_socket).await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_replay_or_sync() {
+    use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    for (fail, cancel) in [(false, false), (true, false), (false, true)] {
+        let mut f = fixture().await;
+        let mut inventory = snapshot(f.platform_id);
+        let template = inventory.containers[0].clone();
+        inventory.containers = (0..20)
+            .map(|i| RuntimeContainerSummary {
+                id: format!("bulk-{i}"),
+                name: format!("bulk-{i}"),
+                ..template.clone()
+            })
+            .collect();
+        PostgresInventoryProjectionStore::new(f.pool.clone())
+            .persist(&inventory)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}',connectortype='Local' WHERE id=$1").bind(f.platform_id).execute(&f.pool).await.unwrap();
+        let ids: Vec<Uuid> =
+            sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 ORDER BY id")
+                .bind(f.platform_id)
+                .fetch_all(&f.pool)
+                .await
+                .unwrap();
+        assert_eq!(ids.len(), 20);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let inspections = Arc::new(AtomicUsize::new(0));
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let stopped = Arc::new(Mutex::new(std::collections::BTreeSet::<String>::new()));
+        let path = std::env::temp_dir().join(format!("bulk-local-{}.sock", Uuid::now_v7()));
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn({
+            let calls = calls.clone();
+            let inspections = inspections.clone();
+            let active = active.clone();
+            let peak = peak.clone();
+            let stopped = stopped.clone();
+            async move {
+                let mut tasks = tokio::task::JoinSet::new();
+                loop {
+                    tokio::select! {
+                        accepted=listener.accept()=> {
+                            let (mut socket,_)=accepted.unwrap();
+                            let calls=calls.clone(); let inspections=inspections.clone(); let active=active.clone(); let peak=peak.clone(); let stopped=stopped.clone();
+                            tasks.spawn(async move {
+                                let mut data=Vec::new(); let mut buf=[0;4096];
+                                while !data.windows(4).any(|w|w==b"\r\n\r\n") { let n=socket.read(&mut buf).await.unwrap(); if n==0 { return; } data.extend_from_slice(&buf[..n]); }
+                                let request=String::from_utf8_lossy(&data); let line=request.lines().next().unwrap();
+                                let (status,body)=if line.starts_with("GET /version ") { (200,json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})) }
+                                else {
+                                    let url=line.split_whitespace().nth(1).unwrap();
+                                    let parts:Vec<_>=url.split('/').collect();
+                                    assert_eq!(parts[2],"containers","no unrelated enumeration: {line}");
+                                    let id=parts[3].to_owned();
+                                    if line.starts_with("POST ") {
+                                        assert!(url.contains("/stop"));
+                                        calls.fetch_add(1,Ordering::SeqCst);
+                                        let count=active.fetch_add(1,Ordering::SeqCst)+1; peak.fetch_max(count,Ordering::SeqCst);
+                                        tokio::time::sleep(StdDuration::from_millis(if cancel {500} else {80})).await;
+                                        active.fetch_sub(1,Ordering::SeqCst);
+                                        if fail && id=="bulk-0" { (500,json!({"message":"deliberate stop failure"})) }
+                                        else { stopped.lock().await.insert(id); (204,json!(null)) }
+                                    } else {
+                                        assert!(url.ends_with("/json"),"no resource list: {line}");
+                                        inspections.fetch_add(1,Ordering::SeqCst);
+                                        let state=if stopped.lock().await.contains(&id) {"exited"} else {"running"};
+                                        (200,json!({"Id":id,"State":{"Status":state}}))
+                                    }
+                                };
+                                let body=if status==204 {String::new()} else {body.to_string()};
+                                let _ = socket.write_all(format!("HTTP/1.1 {status} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await;
+                            });
+                        },
+                        result=tasks.join_next(), if !tasks.is_empty()=> { result.unwrap().unwrap(); }
+                    }
+                }
+            }
+        });
+        let runtime = ContainerRuntimeRouter::new(
+            f.pool.clone(),
+            DockerClient::new(&path, StdDuration::from_secs(2)).unwrap(),
+            None,
+            f.lookup_state.platforms.edge.clone(),
+        );
+        let service = Arc::new(runtime.into_service(Arc::new(
+            citadel_server::tasks::platforms::TrackedContainerTasks::new(
+                citadel_runtime::DynamicTasks::new(CancellationToken::new()),
+            ),
+        )));
+        let mut state = f.lookup_state.platforms.clone();
+        state.containers = service.clone();
+        f.app = platforms_http::router(state);
+        if cancel {
+            let token = CancellationToken::new();
+            let (result, ()) = tokio::join!(
+                service.execute_background(
+                    f.administrator.actor_id,
+                    ids.iter().map(ToString::to_string).collect(),
+                    ContainerAction::Stop,
+                    token.clone()
+                ),
+                async {
+                    tokio::time::timeout(StdDuration::from_secs(3), async {
+                        while calls.load(Ordering::SeqCst) < CONTAINER_IO_CONCURRENCY {
+                            tokio::task::yield_now().await;
+                        }
+                    })
+                    .await
+                    .unwrap();
+                    token.cancel();
+                }
+            );
+            assert!(matches!(result,Err(error) if error.kind==RuntimeErrorKind::Cancelled));
+            tokio::time::sleep(StdDuration::from_millis(600)).await;
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                CONTAINER_IO_CONCURRENCY,
+                "cancelled queued mutations must not reach Docker"
+            );
+            assert_eq!(inspections.load(Ordering::SeqCst), 0);
+            sqlx::query("UPDATE containers SET controlstartedat=1 WHERE platformid=$1")
+                .bind(f.platform_id)
+                .execute(&f.pool)
+                .await
+                .unwrap();
+            service.reconcile(&CancellationToken::new()).await.unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), CONTAINER_IO_CONCURRENCY);
+            assert_eq!(inspections.load(Ordering::SeqCst), 20);
+            assert_eq!(
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT count(*) FROM containers WHERE platformid=$1 AND controlstate='Idle'"
+                )
+                .bind(f.platform_id)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap(),
+                20
+            );
+            server.abort();
+            f.docker_server.abort();
+            let _ = tokio::fs::remove_file(path).await;
+            f.pool.close().await;
+            continue;
+        }
+        let response = send_json(
+            &f,
+            Method::PATCH,
+            "/api/v1/containers/stop",
+            f.administrator.clone(),
+            json!(ids),
+        )
+        .await;
+        assert_eq!(response.status().is_success(), !fail);
+        assert_eq!(calls.load(Ordering::SeqCst), 20);
+        assert_eq!(inspections.load(Ordering::SeqCst), 20);
+        assert_eq!(peak.load(Ordering::SeqCst), CONTAINER_IO_CONCURRENCY);
+        let (exited,processing):(i64,i64)=sqlx::query_as("SELECT count(*) FILTER(WHERE state='Exited'),count(*) FILTER(WHERE controlstate='Processing') FROM containers WHERE platformid=$1").bind(f.platform_id).fetch_one(&f.pool).await.unwrap();
+        assert_eq!(exited, if fail { 19 } else { 20 });
+        assert_eq!(processing, if fail { 20 } else { 0 });
+        if fail {
+            sqlx::query("UPDATE containers SET controlstartedat=1 WHERE platformid=$1")
+                .bind(f.platform_id)
+                .execute(&f.pool)
+                .await
+                .unwrap();
+            service.reconcile(&CancellationToken::new()).await.unwrap();
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                20,
+                "recovery must never replay stop"
+            );
+            assert_eq!(inspections.load(Ordering::SeqCst), 40);
+            let pending: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM containers WHERE platformid=$1 AND controlstate='Processing'",
+            )
+            .bind(f.platform_id)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+            assert_eq!(pending, 0);
+        }
+        server.abort();
+        f.docker_server.abort();
+        let _ = tokio::fs::remove_file(path).await;
+        f.pool.close().await;
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_generation() {
+    use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite, SnapshotGeneration};
+    let f = fixture().await;
+    let mut inventory = snapshot(f.platform_id);
+    let template = inventory.containers[0].clone();
+    inventory.containers = vec![
+        RuntimeContainerSummary {
+            id: "batch-good".into(),
+            name: "batch-good".into(),
+            ..template.clone()
+        },
+        RuntimeContainerSummary {
+            id: "batch-bad".into(),
+            name: "reject-batch".into(),
+            ..template
+        },
+    ];
+    PostgresInventoryProjectionStore::new(f.pool.clone())
+        .persist(&inventory)
+        .await
+        .unwrap();
+    let ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 ORDER BY id")
+            .bind(f.platform_id)
+            .fetch_all(&f.pool)
+            .await
+            .unwrap();
+    let store = PostgresContainerRepository::new(f.pool.clone());
+    let claim = store
+        .claim(f.administrator.actor_id, true, &ids, ContainerAction::Stop)
+        .await
+        .unwrap();
+    let stamp = SnapshotGeneration::capture(f.platform_id, None, ProjectionKind::Containers).await;
+    sqlx::query("CREATE FUNCTION phase7_reject_observation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name='reject-batch' AND NEW.state='Exited' THEN RAISE EXCEPTION 'deliberate batch failure'; END IF; RETURN NEW; END $$").execute(&f.pool).await.unwrap();
+    sqlx::query("CREATE TRIGGER phase7_reject_observation BEFORE UPDATE ON containers FOR EACH ROW EXECUTE FUNCTION phase7_reject_observation()").execute(&f.pool).await.unwrap();
+    let observations: Vec<_> = claim
+        .targets
+        .iter()
+        .map(|target| ContainerObservation {
+            target: target.clone(),
+            state: Some("exited".into()),
+        })
+        .collect();
+    assert!(
+        store
+            .observed_batch(claim.operation_id, &observations)
+            .await
+            .is_err()
+    );
+    assert!(
+        stamp.matches(
+            &ProjectionWrite::begin(f.platform_id, None, ProjectionKind::Containers).await
+        )
+    );
+    let running: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM containers WHERE id=ANY($1) AND state='Running'")
+            .bind(&ids)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(running, 2);
+    sqlx::query("DROP TRIGGER phase7_reject_observation ON containers")
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION phase7_reject_observation()")
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    store
+        .observed_batch(claim.operation_id, &observations)
+        .await
+        .unwrap();
+    let before: Vec<(Uuid, i64)> =
+        sqlx::query_as("SELECT id,rowversion FROM containers WHERE id=ANY($1) ORDER BY id")
+            .bind(&ids)
+            .fetch_all(&f.pool)
+            .await
+            .unwrap();
+    store
+        .observed_batch(claim.operation_id, &observations)
+        .await
+        .unwrap();
+    let after: Vec<(Uuid, i64)> =
+        sqlx::query_as("SELECT id,rowversion FROM containers WHERE id=ANY($1) ORDER BY id")
+            .bind(&ids)
+            .fetch_all(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        before, after,
+        "semantic duplicates must not increment revisions"
+    );
+    let mut wrong: Vec<_> = claim
+        .targets
+        .iter()
+        .map(|target| ContainerObservation {
+            target: target.clone(),
+            state: None,
+        })
+        .collect();
+    for value in &mut wrong {
+        value.target.node_id = Some("another-node".into());
+    }
+    store
+        .observed_batch(claim.operation_id, &wrong)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM containers WHERE id=ANY($1)")
+            .bind(&ids)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        2,
+        "wrong node must not delete a claimed UUID"
+    );
+    store.finish(claim.operation_id).await.unwrap();
+    store
+        .observed_batch(
+            claim.operation_id,
+            &claim
+                .targets
+                .iter()
+                .map(|target| ContainerObservation {
+                    target: target.clone(),
+                    state: None,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM containers WHERE id=ANY($1)")
+            .bind(&ids)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        2,
+        "finished claims cannot delete observations"
+    );
+    f.docker_server.abort();
+    f.pool.close().await;
+}

@@ -908,3 +908,175 @@ async fn broadcasts_reach_each_subscriber_and_survive_one_peer_disconnecting() {
     shutdown.cancel();
     server.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn actor_generation_change_disconnects_without_an_event_or_periodic_recheck() {
+    struct WatchedReader {
+        inner: FakeReader,
+        actor: ActorId,
+        generation: tokio::sync::watch::Sender<Uuid>,
+    }
+    impl RealtimeReadPort for WatchedReader {
+        fn authorization_changes(&self, _: ActorId) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+            Some(self.generation.subscribe())
+        }
+        fn authenticate<'a>(
+            &'a self,
+            token: &'a str,
+        ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+            Box::pin(async move {
+                let mut principal = self.inner.authenticate(token).await?;
+                principal.actor_id = self.actor;
+                Ok(principal)
+            })
+        }
+        fn authorize_platform<'a>(
+            &'a self,
+            principal: &'a ActorPrincipal,
+            id: Uuid,
+        ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+            self.inner.authorize_platform(principal, id)
+        }
+        fn list_containers(
+            &self,
+            id: Uuid,
+        ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+            self.inner.list_containers(id)
+        }
+    }
+    let platform_id = Uuid::now_v7();
+    let (generation, _) = tokio::sync::watch::channel(Uuid::now_v7());
+    let shutdown = CancellationToken::new();
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(WatchedReader {
+            inner: FakeReader {
+                platform: platform(platform_id),
+                allowed: Arc::new(AtomicBool::new(true)),
+            },
+            actor: ActorId::new(Uuid::now_v7()),
+            generation: generation.clone(),
+        }),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    );
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+            .await
+            .unwrap();
+    subscribe(&mut socket, platform_id, 0).await;
+    assert_eq!(receive_json(&mut socket).await["eventKind"], "snapshot");
+    generation.send_replace(Uuid::now_v7());
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), socket.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(_))) | None
+    ));
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn tracked_group_connections_still_reauthenticate_on_the_safety_interval() {
+    use citadel_server::realtime_groups::{Group, GroupReadPort, GroupSnapshot};
+    struct SafetyReader {
+        inner: FakeReader,
+        actor: ActorId,
+        generation: tokio::sync::watch::Sender<Uuid>,
+        expired: AtomicBool,
+    }
+    impl RealtimeReadPort for SafetyReader {
+        fn authorization_changes(&self, _: ActorId) -> Option<tokio::sync::watch::Receiver<Uuid>> {
+            Some(self.generation.subscribe())
+        }
+        fn authenticate<'a>(
+            &'a self,
+            token: &'a str,
+        ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+            Box::pin(async move {
+                if self.expired.load(Ordering::SeqCst) {
+                    return Err(RealtimeReadError::Authentication);
+                }
+                let mut principal = self.inner.authenticate(token).await?;
+                principal.actor_id = self.actor;
+                Ok(principal)
+            })
+        }
+        fn authorize_platform<'a>(
+            &'a self,
+            p: &'a ActorPrincipal,
+            id: Uuid,
+        ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+            self.inner.authorize_platform(p, id)
+        }
+        fn list_containers(
+            &self,
+            id: Uuid,
+        ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+            self.inner.list_containers(id)
+        }
+    }
+    struct Groups(Arc<AtomicBool>);
+    impl GroupReadPort for Groups {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            _: &'a Group,
+            _: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async {
+                if self.0.load(Ordering::SeqCst) {
+                    Ok(GroupSnapshot::default())
+                } else {
+                    Err(RealtimeReadError::Authorization)
+                }
+            })
+        }
+    }
+    for expire_token in [false, true] {
+        let allowed = Arc::new(AtomicBool::new(true));
+        let reader = Arc::new(SafetyReader {
+            inner: FakeReader {
+                platform: platform(Uuid::now_v7()),
+                allowed: Arc::new(AtomicBool::new(true)),
+            },
+            actor: ActorId::new(Uuid::now_v7()),
+            generation: tokio::sync::watch::channel(Uuid::now_v7()).0,
+            expired: AtomicBool::new(false),
+        });
+        let shutdown = CancellationToken::new();
+        let mut settings = config();
+        settings.authorization_recheck_interval = Duration::from_millis(100);
+        let service = RealtimeService::new(
+            &settings,
+            reader.clone(),
+            Arc::new(Metrics::default()),
+            shutdown.clone(),
+        )
+        .with_groups(Arc::new(Groups(allowed.clone())));
+        let (address, server) = start_server(service, shutdown.clone()).await;
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
+        assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"1","target":"JoinGroup","arguments":["platforms"]}).to_string().into())).await.unwrap();
+        assert!(receive_json(&mut socket).await["error"].is_null());
+        if expire_token {
+            reader.expired.store(true, Ordering::SeqCst);
+        } else {
+            allowed.store(false, Ordering::SeqCst);
+        }
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(2), socket.next())
+                .await
+                .unwrap(),
+            Some(Ok(Message::Close(_))) | None
+        ));
+        shutdown.cancel();
+        server.await.unwrap().unwrap();
+    }
+}

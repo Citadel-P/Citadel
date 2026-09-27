@@ -70,12 +70,6 @@ impl ImageService for Runtime {
         let image = ImageInspectionPort::inspect_image(&self.docker, &id, &self.shutdown)
             .await
             .map_err(runtime_error)?;
-        let raw = self
-            .docker
-            .inspect_image_document(&id)
-            .await
-            .map_err(docker_error)?;
-        let config = &raw["Config"];
         Ok(Response::new(InspectImageResponse {
             id: image.id,
             size: image.size,
@@ -88,15 +82,10 @@ impl ImageService for Runtime {
             exposed_ports: image.exposed_ports,
             os: Some(image.os),
             architecture: Some(image.architecture),
-            user: config["User"].as_str().map(str::to_owned),
-            working_dir: config["WorkingDir"].as_str().map(str::to_owned),
-            entry_point: config["Entrypoint"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|v| v.as_str().map(str::to_owned))
-                .collect(),
-            stop_signal: config["StopSignal"].as_str().map(str::to_owned),
+            user: image.user,
+            working_dir: image.working_dir,
+            entry_point: image.entry_point,
+            stop_signal: image.stop_signal,
             layers: image
                 .layers
                 .into_iter()

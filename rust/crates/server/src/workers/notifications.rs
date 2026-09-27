@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub(super) struct DatabaseNotificationHub {
-    signals: Arc<[watch::Sender<()>; 6]>,
+    signals: Arc<[watch::Sender<()>; RuntimeSignal::ALL.len()]>,
 }
 impl DatabaseNotificationHub {
     pub fn new() -> Self {
@@ -91,6 +91,58 @@ mod tests {
 #[cfg(test)]
 mod postgres_tests {
     use super::*;
+    #[tokio::test]
+    #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
+    async fn every_fixed_topic_obeys_commit_and_rollback() {
+        let pool = sqlx::PgPool::connect(&std::env::var("CITADEL_TEST_DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+        let mut listener = super::super::listener(&pool, "citadel_phase8_notify_test")
+            .await
+            .unwrap();
+        let hub = DatabaseNotificationHub::new();
+        let mut receivers = Vec::new();
+        for signal in RuntimeSignal::ALL {
+            listener.listen(signal.channel()).await.unwrap();
+            receivers.push(hub.subscribe(signal));
+        }
+        let token = CancellationToken::new();
+        let worker = tokio::spawn(hub.run(listener, token.clone()));
+        for (signal, receiver) in RuntimeSignal::ALL.into_iter().zip(&mut receivers) {
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(signal.channel())
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(20), receiver.changed())
+                    .await
+                    .is_err()
+            );
+            tx.rollback().await.unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(20), receiver.changed())
+                    .await
+                    .is_err()
+            );
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(signal.channel())
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            tokio::time::timeout(Duration::from_secs(2), receiver.changed())
+                .await
+                .unwrap()
+                .unwrap();
+        }
+        token.cancel();
+        worker.await.unwrap().unwrap();
+        pool.close().await;
+    }
+
     #[tokio::test]
     #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
     async fn notifications_follow_commit_and_recover_after_listener_disconnect() {

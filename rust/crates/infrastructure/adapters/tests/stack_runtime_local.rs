@@ -112,8 +112,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
             == Some(&format!("{}_web", fixture.project_name))
     }));
 
-    use citadel_platforms::InventoryProjectionStore;
-    let snapshot = citadel_platforms::jobs::collect_inventory(
+    let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
         &fixture.docker,
         &citadel_platforms::jobs::InventoryCollectionTarget {
             platform_id: fixture.platform_id,
@@ -123,12 +122,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
     )
     .await
     .unwrap();
-    citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
-        fixture.pool.clone(),
-    )
-    .persist(&snapshot)
-    .await
-    .unwrap();
+    persist_manager_snapshot(&fixture.pool, &snapshot).await;
     // A failed deployment that rolled back to healthy tasks is still a failed
     // release. Exercise the runtime observation boundary with Docker's states.
     for state in ["rollback_completed", "rollback_paused"] {
@@ -214,8 +208,7 @@ impl Fixture {
         .unwrap();
         let runtime = StackRuntimeRouter::new(pool.clone(), docker.clone(), None);
         if platform_type == "DockerSwarm" {
-            use citadel_platforms::InventoryProjectionStore;
-            let snapshot = citadel_platforms::jobs::collect_inventory(
+            let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
                 &docker,
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id,
@@ -229,12 +222,7 @@ impl Fixture {
             )
             .await
             .unwrap();
-            citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
-                pool.clone(),
-            )
-            .persist(&snapshot)
-            .await
-            .unwrap();
+            persist_manager_snapshot(&pool, &snapshot).await;
         }
         let release_id = Uuid::now_v7();
         sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate,currentstackreleaseid,controlstate,rowversion) VALUES($1,$2,$3,'WebEditor','{}','{}',$4,'Processing',1)")
@@ -337,7 +325,6 @@ impl Fixture {
 #[ignore = "requires an isolated two-node Swarm, CITADEL_PHASE6_DOCKER_SOCKET and disposable CITADEL_PHASE6_DATABASE_URL"]
 async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recovers_interrupted_release()
  {
-    use citadel_platforms::InventoryProjectionStore;
     let f = Fixture::new("DockerSwarm").await;
     let compose = format!(
         "version: '3.8'\nservices:\n  web:\n    image: {}\n    command: ['sh', '-c', 'sleep 600']\n    configs:\n      - source: settings\n        target: /etc/settings\n    secrets:\n      - source: token\n        target: auth-token\n    deploy:\n      replicas: 2\n      placement:\n        max_replicas_per_node: 1\nconfigs:\n  settings:\n    file: ./settings.txt\nsecrets:\n  token:\n    file: ./token.txt\n",
@@ -431,7 +418,7 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
         .execute(&f.pool)
         .await
         .unwrap();
-    let snapshot = citadel_platforms::jobs::collect_inventory(
+    let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
         &f.docker,
         &citadel_platforms::jobs::InventoryCollectionTarget {
             platform_id: f.platform_id,
@@ -456,12 +443,7 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
         .map(|t| &t.node_id)
         .collect();
     assert_eq!(nodes.len(), 2, "both nodes must run a task");
-    citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
-        f.pool.clone(),
-    )
-    .persist(&snapshot)
-    .await
-    .unwrap();
+    persist_manager_snapshot(&f.pool, &snapshot).await;
     let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
         .bind(f.release_id)
         .fetch_one(&f.pool)
@@ -527,10 +509,9 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
 }
 
 async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
-    use citadel_platforms::InventoryProjectionStore;
     tokio::time::timeout(Duration::from_secs(90), async {
         loop {
-            let snapshot = citadel_platforms::jobs::collect_inventory(
+            let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
                 &f.docker,
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id: f.platform_id,
@@ -540,12 +521,7 @@ async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
             )
             .await
             .unwrap();
-            citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
-                f.pool.clone(),
-            )
-            .persist(&snapshot)
-            .await
-            .unwrap();
+            persist_manager_snapshot(&f.pool, &snapshot).await;
             let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
                 .bind(f.release_id)
                 .fetch_one(&f.pool)
@@ -559,4 +535,28 @@ async fn wait_for_live_stack_status(f: &Fixture, expected: &str) -> bool {
     })
     .await
     .is_ok()
+}
+
+async fn persist_manager_snapshot(
+    pool: &sqlx::PgPool,
+    snapshot: &citadel_platforms::RuntimeInventorySnapshot,
+) {
+    use citadel_platforms::jobs::{ResourceInventory, ResourceSnapshot};
+    let store = citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone());
+    for inventory in [
+        ResourceInventory::Platform(snapshot.info.clone()),
+        ResourceInventory::Swarm {
+            inventory: snapshot.swarm.clone().unwrap(),
+            networks: snapshot.networks.clone(),
+        },
+    ] {
+        store
+            .persist_resource(&ResourceSnapshot {
+                platform_id: snapshot.platform_id,
+                observed_at: snapshot.observed_at,
+                inventory,
+            })
+            .await
+            .unwrap();
+    }
 }

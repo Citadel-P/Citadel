@@ -10,6 +10,7 @@ use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 mod update_checks;
+mod update_gate;
 pub use update_checks::StackUpdateScanner;
 mod resolution_message;
 
@@ -65,6 +66,8 @@ pub struct StackProgress {
 
 pub trait StackChangeNotifier: Send + Sync {
     fn changed(&self, stack_id: Uuid, event: &'static str);
+    /// Fixed-cardinality diagnostic; contains no caller or resource data.
+    fn update_check_duplicate(&self) {}
 }
 
 #[derive(Default)]
@@ -73,6 +76,7 @@ pub struct NoopStackChangeNotifier;
 pub struct StackService {
     tasks: Arc<dyn crate::StackTaskSpawner>,
     update_scanner: Option<Arc<dyn StackUpdateScanner>>,
+    update_checks: update_gate::UpdateCheckGate,
     pub(crate) store: Arc<dyn StackRepository>,
     runtime: Arc<dyn StackRuntime>,
     source_materializer: Option<Arc<dyn StackSourceMaterializerPort>>,
@@ -98,6 +102,7 @@ impl StackService {
         Self {
             tasks,
             update_scanner: None,
+            update_checks: Default::default(),
             store,
             runtime,
             source_materializer: None,

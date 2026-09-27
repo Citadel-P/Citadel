@@ -82,6 +82,8 @@ impl ApplicationGroupReader {
         let containers = event
             .containers
             .get_or_try_init(|| async {
+                let _read =
+                    citadel_runtime::runtime_metrics::RuntimeWork::RealtimeSharedRead.start();
                 self.platforms
                     .containers_by_runtime_ids(platform, ids)
                     .await
@@ -116,9 +118,18 @@ impl ApplicationGroupReader {
         id: Option<Uuid>,
         specific: Option<SpecificPermission>,
     ) -> Result<(), RealtimeReadError> {
-        if p.is_administrator() {
-            return Ok(());
-        }
+        self.permission_with_lease(p, kind, id, specific, None)
+            .await
+    }
+
+    async fn permission_with_lease(
+        &self,
+        p: &ActorPrincipal,
+        kind: ResourceType,
+        id: Option<Uuid>,
+        specific: Option<SpecificPermission>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<(), RealtimeReadError> {
         use citadel_primitives::PermissionPolicy;
         let workload_requirement = match (kind, specific) {
             (ResourceType::Stack, None) => {
@@ -144,6 +155,21 @@ impl ApplicationGroupReader {
             }
             _ => None,
         };
+        if let Some(lease) = lease {
+            return lease
+                .authorize(
+                    &self.identity,
+                    p,
+                    kind,
+                    id,
+                    workload_requirement.map_or(PermissionLevel::Read, |r| r.level),
+                    workload_requirement.and_then(|r| r.specific).or(specific),
+                )
+                .await;
+        }
+        if p.is_administrator() {
+            return Ok(());
+        }
         let grant = match id {
             Some(id) => self.identity.permission_for_resource(p, kind, id).await,
             None => self.identity.global_permission(p, kind).await,
@@ -172,6 +198,7 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
         e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         if matches!(
             g.topic(),
@@ -211,7 +238,7 @@ impl ApplicationGroupReader {
             | Topic::BuildRun(..) => Build,
             Topic::BuildAgentPool(..) | Topic::BuildAgentPools => BuildAgentPool,
             Topic::ContainerInfo(..) => Platform, // resolved through its actual owner below
-            Topic::Activity { .. } => return self.activities(p, g).await,
+            Topic::Activity { .. } => return self.activities(p, g, lease).await,
             Topic::AlertEvents => {
                 let filter = citadel_alerts::AlertEventFilter {
                     page: 1,
@@ -284,10 +311,10 @@ impl ApplicationGroupReader {
                     .map_err(failure)?
                     .build_project_id,
             ),
-            Topic::ContainerInfo(..) => return self.container_info(p, g, e).await,
+            Topic::ContainerInfo(..) => return self.container_info(p, g, e, lease).await,
             _ => id,
         };
-        self.permission(
+        self.permission_with_lease(
             p,
             kind,
             permission_id,
@@ -296,6 +323,7 @@ impl ApplicationGroupReader {
                 Topic::BackupRestoreRun(..) | Topic::BackupRestoreRuns(..)
             )
             .then_some(SpecificPermission::Restore),
+            lease,
         )
         .await?;
         if matches!(
@@ -329,7 +357,8 @@ impl ApplicationGroupReader {
             }
         }
         if matches!(g.topic(), Topic::SwarmServices(..)) {
-            self.permission(p, Platform, id, None).await?;
+            self.permission_with_lease(p, Platform, id, None, lease)
+                .await?;
         }
         if matches!(g.topic(), Topic::DockerDaemon(..))
             && e.is_some_and(|event| event.payload["dockerResourceType"] == "nodeAgentCoverage")
@@ -354,29 +383,29 @@ impl ApplicationGroupReader {
                 .get_authorized(actor, admin, id.unwrap())
                 .await
                 .map_err(failure)?;
-            self.permission(p, Platform, Some(service.platform_id), None)
+            self.permission_with_lease(p, Platform, Some(service.platform_id), None, lease)
                 .await?;
         }
         let sample = e.is_some_and(|e| e.payload["dockerResourceType"] == "containerStats");
         match g.topic() {
             Topic::Platforms => {
                 if sample {
-                    let platform = self
-                        .platforms
-                        .get_platform(e.unwrap().platform_id.unwrap())
+                    let platform_id = e.unwrap().platform_id.unwrap();
+                    match self
+                        .permission_with_lease(p, Platform, Some(platform_id), None, lease)
                         .await
-                        .map(|value| {
-                            value.map(crate::api::resources::platforms::views::PlatformView::from)
-                        })
-                        .map_err(failure)?
-                        .ok_or(RealtimeReadError::Authorization)?;
-                    if self
-                        .permission(p, Platform, Some(platform.id), None)
-                        .await
-                        .is_err()
                     {
-                        return Ok(GroupSnapshot::default());
+                        Ok(()) => {}
+                        Err(RealtimeReadError::Authorization) => {
+                            return Ok(GroupSnapshot::default());
+                        }
+                        Err(error) => return Err(error),
                     }
+                    let platform =
+                        crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
+                            .await?
+                            .map(crate::api::resources::platforms::views::PlatformView::from)
+                            .ok_or(RealtimeReadError::Authorization)?;
                     let Some(stat) = platform.stats.as_ref().and_then(|s| s.first()) else {
                         return Ok(GroupSnapshot::default());
                     };
@@ -387,15 +416,16 @@ impl ApplicationGroupReader {
                     );
                 }
                 if let Some(platform_id) = e.and_then(|e| e.platform_id) {
-                    let allowed = match self.permission(p, Platform, Some(platform_id), None).await
+                    let allowed = match self
+                        .permission_with_lease(p, Platform, Some(platform_id), None, lease)
+                        .await
                     {
                         Ok(()) => true,
                         Err(RealtimeReadError::Authorization) => false,
                         Err(error) => return Err(error),
                     };
                     let platform = if allowed {
-                        self.platforms
-                            .get_platform(platform_id)
+                        crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
                             .await
                             .map_err(failure)?
                     } else {
@@ -439,17 +469,16 @@ impl ApplicationGroupReader {
                     }
                     return Ok(result);
                 }
-                let containers = self
-                    .platforms
-                    .list_containers(id.unwrap())
-                    .await
-                    .map(|value| {
-                        value
-                            .into_iter()
-                            .map(crate::api::resources::platforms::views::ContainerView::from)
-                            .collect::<Vec<_>>()
-                    })
-                    .map_err(failure)?;
+                let containers =
+                    crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
+                        .await
+                        .map(|value| {
+                            value
+                                .into_iter()
+                                .map(crate::api::resources::platforms::views::ContainerView::from)
+                                .collect::<Vec<_>>()
+                        })
+                        .map_err(failure)?;
                 if sample {
                     let stats = map_stats(e.unwrap(), &containers);
                     return event("ContainersStatsUpdated", stats);
@@ -462,7 +491,7 @@ impl ApplicationGroupReader {
                 }
                 event(
                     "ImagesInfoUpdated",
-                    json!({"images":self.platforms.list_images(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
+                    json!({"images":crate::realtime::shared_reads::images(&self.platforms, id.unwrap(), e).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
                 )
             }
             Topic::DockerDaemon(..) => {
@@ -489,17 +518,30 @@ impl ApplicationGroupReader {
                     }
                     return Ok(result);
                 }
+                if let Some(event) = e
+                    && let Some(snapshot) =
+                        crate::api::routes::platforms::realtime_resource_snapshot(
+                            &self.docker,
+                            p,
+                            id.unwrap(),
+                            lease,
+                            event,
+                        )
+                        .await?
+                {
+                    return Ok(snapshot);
+                }
                 let mut result = crate::api::routes::platforms::realtime_daemon_snapshot(
                     &self.docker,
                     p,
                     id.unwrap(),
+                    lease,
                 )
                 .await?;
                 result.rows.extend(
                     rows(
                         "ContainerEventReceived",
-                        self.platforms
-                            .list_containers(id.unwrap())
+                        crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
                             .await
                             .map(|value| {
                                 value
@@ -515,8 +557,7 @@ impl ApplicationGroupReader {
                 result.rows.extend(
                     rows(
                         "ImageEventReceived",
-                        self.platforms
-                            .list_images(id.unwrap())
+                        crate::realtime::shared_reads::images(&self.platforms, id.unwrap(), e)
                             .await
                             .map(|value| {
                                 value
@@ -529,9 +570,7 @@ impl ApplicationGroupReader {
                     )?
                     .rows,
                 );
-                if self
-                    .platforms
-                    .get_platform(id.unwrap())
+                if crate::realtime::shared_reads::platform(&self.platforms, id.unwrap(), e)
                     .await
                     .map_err(failure)?
                     .is_some_and(|platform| {
@@ -862,6 +901,7 @@ impl ApplicationGroupReader {
         p: &ActorPrincipal,
         g: &Group,
         e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         let id = Uuid::parse_str(g.reference().unwrap())
             .map_err(|_| RealtimeReadError::Authorization)?;
@@ -878,7 +918,12 @@ impl ApplicationGroupReader {
             (ResourceType::Deployment, container.deployment_id),
             (ResourceType::Stack, container.stack_id),
         ] {
-            if id.is_some() && self.permission(p, kind, id, None).await.is_ok() {
+            if id.is_some()
+                && self
+                    .permission_with_lease(p, kind, id, None, lease)
+                    .await
+                    .is_ok()
+            {
                 allowed = true;
                 break;
             }
@@ -898,6 +943,7 @@ impl ApplicationGroupReader {
         &self,
         p: &ActorPrincipal,
         g: &Group,
+        lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         let kind: citadel_activities::ActivityResourceType =
             serde_json::from_value(json!(g.reference()))
@@ -913,7 +959,8 @@ impl ApplicationGroupReader {
         } else {
             let resource = serde_json::from_value(serde_json::to_value(kind).map_err(failure)?)
                 .map_err(|_| RealtimeReadError::Authorization)?;
-            self.permission(p, resource, g.id(), None).await?;
+            self.permission_with_lease(p, resource, g.id(), None, lease)
+                .await?;
         }
         let records = self
             .activities
@@ -943,6 +990,16 @@ impl ApplicationGroupReader {
 }
 
 impl GroupReadPort for ApplicationGroupReader {
+    fn read_with_lease<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        e: Option<&'a PublishedRuntimeEvent>,
+        lease: &'a crate::realtime::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+        Box::pin(self.read_group(p, g, e, Some(lease)))
+    }
+
     fn terminal_invocation<'a>(
         &'a self,
         p: &'a ActorPrincipal,
@@ -982,7 +1039,7 @@ impl GroupReadPort for ApplicationGroupReader {
         g: &'a Group,
         e: Option<&'a PublishedRuntimeEvent>,
     ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
-        Box::pin(self.read_group(p, g, e))
+        Box::pin(self.read_group(p, g, e, None))
     }
 }
 

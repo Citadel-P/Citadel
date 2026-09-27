@@ -19,7 +19,7 @@ export const useNetworksGroup = (platformId?: string) => {
       lastDataRef.current = data.data;
       const snapshot = nodeSnapshotRef.current;
       const clusterNetworks = snapshot ? data.data.networks.filter((network) => !network.dockerNodeId) : [];
-      setNetworks(snapshot ? { ...data.data, networks: [...clusterNetworks, ...snapshot.networks] } : data.data);
+      setNetworks(snapshot ? { ...data.data, networks: [...clusterNetworks, ...(snapshot.networks ?? [])] } : data.data);
     }
   }, [data?.data]);
 
@@ -28,7 +28,7 @@ export const useNetworksGroup = (platformId?: string) => {
       if (!prev?.networks) return prev;
 
       const { network, eventType, actorId } = event;
-      const existingIndex = prev.networks.findIndex((n) => n.id === actorId);
+      const existingIndex = prev.networks.findIndex((n) => n.id === actorId && !n.dockerNodeId);
 
       switch (eventType) {
         case 'create':
@@ -38,13 +38,13 @@ export const useNetworksGroup = (platformId?: string) => {
               networks: [network, ...prev.networks],
             };
           }
-          break;
+          return { ...prev, networks: prev.networks.map((value, index) => index === existingIndex ? network : value) };
 
         case 'destroy':
           if (existingIndex !== -1) {
             return {
               ...prev,
-              networks: prev.networks.filter((n) => n.id !== actorId),
+              networks: prev.networks.filter((n) => n.id !== actorId || !!n.dockerNodeId),
             };
           }
           break;
@@ -59,12 +59,13 @@ export const useNetworksGroup = (platformId?: string) => {
 
   const onSwarmNodeLocalResourcesUpdated = useCallback(
     (snapshot: SwarmNodeLocalResourcesUpdate) => {
-      if (snapshot.platformId !== platformId) return;
+      if (snapshot.platformId !== platformId || !snapshot.networks) return;
+      const values = snapshot.networks;
       nodeSnapshotRef.current = snapshot;
       setNetworks((current) => {
         if (!current) return current;
         const clusterNetworks = current.networks.filter((network) => !network.dockerNodeId);
-        return { ...current, networks: [...clusterNetworks, ...snapshot.networks] };
+        return { ...current, networks: [...clusterNetworks, ...values] };
       });
     },
     [platformId],

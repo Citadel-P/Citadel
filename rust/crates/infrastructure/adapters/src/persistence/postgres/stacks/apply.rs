@@ -180,6 +180,11 @@ impl PostgresStackRepository {
                 operation: operation.to_owned(),
                 service_names: options.service_names,
             };
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::StackRecovery.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(claim)
         })

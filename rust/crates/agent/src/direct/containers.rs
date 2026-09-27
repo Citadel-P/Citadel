@@ -1,7 +1,5 @@
 use super::{Runtime, container_mapping as mapping, docker_error, runtime_error};
-use citadel_adapters::connectors::docker::{
-    DockerExecError, DockerExecEvent, LocalDockerSampler, container_summary,
-};
+use citadel_adapters::connectors::docker::{DockerExecError, DockerExecEvent, container_summary};
 use citadel_contracts::citadel::{
     containers::v1::*,
     shared_models::v1::{ContainerMessage, ContainerStatMessage, InspectContainerResponse},
@@ -22,17 +20,12 @@ impl Runtime {
         if ids.ids.iter().any(|id| id.trim().is_empty()) {
             return Err(Status::invalid_argument("Container ids must not be empty"));
         }
-        let (signal, timeout) = match action {
-            ContainerAction::Stop => (Some("SIGTERM"), Some(10)),
-            ContainerAction::Restart => (Some("SIGINT"), Some(5)),
-            _ => (None, None),
-        };
         let count = ids.ids.len();
         let results = futures_util::stream::iter(ids.ids.into_iter().map(|id| {
             let docker = self.docker.clone();
             async move {
                 docker
-                    .change_container_state_with_options(&id, action, signal, timeout)
+                    .change_container_state(&id, action)
                     .await
                     .map_err(|e| (id, docker_error(e)))
             }
@@ -40,6 +33,7 @@ impl Runtime {
         .buffer_unordered(8)
         .collect::<Vec<_>>()
         .await;
+        self.samples.invalidate();
         let failures: Vec<_> = results.into_iter().filter_map(Result::err).collect();
         if !failures.is_empty() {
             let details = failures
@@ -116,16 +110,19 @@ impl container_service_server::ContainerService for Runtime {
         if r.ids.iter().any(|id| id.trim().is_empty()) {
             return Err(Status::invalid_argument("Container ids must not be empty"));
         }
+        self.samples.invalidate();
         for id in r.ids {
-            self.docker
+            let result = self
+                .docker
                 .delete_container_with_options(
                     &id,
                     r.v.unwrap_or(false),
                     r.force.unwrap_or(false),
                     r.link.unwrap_or(false),
                 )
-                .await
-                .map_err(docker_error)?;
+                .await;
+            self.samples.invalidate();
+            result.map_err(docker_error)?;
         }
         Ok(Response::new(()))
     }
@@ -247,7 +244,7 @@ impl container_service_server::ContainerService for Runtime {
         r: Request<StreamContainersStatsRequest>,
     ) -> Result<Response<Self::StreamContainersStatsStream>, Status> {
         let interval = super::interval(r.into_inner().fetch_interval_ms);
-        let mut sampler = LocalDockerSampler::new(self.docker.clone(), 8);
+        let sampler = self.samples.clone();
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
         Ok(Response::new(Box::pin(async_stream::try_stream! {
@@ -273,7 +270,7 @@ impl container_service_server::ContainerService for Runtime {
             let _guard=guard;
             let filter=serde_json::json!({"id":[r.container_id]}).to_string();
             loop {
-                let mut models=docker.list_container_models(Some(true),None,Some(true),Some(&filter)).await.map_err(docker_error)?;
+                let mut models=docker.list_container_models(Some(true),None,None,Some(&filter)).await.map_err(docker_error)?;
                 let model=models.pop().ok_or_else(||Status::not_found("Container not found"))?;
                 let mut c=summary(model)?;
                 c.container_stat_message=Some(if c.state==2 {docker.sample_container_stats(&c.id,&cancel).await.map(stat).unwrap_or_default()}else{ContainerStatMessage::default()});
@@ -347,17 +344,20 @@ impl Runtime {
 }
 
 pub(super) fn summary(
-    model: citadel_docker_api::models::ContainerSummary,
+    mut model: citadel_docker_api::models::ContainerSummary,
 ) -> Result<ContainerMessage, Status> {
-    let c = container_summary(model.clone().try_into().map_err(docker_error)?);
+    let command = model.command.take().unwrap_or_default();
+    let size_rw = model.size_rw.flatten().unwrap_or_default();
+    let size_root_fs = model.size_root_fs.flatten().unwrap_or_default();
+    let c = container_summary(model.try_into().map_err(docker_error)?);
     Ok(ContainerMessage {
         id: c.id,
         image: c.image,
         image_id: c.image_id,
-        command: model.command.unwrap_or_default(),
+        command,
         created: c.created,
-        size_rw: model.size_rw.flatten().unwrap_or_default(),
-        size_root_fs: model.size_root_fs.flatten().unwrap_or_default(),
+        size_rw,
+        size_root_fs,
         status: c.status,
         state: mapping::state(&c.state),
         name: c.name,

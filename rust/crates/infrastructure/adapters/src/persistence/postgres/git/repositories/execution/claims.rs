@@ -74,6 +74,12 @@ LIMIT $1
                 .await
                 .map_err(storage)?;
             }
+            if !rows.is_empty() {
+                sqlx::query("SELECT pg_notify('citadel_git_work','')")
+                    .execute(&mut *transaction)
+                    .await
+                    .map_err(storage)?;
+            }
             transaction.commit().await.map_err(storage)?;
             Ok(rows.len())
         })
@@ -86,30 +92,8 @@ impl PostgresGitRepositoryExecutionPersistence {
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<Option<GitSyncClaim>, GitRepositoryExecutionError>> {
         Box::pin(async move {
+            self.recover_stale(stale_before).await?;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            sqlx::query(
-                r#"
-WITH candidates AS MATERIALIZED (
-  SELECT repository.id FROM gitrepositories repository
-  WHERE EXISTS (SELECT 1 FROM gitrepositoryrefs reference
-                WHERE reference.gitrepositoryid=repository.id AND reference.status='Syncing' AND reference.lastsyncedat<$1)
-  ORDER BY repository.id FOR NO KEY UPDATE SKIP LOCKED LIMIT 100
-), stale AS (
-  UPDATE gitrepositoryrefs reference
-  SET status='Pending', lasterror='Previous synchronization was interrupted.'
-  FROM candidates WHERE reference.gitrepositoryid=candidates.id
-    AND reference.status='Syncing' AND reference.lastsyncedat<$1
-  RETURNING reference.gitrepositoryid
-)
-UPDATE gitrepositories
-SET controlstate='Queued', status='Pending', controlstartedat=NULL, rowversion=rowversion+1
-WHERE id IN (SELECT gitrepositoryid FROM stale)
-"#,
-            )
-            .bind(stale_before)
-            .execute(&mut *transaction)
-            .await
-            .map_err(storage)?;
             let row = sqlx::query(
                 r#"
 SELECT reference.id AS referenceid, reference.branch, reference.synctrigger, reference.resolvedcommitsha, reference.lasterror,
@@ -186,5 +170,46 @@ impl PostgresGitRepositoryExecutionPersistence {
         message: &'a str,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         Box::pin(async move { finish_sync(&self.pool, claim, None, Some(message)).await })
+    }
+}
+
+impl PostgresGitRepositoryExecutionPersistence {
+    // Recovery is bounded independently of claim throughput. A failed recovery
+    // is retried, and clones of this repository share the same clock.
+    async fn recover_stale(
+        &self,
+        stale_before: DateTime<Utc>,
+    ) -> Result<(), GitRepositoryExecutionError> {
+        let mut last = self.last_recovery.lock().await;
+        if last.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(60)) {
+            return Ok(());
+        }
+        let mut transaction = self.pool.begin().await.map_err(storage)?;
+        sqlx::query(
+                r#"
+WITH candidates AS MATERIALIZED (
+  SELECT repository.id FROM gitrepositories repository
+  WHERE EXISTS (SELECT 1 FROM gitrepositoryrefs reference
+                WHERE reference.gitrepositoryid=repository.id AND reference.status='Syncing' AND reference.lastsyncedat<$1)
+  ORDER BY repository.id FOR NO KEY UPDATE SKIP LOCKED LIMIT 100
+), stale AS (
+  UPDATE gitrepositoryrefs reference
+  SET status='Pending', lasterror='Previous synchronization was interrupted.'
+  FROM candidates WHERE reference.gitrepositoryid=candidates.id
+    AND reference.status='Syncing' AND reference.lastsyncedat<$1
+  RETURNING reference.gitrepositoryid
+)
+UPDATE gitrepositories
+SET controlstate='Queued', status='Pending', controlstartedat=NULL, rowversion=rowversion+1
+WHERE id IN (SELECT gitrepositoryid FROM stale)
+"#,
+            )
+            .bind(stale_before)
+            .execute(&mut *transaction)
+            .await
+            .map_err(storage)?;
+        transaction.commit().await.map_err(storage)?;
+        *last = Some(tokio::time::Instant::now());
+        Ok(())
     }
 }

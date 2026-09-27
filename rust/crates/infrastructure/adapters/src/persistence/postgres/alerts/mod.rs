@@ -36,3 +36,5 @@ mod validation;
 use citadel_alerts::rules::evaluation::{observation_matches, rule_applies};
 use delivery::enqueue_deliveries;
 use validation::*;
+
+mod configuration;

@@ -1,3 +1,4 @@
+use citadel_platforms::PlatformInfoPort;
 use std::ffi::OsString;
 
 use std::sync::Arc;
@@ -1137,7 +1138,6 @@ impl DockerResticBackupExecutor {
                 .get(&EdgeTarget::platform(platform_id))
                 .map_err(|error| error.to_string())?;
             if let Some(expected) = node_id {
-                use citadel_platforms::PlatformRuntimePort;
                 let info = crate::connectors::edge::EdgeRuntime {
                     session: session.clone(),
                 }

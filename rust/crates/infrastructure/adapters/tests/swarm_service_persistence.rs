@@ -111,7 +111,28 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         )
         .await
         .unwrap();
+    assert!(
+        store
+            .active_operation_claims(None, 25)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     store.mark_attempted(&claim).await.unwrap();
+    assert!(
+        store
+            .active_operation_claims(None, 25)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let mut listener = sqlx::postgres::PgListener::connect(&database_url)
+        .await
+        .unwrap();
+    listener
+        .listen(citadel_runtime::RuntimeSignal::SwarmServiceOperations.channel())
+        .await
+        .unwrap();
     let accepted = RuntimeServiceResult {
         docker_service_id: format!("docker-{suffix}"),
         version_index: 4,
@@ -123,6 +144,20 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         warnings: Vec::new(),
     };
     store.mark_accepted(&claim, &accepted).await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let active = store.active_operation_claims(None, 1).await.unwrap();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].1.operation_id, claim.operation_id);
+    assert!(
+        store
+            .active_operation_claims(Some(created.id), 1)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         store
             .stale_operation_claims(i64::MAX, 10)
@@ -140,6 +175,13 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         .complete_operation(actor, &claim, &completed)
         .await
         .unwrap();
+    assert!(
+        store
+            .active_operation_claims(None, 25)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let current = store.get_authorized(actor, true, created.id).await.unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, String>("SELECT health FROM swarmservices WHERE id=$1")

@@ -33,12 +33,15 @@ pub enum RuntimeWork {
     ImageScan,
     HostDisk,
     GitSync,
+    GitSyncStateRead,
+    StackUpdateDuplicate,
     StackUpdates,
     StackWebhooks,
     StackRecovery,
     StackDrift,
     DeploymentRecovery,
     ServiceRecovery,
+    ServiceObservation,
     Readiness,
     EdgeInventory,
     ContainerRecovery,
@@ -46,13 +49,16 @@ pub enum RuntimeWork {
     Pruning,
     AgentStats,
     NotificationReconnect,
-    // Projection units count matched updates, not semantic changes.
     DockerRawEvent,
     AgentDaemonEvent,
     ContainerEventIgnored,
     ContainerEventInspect,
     ContainerEventApply,
+    // Since CPU refactor Phase 5, units count committed semantic changes (Local/Direct).
     ContainerEventProjection,
+    // Iterations: identity hint lookups; units: hits. SQL still validates every hint.
+    RuntimeIdentityLookup,
+    RuntimeIdentityFallback,
     InventoryRequestContainer,
     InventoryRequestNetwork,
     InventoryRequestOther,
@@ -61,6 +67,24 @@ pub enum RuntimeWork {
     InventoryLocalEvent,
     InventoryAgentEvent,
     InventoryRecovery,
+    ContainerRefreshRetry,
+    ImageRefreshRetry,
+    ContainerRefreshDiscarded,
+    ImageRefreshDiscarded,
+    PlatformRefreshRetry,
+    PlatformRefreshDiscarded,
+    NetworkRefreshRetry,
+    NetworkRefreshDiscarded,
+    VolumeRefreshRetry,
+    VolumeRefreshDiscarded,
+    SwarmRefreshRetry,
+    SwarmRefreshDiscarded,
+    EventPlatformRefresh,
+    EventContainersRefresh,
+    EventImagesRefresh,
+    EventNetworksRefresh,
+    EventVolumesRefresh,
+    EventSwarmRefresh,
     DockerContainerList,
     DockerFilteredContainerList,
     DockerImageList,
@@ -68,11 +92,36 @@ pub enum RuntimeWork {
     DockerVolumeList,
     ContainerMutation,
     ContainerVerification,
+    ContainerRuntimeResolve,
+    ContainerObservationBatch,
     ContainerRecoveryQuery,
-    HealthDeploymentRecovery,
+    HealthDeploymentRecovery, // Retained for dashboard compatibility; no probe-driven work.
+    PlatformLifecycle,
+    LifecycleDeploymentRecovery,
     StatsCommit,
     StatsCommittedSamples,
     StatsRetry,
+    PlatformStatsIngress,
+    PlatformStatsFlush,
+    PlatformStatsStale,
+    ContainerStatsIngress,
+    ContainerStatsFlush,
+    ContainerStatsStale,
+    StatsShutdownDrop,
+
+    AuthorizationScopeLookup,
+    AuthorizationResourceLookup,
+    AuthorizationNegativeHit,
+    AuthorizationScopeQuery,
+    AuthorizationGlobalQuery,
+    AuthorizationResourceQuery,
+    AuthorizationInvalidation,
+    RealtimeAuthentication,
+    RealtimeAuthorizationInvalidation,
+    RealtimePermissionLookup,
+    RealtimePermissionMiss,
+    RealtimeSharedRead,
+    RealtimeObservationInput,
     RealtimeRuntimeInvalidation,
 }
 
@@ -103,12 +152,15 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::ImageScan,
     RuntimeWork::HostDisk,
     RuntimeWork::GitSync,
+    RuntimeWork::GitSyncStateRead,
+    RuntimeWork::StackUpdateDuplicate,
     RuntimeWork::StackUpdates,
     RuntimeWork::StackWebhooks,
     RuntimeWork::StackRecovery,
     RuntimeWork::StackDrift,
     RuntimeWork::DeploymentRecovery,
     RuntimeWork::ServiceRecovery,
+    RuntimeWork::ServiceObservation,
     RuntimeWork::Readiness,
     RuntimeWork::EdgeInventory,
     RuntimeWork::ContainerRecovery,
@@ -122,6 +174,8 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::ContainerEventInspect,
     RuntimeWork::ContainerEventApply,
     RuntimeWork::ContainerEventProjection,
+    RuntimeWork::RuntimeIdentityLookup,
+    RuntimeWork::RuntimeIdentityFallback,
     RuntimeWork::InventoryRequestContainer,
     RuntimeWork::InventoryRequestNetwork,
     RuntimeWork::InventoryRequestOther,
@@ -130,6 +184,24 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::InventoryLocalEvent,
     RuntimeWork::InventoryAgentEvent,
     RuntimeWork::InventoryRecovery,
+    RuntimeWork::ContainerRefreshRetry,
+    RuntimeWork::ImageRefreshRetry,
+    RuntimeWork::ContainerRefreshDiscarded,
+    RuntimeWork::ImageRefreshDiscarded,
+    RuntimeWork::PlatformRefreshRetry,
+    RuntimeWork::PlatformRefreshDiscarded,
+    RuntimeWork::NetworkRefreshRetry,
+    RuntimeWork::NetworkRefreshDiscarded,
+    RuntimeWork::VolumeRefreshRetry,
+    RuntimeWork::VolumeRefreshDiscarded,
+    RuntimeWork::SwarmRefreshRetry,
+    RuntimeWork::SwarmRefreshDiscarded,
+    RuntimeWork::EventPlatformRefresh,
+    RuntimeWork::EventContainersRefresh,
+    RuntimeWork::EventImagesRefresh,
+    RuntimeWork::EventNetworksRefresh,
+    RuntimeWork::EventVolumesRefresh,
+    RuntimeWork::EventSwarmRefresh,
     RuntimeWork::DockerContainerList,
     RuntimeWork::DockerFilteredContainerList,
     RuntimeWork::DockerImageList,
@@ -137,11 +209,35 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::DockerVolumeList,
     RuntimeWork::ContainerMutation,
     RuntimeWork::ContainerVerification,
+    RuntimeWork::ContainerRuntimeResolve,
+    RuntimeWork::ContainerObservationBatch,
     RuntimeWork::ContainerRecoveryQuery,
     RuntimeWork::HealthDeploymentRecovery,
+    RuntimeWork::PlatformLifecycle,
+    RuntimeWork::LifecycleDeploymentRecovery,
     RuntimeWork::StatsCommit,
     RuntimeWork::StatsCommittedSamples,
     RuntimeWork::StatsRetry,
+    RuntimeWork::PlatformStatsIngress,
+    RuntimeWork::PlatformStatsFlush,
+    RuntimeWork::PlatformStatsStale,
+    RuntimeWork::ContainerStatsIngress,
+    RuntimeWork::ContainerStatsFlush,
+    RuntimeWork::ContainerStatsStale,
+    RuntimeWork::StatsShutdownDrop,
+    RuntimeWork::AuthorizationScopeLookup,
+    RuntimeWork::AuthorizationResourceLookup,
+    RuntimeWork::AuthorizationNegativeHit,
+    RuntimeWork::AuthorizationScopeQuery,
+    RuntimeWork::AuthorizationGlobalQuery,
+    RuntimeWork::AuthorizationResourceQuery,
+    RuntimeWork::AuthorizationInvalidation,
+    RuntimeWork::RealtimeAuthentication,
+    RuntimeWork::RealtimeAuthorizationInvalidation,
+    RuntimeWork::RealtimePermissionLookup,
+    RuntimeWork::RealtimePermissionMiss,
+    RuntimeWork::RealtimeSharedRead,
+    RuntimeWork::RealtimeObservationInput,
     RuntimeWork::RealtimeRuntimeInvalidation,
 ];
 
@@ -154,6 +250,9 @@ struct Counters {
     failures: AtomicU64,
     wait_us: AtomicU64,
     saturated: AtomicU64,
+    buffered: AtomicU64,
+    queued: AtomicU64,
+    successes: AtomicU64,
 }
 static COUNTERS: [Counters; FAMILIES.len()] = [const {
     Counters {
@@ -165,10 +264,29 @@ static COUNTERS: [Counters; FAMILIES.len()] = [const {
         failures: AtomicU64::new(0),
         wait_us: AtomicU64::new(0),
         saturated: AtomicU64::new(0),
+        buffered: AtomicU64::new(0),
+        queued: AtomicU64::new(0),
+        successes: AtomicU64::new(0),
     }
 }; FAMILIES.len()];
 
 impl RuntimeWork {
+    pub fn success(self) {
+        COUNTERS[self as usize]
+            .successes
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn buffered(self, count: usize) {
+        COUNTERS[self as usize]
+            .buffered
+            .store(count as u64, Ordering::Relaxed);
+    }
+    pub fn queued(self, count: usize) {
+        COUNTERS[self as usize]
+            .queued
+            .store(count as u64, Ordering::Relaxed);
+    }
+
     pub fn permit_wait(self, duration: std::time::Duration, saturated: bool) {
         let counters = &COUNTERS[self as usize];
         counters.wait_us.fetch_add(
@@ -233,6 +351,12 @@ pub fn render_runtime_metrics(output: &mut String) {
                 "saturation_total",
                 counters.saturated.load(Ordering::Relaxed),
             ),
+            ("buffered", counters.buffered.load(Ordering::Relaxed)),
+            ("queued", counters.queued.load(Ordering::Relaxed)),
+            (
+                "successes_total",
+                counters.successes.load(Ordering::Relaxed),
+            ),
             ("iterations_total", started),
             ("in_flight", started.saturating_sub(finished)),
             (
@@ -264,6 +388,9 @@ mod tests {
         let family = RuntimeWork::AgentDaemonEvent;
         family.units(3);
         family.failures(1);
+        family.success();
+        family.buffered(5);
+        family.queued(2);
         family.permit_wait(std::time::Duration::from_micros(25), true);
         let timer = family.start();
         let mut active = String::new();
@@ -274,6 +401,9 @@ mod tests {
         render_runtime_metrics(&mut finished);
         for (name, value) in [
             ("units_total", 3),
+            ("successes_total", 1),
+            ("buffered", 5),
+            ("queued", 2),
             ("failures_total", 1),
             ("permit_wait_microseconds_total", 25),
             ("saturation_total", 1),
@@ -299,6 +429,6 @@ mod tests {
                 rendered.contains(&format!("citadel_runtime_units_total{{family=\"{name}\"}}"))
             );
         }
-        assert_eq!(rendered.lines().count(), FAMILIES.len() * 8);
+        assert_eq!(rendered.lines().count(), FAMILIES.len() * 11);
     }
 }

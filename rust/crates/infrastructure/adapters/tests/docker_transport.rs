@@ -1,10 +1,9 @@
 #![cfg(unix)]
-
 use std::path::PathBuf;
 use std::time::Duration;
 
 use citadel_adapters::connectors::docker::DockerClient;
-use citadel_platforms::{CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort};
+use citadel_platforms::{CreateRuntimeNetwork, CreateRuntimeVolume};
 use futures_util::StreamExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
@@ -14,6 +13,8 @@ use uuid::Uuid;
 mod container_mutations;
 #[path = "docker_transport/distribution.rs"]
 mod distribution;
+#[path = "docker_transport/event_observation.rs"]
+mod event_observation;
 #[path = "docker_transport/generated_boundary.rs"]
 mod generated_boundary;
 
@@ -22,25 +23,8 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     let path = temp_socket();
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
-        for (expected, body) in [
-            (
-                "GET /version ",
-                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
-            ),
-            (
-                "GET /v1.49/volumes ",
-                r#"{"Volumes":[{"Name":"data"},{"Name":"empty"},{"Name":"unknown"}]}"#,
-            ),
-            (
-                "GET /v1.49/system/df?type=volume ",
-                r#"{"Volumes":[{"Name":"empty","UsageData":{"Size":0,"RefCount":0}},{"Name":"data","UsageData":{"Size":4096,"RefCount":2}}]}"#,
-            ),
-            ("GET /v1.49/volumes/data ", r#"{"Name":"data"}"#),
-            (
-                "GET /v1.49/system/df?type=volume ",
-                r#"{"Volumes":[{"Name":"data","UsageData":{"Size":8192,"RefCount":2}}]}"#,
-            ),
-        ] {
+        let mut usage_calls = 0;
+        for _ in 0..6 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = Vec::new();
             let mut buffer = [0; 2048];
@@ -49,7 +33,32 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
                 assert!(n > 0 && bytes.len() < 8192);
                 bytes.extend_from_slice(&buffer[..n]);
             }
-            assert!(String::from_utf8_lossy(&bytes).starts_with(expected));
+            let request = String::from_utf8_lossy(&bytes);
+            let body = if request.starts_with("GET /version ") {
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
+            } else if request.starts_with("GET /v1.49/volumes ") {
+                r#"{"Volumes":[{"Name":"data"},{"Name":"empty"},{"Name":"unknown"}]}"#
+            } else if request.starts_with("GET /v1.49/volumes/data ") {
+                r#"{"Name":"data"}"#
+            } else if request.starts_with("GET /v1.49/system/df?type=volume ") {
+                usage_calls += 1;
+                if usage_calls == 1 {
+                    r#"{"Volumes":[{"Name":"empty","UsageData":{"Size":0,"RefCount":0}},{"Name":"data","UsageData":{"Size":4096,"RefCount":2}}]}"#
+                } else {
+                    r#"{"Volumes":[{"Name":"data","UsageData":{"Size":8192,"RefCount":2}}]}"#
+                }
+            } else {
+                assert!(
+                    request.starts_with("GET /v1.49/containers/json?all=true&filters="),
+                    "{request}"
+                );
+                assert!(
+                    urlencoding::decode(&request)
+                        .unwrap()
+                        .contains(r#""volume":["data"]"#)
+                );
+                r#"[{"Id":"web","Names":["/web"],"Image":"alpine","ImageID":"image","State":"running","NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":""}}},"Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]"#
+            };
             socket
                 .write_all(
                     format!(
@@ -64,7 +73,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     });
     let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
     let cancel = tokio_util::sync::CancellationToken::new();
-    let volumes = citadel_platforms::PlatformInventoryPort::list_volumes(&client, &cancel)
+    let volumes = citadel_platforms::VolumeInventoryPort::list_volumes(&client, &cancel)
         .await
         .unwrap();
     assert_eq!(volumes[0].usage_data.as_ref().unwrap()["Size"], 4096);
@@ -73,10 +82,19 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     assert!(!volumes[1].in_use);
     assert!(volumes[2].usage_data.is_none());
     let inspected =
-        citadel_platforms::PlatformInventoryPort::inspect_volume(&client, "data", &cancel)
+        citadel_platforms::VolumeObservationPort::inspect_volume(&client, "data", &cancel)
             .await
             .unwrap();
     assert_eq!(inspected.usage_data.unwrap()["Size"], 8192);
+    assert_eq!(inspected.containers[0]["state"], "Running");
+    assert_eq!(
+        inspected.containers[0]["networks"]["Mixed.Network"],
+        "Mixed.Network"
+    );
+    assert_eq!(
+        inspected.containers[0]["ports"]["80/tcp"][0]["hostIP"],
+        "::"
+    );
     server.await.unwrap();
     std::fs::remove_file(path).unwrap();
 }
@@ -146,7 +164,7 @@ async fn network_create_preserves_ip_versions_and_omits_empty_ipam_rows() {
         "ipam":{"driver":"default", "config":[{}, {}, {"subnet":"10.42.0.0/24"}]}
     }))
     .unwrap();
-    let created = PlatformResourceMutationPort::create_network(
+    let created = citadel_platforms::NetworkMutationPort::create_network(
         &client,
         &input,
         &tokio_util::sync::CancellationToken::new(),
@@ -178,7 +196,7 @@ async fn image_inspect_combines_generated_details_history_and_filtered_container
             let body = if request.starts_with("GET /version ") {
                 r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
             } else if request.starts_with("GET /v1.49/images/sha256%3Aabc/json ") {
-                r#"{"Id":"sha256:abc","RepoTags":["registry:5000/app:v1"],"Config":{"Env":null,"Cmd":null,"Volumes":{"/data":{}},"ExposedPorts":{"80/tcp":{}},"Labels":null}}"#
+                r#"{"Id":"sha256:abc","RepoTags":["registry:5000/app:v1"],"Config":{"User":"1000","WorkingDir":"/work","Entrypoint":["/entry"],"StopSignal":"SIGQUIT","Env":null,"Cmd":null,"Volumes":{"/data":{}},"ExposedPorts":{"80/tcp":{}},"Labels":null}}"#
             } else if request.starts_with("GET /v1.49/images/sha256%3Aabc/history ") {
                 r#"[{"Id":"layer","Created":123,"CreatedBy":"COPY","Size":42,"Comment":"base"}]"#
             } else {
@@ -212,6 +230,10 @@ async fn image_inspect_combines_generated_details_history_and_filtered_container
             .unwrap();
     assert_eq!(image.name, "registry:5000/app");
     assert_eq!(image.tag, "v1");
+    assert_eq!(image.user.as_deref(), Some("1000"));
+    assert_eq!(image.working_dir.as_deref(), Some("/work"));
+    assert_eq!(image.entry_point, ["/entry"]);
+    assert_eq!(image.stop_signal.as_deref(), Some("SIGQUIT"));
     assert!(image.env.is_empty() && image.labels.is_empty());
     assert_eq!(image.layers[0].size, 42);
     assert_eq!(image.containers[0].volumes, vec!["data"]);
@@ -598,7 +620,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     assert_eq!(client.list_swarm_configs().await.unwrap()[0].id, "config-1");
     let cancellation = tokio_util::sync::CancellationToken::new();
     assert_eq!(
-        PlatformResourceMutationPort::create_network(
+        citadel_platforms::NetworkMutationPort::create_network(
             &client,
             &CreateRuntimeNetwork {
                 name: "created".into(),
@@ -622,11 +644,15 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
         .id,
         "network-created"
     );
-    PlatformResourceMutationPort::delete_network(&client, "network-created", &cancellation)
-        .await
-        .unwrap();
+    citadel_platforms::NetworkMutationPort::delete_network(
+        &client,
+        "network-created",
+        &cancellation,
+    )
+    .await
+    .unwrap();
     assert_eq!(
-        PlatformResourceMutationPort::create_volume(
+        citadel_platforms::VolumeMutationPort::create_volume(
             &client,
             &CreateRuntimeVolume {
                 name: "created".into(),
@@ -641,7 +667,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
         .name,
         "created"
     );
-    PlatformResourceMutationPort::delete_volume(&client, "created", false, &cancellation)
+    citadel_platforms::VolumeMutationPort::delete_volume(&client, "created", false, &cancellation)
         .await
         .unwrap();
     let mut events = client.events(None, None).await.unwrap();
@@ -650,7 +676,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let mut stats = client.container_stats("container-fixture").await.unwrap();
     assert_eq!(
         stats.next().await.unwrap().unwrap().memory_stats.usage,
-        4096
+        Some(4096)
     );
     drop(stats);
     assert_eq!(
@@ -660,7 +686,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             .unwrap()
             .memory_stats
             .usage,
-        4096
+        Some(4096)
     );
 
     let requests = server.await.unwrap();
@@ -904,8 +930,7 @@ async fn read_terminal_request(socket: &mut tokio::net::UnixStream) -> (String, 
 }
 
 #[tokio::test]
-async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
-    use citadel_platforms::PlatformRuntimePort;
+async fn platform_metadata_is_narrow_while_live_stats_follow_visible_lists() {
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -933,6 +958,12 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
             }
             let request = String::from_utf8(bytes).unwrap();
             let route = request.split_whitespace().nth(1).unwrap();
+            if server_phase.load(Ordering::Acquire) == 10 {
+                assert!(
+                    matches!(route, "/version" | "/v1.49/info"),
+                    "metadata enumerated resources: {route}"
+                );
+            }
             let mut status = "200 OK";
             let body = match route {
                 "/version" => r#"{"Version":"fixture","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#.to_owned(),
@@ -963,7 +994,10 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
         }
     });
     let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
-    let info = PlatformRuntimePort::get_info(&client, &stop).await.unwrap();
+    phase.store(10, Ordering::Release);
+    let info = citadel_platforms::PlatformInfoPort::get_info(&client, &stop)
+        .await
+        .unwrap();
     assert_eq!(
         (
             info.container_count,
@@ -971,8 +1005,9 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
             info.containers_paused,
             info.containers_stopped
         ),
-        (20, 8, 1, 9)
+        (57, 47, 0, 10)
     );
+    phase.store(0, Ordering::Release);
     let stats = client.platform_stats().await.unwrap();
     assert_eq!((stats.network_count, stats.volume_count), (2, 3));
     assert_eq!(
@@ -989,9 +1024,13 @@ async fn platform_counts_follow_visible_lists_in_info_and_live_stats() {
         (20, 8, 1, 9)
     );
     phase.store(1, Ordering::Release);
-    let mut stream = PlatformRuntimePort::stream_stats(&client, Duration::from_millis(10), &stop)
-        .await
-        .unwrap();
+    let mut stream = citadel_platforms::PlatformStatsPort::stream_stats(
+        &client,
+        Duration::from_millis(10),
+        &stop,
+    )
+    .await
+    .unwrap();
     let stats = tokio::time::timeout(Duration::from_secs(2), stream.next())
         .await
         .unwrap()

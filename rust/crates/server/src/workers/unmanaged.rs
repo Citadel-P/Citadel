@@ -41,8 +41,8 @@ async fn listen(
     pending: &mut HashMap<Request, Instant>,
     listener: &mut sqlx::postgres::PgListener,
 ) -> Result<(), sqlx::Error> {
-    let mut tick = tokio::time::interval(Duration::from_secs(1));
     loop {
+        let deadline = pending.values().copied().min();
         tokio::select! {
             ()=token.cancelled()=>return Ok(()),
             notification=listener.recv()=> {
@@ -51,7 +51,13 @@ async fn listen(
                     schedule(pending, &mut request, Instant::now());
                 }
             }
-            _=tick.tick()=> {
+            ()=async {
+                // No periodic wakeup when the grace queue is empty.
+                match deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            }=> {
                 let due: Vec<_> = pending.iter().filter(|(_, due)| **due <= Instant::now()).map(|(request,_)|request.clone()).take(256).collect();
                 for request in due {
                     match observe(pool, alerts, &request).await {

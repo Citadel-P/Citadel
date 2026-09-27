@@ -2,7 +2,7 @@
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
-use citadel_platforms::{PlatformInventoryPort, PlatformResourceMutationPort};
+use citadel_platforms::PlatformInventoryPort;
 use citadel_stacks::{
     ComposeProjectRuntimeService, StackAction, StackApplySource, StackDeletionClaim, StackDrift,
     StackDriftPolicy, StackError, StackImportClaim, StackImportKind, StackOperationClaim,
@@ -421,12 +421,19 @@ impl StackRuntime for StackRuntimeRouter {
                         .await
                         .map_err(runtime_io)?;
                 }
-                let networks = PlatformInventoryPort::list_networks(&self.docker, cancellation)
-                    .await
-                    .map_err(agent_error)?;
+                let networks = citadel_platforms::NetworkInventoryPort::list_networks(
+                    &self.docker,
+                    cancellation,
+                )
+                .await
+                .map_err(agent_error)?;
                 self.delete_compose_networks(networks, &claim.project_name, |id| async move {
-                    PlatformResourceMutationPort::delete_network(&self.docker, &id, cancellation)
-                        .await
+                    citadel_platforms::NetworkMutationPort::delete_network(
+                        &self.docker,
+                        &id,
+                        cancellation,
+                    )
+                    .await
                 })
                 .await
             } else {

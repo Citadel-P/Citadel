@@ -109,15 +109,24 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
     let (sender, _receiver) = bounded_channel(16, QueueOverflowPolicy::Wait);
     let targets = PlatformRuntimeRegistry::new(pool.clone(), Some(base.clone()));
     targets.refresh().await.unwrap();
+    let mut stats_supervisor = citadel_runtime::TaskSupervisor::new(token.clone());
+    let stats = crate::workers::statistics::register(
+        &mut stats_supervisor,
+        &token,
+        pool.clone(),
+        None,
+        32,
+        20,
+        Duration::from_millis(100),
+    );
     let worker = tokio::spawn(agent_subscriptions(
         token.clone(),
         base,
         sender,
         StatsWorkerContext {
             targets: targets.clone(),
-            pool: pool.clone(),
+            ingress: stats,
             metrics: Arc::new(Metrics::default()),
-            realtime: None,
             fetch_interval: Duration::from_millis(50),
         },
         Duration::from_millis(20),
@@ -160,6 +169,10 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
         .await
         .unwrap()
         .unwrap()
+        .unwrap();
+    stats_supervisor
+        .shutdown(Duration::from_secs(5))
+        .await
         .unwrap();
     for server in servers {
         server.await.unwrap();

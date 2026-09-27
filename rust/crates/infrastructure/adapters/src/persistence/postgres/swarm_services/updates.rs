@@ -27,6 +27,11 @@ impl PostgresSwarmServiceRepository {
                 "The Service changed before the update check could start.".into(),
             ));
         }
+        sqlx::query("SELECT pg_notify($1, '')")
+            .bind(citadel_runtime::RuntimeSignal::SwarmServiceRecovery.channel())
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
         tx.commit().await.map_err(storage)?;
         Ok(ServiceUpdateCheck {
             lease_id,

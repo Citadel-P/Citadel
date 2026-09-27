@@ -7,6 +7,17 @@ impl PostgresAlertRepository {
         observation: &AlertObservation,
     ) -> Result<Option<AlertEvent>, AlertError> {
         let mut transaction = self.pool.begin().await.map_err(storage)?;
+        // A snapshot can outlive a concurrent deletion. Hold the parent while
+        // applying mutable state so deletion cannot race the foreign key writes.
+        let enabled: Option<String> =
+            sqlx::query_scalar("SELECT status FROM alertrules WHERE id=$1 FOR SHARE")
+                .bind(rule.id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(storage)?;
+        if enabled.as_deref() != Some("Enabled") {
+            return Ok(None);
+        }
         let lock_key = format!("{}:{}", rule.id, observation.resource_id);
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
             .bind(lock_key)
@@ -205,7 +216,7 @@ impl PostgresAlertRepository {
                 },
             )
             .await?;
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             self.get_rule(id).await
         })
     }
@@ -254,7 +265,7 @@ impl PostgresAlertRepository {
                 },
             )
             .await?;
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             self.get_rule(id).await
         })
     }
@@ -280,7 +291,7 @@ impl PostgresAlertRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             Ok(())
         })
     }
@@ -321,7 +332,7 @@ impl PostgresAlertRepository {
             crate::persistence::postgres::activities::store::insert_activity(&mut tx, &activity)
                 .await
                 .map_err(|error| AlertError::Storage(error.to_string()))?;
-            tx.commit().await.map_err(storage)?;
+            self.commit_configuration(tx).await?;
             self.get_rule(input.id).await
         })
     }
@@ -335,16 +346,18 @@ impl PostgresAlertRepository {
     ) -> BoxFuture<'a, Result<AlertRule, AlertError>> {
         Box::pin(async move {
             if let Some(description) = description {
+                let mut tx = self.pool.begin().await.map_err(storage)?;
                 let count = sqlx::query("UPDATE alertrules SET description=$2 WHERE id=$1")
                     .bind(id)
                     .bind(description)
-                    .execute(&self.pool)
+                    .execute(&mut *tx)
                     .await
                     .map_err(storage)?
                     .rows_affected();
                 if count == 0 {
                     return Err(AlertError::RuleNotFound);
                 }
+                self.commit_configuration(tx).await?;
             }
             self.get_rule(id).await
         })

@@ -59,6 +59,25 @@ describe('node-local Docker resource snapshots', () => {
     expect(await screen.findByTestId('networks')).toHaveTextContent('worker');
     expect(screen.queryByText('manager')).not.toBeInTheDocument();
   });
+  it('applies scoped node changes without clearing manager or unrelated resources', async () => {
+    const fake = new FakeRealtimeConnection();
+    server.use(
+      http.get(`http://localhost/api/v1/images/${platformId}`, () => HttpResponse.json({ images: [image('image-owner')], capabilities: {} })),
+      http.get(`http://localhost/api/v1/volumes/${platformId}`, () => HttpResponse.json({ volumes: [{ ...volume(''), id: 'manager' }], capabilities: {} })),
+      http.get(`http://localhost/api/v1/networks/${platformId}`, () => HttpResponse.json({ networks: [network('network-owner')], capabilities: {} })),
+    );
+    renderCitadel(<ResourceProbe />, { groups: { connectionFactory: () => fake.asRealtimeConnection(), startConnection: (connection) => connection.start() } });
+    await waitFor(() => expect(screen.getByTestId('images')).toHaveTextContent('image-owner'));
+    await waitFor(() => expect(screen.getByTestId('networks')).toHaveTextContent('network-owner'));
+    act(() => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, nodeOnly: true, volumes: [volume('worker')] } satisfies SwarmNodeLocalResourcesUpdate));
+    expect(screen.getByTestId('volumes')).toHaveTextContent(',worker');
+    expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
+    expect(screen.getByTestId('networks')).toHaveTextContent('network-owner');
+    act(() => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, nodeOnly: true, volumes: [] } satisfies SwarmNodeLocalResourcesUpdate));
+    expect(screen.getByTestId('volumes')).not.toHaveTextContent('worker');
+    expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
+  });
+
 });
 
 function ResourceProbe() {

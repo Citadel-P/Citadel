@@ -203,6 +203,8 @@ fn field_name(name: &str) -> String {
         "linkLocalIPv6Address",
         "linkLocalIPv6PrefixLen",
         "kernelMemoryTCP",
+        "utsMode",
+        "ioMaximumBandwidth",
         "oomKilled",
         "rw",
         "tty",

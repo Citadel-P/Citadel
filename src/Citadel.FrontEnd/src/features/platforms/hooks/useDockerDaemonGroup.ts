@@ -148,7 +148,9 @@ export type SwarmInventoryUpdate = {
 
 export type SwarmNodeLocalResourcesUpdate = {
   platformId: string;
-  images: ImageView[];
-  volumes: DockerVolumeResultView[];
-  networks: DockerNetworkResultView[];
+  images?: ImageView[];
+  volumes?: DockerVolumeResultView[];
+  networks?: DockerNetworkResultView[];
+  nodeOnly?: boolean;
+  volumeCount?: number;
 };

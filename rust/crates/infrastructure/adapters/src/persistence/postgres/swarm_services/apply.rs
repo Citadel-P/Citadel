@@ -68,6 +68,11 @@ impl PostgresSwarmServiceRepository {
                 desired_hash: desired,
                 spec,
             };
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::SwarmServiceRecovery.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(claim)
         })
@@ -97,6 +102,7 @@ impl PostgresSwarmServiceRepository {
         result: &'a RuntimeServiceResult,
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             let changed = sqlx::query(
                 "UPDATE swarmservices SET dockerserviceid=$3,dockerversionindex=$4,operationstate='Accepted',observeddockerversion=$4,warnings=$5,rowversion=rowversion+1,updatedat=$6 WHERE id=$1 AND operationid=$2 AND operationstate='PendingAcceptance'",
             )
@@ -106,13 +112,13 @@ impl PostgresSwarmServiceRepository {
             .bind(result.version_index)
             .bind(serde_json::to_value(&result.warnings).map_err(storage)?)
             .bind(Utc::now())
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await
             .map_err(storage)?
             .rows_affected();
             if changed != 1 {
                 let settled: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmservices WHERE id=$1 AND operationid=$2 AND operationstate IN ('Accepted','Completed'))")
-                    .bind(claim.id).bind(claim.operation_id).fetch_one(&self.pool).await.map_err(storage)?;
+                    .bind(claim.id).bind(claim.operation_id).fetch_one(&mut *tx).await.map_err(storage)?;
                 if settled {
                     return Ok(());
                 }
@@ -121,6 +127,12 @@ impl PostgresSwarmServiceRepository {
                         .to_owned(),
                 ));
             }
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::SwarmServiceOperations.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
             Ok(())
         })
     }
@@ -229,6 +241,16 @@ impl PostgresSwarmServiceRepository {
     }
 }
 impl PostgresSwarmServiceRepository {
+    pub(super) fn active_operation_claims_impl(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, ServiceOperationClaim)>, SwarmServiceError>> {
+        Box::pin(async move {
+            sqlx::query("SELECT id,platformid,dockername,dockerserviceid,dockerversionindex,rowversion,desiredspechash,spec,operationid,operationactorid FROM swarmservices WHERE controlstate='Processing' AND updatecheckid IS NULL AND operationstate='Accepted' AND ($1::uuid IS NULL OR id > $1) AND operationid IS NOT NULL AND operationkind<>'Delete' ORDER BY id LIMIT $2")
+            .bind(after).bind(limit.clamp(1, 100)).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(|row| Ok((ActorId::new(row.try_get("operationactorid").map_err(storage)?),ServiceOperationClaim{operation_id:row.try_get("operationid").map_err(storage)?,id:row.try_get("id").map_err(storage)?,platform_id:row.try_get("platformid").map_err(storage)?,docker_name:row.try_get("dockername").map_err(storage)?,docker_service_id:row.try_get("dockerserviceid").map_err(storage)?,docker_version_index:row.try_get("dockerversionindex").map_err(storage)?,row_version:row.try_get("rowversion").map_err(storage)?,desired_hash:row.try_get("desiredspechash").map_err(storage)?,spec:SwarmServiceSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?}))).collect()
+        })
+    }
     pub(super) fn stale_operation_claims_impl(
         &self,
         started_before: i64,

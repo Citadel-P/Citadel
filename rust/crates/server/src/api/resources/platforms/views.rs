@@ -1,4 +1,5 @@
 use crate::api::resources::platforms::requests::PruneResource;
+use crate::api::resources::platforms::runtime_mapping;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
@@ -329,7 +330,9 @@ pub struct NetworkView {
     pub created: String,
     pub driver: String,
     pub scope: String,
+    #[serde(rename = "enableIPv4")]
     pub enable_ipv4: bool,
+    #[serde(rename = "enableIPv6")]
     pub enable_ipv6: bool,
     pub internal: bool,
     pub attachable: bool,
@@ -352,6 +355,7 @@ pub struct NetworkView {
 
 impl From<citadel_platforms::NetworkDetails> for NetworkView {
     fn from(value: citadel_platforms::NetworkDetails) -> Self {
+        let is_system = runtime_mapping::system_network(&value.name, value.ingress);
         Self {
             name: value.name,
             id: value.id,
@@ -366,12 +370,16 @@ impl From<citadel_platforms::NetworkDetails> for NetworkView {
             config_only: value.config_only,
             in_use: value.in_use,
             config_from: value.config_from,
-            ipam: value.ipam,
+            ipam: value.ipam.map(runtime_mapping::ipam),
             options: value.options,
             labels: value.labels,
-            containers: value.containers,
-            peers: value.peers,
-            is_system: value.is_system,
+            containers: value
+                .containers
+                .into_iter()
+                .map(|(id, c)| (id, runtime_mapping::network_container(c)))
+                .collect(),
+            peers: value.peers.into_iter().map(runtime_mapping::peer).collect(),
+            is_system,
             docker_node_id: value.docker_node_id,
             node_hostname: value.node_hostname,
             is_stale: value.is_stale,
@@ -414,7 +422,7 @@ impl From<citadel_platforms::VolumeDetails> for VolumeView {
             driver: value.driver,
             mountpoint: value.mountpoint,
             created_at: value.created_at,
-            cluster_volume: value.cluster_volume,
+            cluster_volume: value.cluster_volume.map(runtime_mapping::cluster_volume),
             usage_data: value.usage_data.map(Into::into),
             containers: value.containers,
             status: value.status,
@@ -624,6 +632,7 @@ pub struct SwarmNetworkView {
     pub is_internal: bool,
     pub is_ingress: bool,
     pub is_encrypted: bool,
+    #[serde(rename = "enableIPv6")]
     pub enable_ipv6: bool,
     pub subnets: Vec<String>,
     pub service_names: Vec<String>,

@@ -22,12 +22,9 @@ use citadel_identity::{
     NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_platforms::{
-    CreatePlatformInput, PlatformConnectorType, PlatformInventoryPort, PlatformReadService,
-    PlatformRegistrationError, PlatformRegistrationRuntime, PlatformRegistrationService,
-    PlatformRuntimePort, RuntimeCapabilityError, RuntimeContainerSummary, RuntimeErrorKind,
-    RuntimeImageSummary, RuntimeNetworkSummary, RuntimePlatformInfo, RuntimeStatsStream,
-    RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService,
-    RuntimeSwarmTask, RuntimeVolumeSummary,
+    CreatePlatformInput, PlatformConnectorType, PlatformReadService, PlatformRegistrationError,
+    PlatformRegistrationRuntime, PlatformRegistrationService, RuntimeCapabilityError,
+    RuntimeErrorKind, RuntimePlatformInfo,
 };
 use citadel_primitives::ActorId;
 use citadel_server::{
@@ -50,14 +47,9 @@ use uuid::Uuid;
 #[path = "platform_creation_http/deletion.rs"]
 mod deletion;
 
-struct StaticInventory {
+struct StaticInfo {
     calls: AtomicUsize,
     info: InfoOutcome,
-    containers: Vec<RuntimeContainerSummary>,
-    images: Vec<RuntimeImageSummary>,
-    nodes: Vec<RuntimeSwarmNode>,
-    services: Vec<RuntimeSwarmService>,
-    tasks: Vec<RuntimeSwarmTask>,
 }
 
 #[derive(Clone)]
@@ -66,7 +58,7 @@ enum InfoOutcome {
     Error(RuntimeErrorKind, String, bool),
 }
 
-impl StaticInventory {
+impl StaticInfo {
     fn standalone(daemon_id: impl Into<String>) -> Self {
         Self {
             calls: AtomicUsize::new(0),
@@ -87,18 +79,6 @@ impl StaticInventory {
                 agent_version: Some("test-agent".into()),
                 swarm: None,
             })),
-            containers: vec![container("docker-container-1", "running", false)],
-            images: vec![RuntimeImageSummary {
-                id: "sha256:image-1".into(),
-                repo_tags: vec!["nginx:latest".into()],
-                created: 1,
-                size: 100,
-                containers: 1,
-                ..Default::default()
-            }],
-            nodes: Vec::new(),
-            services: Vec::new(),
-            tasks: Vec::new(),
         }
     }
 
@@ -120,19 +100,6 @@ impl StaticInventory {
             cluster_id: Some(cluster_id),
             ..Default::default()
         });
-        inventory.containers = vec![
-            container("current-task", "running", true),
-            container("historical-task", "exited", true),
-        ];
-        inventory.nodes = vec![RuntimeSwarmNode {
-            id: "manager-1".into(),
-            hostname: "manager".into(),
-            role: "manager".into(),
-            is_leader: true,
-            status: "ready".into(),
-            availability: "active".into(),
-            ..Default::default()
-        }];
         inventory
     }
 
@@ -143,7 +110,7 @@ impl StaticInventory {
     }
 }
 
-impl PlatformRuntimePort for StaticInventory {
+impl citadel_platforms::PlatformInfoPort for StaticInfo {
     fn get_info<'a>(
         &'a self,
         _cancellation: &'a CancellationToken,
@@ -159,104 +126,19 @@ impl PlatformRuntimePort for StaticInventory {
             }
         })
     }
-
-    fn list_containers<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-        let containers = self.containers.clone();
-        Box::pin(async move { Ok(containers) })
-    }
-
-    fn stream_stats<'a>(
-        &'a self,
-        _fetch_interval: StdDuration,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeStatsStream, RuntimeCapabilityError>> {
-        unreachable!("registration does not stream statistics")
-    }
-}
-
-macro_rules! static_list {
-    ($name:ident, $type:ty, $field:ident) => {
-        fn $name<'a>(
-            &'a self,
-            _cancellation: &'a CancellationToken,
-        ) -> BoxFuture<'a, Result<Vec<$type>, RuntimeCapabilityError>> {
-            self.calls.fetch_add(1, Ordering::Relaxed);
-            let values = self.$field.clone();
-            Box::pin(async move { Ok(values) })
-        }
-    };
-}
-
-impl PlatformInventoryPort for StaticInventory {
-    static_list!(list_images, RuntimeImageSummary, images);
-    static_list!(list_swarm_nodes, RuntimeSwarmNode, nodes);
-    static_list!(list_swarm_services, RuntimeSwarmService, services);
-    static_list!(list_swarm_tasks, RuntimeSwarmTask, tasks);
-
-    fn list_networks<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn list_volumes<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn list_swarm_configs<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmConfig>, RuntimeCapabilityError>> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn list_swarm_secrets<'a>(
-        &'a self,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmSecret>, RuntimeCapabilityError>> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn inspect_network<'a>(
-        &'a self,
-        _id: &'a str,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeNetworkSummary, RuntimeCapabilityError>> {
-        unreachable!("registration does not inspect individual networks")
-    }
-
-    fn inspect_volume<'a>(
-        &'a self,
-        _name: &'a str,
-        _cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
-        unreachable!("registration does not inspect individual volumes")
-    }
 }
 
 struct StaticRegistrationRuntime {
-    inventory: Arc<StaticInventory>,
+    inventory: Arc<StaticInfo>,
     selections: Mutex<Vec<(PlatformConnectorType, String)>>,
 }
 
 impl PlatformRegistrationRuntime for StaticRegistrationRuntime {
-    fn inventory_for(
+    fn info_for(
         &self,
         connector_type: PlatformConnectorType,
         address: &str,
-    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError> {
+    ) -> Result<Arc<dyn citadel_platforms::PlatformInfoPort>, PlatformRegistrationError> {
         self.selections
             .lock()
             .unwrap()
@@ -267,7 +149,7 @@ impl PlatformRegistrationRuntime for StaticRegistrationRuntime {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
-async fn create_platform_enforces_authorization_and_atomically_persists_initial_inventory() {
+async fn create_platform_enforces_authorization_and_commits_metadata_before_inventory() {
     let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
         .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
@@ -291,7 +173,7 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     ));
     let (administrator, denied) = seed_actors(&pool).await;
     let runtime = Arc::new(StaticRegistrationRuntime {
-        inventory: Arc::new(StaticInventory::standalone(format!(
+        inventory: Arc::new(StaticInfo::standalone(format!(
             "daemon-{}",
             Uuid::now_v7().simple()
         ))),
@@ -388,6 +270,13 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     );
     assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 0);
 
+    let mut targets = sqlx::postgres::PgListener::connect_with(&pool)
+        .await
+        .unwrap();
+    targets
+        .listen(citadel_runtime::RuntimeSignal::Targets.channel())
+        .await
+        .unwrap();
     let response = request(&app, Some(administrator.clone()), input.clone()).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value =
@@ -395,8 +284,8 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
             .unwrap();
     let platform_id = Uuid::parse_str(body["id"].as_str().unwrap()).unwrap();
     assert_eq!(body["address"], "http://localhost.docker");
-    assert_eq!(body["imageCount"], 1);
-    assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 5);
+    assert_eq!(body["imageCount"], 0);
+    assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 1);
 
     let persisted: (i64, i64, i64) = sqlx::query_as(
         "SELECT (SELECT COUNT(*) FROM platforms WHERE id=$1), (SELECT COUNT(*) FROM images WHERE platformid=$1), (SELECT COUNT(*) FROM containers WHERE platformid=$1)",
@@ -405,7 +294,17 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(persisted, (1, 1, 1));
+    assert_eq!(persisted, (1, 0, 0));
+    let notification = tokio::time::timeout(StdDuration::from_secs(2), targets.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        notification.channel(),
+        citadel_runtime::RuntimeSignal::Targets.channel()
+    );
+    drop(targets);
+
     // The unchanged Platform form requests this endpoint after creation. It
     // must not touch Docker, rotate keys or expose private signing material.
     for _ in 0..2 {
@@ -431,7 +330,7 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
         );
         assert!(!data.to_string().contains("PRIVATE_KEY="));
     }
-    assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 5);
+    assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 1);
     let activity_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='PlatformCreated' AND status='Success'",
     )
@@ -452,7 +351,7 @@ async fn create_platform_enforces_authorization_and_atomically_persists_initial_
     );
     assert_eq!(
         runtime.inventory.calls.load(Ordering::Relaxed),
-        5,
+        1,
         "known name/address conflicts must not contact Docker"
     );
 
@@ -498,7 +397,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
     let suffix = Uuid::now_v7().simple().to_string();
     let name = format!("agent-{suffix}");
     let address = format!("https://agent-{suffix}.example.test:5001");
-    let harness = harness(StaticInventory::standalone(format!("daemon-{suffix}"))).await;
+    let harness = harness(StaticInfo::standalone(format!("daemon-{suffix}"))).await;
     let tag_id = seed_tag(&harness.pool, &suffix).await;
     let mut events = harness.realtime.subscribe();
 
@@ -530,7 +429,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
     .fetch_one(&harness.pool)
     .await
     .unwrap();
-    assert_eq!(persisted, (address.clone(), "Agent".into(), 1, 1, 1));
+    assert_eq!(persisted, (address.clone(), "Agent".into(), 0, 0, 1));
     assert_eq!(
         harness.runtime.selections.lock().unwrap().as_slice(),
         [(PlatformConnectorType::Agent, address)]
@@ -544,11 +443,11 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
-async fn swarm_manager_creation_persists_cluster_inventory_and_prunes_historical_tasks() {
+async fn swarm_manager_creation_persists_cluster_metadata_without_inline_inventory() {
     let suffix = Uuid::now_v7().simple().to_string();
     let cluster_id = format!("cluster-{suffix}");
     let name = format!("swarm-{suffix}");
-    let harness = harness(StaticInventory::swarm(
+    let harness = harness(StaticInfo::swarm(
         format!("daemon-{suffix}"),
         cluster_id.clone(),
     ))
@@ -579,22 +478,15 @@ async fn swarm_manager_creation_persists_cluster_inventory_and_prunes_historical
     .fetch_one(&harness.pool)
     .await
     .unwrap();
-    assert_eq!(persisted, (cluster_id, "DockerSwarm".into(), true, 1, 1));
-    let container_id: String =
-        sqlx::query_scalar("SELECT dockercontainerid FROM containers WHERE platformid=$1")
-            .bind(platform_id)
-            .fetch_one(&harness.pool)
-            .await
-            .unwrap();
-    assert_eq!(container_id, "current-task");
-    assert_eq!(harness.runtime.inventory.calls.load(Ordering::Relaxed), 10);
+    assert_eq!(persisted, (cluster_id, "DockerSwarm".into(), true, 0, 0));
+    assert_eq!(harness.runtime.inventory.calls.load(Ordering::Relaxed), 1);
     cleanup_platform(&harness.pool, platform_id).await;
 }
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_types() {
-    let authentication = harness(StaticInventory::error(
+    let authentication = harness(StaticInfo::error(
         RuntimeErrorKind::Authentication,
         "Agent rejected the Core signature.",
     ))
@@ -612,7 +504,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
             .contains("Agent rejected the Core signature.")
     );
 
-    let missing_id = harness(StaticInventory::standalone("  ")).await;
+    let missing_id = harness(StaticInfo::standalone("  ")).await;
     let response = request(
         &missing_id.app,
         Some(missing_id.administrator.clone()),
@@ -622,7 +514,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(platform_count(&missing_id.pool, "missing-daemon").await, 0);
 
-    let active_swarm = harness(StaticInventory::swarm("daemon-active", "cluster-active")).await;
+    let active_swarm = harness(StaticInfo::swarm("daemon-active", "cluster-active")).await;
     let response = request(
         &active_swarm.app,
         Some(active_swarm.administrator.clone()),
@@ -640,7 +532,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
         1
     );
 
-    let mut worker_inventory = StaticInventory::swarm("daemon-worker", "cluster-worker");
+    let mut worker_inventory = StaticInfo::swarm("daemon-worker", "cluster-worker");
     let InfoOutcome::Value(worker_info) = &mut worker_inventory.info else {
         unreachable!()
     };
@@ -656,8 +548,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
     assert!(response_text(response).await.contains("manager node"));
     assert_eq!(worker.runtime.inventory.calls.load(Ordering::Relaxed), 1);
 
-    let mut missing_cluster_inventory =
-        StaticInventory::swarm("daemon-no-cluster", "discarded-cluster");
+    let mut missing_cluster_inventory = StaticInfo::swarm("daemon-no-cluster", "discarded-cluster");
     let InfoOutcome::Value(missing_cluster_info) = &mut missing_cluster_inventory.info else {
         unreachable!()
     };
@@ -680,7 +571,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
         1
     );
 
-    let unsupported = harness(StaticInventory::standalone("unused-daemon")).await;
+    let unsupported = harness(StaticInfo::standalone("unused-daemon")).await;
     let response = request(
         &unsupported.app,
         Some(unsupported.administrator),
@@ -699,7 +590,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
 async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let suffix = Uuid::now_v7().simple().to_string();
     let daemon_id = format!("duplicate-daemon-{suffix}");
-    let duplicate_harness = harness(StaticInventory::standalone(daemon_id)).await;
+    let duplicate_harness = harness(StaticInfo::standalone(daemon_id)).await;
     let address = format!("https://first-{suffix}.example.test:5001");
     let first_name = format!("first-{suffix}");
     let first = request(
@@ -756,7 +647,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     );
 
     let cluster_id = format!("duplicate-cluster-{suffix}");
-    let first_cluster = harness(StaticInventory::swarm(
+    let first_cluster = harness(StaticInfo::swarm(
         format!("cluster-daemon-a-{suffix}"),
         cluster_id.clone(),
     ))
@@ -771,7 +662,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let cluster_platform_id =
         Uuid::parse_str(response_json(response).await["id"].as_str().unwrap()).unwrap();
 
-    let second_cluster = harness(StaticInventory::swarm(
+    let second_cluster = harness(StaticInfo::swarm(
         format!("cluster-daemon-b-{suffix}"),
         cluster_id,
     ))
@@ -793,7 +684,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_creates() {
     let suffix = Uuid::now_v7().simple().to_string();
-    let invalid_tag = harness(StaticInventory::standalone(format!("tag-daemon-{suffix}"))).await;
+    let invalid_tag = harness(StaticInfo::standalone(format!("tag-daemon-{suffix}"))).await;
     let name = format!("invalid-tag-{suffix}");
     let response = request(
         &invalid_tag.app,
@@ -812,9 +703,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
 
     let rollback_name = format!("rollback-{suffix}");
     let rollback_runtime = Arc::new(StaticRegistrationRuntime {
-        inventory: Arc::new(StaticInventory::standalone(format!(
-            "rollback-daemon-{suffix}"
-        ))),
+        inventory: Arc::new(StaticInfo::standalone(format!("rollback-daemon-{suffix}"))),
         selections: Mutex::new(Vec::new()),
     });
     let rollback_service = PlatformRegistrationService::new(
@@ -841,7 +730,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
     assert!(matches!(error, PlatformRegistrationError::Storage(_)));
     assert_eq!(platform_count(&invalid_tag.pool, &rollback_name).await, 0);
 
-    let competing = harness(StaticInventory::standalone(format!("race-daemon-{suffix}"))).await;
+    let competing = harness(StaticInfo::standalone(format!("race-daemon-{suffix}"))).await;
     let input = json!({
         "name": format!("race-{suffix}"),
         "address": format!("https://race-{suffix}.example.test"),
@@ -871,7 +760,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn platform_patch_reports_json_field_errors_without_writes() {
     let suffix = Uuid::now_v7().simple().to_string();
-    let harness = harness(StaticInventory::standalone(format!("daemon-{suffix}"))).await;
+    let harness = harness(StaticInfo::standalone(format!("daemon-{suffix}"))).await;
     let response = request(
         &harness.app,
         Some(harness.administrator.clone()),
@@ -931,7 +820,7 @@ struct TestHarness {
     edge: citadel_adapters::connectors::edge::EdgeRegistry,
 }
 
-async fn harness(inventory: StaticInventory) -> TestHarness {
+async fn harness(inventory: StaticInfo) -> TestHarness {
     let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
         .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
@@ -1021,25 +910,6 @@ fn agent_input(name: &str, platform_type: &str) -> Value {
         "type": platform_type,
         "connectorType": "Agent"
     })
-}
-
-fn container(id: &str, state: &str, is_swarm_task: bool) -> RuntimeContainerSummary {
-    RuntimeContainerSummary {
-        id: id.into(),
-        name: id.into(),
-        image: "nginx:latest".into(),
-        image_id: "sha256:image-1".into(),
-        created: 1,
-        state: state.into(),
-        status: state.into(),
-        labels: Default::default(),
-        ports: json!([]),
-        stack: None,
-        is_system: false,
-        system_role: None,
-        has_citadel_ownership_labels: false,
-        is_swarm_task,
-    }
 }
 
 async fn response_json(response: axum::response::Response) -> Value {

@@ -90,6 +90,8 @@ mod node_coverage;
 mod node_resources;
 #[path = "platforms_http/platform_image_management.rs"]
 mod platform_image_management;
+#[path = "platforms_http/realtime_generation.rs"]
+mod realtime_generation;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
 #[path = "platforms_http/registry_browsing.rs"]

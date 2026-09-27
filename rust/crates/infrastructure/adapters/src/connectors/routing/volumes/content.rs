@@ -14,9 +14,9 @@ use citadel_contracts::citadel::{
     edge::v1::EdgeCommandKind,
     shared_models::v1::Mount,
 };
+use citadel_platforms::VolumeObservationPort;
 use citadel_platforms::{
-    PlatformInventoryPort, RuntimeCapabilityError, RuntimeErrorKind, containers::ContainerTarget,
-    volume_content::*,
+    RuntimeCapabilityError, RuntimeErrorKind, containers::ContainerTarget, volume_content::*,
 };
 use citadel_runtime::{DynamicTaskReservation, DynamicTasks};
 use futures_util::{StreamExt, stream::BoxStream};

@@ -119,7 +119,11 @@ export const useSwarmOverview = (platformId?: string) => {
   const onSwarmNodeLocalResourcesUpdated = useCallback(
     (snapshot: SwarmNodeLocalResourcesUpdate) => {
       if (!platformId || snapshot.platformId !== platformId) return;
-      setLocalSnapshot(snapshot);
+      setLocalSnapshot((previous) => ({
+        ...previous, ...snapshot,
+        nodeOnly: snapshot.volumes ? !!snapshot.nodeOnly : previous?.nodeOnly,
+        volumeCount: snapshot.volumes ? snapshot.volumeCount : previous?.volumeCount,
+      }));
       const queryKey = ['getSwarmOverview', args] as const;
       queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, (previous) => {
         if (!previous?.data) return previous;
@@ -131,10 +135,10 @@ export const useSwarmOverview = (platformId?: string) => {
           ...previous,
           data: {
             ...previous.data,
-            imageCount: snapshot.images.length,
-            volumeCount: snapshot.volumes.length,
-            localNetworkCount: snapshot.networks.length,
-            networkCount: clusterNetworkCount + snapshot.networks.length,
+            imageCount: (snapshot.images?.length ?? previous.data.imageCount),
+            volumeCount: (snapshot.volumeCount ?? (!snapshot.nodeOnly ? snapshot.volumes?.length : undefined) ?? previous.data.volumeCount),
+            localNetworkCount: (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
+            networkCount: clusterNetworkCount + (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
           },
         };
       });
@@ -151,10 +155,10 @@ export const useSwarmOverview = (platformId?: string) => {
     const clusterNetworkCount = Math.max(0, count(current.networkCount) - count(current.localNetworkCount));
     return {
       ...current,
-      imageCount: localSnapshot.images.length,
-      volumeCount: localSnapshot.volumes.length,
-      localNetworkCount: localSnapshot.networks.length,
-      networkCount: clusterNetworkCount + localSnapshot.networks.length,
+      imageCount: (localSnapshot.images?.length ?? current.imageCount),
+      volumeCount: (localSnapshot.volumeCount ?? (!localSnapshot.nodeOnly ? localSnapshot.volumes?.length : undefined) ?? current.volumeCount),
+      localNetworkCount: (localSnapshot.networks?.length ?? count(current.localNetworkCount)),
+      networkCount: clusterNetworkCount + (localSnapshot.networks?.length ?? count(current.localNetworkCount)),
     };
   }, [localSnapshot, query.data?.data]);
 

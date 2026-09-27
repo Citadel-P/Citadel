@@ -69,6 +69,12 @@ pub async fn delete(
     // Trust a fresh inventory, not the requested ID list or a partial response.
     let observed =
         tokio::time::timeout(Duration::from_secs(15), inventory.list_images(&cancel)).await;
+    let write = citadel_platforms::jobs::ProjectionWrite::begin(
+        platform_id,
+        None,
+        citadel_platforms::jobs::ProjectionKind::Images,
+    )
+    .await;
     let mut tx = pool.begin().await.map_err(storage)?;
     sqlx::query("SET LOCAL lock_timeout = '5s'")
         .execute(&mut *tx)
@@ -89,6 +95,7 @@ pub async fn delete(
     sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1")
         .bind(platform_id).execute(&mut *tx).await.map_err(storage)?;
     tx.commit().await.map_err(storage)?;
+    write.committed();
     result
 }
 

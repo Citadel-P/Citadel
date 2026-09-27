@@ -49,9 +49,7 @@ use citadel_deployments::{
     UpdateBehavior,
 };
 use citadel_platforms::terminal::*;
-use citadel_platforms::{
-    CreateRuntimeNetwork, CreateRuntimeVolume, PlatformResourceMutationPort, RuntimeErrorKind,
-};
+use citadel_platforms::{CreateRuntimeNetwork, CreateRuntimeVolume, RuntimeErrorKind};
 use citadel_stacks::{
     StackApplySource, StackOperationClaim, StackSourceFile, StackSpec, StackSpecCommon,
     StackUpdateBehavior,
@@ -142,7 +140,11 @@ impl ContainerService for MutationFixture {
     ) -> Result<Response<()>, Status> {
         require_signature(&request)?;
         let request = request.get_ref();
-        assert!(request.ids == ["container-1"] || request.ids == ["backup-helper"]);
+        assert!(
+            request.ids == ["container-1"]
+                || request.ids == ["backup-helper"]
+                || request.ids == ["container-1", "container-2"]
+        );
         assert_eq!(request.v, Some(true));
         assert_eq!(request.force, Some(true));
         assert_eq!(request.link, Some(false));
@@ -465,17 +467,21 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
     let client = connect(&address).await;
     let cancellation = CancellationToken::new();
     assert_eq!(
-        PlatformResourceMutationPort::create_network(&client, &network_input(), &cancellation,)
-            .await
-            .unwrap()
-            .id,
+        citadel_platforms::NetworkMutationPort::create_network(
+            &client,
+            &network_input(),
+            &cancellation,
+        )
+        .await
+        .unwrap()
+        .id,
         "network-1"
     );
-    PlatformResourceMutationPort::delete_network(&client, "network-1", &cancellation)
+    citadel_platforms::NetworkMutationPort::delete_network(&client, "network-1", &cancellation)
         .await
         .unwrap();
     assert_eq!(
-        PlatformResourceMutationPort::create_volume(
+        citadel_platforms::VolumeMutationPort::create_volume(
             &client,
             &CreateRuntimeVolume {
                 name: "data".into(),
@@ -490,7 +496,7 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
         .name,
         "data"
     );
-    PlatformResourceMutationPort::delete_volume(&client, "data", true, &cancellation)
+    citadel_platforms::VolumeMutationPort::delete_volume(&client, "data", true, &cancellation)
         .await
         .unwrap();
     client
@@ -501,6 +507,18 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
         .change_containers_state(
             &["container-1".to_owned(), "container-2".to_owned()],
             AgentContainerAction::Start,
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    client
+        .delete_containers_with_options(
+            &["container-1".into(), "container-2".into()],
+            citadel_platforms::containers::DeleteContainerOptions {
+                v: true,
+                force: true,
+                link: false,
+            },
             &cancellation,
         )
         .await
@@ -534,7 +552,7 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
         .unwrap();
     assert_eq!(stack.status, citadel_stacks::StackReleaseStatus::Healthy);
     assert_eq!(calls.load(Ordering::Relaxed), 1);
-    assert_eq!(container_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(container_calls.load(Ordering::Relaxed), 2);
     assert_eq!(deployment_calls.load(Ordering::Relaxed), 1);
     assert_eq!(action_calls.load(Ordering::Relaxed), 1);
     assert_eq!(stack_calls.load(Ordering::Relaxed), 1);
@@ -637,7 +655,7 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
         stack_apply_calls: Arc::new(AtomicUsize::new(0)),
     })
     .await;
-    let error = PlatformResourceMutationPort::create_network(
+    let error = citadel_platforms::NetworkMutationPort::create_network(
         &connect(&address).await,
         &network_input(),
         &CancellationToken::new(),

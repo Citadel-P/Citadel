@@ -47,6 +47,12 @@ impl StackService {
             .try_acquire_owned()
             .map_err(|_| StackError::Conflict("Stack operations are busy.".into()))?;
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
+        // Authorize before admission. Hold the key through the final CAS, not
+        // just through the external scan; no persistent result is cached here.
+        let _check = self.update_checks.try_enter(id).ok_or_else(|| {
+            self.notifier.update_check_duplicate();
+            StackError::Conflict("A Stack update check is already running.".into())
+        })?;
         if snapshot.control_state != "Idle"
             || !matches!(
                 snapshot.status,

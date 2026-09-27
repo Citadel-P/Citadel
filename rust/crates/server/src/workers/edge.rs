@@ -4,7 +4,10 @@ use citadel_adapters::connectors::edge::EdgeRuntime;
 use citadel_adapters::connectors::edge::EdgeSession;
 use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::edge::v1::EdgeCommandKind;
-use citadel_platforms::jobs::{InventoryCollectionTarget, collect_inventory};
+use citadel_platforms::jobs::{
+    ContainerChange, DeltaOutcome, EventRefresh, ReconciliationDecision, RuntimeEventKind,
+    event_decision,
+};
 use citadel_runtime::IoBudget;
 use futures_util::StreamExt;
 use sqlx::PgPool;
@@ -27,6 +30,7 @@ pub async fn run(
     realtime: Option<RealtimeHub>,
     settings: InventorySettings,
     scans: IoBudget,
+    stats: super::statistics::StatsIngress,
 ) -> Result<(), std::convert::Infallible> {
     let mut active = HashMap::new();
     let mut tasks = JoinSet::new();
@@ -50,11 +54,12 @@ pub async fn run(
                     if active.values().any(|id| *id == session.id) { continue; }
                     let session_id = session.id;
                     let pool=pool.clone(); let realtime=realtime.clone(); let settings=settings.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
+                    let stats = stats.clone();
                     let task = tasks.spawn(async move {
                         tokio::select! {
                             ()=cancellation.cancelled()=>{},
                             ()=session.closed()=>{},
-                            result=monitor(session.clone(),pool,realtime,settings,scans,&cancellation)=>{
+                            result=monitor(session.clone(),pool,realtime,settings,scans,stats,&cancellation)=>{
                                 if let Err(error)=result { tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge inventory synchronization interrupted"); }
                             }
                         }
@@ -75,6 +80,7 @@ async fn monitor(
     realtime: Option<RealtimeHub>,
     settings: InventorySettings,
     scans: IoBudget,
+    stats: super::statistics::StatsIngress,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::try_join!(
@@ -86,21 +92,19 @@ async fn monitor(
             settings,
             cancellation
         ),
-        observe_stats(session, pool, realtime, cancellation),
+        observe_stats(session, stats, cancellation),
     )?;
     Ok(())
 }
 
 async fn observe_stats(
     session: Arc<EdgeSession>,
-    pool: PgPool,
-    realtime: Option<RealtimeHub>,
+    ingress: super::statistics::StatsIngress,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let store = PostgresEdgeStore::new(pool.clone());
     let mut stream = runtime.stream_container_stats(Duration::from_secs(10), cancellation)?;
     let interval = Duration::from_secs(10);
     let mut disk = super::disk::LatestPlatformStats::new(interval);
@@ -119,46 +123,38 @@ async fn observe_stats(
             break;
         };
         let stats = stats?;
-        let sample_disk = disk.get();
-        let mut delay = Duration::from_secs(2);
-        let persisted = loop {
-            let result = tokio::select! {
-                ()=cancellation.cancelled()=>return Ok(()),
-                result=store.persist_stats_with_platform_stats(&session,&stats,sample_disk)=>result,
-            };
-            match result {
-                Ok(inserted) => break inserted,
-                Err(citadel_adapters::persistence::postgres::platforms::edge::store::EdgeStoreError::Storage(error)) => {
-                    tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge statistics persistence failed; retaining batch for retry");
-                    tokio::select! {()=cancellation.cancelled()=>return Ok(()),_=tokio::time::sleep(delay)=>{}}
-                    delay = (delay * 2).min(Duration::from_secs(30));
-                }
-                Err(error) => return Err(error.into()),
-            }
+        if session.is_closed() {
+            return Ok(());
+        }
+        let scope = citadel_platforms::stats_ingestion::StatsScope {
+            platform_id: session.target.platform_id,
+            node_id: session.target.node_id.clone(),
+            connector: "EdgeAgent".into(),
+            address: None,
+            agent_id: Some(session.agent_id),
+            connected_at: Some(session.connected_at),
+            closed: Some(session.observation_token()),
         };
-        if (persisted > 0 || (session.target.node_id.is_none() && stats.is_empty()))
-            && let Some(hub) = &realtime
+        if !ingress
+            .submit(scope, stats, disk.get().cloned(), cancellation)
+            .await
         {
-            hub.publish_scoped_container_stats(
-                session.target.platform_id,
-                session.target.node_id.as_deref(),
-                &stats,
-            );
+            return Ok(());
         }
     }
     Err("Edge statistics stream ended.".into())
 }
 
-async fn observe(
+async fn observe_events(
     session: Arc<EdgeSession>,
     pool: PgPool,
     realtime: Option<RealtimeHub>,
-    scans: IoBudget,
     settings: InventorySettings,
     cancellation: &CancellationToken,
+    refreshes: super::platforms::scoped_reconciler::EventRefreshSender,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
-    let (platform_type,expected_daemon):(String,String)=sqlx::query_as("SELECT COALESCE(platform.platformdescriptor::jsonb->>'$type','Docker'),binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL").bind(platform_id).bind(session.agent_id).bind(session.connected_at).fetch_one(&pool).await?;
+    let (platform_type,_expected_daemon):(String,String)=sqlx::query_as("SELECT COALESCE(platform.platformdescriptor::jsonb->>'$type','Docker'),binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL").bind(platform_id).bind(session.agent_id).bind(session.connected_at).fetch_one(&pool).await?;
     let mut platform_type =
         citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
             &platform_type,
@@ -167,13 +163,6 @@ async fn observe(
     if session.target.node_id.is_some() {
         platform_type = citadel_platforms::PlatformKind::Docker;
     }
-    let target = InventoryCollectionTarget {
-        platform_id,
-        platform_type,
-    };
-    let runtime = EdgeRuntime {
-        session: session.clone(),
-    };
     let store = PostgresEdgeStore::new(pool.clone()).with_node_policy(settings.node_policy);
     let mut events = session.command(
         EdgeCommandKind::PlatformDaemonEventsStream,
@@ -181,70 +170,129 @@ async fn observe(
         Duration::from_secs(3600),
         true,
     )?;
-    loop {
+    use citadel_platforms::jobs::{RecoveryReason, RuntimeRecoveryCoordinator};
+    let request = |refresh| super::platforms::event_refresh::ScopedEventRequest {
+        platform_id,
+        refresh,
+    };
+    if let Some(refresh) =
+        RuntimeRecoveryCoordinator::request(RecoveryReason::Bootstrap, platform_type)
+    {
+        if refreshes
+            .send(request(refresh), cancellation)
+            .await
+            .is_err()
         {
-            let Some(_permit) = scans.enter(cancellation).await else {
-                return Ok(());
-            };
-            let started = chrono::Utc::now();
-            let snapshot = match collect_inventory(&runtime, &target, cancellation).await {
-                Ok(snapshot) => snapshot,
-                Err(error) => {
-                    if target.platform_type == citadel_platforms::PlatformKind::DockerSwarm
-                        && !cancellation.is_cancelled()
-                    {
-                        citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())
-                            .mark_swarm_stale(platform_id,started).await?;
-                    }
-                    return Err(error.into());
-                }
-            };
-            // Enrollment binds a daemon; reject transport identity changes before
-            // they can overwrite another daemon's persisted inventory.
-            if expected_daemon.is_empty() || snapshot.info.daemon_id != expected_daemon {
-                return Err("Edge Agent Docker identity does not match its binding.".into());
-            }
-            store.persist_inventory(&session, &snapshot).await?;
-            if let Some(hub) = &realtime {
-                hub.publish_runtime_change(
-                    platform_id,
-                    "platform",
-                    "update",
-                    platform_id.to_string(),
-                );
-            }
+            return Ok(());
         }
-        // Stay on the event path after a targeted update. Only discovery, other
-        // resource events, or the periodic deadline require a full scan.
-        let deadline = tokio::time::Instant::now() + settings.reconciliation_interval;
-        loop {
-            let bytes = tokio::select! {
-                ()=cancellation.cancelled()=>return Ok(()),
-                ()=session.closed()=>return Ok(()),
-                ()=tokio::time::sleep_until(deadline)=>break,
-                event=events.next(cancellation)=>{ let Some(bytes)=event? else { return Ok(()); }; bytes }
-            };
-            let Some(event) =
-                citadel_adapters::connectors::agent::client::decode_daemon_event(bytes.as_slice())?
-            else {
+    }
+    let safety = Duration::from_secs(6 * 3600);
+    let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
+    timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        let bytes = tokio::select! {
+            ()=cancellation.cancelled()=>return Ok(()),
+            ()=session.closed()=>return Ok(()),
+            _ = timer.tick() => {
+                let _ = refreshes.send(request(EventRefresh::Platform), cancellation).await;
                 continue;
-            };
-            if event.resource_type == "container"
-                && store.persist_container_event(&session, &event).await?
-            {
-                if let Some(hub) = &realtime {
-                    hub.publish_container_observation(
-                        platform_id,
-                        &event.action,
-                        event.container_id.unwrap_or_default(),
-                    );
+            }
+            event=events.next(cancellation)=>{
+                if cancellation.is_cancelled() { return Ok(()); }
+                let Some(bytes)=event? else { return Ok(()); };
+                bytes
+            }
+        };
+        let Some(event) =
+            citadel_adapters::connectors::agent::client::decode_daemon_event(bytes.as_slice())?
+        else {
+            continue;
+        };
+        let mut outcome = DeltaOutcome::Unavailable;
+        if matches!(event.kind, RuntimeEventKind::Container(_)) {
+            match store.persist_container_event(&session, &event).await {
+                Ok(updated) => {
+                    if updated.accepted()
+                        || event.kind == RuntimeEventKind::Container(ContainerChange::Tombstone)
+                    {
+                        outcome = DeltaOutcome::Applied;
+                    }
+                    if updated.changed()
+                        && let Some(hub) = &realtime
+                    {
+                        hub.publish_container_observation(
+                            platform_id,
+                            &event.action,
+                            event.container_id.clone().unwrap_or_default(),
+                        );
+                    }
                 }
-            } else {
-                break;
+                Err(error) => {
+                    tracing::warn!(%error, %platform_id, "Edge delta failed; requesting only its resource scope")
+                }
             }
         }
-        // Bound scan frequency under daemon event bursts without making the
-        // source queue unbounded. Overflow terminates/reopens with a full scan.
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        if let Some(delta) = &event.resource {
+            match store.persist_resource_event(&session, &event).await {
+                Ok(updated) => {
+                    if updated.accepted() {
+                        outcome = DeltaOutcome::Applied;
+                    }
+                    if updated.changed()
+                        && let Some(hub) = &realtime
+                    {
+                        hub.publish_resource_observation(
+                            platform_id,
+                            session.target.node_id.as_deref(),
+                            &event.action,
+                            delta,
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(%error, %platform_id, "Edge resource delta failed; requesting its scope")
+                }
+            }
+        }
+        let refresh = match event_decision(
+            event.kind,
+            platform_type == citadel_platforms::PlatformKind::DockerSwarm,
+            event.swarm_scope,
+            outcome,
+        ) {
+            ReconciliationDecision::Reconcile(scope) => EventRefresh::Resource(scope),
+            ReconciliationDecision::SwarmDirty => EventRefresh::Swarm,
+            ReconciliationDecision::None | ReconciliationDecision::ApplyDelta => continue,
+        };
+        let request = super::platforms::event_refresh::ScopedEventRequest {
+            platform_id,
+            refresh,
+        };
+        if refreshes.send(request, cancellation).await.is_err() {
+            return Ok(());
+        }
+        if platform_type == citadel_platforms::PlatformKind::DockerSwarm
+            && matches!(event.kind, RuntimeEventKind::Container(_))
+            && refresh != EventRefresh::Swarm
+            && refreshes
+                .send(
+                    super::platforms::event_refresh::ScopedEventRequest {
+                        platform_id,
+                        refresh: EventRefresh::Swarm,
+                    },
+                    cancellation,
+                )
+                .await
+                .is_err()
+        {
+            return Ok(());
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "edge_event_tests.rs"]
+mod event_tests;
+
+mod reconciliation;
+use reconciliation::observe;

@@ -1,3 +1,4 @@
+use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, RuntimeInventorySnapshot};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -11,6 +12,8 @@ pub async fn refresh(
     let storage = |error: sqlx::Error| {
         RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
     };
+    let metadata =
+        ProjectionWrite::begin(snapshot.platform_id, None, ProjectionKind::Platform).await;
     let mut tx = pool.begin().await.map_err(storage)?;
     let saved = sqlx::query_as::<_, (Option<String>, Value)>(
         "SELECT clusterid,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE",
@@ -37,9 +40,13 @@ pub async fn refresh(
             false,
         ));
     }
-    crate::persistence::postgres::platforms::inventory::store::persist_snapshot(
-        &mut tx, snapshot, None,
+    crate::persistence::postgres::platforms::inventory::resource::persist_swarm_snapshot(
+        &mut tx,
+        snapshot,
+        &Default::default(),
     )
     .await?;
-    tx.commit().await.map_err(storage)
+    tx.commit().await.map_err(storage)?;
+    metadata.committed();
+    Ok(())
 }

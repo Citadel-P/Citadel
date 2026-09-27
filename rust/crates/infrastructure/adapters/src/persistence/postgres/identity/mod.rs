@@ -1,3 +1,5 @@
+pub(crate) mod authorization_cache;
+
 pub mod actors;
 
 pub mod authentication;

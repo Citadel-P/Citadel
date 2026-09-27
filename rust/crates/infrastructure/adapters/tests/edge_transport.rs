@@ -122,6 +122,22 @@ async fn manager_inventory_pins_cluster_and_rejects_identity_changes() {
             "{change}"
         );
     }
+    let mut wrong = snapshot.info.clone();
+    wrong.daemon_id = "other-engine".into();
+    assert!(
+        store
+            .persist_resource(
+                &session,
+                &citadel_platforms::jobs::ResourceSnapshot {
+                    platform_id: snapshot.platform_id,
+                    observed_at: chrono::Utc::now(),
+                    inventory: citadel_platforms::jobs::ResourceInventory::Platform(wrong),
+                }
+            )
+            .await
+            .is_err(),
+        "scoped metadata must enforce the enrolled daemon binding"
+    );
     let saved: (String, String) =
         sqlx::query_as("SELECT clusterid,platformdescriptor->>'nodeID' FROM platforms WHERE id=$1")
             .bind(target.platform_id)
@@ -594,7 +610,18 @@ async fn verify_node_projection_isolation(
             .is_err()
     );
     assert!(store.persist_inventory(&session, &newer).await.is_err());
+    let scoped = citadel_platforms::jobs::ResourceSnapshot {
+        platform_id: newer.platform_id,
+        observed_at: newer.observed_at,
+        inventory: citadel_platforms::jobs::ResourceInventory::Containers(newer.containers.clone()),
+    };
+    assert!(store.persist_resource(&session, &scoped).await.is_err());
     let stale_event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
+        resource: None,
+        swarm_scope: false,
+        kind: citadel_adapters::connectors::docker::events::RuntimeEventKind::Container(
+            citadel_adapters::connectors::docker::events::ContainerChange::Tombstone,
+        ),
         container: None,
         resource_type: "container",
         action: "destroy".into(),
@@ -768,6 +795,52 @@ async fn verify_node_local_resources(
             "late scan cannot resurrect deleted resources"
         );
     }
+    // Metadata starts recovery but cannot mark a partially refreshed node fresh.
+    let started = snapshot.observed_at + chrono::Duration::seconds(1);
+    store
+        .persist_resource(
+            session,
+            &citadel_platforms::jobs::ResourceSnapshot {
+                platform_id: platform,
+                observed_at: started,
+                inventory: citadel_platforms::jobs::ResourceInventory::Platform(
+                    snapshot.info.clone(),
+                ),
+            },
+        )
+        .await
+        .unwrap();
+    let stale = || async {
+        sqlx::query_scalar::<_, bool>("SELECT isstale FROM swarmnoderuntimeprojectionstates WHERE platformid=$1 AND dockernodeid='worker'")
+            .bind(platform).fetch_one(pool).await.unwrap()
+    };
+    assert!(stale().await);
+    assert_eq!(
+        store
+            .complete_resource_recovery(session, old.observed_at)
+            .await
+            .unwrap(),
+        citadel_platforms::jobs::ProjectionChange::Unchanged
+    );
+    assert!(
+        stale().await,
+        "an old recovery cannot clear a newer recovery's uncertainty"
+    );
+    assert_eq!(
+        store
+            .complete_resource_recovery(session, started)
+            .await
+            .unwrap(),
+        citadel_platforms::jobs::ProjectionChange::Changed
+    );
+    assert_eq!(
+        store
+            .complete_resource_recovery(session, started)
+            .await
+            .unwrap(),
+        citadel_platforms::jobs::ProjectionChange::Unchanged
+    );
+    assert!(!stale().await);
 }
 
 #[tokio::test]
@@ -1208,5 +1281,155 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
         .await
         .unwrap()
         .unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() {
+    use citadel_platforms::jobs::ProjectionChange;
+    let (pool, store, target) = setup().await;
+    let (_, token, _) = store
+        .create_enrollment(&target, SYSTEM_ACTOR_ID)
+        .await
+        .unwrap();
+    let key = SigningKey::from_bytes(&[39; 32]);
+    let binding = store
+        .enroll(&enrollment(token, &key, Uuid::now_v7().to_string()))
+        .await
+        .unwrap();
+    let registry = EdgeRegistry::default();
+    let (session, _) = registry.register(target.clone(), binding.agent_id).unwrap();
+    store
+        .connected(&binding, session.connected_at)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,'replay','image','replay',1,1,'Running','[]')")
+        .bind(Uuid::now_v7()).bind(target.platform_id).execute(&pool).await.unwrap();
+    let event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
+        resource: None,
+        swarm_scope: false,
+        kind: citadel_platforms::jobs::RuntimeEventKind::Container(
+            citadel_platforms::jobs::ContainerChange::Exited,
+        ),
+        container: Some(citadel_platforms::RuntimeContainerSummary {
+            id: "replay".into(),
+            image_id: "image".into(),
+            name: "replay".into(),
+            state: "exited".into(),
+            ..Default::default()
+        }),
+        resource_type: "container",
+        action: "die".into(),
+        container_id: Some("replay".into()),
+        container_state: Some("exited".into()),
+        container_name: None,
+    };
+    let mut unavailable = event.clone();
+    unavailable.container = None;
+    assert_eq!(
+        store
+            .persist_container_event(&session, &unavailable)
+            .await
+            .unwrap(),
+        ProjectionChange::Unavailable
+    );
+    unavailable.container = Some(citadel_platforms::RuntimeContainerSummary {
+        id: "replay".into(),
+        state: "exited".into(),
+        ..Default::default()
+    });
+    assert_eq!(
+        store
+            .persist_container_event(&session, &unavailable)
+            .await
+            .unwrap(),
+        ProjectionChange::Unavailable,
+        "legacy default-filled metadata remains uncertain"
+    );
+    let preserved: (String, String, String) =
+        sqlx::query_as("SELECT name,dockerimageid,state FROM containers WHERE platformid=$1")
+            .bind(target.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        preserved,
+        ("replay".into(), "image".into(), "Running".into())
+    );
+    let resource_event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
+        resource: Some(citadel_platforms::jobs::ResourceDelta::Image {
+            id: "one".into(),
+            value: Some(citadel_platforms::RuntimeImageSummary {
+                id: "one".into(),
+                ..Default::default()
+            }),
+        }),
+        kind: citadel_platforms::jobs::RuntimeEventKind::Image(
+            citadel_platforms::jobs::ResourceChange::Observe,
+        ),
+        resource_type: "image",
+        action: "pull".into(),
+        container: None,
+        container_id: None,
+        container_state: None,
+        container_name: None,
+        swarm_scope: false,
+    };
+    assert_eq!(
+        store
+            .persist_resource_event(&session, &resource_event)
+            .await
+            .unwrap(),
+        ProjectionChange::Changed
+    );
+    assert_eq!(
+        store
+            .persist_resource_event(&session, &resource_event)
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    assert_eq!(
+        store
+            .persist_container_event(&session, &event)
+            .await
+            .unwrap(),
+        ProjectionChange::Changed
+    );
+    let version: i64 = sqlx::query_scalar("SELECT rowversion FROM containers WHERE platformid=$1")
+        .bind(target.platform_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .persist_container_event(&session, &event)
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT rowversion FROM containers WHERE platformid=$1")
+            .bind(target.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        version
+    );
+    registry.remove(&session);
+    assert!(
+        store
+            .persist_resource_event(&session, &resource_event)
+            .await
+            .is_err()
+    );
+    assert!(
+        store
+            .persist_container_event(&session, &event)
+            .await
+            .is_err(),
+        "no-op must not bypass session authorization"
+    );
     pool.close().await;
 }

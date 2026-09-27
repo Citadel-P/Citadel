@@ -9,8 +9,8 @@ async fn container_actions_use_generated_routes_preserve_delete_options_and_acce
         for expected in [
             "GET /version ",
             "POST /v1.49/containers/container/start ",
-            "POST /v1.49/containers/container/stop?t=10 ",
-            "POST /v1.49/containers/container/restart?t=10 ",
+            "POST /v1.49/containers/container/stop?signal=SIGTERM&t=10 ",
+            "POST /v1.49/containers/container/restart?signal=SIGINT&t=5 ",
             "POST /v1.49/containers/container/pause ",
             "POST /v1.49/containers/container/unpause ",
             "DELETE /v1.49/containers/container?v=false&force=true&link=false ",

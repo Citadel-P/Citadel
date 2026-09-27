@@ -16,8 +16,6 @@ use uuid::Uuid;
 
 use crate::persistence::postgres::activities::store::insert_activity;
 
-use crate::persistence::postgres::platforms::inventory::store::persist_snapshot;
-
 #[derive(Clone)]
 pub struct PostgresPlatformRegistrationRepository {
     pool: PgPool,
@@ -152,9 +150,6 @@ impl PlatformRegistrationRepository for PostgresPlatformRegistrationRepository {
             reject_existing(&mut transaction, registration).await?;
             validate_tags(&mut transaction, &registration.tag_ids).await?;
             insert_platform(&mut transaction, registration).await?;
-            persist_snapshot(&mut transaction, &registration.snapshot, None)
-                .await
-                .map_err(|error| PlatformRegistrationError::Storage(error.message))?;
             insert_tags(&mut transaction, actor_id, registration).await?;
             insert_created_activity(&mut transaction, actor_id, registration).await?;
             sqlx::query("SELECT pg_notify('citadel_platform_targets','')")

@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 #[derive(Default)]
 struct SlowStore {
+    delay: Duration,
     calls: AtomicUsize,
     completed: AtomicUsize,
     schedules: AtomicUsize,
@@ -29,7 +30,7 @@ impl GitRepositoryExecutionPersistence for SlowStore {
     ) -> BoxFuture<'_, Result<Option<GitSyncClaim>, GitRepositoryExecutionError>> {
         Box::pin(async {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            tokio::time::sleep(Duration::from_secs(120)).await;
+            tokio::time::sleep(self.delay).await;
             self.completed.fetch_add(1, Ordering::SeqCst);
             Ok(None)
         })
@@ -107,7 +108,10 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
         Arc::new(PostgresGitAccountRepository::new(pool)),
         Arc::new(AesGcmSecretProtector::new(&[91; 32]).unwrap()),
     ));
-    let store = Arc::new(SlowStore::default());
+    let store = Arc::new(SlowStore {
+        delay: Duration::from_secs(120),
+        ..Default::default()
+    });
     let service = Arc::new(GitRepositoryExecutionService::new(
         store.clone(),
         accounts,
@@ -119,7 +123,8 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
         Duration::from_secs(300),
     ));
     let cancellation = CancellationToken::new();
-    let worker = tokio::spawn(git_repository_sync(cancellation.clone(), service));
+    let (_sender, wake) = tokio::sync::watch::channel(());
+    let worker = tokio::spawn(git_repository_sync(cancellation.clone(), service, wake));
     tokio::task::yield_now().await;
     // Cross the staggered scheduler deadline before the execution completes.
     // Advancing straight to 120s makes both select branches ready together.
@@ -135,5 +140,57 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
         "the initial background schedule is delayed past one full interval"
     );
     cancellation.cancel();
+    worker.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn idle_git_waits_for_committed_signals_with_a_bounded_fallback() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@localhost/unused")
+        .unwrap();
+    let accounts = Arc::new(GitAccountService::new(
+        Arc::new(PostgresGitAccountRepository::new(pool)),
+        Arc::new(AesGcmSecretProtector::new(&[91; 32]).unwrap()),
+    ));
+    let store = Arc::new(SlowStore::default());
+    let service = Arc::new(GitRepositoryExecutionService::new(
+        store.clone(),
+        accounts,
+        Arc::new(GitCli::new(
+            Arc::new(citadel_processes::SystemProcess),
+            Duration::from_secs(300),
+        )),
+        std::env::temp_dir(),
+        Duration::from_secs(300),
+    ));
+    let cancel = CancellationToken::new();
+    let (sender, wake) = tokio::sync::watch::channel(());
+    let worker = tokio::spawn(git_repository_sync(cancel.clone(), service, wake));
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    let initial = store.calls.load(Ordering::SeqCst);
+    tokio::time::advance(Duration::from_secs(10)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        initial,
+        "no two-second claim polling"
+    );
+    sender.send_modify(|_| {});
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(store.calls.load(Ordering::SeqCst), initial + 1);
+    tokio::time::advance(Duration::from_secs(31)).await;
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        initial + 2,
+        "lost notifications fall back within 30 seconds"
+    );
+    cancel.cancel();
     worker.await.unwrap().unwrap();
 }

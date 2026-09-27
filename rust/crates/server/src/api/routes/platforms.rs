@@ -1,4 +1,5 @@
 //! Platforms HTTP routes, authorization and local request handling.
+use crate::api::resources::platforms::runtime_mapping;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -32,6 +33,7 @@ use crate::{
     realtime::RealtimeHub,
     request_validation::{invalid_json, invalid_path, invalid_query},
 };
+use citadel_platforms::PlatformInfoPort;
 
 use axum::{
     Json, Router,
@@ -64,9 +66,9 @@ use citadel_identity::{ActorPrincipal, IdentityService};
 
 use citadel_platforms::{
     AuthorizedReadError, EffectivePlatformPermission, PlatformInventoryPort, PlatformReadService,
-    PlatformRegistrationError, PlatformRegistrationService, PlatformResourceMutationPort,
-    PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeNetworkSummary,
-    RuntimeVolumeSummary, StatisticsReader, StatisticsWorkload, StatsWindow, SwarmTaskRuntimePort,
+    PlatformRegistrationError, PlatformRegistrationService, RuntimeCapabilityError,
+    RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary, StatisticsReader,
+    StatisticsWorkload, StatsWindow, SwarmTaskRuntimePort,
     containers::{ContainerAction, ContainerInspectionPort},
     deletion::{PlatformDeletionError, PlatformDeletionRepository},
     image_pull::{ImagePullError, ImagePullPort, PullImageStreamItem},
@@ -718,13 +720,13 @@ async fn list_networks(
     };
     let values = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
     };
     let values = match values {
@@ -778,13 +780,13 @@ pub(crate) async fn lookup_platform_resources(
     let names = if kind == citadel_discovery::LookupResourceType::Volume {
         let result = match runtime {
             RuntimeRef::Local(runtime) => {
-                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
             }
             RuntimeRef::Agent(ref runtime) => {
-                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
-                PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
             }
         };
         result.map(|values| {
@@ -796,13 +798,13 @@ pub(crate) async fn lookup_platform_resources(
     } else {
         let result = match runtime {
             RuntimeRef::Local(runtime) => {
-                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
             }
             RuntimeRef::Agent(ref runtime) => {
-                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
             }
             RuntimeRef::Edge(ref runtime) => {
-                PlatformInventoryPort::list_networks(runtime, &cancellation).await
+                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
             }
         };
         result.map(|values| {
@@ -867,13 +869,28 @@ async fn get_network(
         };
     let value = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
+            citadel_platforms::NetworkObservationPort::inspect_network(
+                runtime,
+                &network_id,
+                &cancellation,
+            )
+            .await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
+            citadel_platforms::NetworkObservationPort::inspect_network(
+                runtime,
+                &network_id,
+                &cancellation,
+            )
+            .await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::inspect_network(runtime, &network_id, &cancellation).await
+            citadel_platforms::NetworkObservationPort::inspect_network(
+                runtime,
+                &network_id,
+                &cancellation,
+            )
+            .await
         }
     };
     let mut network = match value {
@@ -928,7 +945,7 @@ async fn create_network(
     let cancellation = CancellationToken::new();
     let result = match runtime_for(&state, input.platform_id).await {
         Ok(RuntimeRef::Local(runtime)) => {
-            PlatformResourceMutationPort::create_network(
+            citadel_platforms::NetworkMutationPort::create_network(
                 runtime,
                 &input.network.clone().into(),
                 &cancellation,
@@ -936,7 +953,7 @@ async fn create_network(
             .await
         }
         Ok(RuntimeRef::Agent(ref runtime)) => {
-            PlatformResourceMutationPort::create_network(
+            citadel_platforms::NetworkMutationPort::create_network(
                 runtime,
                 &input.network.clone().into(),
                 &cancellation,
@@ -944,7 +961,7 @@ async fn create_network(
             .await
         }
         Ok(RuntimeRef::Edge(ref runtime)) => {
-            PlatformResourceMutationPort::create_network(
+            citadel_platforms::NetworkMutationPort::create_network(
                 runtime,
                 &input.network.clone().into(),
                 &cancellation,
@@ -1008,13 +1025,28 @@ async fn delete_networks(
     for id in &input.ids {
         let inspected = match runtime {
             RuntimeRef::Local(runtime) => {
-                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkObservationPort::inspect_network(
+                    runtime,
+                    id,
+                    &cancellation,
+                )
+                .await
             }
             RuntimeRef::Agent(ref runtime) => {
-                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkObservationPort::inspect_network(
+                    runtime,
+                    id,
+                    &cancellation,
+                )
+                .await
             }
             RuntimeRef::Edge(ref runtime) => {
-                PlatformInventoryPort::inspect_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkObservationPort::inspect_network(
+                    runtime,
+                    id,
+                    &cancellation,
+                )
+                .await
             }
         };
         let network = match inspected {
@@ -1071,13 +1103,16 @@ async fn delete_networks(
     for id in &input.ids {
         let result = match runtime {
             RuntimeRef::Local(runtime) => {
-                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
+                    .await
             }
             RuntimeRef::Agent(ref runtime) => {
-                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
+                    .await
             }
             RuntimeRef::Edge(ref runtime) => {
-                PlatformResourceMutationPort::delete_network(runtime, id, &cancellation).await
+                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
+                    .await
             }
         };
         match result {
@@ -1145,13 +1180,13 @@ async fn list_volumes(
     };
     let values = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
     };
     let values = match values {
@@ -1236,13 +1271,16 @@ async fn get_volume(
         };
     let value = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
+            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
+                .await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
+            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
+                .await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::inspect_volume(runtime, &name, &cancellation).await
+            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
+                .await
         }
     };
     let mut volume = match value {
@@ -1295,7 +1333,7 @@ async fn create_volume(
     let cancellation = CancellationToken::new();
     let result = match runtime_for(&state, input.platform_id).await {
         Ok(RuntimeRef::Local(runtime)) => {
-            PlatformResourceMutationPort::create_volume(
+            citadel_platforms::VolumeMutationPort::create_volume(
                 runtime,
                 &input.volume.clone().into(),
                 &cancellation,
@@ -1303,7 +1341,7 @@ async fn create_volume(
             .await
         }
         Ok(RuntimeRef::Agent(ref runtime)) => {
-            PlatformResourceMutationPort::create_volume(
+            citadel_platforms::VolumeMutationPort::create_volume(
                 runtime,
                 &input.volume.clone().into(),
                 &cancellation,
@@ -1311,7 +1349,7 @@ async fn create_volume(
             .await
         }
         Ok(RuntimeRef::Edge(ref runtime)) => {
-            PlatformResourceMutationPort::create_volume(
+            citadel_platforms::VolumeMutationPort::create_volume(
                 runtime,
                 &input.volume.clone().into(),
                 &cancellation,
@@ -1380,7 +1418,7 @@ async fn delete_volumes(
     for name in &input.names {
         let result = match runtime {
             RuntimeRef::Local(runtime) => {
-                PlatformResourceMutationPort::delete_volume(
+                citadel_platforms::VolumeMutationPort::delete_volume(
                     runtime,
                     name,
                     input.force.unwrap_or(false),
@@ -1389,7 +1427,7 @@ async fn delete_volumes(
                 .await
             }
             RuntimeRef::Agent(ref runtime) => {
-                PlatformResourceMutationPort::delete_volume(
+                citadel_platforms::VolumeMutationPort::delete_volume(
                     runtime,
                     name,
                     input.force.unwrap_or(false),
@@ -1398,7 +1436,7 @@ async fn delete_volumes(
                 .await
             }
             RuntimeRef::Edge(ref runtime) => {
-                PlatformResourceMutationPort::delete_volume(
+                citadel_platforms::VolumeMutationPort::delete_volume(
                     runtime,
                     name,
                     input.force.unwrap_or(false),
@@ -1967,10 +2005,14 @@ pub(crate) enum RuntimeRef<'a> {
     Edge(EdgeRuntime),
 }
 
+mod runtime_realtime;
+pub(crate) use runtime_realtime::realtime_resource_snapshot;
+
 pub(crate) async fn realtime_daemon_snapshot(
     state: &PlatformsHttpState,
     principal: &ActorPrincipal,
     id: Uuid,
+    lease: Option<&crate::realtime::AuthorizationLease>,
 ) -> Result<crate::realtime_groups::GroupSnapshot, crate::realtime::RealtimeReadError> {
     use crate::{
         realtime::RealtimeReadError,
@@ -1978,35 +2020,42 @@ pub(crate) async fn realtime_daemon_snapshot(
     };
     let failure = |error: RuntimeCapabilityError| RealtimeReadError::Storage(error.to_string());
     let headers = HeaderMap::new();
-    let platform = authorize_platform(state, principal, id, &headers)
-        .await
-        .map_err(|_| RealtimeReadError::Authorization)?;
-    let volume_cap = volume_capabilities(state, principal, id, platform, &headers)
-        .await
-        .map_err(|_| RealtimeReadError::Authorization)?;
+    let (platform, volume_cap) = if let Some(lease) = lease {
+        lease
+            .daemon_capabilities(&state.identity, principal, id)
+            .await?
+    } else {
+        let platform = authorize_platform(state, principal, id, &headers)
+            .await
+            .map_err(|_| RealtimeReadError::Authorization)?;
+        let volume_cap = volume_capabilities(state, principal, id, platform, &headers)
+            .await
+            .map_err(|_| RealtimeReadError::Authorization)?;
+        (platform, volume_cap)
+    };
     let runtime = runtime_for(state, id).await.map_err(failure)?;
     let cancellation = CancellationToken::new();
     let networks = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::list_networks(runtime, &cancellation).await
+            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
         }
     }
     .map_err(failure)?;
     let volumes = match runtime {
         RuntimeRef::Local(runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Agent(ref runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
         RuntimeRef::Edge(ref runtime) => {
-            PlatformInventoryPort::list_volumes(runtime, &cancellation).await
+            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
         }
     }
     .map_err(failure)?;
@@ -2129,13 +2178,13 @@ pub(crate) async fn runtime_for_node<'a>(
         let cancellation = CancellationToken::new();
         let info = match &runtime {
             RuntimeRef::Local(runtime) => {
-                citadel_platforms::PlatformRuntimePort::get_info(*runtime, &cancellation).await
+                citadel_platforms::PlatformInfoPort::get_info(*runtime, &cancellation).await
             }
             RuntimeRef::Agent(runtime) => {
-                citadel_platforms::PlatformRuntimePort::get_info(runtime, &cancellation).await
+                citadel_platforms::PlatformInfoPort::get_info(runtime, &cancellation).await
             }
             RuntimeRef::Edge(runtime) => {
-                citadel_platforms::PlatformRuntimePort::get_info(runtime, &cancellation).await
+                citadel_platforms::PlatformInfoPort::get_info(runtime, &cancellation).await
             }
         }?;
         if info.swarm.is_some_and(|swarm| {
@@ -2204,10 +2253,7 @@ fn map_network(
     network: RuntimeNetworkSummary,
     capabilities: NetworkCapabilitiesView,
 ) -> NetworkView {
-    let is_system = network
-        .labels
-        .get("com.citadel.system")
-        .is_some_and(|value| value == "true");
+    let is_system = runtime_mapping::system_network(&network.name, network.ingress);
     NetworkView {
         name: network.name,
         id: network.id,
@@ -2222,11 +2268,19 @@ fn map_network(
         config_only: network.config_only,
         in_use: network.container_count > 0,
         config_from: network.config_from,
-        ipam: network.ipam,
+        ipam: network.ipam.map(runtime_mapping::ipam),
         options: network.options,
         labels: network.labels,
-        containers: network.containers,
-        peers: network.peers,
+        containers: network
+            .containers
+            .into_iter()
+            .map(|(id, c)| (id, runtime_mapping::network_container(c)))
+            .collect(),
+        peers: network
+            .peers
+            .into_iter()
+            .map(runtime_mapping::peer)
+            .collect(),
         is_system,
         docker_node_id: None,
         node_hostname: None,
@@ -2273,7 +2327,7 @@ fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView
         driver: volume.driver,
         mountpoint: volume.mountpoint,
         created_at: volume.created_at,
-        cluster_volume: volume.cluster_volume,
+        cluster_volume: volume.cluster_volume.map(runtime_mapping::cluster_volume),
         usage_data: volume
             .usage_data
             .and_then(|usage| serde_json::from_value(usage).ok()),
@@ -2282,9 +2336,13 @@ fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView
             .status
             .into_iter()
             .map(|(key, value)| {
-                let value = value
-                    .as_str()
-                    .map_or_else(|| value.to_string(), str::to_owned);
+                let value = if value.is_null() {
+                    String::new()
+                } else {
+                    value
+                        .as_str()
+                        .map_or_else(|| value.to_string(), str::to_owned)
+                };
                 (key, value)
             })
             .collect(),
@@ -3876,7 +3934,7 @@ async fn initialize_swarm(
     };
     let snapshot = tokio::time::timeout(
         std::time::Duration::from_secs(30),
-        citadel_platforms::jobs::collect_inventory(port, &target, &cancellation),
+        citadel_platforms::jobs::collect_swarm_snapshot(port, &target, &cancellation),
     )
     .await
     .map_err(|_| {
@@ -5982,7 +6040,6 @@ async fn manager_identity(
     platform: &citadel_platforms::PlatformDetails,
     cancel: &CancellationToken,
 ) -> Result<(), RuntimeCapabilityError> {
-    use citadel_platforms::PlatformRuntimePort;
     let info = match runtime {
         RuntimeRef::Local(r) => r.get_info(cancel).await,
         RuntimeRef::Agent(r) => r.get_info(cancel).await,
@@ -6016,7 +6073,7 @@ async fn refresh(
     let _guard = cancel.clone().drop_guard();
     let snapshot = tokio::time::timeout(
         Duration::from_secs(30),
-        citadel_platforms::jobs::collect_inventory(
+        citadel_platforms::jobs::collect_swarm_snapshot(
             port,
             &citadel_platforms::jobs::InventoryCollectionTarget {
                 platform_id: platform.id,
@@ -7344,6 +7401,18 @@ mod tests {
             VolumeCapabilitiesView::default(),
         );
         assert!(view.usage_data.is_none());
+    }
+
+    #[test]
+    fn null_volume_status_matches_the_empty_dotnet_string() {
+        let volume = RuntimeVolumeSummary {
+            status: std::collections::BTreeMap::from([("missing".into(), serde_json::Value::Null)]),
+            ..Default::default()
+        };
+        assert_eq!(
+            map_volume(volume, VolumeCapabilitiesView::default()).status["missing"],
+            ""
+        );
     }
 
     #[test]

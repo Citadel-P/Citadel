@@ -52,7 +52,7 @@ async fn deleted_activities(harness: &TestHarness, id: Uuid) -> i64 {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn delete_platform_persists_snapshot_cascades_inventory_and_backup_items_and_notifies() {
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let run = seed_backup_item(&harness, id).await;
     let mut events = harness.realtime.subscribe();
@@ -115,7 +115,7 @@ async fn delete_platform_persists_snapshot_cascades_inventory_and_backup_items_a
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn delete_missing_platform_rolls_back_entire_selection_without_notifications() {
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let mut events = harness.realtime.subscribe();
     let response = delete(
@@ -133,7 +133,7 @@ async fn delete_missing_platform_rolls_back_entire_selection_without_notificatio
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn delete_validates_input_and_requires_execute_permission() {
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     assert_eq!(
         delete(&harness.app, None, json!({"ids":[id]}))
@@ -185,7 +185,7 @@ async fn delete_validates_input_and_requires_execute_permission() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_audit() {
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let other = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms (id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,$2,'Agent',0,0,0,0,'{}','Offline',0)")
@@ -225,7 +225,7 @@ async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn concurrent_deletes_emit_only_one_activity_and_notification() {
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let mut events = harness.realtime.subscribe();
     let (first, second) = tokio::join!(
@@ -252,7 +252,7 @@ async fn concurrent_deletes_emit_only_one_activity_and_notification() {
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
 async fn deletion_revokes_edge_credentials_and_disconnects_sessions_only_after_commit() {
     use citadel_adapters::connectors::edge::EdgeTarget;
-    let harness = harness(StaticInventory::standalone(Uuid::now_v7().to_string())).await;
+    let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
     let enrollment = Uuid::now_v7();
     let agent = Uuid::now_v7();

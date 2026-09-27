@@ -56,6 +56,11 @@ impl PostgresStackRepository {
                 .bind(Uuid::now_v7()).bind(expected.id).bind(git_repo_id).bind(expected.current_stack_release_id)
                 .bind(fingerprint).bind(branch).bind(commit).execute(&mut *tx).await.map_err(storage)?;
         }
+        sqlx::query("SELECT pg_notify($1, '')")
+            .bind(citadel_runtime::RuntimeSignal::StackWebhooks.channel())
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
         tx.commit().await.map_err(storage)
     }
 }
@@ -109,6 +114,11 @@ pub(super) async fn settle(
     }
     sqlx::query("DELETE FROM stackwebhookdeployqueue WHERE stackid=$1 AND expectedstackreleaseid=$2 AND status='Processing'")
         .bind(claim.stack_id).bind(claim.release_id).execute(&mut **tx).await.map_err(storage)?;
+    sqlx::query("SELECT pg_notify($1, '')")
+        .bind(citadel_runtime::RuntimeSignal::StackWebhooks.channel())
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
     Ok(())
 }
 

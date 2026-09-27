@@ -5,7 +5,7 @@ use citadel_agent::{app::Agent, config::AgentConfig};
 use citadel_contracts::citadel::{
     containers::v1::*, deployments::v1::*, images::v1::*, networks::v1::*, volumes::v1::*,
 };
-use citadel_platforms::PlatformRuntimePort;
+use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort, PlatformStatsPort};
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::StreamExt;
 use prost::Message;

@@ -4,14 +4,12 @@ use chrono::{DateTime, Utc};
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::PlatformRuntimePort;
 use crate::RuntimeCapabilityError;
 use citadel_swarm_services::SwarmServiceOwnership;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeImageSummary {
     pub id: String,
     pub repo_tags: Vec<String>,
@@ -314,58 +312,30 @@ pub trait InventoryProjectionStore: Send + Sync {
     ) -> BoxFuture<'a, Result<InventoryProjectionChange, RuntimeCapabilityError>>;
 }
 
-pub trait PlatformInventoryPort: PlatformRuntimePort {
-    fn list_images<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeImageSummary>, RuntimeCapabilityError>>;
-
-    fn list_networks<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>>;
-
-    fn inspect_network<'a>(
-        &'a self,
-        id: &'a str,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeNetworkSummary, RuntimeCapabilityError>>;
-
-    fn list_volumes<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>>;
-
-    fn inspect_volume<'a>(
-        &'a self,
-        name: &'a str,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>>;
-
-    fn list_swarm_nodes<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmNode>, RuntimeCapabilityError>>;
-
-    fn list_swarm_services<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmService>, RuntimeCapabilityError>>;
-
-    fn list_swarm_tasks<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmTask>, RuntimeCapabilityError>>;
-
-    fn list_swarm_configs<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmConfig>, RuntimeCapabilityError>>;
-
-    fn list_swarm_secrets<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeSwarmSecret>, RuntimeCapabilityError>>;
+/// Composite for orchestration only; scoped services use individual capabilities.
+pub trait PlatformInventoryPort:
+    crate::PlatformInfoPort
+    + crate::ContainerInventoryPort
+    + crate::ImageInventoryPort
+    + crate::NetworkInventoryPort
+    + crate::NetworkObservationPort
+    + crate::VolumeInventoryPort
+    + crate::VolumeObservationPort
+    + crate::SwarmInventoryPort
+{
+}
+impl<
+    T: crate::PlatformInfoPort
+        + crate::ContainerInventoryPort
+        + crate::ImageInventoryPort
+        + crate::NetworkInventoryPort
+        + crate::NetworkObservationPort
+        + crate::VolumeInventoryPort
+        + crate::VolumeObservationPort
+        + crate::SwarmInventoryPort
+        + ?Sized,
+> PlatformInventoryPort for T
+{
 }
 
 #[cfg(test)]

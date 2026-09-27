@@ -43,7 +43,7 @@ impl NodeAgentSetupRuntime for NodeAgentRuntimeRouter {
     ) -> BoxFuture<'a, Result<RuntimeInventorySnapshot, RuntimeCapabilityError>> {
         Box::pin(async move {
             let target = self.target(claim.platform_id).await?;
-            let snapshot = citadel_platforms::jobs::collect_inventory(
+            let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
                 target.inventory(),
                 &citadel_platforms::jobs::InventoryCollectionTarget {
                     platform_id: claim.platform_id,

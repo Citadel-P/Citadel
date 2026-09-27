@@ -273,7 +273,9 @@ pub struct CpuUsage {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MemoryStats {
     #[serde(default)]
-    pub usage: u64,
+    pub usage: Option<u64>,
+    #[serde(default)]
+    pub privateworkingset: Option<u64>,
     #[serde(default)]
     pub stats: HashMap<String, u64>,
     #[serde(default)]
@@ -388,6 +390,18 @@ pub struct ImageInspect {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ImageConfig {
+    #[serde(rename = "User", default)]
+    pub user: Option<String>,
+    #[serde(rename = "WorkingDir", default)]
+    pub working_dir: Option<String>,
+    #[serde(
+        rename = "Entrypoint",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub entry_point: Vec<String>,
+    #[serde(rename = "StopSignal", default)]
+    pub stop_signal: Option<String>,
     #[serde(rename = "Env", default, deserialize_with = "deserialize_null_default")]
     pub env: Vec<String>,
     #[serde(rename = "Cmd", default, deserialize_with = "deserialize_null_default")]

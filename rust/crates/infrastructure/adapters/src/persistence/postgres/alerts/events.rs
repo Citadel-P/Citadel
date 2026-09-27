@@ -193,30 +193,13 @@ impl PostgresAlertRepository {
         observation: &'a AlertObservation,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
-            let rows = sqlx::query(
-                r#"SELECT rule.*,
-COALESCE(array_agg(relation.alertchannelid) FILTER (WHERE relation.alertchannelid IS NOT NULL),'{}') AS channelids
-FROM alertrules rule
-LEFT JOIN alertrulechannels relation ON relation.alertruleid=rule.id
-WHERE rule.status='Enabled' AND rule.type=$1
-GROUP BY rule.id
-ORDER BY CASE rule.severity WHEN 'Critical' THEN 3 WHEN 'Warning' THEN 2 ELSE 1 END DESC,
-         rule.createdat,rule.id"#,
-            )
-            .bind(&observation.alert_type)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(storage)?;
-            let rules = rows
-                .into_iter()
-                .map(map_rule)
-                .collect::<Result<Vec<_>, _>>()?;
+            let rules = self.configured_rules(&observation.alert_type).await?;
             let advanced_alerting = !rules
                 .iter()
                 .any(|rule| rule.created_by_actor_id != Uuid::from_u128(1))
                 || self.entitlements.advanced_alerting().await?;
             let rules = rules
-                .into_iter()
+                .iter()
                 .filter(|rule| {
                     (advanced_alerting || rule.created_by_actor_id == Uuid::from_u128(1))
                         && rule_applies(rule, observation.resource_id)

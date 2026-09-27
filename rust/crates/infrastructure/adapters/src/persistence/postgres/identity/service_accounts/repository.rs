@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use chrono::{DateTime, Utc};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, ServiceAccountActivitySnapshot,
@@ -152,7 +153,13 @@ LIMIT $5 OFFSET $6
         account: &'a NewServiceAccount,
     ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![account.id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let roles = sqlx::query_scalar::<_, Uuid>("SELECT id FROM roles WHERE id = ANY($1)")
                 .bind(&account.role_ids)
                 .fetch_all(&mut *transaction)
@@ -254,7 +261,10 @@ VALUES ($1, $2, $3, $4, $5, $6)
                 account.created_at,
             )
             .await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, account.id)
                 .await?
                 .ok_or(IdentityError::NotFound)
@@ -270,7 +280,13 @@ VALUES ($1, $2, $3, $4, $5, $6)
         updated_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_id = sqlx::query_scalar::<_, Uuid>(
                 "SELECT actorid FROM serviceaccounts WHERE id = $1 AND archivedatutc IS NULL FOR UPDATE",
             )
@@ -336,7 +352,10 @@ WHERE id = $1
                 )
                 .await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, id)
                 .await?
                 .ok_or(IdentityError::NotFound)
@@ -394,7 +413,13 @@ WHERE id = $1 AND archivedatutc IS NULL
         archived_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<(), IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(ids.to_vec());
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_ids = sqlx::query_scalar::<_, Uuid>(
                 r#"
 SELECT actorid FROM serviceaccounts
@@ -471,7 +496,10 @@ WHERE serviceaccountid = ANY($1)
                 )
                 .await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             Ok(())
         })
     }
@@ -484,7 +512,13 @@ WHERE serviceaccountid = ANY($1)
         changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![account_id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
             let (_, old_snapshot) = load_activity_snapshot(&mut transaction, account_id).await?;
             if !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM roles WHERE id = $1)")
@@ -519,7 +553,10 @@ WHERE serviceaccountid = ANY($1)
                 changed_at,
             )
             .await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, account_id)
                 .await?
                 .ok_or(IdentityError::NotFound)
@@ -534,7 +571,13 @@ WHERE serviceaccountid = ANY($1)
         changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![account_id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
             let (_, old_snapshot) = load_activity_snapshot(&mut transaction, account_id).await?;
             let affected = sqlx::query("DELETE FROM actorroles WHERE actorid = $1 AND roleid = $2")
@@ -557,7 +600,10 @@ WHERE serviceaccountid = ANY($1)
                 changed_at,
             )
             .await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, account_id)
                 .await?
                 .ok_or(IdentityError::NotFound)
@@ -572,7 +618,13 @@ WHERE serviceaccountid = ANY($1)
         changed_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![account_id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
             let (_, old_snapshot) = load_activity_snapshot(&mut transaction, account_id).await?;
             let affected = sqlx::query(
@@ -610,7 +662,10 @@ ON CONFLICT DO NOTHING
                 changed_at,
             )
             .await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, account_id)
                 .await?
                 .ok_or(IdentityError::NotFound)
@@ -625,7 +680,13 @@ ON CONFLICT DO NOTHING
         changed_at: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<ServiceAccountDetails, IdentityError>> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::ServiceAccounts(vec![account_id]);
+            authorization
+                .capture(&mut transaction, &impact)
+                .await
+                .map_err(storage)?;
             let actor_id = lock_active_account(&mut transaction, account_id).await?;
             let (_, old_snapshot) = load_activity_snapshot(&mut transaction, account_id).await?;
             let affected =
@@ -649,7 +710,10 @@ ON CONFLICT DO NOTHING
                 changed_at,
             )
             .await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, impact)
+                .await
+                .map_err(storage)?;
             load_account(&self.pool, account_id)
                 .await?
                 .ok_or(IdentityError::NotFound)

@@ -1,11 +1,15 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::{
     activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
     automation::PostgresAutomationRepository, backups::PostgresBackupPersistence,
     builds::PostgresBuildRepository, deployments::PostgresDeploymentRepository,
     stacks::PostgresStackRepository, swarm_services::PostgresSwarmServiceRepository,
 };
-use citadel_identity::{AccessTokenClaims, SessionTokenCodec};
+use citadel_identity::{
+    AccessTokenClaims, SessionTokenCodec, UserPatchMutation, UserReader, UserRepository,
+    UserResourceAccessInput,
+};
 use citadel_primitives::ResourceType;
 use citadel_server::{
     config::RealtimeConfig,
@@ -40,7 +44,7 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         docker: f.lookup_state.platforms.clone(),
     }
 }
-fn token(p: &ActorPrincipal) -> String {
+pub(super) fn token(p: &ActorPrincipal) -> String {
     JwtSessionTokenCodec::new(&[7; 32], "fixture".into(), "fixture".into())
         .unwrap()
         .encode_access(&AccessTokenClaims {
@@ -53,7 +57,7 @@ fn token(p: &ActorPrincipal) -> String {
         })
         .unwrap()
 }
-async fn receive(socket: &mut Socket) -> Value {
+pub(super) async fn receive(socket: &mut Socket) -> Value {
     let frame = tokio::time::timeout(StdDuration::from_secs(5), socket.next())
         .await
         .unwrap()
@@ -283,13 +287,13 @@ fn append_terminal_output(frame: &Value, output: &mut Vec<u8>) {
     );
     assert!(output.len() < 65536);
 }
-async fn invoke(socket: &mut Socket, target: &str, group: &str) -> Value {
+pub(super) async fn invoke(socket: &mut Socket, target: &str, group: &str) -> Value {
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"1","target":target,"arguments":[group]}).to_string().into())).await.unwrap();
     let completion = receive(socket).await;
     assert_eq!(completion["kind"], "completion");
     completion
 }
-async fn cleanup(f: Fixture) {
+pub(super) async fn cleanup(f: Fixture) {
     f.docker_server.abort();
     f.pool.close().await;
     std::fs::remove_file(f.docker_socket).unwrap();
@@ -633,7 +637,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
     let principal = super::lookup::subject(&f).await;
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::Platform,
@@ -649,12 +653,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
             .await
             .is_err()
     );
-    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
-        .bind(SpecificPermission::Terminal as i32)
-        .bind(principal.actor_id.value())
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    replace_specific_permissions(&f, &principal, vec![SpecificPermission::Terminal]).await;
     let registry = f.lookup_state.platforms.edge.clone();
     let (session, mut commands) = registry
         .register(
@@ -778,11 +777,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
     assert_eq!(event["target"], "SendContainerExec");
     assert_eq!(event["arguments"][0], json!(b"hello".to_vec()));
     assert!(other_node.try_recv().is_err());
-    sqlx::query("UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1")
-        .bind(principal.actor_id.value())
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    replace_specific_permissions(&f, &principal, vec![]).await;
     let closed = tokio::time::timeout(StdDuration::from_secs(3), socket.next())
         .await
         .unwrap();
@@ -1026,7 +1021,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
     let principal = super::lookup::subject(&f).await;
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::Platform,
@@ -1043,12 +1038,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
             .is_err(),
         "Read alone must not permit logs"
     );
-    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
-        .bind(SpecificPermission::Logs as i32)
-        .bind(principal.actor_id.value())
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    replace_specific_permissions(&f, &principal, vec![SpecificPermission::Logs]).await;
     let resolved = reader
         .invocation_group(&principal, "StartContainerLogs", &[json!(&docker_id)])
         .await
@@ -1080,7 +1070,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         "the unchanged Deployment viewer joins a short Docker-ID group"
     );
     let group = deployment_group.name;
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::Deployment,
@@ -1088,12 +1078,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         0,
     )
     .await;
-    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2")
-        .bind(SpecificPermission::Logs as i32)
-        .bind(principal.actor_id.value())
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    replace_specific_permissions(&f, &principal, vec![SpecificPermission::Logs]).await;
     let registry = &f.lookup_state.platforms.edge;
     let (session, mut commands) = registry
         .register(
@@ -1182,11 +1167,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         assert_eq!(output["target"], "SendContainerLogs");
         assert_eq!(output["arguments"][0], json!(bytes));
         if revoke {
-            sqlx::query("UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1")
-                .bind(principal.actor_id.value())
-                .execute(&f.pool)
-                .await
-                .unwrap();
+            replace_specific_permissions(&f, &principal, vec![]).await;
             let closed = tokio::time::timeout(StdDuration::from_secs(3), socket.next())
                 .await
                 .unwrap();
@@ -1225,7 +1206,7 @@ async fn managed_service_group_requires_parent_platform_and_preserves_persisted_
     let groups = reader(&f);
     let group = Group::parse(&format!("swarm-service:{id}")).unwrap();
     assert!(groups.read(&principal, &group, None).await.is_err());
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::SwarmService,
@@ -1237,7 +1218,7 @@ async fn managed_service_group_requires_parent_platform_and_preserves_persisted_
         groups.read(&principal, &group, None).await.is_err(),
         "Service Read alone must not bypass parent Platform visibility"
     );
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::Platform,
@@ -1281,7 +1262,7 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
             "{name}"
         );
     }
-    super::lookup::grant(
+    grant(
         &f,
         principal.actor_id.value(),
         ResourceType::Platform,
@@ -1329,12 +1310,7 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
             .iter()
             .any(|batch| batch.target == "NetworkEventReceived")
     );
-    sqlx::query("DELETE FROM resourceaccesses WHERE actorid=$1 AND resourceid=$2")
-        .bind(principal.actor_id.value())
-        .bind(f.platform_id)
-        .execute(&f.pool)
-        .await
-        .unwrap();
+    remove_platform_access(&f, &principal).await;
     assert!(groups.read(&principal, &group, None).await.is_err());
     cleanup(f).await;
 }
@@ -1387,7 +1363,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
     second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&restricted)}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut second).await["kind"], "subscribed");
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_string());
-    super::lookup::grant(
+    grant(
         &f,
         restricted.actor_id.value(),
         ResourceType::Platform,
@@ -1395,6 +1371,18 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
         0,
     )
     .await;
+    assert!(matches!(
+        tokio::time::timeout(StdDuration::from_secs(2), second.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(_))) | None
+    ));
+    let (mut second, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&restricted)}).to_string().into())).await.unwrap();
+    assert_eq!(receive(&mut second).await["kind"], "subscribed");
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_null());
     assert_eq!(
         receive(&mut second).await["target"],
@@ -1421,13 +1409,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
     );
     // A resource ACL removal must affect an existing authenticated socket,
     // including a repeated join. A cached token role is insufficient.
-    sqlx::query("DELETE FROM resourceaccesses WHERE actorid=$1 AND resourceid=$2")
-        .bind(restricted.actor_id.value())
-        .bind(f.platform_id)
-        .execute(&f.pool)
-        .await
-        .unwrap();
-    assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_string());
+    remove_platform_access(&f, &restricted).await;
     // Existing statistics handlers require Citadel IDs, not Docker IDs.
     hub.publish_container_stats(
         f.platform_id,
@@ -1471,5 +1453,151 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
     socket.close(None).await.unwrap();
     cancellation.cancel();
     server.await.unwrap();
+    cleanup(f).await;
+}
+
+// Authorization mutations in live-connection fixtures use the same commit hook
+// as the API. Raw SQL setup is safe only before the actor has been read/cached.
+async fn grant(f: &Fixture, actor: Uuid, kind: ResourceType, id: Uuid, specific: i32) {
+    let user: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE actorid=$1")
+        .bind(actor)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let access = UserResourceAccessInput {
+        resource_type: kind,
+        resource_id: id,
+        permission_level: citadel_primitives::PermissionLevel::Read,
+        specific_permissions: citadel_primitives::SpecificPermission::ALL
+            .into_iter()
+            .filter(|p| specific & (*p as i32) != 0)
+            .collect(),
+    };
+    PostgresUserRepository::new(f.pool.clone())
+        .add_resource_access(
+            user,
+            &access,
+            ActorId::new(SYSTEM_ACTOR_ID),
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
+}
+
+async fn replace_specific_permissions(
+    f: &Fixture,
+    p: &ActorPrincipal,
+    specifics: Vec<citadel_primitives::SpecificPermission>,
+) {
+    let users = PostgresUserRepository::new(f.pool.clone());
+    let accesses = users
+        .get(p.subject_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .resource_accesses
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| UserResourceAccessInput {
+            resource_type: a.resource_type,
+            resource_id: a.resource_id,
+            permission_level: a.permission_level,
+            specific_permissions: specifics.clone(),
+        })
+        .collect();
+    users
+        .patch(
+            p.subject_id,
+            &UserPatchMutation {
+                resource_accesses: Some(accesses),
+                ..Default::default()
+            },
+            ActorId::new(SYSTEM_ACTOR_ID),
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
+}
+
+async fn remove_platform_access(f: &Fixture, p: &ActorPrincipal) {
+    let access = UserResourceAccessInput {
+        resource_type: ResourceType::Platform,
+        resource_id: f.platform_id,
+        permission_level: citadel_primitives::PermissionLevel::Read,
+        specific_permissions: vec![],
+    };
+    PostgresUserRepository::new(f.pool.clone())
+        .remove_resource_access(
+            p.subject_id,
+            &access,
+            ActorId::new(SYSTEM_ACTOR_ID),
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn committed_resource_notifications_do_not_reopen_docker_or_cross_authorization() {
+    use citadel_platforms::{RuntimeNetworkSummary, RuntimeVolumeSummary, jobs::ResourceDelta};
+    let f = fixture().await;
+    let groups = reader(&f);
+    f.docker_server.abort();
+    let hub = citadel_server::realtime::RealtimeHub::new(16, Arc::new(Metrics::default()));
+    let mut changes = hub.subscribe();
+    let daemon = Group::parse(&format!("docker-daemon:{}", f.platform_id)).unwrap();
+    let unauthorized = super::lookup::subject(&f).await;
+    for delta in [
+        ResourceDelta::Network {
+            id: "network-one".into(),
+            value: Some(RuntimeNetworkSummary {
+                id: "network-one".into(),
+                name: "one".into(),
+                ..Default::default()
+            }),
+        },
+        ResourceDelta::Volume {
+            id: "volume-one".into(),
+            value: Some(RuntimeVolumeSummary {
+                name: "volume-one".into(),
+                ..Default::default()
+            }),
+        },
+        ResourceDelta::Volume {
+            id: "volume-one".into(),
+            value: None,
+        },
+        ResourceDelta::Image {
+            id: "image".into(),
+            value: None,
+        },
+    ] {
+        hub.publish_resource_observation(f.platform_id, None, "update", &delta);
+        let event = changes.recv().await.unwrap();
+        for _ in 0..2 {
+            let value = groups
+                .read(&f.administrator, &daemon, Some(&event))
+                .await
+                .unwrap();
+            assert_eq!(value.rows.len(), 1);
+            assert_eq!(
+                value.rows[0].target,
+                match delta {
+                    ResourceDelta::Network { .. } => "NetworkEventReceived",
+                    ResourceDelta::Volume { .. } => "VolumeEventReceived",
+                    ResourceDelta::Image { .. } => "ImageEventReceived",
+                }
+            );
+        }
+        assert!(
+            groups
+                .read(&unauthorized, &daemon, Some(&event))
+                .await
+                .is_err()
+        );
+    }
     cleanup(f).await;
 }

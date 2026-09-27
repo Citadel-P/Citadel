@@ -50,17 +50,20 @@ pub(super) async fn edge_health(
         .bind(platform).fetch_optional(pool).await
 }
 
+#[derive(Clone)]
+pub(super) struct PlatformHealthTransition {
+    pub target: ReconciliationTarget,
+    pub online: bool,
+}
+
 pub(super) struct HealthWorker {
     pub(super) docker: DockerClient,
     pub(super) targets: Arc<PlatformRuntimeRegistry>,
     pub(super) pool: PgPool,
-    pub(super) realtime: Option<RealtimeHub>,
-    pub(super) local: BoundedSender<()>,
-    pub(super) agent_trigger: AgentReconciliationSignal,
-    pub(super) alerts: Arc<dyn AlertEventSink>,
+    pub(super) transitions: BoundedSender<PlatformHealthTransition>,
 }
 
-pub(super) async fn resource_health(
+pub(super) async fn platform_health_monitor(
     cancellation: CancellationToken,
     worker: HealthWorker,
 ) -> Result<(), std::convert::Infallible> {
@@ -68,20 +71,22 @@ pub(super) async fn resource_health(
         docker,
         targets: registry,
         pool,
-        realtime,
-        local,
-        agent_trigger,
-        alerts,
+        transitions,
     } = worker;
     let budget = IoBudget::new(HEALTH_CONCURRENCY.try_into().unwrap(), RuntimeWork::Health);
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut states = std::collections::HashMap::new();
+    let mut states = std::collections::HashMap::<
+        (uuid::Uuid, String),
+        (citadel_platforms::ConnectorKind, HealthState),
+    >::new();
     loop {
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
         let targets = registry.snapshot().await;
-        states.retain(|key: &(uuid::Uuid, String), _| {
-            targets.iter().any(|t| t.id == key.0 && t.address == key.1)
+        states.retain(|key, (connector, _)| {
+            targets
+                .iter()
+                .any(|t| t.id == key.0 && t.address == key.1 && t.connector_type == *connector)
         });
         let probes = futures_util::stream::iter(targets.iter().cloned().map(|target| {
             let docker = docker.clone();
@@ -127,87 +132,18 @@ pub(super) async fn resource_health(
                 }
                 continue;
             };
-            let state: &mut HealthState = states
+            let (_, state) = states
                 .entry((target.id, target.address.clone()))
-                .or_default();
-            // Recover a committed inventory whose process stopped before the
-            // separate deployment reconciliation. Observations live in Postgres.
-            let recovery = RuntimeWork::HealthDeploymentRecovery.start();
-            match citadel_adapters::persistence::postgres::platforms::status::reconcile_deployments(
-                &pool, target.id, None, false,
-            )
-            .await
-            {
-                Ok(changed) if changed > 0 => {
-                    if let Some(hub) = &realtime {
-                        hub.publish_runtime_change(
-                            target.id,
-                            "platformInventory",
-                            "updated",
-                            target.id.to_string(),
-                        );
-                    }
-                }
-                Err(error) => {
-                    tracing::warn!(%error, platform_id=%target.id, "Deployment observation reconciliation failed")
-                }
-                _ => {}
-            }
-            drop(recovery);
+                .or_insert_with(|| (target.connector_type, HealthState::default()));
             let Some(online) = state.observe(healthy) else {
                 continue;
             };
-            if online {
-                if let Err(error) =
-                    citadel_adapters::persistence::postgres::platforms::status::platform_online(
-                        &pool, target.id,
-                    )
-                    .await
-                {
-                    tracing::warn!(%error, "Online Platform state persistence failed");
-                    state.online = None;
-                    continue;
-                }
-                if target.connector_type != citadel_platforms::ConnectorKind::EdgeAgent {
-                    if target.connector_type == citadel_platforms::ConnectorKind::Local {
-                        let _ = local.try_send(());
-                    } else {
-                        agent_trigger.request(Some(target.id));
-                    }
-                }
-            } else if let Err(error) =
-                citadel_adapters::persistence::postgres::platforms::status::platform_offline(
-                    &pool, target.id,
-                )
+            if transitions
+                .send(PlatformHealthTransition { target, online }, &cancellation)
                 .await
+                .is_err()
             {
-                tracing::warn!(%error, "Offline resource synchronization failed");
-                state.online = None; // Retry persistence on the next confirmed sample.
-                continue;
-            }
-            let observation = if online {
-                platform_reachable_observation(&target)
-            } else {
-                platform_unreachable_observation(
-                    &target,
-                    &RuntimeCapabilityError::new(
-                        citadel_platforms::RuntimeErrorKind::Unavailable,
-                        "Platform health checks failed",
-                        true,
-                    ),
-                )
-            };
-            if let Err(error) = alerts.observe(&observation).await {
-                tracing::warn!(%error, "Platform health Alert evaluation failed");
-                state.online = None;
-            }
-            if let Some(hub) = &realtime {
-                hub.publish_runtime_change(
-                    target.id,
-                    "platformInventory",
-                    if online { "reachable" } else { "offline" },
-                    target.id.to_string(),
-                );
+                return Ok(());
             }
         }
     }

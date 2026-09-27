@@ -8,6 +8,7 @@ mod image_builds;
 mod images;
 mod networks;
 mod platforms;
+mod sampling;
 mod stack_source;
 mod stacks;
 mod swarm;
@@ -31,6 +32,7 @@ pub const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Clone)]
 pub struct Runtime {
     docker: DockerClient,
+    samples: Arc<sampling::SharedSampler>,
     docker_cli: String,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
@@ -43,6 +45,7 @@ impl Runtime {
         runtime_container: Option<String>,
     ) -> Self {
         Self {
+            samples: Arc::new(sampling::SharedSampler::new(docker.clone())),
             docker,
             docker_cli: "docker".into(),
             shutdown,
@@ -159,3 +162,6 @@ fn interval(milliseconds: i32) -> std::time::Duration {
 fn version() -> String {
     crate::VERSION.to_owned()
 }
+
+#[cfg(test)]
+mod runtime_audit_tests;

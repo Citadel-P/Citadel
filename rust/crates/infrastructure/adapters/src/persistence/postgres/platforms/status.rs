@@ -1,5 +1,6 @@
 //! Shared container event and reconciliation rules.
 use citadel_activities::{ActivityEvent, ActivityEventInfo, ActivityStatus};
+use citadel_platforms::jobs::{ProjectionChange, ProjectionKind, ProjectionWrite};
 use citadel_primitives::ActorId;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -16,6 +17,8 @@ pub(crate) struct RemovedBindings {
 #[derive(Default)]
 pub(crate) struct ContainerEventChange {
     pub changed: bool,
+    pub accepted: bool,
+    pub identity: Option<Uuid>,
     pub deployments: Vec<Uuid>,
 }
 
@@ -50,12 +53,57 @@ pub async fn container_event(
     name: Option<&str>,
     observed: i64,
 ) -> Result<bool> {
+    Ok(
+        container_event_committed(pool, platform, node, docker_id, state, name, observed)
+            .await?
+            .changed(),
+    )
+}
+pub async fn container_event_committed(
+    pool: &PgPool,
+    platform: Uuid,
+    node: Option<&str>,
+    docker_id: &str,
+    state: Option<&str>,
+    name: Option<&str>,
+    observed: i64,
+) -> Result<ProjectionChange> {
+    let write = ProjectionWrite::begin(platform, node, ProjectionKind::Containers).await;
     let mut tx = pool.begin().await?;
-    let changed =
-        container_event_in(&mut tx, platform, node, docker_id, state, name, observed).await?;
+    let changed = container_event_in(
+        &mut tx,
+        platform,
+        node,
+        docker_id,
+        state,
+        name,
+        observed,
+        super::runtime_index::hint(pool, platform, node, docker_id),
+    )
+    .await?;
     tx.commit().await?;
-    reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
-    Ok(changed.changed)
+    if changed.identity.is_some() || !changed.accepted {
+        super::runtime_index::committed_identity(
+            pool,
+            platform,
+            node,
+            docker_id,
+            if state.is_none() && changed.changed {
+                None
+            } else {
+                changed.identity
+            },
+        );
+    }
+    write.committed();
+    if changed.changed {
+        reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
+    }
+    Ok(if changed.accepted {
+        ProjectionChange::committed(changed.changed)
+    } else {
+        ProjectionChange::Unavailable
+    })
 }
 pub(crate) async fn container_event_in(
     tx: &mut Transaction<'_, Postgres>,
@@ -65,17 +113,57 @@ pub(crate) async fn container_event_in(
     state: Option<&str>,
     name: Option<&str>,
     observed: i64,
+    hint: Option<Uuid>,
 ) -> Result<ContainerEventChange> {
     // Use the same lock order as inventory and health synchronization.
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(platform)
         .fetch_optional(&mut **tx)
         .await?;
-    let row=sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 AND COALESCE(projectionobservedat,0)<=$4 FOR UPDATE")
-        .bind(platform).bind(node).bind(docker_id).bind(observed).fetch_optional(&mut **tx).await?;
+    let mut row=sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 AND ($4::uuid IS NULL OR id=$4) FOR UPDATE")
+        .bind(platform).bind(node).bind(docker_id).bind(hint).fetch_optional(&mut **tx).await?;
+    if row.is_none() && hint.is_some() {
+        citadel_runtime::runtime_metrics::RuntimeWork::RuntimeIdentityFallback.units(1);
+        // Hints may lag another process or a missed invalidation. Never let a
+        // cached UUID bypass the daemon/node identity check or hide a real row.
+        row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate,state,name,projectionobservedat,projectionstalesince,projectionstalereason FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3 FOR UPDATE")
+            .bind(platform).bind(node).bind(docker_id).fetch_optional(&mut **tx).await?;
+    }
     let Some(row) = row else {
         return Ok(ContainerEventChange::default());
     };
+    if row
+        .try_get::<Option<i64>, _>("projectionobservedat")?
+        .unwrap_or(0)
+        > observed
+    {
+        return Ok(ContainerEventChange {
+            accepted: true,
+            identity: Some(row.try_get("id")?),
+            ..Default::default()
+        });
+    }
+    if let Some(state) = state {
+        let same = row
+            .try_get::<String, _>("state")?
+            .eq_ignore_ascii_case(state)
+            && name.is_none_or(|name| row.get::<String, _>("name") == name.trim_start_matches('/'))
+            && row
+                .try_get::<Option<i64>, _>("projectionstalesince")?
+                .is_none()
+            && row
+                .try_get::<Option<String>, _>("projectionstalereason")?
+                .is_none();
+        if same {
+            sqlx::query("UPDATE containers SET projectionobservedat=$2 WHERE id=$1 AND COALESCE(projectionobservedat,0)<$2")
+                .bind(row.get::<Uuid,_>("id")).bind(observed).execute(&mut **tx).await?;
+            return Ok(ContainerEventChange {
+                accepted: true,
+                identity: Some(row.try_get("id")?),
+                ..Default::default()
+            });
+        }
+    }
     let id: Uuid = row.try_get("id")?;
     let mut removed = RemovedBindings {
         allow_degraded_while_processing: row.try_get::<String, _>("controlstate")? == "Processing",
@@ -94,7 +182,7 @@ pub(crate) async fn container_event_in(
         ..Default::default()
     };
     if let Some(state) = state {
-        sqlx::query("UPDATE containers SET state=initcap($2),name=COALESCE($3,name),updated=$4,projectionobservedat=$4,rowversion=rowversion+1 WHERE id=$1")
+        sqlx::query("UPDATE containers SET state=initcap($2),name=COALESCE($3,name),updated=$4,projectionobservedat=$4,projectionstalesince=NULL,projectionstalereason=NULL,rowversion=rowversion+1 WHERE id=$1")
             .bind(id).bind(state).bind(name.map(|s|s.trim_start_matches('/'))).bind(observed).execute(&mut **tx).await?;
     } else {
         if !row.try_get::<bool, _>("isswarmtask")? {
@@ -107,6 +195,17 @@ pub(crate) async fn container_event_in(
             .execute(&mut **tx)
             .await?;
     }
+    container_effects(tx, platform, node, state, &row, removed).await
+}
+
+async fn container_effects(
+    tx: &mut Transaction<'_, Postgres>,
+    platform: Uuid,
+    node: Option<&str>,
+    state: Option<&str>,
+    row: &sqlx::postgres::PgRow,
+    removed: RemovedBindings,
+) -> Result<ContainerEventChange> {
     if state.is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "exited" | "paused"))
         && let Some(stack) = row.try_get::<Option<Uuid>, _>("stackid")?
     {
@@ -126,6 +225,8 @@ pub(crate) async fn container_event_in(
     reconcile(tx, platform, node, &removed, true).await?;
     Ok(ContainerEventChange {
         changed: true,
+        accepted: true,
+        identity: Some(row.try_get("id")?),
         deployments: removed.affected_deployments.unwrap_or_default(),
     })
 }
@@ -140,9 +241,11 @@ pub async fn platform_online(pool: &PgPool, platform: Uuid) -> Result<()> {
 }
 
 pub async fn platform_offline(pool: &PgPool, platform: Uuid) -> Result<()> {
+    let write = ProjectionWrite::begin(platform, None, ProjectionKind::Containers).await;
     let mut tx = pool.begin().await?;
     platform_offline_in(&mut tx, platform).await?;
     tx.commit().await?;
+    write.committed();
     reconcile_deployments(pool, platform, None, false)
         .await
         .map(|_| ())
@@ -164,25 +267,29 @@ pub(crate) async fn reconcile(
     node: Option<&str>,
     removed: &RemovedBindings,
     activities: bool,
-) -> Result<()> {
+) -> Result<bool> {
     sqlx::query("SAVEPOINT stack_sync")
         .execute(&mut **tx)
         .await?;
-    if let Err(error) = reconcile_stacks(tx, platform, node, removed, activities).await {
-        sqlx::query("ROLLBACK TO SAVEPOINT stack_sync")
-            .execute(&mut **tx)
-            .await?;
-        tracing::warn!(%error,%platform,"Stack synchronization failed; periodic reconciliation will retry");
-    }
+    let changed = match reconcile_stacks(tx, platform, node, removed, activities).await {
+        Ok(changed) => changed,
+        Err(error) => {
+            sqlx::query("ROLLBACK TO SAVEPOINT stack_sync")
+                .execute(&mut **tx)
+                .await?;
+            tracing::warn!(%error,%platform,"Stack synchronization failed; periodic reconciliation will retry");
+            false
+        }
+    };
     sqlx::query("RELEASE SAVEPOINT stack_sync")
         .execute(&mut **tx)
         .await?;
-    Ok(())
+    Ok(changed)
 }
 
 /// Read committed observations after inventory has released its locks. Each
 /// deployment gets a short transaction; no container or platform lock is held.
-/// The health sweep repeats this after a crash between the two commits.
+/// The lifecycle recovery sweep repeats this after a crash between the two commits.
 pub async fn reconcile_deployments(
     pool: &PgPool,
     platform: Uuid,
@@ -268,12 +375,13 @@ async fn reconcile_stacks(
     node: Option<&str>,
     removed: &RemovedBindings,
     activities: bool,
-) -> Result<()> {
+) -> Result<bool> {
     // Inventory owns observation rows here. Never wait for a resource lock:
     // the next inventory sweep reconciles busy Stacks after their operation.
     // Swarm service/task health is owned by Swarm reconciliation, not Compose rules.
     let stacks=sqlx::query("SELECT s.id,s.name,s.controlstate,s.controltriggeredby,r.id releaseid,r.status,p.status platformstatus FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE r.platformid=$1 AND lower(COALESCE(p.platformdescriptor->>'$type','')) <> 'dockerswarm' AND (EXISTS(SELECT 1 FROM containers c WHERE c.stackid=s.id AND NOT c.isswarmtask AND c.dockernodeid IS NOT DISTINCT FROM $2) OR s.id=ANY($3) OR $2::text IS NULL) AND ($4::uuid[] IS NULL OR s.id=ANY($4)) ORDER BY s.id FOR NO KEY UPDATE OF s,r SKIP LOCKED")
         .bind(platform).bind(node).bind(&removed.stacks).bind(&removed.affected_stacks).fetch_all(&mut **tx).await?;
+    let mut changed = false;
     for row in stacks {
         let old: String = row.try_get("status")?;
         // An owned apply/state/delete operation completes its own claim. Neither
@@ -291,6 +399,7 @@ async fn reconcile_stacks(
         let id: Uuid = row.try_get("id")?;
         if !activities && row.try_get::<String, _>("controlstate")? == "Processing" {
             if !matches!(old.as_str(), "Applying" | "Pending") {
+                changed = true;
                 sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1 WHERE id=$1")
                     .bind(id).execute(&mut **tx).await?;
             }
@@ -318,6 +427,7 @@ async fn reconcile_stacks(
         {
             continue;
         }
+        changed = true;
         sqlx::query("UPDATE stackreleases SET status=$2 WHERE id=$1")
             .bind(row.try_get::<Uuid, _>("releaseid")?)
             .bind(next)
@@ -345,7 +455,7 @@ async fn reconcile_stacks(
             }
         }
     }
-    Ok(())
+    Ok(changed)
 }
 async fn activity(
     tx: &mut Transaction<'_, Postgres>,
@@ -419,16 +529,16 @@ pub(crate) async fn platform_status(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     status: &str,
-) -> Result<()> {
+) -> Result<bool> {
     use citadel_activities::PlatformActivitySnapshot;
     let row = sqlx::query("SELECT id,name,address,description,status,connectortype,networkcount,volumecount,imagecount::bigint imagecount,cpucount::bigint cpucount,memtotal,serverversion,agentversion,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(id).fetch_optional(&mut **tx).await?;
     let Some(row) = row else {
-        return Ok(());
+        return Ok(false);
     };
     let previous_status: String = row.try_get("status")?;
     if previous_status == status {
-        return Ok(());
+        return Ok(false);
     }
     sqlx::query("UPDATE platforms SET status=$2 WHERE id=$1")
         .bind(id)
@@ -473,7 +583,8 @@ pub(crate) async fn platform_status(
     .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     crate::persistence::postgres::activities::store::insert_activity(tx, &event)
         .await
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))
+        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    Ok(true)
 }
 
 pub async fn container_observation(
@@ -483,35 +594,76 @@ pub async fn container_observation(
     container: &citadel_platforms::RuntimeContainerSummary,
     observed: i64,
 ) -> Result<bool> {
-    let mut tx = pool.begin().await?;
-    container_metadata_in(&mut tx, platform, node, container, observed).await?;
-    let changed = container_event_in(
-        &mut tx,
-        platform,
-        node,
-        &container.id,
-        Some(&container.state),
-        Some(&container.name),
-        observed,
+    Ok(
+        container_observation_committed(pool, platform, node, container, observed)
+            .await?
+            .changed(),
     )
-    .await?;
+}
+pub async fn container_observation_committed(
+    pool: &PgPool,
+    platform: Uuid,
+    node: Option<&str>,
+    container: &citadel_platforms::RuntimeContainerSummary,
+    observed: i64,
+) -> Result<ProjectionChange> {
+    let write = ProjectionWrite::begin(platform, node, ProjectionKind::Containers).await;
+    let mut tx = pool.begin().await?;
+    let changed = container_observation_in(&mut tx, platform, node, container, observed).await?;
     tx.commit().await?;
-    reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
-    Ok(changed.changed)
+    if let Some(id) = changed.identity {
+        super::runtime_index::committed_identity(pool, platform, node, &container.id, Some(id));
+    }
+    write.committed();
+    if changed.changed {
+        reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
+    }
+    Ok(if changed.accepted {
+        ProjectionChange::committed(changed.changed)
+    } else {
+        ProjectionChange::Unavailable
+    })
 }
 
-pub(crate) async fn container_metadata_in(
+/// One authoritative metadata/state upsert shared by Local, Direct and Edge.
+pub(crate) async fn container_observation_in(
     tx: &mut Transaction<'_, Postgres>,
     platform: Uuid,
     node: Option<&str>,
     container: &citadel_platforms::RuntimeContainerSummary,
     observed: i64,
-) -> Result<()> {
-    crate::persistence::postgres::platforms::inventory::store::persist_container_observation(
-        tx, platform, node, container, observed,
-    )
-    .await
-    .map_err(|error| sqlx::Error::Protocol(error.to_string()))
+) -> Result<ContainerEventChange> {
+    let changed =
+        crate::persistence::postgres::platforms::inventory::store::persist_container_observation(
+            tx, platform, node, container, observed,
+        )
+        .await
+        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    if !changed {
+        return Ok(ContainerEventChange {
+            accepted: true,
+            ..Default::default()
+        });
+    }
+    let row = sqlx::query("SELECT id,deploymentid,stackid,isswarmtask,controlstate FROM containers WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=$3")
+        .bind(platform).bind(node).bind(&container.id).fetch_one(&mut **tx).await?;
+    let removed = RemovedBindings {
+        allow_degraded_while_processing: row.try_get::<String, _>("controlstate")? == "Processing",
+        affected_deployments: Some(
+            row.try_get::<Option<Uuid>, _>("deploymentid")?
+                .into_iter()
+                .collect(),
+        ),
+        affected_stacks: Some(if row.try_get::<bool, _>("isswarmtask")? {
+            vec![]
+        } else {
+            row.try_get::<Option<Uuid>, _>("stackid")?
+                .into_iter()
+                .collect()
+        }),
+        ..Default::default()
+    };
+    container_effects(tx, platform, node, Some(&container.state), &row, removed).await
 }
 
 #[cfg(test)]

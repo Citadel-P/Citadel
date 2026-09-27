@@ -1,4 +1,7 @@
 use super::*;
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
+use crate::persistence::postgres::platforms::runtime_index;
+use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite};
 impl PostgresDeploymentRepository {
     pub(super) fn claim_delete_impl<'a>(
         &'a self,
@@ -80,7 +83,21 @@ impl PostgresDeploymentRepository {
         claims: &'a [DeletionClaim],
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         Box::pin(async move {
+            let platforms: std::collections::BTreeSet<_> =
+                claims.iter().map(|claim| claim.platform_id).collect();
+            let writes = ProjectionWrite::begin_many(
+                platforms
+                    .iter()
+                    .map(|id| (*id, None, ProjectionKind::Containers)),
+            )
+            .await;
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let impact = Impact::Resources(1, claims.iter().map(|claim| claim.id).collect());
+            authorization
+                .capture(&mut tx, &impact)
+                .await
+                .map_err(storage)?;
             let ids = claims.iter().map(|claim| claim.id).collect::<Vec<_>>();
             lock_delete_platforms(&mut tx, &ids).await?;
             for claim in claims {
@@ -143,7 +160,21 @@ impl PostgresDeploymentRepository {
                     "Not all claimed Deployments could be deleted.".to_owned(),
                 ));
             }
-            tx.commit().await.map_err(storage)?;
+            let mut identities = Vec::new();
+            for platform in platforms {
+                identities.extend(
+                    runtime_index::stage_scope(&self.pool, &mut tx, platform, None)
+                        .await
+                        .map_err(storage)?,
+                );
+            }
+            authorization.commit(tx, impact).await.map_err(storage)?;
+            for update in identities {
+                update.committed();
+            }
+            for write in writes {
+                write.committed();
+            }
             Ok(())
         })
     }
@@ -272,6 +303,11 @@ impl PostgresDeploymentRepository {
                 existing_container_id: row.try_get("containerid").map_err(storage)?,
                 existing_docker_container_id: row.try_get("dockercontainerid").map_err(storage)?,
             };
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::DeploymentRecovery.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(claim)
         })
@@ -286,6 +322,8 @@ impl PostgresDeploymentRepository {
         bindings: &'a [DeploymentBindingSnapshot],
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         Box::pin(async move {
+            let write =
+                ProjectionWrite::begin(claim.platform_id, None, ProjectionKind::Containers).await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let mut spec = claim.spec.clone();
             if let DeploymentImageInfo::External {
@@ -361,7 +399,15 @@ impl PostgresDeploymentRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
+            let identities =
+                runtime_index::stage_scope(&self.pool, &mut tx, claim.platform_id, None)
+                    .await
+                    .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
+            if let Some(identities) = identities {
+                identities.committed();
+            }
+            write.committed();
             Ok(())
         })
     }
@@ -375,6 +421,14 @@ impl PostgresDeploymentRepository {
         bindings: &'a [DeploymentBindingSnapshot],
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         Box::pin(async move {
+            let write = if result.is_some() {
+                Some(
+                    ProjectionWrite::begin(claim.platform_id, None, ProjectionKind::Containers)
+                        .await,
+                )
+            } else {
+                None
+            };
             let mut tx = self.pool.begin().await.map_err(storage)?;
             lock_apply_claim(&mut tx, actor_id, claim).await?;
             if let Some(result) = result {
@@ -409,7 +463,20 @@ impl PostgresDeploymentRepository {
                 None,
             )
             .await?;
+            let identities = if write.is_some() {
+                runtime_index::stage_scope(&self.pool, &mut tx, claim.platform_id, None)
+                    .await
+                    .map_err(storage)?
+            } else {
+                None
+            };
             tx.commit().await.map_err(storage)?;
+            if let Some(identities) = identities {
+                identities.committed();
+            }
+            if let Some(write) = write {
+                write.committed();
+            }
             Ok(())
         })
     }
@@ -511,7 +578,7 @@ pub(super) async fn upsert_apply_container(
     .map_err(storage)?
     {
         sqlx::query(
-            "UPDATE containers SET deploymentid=$2,dockerimageid=$3,hascitadelownershiplabels=TRUE,name=$4,state=$5,updated=$6,rowversion=rowversion+1 WHERE id=$1",
+            "UPDATE containers SET deploymentid=$2,dockerimageid=$3,hascitadelownershiplabels=TRUE,name=$4,state=$5,updated=$6,projectionobservedat=GREATEST(COALESCE(projectionobservedat,0),$6),rowversion=rowversion+1 WHERE id=$1",
         )
         .bind(id)
         .bind(claim.id)
@@ -528,7 +595,7 @@ pub(super) async fn upsert_apply_container(
         let affected = sqlx::query(
             r#"UPDATE containers SET dockercontainerid=$2,dockerimageid=$3,
                       hascitadelownershiplabels=TRUE,name=$4,state=$5,updated=$6,
-                      deploymentid=$7,rowversion=rowversion+1
+                      deploymentid=$7,projectionobservedat=GREATEST(COALESCE(projectionobservedat,0),$6),rowversion=rowversion+1
                WHERE id=$1"#,
         )
         .bind(id)
@@ -550,12 +617,12 @@ pub(super) async fn upsert_apply_container(
     sqlx::query(
         r#"INSERT INTO containers(
                id,created,deploymentid,dockercontainerid,dockerimageid,hascitadelownershiplabels,
-               isswarmtask,issystem,name,platformid,ports,rowversion,state,updated)
-           VALUES($1,$2,$3,$4,$5,TRUE,FALSE,FALSE,$6,$7,'{}'::json,0,$8,$2)
+               isswarmtask,issystem,name,platformid,ports,rowversion,state,updated,projectionobservedat)
+           VALUES($1,$2,$3,$4,$5,TRUE,FALSE,FALSE,$6,$7,'{}'::json,0,$8,$2,$2)
            ON CONFLICT (dockercontainerid,platformid) WHERE dockernodeid IS NULL
            DO UPDATE SET deploymentid=EXCLUDED.deploymentid,dockerimageid=EXCLUDED.dockerimageid,
                          hascitadelownershiplabels=TRUE,name=EXCLUDED.name,state=EXCLUDED.state,
-                         updated=EXCLUDED.updated,rowversion=containers.rowversion+1"#,
+                         updated=EXCLUDED.updated,projectionobservedat=GREATEST(COALESCE(containers.projectionobservedat,0),EXCLUDED.projectionobservedat),rowversion=containers.rowversion+1"#,
     )
     .bind(id)
     .bind(now)

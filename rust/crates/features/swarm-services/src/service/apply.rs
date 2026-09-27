@@ -351,10 +351,39 @@ impl SwarmServiceService {
             .store
             .stale_operation_claims(cutoff, limit.clamp(1, 100))
             .await?;
+        self.observe_operation_claims(claims).await
+    }
+
+    /// Observe one bounded page without the unrelated stale update-check scan.
+    /// The cursor and work count let the coordinator sleep completely when idle.
+    pub async fn observe_active_operations(
+        &self,
+        after: Option<Uuid>,
+        limit: i64,
+    ) -> Result<(Option<Uuid>, usize), SwarmServiceError> {
+        let limit = limit.clamp(1, 100);
+        let claims = self.store.active_operation_claims(after, limit).await?;
+        let count = claims.len();
+        let next = if count == limit as usize {
+            claims.last().map(|(_, claim)| claim.id)
+        } else {
+            None
+        };
+        self.observe_operation_claims(claims).await?;
+        Ok((next, count))
+    }
+
+    async fn observe_operation_claims(
+        &self,
+        claims: Vec<(ActorId, ServiceOperationClaim)>,
+    ) -> Result<usize, SwarmServiceError> {
         let mut reconciled = 0;
         // Deletion outcomes are reconciled from the complete manager snapshot.
         // Never replay an ambiguous daemon mutation from a recovery timer.
         for (actor_id, claim) in claims {
+            if self.shutdown.is_cancelled() {
+                break;
+            }
             let cancellation = self.shutdown.child_token();
             match tokio::time::timeout(
                 self.operation_timeout.min(Duration::from_secs(30)),

@@ -1,4 +1,4 @@
-//! Persist samples immediately, then evaluate one smoothed observation per flush.
+//! Evaluate one smoothed observation per committed Platform writer batch.
 //! PostgreSQL is the buffer: idle input cannot strand samples or grow an in-memory queue.
 use citadel_alerts::AlertEventSink;
 use sqlx::{PgPool, Row};
@@ -11,13 +11,15 @@ pub(super) async fn run(
     alerts: Arc<dyn AlertEventSink>,
     interval: Duration,
     batch_size: i64,
+    mut signals: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
-    // Ten bounded batches or five seconds per flush; PostgreSQL retains the rest.
-    // No count query or per-second wakeup when there is no input.
-    let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
-    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Commit notifications avoid adding another full flush interval of alert
+    // latency. PostgreSQL retains pending rows across missed signals/restarts.
     loop {
-        tokio::select! { ()=cancel.cancelled()=>return Ok(()), _=tick.tick()=>{} }
+        super::notifications::wait(&mut signals, &cancel, interval).await;
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         let drain = async {
             for _ in 0..10 {
                 let count = flush_pending(&pool, alerts.as_ref(), batch_size).await?;

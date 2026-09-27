@@ -2,7 +2,7 @@
 use std::{sync::Arc, time::Duration};
 
 use citadel_primitives::ActorId;
-use futures_util::future::BoxFuture;
+use futures_util::{StreamExt, future::BoxFuture};
 use serde::Deserialize;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 use crate::RuntimeCapabilityError;
 use crate::RuntimeErrorKind;
+
+pub const CONTAINER_IO_CONCURRENCY: usize = 8;
 
 pub const MAX_CONTAINER_BATCH: usize = 100;
 pub const CONTAINER_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -66,6 +68,57 @@ pub struct ContainerClaim {
     pub stack_ids: Vec<Uuid>,
 }
 
+/// Confirmed runtime observations only; errors never become absence.
+#[derive(Debug)]
+pub struct ContainerObservation {
+    pub target: ContainerTarget,
+    pub state: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct ContainerObservations {
+    pub observed: Vec<ContainerObservation>,
+    pub errors: Vec<(Uuid, RuntimeCapabilityError)>,
+}
+impl ContainerObservations {
+    pub fn push(
+        &mut self,
+        target: &ContainerTarget,
+        result: Result<Option<String>, RuntimeCapabilityError>,
+    ) {
+        match result {
+            Ok(state) => self.observed.push(ContainerObservation {
+                target: target.clone(),
+                state,
+            }),
+            Err(error) => self.errors.push((target.id, error)),
+        }
+    }
+    pub fn result(self) -> Result<(), RuntimeCapabilityError> {
+        container_batch_result(self.errors)
+    }
+}
+
+/// Keep every failed identity and cause, with deterministic ordering. The caller
+/// retains the durable claim on any error, even when other targets succeeded.
+pub fn container_batch_result(
+    mut errors: Vec<(Uuid, RuntimeCapabilityError)>,
+) -> Result<(), RuntimeCapabilityError> {
+    errors.sort_by_key(|(id, _)| *id);
+    let Some((_, first)) = errors.first() else {
+        return Ok(());
+    };
+    Err(RuntimeCapabilityError::new(
+        first.kind,
+        errors
+            .iter()
+            .map(|(id, error)| format!("{id}: {error}"))
+            .collect::<Vec<_>>()
+            .join("; "),
+        false,
+    ))
+}
+
 pub trait ContainerRepository: Send + Sync {
     fn resolve_ids<'a>(
         &'a self,
@@ -105,6 +158,21 @@ pub trait ContainerRepository: Send + Sync {
         state: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
 
+    /// Implementations can commit the confirmed selection in one transaction.
+    fn observed_batch<'a>(
+        &'a self,
+        claim: Uuid,
+        observations: &'a [ContainerObservation],
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            for observation in observations {
+                self.observed(claim, &observation.target, observation.state.as_deref())
+                    .await?;
+            }
+            Ok(())
+        })
+    }
+
     fn finish(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>>;
     fn abandon(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>>;
 
@@ -139,6 +207,25 @@ pub trait ContainerMutationRuntime: Send + Sync {
         target: &'a ContainerTarget,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>>;
+    fn observe_batch<'a>(
+        &'a self,
+        targets: &'a [ContainerTarget],
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, ContainerObservations> {
+        Box::pin(async move {
+            let mut results = ContainerObservations::default();
+            let mut pending = futures_util::stream::iter(targets.to_vec())
+                .map(|target| async move {
+                    let result = self.observe(&target, cancellation).await;
+                    (target, result)
+                })
+                .buffer_unordered(CONTAINER_IO_CONCURRENCY);
+            while let Some((target, result)) = pending.next().await {
+                results.push(&target, result);
+            }
+            results
+        })
+    }
 }
 
 /// Process-owned admission for mutations that must outlive an HTTP connection.
@@ -306,18 +393,20 @@ impl ContainerMutationService {
                 (service.changed)(&claim);
                 let _cancel_on_drop = cancellation.clone().drop_guard();
                 let work = async {
-                    service
+                    // Even a failed/partial mutation can have successful siblings. Verify
+                    // and persist them now; retain the claim for read-only recovery.
+                    let mutation = service
                         .runtime
                         .mutate_batch(&claim.targets, action, &cancellation)
-                        .await?;
-                    for target in &claim.targets {
-                        let state = service.runtime.observe(target, &cancellation).await?;
-                        service
-                            .store
-                            .observed(claim.operation_id, target, state.as_deref())
-                            .await?;
+                        .await;
+                    let verification = service.verify(&claim, &cancellation).await;
+                    match (mutation, verification) {
+                        (Ok(()), result) | (result, Ok(())) => result,
+                        (Err(mutation), Err(verification)) => Err(error(
+                            mutation.kind,
+                            &format!("Mutation: {mutation}; verification: {verification}"),
+                        )),
                     }
-                    Ok::<_, RuntimeCapabilityError>(())
                 };
                 let result = tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work)
                     .await
@@ -366,6 +455,21 @@ impl ContainerMutationService {
         })?
     }
 
+    async fn verify(
+        &self,
+        claim: &ContainerClaim,
+        cancellation: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        let observations = self
+            .runtime
+            .observe_batch(&claim.targets, cancellation)
+            .await;
+        for batch in observations.observed.chunks(MAX_CONTAINER_BATCH) {
+            self.store.observed_batch(claim.operation_id, batch).await?;
+        }
+        observations.result()
+    }
+
     pub async fn reconcile(
         &self,
         cancellation: &CancellationToken,
@@ -375,12 +479,7 @@ impl ContainerMutationService {
                 break;
             }
             let work = async {
-                for target in &claim.targets {
-                    let state = self.runtime.observe(target, cancellation).await?;
-                    self.store
-                        .observed(claim.operation_id, target, state.as_deref())
-                        .await?;
-                }
+                self.verify(&claim, cancellation).await?;
                 self.store.finish(claim.operation_id).await?;
                 (self.changed)(&claim);
                 Ok::<_, RuntimeCapabilityError>(())

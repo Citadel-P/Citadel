@@ -6,12 +6,18 @@ use citadel_stacks::{StackDetails, StackUpdateScanner, StackUpdateState};
 pub(super) struct Scanner {
     pool: sqlx::PgPool,
     mode: AtomicU8,
+    calls: std::sync::atomic::AtomicUsize,
+    entered: tokio::sync::Notify,
+    release: tokio::sync::Notify,
 }
 impl Scanner {
     pub fn new(pool: sqlx::PgPool) -> Self {
         Self {
             pool,
             mode: AtomicU8::new(0),
+            calls: Default::default(),
+            entered: Default::default(),
+            release: Default::default(),
         }
     }
 }
@@ -22,6 +28,7 @@ impl StackUpdateScanner for Scanner {
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         Box::pin(async move {
+            self.calls.fetch_add(1, Ordering::SeqCst);
             match self.mode.load(Ordering::Relaxed) {
                 1 => {
                     sqlx::query("UPDATE stacks SET rowversion=rowversion+1 WHERE id=$1")
@@ -31,6 +38,10 @@ impl StackUpdateScanner for Scanner {
                         .unwrap();
                 }
                 2 => return Err(StackError::Runtime("Registry is unavailable.".into())),
+                3 => {
+                    self.entered.notify_one();
+                    self.release.notified().await;
+                }
                 _ => {}
             }
             if matches!(stack.spec, Some(citadel_stacks::StackSpec::Git { .. })) {
@@ -120,9 +131,61 @@ pub(super) async fn verify(
         "a configuration checked before an edit must not be automatically applied"
     );
     scanner.mode.store(0, Ordering::Relaxed);
+    verify_single_flight(stacks, admin.actor_id, id, scanner).await;
     verify_selected_apply(pool, admin, id).await;
     verify_update_producers(pool, id).await;
     verify_git_update_producers(pool, admin, id).await;
+}
+
+async fn verify_single_flight(stacks: &StackService, actor: ActorId, id: Uuid, scanner: &Scanner) {
+    for cancel in [false, true] {
+        scanner.mode.store(3, Ordering::Relaxed);
+        let before = scanner.calls.load(Ordering::SeqCst);
+        let token = CancellationToken::new();
+        let first = stacks.check_updates(actor, true, id, &token);
+        tokio::pin!(first);
+        tokio::select! {
+            result = &mut first => panic!("scan unexpectedly finished: {result:?}"),
+            () = scanner.entered.notified() => {},
+        }
+        for _ in 0..8 {
+            assert!(matches!(
+                stacks
+                    .check_updates(actor, true, id, &CancellationToken::new())
+                    .await,
+                Err(StackError::Conflict(_))
+            ));
+        }
+        assert_eq!(scanner.calls.load(Ordering::SeqCst), before + 1);
+        if cancel {
+            token.cancel();
+            assert!(matches!(first.await, Err(StackError::Cancelled)));
+        } else {
+            scanner.release.notify_one();
+            first.await.unwrap();
+        }
+        scanner.mode.store(0, Ordering::Relaxed);
+        stacks
+            .check_updates(actor, true, id, &CancellationToken::new())
+            .await
+            .unwrap();
+    }
+    // Dropping an HTTP-like future must also release both the key and budget.
+    scanner.mode.store(3, Ordering::Relaxed);
+    {
+        let token = CancellationToken::new();
+        let first = stacks.check_updates(actor, true, id, &token);
+        tokio::pin!(first);
+        tokio::select! {
+            result = &mut first => panic!("scan unexpectedly finished: {result:?}"),
+            () = scanner.entered.notified() => {},
+        }
+    }
+    scanner.mode.store(0, Ordering::Relaxed);
+    stacks
+        .check_updates(actor, true, id, &CancellationToken::new())
+        .await
+        .unwrap();
 }
 
 struct GitSource;

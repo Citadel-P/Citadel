@@ -37,7 +37,21 @@ async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
     };
     let stack = store.create(actor, true, &input).await.unwrap();
     let commit = "a".repeat(40);
+    let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
+    listener
+        .listen(citadel_runtime::RuntimeSignal::StackWebhooks.channel())
+        .await
+        .unwrap();
     store.enqueue_webhook(&stack, Some(&commit)).await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        store.ready_webhooks(10).await.unwrap().len(),
+        1,
+        "the wakeup must expose committed queue work"
+    );
     store.enqueue_webhook(&stack, Some(&commit)).await.unwrap();
     let jobs = store.ready_webhooks(10).await.unwrap();
     assert_eq!(jobs.len(), 1);

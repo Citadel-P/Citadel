@@ -8854,10 +8854,10 @@
           "driver": {
             "type": "string"
           },
-          "enableIpv4": {
+          "enableIPv4": {
             "type": "boolean"
           },
-          "enableIpv6": {
+          "enableIPv6": {
             "type": "boolean"
           },
           "id": {
@@ -8926,8 +8926,8 @@
           "created",
           "driver",
           "scope",
-          "enableIpv4",
-          "enableIpv6",
+          "enableIPv4",
+          "enableIPv6",
           "internal",
           "attachable",
           "ingress",
@@ -14343,7 +14343,7 @@
           "driver": {
             "type": "string"
           },
-          "enableIpv6": {
+          "enableIPv6": {
             "type": "boolean"
           },
           "id": {
@@ -14405,7 +14405,7 @@
           "isInternal",
           "isIngress",
           "isEncrypted",
-          "enableIpv6",
+          "enableIPv6",
           "subnets",
           "serviceNames",
           "labels",

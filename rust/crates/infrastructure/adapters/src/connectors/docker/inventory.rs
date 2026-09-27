@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use citadel_platforms::jobs::ContainerStatsSampler;
+use citadel_platforms::ContainerStatsPort;
 use citadel_platforms::{
-    PlatformInventoryPort, RuntimeCapabilityError, RuntimeContainerStat, RuntimeImageSummary,
-    RuntimeNetworkSummary, RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret,
-    RuntimeSwarmService, RuntimeSwarmTask, RuntimeVolumeSummary,
+    RuntimeCapabilityError, RuntimeContainerStat, RuntimeImageSummary, RuntimeNetworkSummary,
+    RuntimeSwarmConfig, RuntimeSwarmNode, RuntimeSwarmSecret, RuntimeSwarmService,
+    RuntimeSwarmTask, RuntimeVolumeSummary,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use serde_json::Value;
@@ -18,7 +18,7 @@ use super::projection::{
 };
 use super::runtime::{cancelled_error, normalize_docker_error};
 
-impl PlatformInventoryPort for DockerClient {
+impl citadel_platforms::ImageInventoryPort for DockerClient {
     fn list_images<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -33,22 +33,33 @@ impl PlatformInventoryPort for DockerClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::NetworkInventoryPort for DockerClient {
     fn list_networks<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>> {
         async move {
-            let values = tokio::select! {
+            let (values, containers) = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
-                result = DockerClient::list_networks(self) => result.map_err(normalize_docker_error)?,
+                result = async {tokio::try_join!(DockerClient::list_networks(self),self.list_container_models(Some(true),None,None,None))} => result.map_err(normalize_docker_error)?,
             };
-            Ok(values.into_iter().map(map_network).collect())
+            let mut usage=std::collections::HashMap::<String,usize>::new();
+            for container in containers {
+                for (name,endpoint) in container.network_settings.into_iter().flat_map(|n|n.networks.unwrap_or_default()) {
+                    let id=endpoint.network_id.filter(|id|!id.is_empty()).unwrap_or(name);
+                    *usage.entry(id).or_default()+=1;
+                }
+            }
+            Ok(values.into_iter().map(|v| {let mut network=map_network(v);network.container_count=network.container_count.max(usage.get(&network.id).or_else(||usage.get(&network.name)).copied().unwrap_or_default());network}).collect())
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::NetworkObservationPort for DockerClient {
     fn inspect_network<'a>(
         &'a self,
         id: &'a str,
@@ -64,7 +75,9 @@ impl PlatformInventoryPort for DockerClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeInventoryPort for DockerClient {
     fn list_volumes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -79,23 +92,48 @@ impl PlatformInventoryPort for DockerClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::VolumeObservationPort for DockerClient {
     fn inspect_volume<'a>(
         &'a self,
         name: &'a str,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
         async move {
-            let value = tokio::select! {
+            let (value, containers) = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
-                result = DockerClient::inspect_volume(self, name) => result.map_err(normalize_docker_error)?,
+                result = async { tokio::try_join!(DockerClient::inspect_volume(self, name), self.volume_containers(name)) } => result.map_err(normalize_docker_error)?,
             };
-            Ok(map_volume(value))
+            let mut volume = map_volume(value);
+            volume.in_use |= !containers.is_empty();
+            volume.containers = containers.into_iter().map(|c| {
+                let networks = c.network_settings.as_ref().and_then(|n| n.networks.as_ref())
+                    .into_iter().flatten().map(|(name, endpoint)| {
+                        (name.clone(), endpoint.network_id.as_ref().filter(|id| !id.is_empty()).unwrap_or(name).clone())
+                    }).collect::<BTreeMap<_, _>>();
+                use citadel_docker_api::models::container_summary::State;
+                let state = match c.state {
+                    Some(State::Created) => "Created", Some(State::Running) => "Running",
+                    Some(State::Paused) => "Paused", Some(State::Restarting) => "Restarting",
+                    Some(State::Removing) => "Removing", Some(State::Dead) => "Dead",
+                    Some(State::Exited) | None => "Exited",
+                };
+                Ok(serde_json::json!({
+                    "id": c.id.unwrap_or_default(), "name": c.names.unwrap_or_default().into_iter().next().unwrap_or_default(),
+                    "image": c.image.unwrap_or_default(), "imageId": c.image_id.unwrap_or_default(),
+                    "state": state, "networks": networks,
+                    "ports": crate::connectors::containers::ports::normalize(serde_json::to_value(c.ports).map_err(super::DockerError::from).map_err(normalize_docker_error)?),
+                }))
+            }).collect::<Result<Vec<_>, RuntimeCapabilityError>>()?;
+            Ok(volume)
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::SwarmInventoryPort for DockerClient {
     fn list_swarm_nodes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -187,7 +225,7 @@ impl DockerClient {
     }
 }
 
-impl ContainerStatsSampler for DockerClient {
+impl ContainerStatsPort for DockerClient {
     fn sample_container_stats<'a>(
         &'a self,
         id: &'a str,
@@ -198,14 +236,25 @@ impl ContainerStatsSampler for DockerClient {
 }
 
 fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
-    let usage = value.memory_stats.usage;
+    let usage = value
+        .memory_stats
+        .usage
+        .or(value.memory_stats.privateworkingset)
+        .unwrap_or_default();
     let inactive = value
         .memory_stats
         .stats
         .get("total_inactive_file")
-        .or_else(|| value.memory_stats.stats.get("inactive_file"))
         .copied()
         .filter(|inactive| *inactive < usage)
+        .or_else(|| {
+            value
+                .memory_stats
+                .stats
+                .get("inactive_file")
+                .copied()
+                .filter(|inactive| *inactive < usage)
+        })
         .unwrap_or_default();
     let memory_cache = value
         .memory_stats
@@ -618,7 +667,8 @@ mod tests {
                 ..Default::default()
             },
             memory_stats: super::super::projection::MemoryStats {
-                usage: 1_000,
+                usage: Some(1_000),
+                privateworkingset: None,
                 stats: [("inactive_file".to_owned(), 250), ("file".to_owned(), 300)]
                     .into_iter()
                     .collect(),
@@ -643,5 +693,61 @@ mod tests {
         assert_eq!(stat.cpu_usage, 40.0);
         assert_eq!(stat.rx_bytes, 10.0);
         assert_eq!(stat.tx_bytes, 20.0);
+    }
+    #[test]
+    fn invalid_v1_inactive_memory_falls_back_to_v2() {
+        let mut value = ContainerStats::default();
+        value.memory_stats.usage = Some(1_000);
+        value.memory_stats.stats = [
+            ("total_inactive_file".into(), 1_500),
+            ("inactive_file".into(), 250),
+        ]
+        .into();
+        assert_eq!(map_container_stat("container", value).memory_active, 750.0);
+    }
+}
+
+impl DockerClient {
+    pub async fn resource_event_observation(
+        &self,
+        kind: citadel_platforms::jobs::RuntimeEventKind,
+        id: &str,
+        cancel: &CancellationToken,
+    ) -> Result<Option<citadel_platforms::jobs::ResourceDelta>, RuntimeCapabilityError> {
+        use citadel_platforms::jobs::{
+            ResourceChange as C, ResourceDelta as D, RuntimeEventKind as K,
+        };
+        let delta = tokio::select! {
+            biased; ()=cancel.cancelled()=>return Err(cancelled_error()),
+            result=async { Ok::<_, super::DockerError>(match kind {
+                K::Image(C::Tombstone)=>Some(D::Image{id:id.into(), value:None}),
+                K::Network(C::Tombstone)=>Some(D::Network{id:id.into(), value:None}),
+                K::Volume(C::Tombstone)=>Some(D::Volume{id:id.into(), value:None}),
+                K::Image(C::Observe)=>Some(D::Image{id:id.into(),value:Some(map_image(self.image_event_model(id).await?.try_into()?))}),
+                K::Network(C::Observe)=>Some(D::Network{id:id.into(),value:Some(map_network(self.inspect_network(id).await?))}),
+                K::Volume(C::Observe)=>Some(D::Volume{id:id.into(),value:Some(map_volume(self.inspect_volume(id).await?))}),
+                _=>None,
+            }) }=>result.map_err(normalize_docker_error)?,
+        };
+        Ok(delta.filter(|delta| delta.valid_for(kind)))
+    }
+}
+
+#[cfg(test)]
+mod windows_memory_tests {
+    #[test]
+    fn absent_usage_falls_back_to_private_working_set_but_explicit_zero_does_not() {
+        for (memory, expected) in [
+            (serde_json::json!({"privateworkingset":512}), 512.0),
+            (serde_json::json!({"usage":0,"privateworkingset":512}), 0.0),
+        ] {
+            let wire: citadel_docker_api::models::ContainerStatsResponse =
+                serde_json::from_value(serde_json::json!({"memory_stats":memory})).unwrap();
+            let value = wire.try_into().unwrap();
+            assert_eq!(
+                super::map_container_stat("windows", value).memory_active,
+                expected
+            );
+        }
     }
 }

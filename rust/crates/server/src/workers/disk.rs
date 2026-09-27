@@ -1,5 +1,5 @@
 //! Keep one recent platform statistics sample alongside each container statistics stream.
-use citadel_platforms::{PlatformRuntimePort, RuntimePlatformStats};
+use citadel_platforms::{PlatformStatsPort, RuntimePlatformStats};
 use futures_util::{Stream, StreamExt};
 use std::{pin::Pin, time::Duration};
 use tokio::time::Instant;
@@ -28,7 +28,7 @@ impl LatestPlatformStats {
 }
 
 /// Failure of optional disk telemetry must not interrupt CPU/container telemetry.
-pub(super) fn samples<R: PlatformRuntimePort + Send + Sync + 'static>(
+pub(super) fn samples<R: PlatformStatsPort + Send + Sync + 'static>(
     runtime: R,
     interval: Duration,
     cancel: CancellationToken,

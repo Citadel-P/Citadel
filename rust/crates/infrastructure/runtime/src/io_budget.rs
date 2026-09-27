@@ -18,6 +18,14 @@ impl IoBudget {
         }
     }
 
+    /// Reuse the same semaphore while attributing work to a narrower fixed family.
+    pub fn measured_as(&self, family: RuntimeWork) -> Self {
+        Self {
+            permits: self.permits.clone(),
+            family,
+        }
+    }
+
     pub async fn enter(&self, cancellation: &CancellationToken) -> Option<IoPermit> {
         let started = std::time::Instant::now();
         let saturated = self.permits.available_permits() == 0;
@@ -52,9 +60,13 @@ mod tests {
         let active = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
         let mut tasks = tokio::task::JoinSet::new();
-        for _ in 0..20 {
+        for index in 0..20 {
             let (budget, token, active, peak) = (
-                inventory.clone(),
+                if index % 2 == 0 {
+                    inventory.measured_as(RuntimeWork::EventContainersRefresh)
+                } else {
+                    inventory.clone()
+                },
                 token.clone(),
                 active.clone(),
                 peak.clone(),

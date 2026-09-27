@@ -40,10 +40,15 @@ pub(crate) fn normalize(ports: Value) -> Value {
                 }
                 if let Some(bindings) = bindings.as_array_mut() {
                     for binding in bindings {
-                        if let Some(binding) = binding.as_object_mut()
-                            && let Some(ip) = binding.remove("hostIp")
-                        {
-                            binding.entry("hostIP").or_insert(ip);
+                        if let Some(binding) = binding.as_object_mut() {
+                            for alias in ["hostIp", "HostIp"] {
+                                if let Some(ip) = binding.remove(alias) {
+                                    binding.entry("hostIP").or_insert(ip);
+                                }
+                            }
+                            if let Some(port) = binding.remove("HostPort") {
+                                binding.entry("hostPort").or_insert(port);
+                            }
                         }
                     }
                 }
@@ -94,5 +99,9 @@ mod tests {
             expected
         );
         assert_eq!(normalize(expected.clone()), expected);
+        assert_eq!(
+            normalize(json!({"80/tcp": [{"HostIp": "::", "HostPort": "8080"}], "443/tcp": null})),
+            expected
+        );
     }
 }

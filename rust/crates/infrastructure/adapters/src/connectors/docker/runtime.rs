@@ -1,9 +1,7 @@
 use std::time::Duration;
 
 use async_stream::stream;
-use citadel_platforms::{
-    PlatformRuntimePort, RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream,
-};
+use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsStream};
 use citadel_platforms::{
     RuntimeContainerSummary, RuntimePlatformInfo, RuntimeSwarmInfo, RuntimeSwarmPeer,
 };
@@ -29,52 +27,65 @@ impl citadel_platforms::PlatformHealthPort for DockerClient {
     }
 }
 
-impl PlatformRuntimePort for DockerClient {
+impl citadel_platforms::PlatformInfoPort for DockerClient {
     fn get_info<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
-        async move {
-            let value = tokio::select! {
-                biased;
-                () = cancellation.cancelled() => return Err(cancelled_error()),
-                value = async {
-                    let info = self.info().await?;
-                    let version = self.version().await?;
-                    let negotiated = self.negotiated_version().await?;
-                    let containers = self.list_containers(true).await?;
-                    Ok::<_, DockerError>((version, negotiated, info, ContainerCounts::from_list(&containers)))
-                } => value.map_err(normalize_docker_error)?,
-            };
-            let (version, negotiated, info, counts) = value;
-            let swarm = info.swarm.map(|swarm| RuntimeSwarmInfo {
-                node_id: swarm.node_id,
-                node_addr: swarm.node_addr,
-                local_node_state: swarm.local_node_state,
-                control_available: swarm.control_available,
-                error: (!swarm.error.trim().is_empty()).then_some(swarm.error),
-                remote_managers: swarm
-                    .remote_managers
-                    .into_iter()
-                    .map(|manager| RuntimeSwarmPeer {
-                        node_id: manager.node_id,
-                        address: manager.address,
-                    })
-                    .collect(),
-                nodes: swarm.nodes,
-                managers: swarm.managers,
-                cluster_id: swarm
-                    .cluster
-                    .as_ref()
-                    .map(|cluster| cluster.id.trim().to_owned())
-                    .filter(|value| !value.is_empty()),
-                cluster_created_at: swarm.cluster.and_then(|cluster| {
-                    chrono::DateTime::parse_from_rfc3339(&cluster.created_at)
-                        .ok()
-                        .map(|value| value.with_timezone(&chrono::Utc))
-                }),
-            });
-            Ok(RuntimePlatformInfo {
+        Box::pin(async move {
+            self.get_info_with_details(cancellation)
+                .await
+                .map(|(info, _)| info)
+        })
+    }
+}
+
+impl DockerClient {
+    pub async fn get_info_with_details(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(RuntimePlatformInfo, super::projection::DockerInfo), RuntimeCapabilityError> {
+        let value = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            value = async {
+                let info = self.info().await?;
+                let version = self.version().await?;
+                let negotiated = self.negotiated_version().await?;
+                Ok::<_, DockerError>((version, negotiated, info))
+            } => value.map_err(normalize_docker_error)?,
+        };
+        let (version, negotiated, info) = value;
+        let details = info.clone();
+        let swarm = info.swarm.map(|swarm| RuntimeSwarmInfo {
+            node_id: swarm.node_id,
+            node_addr: swarm.node_addr,
+            local_node_state: swarm.local_node_state,
+            control_available: swarm.control_available,
+            error: (!swarm.error.trim().is_empty()).then_some(swarm.error),
+            remote_managers: swarm
+                .remote_managers
+                .into_iter()
+                .map(|manager| RuntimeSwarmPeer {
+                    node_id: manager.node_id,
+                    address: manager.address,
+                })
+                .collect(),
+            nodes: swarm.nodes,
+            managers: swarm.managers,
+            cluster_id: swarm
+                .cluster
+                .as_ref()
+                .map(|cluster| cluster.id.trim().to_owned())
+                .filter(|value| !value.is_empty()),
+            cluster_created_at: swarm.cluster.and_then(|cluster| {
+                chrono::DateTime::parse_from_rfc3339(&cluster.created_at)
+                    .ok()
+                    .map(|value| value.with_timezone(&chrono::Utc))
+            }),
+        });
+        Ok((
+            RuntimePlatformInfo {
                 daemon_id: info.id,
                 server_version: version.version,
                 operating_system: info.operating_system,
@@ -82,19 +93,21 @@ impl PlatformRuntimePort for DockerClient {
                 architecture: info.architecture,
                 cpu_count: i64::from(info.cpu_count),
                 memory_total: bounded_i64(info.memory_total),
-                container_count: counts.total,
-                containers_running: counts.running,
-                containers_paused: counts.paused,
-                containers_stopped: counts.stopped,
+                container_count: bounded_i64(info.containers),
+                containers_running: bounded_i64(info.containers_running),
+                containers_paused: bounded_i64(info.containers_paused),
+                containers_stopped: bounded_i64(info.containers_stopped),
                 api_version: negotiated.to_string(),
                 minimum_api_version: version.min_api_version,
                 agent_version: None,
                 swarm,
-            })
-        }
-        .boxed()
+            },
+            details,
+        ))
     }
+}
 
+impl citadel_platforms::ContainerInventoryPort for DockerClient {
     fn list_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -114,7 +127,9 @@ impl PlatformRuntimePort for DockerClient {
         }
         .boxed()
     }
+}
 
+impl citadel_platforms::PlatformStatsPort for DockerClient {
     fn stream_stats<'a>(
         &'a self,
         fetch_interval: Duration,
@@ -343,11 +358,15 @@ mod tests {
     }
 }
 
-/// Keep event inspection metadata equivalent to a normal container snapshot.
+/// Compatibility fallback for an event summary with no image identity.
 pub fn container_observation(
-    document: serde_json::Value,
+    mut document: serde_json::Value,
 ) -> Result<RuntimeContainerSummary, serde_json::Error> {
-    let inspected: super::projection::ContainerInspect = serde_json::from_value(document.clone())?;
+    let ports = document
+        .pointer_mut("/NetworkSettings/Ports")
+        .map(serde_json::Value::take)
+        .unwrap_or_default();
+    let inspected: super::projection::ContainerInspect = serde_json::from_value(document)?;
     Ok(map_container(ContainerSummary {
         id: inspected.id,
         names: vec![inspected.name],
@@ -362,10 +381,7 @@ pub fn container_observation(
         labels: inspected.config.labels,
         state: inspected.state.status,
         status: String::new(),
-        ports: document
-            .pointer("/NetworkSettings/Ports")
-            .cloned()
-            .unwrap_or_default(),
+        ports,
     }))
 }
 

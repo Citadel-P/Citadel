@@ -1,6 +1,6 @@
 use citadel_platforms::{
-    PlatformConnectorType, PlatformInventoryPort, PlatformRegistrationError,
-    PlatformRegistrationRuntime, RuntimeCapabilityError, RuntimeErrorKind,
+    PlatformConnectorType, PlatformRegistrationError, PlatformRegistrationRuntime,
+    RuntimeCapabilityError, RuntimeErrorKind,
 };
 
 use crate::connectors::agent::client::AgentClient;
@@ -22,11 +22,11 @@ impl PlatformRegistrationRuntimeRouter {
 }
 
 impl PlatformRegistrationRuntime for PlatformRegistrationRuntimeRouter {
-    fn inventory_for(
+    fn info_for(
         &self,
         connector_type: PlatformConnectorType,
         address: &str,
-    ) -> Result<Arc<dyn PlatformInventoryPort>, PlatformRegistrationError> {
+    ) -> Result<Arc<dyn citadel_platforms::PlatformInfoPort>, PlatformRegistrationError> {
         match connector_type {
             PlatformConnectorType::Unknown => Err(PlatformRegistrationError::Runtime(
                 RuntimeCapabilityError::new(
@@ -49,7 +49,9 @@ impl PlatformRegistrationRuntime for PlatformRegistrationRuntimeRouter {
                 .and_then(|agent| {
                     agent
                         .at_address(address)
-                        .map(|agent| Arc::new(agent) as Arc<dyn PlatformInventoryPort>)
+                        .map(|agent| {
+                            Arc::new(agent) as Arc<dyn citadel_platforms::PlatformInfoPort>
+                        })
                         .map_err(PlatformRegistrationError::from)
                 }),
             PlatformConnectorType::EdgeAgent => Err(PlatformRegistrationError::Runtime(

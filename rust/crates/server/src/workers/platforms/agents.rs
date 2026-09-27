@@ -13,6 +13,7 @@ pub(super) async fn agent_subscriptions(
         );
     let mut tasks = tokio::task::JoinSet::new();
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
+    let mut ensure = context.targets.subscription_wakes();
     loop {
         tokio::select! {
             biased;
@@ -25,33 +26,67 @@ pub(super) async fn agent_subscriptions(
                 };
                 if let Some(platform) = active.iter().find(|(_,(_,_,id))|Some(*id)==task_id).map(|(platform,_)|*platform)
                     && let Some((_,token,_))=active.remove(&platform) { token.cancel(); }
+                continue;
             }
-            _ = ticker.tick() => {
-                let targets: Vec<_> = context.targets.snapshot().await.iter().filter(|target| target.connector_type == citadel_platforms::ConnectorKind::Agent).map(|target| (target.id, target.address.clone())).collect();
-                active.retain(|id, (address, token, _)| {
-                    let keep = targets.iter().any(|(target, endpoint)| target == id && endpoint == address);
-                    if !keep { token.cancel(); }
-                    keep
-                });
-                for (id, address) in targets {
-                    if active.contains_key(&id) { continue; }
-                    let token = cancellation.child_token();
-                    let owned_token = token.clone();
-                    let base = base.clone();
-                    let context = context.clone();
-                    let sender = sender.clone();
-                    let task = tasks.spawn(async move {
-                        // Endpoint failures stay inside this platform's retry loop.
-                        loop {
-                            let events = agent_event_source(token.clone(), id, base.clone(), context.targets.clone(), sender.clone(), context.metrics.clone(), reconnect_delay);
-                            let stats = agent_container_stats(token.clone(), id, base.clone(), context.clone(), reconnect_delay);
-                            let (_, result) = tokio::join!(events, stats);
-                            if let Err(error) = result { tracing::warn!(%error, %id, "Agent subscription failed"); }
-                            if wait_to_reconnect(&token, reconnect_delay).await { break; }
-                        }
-                    });
-                    active.insert(id, (address, owned_token, task.id()));
+            _ = ticker.tick() => {},
+            _ = ensure.changed() => {},
+        }
+        {
+            let targets: Vec<_> = context
+                .targets
+                .snapshot()
+                .await
+                .iter()
+                .filter(|target| target.connector_type == citadel_platforms::ConnectorKind::Agent)
+                .map(|target| (target.id, target.address.clone()))
+                .collect();
+            active.retain(|id, (address, token, _)| {
+                let keep = targets
+                    .iter()
+                    .any(|(target, endpoint)| target == id && endpoint == address);
+                if !keep {
+                    token.cancel();
                 }
+                keep
+            });
+            for (id, address) in targets {
+                if active.contains_key(&id) {
+                    continue;
+                }
+                let token = cancellation.child_token();
+                let owned_token = token.clone();
+                let base = base.clone();
+                let context = context.clone();
+                let sender = sender.clone();
+                let task = tasks.spawn(async move {
+                    // Endpoint failures stay inside this platform's retry loop.
+                    loop {
+                        let events = agent_event_source(
+                            token.clone(),
+                            id,
+                            base.clone(),
+                            context.targets.clone(),
+                            sender.clone(),
+                            context.metrics.clone(),
+                            reconnect_delay,
+                        );
+                        let stats = agent_container_stats(
+                            token.clone(),
+                            id,
+                            base.clone(),
+                            context.clone(),
+                            reconnect_delay,
+                        );
+                        let (_, result) = tokio::join!(events, stats);
+                        if let Err(error) = result {
+                            tracing::warn!(%error, %id, "Agent subscription failed");
+                        }
+                        if wait_to_reconnect(&token, reconnect_delay).await {
+                            break;
+                        }
+                    }
+                });
+                active.insert(id, (address, owned_token, task.id()));
             }
         }
     }

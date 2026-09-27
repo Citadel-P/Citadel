@@ -9,7 +9,7 @@ use citadel_contracts::citadel::edge::v1::{
     EdgeCommandKind, edge_agent_service_server::EdgeAgentServiceServer,
 };
 use citadel_execution::{ProcessLimits, ProcessRequest};
-use citadel_platforms::PlatformRuntimePort;
+use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort, PlatformStatsPort};
 use citadel_processes::run;
 use futures_util::{FutureExt, StreamExt};
 use std::{panic::AssertUnwindSafe, time::Duration};

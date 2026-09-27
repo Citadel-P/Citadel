@@ -214,6 +214,10 @@ impl TryFrom<wire::ImageInspect> for ImageInspect {
             os: v.os.unwrap_or_default(),
             architecture: v.architecture.unwrap_or_default(),
             config: ImageConfig {
+                user: c.user,
+                working_dir: c.working_dir,
+                entry_point: c.entrypoint.unwrap_or_default(),
+                stop_signal: c.stop_signal.flatten(),
                 env: c.env.unwrap_or_default(),
                 cmd: c.cmd.unwrap_or_default(),
                 volumes: c.volumes.unwrap_or_default(),
@@ -432,7 +436,8 @@ impl TryFrom<wire::ContainerStatsResponse> for ContainerStats {
                 .map(|c| (*c).into())
                 .unwrap_or_default(),
             memory_stats: MemoryStats {
-                usage: m.usage.flatten().unwrap_or_default(),
+                usage: m.usage.flatten(),
+                privateworkingset: m.privateworkingset.flatten(),
                 stats: m.stats.unwrap_or_default(),
                 limit: m.limit.flatten().unwrap_or_default(),
             },
