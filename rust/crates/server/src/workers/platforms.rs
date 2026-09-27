@@ -14,6 +14,9 @@ use scoped_reconciler::*;
 mod events;
 use events::*;
 
+#[cfg(test)]
+mod state_delta_tests;
+
 mod health;
 use health::*;
 mod lifecycle;
@@ -47,7 +50,6 @@ use futures_util::StreamExt;
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
 
-use crate::Readiness;
 use crate::runtime_targets::{
     HEALTH_CONCURRENCY, PlatformRuntimeRegistry, PlatformTarget as ReconciliationTarget,
     STATS_CONCURRENCY,
@@ -80,7 +82,6 @@ pub struct WorkerDependencies {
     pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
     pub docker: DockerClient,
     pub pool: PgPool,
-    pub readiness: Arc<Readiness>,
     pub metrics: Arc<Metrics>,
     pub agent: Option<AgentClient>,
     pub realtime: Option<RealtimeHub>,
@@ -126,7 +127,6 @@ pub async fn register(
         containers,
         docker,
         pool,
-        readiness,
         metrics,
         agent,
         realtime,
@@ -230,7 +230,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "alert-deliveries",
-        super::alerts::deliveries(cancellation.child_token(), alert_deliveries),
+        super::alerts::deliveries(
+            cancellation.child_token(),
+            alert_deliveries,
+            notifications.subscribe(RuntimeSignal::AlertDelivery),
+        ),
     );
     supervisor.spawn(
         "build-runs",
@@ -492,17 +496,6 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
-        "readiness-probe",
-        readiness_probe(
-            cancellation.child_token(),
-            docker.clone(),
-            pool.clone(),
-            readiness,
-            Arc::clone(&metrics),
-            settings.probe_interval,
-        ),
-    );
-    supervisor.spawn(
         "local-container-stats",
         local_container_stats(
             cancellation.child_token(),
@@ -526,7 +519,7 @@ struct StatsWorkerContext {
     fetch_interval: Duration,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReconciliationTrigger {
     LocalEvent,
     AgentEvent,

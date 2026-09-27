@@ -15,8 +15,13 @@ struct Store {
     finished: AtomicUsize,
     persisted: AtomicUsize,
     batches: AtomicUsize,
+    coordinator: Arc<ContainerOperationCoordinator>,
+    active_claim: std::sync::Mutex<Option<ContainerClaim>>,
 }
 impl ContainerRepository for Store {
+    fn coordinator(&self) -> Option<Arc<ContainerOperationCoordinator>> {
+        Some(self.coordinator.clone())
+    }
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],
@@ -33,7 +38,7 @@ impl ContainerRepository for Store {
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
         Box::pin(async move {
             self.claimed.fetch_add(1, Ordering::SeqCst);
-            Ok(ContainerClaim {
+            let claim = ContainerClaim {
                 operation_id: Uuid::now_v7(),
                 started_at: chrono::Utc::now().timestamp(),
                 targets: ids
@@ -41,13 +46,15 @@ impl ContainerRepository for Store {
                     .map(|id| ContainerTarget {
                         id: *id,
                         platform_id: Uuid::nil(),
-                        docker_id: "docker-id".into(),
+                        docker_id: format!("docker-{id}"),
                         node_id: None,
                     })
                     .collect(),
                 deployment_ids: vec![],
                 stack_ids: vec![],
-            })
+            };
+            *self.active_claim.lock().unwrap() = Some(claim.clone());
+            Ok(claim)
         })
     }
     fn observed<'a>(
@@ -333,5 +340,118 @@ async fn partial_verification_persists_successful_siblings_in_one_batch_and_reta
     );
     assert_eq!(store.persisted.load(Ordering::SeqCst), 5);
     assert_eq!(store.batches.load(Ordering::SeqCst), 1);
+    assert_eq!(store.finished.load(Ordering::SeqCst), 0);
+}
+
+struct ConfirmingRuntime {
+    store: Arc<Store>,
+    events: usize,
+    inspections: AtomicUsize,
+}
+impl ContainerMutationRuntime for ConfirmingRuntime {
+    fn mutate<'a>(
+        &'a self,
+        _: &'a ContainerTarget,
+        _: ContainerAction,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async { unreachable!("uses batch mutation") })
+    }
+    fn mutate_batch<'a>(
+        &'a self,
+        targets: &'a [ContainerTarget],
+        action: ContainerAction,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let claim = self.store.active_claim.lock().unwrap().clone().unwrap();
+            let state = match action {
+                ContainerAction::Stop | ContainerAction::Delete(_) => "exited",
+                ContainerAction::Pause => "paused",
+                _ => "running",
+            };
+            for target in targets.iter().take(self.events) {
+                self.store.coordinator.committed(
+                    claim.operation_id,
+                    target,
+                    Some(state),
+                    chrono::Utc::now().timestamp_millis(),
+                );
+            }
+            Ok(())
+        })
+    }
+    fn observe<'a>(
+        &'a self,
+        _: &'a ContainerTarget,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            self.inspections.fetch_add(1, Ordering::SeqCst);
+            Ok(Some("exited".into()))
+        })
+    }
+}
+
+#[tokio::test]
+async fn lifecycle_events_confirm_targets_and_only_missing_targets_are_inspected() {
+    for (events, expected_inspections) in [(6, 0), (4, 2), (0, 6)] {
+        let store = Arc::new(Store::default());
+        let runtime = Arc::new(ConfirmingRuntime {
+            store: store.clone(),
+            events,
+            inspections: AtomicUsize::new(0),
+        });
+        let service =
+            ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
+        service
+            .execute(
+                ActorId::new(Uuid::now_v7()),
+                true,
+                (0..6).map(|_| Uuid::now_v7().to_string()).collect(),
+                ContainerAction::Stop,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            runtime.inspections.load(Ordering::SeqCst),
+            expected_inspections,
+            "events={events}"
+        );
+        assert_eq!(store.finished.load(Ordering::SeqCst), 1, "events={events}");
+        assert_eq!(
+            store.persisted.load(Ordering::SeqCst),
+            expected_inspections,
+            "events={events}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn task_cancellation_keeps_claim_for_later_read_only_recovery() {
+    let store = Arc::new(Store::default());
+    let runtime = Arc::new(Runtime::new());
+    let service = ContainerMutationService::new(store.clone(), runtime.clone(), Arc::new(Tasks));
+    let cancellation = CancellationToken::new();
+    let operation = tokio::spawn({
+        let service = service.clone();
+        let cancellation = cancellation.clone();
+        async move {
+            service
+                .execute_background(
+                    ActorId::new(Uuid::now_v7()),
+                    vec![Uuid::now_v7().to_string()],
+                    ContainerAction::Stop,
+                    cancellation,
+                )
+                .await
+        }
+    });
+    runtime.started.acquire().await.unwrap().forget();
+    cancellation.cancel();
+    assert!(
+        matches!(operation.await.unwrap(), Err(error) if error.kind == RuntimeErrorKind::Unavailable)
+    );
+    assert_eq!(store.claimed.load(Ordering::SeqCst), 1);
     assert_eq!(store.finished.load(Ordering::SeqCst), 0);
 }

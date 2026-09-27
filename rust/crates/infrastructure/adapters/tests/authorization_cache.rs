@@ -4,8 +4,10 @@ use citadel_adapters::persistence::postgres::identity::{
     roles::repository::PostgresRoleRepository, teams::repository::PostgresTeamRepository,
     users::repository::PostgresUserRepository,
 };
+use citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader;
 use citadel_database::MigrationRunner;
 use citadel_identity::*;
+use citadel_platforms::PlatformReader;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -93,8 +95,26 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
         counter("AuthorizationNegativeHit", "units") - warm_negatives,
         6400
     );
+    let platform_reader = PostgresPlatformReader::new(pool.clone());
+    let cached_lookups = counter("AuthorizationResourceLookup", "units");
+    let cached_query_count = queries("AuthorizationResourceQuery");
+    let platform_permissions = platform_reader
+        .permissions_for_platforms(alice.actor_id, &batch)
+        .await
+        .unwrap();
+    assert_eq!(platform_permissions.len(), ids.len());
+    assert!(
+        platform_permissions
+            .values()
+            .all(|permission| { permission.level_mask == 0 && permission.specific_mask == 0 })
+    );
+    assert_eq!(
+        counter("AuthorizationResourceLookup", "units") - cached_lookups,
+        ids.len() as u64
+    );
+    assert_eq!(queries("AuthorizationResourceQuery"), cached_query_count);
     println!(
-        "authorization gate: cold resource misses=64 ACL SQL=1; warm resource hits=6400 negative hits=6400 ACL SQL=0"
+        "authorization gate: cold resource misses=64 ACL SQL=1; warm resource hits=6400 negative hits=6400; Platform permission projection uses 64 cached known-ID lookups and 0 ACL SQL"
     );
     store.authorization_snapshot(bob.actor_id).await.unwrap();
     let mut alice_watch = store.authorization_changes(alice.actor_id).unwrap();
@@ -111,6 +131,11 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
         .unwrap();
     assert!(alice_watch.has_changed().unwrap());
     alice_watch.borrow_and_update();
+    let granted = platform_reader
+        .permissions_for_platforms(alice.actor_id, &[ids[0]])
+        .await
+        .unwrap();
+    assert_eq!(granted[&ids[0]].level_mask, PermissionLevel::Read as i32);
     assert!(
         store
             .resource_permission(alice.actor_id, kind, ids[0])

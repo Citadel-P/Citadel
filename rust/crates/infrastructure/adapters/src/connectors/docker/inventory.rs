@@ -36,6 +36,20 @@ impl citadel_platforms::ImageInventoryPort for DockerClient {
 }
 
 impl citadel_platforms::NetworkInventoryPort for DockerClient {
+    fn list_network_topology<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>> {
+        async move {
+            let values = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => return Err(cancelled_error()),
+                result = DockerClient::list_networks(self) => result.map_err(normalize_docker_error)?,
+            };
+            Ok(values.into_iter().map(map_network).collect())
+        }.boxed()
+    }
+
     fn list_networks<'a>(
         &'a self,
         cancellation: &'a CancellationToken,

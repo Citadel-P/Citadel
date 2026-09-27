@@ -188,6 +188,13 @@ impl AlertRepository for PostgresAlertRepository {
         self.claim_delivery_impl(owner, stale_before)
     }
 
+    fn next_delivery_deadline(
+        &self,
+        stale_after: chrono::Duration,
+    ) -> BoxFuture<'_, Result<Option<DateTime<Utc>>, AlertError>> {
+        self.next_delivery_deadline_impl(stale_after)
+    }
+
     fn complete_delivery(&self, id: Uuid, owner: Uuid) -> BoxFuture<'_, Result<bool, AlertError>> {
         self.complete_delivery_impl(id, owner)
     }

@@ -3,6 +3,7 @@ mod automation;
 mod backups;
 mod build_consumers;
 mod builds;
+mod container_batch;
 mod containers;
 mod deployments;
 pub mod edge;

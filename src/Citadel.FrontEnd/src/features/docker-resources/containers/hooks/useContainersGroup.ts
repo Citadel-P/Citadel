@@ -4,7 +4,8 @@ import { ContainersView, ContainerView, ContainerStatView } from '@/api/generate
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { applyContainerChange, reconcileContainerOrder } from './container-order';
+import { applyContainerChange, applyContainerStatePatches, reconcileContainerOrder } from './container-order';
+import type { ContainerStatePatch } from './container-order';
 
 export const useContainersGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listContainers', { id: platformId });
@@ -114,13 +115,29 @@ export const useContainersGroup = (platformId?: string) => {
     [platformId],
   );
 
+  const handleContainerStateChanged = useCallback(
+    (change: { platformId: string; patches: ContainerStatePatch[] }) => {
+      if (change.platformId !== platformId) return;
+      setContainersInfo((current) =>
+        current
+          ? {
+              ...current,
+              containers: applyContainerStatePatches(current.containers ?? [], change.patches),
+            }
+          : current,
+      );
+    },
+    [platformId],
+  );
+
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
       hubConnection.on('ContainersChanged', handleContainersChanged);
+      hubConnection.on('ContainersStateChanged', handleContainerStateChanged);
     },
-    [handleContainersStatsUpdated, handleContainersInfoUpdated, handleContainersChanged],
+    [handleContainersStatsUpdated, handleContainersInfoUpdated, handleContainersChanged, handleContainerStateChanged],
   );
 
   const removeEventListeners = useCallback(
@@ -128,8 +145,9 @@ export const useContainersGroup = (platformId?: string) => {
       hubConnection.off('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.off('ContainersStatsUpdated', handleContainersStatsUpdated);
       hubConnection.off('ContainersChanged', handleContainersChanged);
+      hubConnection.off('ContainersStateChanged', handleContainerStateChanged);
     },
-    [handleContainersInfoUpdated, handleContainersStatsUpdated, handleContainersChanged],
+    [handleContainersInfoUpdated, handleContainersStatsUpdated, handleContainersChanged, handleContainerStateChanged],
   );
 
   useRealtimeGroup({

@@ -10,6 +10,17 @@ pub enum ContainerChange {
 }
 
 impl ContainerChange {
+    /// These transitions change runtime state only. Create/observe still need metadata.
+    pub const fn state_delta(self) -> Option<super::ContainerLifecycleState> {
+        use super::ContainerLifecycleState as State;
+        match self {
+            Self::Running => Some(State::Running),
+            Self::Paused => Some(State::Paused),
+            Self::Exited => Some(State::Exited),
+            _ => None,
+        }
+    }
+
     pub const fn state(self) -> Option<&'static str> {
         match self {
             Self::Created => Some("created"),

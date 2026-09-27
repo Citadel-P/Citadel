@@ -1,4 +1,6 @@
+mod container_delta;
 mod container_stats;
+pub use container_delta::{ContainerDeltaResult, ContainerLifecycleState, ContainerStateDelta};
 mod event_policy;
 mod inventory_reconciliation;
 

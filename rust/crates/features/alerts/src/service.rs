@@ -62,6 +62,13 @@ impl AlertDeliveryService {
         Ok(true)
     }
 
+    /// Earliest retry or stale-claim recovery deadline for idle worker scheduling.
+    pub async fn next_delivery_deadline(
+        &self,
+    ) -> Result<Option<chrono::DateTime<Utc>>, AlertError> {
+        self.store.next_delivery_deadline(self.stale_after).await
+    }
+
     async fn maintain_if_due(&self) -> Result<(), AlertError> {
         let now = Utc::now();
         let timestamp = now.timestamp();

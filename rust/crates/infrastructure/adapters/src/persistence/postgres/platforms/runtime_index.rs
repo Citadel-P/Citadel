@@ -10,7 +10,7 @@ use uuid::Uuid;
 type Scope = (Uuid, Option<String>);
 type Identities = BTreeMap<String, Uuid>;
 type Snapshot = BTreeMap<Scope, Arc<Identities>>;
-type Database = (String, u16, String, String, Option<std::path::PathBuf>);
+pub(super) type Database = (String, u16, String, String, Option<std::path::PathBuf>);
 static INDEXES: OnceLock<Mutex<BTreeMap<Database, Weak<RuntimeIdentityIndex>>>> = OnceLock::new();
 
 #[derive(Default)]
@@ -24,7 +24,12 @@ pub struct RuntimeIdentityIndex {
     pool: PgPool,
     state: RwLock<State>,
 }
-fn database(pool: &PgPool) -> Database {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PrefixMatch {
+    Unique(Uuid),
+    Ambiguous,
+}
+pub(super) fn database(pool: &PgPool) -> Database {
     let options = pool.connect_options();
     (
         options.get_host().into(),
@@ -64,6 +69,28 @@ impl RuntimeIdentityIndex {
             .get(&(platform, node.map(str::to_owned)))
             .and_then(|scope| scope.get(docker))
             .copied()
+    }
+    /// Resolve a short Docker ID only from a complete committed snapshot. A
+    /// miss remains eligible for SQL fallback; multiple scopes fail closed.
+    pub fn lookup_prefix(&self, prefix: &str) -> Option<PrefixMatch> {
+        let prefix = prefix.to_ascii_lowercase();
+        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
+        if !state.initialized || prefix.is_empty() {
+            return None;
+        }
+        let mut found = None;
+        for identities in state.snapshot.values() {
+            for (docker, id) in identities.range(prefix.clone()..) {
+                if !docker.starts_with(&prefix) {
+                    break;
+                }
+                if found.is_some_and(|found| found != *id) {
+                    return Some(PrefixMatch::Ambiguous);
+                }
+                found = Some(*id);
+            }
+        }
+        found.map(PrefixMatch::Unique)
     }
     pub fn initialized(&self) -> bool {
         self.state
@@ -234,5 +261,19 @@ mod tests {
         index.observe((platform, None), "old", None);
         assert!(!index.install_rebuild(0, stale));
         assert_eq!(index.lookup(platform, None, "old"), None);
+    }
+    #[tokio::test]
+    async fn prefix_lookup_requires_a_complete_snapshot_and_fails_closed_on_ambiguity() {
+        let index = index();
+        assert_eq!(index.lookup_prefix("abc"), None);
+        let platform = Uuid::now_v7();
+        let first = Uuid::now_v7();
+        let second = Uuid::now_v7();
+        index.observe((platform, None), "abcdef01", Some(first));
+        index.state.write().unwrap().initialized = true;
+        assert_eq!(index.lookup_prefix("ABC"), Some(PrefixMatch::Unique(first)));
+        index.observe((platform, Some("worker".into())), "abcdef02", Some(second));
+        assert_eq!(index.lookup_prefix("abc"), Some(PrefixMatch::Ambiguous));
+        assert_eq!(index.lookup_prefix("def"), None);
     }
 }

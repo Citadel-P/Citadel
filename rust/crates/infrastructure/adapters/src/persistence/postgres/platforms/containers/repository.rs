@@ -9,15 +9,33 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct PostgresContainerRepository {
     pool: PgPool,
+    coordinator: std::sync::Arc<ContainerOperationCoordinator>,
+    authorization: std::sync::Arc<
+        crate::persistence::postgres::identity::authorization_cache::AuthorizationCache,
+    >,
 }
 
 impl PostgresContainerRepository {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            coordinator: super::coordination::attach(&pool),
+            authorization: crate::persistence::postgres::identity::authorization_cache::AuthorizationCache::attach(&pool),
+            pool,
+        }
     }
 }
 
 impl ContainerRepository for PostgresContainerRepository {
+    fn coordinator(&self) -> Option<std::sync::Arc<ContainerOperationCoordinator>> {
+        Some(self.coordinator.clone())
+    }
+    fn finish_committed(
+        &self,
+        claim: Uuid,
+    ) -> BoxFuture<'_, Result<ContainerCompletion, RuntimeCapabilityError>> {
+        Box::pin(super::completion::finish(&self.pool, claim))
+    }
+
     fn resolve_ids<'a>(
         &'a self,
         ids: &'a [String],
@@ -28,34 +46,34 @@ impl ContainerRepository for PostgresContainerRepository {
                 .map(|id| Uuid::parse_str(id))
                 .collect::<Result<Vec<_>, _>>()
             {
-                let found: BTreeSet<Uuid> =
-                    sqlx::query_scalar("SELECT id FROM containers WHERE id=ANY($1::uuid[])")
-                        .bind(&uuids)
-                        .fetch_all(&self.pool)
-                        .await
-                        .map_err(storage)?
-                        .into_iter()
-                        .collect();
-                if uuids.iter().any(|id| !found.contains(id)) {
-                    return Err(error(
-                        RuntimeErrorKind::NotFound,
-                        "No containers found for the provided ID(s).",
-                    ));
-                }
                 return Ok(uuids);
             }
             let mut resolved = Vec::with_capacity(ids.len());
             for id in ids {
-                let matches: Vec<Uuid> = if let Ok(id) = Uuid::parse_str(id) {
-                    sqlx::query_scalar("SELECT id FROM containers WHERE id=$1")
-                        .bind(id)
-                        .fetch_all(&self.pool)
-                        .await
-                        .map_err(storage)?
-                } else {
-                    sqlx::query_scalar("SELECT id FROM containers WHERE dockercontainerid LIKE $1 ORDER BY id LIMIT 2")
-                        .bind(format!("{}%", id.to_ascii_lowercase())).fetch_all(&self.pool).await.map_err(storage)?
-                };
+                if let Ok(id) = Uuid::parse_str(id) {
+                    resolved.push(id);
+                    continue;
+                }
+                if let Some(index) = super::super::runtime_index::attached(&self.pool) {
+                    match index.lookup_prefix(id) {
+                        Some(super::super::runtime_index::PrefixMatch::Unique(id)) => {
+                            resolved.push(id);
+                            continue;
+                        }
+                        Some(super::super::runtime_index::PrefixMatch::Ambiguous) => {
+                            return Err(error(
+                                RuntimeErrorKind::Conflict,
+                                "Container ID is ambiguous across nodes; use its Citadel ID.",
+                            ));
+                        }
+                        None => {}
+                    }
+                }
+                let prefix = id.to_ascii_lowercase();
+                let _query =
+                    citadel_runtime::runtime_metrics::RuntimeWork::ContainerIdResolveQuery.start();
+                let matches: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM containers WHERE left(lower(dockercontainerid),length($1))=$1 ORDER BY id LIMIT 2")
+                    .bind(prefix).fetch_all(&self.pool).await.map_err(storage)?;
                 match matches.as_slice() {
                     [id] => resolved.push(*id),
                     [] => {
@@ -84,6 +102,15 @@ impl ContainerRepository for PostgresContainerRepository {
         selection: ContainerSelectionKind,
     ) -> BoxFuture<'a, Result<ContainerClaim, RuntimeCapabilityError>> {
         Box::pin(async move {
+            // Fence ACL mutations before opening a SQL transaction. Cold cache
+            // fills then use the claim transaction below; warm admissions avoid
+            // the actor/team/role CTE entirely.
+            let authorization = if administrator {
+                None
+            } else {
+                let fence = self.authorization.read_fence().await;
+                Some(fence)
+            };
             let mut tx = self.pool.begin().await.map_err(storage)?;
             // Inventory takes an exclusive Platform lock before its child rows.
             // Take shared Platform locks first, including for Deployment selectors.
@@ -192,14 +219,14 @@ impl ContainerRepository for PostgresContainerRepository {
                     } else {
                         (ResourceType::Platform, platform_ids.as_slice())
                     };
-                let grants = crate::persistence::postgres::permissions::for_resources(
-                    &mut *tx,
-                    actor,
-                    resource_type,
-                    resource_ids,
-                )
-                .await
-                .map_err(storage)?;
+                let fence = authorization
+                    .as_ref()
+                    .expect("non-administrator claim holds an authorization fence");
+                let grants = self
+                    .authorization
+                    .resources_in_transaction(&mut tx, actor, resource_type, resource_ids, fence)
+                    .await
+                    .map_err(storage)?;
                 let required = if selection == ContainerSelectionKind::Deployments {
                     PermissionLevel::Write as i32
                 } else if matches!(action, ContainerAction::Delete(_)) {
@@ -207,10 +234,14 @@ impl ContainerRepository for PostgresContainerRepository {
                 } else {
                     PermissionLevel::Write as i32 | PermissionLevel::Execute as i32
                 };
-                if resource_ids
-                    .iter()
-                    .any(|id| grants.get(id).copied().unwrap_or(0) & required == 0)
-                {
+                if resource_ids.iter().any(|id| {
+                    grants
+                        .get(id)
+                        .and_then(|grant| *grant)
+                        .map_or(0, |grant| grant.level as i32)
+                        & required
+                        == 0
+                }) {
                     return Err(error(
                         RuntimeErrorKind::PermissionDenied,
                         "Not authorized to operate on all selected Containers.",
@@ -337,27 +368,7 @@ impl ContainerRepository for PostgresContainerRepository {
     }
 
     fn finish(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
-        Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            lock_claim_resources(&mut tx, claim).await?;
-            // Parent state is derived from *all* owned containers, not from the requested command.
-            sqlx::query("UPDATE deployments d SET status=CASE WHEN EXISTS(SELECT 1 FROM containers c WHERE c.deploymentid=d.id AND lower(c.state)='paused') THEN 'Paused' WHEN EXISTS(SELECT 1 FROM containers c WHERE c.deploymentid=d.id AND lower(c.state)='running') THEN 'Healthy' ELSE 'Stopped' END WHERE containeroperationid=$1")
-                .bind(claim).execute(&mut *tx).await.map_err(storage)?;
-            sqlx::query("UPDATE stackreleases r SET status=CASE WHEN NOT EXISTS(SELECT 1 FROM containers c WHERE c.stackid=s.id AND lower(c.state) IN ('running','paused')) THEN 'Stopped' WHEN NOT EXISTS(SELECT 1 FROM containers c WHERE c.stackid=s.id AND lower(c.state)!='paused') THEN 'Paused' WHEN NOT EXISTS(SELECT 1 FROM containers c WHERE c.stackid=s.id AND lower(c.state)!='running') THEN 'Healthy' ELSE 'Degraded' END FROM stacks s WHERE s.containeroperationid=$1 AND r.id=s.currentstackreleaseid")
-                .bind(claim).execute(&mut *tx).await.map_err(storage)?;
-            for table in ["deployments", "stacks", "containers"] {
-                let statement = format!(
-                    "UPDATE {table} SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,containeroperationid=NULL,rowversion=rowversion+1 WHERE containeroperationid=$1"
-                );
-                sqlx::query(sqlx::AssertSqlSafe(statement))
-                    .bind(claim)
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(storage)?;
-            }
-            tx.commit().await.map_err(storage)?;
-            Ok(())
-        })
+        Box::pin(async move { self.finish_committed(claim).await.map(|_| ()) })
     }
 
     fn abandon(&self, claim: Uuid) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
@@ -431,7 +442,7 @@ fn target(row: sqlx::postgres::PgRow) -> ContainerTarget {
         node_id: row.get("dockernodeid"),
     }
 }
-async fn lock_claim_resources(
+pub(super) async fn lock_claim_resources(
     tx: &mut Transaction<'_, Postgres>,
     claim: Uuid,
 ) -> Result<(), RuntimeCapabilityError> {

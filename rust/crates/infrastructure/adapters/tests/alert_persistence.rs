@@ -195,7 +195,18 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         resource_type: "Build".into(),
         deduplication_key: format!("phase7-incident-{}", Uuid::now_v7()),
     };
+    let mut delivery_wake = sqlx::postgres::PgListener::connect_with(&pool)
+        .await
+        .unwrap();
+    delivery_wake
+        .listen(citadel_runtime::RuntimeSignal::AlertDelivery.channel())
+        .await
+        .unwrap();
     let raised = store.raise(&event).await.unwrap().unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), delivery_wake.recv())
+        .await
+        .expect("enqueue commits a worker wakeup")
+        .unwrap();
     assert!(store.raise(&event).await.unwrap().is_none());
     assert_eq!(
         notifications.load(Ordering::SeqCst),
@@ -212,18 +223,62 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let claim = claims.into_iter().flatten().next().unwrap();
     assert_eq!(claim.event.id, raised.id);
     assert_eq!(claim.channel.id, channel.id);
+    let claimed_at: chrono::DateTime<Utc> =
+        sqlx::query_scalar("SELECT claimedat FROM alertdeliveryoutbox WHERE id=$1")
+            .bind(claim.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let stale_deadline = store
+        .next_delivery_deadline(Duration::minutes(2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        (stale_deadline - (claimed_at + Duration::minutes(2)))
+            .num_seconds()
+            .abs()
+            <= 1
+    );
+    sqlx::query("UPDATE alertdeliveryoutbox SET claimedat=now()-interval '3 minutes' WHERE id=$1")
+        .bind(claim.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let recovery_owner = Uuid::now_v7();
+    let recovered = store
+        .claim_delivery(recovery_owner, Utc::now() - Duration::minutes(2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        recovered.id, claim.id,
+        "expired delivery claims are recoverable"
+    );
+    let retry_at = Utc::now() + Duration::seconds(45);
     assert!(
         store
             .retry_delivery(
-                claim.id,
-                owner,
-                Utc::now() - Duration::seconds(1),
+                recovered.id,
+                recovery_owner,
+                retry_at,
                 false,
-                "temporary failure",
+                "temporary failure"
             )
             .await
             .unwrap()
     );
+    let next_deadline = store
+        .next_delivery_deadline(Duration::minutes(2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!((next_deadline - retry_at).num_seconds().abs() <= 1);
+    sqlx::query("UPDATE alertdeliveryoutbox SET nextattemptat=now() WHERE id=$1")
+        .bind(claim.id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let retried = store
         .claim_delivery(owner, Utc::now() - Duration::minutes(2))
         .await

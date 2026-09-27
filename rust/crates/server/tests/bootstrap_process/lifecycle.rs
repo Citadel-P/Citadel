@@ -66,7 +66,8 @@ async fn startup_registers_routes_starts_workers_and_shuts_down_both_listeners()
             "the fixture never connects to the host Docker daemon"
         );
 
-        // Workers, rather than the request handler, maintain these counters.
+        // Failed on-demand readiness checks are counted at the endpoint; active
+        // task accounting remains owned by the background workers.
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let metrics = fixture

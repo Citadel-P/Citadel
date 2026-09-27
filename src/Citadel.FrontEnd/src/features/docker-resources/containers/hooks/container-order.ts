@@ -1,5 +1,42 @@
 import { ContainerView } from '@/api/generated/api.types';
 
+export interface ContainerStatePatch {
+  id: string;
+  containerId: string;
+  state?: string;
+  controlState?: string;
+  updated?: number;
+  dockerNodeId?: string | null;
+}
+
+export const applyContainerStatePatches = (
+  previous: ContainerView[],
+  patches: ContainerStatePatch[],
+): ContainerView[] => {
+  if (!patches.length) return previous;
+  const byId = new Map(patches.map((patch) => [patch.id, patch]));
+  let changed = false;
+  const updated = previous.map((container) => {
+    const patch = byId.get(container.id);
+    if (!patch) return container;
+    const next = {
+      ...container,
+      ...(patch.state !== undefined ? { state: patch.state } : {}),
+      ...(patch.controlState !== undefined ? { controlState: patch.controlState } : {}),
+      ...(patch.updated !== undefined ? { updated: patch.updated } : {}),
+    };
+    if (
+      next.state !== container.state ||
+      next.controlState !== container.controlState ||
+      next.updated !== container.updated
+    ) {
+      changed = true;
+    }
+    return next;
+  });
+  return changed ? updated : previous;
+};
+
 export const applyContainerChange = (
   previous: ContainerView[],
   dockerId: string,

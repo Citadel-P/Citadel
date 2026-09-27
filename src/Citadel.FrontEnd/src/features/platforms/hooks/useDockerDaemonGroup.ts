@@ -13,6 +13,7 @@ import {
   SwarmTasksView,
 } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import type { ContainerStatePatch } from '@/features/docker-resources/containers/hooks/container-order';
 
 export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaemonListeners) => {
   const listenersRef = useRef(listeners);
@@ -22,6 +23,10 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
 
   const handleContainerEventReceived = useCallback((container: ContainerView, eventType: string) => {
     listenersRef.current?.onContainerEvent?.({ container, eventType });
+  }, []);
+
+  const handleContainerStateChanged = useCallback((patches: ContainerStatePatch[]) => {
+    listenersRef.current?.onContainerStateChange?.(patches);
   }, []);
 
   const handleImageEventReceived = useCallback((image: ImageView, eventType: string) => {
@@ -60,12 +65,14 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.on('VolumeEventReceived', handleVolumeEventReceived);
       hub.on('NetworkEventReceived', handleNetworkEventReceived);
       hub.on('ContainerEventReceived', handleContainerEventReceived);
+      hub.on('ContainerStateChanged', handleContainerStateChanged);
       hub.on('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
       hub.on('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
       hub.on('SwarmNodeLocalResourcesUpdated', handleSwarmNodeLocalResourcesUpdated);
     },
     [
       handleContainerEventReceived,
+      handleContainerStateChanged,
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
@@ -81,12 +88,14 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.off('VolumeEventReceived', handleVolumeEventReceived);
       hub.off('NetworkEventReceived', handleNetworkEventReceived);
       hub.off('ContainerEventReceived', handleContainerEventReceived);
+      hub.off('ContainerStateChanged', handleContainerStateChanged);
       hub.off('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
       hub.off('SwarmNodeAgentCoverageChanged', handleSwarmNodeAgentCoverageChanged);
       hub.off('SwarmNodeLocalResourcesUpdated', handleSwarmNodeLocalResourcesUpdated);
     },
     [
       handleContainerEventReceived,
+      handleContainerStateChanged,
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
@@ -128,6 +137,7 @@ export interface NetworkEvent extends BaseEvent {
 
 export type DockerDaemonListeners = {
   onContainerEvent?: (event: ContainerEvent) => void;
+  onContainerStateChange?: (patches: ContainerStatePatch[]) => void;
   onImageEvent?: (event: ImageEvent) => void;
   onVolumeEvent?: (event: VolumeEvent) => void;
   onNetworkEvent?: (event: NetworkEvent) => void;

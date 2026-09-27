@@ -101,7 +101,7 @@ pub async fn collect_event_scope(
             .expect("Swarm target");
             ResourceInventory::Swarm {
                 inventory,
-                networks: super::NetworkReconciler::collect(networks, cancellation).await?,
+                networks: networks.list_network_topology(cancellation).await?,
             }
         }
     };

@@ -563,12 +563,38 @@ tests remain authoritative for what is currently implemented.
 
 ### Container-driven resource status
 
-Daemon container events update the persisted runtime identity and its Deployment
-or Compose Stack status in one transaction. Local Core inspects the affected
-container; Direct and Edge Agents supply the observed container state. Confirmed
-deletions preserve the resource binding long enough to mark the owner degraded.
-Status-change activities use the persisted payload names, and realtime invalidations
-are published after commit. Duplicate observations do not create duplicate activities.
+Known `start`, `die`, `pause` and `unpause` events use a narrow state projection;
+Local and updated Agents perform no Docker metadata read for these actions. The
+writer validates platform/node/Docker identity, uses the identity index only as a
+hint, preserves metadata and operation claims, and suppresses semantic no-op
+revisions. Unknown identities request Container reconciliation only. `create`,
+`rename` and other supported metadata observations retain targeted hydration;
+confirmed deletion remains an ID-only tombstone. Older enriched Agent events
+are accepted, but their metadata is not applied on a state-only transition.
+
+Local daemon timestamps, or Agent receive timestamps, feed the existing
+Unix-second projection watermark. Within a batch, available millisecond timestamps
+choose the latest state; equal timestamps use arrival order. Across batches,
+equal-second transitions retain stream order. Resource generations still fence
+snapshots captured before a delta. This is not nanosecond ordering or a new timestamp field in the Agent protocol.
+
+Local, Direct and Edge gather a maximum of 256 raw state events over a fixed 20 ms
+window. Coalescing never crosses metadata/create/destroy, recovery or scope changes.
+Each resulting platform/node batch takes one projection guard and state transaction;
+Edge validates the current authenticated session in that same transaction.
+
+State writes return parent/operation IDs. Unmanaged containers skip Stack and
+Deployment reconciliation entirely. Operation-owned state changes also skip parent
+effects and Stack drift, while preserving their durable claims. External parents
+are reconciled once per distinct ID: Stack effects share the state transaction;
+Deployment effects retain their post-commit transactions to preserve lock ordering.
+One realtime invalidation carries the changed IDs.
+
+Container commands register claimed targets before mutation. Committed state events
+confirm the expected result for a bounded 150 ms window; only missing targets use
+read-only inspection. Parent status, one transition activity, and claim release then
+commit together. The coordinator is a local hint; durable claims and stale recovery
+remain authoritative.
 
 Recovery composes independent resource refreshes after metadata validation at
 startup, on reconnect, and on a six-hour safety pass. Swarm projection recovery
@@ -580,8 +606,10 @@ events during collection retain one follow-up. The independently configured
 marks only Swarm projections dirty. Local/Direct targets come from the runtime
 registry; Edge safety work is session-bound and only enabled for a confirmed
 manager. This path reads nodes, services, tasks, networks, configs and secrets;
-only Swarm-scoped networks are persisted in the Swarm projection. It does not
-enumerate standalone images, volumes, or containers.
+only Swarm-scoped networks are persisted in the Swarm projection. Local collection
+uses network topology without standalone container usage enrichment. Legacy
+remote connectors retain their compatible network-list RPC, whose Agent may
+enumerate containers to derive usage. Image/volume inventory is not collected.
 
 Platform health is checked every five seconds with a two-second timeout,
 three failures before going offline, and two successes before recovery.
@@ -593,8 +621,11 @@ queue resource recovery. Direct Agent subscription ownership is woken on Online;
 existing streams remain responsible for reconnecting, and Edge sessions own their
 own bootstrap. Deployment observation crash catch-up runs separately every five
 minutes; stable health probes perform no Deployment reconciliation.
-`JobConfiguration__MonitoringInterval` controls the readiness probe. An unreachable daemon degrades its Deployments; recovery
-refreshes inventory before restoring observed health. Separate node-Agent
+`JobConfiguration__MonitoringInterval` controls statistics sampling. Platform
+health has its own five-second probe cadence: an unreachable daemon degrades its
+Deployments; recovery refreshes inventory before restoring observed health.
+`/ready` checks PostgreSQL and Docker on demand, while `/health` remains a cheap
+liveness check. Separate node-Agent
 container projections are preserved when the manager disconnects.
 
 Swarm task health remains owned by Swarm reconciliation. Existing container,
@@ -623,8 +654,9 @@ execution ownership and existing mutation admission limits. Swarm observation
 keeps only a keyset cursor and a work flag, not an inventory cache or an ID queue.
 Timers skip missed ticks. Cancellation ends waits immediately and is checked
 between batches; dispatched operations retain their process-owned cancellation
-and timeout behavior. Health/readiness probes keep their correctness cadence,
-lease expiry stays at 30 seconds, and Git/update scheduling is handled separately.
+and timeout behavior. Platform health keeps its five-second cadence and
+hysteresis; readiness probes run only when `/ready` is requested. Lease expiry
+stays at 30 seconds, and Git/update scheduling is handled separately.
 
 ### Statistics ingestion and persistence
 

@@ -24,7 +24,7 @@ pub async fn collect_swarm_snapshot<
     let observed_at = Utc::now();
     let info = super::PlatformReconciler::collect(runtime, cancellation).await?;
     let swarm = collect_swarm_inventory(runtime, target, cancellation).await?;
-    let networks = super::NetworkReconciler::collect(runtime, cancellation).await?;
+    let networks = runtime.list_network_topology(cancellation).await?;
     Ok(RuntimeInventorySnapshot {
         platform_id: target.platform_id,
         info,

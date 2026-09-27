@@ -14,6 +14,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock, Weak},
     time::{Duration, Instant},
 };
+use tokio::sync::OwnedRwLockReadGuard;
 use tokio::sync::{RwLock, watch};
 use uuid::Uuid;
 
@@ -27,6 +28,11 @@ type ResourceKey = (Uuid, i32, Uuid);
 pub(crate) struct AuthorizationCache {
     gate: Arc<RwLock<()>>,
     state: Mutex<State>,
+}
+/// Hold across the transaction that consumes a cached authorization decision.
+/// ACL mutations take the matching write gate through commit and invalidation.
+pub(crate) struct ReadFence {
+    _guard: OwnedRwLockReadGuard<()>,
 }
 #[derive(Default)]
 struct State {
@@ -89,6 +95,11 @@ impl AuthorizationCache {
             .actor(actor)
             .generation
             .subscribe()
+    }
+    pub(crate) async fn read_fence(&self) -> ReadFence {
+        ReadFence {
+            _guard: self.gate.clone().read_owned().await,
+        }
     }
     fn invalidate(&self, actors: impl IntoIterator<Item = Uuid>) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());

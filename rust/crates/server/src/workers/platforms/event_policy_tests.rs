@@ -7,7 +7,7 @@ use std::sync::{
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
-async fn stop_and_network_noise_never_enumerate_unrelated_resources_even_when_observation_fails() {
+async fn stop_and_network_noise_never_read_metadata_even_when_docker_observation_would_fail() {
     let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
@@ -123,10 +123,7 @@ async fn stop_and_network_noise_never_enumerate_unrelated_resources_even_when_ob
         }).await.unwrap();
         assert!(local_recovery.try_recv().is_none());
         assert!(agent_recovery.try_recv().is_none());
-        assert_eq!(
-            lists.load(Ordering::SeqCst),
-            if fail_observation { 2 } else { 0 }
-        );
+        assert_eq!(lists.load(Ordering::SeqCst), 0);
         let counts: (i32, i32, i32) =
             sqlx::query_as("SELECT imagecount,networkcount,volumecount FROM platforms WHERE id=$1")
                 .bind(platform)
@@ -134,10 +131,13 @@ async fn stop_and_network_noise_never_enumerate_unrelated_resources_even_when_ob
                 .await
                 .unwrap();
         assert_eq!(counts, (9, 7, 8));
-        assert!(calls.lock().unwrap().iter().all(|path| matches!(
-            path.as_str(),
-            "/version" | "/v1.49/events" | "/v1.49/containers/json"
-        )));
+        assert!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|path| matches!(path.as_str(), "/version" | "/v1.49/events"))
+        );
         cancel.cancel();
         source.await.unwrap().unwrap();
         consumer.await.unwrap().unwrap();

@@ -80,6 +80,7 @@ pub fn router(
             readiness: Arc::clone(&readiness),
             metrics,
             pool: pool.clone(),
+            docker: platform_state.docker.clone(),
         },
     )
     .merge(identity_http::router(identity_http::IdentityHttpState {

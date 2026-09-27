@@ -16,8 +16,7 @@ pub async fn migrate(config: &Config) -> Result<(), Box<dyn std::error::Error>> 
 
 pub async fn run(state: &ServerComponents) -> Result<(), Box<dyn std::error::Error>> {
     citadel_server::bootstrap::initialize_from_environment(&state.identity).await?;
-    // Login must use persisted setup state before listeners open, not wait for
-    // the first background probe after a fresh bootstrap or ordinary restart.
+    // Login and /ready must see persisted setup state before listeners open.
     state
         .readiness
         .set_setup(!state.identity.setup_status().await?.requires_setup);

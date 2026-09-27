@@ -135,55 +135,31 @@ ORDER BY p.name, p.id
             if platform_ids.is_empty() {
                 return Ok(BTreeMap::new());
             }
-            sqlx::query(
-                r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-)
-SELECT requested.id,
-       COALESCE(bit_or(effective_grant.permissionlevel), 0)::integer AS levelmask,
-       COALESCE(bit_or(effective_grant.specificpermissions), 0)::integer AS specificmask
-FROM unnest($2::uuid[]) requested(id)
-LEFT JOIN LATERAL (
-    SELECT permission.permissionlevel, permission.specificpermissions
-    FROM actor_scope scope
-    JOIN actorroles assignment ON assignment.actorid = scope.actorid
-    JOIN permissions permission ON permission.roleid = assignment.roleid
-    WHERE permission.resourcetype = $3
-    UNION ALL
-    SELECT access.permissionlevel, access.specificpermissions
-    FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid = scope.actorid
-    WHERE access.resourcetype = $3 AND access.resourceid = requested.id
-) effective_grant ON TRUE
-GROUP BY requested.id
-"#,
-            )
-            .bind(actor_id.value())
-            .bind(platform_ids)
-            .bind(PLATFORM_RESOURCE_TYPE)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(storage)?
-            .into_iter()
-            .map(|row| {
-                Ok((
-                    row.try_get("id").map_err(storage)?,
-                    EffectivePlatformPermission {
-                        level_mask: row.try_get("levelmask").map_err(storage)?,
-                        specific_mask: row.try_get("specificmask").map_err(storage)?,
-                    },
-                ))
-            })
-            .collect()
+            let grants =
+                super::super::identity::authorization_cache::AuthorizationCache::attach(&self.pool)
+                    .resources(
+                        &self.pool,
+                        actor_id,
+                        citadel_primitives::ResourceType::Platform,
+                        platform_ids,
+                    )
+                    .await
+                    .map_err(|error| AuthorizedReadError::Storage(error.to_string()))?;
+            Ok(grants
+                .into_iter()
+                .map(|(id, grant)| {
+                    let (level_mask, specific_mask) = grant.map_or((0, 0), |grant| {
+                        (grant.level as i32, grant.specifics.bits() as i32)
+                    });
+                    (
+                        id,
+                        EffectivePlatformPermission {
+                            level_mask,
+                            specific_mask,
+                        },
+                    )
+                })
+                .collect())
         })
     }
 

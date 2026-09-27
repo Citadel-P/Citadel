@@ -87,6 +87,10 @@ pub trait AlertRepository: Send + Sync {
         owner: Uuid,
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<Option<AlertDeliveryClaim>, AlertError>>;
+    fn next_delivery_deadline(
+        &self,
+        stale_after: chrono::Duration,
+    ) -> BoxFuture<'_, Result<Option<DateTime<Utc>>, AlertError>>;
     fn complete_delivery(&self, id: Uuid, owner: Uuid) -> BoxFuture<'_, Result<bool, AlertError>>;
     fn retry_delivery<'a>(
         &'a self,

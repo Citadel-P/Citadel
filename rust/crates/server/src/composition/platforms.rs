@@ -52,17 +52,44 @@ pub(super) fn build(
                     runtime.dynamic_tasks.clone(),
                 ),
             ))
-            .with_notifier(move |claim| {
+            .with_notifier(move |claim, notice, completion_patches| {
                 if let Some(hub) = &container_hub {
                     let mut platforms = std::collections::BTreeMap::<_, Vec<_>>::new();
-                    for target in &claim.targets {
-                        platforms
-                            .entry(target.platform_id)
-                            .or_default()
-                            .push(target.docker_id.clone());
+                    match notice {
+                        citadel_platforms::containers::ContainerMutationNotice::Claimed
+                        | citadel_platforms::containers::ContainerMutationNotice::Released => {
+                            let control_state = if notice
+                                == citadel_platforms::containers::ContainerMutationNotice::Claimed
+                            {
+                                "Processing"
+                            } else {
+                                "Idle"
+                            };
+                            for target in &claim.targets {
+                                platforms.entry(target.platform_id).or_default().push(
+                                    citadel_platforms::containers::ContainerStatePatch {
+                                        id: target.id,
+                                        platform_id: target.platform_id,
+                                        container_id: target.docker_id.clone(),
+                                        state: None,
+                                        control_state: Some(control_state.into()),
+                                        updated: None,
+                                        docker_node_id: target.node_id.clone(),
+                                    },
+                                );
+                            }
+                        }
+                        citadel_platforms::containers::ContainerMutationNotice::Completed => {
+                            for patch in completion_patches {
+                                platforms
+                                    .entry(patch.platform_id)
+                                    .or_default()
+                                    .push(patch.clone());
+                            }
+                        }
                     }
-                    for (platform, ids) in platforms {
-                        hub.publish_container_changes(platform, "update", &ids);
+                    for (platform, patches) in platforms {
+                        hub.publish_container_state_patches(platform, &patches);
                     }
                     hub.publish_resource_changes("Deployment", &claim.deployment_ids);
                     hub.publish_resource_changes("Stack", &claim.stack_ids);
