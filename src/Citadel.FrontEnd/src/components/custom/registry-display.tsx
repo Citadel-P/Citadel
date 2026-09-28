@@ -7,7 +7,7 @@ export function RegistryDisplay({ registry }: { registry: RegistryView | undefin
   return (
     <div className="flex flex-wrap gap-2">
       {registry.name == '' ? (
-        <span className="text-sm text-muted">&lt;unknown&gt;</span>
+        <span className="text-sm text-muted-foreground">&lt;unknown&gt;</span>
       ) : (
         <HoverCard openDelay={150} closeDelay={150}>
           <HoverCardTrigger>

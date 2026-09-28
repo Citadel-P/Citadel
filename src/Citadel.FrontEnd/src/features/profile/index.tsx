@@ -1,5 +1,5 @@
+import { AppContent } from '@/components/custom/app-content';
 import { CurrentProfileView, UserDateTimeFormat } from '@/api/generated/api.types';
-import { PageContainer } from '@/components/custom/common';
 import { getBrowserTimezone } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
 import Loader from '@/components/ui/loader';
@@ -25,28 +25,28 @@ export default function ProfilePage() {
 
   if (profileQuery.isLoading || preferencesQuery.isLoading) {
     return (
-      <PageContainer className="border">
+      <AppContent>
         <Loader />
-      </PageContainer>
+      </AppContent>
     );
   }
 
   if (!profile) {
-    return <PageContainer className="border text-sm text-muted-foreground">Profile is not available.</PageContainer>;
+    return <AppContent className="text-sm text-muted-foreground">Profile is not available.</AppContent>;
   }
 
   return (
-    <PageContainer className="space-y-4">
+    <AppContent className="space-y-(--section-gap)">
       <AccountHeader profile={profile} formatDate={formatDate} />
       <ProfileForm profile={profile} preferences={preferences} formatDate={formatDate} />
-    </PageContainer>
+    </AppContent>
   );
 }
 
 function AccountHeader({ profile, formatDate }: { profile: CurrentProfileView; formatDate: ProfileDateFormatter }) {
   return (
     <header className="rounded-sm border bg-background">
-      <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-(--section-gap) p-(--surface-padding) lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-sm font-semibold text-primary">
             {getInitials(profile.displayName)}

@@ -15,6 +15,7 @@ export const useUpdatesAvailableFilter = () => {
       const next = new URLSearchParams(current);
       if (enabled) {
         next.set(UPDATE_FILTER_KEY, UPDATE_FILTER_VALUE);
+        next.delete('overview');
       } else {
         next.delete(UPDATE_FILTER_KEY);
       }
@@ -34,7 +35,7 @@ export const UpdatesAvailableFilter = () => {
       variant="outline"
       aria-pressed={updatesAvailableOnly}
       className={cn(
-        'h-9 shrink-0 rounded-sm px-2.5',
+        'h-(--control-height) shrink-0 rounded-sm px-2.5',
         updatesAvailableOnly && 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15',
       )}
       onClick={() => setUpdatesAvailableOnly(!updatesAvailableOnly)}>

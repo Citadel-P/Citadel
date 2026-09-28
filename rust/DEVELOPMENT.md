@@ -426,6 +426,15 @@ cargo run --locked -p xtask -- database verify
 compile-time migration catalog from the declarative schema. Numbered follow-up
 migrations begin only after the first Rust release freezes that baseline.
 
+Refreshing the baseline does not upgrade an existing development database. If
+Core exits with `AppliedChecksum` after a rebuild, its database still records an
+older baseline. The default Ctrl+Shift+B task waits for Core to become healthy
+before starting Vite, so this also prevents the UI task from starting. Back up the
+database, compare its schema with a disposable database created from the new
+baseline, and apply the required schema changes before aligning the local migration
+journal. Preserve existing rows and saved preferences. Do not bypass checksum
+validation or replace the recorded checksum without verifying schema equivalence.
+
 ## Restore a Citadel system backup
 
 Stop every Citadel Core instance before restoring. Extract the selected Restic
@@ -1212,3 +1221,31 @@ observations and published runtime invalidations in units. Labels never include
 actor or resource IDs. Run the `platforms_http` tests filtered by `realtime_` with
 `CITADEL_PHASE4_DATABASE_URL` and `--include-ignored --test-threads=1` for the
 cross-connection counters and committed revocation gate.
+
+## Appearance preferences
+
+The header palette button and Profile appearance section share one customizer.
+Mode, accent, interface font, radius, content width, and density update immediately
+and save through `PATCH /api/v1/profile/preferences`. Browser caches are per user;
+logout returns to the separate anonymous cache. The authenticated server value
+remains authoritative. Failed saves keep the selected local appearance and show
+a notification; a later edit retries the pending fields.
+
+Regenerate the Rust OpenAPI before the frontend client:
+
+```bash
+cd rust
+cargo run --locked -p xtask -- openapi
+cd ../src/Citadel.FrontEnd
+npm run api:generate
+```
+
+The preference schema overlay in `scripts/sync-rust-preferences.ts` imports these
+DTOs and their enums from Rust while preserving the rest of the existing frontend
+compatibility contract. Do not edit generated preference types manually.
+
+Shared UI uses runtime CSS variables in `main.css`. Use `AppContent` for page
+spacing, `PageHeader` for titles/actions, and `Surface`/`Card` for individual
+sections. Use semantic status colors for health; accent selection must never
+change the meaning of success, warning, or danger. UI fonts and density do not
+change Monaco or terminal monospace metrics.

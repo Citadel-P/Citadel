@@ -374,7 +374,7 @@ export function AutomationActionForm({
                     value={value ?? 'UTC'}
                     disabled={disabled || !currentScheduleEnabled || !automatedOperationsEnabled}
                     onChange={(scheduleTimeZone) => set({ scheduleTimeZone })}
-                    className="w-100"
+                    className="w-full min-w-0 max-w-100"
                   />
                 ),
               }),

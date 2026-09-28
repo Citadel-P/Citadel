@@ -62,7 +62,7 @@ export const ResourceTagFilter = () => {
         <button
           key={tag.id}
           type="button"
-          className="inline-flex h-9 max-w-40 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
+          className="inline-flex h-(--control-height) max-w-40 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
           style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
           title={`Remove ${tag.name} tag filter`}
           onClick={() => removeTag(tag.name)}>
@@ -72,7 +72,11 @@ export const ResourceTagFilter = () => {
       ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" className="h-9 shrink-0 rounded-sm px-2.5" disabled={isLoading}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-(--control-height) shrink-0 rounded-sm px-2.5"
+            disabled={isLoading}>
             <Tag className="size-3.5" />
             Tag Filter
           </Button>

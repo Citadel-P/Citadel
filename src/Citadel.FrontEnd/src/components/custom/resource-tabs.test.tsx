@@ -92,25 +92,16 @@ describe('ResourceTabs', () => {
     expect(screen.getByText('inspect content')).toBeVisible();
   });
 
-  it('applies the shared underline treatment without changing tab navigation', async () => {
+  it('supports keyboard navigation between resource sections', async () => {
     const { user } = renderCitadel(<ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />, {
       route: '/containers/1',
     });
 
-    const tabList = screen.getByRole('tablist');
     const overviewTab = screen.getByRole('tab', { name: 'Overview' });
-
-    expect(tabList).toHaveClass('border-b', 'bg-transparent', 'overflow-y-hidden');
-    expect(overviewTab).toHaveClass(
-      'text-[12px]',
-      'after:h-0.75',
-      'after:scale-x-0',
-      'data-[state=active]:after:scale-x-100',
-    );
-
-    await user.click(screen.getByRole('tab', { name: 'Logs' }));
+    overviewTab.focus();
+    await user.keyboard('{ArrowRight}');
 
     expect(screen.getByText('log output')).toBeVisible();
-    expect(screen.getByRole('tabpanel')).toHaveClass('data-[state=active]:animate-in');
+    expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-selected', 'true');
   });
 });

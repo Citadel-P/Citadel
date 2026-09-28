@@ -283,7 +283,10 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sidebar-group"
-      className={cn('relative flex w-full min-w-0 flex-col px-2 py-1.5', className)}
+      className={cn(
+        'relative flex w-full min-w-0 flex-col px-2 py-[calc(var(--section-gap)/3)] group-data-[collapsible=icon]:px-0',
+        className,
+      )}
       {...props}
     />
   );
@@ -294,8 +297,8 @@ function SidebarGroupLabel({ className, ...props }: React.ComponentProps<'div'>)
     <div
       data-slot="sidebar-group-label"
       className={cn(
-        'flex h-6 shrink-0 items-center px-2 text-[10px] font-normal tracking-[0.08em] text-muted-foreground uppercase outline-hidden transition-[margin,opacity] duration-200 ease-linear',
-        'group-data-[collapsible=icon]:-mt-6 group-data-[collapsible=icon]:opacity-0',
+        'flex h-6 shrink-0 items-center px-2 text-[11px] font-medium tracking-[0.02em] text-muted-foreground outline-hidden transition-[margin,opacity] duration-200 ease-linear',
+        'group-data-[collapsible=icon]:hidden',
         className,
       )}
       {...props}
@@ -353,8 +356,8 @@ function SidebarMenuButton({
       data-sidebar="menu-button"
       data-active={isActive}
       className={cn(
-        'peer/menu-button flex h-8 w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-[13px] font-normal text-sidebar-foreground outline-hidden transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/50 active:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground [&>svg]:shrink-0',
-        'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:*:data-sidebar-label:hidden',
+        'peer/menu-button flex h-(--control-height) w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm font-normal text-muted-foreground outline-hidden transition-colors duration-150 motion-reduce:transition-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/50 active:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-foreground [&>svg]:shrink-0',
+        'group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-(--control-height) group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:*:data-sidebar-label:hidden',
         className,
       )}
       {...props}
@@ -432,7 +435,7 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<'ul'>) {
     <ul
       data-slot="sidebar-menu-sub"
       className={cn(
-        'mx-3.5 flex min-w-0 translate-x-px flex-col gap-0.5 border-l border-solid border-sidebar-border px-2.5 py-1',
+        'ml-3.5 mr-0 flex min-w-0 flex-col gap-0.5 border-l border-sidebar-border pl-2 py-1',
         'group-data-[collapsible=icon]:hidden',
         className,
       )}
@@ -458,7 +461,7 @@ function SidebarMenuSubButton({
       data-slot="sidebar-menu-sub-button"
       data-active={isActive}
       className={cn(
-        'flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 text-xs font-normal text-sidebar-foreground/80 outline-hidden transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground [&>svg]:shrink-0',
+        'flex h-(--control-height) min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 text-xs font-normal text-muted-foreground outline-hidden transition-colors duration-150 motion-reduce:transition-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-foreground [&>svg]:shrink-0',
         className,
       )}
       {...props}

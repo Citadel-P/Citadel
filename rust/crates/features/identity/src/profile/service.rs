@@ -85,6 +85,11 @@ impl ProfileService {
         if matches!(&request.time_zone, PatchField::Missing)
             && matches!(&request.date_time_format, PatchField::Missing)
             && matches!(&request.theme, PatchField::Missing)
+            && matches!(&request.theme_color, PatchField::Missing)
+            && matches!(&request.font, PatchField::Missing)
+            && matches!(&request.radius, PatchField::Missing)
+            && matches!(&request.content_layout, PatchField::Missing)
+            && matches!(&request.density, PatchField::Missing)
         {
             return Err(IdentityError::Validation(
                 "At least one preference field is required.".to_owned(),
@@ -93,6 +98,11 @@ impl ProfileService {
         reject_null(&request.time_zone, "timeZone")?;
         reject_null(&request.date_time_format, "dateTimeFormat")?;
         reject_null(&request.theme, "theme")?;
+        reject_null(&request.theme_color, "themeColor")?;
+        reject_null(&request.font, "font")?;
+        reject_null(&request.radius, "radius")?;
+        reject_null(&request.content_layout, "contentLayout")?;
+        reject_null(&request.density, "density")?;
 
         let time_zone = match &request.time_zone {
             PatchField::Missing => None,
@@ -116,6 +126,26 @@ impl ProfileService {
                     time_zone,
                     date_time_format,
                     theme,
+                    theme_color: match request.theme_color {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
+                    font: match request.font {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
+                    radius: match request.radius {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
+                    content_layout: match request.content_layout {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
+                    density: match request.density {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
                 },
                 self.clock.now(),
                 principal.actor_id,
@@ -322,6 +352,12 @@ pub(super) fn default_preferences() -> UserPreferencesDetails {
         time_zone: None,
         date_time_format: UserDateTimeFormat::System,
         theme: UserTheme::System,
+        theme_color: UserThemeColor::default(),
+        font: UserUiFont::Geist,
+        radius: UserUiRadius::default(),
+        content_layout: UserContentLayout::default(),
+        density: UserUiDensity::default(),
+
         is_persisted: false,
     }
 }
@@ -331,6 +367,12 @@ pub(super) fn persisted_preferences(preferences: UserPreferences) -> UserPrefere
         time_zone: Some(preferences.time_zone().to_owned()),
         date_time_format: preferences.date_time_format(),
         theme: preferences.theme(),
+        theme_color: preferences.theme_color(),
+        font: preferences.font(),
+        radius: preferences.radius(),
+        content_layout: preferences.content_layout(),
+        density: preferences.density(),
+
         is_persisted: true,
     }
 }

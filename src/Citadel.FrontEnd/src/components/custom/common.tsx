@@ -6,7 +6,6 @@ import {
   useCallback,
   useDeferredValue,
   memo,
-  type ComponentProps,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -94,14 +93,6 @@ import { formatId } from '@/lib/utils';
 import { StateIndicator } from './state-indicator';
 import { getContainerSeriesColor } from './container-series-colors';
 import { useFormFieldAccessibility } from './form-field-accessibility';
-
-export const PageContainer = ({ className, children, ...props }: ComponentProps<'div'>) => (
-  <div className="mx-auto flex min-h-[calc(100dvh-var(--layout-header-height))] w-full max-w-(--layout-content-width) flex-col px-4 py-4 sm:px-6">
-    <div className={cn('w-full flex-1 rounded-md border-border bg-background p-4 shadow-sm', className)} {...props}>
-      {children}
-    </div>
-  </div>
-);
 
 export type StatsWindowHours = 24 | 48 | 72;
 
@@ -215,7 +206,7 @@ export const IntegrationCard = ({
       onKeyDown={handleKeyDown}
       aria-disabled={disabled}
       className={cn(
-        'group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all flex flex-col justify-between h-35',
+        'group relative bg-card rounded-lg border border-border p-(--surface-padding) hover:border-ring/50 hover:shadow-xs transition-all flex flex-col justify-between h-35',
         disabled ? 'hover:cursor-not-allowed opacity-70' : 'cursor-pointer',
       )}>
       <div className="flex items-start justify-between">
@@ -255,7 +246,7 @@ export const IntegrationAddCard = ({
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
     className={cn(
-      'flex h-35 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600',
+      'flex h-35 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-(--surface-padding) text-muted-foreground hover:text-foreground',
       disabled && 'hover:cursor-not-allowed opacity-70',
     )}>
     <Plus className="h-5 w-5" />
@@ -409,7 +400,6 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                   <Check className={cn('h-4 w-4 transition-opacity', !selectedItem ? 'opacity-100' : 'opacity-0')} />
                 </CommandItem>
               )}
-
             </CommandGroup>
             {grouped.map(([group, groupItems]) => (
               <CommandGroup key={group || '__ungrouped__'} heading={group || undefined}>
@@ -737,12 +727,12 @@ export const UPDATE_BEHAVIOR_UI: Record<
   [UpdateBehavior.AutoDeploy]: {
     label: 'Auto',
     Icon: RefreshCcw,
-    className: 'text-green-400',
+    className: 'text-success',
   },
   [UpdateBehavior.Notify]: {
     label: 'Notify',
     Icon: Bell,
-    className: 'text-yellow-400',
+    className: 'text-warning',
   },
 };
 
@@ -762,22 +752,22 @@ export const UPDATE_STATUS_UI: Record<
   [AutoUpdateStatus.UpToDate]: {
     label: 'Up to date',
     Icon: CircleCheck,
-    className: 'text-green-400',
+    className: 'text-success',
   },
   [AutoUpdateStatus.Failed]: {
     label: 'Failed',
     Icon: CircleX,
-    className: 'text-orange-400',
+    className: 'text-danger',
   },
   [AutoUpdateStatus.UpdateAvailable]: {
     label: 'Update Available',
     Icon: Info,
-    className: 'text-orange-500',
+    className: 'text-warning',
   },
   [AutoUpdateStatus.Updating]: {
     label: 'Updating...',
     Icon: RefreshCcwDot,
-    className: 'text-blue-400',
+    className: 'text-pending',
   },
 };
 
@@ -955,8 +945,8 @@ LogRow.displayName = 'LogRow';
 const logSeverityConfig = {
   info: {
     Icon: Info,
-    iconClassName: 'text-blue-500',
-    textClassName: 'text-blue-700',
+    iconClassName: 'text-info',
+    textClassName: 'text-info',
   },
   success: {
     Icon: CircleCheck,
@@ -965,8 +955,8 @@ const logSeverityConfig = {
   },
   warning: {
     Icon: TriangleAlert,
-    iconClassName: 'text-amber-500',
-    textClassName: 'text-amber-700',
+    iconClassName: 'text-warning',
+    textClassName: 'text-warning',
   },
   error: {
     Icon: CircleX,
@@ -1409,7 +1399,7 @@ export const MemoryUsageCell = ({
   stats?: ContainerStatView | null;
 }) => {
   if (state !== ContainerStateStatus.Running) {
-    return <div className="text-muted">0B / 0B</div>;
+    return <div className="text-muted-foreground">0B / 0B</div>;
   }
   return (
     <span className="text-[13px]">
@@ -1420,7 +1410,7 @@ export const MemoryUsageCell = ({
 
 export const CPUCell = ({ state, stats }: { state: ContainerStateStatus; stats?: ContainerStatView | null }) => {
   if (state !== ContainerStateStatus.Running) {
-    return <div className="text-muted">0%</div>;
+    return <div className="text-muted-foreground">0%</div>;
   }
   return (
     <span className="text-[13px]">{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>
@@ -1438,7 +1428,7 @@ export const PlatformStatusCell = ({
 }) => {
   return (
     <div className="flex flex-row items-center gap-2">
-      <Server width={13} height={13} className={status === PlatformStatus.Online ? 'text-green-500' : 'text-red-500'} />
+      <Server width={13} height={13} className={status === PlatformStatus.Online ? 'text-success' : 'text-danger'} />
       <Link to={`/platforms/edit/${id}`} className="table-link" title={name}>
         {name}
       </Link>

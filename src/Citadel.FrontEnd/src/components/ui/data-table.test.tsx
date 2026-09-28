@@ -85,14 +85,14 @@ describe('DataTable styling', () => {
     render(<DataTable columns={columns} data={[{ id: 'stack', name: 'Stack' }]} isLoading={false} />);
 
     const table = screen.getByRole('table');
-    expect(table.closest('[data-slot="table-container"]')).toHaveClass('rounded-md', 'border', 'p-1');
+    expect(table.closest('[data-slot="table-container"]')).toHaveClass('rounded-lg', 'border', 'bg-card');
 
     screen.getAllByRole('columnheader').forEach((header) => {
-      expect(header).toHaveClass('h-11', 'text-xs', 'font-semibold');
+      expect(header).toHaveClass('h-(--table-row-height)', 'text-xs', 'font-semibold');
     });
 
     screen.getAllByRole('cell').forEach((cell) => {
-      expect(cell).toHaveClass('h-12', 'text-sm');
+      expect(cell).toHaveClass('h-(--table-row-height)', 'text-sm');
     });
 
     expect(screen.getAllByRole('row')[1]).toHaveClass('even:bg-muted/15');

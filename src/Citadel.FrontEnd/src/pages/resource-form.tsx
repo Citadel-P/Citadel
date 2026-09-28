@@ -1,3 +1,4 @@
+import { AppContent } from '@/components/custom/app-content';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Pencil, Plus, Save, X } from 'lucide-react';
@@ -6,9 +7,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ResourceFormComponents } from '@/features';
 import { useMutate, useResourceParamType } from '@/lib/hooks';
 import { capitalize } from '@/lib/utils';
+import { CitadelIcons } from '@/lib/icons';
+import { PageHeader } from '@/components/custom/page-header';
 
 import { FieldInput } from '@/components/custom/form-builder';
-import { PageContainer } from '@/components/custom/common';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -27,9 +29,7 @@ export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   if (!type) return <NotFound />;
 
   const routeType = tab ?? type;
-  const resolvedType = platformId && routeType === 'Service'
-    ? 'SwarmService'
-    : routeType;
+  const resolvedType = platformId && routeType === 'Service' ? 'SwarmService' : routeType;
   const formComponents = ResourceFormComponents[resolvedType];
 
   return (
@@ -62,7 +62,16 @@ const EditFormPage = ({ type, skipMetadataUpdate = false }: { type: ResourceType
   const Components = ResourceFormComponents[type]?.EditForm;
   if (!Components?.useData) return <NotFound />;
 
-  return <EditFormData id={id!} type={type} Components={Components} skipMetadataUpdate={skipMetadataUpdate} />;
+  // Each resource type supplies a different hook tree; never reuse it across resources.
+  return (
+    <EditFormData
+      key={`${type}:${id}`}
+      id={id!}
+      type={type}
+      Components={Components}
+      skipMetadataUpdate={skipMetadataUpdate}
+    />
+  );
 };
 
 const EditFormData = ({
@@ -104,15 +113,7 @@ const EditFormPageWithRename = ({
 }) => {
   const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
 
-  return (
-    <EditFormContent
-      id={id}
-      item={item}
-      renameResource={renameResource}
-      Components={Components}
-      type={type}
-    />
-  );
+  return <EditFormContent id={id} item={item} renameResource={renameResource} Components={Components} type={type} />;
 };
 
 const EditFormPageWithMetadata = ({
@@ -183,6 +184,7 @@ const EditFormContent = ({
   return (
     <>
       <EditHeader
+        type={type}
         canEditTitle={canWrite && Header.canEditTitle !== false}
         canEditDescription={canWrite && Header.canEditDescription !== false}
         item={item}
@@ -199,20 +201,28 @@ const EditFormContent = ({
   );
 };
 
-const PageShell = ({ mode, children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
-  <PageContainer className={`flex flex-col border ${mode === 'add' ? 'gap-6' : 'gap-0.5'}`}>{children}</PageContainer>
+const PageShell = ({ children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
+  <AppContent className="flex flex-col gap-(--section-gap)">{children}</AppContent>
 );
 
-const AddHeader = ({ type, title }: { type: string; title?: string }) => (
-  <div className="flex items-center gap-2">
-    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-      <Plus className="h-4 w-4" />
+const resourceLabel = (type: string) => capitalize(type.replace(/([a-z])([A-Z])/g, '$1 $2'));
+
+const AddHeader = ({ type, title }: { type: ResourceType; title?: string }) => {
+  const Icon = CitadelIcons[type] ?? Plus;
+  const label = title ?? resourceLabel(type);
+  return (
+    <div className="rounded-lg border bg-card p-(--surface-padding) shadow-xs">
+      <PageHeader
+        title={`Add ${label}`}
+        description={`Configure your ${label.toLowerCase()} using the sections below.`}
+        icon={<Icon className="size-5" />}
+      />
     </div>
-    <h1 className="text-md font-bold">Add {title ?? capitalize(type)}</h1>
-  </div>
-);
+  );
+};
 
 type EditHeaderProps<T> = {
+  type: ResourceType;
   canEditTitle?: boolean;
   canEditDescription?: boolean;
   item: T;
@@ -224,6 +234,7 @@ type EditHeaderProps<T> = {
 };
 
 const EditHeader = <T extends RequiredFormFields>({
+  type,
   canEditTitle = true,
   canEditDescription = true,
   item,
@@ -232,25 +243,41 @@ const EditHeader = <T extends RequiredFormFields>({
   Actions,
   onRename,
   onChangeDescription,
-}: EditHeaderProps<T>) => (
-  <div className="flex flex-col sm:flex-row gap-4 items-start">
-    <div className="flex items-center gap-2 flex-1 min-w-0 w-full">
-      <Indicator resource={item} />
-      <div className="flex flex-col flex-1 min-w-0">
-        <EditableTitle value={item.name} readOnly={!canEditTitle} onSave={onRename} />
-        <EditableDescription
-          readOnly={!canEditDescription}
-          value={item.description ?? ''}
-          onSave={onChangeDescription}
-        />
+}: EditHeaderProps<T>) => {
+  const Icon = CitadelIcons[type] ?? Pencil;
+  return (
+    <header className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card shadow-xs lg:flex-row lg:items-center">
+      <div className="flex min-w-0 flex-1 items-start gap-4 p-(--surface-padding)">
+        <span
+          aria-hidden="true"
+          className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary dark:text-foreground">
+          <Icon className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <EditableTitle
+            value={item.name}
+            readOnly={!canEditTitle}
+            onSave={onRename}
+            status={<Indicator resource={item} />}
+          />
+          <EditableDescription
+            readOnly={!canEditDescription}
+            value={item.description ?? ''}
+            onSave={onChangeDescription}
+          />
+          {Tags && (
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+              <Tags resource={item} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-    <div className="flex w-full min-w-0 flex-wrap items-center gap-4 sm:w-auto sm:shrink-0">
-      {Tags && <Tags resource={item} />}
-      <Actions resource={item} />
-    </div>
-  </div>
-);
+      <div className="flex min-w-0 flex-wrap items-center gap-3 border-t bg-muted/10 px-(--surface-padding) py-3 lg:max-w-[45%] lg:shrink-0 lg:justify-end lg:border-t-0 lg:bg-transparent lg:py-(--surface-padding)">
+        <Actions resource={item} />
+      </div>
+    </header>
+  );
+};
 
 const useInlineEdit = (initial: string) => {
   const [editing, setEditing] = useState(false);
@@ -283,8 +310,10 @@ const EditableTitle = ({
   value,
   readOnly,
   onSave,
+  status,
 }: {
   value: string;
+  status: React.ReactNode;
   readOnly?: boolean;
   onSave?: (v: string) => void;
 }) => {
@@ -299,45 +328,62 @@ const EditableTitle = ({
 
   if (!edit.editing)
     return (
-      <div className="group flex items-center gap-1 min-w-0">
-        <div
-          className={`text-md font-bold truncate focus:outline-none ${readOnly ? '' : 'cursor-text'}`}
-          onClick={readOnly ? undefined : edit.start}
-          onKeyDown={(e) => {
-            if (readOnly) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              edit.start();
-            }
-          }}>
-          {value}
-        </div>
+      <div className="group/title flex w-fit min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-2">
+        <h1 className="min-w-0 max-w-full text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+          {readOnly ? (
+            value
+          ) : (
+            <button
+              type="button"
+              onClick={edit.start}
+              className="max-w-full cursor-text rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring">
+              {value}
+            </button>
+          )}
+        </h1>
 
-        {!readOnly && (
-          <GhostIconButton onClick={edit.start}>
-            <Pencil className="h-3.5 w-3.5" />
-          </GhostIconButton>
-        )}
+        <div
+          className={
+            readOnly
+              ? 'flex shrink-0 items-center'
+              : 'relative flex shrink-0 items-center pl-0 transition-[padding] duration-150 ease-out group-hover/title:pl-8 group-focus-within/title:pl-8 motion-reduce:transition-none'
+          }>
+          {!readOnly && (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Edit name"
+              onClick={edit.start}
+              className="pointer-events-none absolute left-0 size-7 -translate-x-1 opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover/title:pointer-events-auto group-hover/title:translate-x-0 group-hover/title:opacity-100 group-focus-within/title:pointer-events-auto group-focus-within/title:translate-x-0 group-focus-within/title:opacity-100 motion-reduce:transition-none">
+              <Pencil className="size-3.5" />
+            </Button>
+          )}
+          {status}
+        </div>
       </div>
     );
 
   return (
-    <InlineEditActions
-      dirty={edit.isDirty && edit.value.trim().length > 0}
-      onSave={() => edit.commit(onSave)}
-      onCancel={edit.cancel}>
-      <FieldInput
-        ref={inputRef}
-        value={edit.value}
-        onChange={edit.setValue}
-        placeholder="Name"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') edit.commit(onSave);
-          if (e.key === 'Escape') edit.cancel();
-        }}
-        className="h-7.5 text-md font-bold bg-transparent"
-      />
-    </InlineEditActions>
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <InlineEditActions
+        dirty={edit.isDirty && edit.value.trim().length > 0}
+        onSave={() => edit.commit(onSave)}
+        onCancel={edit.cancel}>
+        <FieldInput
+          ref={inputRef}
+          value={edit.value}
+          onChange={edit.setValue}
+          placeholder="Name"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') edit.commit(onSave);
+            if (e.key === 'Escape') edit.cancel();
+          }}
+          className="h-7.5 text-md font-bold bg-transparent"
+        />
+      </InlineEditActions>
+      {status}
+    </div>
   );
 };
 
@@ -356,7 +402,7 @@ const EditableDescription = ({
     return (
       <div className="group flex items-center gap-2 w-full min-w-0">
         <div
-          className={`text-sm text-muted-foreground leading-relaxed truncate focus:outline-none min-w-0 ${readOnly ? '' : 'cursor-text'}`}
+          className={`text-sm text-muted-foreground leading-relaxed [overflow-wrap:anywhere] focus:outline-none min-w-0 ${readOnly ? '' : 'cursor-text'}`}
           onClick={readOnly ? undefined : edit.start}
           onKeyDown={(e) => {
             if (readOnly) return;
@@ -365,10 +411,10 @@ const EditableDescription = ({
               edit.start();
             }
           }}>
-          {value || '--'}
+          {value || (readOnly ? 'No description' : 'Add a description…')}
         </div>
         {!readOnly && (
-          <GhostIconButton onClick={edit.start}>
+          <GhostIconButton aria-label="Edit description" onClick={edit.start}>
             <Pencil className="h-3.5 w-3.5" />
           </GhostIconButton>
         )}
@@ -395,7 +441,7 @@ const GhostIconButton = ({ children, ...props }: React.ComponentProps<typeof But
   <Button
     size="icon-sm"
     variant="ghost"
-    className="opacity-0 group-hover:opacity-100 inline-flex hover:bg-transparent"
+    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 inline-flex hover:bg-transparent"
     {...props}>
     {children}
   </Button>

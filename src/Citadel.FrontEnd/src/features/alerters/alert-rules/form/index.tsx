@@ -1,5 +1,6 @@
-import { AlertRuleForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { AlertRuleForm } from './form';
+import { StateBadge } from '@/components/custom/state-badge';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
@@ -21,7 +22,12 @@ export const AlertRuleFormComponents: RequiredFormComponents = {
   EditForm: {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <StateIndicator value={resource.status as any} />;
+        return (
+          <StateBadge
+            indicator={<StateIndicator value={resource.status as any} className="mr-0" />}
+            value={resource.status as any}
+          />
+        );
       },
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(AlertRuleActions)} />;

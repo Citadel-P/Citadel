@@ -2,7 +2,10 @@ use crate::api::resources::{
     capabilities::ResourceCapabilities,
     common::{PagedResult, ResourceInfo},
 };
-use citadel_identity::{UserDateTimeFormat, UserTheme};
+use citadel_identity::{
+    UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity, UserUiFont,
+    UserUiRadius,
+};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use serde::Serialize;
 use uuid::Uuid;
@@ -22,6 +25,17 @@ pub struct UserPreferencesView {
     pub date_time_format: UserDateTimeFormat,
     #[schema(value_type = crate::api::resources::vocabulary::UserThemeSchema)]
     pub theme: UserTheme,
+    #[schema(value_type = crate::api::resources::vocabulary::UserThemeColorSchema)]
+    pub theme_color: UserThemeColor,
+    #[schema(value_type = crate::api::resources::vocabulary::UserUiFontSchema)]
+    pub font: UserUiFont,
+    #[schema(value_type = crate::api::resources::vocabulary::UserUiRadiusSchema)]
+    pub radius: UserUiRadius,
+    #[schema(value_type = crate::api::resources::vocabulary::UserContentLayoutSchema)]
+    pub content_layout: UserContentLayout,
+    #[schema(value_type = crate::api::resources::vocabulary::UserUiDensitySchema)]
+    pub density: UserUiDensity,
+
     pub is_persisted: bool,
 }
 
@@ -31,6 +45,12 @@ impl From<UserPreferencesView> for citadel_identity::UserPreferencesDetails {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
             theme: value.theme,
+            theme_color: value.theme_color,
+            font: value.font,
+            radius: value.radius,
+            content_layout: value.content_layout,
+            density: value.density,
+
             is_persisted: value.is_persisted,
         }
     }
@@ -42,6 +62,12 @@ impl From<citadel_identity::UserPreferencesDetails> for UserPreferencesView {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
             theme: value.theme,
+            theme_color: value.theme_color,
+            font: value.font,
+            radius: value.radius,
+            content_layout: value.content_layout,
+            density: value.density,
+
             is_persisted: value.is_persisted,
         }
     }

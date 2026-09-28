@@ -525,7 +525,6 @@ try {
     $profileActivities = @($activityPage.pagedResult.items)
     foreach ($eventType in @(
         'UserProfileUpdated',
-        'UserPreferencesUpdated',
         'UserPasswordChanged',
         'UserSessionRevoked',
         'UserOtherSessionsRevoked'
@@ -533,6 +532,9 @@ try {
         if ($profileActivities.eventType -notcontains $eventType) {
             throw "Profile activity history is missing '$eventType'."
         }
+    }
+    if ($profileActivities.eventType -contains 'UserPreferencesUpdated') {
+        throw 'Preference saves should not create activity history.'
     }
     $activityJson = $activityPage | ConvertTo-Json -Depth 20 -Compress
     if ($activityJson -match 'correct-horse-battery-staple') {

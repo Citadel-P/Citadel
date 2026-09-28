@@ -57,16 +57,20 @@ export const ResourceTabs = ({
   };
 
   return (
-    <Tabs value={effectiveActiveTab} onValueChange={handleTabChange} className="gap-4">
+    <Tabs value={effectiveActiveTab} onValueChange={handleTabChange}>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(
-          'sticky top-0 right-0 left-0 z-30 transition-all duration-200',
-          isStuck ? '-mx-4 bg-accent' : 'mx-0 bg-background',
+          'sticky top-0 right-0 left-0 z-30 min-w-0 overflow-hidden rounded-lg border bg-card transition-shadow duration-200',
+          isStuck && 'shadow-sm',
         )}>
-        <TabsList className={cn('w-full overflow-x-auto', isStuck && 'px-4')}>
+        <TabsList aria-label="Resource sections" className="h-auto w-full gap-1 overflow-x-auto border-0">
           {tabs.map((tab) => (
-            <TabsTrigger key={tab.label} value={tab.label} disabled={tab.disabled?.(resource) ?? false}>
+            <TabsTrigger
+              key={tab.label}
+              value={tab.label}
+              disabled={tab.disabled?.(resource) ?? false}
+              className="h-[calc(var(--control-height)+0.5rem)] shrink-0 rounded-none px-4 after:inset-x-3 after:h-0.5 after:rounded-none data-[state=active]:bg-primary/10">
               {tab.Label ? <tab.Label /> : tab.label}
             </TabsTrigger>
           ))}
@@ -76,7 +80,7 @@ export const ResourceTabs = ({
       {tabs
         .filter((tab) => !(tab.disabled?.(resource) ?? false))
         .map((tab) => (
-          <TabsContent key={tab.label} value={tab.label}>
+          <TabsContent key={tab.label} value={tab.label} className="mt-3">
             <tab.Content resource={resource} metadataChanged={metadataChanged} />
           </TabsContent>
         ))}

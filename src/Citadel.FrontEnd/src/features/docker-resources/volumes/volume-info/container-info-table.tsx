@@ -52,7 +52,7 @@ export const ContainerInfoTable = ({ volume }: { volume: DockerVolumeResultView 
   const { currentPlatform } = useAppContext();
   if (!volume) return <></>;
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
+    <div className="min-w-0">
       <DataTable columns={columns(currentPlatform)} data={volume.containers} isLoading={false} />
     </div>
   );

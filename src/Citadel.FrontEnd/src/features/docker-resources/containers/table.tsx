@@ -43,10 +43,12 @@ type PlatformResourceLimits = {
 export const ContainersTable = ({
   items,
   isLoading,
+  isFiltered,
   actions,
 }: {
   items: ContainerView[];
   isLoading: boolean;
+  isFiltered?: boolean;
   actions: Record<
     string,
     React.FC<{ resource: ContainerActionResource; onAction?: (actionKey: string, actionData?: ActionData) => void }>
@@ -83,6 +85,10 @@ export const ContainersTable = ({
       columns={cols}
       data={rows}
       isLoading={isLoading}
+      emptyState={isFiltered ? {
+        title: 'No containers match the current filters.',
+        description: 'Select another overview card or adjust the search and filters.',
+      } : undefined}
       getSubRows={getSubRows}
       onSelectionChange={handleSelectionChange}
     />

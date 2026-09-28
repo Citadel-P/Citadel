@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { renderCitadel } from '@/test/render-citadel';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { defineField, defineGroupField, FormSchema, FormShell } from './form-builder';
 
@@ -27,11 +27,7 @@ const schema: FormSchema<TestConfiguration> = {
         label: 'Name',
         required: true,
         render: (value, set) => (
-          <Input
-            aria-label="Name input"
-            value={value ?? ''}
-            onChange={(event) => set({ name: event.target.value })}
-          />
+          <Input aria-label="Name input" value={value ?? ''} onChange={(event) => set({ name: event.target.value })} />
         ),
       }),
       defineField<TestConfiguration, 'description'>({
@@ -86,11 +82,7 @@ const licensedFieldSchema: FormSchema<TestConfiguration> = {
         description: 'Automatically redeploy this deployment after the selected build succeeds.',
         requiredLicense: 'Team',
         render: (value, set) => (
-          <Input
-            aria-label="Name input"
-            value={value ?? ''}
-            onChange={(event) => set({ name: event.target.value })}
-          />
+          <Input aria-label="Name input" value={value ?? ''} onChange={(event) => set({ name: event.target.value })} />
         ),
       }),
     ],
@@ -129,6 +121,9 @@ const enabledSaveButton = () =>
   screen.getAllByRole('button', { name: /save/i }).find((button) => !button.hasAttribute('disabled'));
 
 describe('FormShell', () => {
+  beforeEach(() => {
+    vi.mocked(window.matchMedia).mockReturnValue({ matches: false } as MediaQueryList);
+  });
   it('merges changed fields into the payload and resets the dirty state after saving', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const { user } = renderCitadel(<FormHarness onSave={onSave} />);
@@ -218,6 +213,61 @@ describe('FormShell', () => {
       behavior: 'smooth',
     });
     expect(window.location.hash).toBe('#name');
+    expect(screen.getByRole('link', { name: 'Name' })).toHaveAttribute('aria-current', 'location');
+    expect(screen.getByRole('link', { name: 'Description' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('supports keyboard navigation with reduced motion and preserves router history state', async () => {
+    vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList);
+    window.history.replaceState({ key: 'config-page', idx: 3 }, '', '/deployments/edit/test#config');
+    const { user } = renderCitadel(<FormHarness onSave={vi.fn().mockResolvedValue(undefined)} />);
+    const link = screen.getByRole('link', { name: 'Description' });
+    link.focus();
+    await user.keyboard('{Enter}');
+    expect(document.getElementById('description')?.scrollIntoView).toHaveBeenCalledWith({
+      block: 'start',
+      behavior: 'auto',
+    });
+    expect(link).toHaveAttribute('aria-current', 'location');
+    expect(window.history.state).toEqual({ key: 'config-page', idx: 3 });
+  });
+
+  it('distinguishes edited sections from validation errors and clears status on reset', async () => {
+    const { user } = renderCitadel(<FormHarness onSave={vi.fn().mockResolvedValue(undefined)} />);
+    const nav = screen.getByRole('navigation', { name: 'Configuration sections' });
+    await user.clear(screen.getByRole('textbox', { name: 'Name input' }));
+    expect(within(nav).getByRole('link', { name: 'Name, Needs attention' })).toBeVisible();
+    await user.type(screen.getByRole('textbox', { name: 'Name input' }), 'worker');
+    expect(within(nav).getByRole('link', { name: 'Name, Edited' })).toBeVisible();
+    expect(within(nav).queryByText('Needs attention')).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: 'Reset', exact: true })[0]);
+    expect(within(nav).getByRole('link', { name: 'Name', exact: true })).toBeVisible();
+    expect(within(nav).queryByText('Edited')).not.toBeInTheDocument();
+  });
+
+  it('highlights the final section at the scroll boundary and restores the visible section when scrolling up', async () => {
+    renderCitadel(
+      <div id="main-scroll-container">
+        <FormHarness onSave={vi.fn().mockResolvedValue(undefined)} />
+      </div>,
+    );
+    const root = document.getElementById('main-scroll-container')!;
+    Object.defineProperties(root, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 700 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+    const first = screen.getByRole('link', { name: 'Name', exact: true });
+    const last = screen.getByRole('link', { name: 'Description', exact: true });
+    expect(first).toHaveAttribute('aria-current', 'location');
+    root.scrollTop = 300;
+    root.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(last).toHaveAttribute('aria-current', 'location'));
+    expect(first).not.toHaveAttribute('aria-current');
+    root.scrollTop = 100;
+    root.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(first).toHaveAttribute('aria-current', 'location'));
+    expect(last).not.toHaveAttribute('aria-current');
   });
 
   it('keeps desktop actions outside the scrollable section navigation', async () => {
@@ -243,9 +293,7 @@ describe('FormShell', () => {
   it('shows a license indicator beside a licensed field description', () => {
     renderCitadel(<FormHarness formSchema={licensedFieldSchema} onSave={vi.fn().mockResolvedValue(undefined)} />);
 
-    expect(
-      screen.getByText('Automatically redeploy this deployment after the selected build succeeds.'),
-    ).toBeVisible();
+    expect(screen.getByText('Automatically redeploy this deployment after the selected build succeeds.')).toBeVisible();
     expect(screen.getByLabelText('Requires a Team license')).toBeVisible();
   });
 });

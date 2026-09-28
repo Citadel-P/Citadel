@@ -1,5 +1,8 @@
 use crate::api::resources::common::enabled_by_default;
-use citadel_identity::{PatchField, UserDateTimeFormat, UserTheme};
+use citadel_identity::{
+    PatchField, UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity,
+    UserUiFont, UserUiRadius,
+};
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -50,6 +53,21 @@ pub struct PatchUserPreferencesRequest {
     #[serde(default)]
     #[schema(value_type = Option<crate::api::resources::vocabulary::UserThemeSchema>, required = false)]
     pub theme: PatchField<UserTheme>,
+    #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserThemeColorSchema>, required = false)]
+    pub theme_color: PatchField<UserThemeColor>,
+    #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserUiFontSchema>, required = false)]
+    pub font: PatchField<UserUiFont>,
+    #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserUiRadiusSchema>, required = false)]
+    pub radius: PatchField<UserUiRadius>,
+    #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserContentLayoutSchema>, required = false)]
+    pub content_layout: PatchField<UserContentLayout>,
+    #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserUiDensitySchema>, required = false)]
+    pub density: PatchField<UserUiDensity>,
 }
 
 impl From<PatchUserPreferencesRequest> for citadel_identity::PatchUserPreferences {
@@ -58,6 +76,11 @@ impl From<PatchUserPreferencesRequest> for citadel_identity::PatchUserPreference
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
             theme: value.theme,
+            theme_color: value.theme_color,
+            font: value.font,
+            radius: value.radius,
+            content_layout: value.content_layout,
+            density: value.density,
         }
     }
 }
@@ -68,6 +91,11 @@ impl From<citadel_identity::PatchUserPreferences> for PatchUserPreferencesReques
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
             theme: value.theme,
+            theme_color: value.theme_color,
+            font: value.font,
+            radius: value.radius,
+            content_layout: value.content_layout,
+            density: value.density,
         }
     }
 }

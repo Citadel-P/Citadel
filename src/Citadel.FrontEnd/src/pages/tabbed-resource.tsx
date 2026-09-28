@@ -1,5 +1,5 @@
+import { AppContent } from '@/components/custom/app-content';
 import { PluralResourceMap, ResourceType } from '@/api/types';
-import { PageContainer } from '@/components/custom/common';
 import { SearchField } from '@/components/custom/search-field';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Button } from '@/components/ui/button';
@@ -74,7 +74,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   return (
     <div className="flex-col relative">
-      <PageContainer className="flex flex-col gap-4">
+      <AppContent className="flex flex-col gap-(--section-gap)">
         <ResourceHeader
           type={type}
           icon={Components.Icon}
@@ -141,7 +141,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
             </TabsContent>
           ))}
         </Tabs>
-      </PageContainer>
+      </AppContent>
 
       <TaskSheet type={type} />
     </div>

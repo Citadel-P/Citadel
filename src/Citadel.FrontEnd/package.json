@@ -20,10 +20,13 @@
     "prettier": "prettier --config ./.prettierrc --write \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "prettier:verify": "prettier --config ./.prettierrc --check \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "preview": "vite preview",
-    "api:generate": "npx swagger-typescript-api generate --path ../schema/Citadel.WebApi.json -o ./src/api/ -n generated/api.types.ts --responses && tsx scripts/generate-resources.ts"
+    "api:generate": "tsx scripts/sync-rust-preferences.ts && npx swagger-typescript-api generate --path ./node_modules/.cache/citadel-openapi.json -o ./src/api/ -n generated/api.types.ts --responses && tsx scripts/generate-resources.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/source-sans-3": "^5.3.0",
     "@formkit/auto-animate": "^0.9.0",
     "@microsoft/signalr": "^10.0.0",
     "@microsoft/signalr-protocol-msgpack": "^10.0.0",

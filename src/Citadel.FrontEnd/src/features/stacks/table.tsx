@@ -1,3 +1,5 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import {
   AutoUpdateStatus,
@@ -12,7 +14,6 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -88,6 +89,16 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <StackNameRow stack={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+  },
+  {
+    accessorKey: 'status',
+    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
+    cell: ({ row }) => (
+      <StateBadge
+        value={row.original.status}
+        isProcessing={row.original.controlState === ResourceControlState.Processing}
+      />
+    ),
   },
   {
     accessorKey: 'source',

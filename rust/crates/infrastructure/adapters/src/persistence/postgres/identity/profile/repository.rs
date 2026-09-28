@@ -1,9 +1,12 @@
-use citadel_activities::{ActivityChangedField, ActivityEvent, ActivityEventInfo};
+use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_identity::{
     CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileRepository,
     ProfileResourceInfo, User, UserPreferences, UserPreferencesUpdate,
 };
-use citadel_identity::{UserDateTimeFormat, UserTheme};
+use citadel_identity::{
+    UserAppearance, UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor,
+    UserUiDensity, UserUiFont, UserUiRadius,
+};
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -62,7 +65,7 @@ WHERE u.id = $1
 "#;
 
 const USER_PREFERENCES_SQL: &str = r#"
-SELECT userid, timezone, datetimeformat, theme, updatedat
+SELECT userid, timezone, datetimeformat, theme, updatedat, themecolor, font, radius, contentlayout, density
 FROM userpreferences
 WHERE userid = $1
 "#;
@@ -194,11 +197,11 @@ impl ProfileRepository for PostgresProfileRepository {
         user_id: Uuid,
         update: &'a UserPreferencesUpdate,
         updated_at: chrono::DateTime<chrono::Utc>,
-        actor_id: ActorId,
+        _actor_id: ActorId,
     ) -> BoxFuture<'a, Result<UserPreferences, IdentityError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let resource_name = lock_enabled_user(&mut transaction, user_id).await?;
+            lock_enabled_user(&mut transaction, user_id).await?;
             let current = sqlx::query(USER_PREFERENCES_SQL)
                 .bind(user_id)
                 .fetch_optional(&mut *transaction)
@@ -223,43 +226,44 @@ impl ProfileRepository for PostgresProfileRepository {
                     .as_ref()
                     .map_or(UserTheme::System, UserPreferences::theme)
             });
-            let mut changes = Vec::with_capacity(3);
-            if update.time_zone.as_ref().is_some_and(|value| {
+            let theme_color = update.theme_color.unwrap_or_else(|| {
                 current
                     .as_ref()
-                    .is_none_or(|preferences| preferences.time_zone() != value)
-            }) {
-                changes.push(ActivityChangedField::time_zone(
-                    current
-                        .as_ref()
-                        .map(|preferences| preferences.time_zone().to_owned()),
-                    time_zone.clone(),
-                ));
-            }
-            let old_date_time_format = current.as_ref().map_or(
-                UserDateTimeFormat::System,
-                UserPreferences::date_time_format,
-            );
-            if update
-                .date_time_format
-                .is_some_and(|value| value != old_date_time_format)
-            {
-                changes.push(ActivityChangedField::date_time_format(
-                    old_date_time_format.as_database_str(),
-                    date_time_format.as_database_str(),
-                ));
-            }
-            let old_theme = current
-                .as_ref()
-                .map_or(UserTheme::System, UserPreferences::theme);
-            if update.theme.is_some_and(|value| value != old_theme) {
-                changes.push(ActivityChangedField::theme(
-                    old_theme.as_database_str(),
-                    theme.as_database_str(),
-                ));
-            }
-            if changes.is_empty()
-                && let Some(current) = current
+                    .map_or(UserThemeColor::default(), UserPreferences::theme_color)
+            });
+            let font = update.font.unwrap_or_else(|| {
+                current
+                    .as_ref()
+                    .map_or(UserUiFont::Geist, UserPreferences::font)
+            });
+            let radius = update.radius.unwrap_or_else(|| {
+                current
+                    .as_ref()
+                    .map_or(UserUiRadius::default(), UserPreferences::radius)
+            });
+            let content_layout = update.content_layout.unwrap_or_else(|| {
+                current.as_ref().map_or(
+                    UserContentLayout::default(),
+                    UserPreferences::content_layout,
+                )
+            });
+            let density = update.density.unwrap_or_else(|| {
+                current
+                    .as_ref()
+                    .map_or(UserUiDensity::default(), UserPreferences::density)
+            });
+            // Personal preferences do not produce activity history. Keep no-op
+            // detection so repeated saves also avoid rewriting the preference row.
+            if current.as_ref().is_some_and(|preferences| {
+                preferences.time_zone() == time_zone
+                    && preferences.date_time_format() == date_time_format
+                    && preferences.theme() == theme
+                    && preferences.theme_color() == theme_color
+                    && preferences.font() == font
+                    && preferences.radius() == radius
+                    && preferences.content_layout() == content_layout
+                    && preferences.density() == density
+            }) && let Some(current) = current
             {
                 transaction.commit().await.map_err(storage)?;
                 return Ok(current);
@@ -275,14 +279,27 @@ impl ProfileRepository for PostgresProfileRepository {
                 )
             });
             preferences.update(time_zone, date_time_format, theme, updated_at);
+            preferences = preferences.with_appearance(UserAppearance {
+                theme_color,
+                font,
+                radius,
+                content_layout,
+                density,
+            });
             sqlx::query(
                 r#"
-INSERT INTO userpreferences (userid, timezone, datetimeformat, theme, updatedat)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO userpreferences (userid, timezone, datetimeformat, theme, updatedat, themecolor, font, radius, contentlayout, density)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (userid) DO UPDATE
 SET timezone = EXCLUDED.timezone,
     datetimeformat = EXCLUDED.datetimeformat,
     theme = EXCLUDED.theme,
+    themecolor = EXCLUDED.themecolor,
+    font = EXCLUDED.font,
+    radius = EXCLUDED.radius,
+    contentlayout = EXCLUDED.contentlayout,
+    density = EXCLUDED.density,
+
     updatedat = EXCLUDED.updatedat
 "#,
             )
@@ -291,22 +308,15 @@ SET timezone = EXCLUDED.timezone,
             .bind(preferences.date_time_format().as_database_str())
             .bind(preferences.theme().as_database_str())
             .bind(preferences.updated_at())
+            .bind(preferences.theme_color().as_database_str())
+            .bind(preferences.font().as_database_str())
+            .bind(preferences.radius().as_database_str())
+            .bind(preferences.content_layout().as_database_str())
+            .bind(preferences.density().as_database_str())
+
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
-            if !changes.is_empty() {
-                let info = ActivityEventInfo::user_preferences_updated(changes)
-                    .map_err(invalid_activity)?;
-                let activity = ActivityEvent::new_user_event(
-                    user_id,
-                    resource_name,
-                    actor_id,
-                    info,
-                    updated_at,
-                )
-                .map_err(invalid_activity)?;
-                insert_activity(&mut transaction, &activity).await?;
-            }
             transaction.commit().await.map_err(storage)?;
             Ok(preferences)
         })
@@ -477,7 +487,27 @@ fn map_preferences(row: sqlx::postgres::PgRow) -> Result<UserPreferences, Identi
             IdentityError::Storage(format!("Unknown User preference theme '{theme}'."))
         })?,
         row.try_get("updatedat").map_err(storage)?,
-    ))
+    )
+    .with_appearance(UserAppearance {
+        theme_color: UserThemeColor::from_database_str(
+            &row.try_get::<String, _>("themecolor").map_err(storage)?,
+        )
+        .ok_or_else(|| IdentityError::Storage("Unknown preference theme_color.".to_owned()))?,
+        font: UserUiFont::from_database_str(&row.try_get::<String, _>("font").map_err(storage)?)
+            .ok_or_else(|| IdentityError::Storage("Unknown preference font.".to_owned()))?,
+        radius: UserUiRadius::from_database_str(
+            &row.try_get::<String, _>("radius").map_err(storage)?,
+        )
+        .ok_or_else(|| IdentityError::Storage("Unknown preference radius.".to_owned()))?,
+        content_layout: UserContentLayout::from_database_str(
+            &row.try_get::<String, _>("contentlayout").map_err(storage)?,
+        )
+        .ok_or_else(|| IdentityError::Storage("Unknown preference content_layout.".to_owned()))?,
+        density: UserUiDensity::from_database_str(
+            &row.try_get::<String, _>("density").map_err(storage)?,
+        )
+        .ok_or_else(|| IdentityError::Storage("Unknown preference density.".to_owned()))?,
+    }))
 }
 
 fn required_email(row: &sqlx::postgres::PgRow) -> Result<String, IdentityError> {

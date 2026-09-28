@@ -1,3 +1,7 @@
-export const ContentCard = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={`rounded-sm border p-1 shadow-xs ${className || ''}`}>{children}</div>
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import { Surface } from './surface';
+
+export const ContentCard = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <Surface className={cn('p-0', className)}>{children}</Surface>
 );

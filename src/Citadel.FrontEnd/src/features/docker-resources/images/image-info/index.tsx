@@ -1,6 +1,8 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
 import { ImageView, InspectImageView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { Box, Info, Layers } from 'lucide-react';
@@ -8,15 +10,19 @@ import { ImageInfoTable } from './image-info-table';
 import { ContainerInfoTable } from './container-info-table';
 import { ImageLayerTable } from './image-layer-table';
 import { ImageInfoActions } from './actions';
-import { DockerLabelsSection, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useSearchParams } from 'react-router';
 
 export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView> = {
   Header: {
-    Indicator: ({ resource }) => {
-      return <StateIndicator value={Object.keys(resource.containers ?? {}).length > 0} />;
-    },
+    Icon: Layers,
+    Status: ({ resource }) => (
+      <StateBadge
+        indicator={<StateIndicator value={Boolean(resource.containers?.length)} className="mr-0" />}
+        value={Boolean(resource.containers?.length)}
+        label={resource.containers?.length ? 'In use' : 'Unused'}
+      />
+    ),
     ActionButtons: ({ resource }) => {
       return (
         <GenericActionBarButtons
@@ -58,22 +64,24 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
 
 const InspectImageWrapper = ({ resource }: { resource: InspectImageView }) => {
   return (
-    <div className="flex flex-col gap-8">
-      <Section title="Details" Icon={Info}>
+    <div className="flex flex-col gap-(--section-gap)">
+      <DetailSection title="Image details" description="Build platform, origin, and image size." icon={Info}>
         <ImageInfoTable image={resource} />
-      </Section>
+      </DetailSection>
 
-      {Object.keys(resource?.containers ?? {}).length !== 0 && (
-        <Section title="Containers from this image" Icon={Box}>
+      <DetailSection title={`Containers using this image (${resource.containers?.length ?? 0})`} icon={Box}>
+        {resource.containers?.length ? (
           <ContainerInfoTable image={resource} />
-        </Section>
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">No containers currently use this image.</p>
+        )}
+      </DetailSection>
 
-      <Section title={`Layers (${resource.layers?.length ?? 0})`} Icon={Layers}>
+      <DetailSection title={`Layers (${resource.layers?.length ?? 0})`} icon={Layers}>
         <ImageLayerTable image={resource} />
-      </Section>
+      </DetailSection>
 
-      <DockerLabelsSection labels={resource?.labels} />
+      <DetailMetadata items={resource.labels} />
     </div>
   );
 };

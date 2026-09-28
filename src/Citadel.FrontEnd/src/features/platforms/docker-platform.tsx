@@ -1,3 +1,4 @@
+import { StateBadge } from '@/components/custom/state-badge';
 import {
   PlatformConnectorType,
   PlatformDescriptorDockerPlatformDescriptor,
@@ -73,13 +74,7 @@ const LiveSwarmPlatform = ({
       }
     : platform;
 
-  return (
-    <DockerPlatformCard
-      platform={livePlatform}
-      actions={actions}
-      swarmOverview={overview}
-    />
-  );
+  return <DockerPlatformCard platform={livePlatform} actions={actions} swarmOverview={overview} />;
 };
 
 const DockerPlatformCard = ({
@@ -133,7 +128,7 @@ const DockerPlatformCard = ({
   return (
     <ContentCard className="overflow-hidden">
       <TooltipProvider delayDuration={200}>
-        <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 px-4 py-3 pr-12 2xl:grid-cols-[auto_minmax(15rem,1fr)_minmax(18rem,0.9fr)_minmax(17rem,0.9fr)_auto] 2xl:items-center 2xl:gap-x-5 2xl:pr-4">
+        <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 p-(--surface-padding) pr-12 2xl:grid-cols-[auto_minmax(15rem,1fr)_minmax(18rem,0.9fr)_minmax(17rem,0.9fr)_auto] 2xl:items-center 2xl:gap-x-5 2xl:pr-4">
           {/* Logo + status */}
           <div className="relative shrink-0">
             <div className="h-12 w-12 rounded-full border border-border/60 p-0.5">
@@ -150,7 +145,7 @@ const DockerPlatformCard = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  className={`absolute top-0 right-0 h-3 w-3 rounded-full border-2 border-card ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                  className={`absolute top-0 right-0 h-3 w-3 rounded-full border-2 border-card ${isOnline ? 'bg-success' : 'bg-danger'}`}
                 />
               </TooltipTrigger>
               <TooltipContent>
@@ -168,6 +163,7 @@ const DockerPlatformCard = ({
                 className="min-w-0 truncate text-[15px] font-medium text-foreground hover:underline">
                 {platform.name}
               </Link>
+              <StateBadge value={platform.status} />
               {swarmOverview?.quorum && (
                 <SwarmQuorumStatus quorum={swarmOverview.quorum} managerCount={swarmOverview.managerCount} />
               )}
@@ -189,7 +185,9 @@ const DockerPlatformCard = ({
                   <Link to={`/platforms/${platform.id}/nodes`} className="hover:text-foreground hover:underline">
                     {formatCount(swarmDescriptor.nodes, 'node')}
                   </Link>
-                  <Link to={`/swarm-services?platformId=${platform.id}`} className="hover:text-foreground hover:underline">
+                  <Link
+                    to={`/swarm-services?platformId=${platform.id}`}
+                    className="hover:text-foreground hover:underline">
                     {formatCount(platform.swarmServiceStatusCounts.total, 'service')}
                   </Link>
                   <Link to={`/platforms/${platform.id}/tasks`} className="hover:text-foreground hover:underline">

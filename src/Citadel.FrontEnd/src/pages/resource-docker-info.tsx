@@ -10,7 +10,7 @@ const ResourceDockerInfoPage = () => {
   const Components = DockerResourceInfoComponents[type as DockerResourceType];
   if (!Components) return <NotFound />;
 
-  return <ResourceInfoView key={type} Components={Components} type={type as DockerResourceType} />;
+  return <ResourceInfoView key={type} Components={Components} type={type as DockerResourceType} showHeaderId={false} />;
 };
 
 export default ResourceDockerInfoPage;

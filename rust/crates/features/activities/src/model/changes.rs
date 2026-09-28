@@ -4,6 +4,11 @@ pub enum ActivityChangedFieldName {
     DisplayName,
     TimeZone,
     DateTimeFormat,
+    ThemeColor,
+    Font,
+    Radius,
+    ContentLayout,
+    Density,
     Theme,
 }
 
@@ -14,6 +19,11 @@ impl ActivityChangedFieldName {
             Self::DisplayName => "DisplayName",
             Self::TimeZone => "TimeZone",
             Self::DateTimeFormat => "DateTimeFormat",
+            Self::ThemeColor => "ThemeColor",
+            Self::Font => "Font",
+            Self::Radius => "Radius",
+            Self::ContentLayout => "ContentLayout",
+            Self::Density => "Density",
             Self::Theme => "Theme",
         }
     }
@@ -61,6 +71,51 @@ impl ActivityChangedField {
     pub fn theme(old_value: &str, new_value: &str) -> Self {
         Self::new(
             ActivityChangedFieldName::Theme,
+            Some(old_value.to_owned()),
+            Some(new_value.to_owned()),
+        )
+    }
+
+    #[must_use]
+    pub fn theme_color(old_value: &str, new_value: &str) -> Self {
+        Self::new(
+            ActivityChangedFieldName::ThemeColor,
+            Some(old_value.to_owned()),
+            Some(new_value.to_owned()),
+        )
+    }
+
+    #[must_use]
+    pub fn font(old_value: &str, new_value: &str) -> Self {
+        Self::new(
+            ActivityChangedFieldName::Font,
+            Some(old_value.to_owned()),
+            Some(new_value.to_owned()),
+        )
+    }
+
+    #[must_use]
+    pub fn radius(old_value: &str, new_value: &str) -> Self {
+        Self::new(
+            ActivityChangedFieldName::Radius,
+            Some(old_value.to_owned()),
+            Some(new_value.to_owned()),
+        )
+    }
+
+    #[must_use]
+    pub fn content_layout(old_value: &str, new_value: &str) -> Self {
+        Self::new(
+            ActivityChangedFieldName::ContentLayout,
+            Some(old_value.to_owned()),
+            Some(new_value.to_owned()),
+        )
+    }
+
+    #[must_use]
+    pub fn density(old_value: &str, new_value: &str) -> Self {
+        Self::new(
+            ActivityChangedFieldName::Density,
             Some(old_value.to_owned()),
             Some(new_value.to_owned()),
         )

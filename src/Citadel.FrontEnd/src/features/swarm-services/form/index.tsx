@@ -1,3 +1,4 @@
+import { StateBadge } from '@/components/custom/state-badge';
 import { useMemo, useState } from 'react';
 import { Boxes, Container, Copy, Maximize2, RefreshCw, Workflow, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -47,7 +48,8 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
   EditForm: {
     Header: {
       Indicator: ({ resource }) => (
-        <StateIndicator
+        <StateBadge
+          indicator={<StateIndicator value={resource.health} className="mr-0" />}
           value={resource.health}
           isProcessing={resource.controlState === ResourceControlState.Processing}
         />

@@ -3,11 +3,19 @@
 @custom-variant dark (&:is(.dark *));
 @plugin "tailwindcss-animate";
 
-@theme {
-  --font-sans: 'Geist Variable', 'Segoe UI', system-ui, sans-serif;
+@theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
-  --layout-content-width: 96rem;
+  --layout-content-width: var(--content-max-width);
   --layout-header-height: 4rem;
   --layout-footer-height: 3.5625rem;
   /* Animations */
@@ -52,6 +60,16 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-pending: var(--pending);
+  --color-pending-foreground: var(--pending-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
   /* Keyframes */
   @keyframes wiggle {
@@ -112,29 +130,29 @@
 @layer base {
   :root {
     --background: #ffffff;
-    --foreground: #0c1420;
-    --card: #f1f5f9;
+    --foreground: #171717;
+    --card: #ffffff;
     --card-foreground: #000000;
-    --primary: #e11d48;
+    --primary: oklch(0.488 0.243 264.376);
     --primary-foreground: #ffffff;
     --secondary: #e6e6e6;
     --secondary-foreground: #171717;
-    --muted: #cfd9e5;
-    --muted-foreground: #64748b;
+    --muted: #f5f5f5;
+    --muted-foreground: #737373;
     --accent: #f5f5f5;
     --accent-foreground: #171717;
     --destructive: #dc2626;
     --destructive-foreground: #ffffff;
-    --border: #e2e8f0;
+    --border: #e5e5e5;
     --input: #e5e5e5;
-    --ring: #0a0a0a;
-    --radius: 0.5rem;
+    --ring: var(--primary);
+    --radius: 0.625rem;
 
-    --success: #16a34a;
+    --success: #15803d;
     --success-foreground: #f8fafc;
     --info: #2563eb;
     --info-foreground: #f8fafc;
-    --warning: #f97316;
+    --warning: #b45309;
     --warning-foreground: #fafaf9;
     --danger: #ff0f0f;
 
@@ -153,7 +171,7 @@
     --foreground: #f2f2f2;
     --card: #1c1c1c;
     --card-foreground: #f2f2f2;
-    --primary: #e63946;
+    --primary: oklch(0.546 0.245 262.881);
     --primary-foreground: #ffffff;
     --secondary: #333333;
     --secondary-foreground: #fafafa;
@@ -165,7 +183,7 @@
     --destructive-foreground: #ffffff;
     --border: #262626;
     --input: #262626;
-    --ring: #d4d4d4;
+    --ring: var(--primary);
     --success: #22c55e;
     --success-foreground: #f0fdf4;
     --info: #3b82f6;
@@ -176,39 +194,6 @@
     --chart-1: #cc0022;
     --chart-2: #e23670;
     --chart-3: #4ade80;
-  }
-
-  /* Multi-theme support */
-  :root[data-theme='violet'] {
-    --primary: #6e56cf;
-    --chart-1: #6e56cf;
-  }
-  .dark[data-theme='violet'] {
-    --background: #060815;
-    --foreground: #f6f8fb;
-    --primary: #6d28d9;
-    --border: #232b3d;
-  }
-
-  :root[data-theme='red'] {
-    --primary: #cc0033;
-    --chart-1: #cc0033;
-  }
-  :root[data-theme='blue'] {
-    --primary: #0068d6;
-    --chart-1: #0068d6;
-  }
-  :root[data-theme='orange'] {
-    --primary: #ea580c;
-    --chart-1: #ea580c;
-  }
-  :root[data-theme='yellow'] {
-    --primary: #facc15;
-    --chart-1: #facc15;
-  }
-  :root[data-theme='green'] {
-    --primary: #22c55e;
-    --chart-1: #22c55e;
   }
 
   /* Global Styles & Resets */
@@ -295,28 +280,137 @@
   background-color: #151b25 !important;
 }
 
+/* Appearance presets change tokens; feature components never branch on a preset. */
 :root {
-  --sidebar: #f8fafc;
-  --sidebar-foreground: #334155;
+  --app-font-sans: 'Geist Variable', system-ui, sans-serif;
+  --app-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --radius: 0rem;
+  --content-max-width: none;
+  --content-padding-x: 1.5rem;
+  --content-padding-y: 1.5rem;
+  --control-height: 2.25rem;
+  --table-row-height: 3.25rem;
+  --table-cell-padding-y: 0.5rem;
+  --surface-padding: 1.25rem;
+  --section-gap: 1.5rem;
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+  --surface: var(--card);
+  --surface-subtle: color-mix(in oklab, var(--muted) 55%, transparent);
+  --surface-hover: var(--accent);
+  --danger: var(--destructive);
+  --danger-foreground: var(--destructive-foreground);
+  --pending: #7c3aed;
+  --pending-foreground: #ffffff;
+  --chart-1: var(--primary);
+  --chart-4: #a855f7;
+  --chart-5: #f59e0b;
+  --sidebar: #fafafa;
+  --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
-  --sidebar-ring: var(--primary);
+  --sidebar-ring: var(--ring);
 }
-
 .dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar: #141414;
+  --pending: #a78bfa;
 }
-
+:root[data-font='inter'] {
+  --app-font-sans: 'Inter Variable', system-ui, sans-serif;
+}
+:root[data-font='ibm-plex-sans'] {
+  --app-font-sans: 'IBM Plex Sans Variable', system-ui, sans-serif;
+}
+:root[data-font='source-sans-3'] {
+  --app-font-sans: 'Source Sans 3 Variable', system-ui, sans-serif;
+}
+:root[data-font='system'] {
+  --app-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+:root[data-radius='none'] {
+  --radius: 0rem;
+}
+:root[data-radius='small'] {
+  --radius: 0.375rem;
+}
+:root[data-radius='medium'] {
+  --radius: 0.625rem;
+}
+:root[data-radius='large'] {
+  --radius: 0.875rem;
+}
+:root[data-content-layout='compact'] {
+  --content-max-width: 80rem;
+}
+:root[data-content-layout='wide'] {
+  --content-max-width: 96rem;
+}
+:root[data-content-layout='full'] {
+  --content-max-width: none;
+}
+:root[data-density='compact'] {
+  --control-height: 2rem;
+  --table-row-height: 2.85rem;
+  --table-cell-padding-y: 0.375rem;
+  --surface-padding: 1rem;
+  --section-gap: 1rem;
+}
+:root:not([data-theme-color]),
+:root[data-theme-color='neutral'] {
+  --primary: oklch(0.269 0 0);
+}
+.dark:not([data-theme-color]),
+.dark[data-theme-color='neutral'] {
+  --primary: oklch(0.87 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+}
+:root[data-theme-color='blue'] {
+  --primary: oklch(0.488 0.243 264.376);
+}
+:root[data-theme-color='indigo'] {
+  --primary: oklch(0.511 0.262 276.966);
+}
+:root[data-theme-color='violet'] {
+  --primary: oklch(0.541 0.281 293.009);
+}
+:root[data-theme-color='emerald'] {
+  --primary: oklch(0.508 0.118 165.612);
+}
+:root[data-theme-color='yellow'] {
+  --primary: #8a6d00;
+  --primary-foreground: #ffffff;
+}
+.dark[data-theme-color='yellow'] {
+  --primary: #facc15;
+  --primary-foreground: #171717;
+}
+:root[data-theme-color='orange'] {
+  --primary: oklch(0.553 0.195 38.402);
+}
+:root[data-theme-color='rose'] {
+  --primary: oklch(0.514 0.222 16.935);
+}
+@media (min-width: 1536px) {
+  :root {
+    --content-padding-x: 2rem;
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --content-padding-x: 1rem;
+    --content-padding-y: 1rem;
+  }
+}
+.app-content {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin-inline: auto;
+  padding: var(--content-padding-y) var(--content-padding-x);
+  min-height: calc(100dvh - var(--layout-header-height));
+}
 @theme inline {
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

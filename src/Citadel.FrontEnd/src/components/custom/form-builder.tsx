@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef, memo, Ref, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Eye, History, Save, X } from 'lucide-react';
+import { Loader2, Eye, History, Save, X, ChevronRight, CircleAlert } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MonacoDiff } from '@/lib/monaco';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -464,7 +464,7 @@ export function PortMappingField({
   return (
     <div className="col-span-2 ">
       <div className="space-y-2 flex flex-col gap-2">
-        {ports.length === 0 && <span className="text-xs text-muted">No ports exposed in this image</span>}
+        {ports.length === 0 && <span className="text-xs text-muted-foreground">No ports exposed in this image</span>}
 
         {ports.map((value, idx) => {
           const hasMapping = value.includes(':');
@@ -761,7 +761,7 @@ function buildNavigationSections<T>(
 
   return Object.entries(schema).map(([sectionKey, section]) => ({
     key: sectionKey,
-    title: section.title,
+    title: section.title?.trim() || sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1),
     items: section.items.map((item): FormNavigationItem => {
       if (item.kind === 'field') {
         const identity = fieldIdentity(item.field);
@@ -775,7 +775,11 @@ function buildNavigationSections<T>(
       if (item.kind === 'row') {
         return {
           id: item.id,
-          label: item.id,
+          label:
+            item.fields
+              .map((field) => field.label.trim())
+              .filter(Boolean)
+              .join(' / ') || item.id,
           ...rowState(item.fields),
         };
       }
@@ -791,42 +795,46 @@ function buildNavigationSections<T>(
 
 const FormNavigationLink = ({
   item,
-  variant,
+  active,
   onSelect,
 }: {
   item: FormNavigationItem;
-  variant: 'sidebar' | 'compact';
+  active: boolean;
   onSelect: (id: string) => void;
 }) => (
-  <Button
-    asChild
-    variant={variant === 'sidebar' ? 'secondary' : 'outline'}
-    size="sm"
+  <a
+    href={`#${item.id}`}
+    aria-label={`${item.label}${item.error ? ', Needs attention' : item.dirty ? ', Edited' : ''}`}
+    aria-current={active ? 'location' : undefined}
     className={cn(
-      'text-xs font-normal text-foreground/90',
-      variant === 'sidebar' ? 'w-full justify-end bg-accent/60' : 'h-8 shrink-0 rounded-sm px-2.5',
-      item.error && 'border-destructive/50 bg-destructive/10 text-red-700 hover:bg-destructive/15',
-    )}>
-    <a
-      href={`#${item.id}`}
-      title={item.label}
-      onClick={(event) => {
-        event.preventDefault();
-        onSelect(item.id);
-      }}>
-      {item.dirty && <span className="mr-1 text-[10px] text-destructive">*</span>}
-      <span className="truncate">{item.label}</span>
-    </a>
-  </Button>
+      'relative flex min-h-(--control-height) w-full items-center gap-2 rounded-md px-3 py-[calc(var(--surface-padding)/4)] text-sm text-muted-foreground transition-colors after:pointer-events-none after:absolute after:inset-y-2 after:left-0 after:w-0.5 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+      active && 'bg-primary/5 font-medium text-foreground after:bg-primary',
+      item.error && 'text-destructive',
+    )}
+    onClick={(event) => {
+      event.preventDefault();
+      onSelect(item.id);
+    }}>
+    <span className="min-w-0 flex-1 whitespace-normal wrap-anywhere">{item.label}</span>
+    {item.error ? (
+      <span title="Needs attention" className="shrink-0 text-destructive">
+        <CircleAlert aria-hidden="true" className="size-3.5" />
+        <span className="sr-only">Needs attention</span>
+      </span>
+    ) : item.dirty ? (
+      <span className="shrink-0 rounded-sm border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+        Edited
+      </span>
+    ) : active ? (
+      <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
+    ) : null}
+  </a>
 );
 
 const FormNavigationSelectItem = ({ item }: { item: FormNavigationItem }) => (
   <SelectItem
     value={item.id}
-    className={cn(
-      'text-xs font-normal text-foreground/90',
-      item.error && 'text-destructive focus:text-destructive',
-    )}>
+    className={cn('text-xs font-normal text-foreground/90', item.error && 'text-destructive focus:text-destructive')}>
     <span
       className={cn(
         'size-1.5 shrink-0 rounded-full bg-transparent',
@@ -835,7 +843,11 @@ const FormNavigationSelectItem = ({ item }: { item: FormNavigationItem }) => (
       )}
     />
     <span className="min-w-0 flex-1 truncate font-normal">{item.label}</span>
-    {item.dirty && <span className="text-[10px] text-muted-foreground">Edited</span>}
+    {item.error ? (
+      <span className="text-[10px] text-destructive">Needs attention</span>
+    ) : (
+      item.dirty && <span className="text-[10px] text-muted-foreground">Edited</span>
+    )}
   </SelectItem>
 );
 
@@ -945,15 +957,73 @@ export function FormShell<T>({
     () => buildNavigationSections(schema, dirty, errors, touched, mode),
     [schema, dirty, errors, touched, mode],
   );
-  const [selectedNavigationId, setSelectedNavigationId] = useState<string | undefined>();
+  const formRef = useRef<HTMLDivElement>(null);
+  const [selectedNavigationId, setSelectedNavigationId] = useState<string | undefined>(
+    () => window.location.hash.slice(1) || undefined,
+  );
   const selectedNavigationValue = useMemo(
     () =>
       selectedNavigationId &&
       navigationSections.some((section) => section.items.some((item) => item.id === selectedNavigationId))
         ? selectedNavigationId
-        : undefined,
+        : navigationSections[0]?.items[0]?.id,
     [navigationSections, selectedNavigationId],
   );
+
+  // Reconnect only when sections change, not on each field edit.
+  const navigationTargetKey = JSON.stringify(
+    navigationSections.flatMap((section) => section.items.map((item) => item.id)),
+  );
+  useEffect(() => {
+    const ids: string[] = JSON.parse(navigationTargetKey);
+    const targets = ids
+      .map((id) => document.getElementById(id))
+      .filter((element): element is HTMLElement => !!element && !!formRef.current?.contains(element));
+    const scrollRoot = formRef.current?.closest<HTMLElement>('#main-scroll-container') ?? null;
+    const scrollElement = scrollRoot ?? document.scrollingElement;
+    const scrollTarget = scrollRoot ?? window;
+    const visible = new Set<Element>();
+    let atBottom = false;
+    let frame: number | undefined;
+    const updateCurrent = () => {
+      // The final section may never reach the top of the viewport. At the end
+      // of the scroll area it takes precedence over earlier visible sections.
+      atBottom =
+        !!scrollElement &&
+        scrollElement.scrollTop > 0 &&
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight <= 2;
+      const current = atBottom ? targets.at(-1) : targets.find((target) => visible.has(target));
+      if (current) setSelectedNavigationId(current.id);
+    };
+    const onScroll = () => {
+      if (frame !== undefined) return;
+      frame = requestAnimationFrame(() => {
+        frame = undefined;
+        const reachedBottom =
+          !!scrollElement &&
+          scrollElement.scrollTop > 0 &&
+          scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight <= 2;
+        if (reachedBottom !== atBottom) updateCurrent();
+      });
+    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.add(entry.target);
+          else visible.delete(entry.target);
+        }
+        updateCurrent();
+      },
+      { root: scrollRoot, rootMargin: '-112px 0px 0px 0px', threshold: 0 },
+    );
+    targets.forEach((target) => observer.observe(target));
+    scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      scrollTarget.removeEventListener('scroll', onScroll);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  }, [navigationTargetKey]);
 
   const hasChanges = useMemo(() => !areValuesEqual(effectiveOriginal, merged), [effectiveOriginal, merged]);
   const isValid = useMemo(() => Object.values(errors).every((v) => !v), [errors]);
@@ -1054,8 +1124,11 @@ export function FormShell<T>({
 
     if (typeof window === 'undefined') return;
 
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${id}`);
-    document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${id}`);
+    document.getElementById(id)?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
   }, []);
 
   const validateAll = useCallback(
@@ -1113,7 +1186,7 @@ export function FormShell<T>({
   /* -------------------------------------------------------------------------- */
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={formRef} className="flex flex-col gap-6">
       {/* Draft banner (if we restored a draft) */}
       {draftLoadedBanner && (
         <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-3">
@@ -1138,10 +1211,12 @@ export function FormShell<T>({
         </div>
       )}
 
-      <div className="sticky top-0 z-20 -mx-1 border-b bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 xl:hidden">
+      <div className="sticky top-0 z-20 rounded-lg border bg-card p-3 shadow-xs xl:hidden">
         <div className="flex items-center justify-end">
           <Select value={selectedNavigationValue} onValueChange={handleNavigationSelect}>
-            <SelectTrigger className="h-8 w-full mb-3 rounded-sm bg-background text-xs shadow-xs">
+            <SelectTrigger
+              aria-label="Jump to section"
+              className="min-h-(--control-height) w-full bg-background text-sm">
               <SelectValue placeholder="Jump to section" />
             </SelectTrigger>
             <SelectContent className="max-h-80 bg-background">
@@ -1168,20 +1243,20 @@ export function FormShell<T>({
         </div>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex min-w-0 items-start gap-(--section-gap)">
         {/* Sidebar (xl and up) */}
-        <aside className="hidden xl:block relative pr-6 border-r">
-          <div className="sticky top-26 hidden max-h-[calc(100dvh-11rem)] min-h-0 w-35 flex-col xl:flex">
-            {title && <p className="mb-4 shrink-0 text-sm font-semibold text-muted-foreground">{title}</p>}
-
+        <aside className="sticky top-17 hidden shrink-0 xl:block">
+          <div className="flex max-h-[calc(100dvh-11rem)] min-h-0 w-60 flex-col overflow-hidden rounded-lg border bg-card shadow-xs">
             <nav
               aria-label={`${title ?? 'Form'} sections`}
-              className="min-h-0 flex-1 space-y-8 overflow-y-auto overscroll-contain pr-2">
+              className="min-h-0 flex-1 space-y-(--section-gap) overflow-y-auto overscroll-contain p-[calc(var(--surface-padding)/2)]">
               {navigationSections.map((section) => {
                 return (
-                  <div key={section.key} className="flex flex-col gap-2">
+                  <div key={section.key} className="flex flex-col gap-0.5">
                     {section.title && (
-                      <p className="uppercase text-xs mb-1 text-muted-foreground text-right">{section.title}</p>
+                      <p className="px-3 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {section.title}
+                      </p>
                     )}
 
                     {section.items.map((item) => {
@@ -1189,7 +1264,7 @@ export function FormShell<T>({
                         <FormNavigationLink
                           key={`${section.key}:${item.id}`}
                           item={item}
-                          variant="sidebar"
+                          active={selectedNavigationValue === item.id}
                           onSelect={handleNavigationSelect}
                         />
                       );
@@ -1200,7 +1275,9 @@ export function FormShell<T>({
             </nav>
 
             {hasChanges && (
-              <div data-slot="form-sidebar-actions" className="mt-4 flex shrink-0 flex-col items-center gap-2">
+              <div
+                data-slot="form-sidebar-actions"
+                className="flex shrink-0 flex-col items-center gap-2 border-t bg-muted/10 p-[calc(var(--surface-padding)/2)]">
                 {mode === 'edit' && (
                   <>
                     <Button
@@ -1232,13 +1309,13 @@ export function FormShell<T>({
         </aside>
 
         {/* Main */}
-        <main className="flex-1 flex flex-col gap-4">
+        <main className="min-w-0 flex-1 flex flex-col gap-4">
           {sections.map((sectionKey) => {
             const section = schema[sectionKey];
 
             return (
-              <div key={sectionKey} className="flex flex-col gap-5 border-b last:border-b-0 pb-10 last:pb-4">
-                {section.title && <div className="text-md font-bold uppercase">{section.title}</div>}
+              <div key={sectionKey} className="flex min-w-0 flex-col gap-5 pb-4 last:pb-0">
+                {section.title && <h2 className="text-base font-semibold tracking-tight">{section.title}</h2>}
 
                 {section.items.map((item) => {
                   if (item.kind === 'field') {
@@ -1256,7 +1333,7 @@ export function FormShell<T>({
                         key={identity}
                         disabled={fieldDisabled}
                         className={cn(
-                          'relative border rounded-sm p-6 scroll-mt-22 xl:scroll-mt-20 shadow-xs',
+                          'relative min-w-0 border bg-card rounded-lg p-(--surface-padding) scroll-mt-22 xl:scroll-mt-20 shadow-xs',
                           fieldDisabled && 'pointer-events-none opacity-60',
                         )}>
                         <SmartField
@@ -1282,7 +1359,7 @@ export function FormShell<T>({
                       <section
                         id={item.id}
                         key={item.id}
-                        className="relative border rounded-md p-6 scroll-mt-22 xl:scroll-mt-20">
+                        className="relative min-w-0 border bg-card rounded-lg p-(--surface-padding) scroll-mt-22 xl:scroll-mt-20">
                         <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
                           {item.fields.map((f) => {
                             const key = f.key as string;
@@ -1327,18 +1404,20 @@ export function FormShell<T>({
                     <section
                       id={group.id}
                       key={group.id}
-                      className={`relative rounded-sm border border-border/70 bg-background p-6 shadow-xs ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-22 xl:scroll-mt-20`}>
+                      className={`relative min-w-0 rounded-lg border border-border bg-card p-(--surface-padding) shadow-xs ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-22 xl:scroll-mt-20`}>
                       <div className="flex flex-col gap-4 w-full">
-                        {(group.title || group.description || group.requiredLicense) && (
-                          <div className="flex items-start justify-between gap-3 border-b border-dashed border-border/70 pb-4">
+                        {(group.title || group.label || group.description || group.requiredLicense) && (
+                          <div className="-mx-(--surface-padding) -mt-(--surface-padding) flex items-start justify-between gap-3 rounded-t-lg border-b bg-muted/15 px-(--surface-padding) py-3">
                             <div className="flex min-w-0 flex-col gap-1.5">
-                              {group.title && (
+                              {(group.title || group.label) && (
                                 <h3 className="text-sm font-semibold tracking-tight text-foreground/90">
-                                  {group.title}
+                                  {group.title || group.label}
                                 </h3>
                               )}
                               {typeof group.description === 'string' ? (
-                                <p className="max-w-full text-sm leading-6 text-muted-foreground">{group.description}</p>
+                                <p className="max-w-full text-sm leading-6 text-muted-foreground">
+                                  {group.description}
+                                </p>
                               ) : (
                                 group.description
                               )}
@@ -1363,7 +1442,7 @@ export function FormShell<T>({
                                 key={identity}
                                 disabled={fieldDisabled}
                                 className={cn(
-                                  `relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`,
+                                  `relative min-w-0 pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`,
                                   fieldDisabled && 'pointer-events-none opacity-60',
                                 )}>
                                 <SmartField
@@ -1439,8 +1518,8 @@ export function FormShell<T>({
       </div>
 
       {/* Bottom action bar for small screens */}
-      <div className="xl:hidden sticky bottom-0 bg-background border-t pt-3 pb-3 mt-2">
-        <div className="flex justify-end gap-2">
+      <div className="xl:hidden sticky bottom-0 z-20 rounded-lg border bg-card p-3 shadow-sm">
+        <div className="flex flex-wrap justify-end gap-2">
           {mode === 'edit' && (
             <>
               <Button variant="outline" size="sm" onClick={reset} disabled={disabled || !hasChanges}>
@@ -1453,10 +1532,7 @@ export function FormShell<T>({
               </Button>
             </>
           )}
-          <Button
-            size="sm"
-            onClick={confirm}
-            disabled={disabled || saveDisabled || !isValid || !canSave || pending}>
+          <Button size="sm" onClick={confirm} disabled={disabled || saveDisabled || !isValid || !canSave || pending}>
             {pending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}{' '}
             {saveLabel}
           </Button>

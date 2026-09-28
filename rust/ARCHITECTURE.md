@@ -1013,3 +1013,24 @@ Validation of the flat route files passed: formatting, strict locked workspace
 Clippy, 682 workspace tests (239 opt-in tests skipped), and 147 PostgreSQL
 acceptance tests. OpenAPI and frontend type verification retained the unchanged
 404 full and 305 public operations. No baseline was updated to accept drift.
+
+## Appearance and design tokens
+
+Frontend appearance is owned by `src/lib/appearance/AppearanceProvider` (module
+`appearance-provider.tsx`), separate from navigation layout state. The provider
+applies mode plus `data-theme-color`, `data-font`, `data-radius`,
+`data-content-layout`, and `data-density` to the document. Shared CSS variables
+flow into Tailwind semantic tokens and existing components; features do not branch
+on appearance presets. The shared sheet is available from the header and Profile.
+
+Preferences persist through the existing identity profile service and merge-patch
+endpoint. Enum values are stable PascalCase API/database values; DOM identifiers
+are mapped centrally. Changes are serialized per browser session, optimistic,
+and scoped to the authenticated user. In-flight responses from a previous session
+cannot update the next user's document. The selected local font loads before
+React mounts, and system mode listens to the operating-system media query.
+
+Citadel is unreleased, so appearance columns and their defaults belong in the
+canonical schema and generated `0001_initial.sql` baseline. Repository updates
+merge under the existing user lock; unchanged values do not update rows or emit
+activity. The migration catalog retains a single baseline until the first release.

@@ -1,3 +1,4 @@
+import { AppearanceCustomizer } from '@/components/custom/appearance-customizer';
 import { AlertEventStatus, AlertResourceType, AlertSeverity, type AlertEventView } from '@/api/generated/api.types';
 import type { ResourceType } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -13,14 +14,11 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuthContext } from '@/features/auth/auth-context';
 import { getInitials } from '@/features/profile/utils';
-import { useRead, useMutate } from '@/lib/hooks';
+import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
-import { useLayoutContext, type ThemeMode } from '@/lib/context/layout-context';
-import { toUserTheme } from '@/lib/theme-preferences';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { useQueryClient } from '@tanstack/react-query';
 import { jwtDecode } from 'jwt-decode';
-import { ArrowRight, Bell, BellOff, LogOut, Moon, Sun, User } from 'lucide-react';
+import { ArrowRight, Bell, BellOff, LogOut, User } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { BreadcrumbTrail } from './breadcrumb';
@@ -30,21 +28,6 @@ import { CitadelIcons } from '@/lib/icons';
 import { fromNow } from '@/lib/dayjs.helper';
 import { cn, formatActivityEvent } from '@/lib/utils';
 import { LiveConnectionIndicator } from './live-connection-indicator';
-
-const themeColors = [
-  { name: 'base', code: '#e11d48' },
-  { name: 'yellow', code: '#f59e0b' },
-  { name: 'green', code: '#22c55e' },
-  { name: 'blue', code: '#3b82f6' },
-  { name: 'orange', code: '#ea580c' },
-  { name: 'red', code: '#cc0022' },
-  { name: 'violet', code: '#6d28d9' },
-];
-
-const themeModes = [
-  { name: 'light' as const, icon: Sun },
-  { name: 'dark' as const, icon: Moon },
-];
 
 export function Header() {
   return (
@@ -57,9 +40,10 @@ export function Header() {
       <div className="flex shrink-0 items-center px-2 empty:hidden sm:px-4">
         <LiveConnectionIndicator />
       </div>
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex items-center gap-1 sm:gap-2">
         <GlobalSearch />
         <AlertBell />
+        <AppearanceCustomizer />
         <HeaderAccountMenu />
       </div>
     </header>
@@ -68,28 +52,10 @@ export function Header() {
 
 function HeaderAccountMenu() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { logout, accessToken } = useAuthContext();
-  const { toggleThemeColor, setThemeMode, theme } = useLayoutContext();
   const { data: cachedProfileData } = useRead('getCurrentProfile', undefined, { enabled: false });
-  const patchPreferences = useMutate('patchProfilePreferences');
   const tokenProfile = useMemo(() => getTokenProfile(accessToken), [accessToken]);
   const profile = cachedProfileData?.data ?? tokenProfile;
-
-  const handleThemeModeClick = (mode: ThemeMode) => {
-    setThemeMode(mode);
-
-    if (mode === theme.mode) return;
-
-    patchPreferences.mutate(
-      { data: { theme: toUserTheme(mode) } as any },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['getProfilePreferences'] });
-        },
-      },
-    );
-  };
 
   return (
     <DropdownMenu>
@@ -121,44 +87,6 @@ function HeaderAccountMenu() {
           <LogOut className="size-4" />
           Log out
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Color</DropdownMenuLabel>
-        <div className="grid grid-cols-2 gap-2 p-2">
-          {themeColors.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              onClick={() => toggleThemeColor(item.name)}
-              className={`focus-visible:ring-ring inline-flex h-8 items-center justify-start rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 hover:bg-card ${
-                item.name === theme.color
-                  ? 'border-muted-foreground bg-card text-foreground'
-                  : 'border-border text-muted-foreground'
-              }`}>
-              <span style={{ backgroundColor: item.code }} className="mr-2 size-4 shrink-0 rounded-full" />
-              <span className="capitalize">{item.name}</span>
-            </button>
-          ))}
-        </div>
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Mode</DropdownMenuLabel>
-        <div className="grid grid-cols-2 gap-2 p-2 pt-1">
-          {themeModes.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => handleThemeModeClick(item.name)}
-                className={`focus-visible:ring-ring inline-flex h-8 items-center justify-start rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 hover:bg-card ${
-                  item.name === theme.mode
-                    ? 'border-muted-foreground bg-card text-foreground'
-                    : 'border-border text-muted-foreground'
-                }`}>
-                <Icon className="mr-2 size-4" />
-                <span className="capitalize">{item.name}</span>
-              </button>
-            );
-          })}
-        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

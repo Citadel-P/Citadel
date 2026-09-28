@@ -1005,6 +1005,11 @@ CREATE TABLE usermfasettings (
 
 CREATE TABLE userpreferences (
     userid uuid NOT NULL,
+    themecolor text NOT NULL DEFAULT 'Neutral',
+    font text NOT NULL DEFAULT 'Geist',
+    radius text NOT NULL DEFAULT 'None',
+    contentlayout text NOT NULL DEFAULT 'Full',
+    density text NOT NULL DEFAULT 'Comfortable',
     datetimeformat text NOT NULL,
     theme text NOT NULL,
     timezone text NOT NULL,

@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/custom/page-header';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
@@ -39,32 +40,38 @@ export const ResourceHeader = ({
   const Icon = icon;
   const defaultTitle = PluralResourceMap[type as ResourceType] ?? type;
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {Icon && <Icon className="h-4 w-4" />}
-          <span className="sr-only">{defaultTitle}</span>
+    <div className="space-y-(--section-gap)">
+      <PageHeader
+        title={title ?? defaultTitle}
+        description={subtitle}
+        icon={Icon && <Icon className="size-5" />}
+        actions={
+          showAdd && (
+            <Button type="button" onClick={onAdd} disabled={addDisabled}>
+              <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
+            </Button>
+          )
+        }
+      />
+      {(showSearch || showTagFilter || showPlatformFilter || Extra) && (
+        <div
+          role="region"
+          aria-label={`${title ?? defaultTitle} filters`}
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border bg-card p-3 shadow-xs">
+          {showSearch && (
+            <SearchField
+              placeholder={`Search ${defaultTitle.toLowerCase()}…`}
+              className="mb-0 w-full sm:w-72"
+              onSearch={onSearch}
+            />
+          )}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
+            {showTagFilter && <ResourceTagFilter />}
+            {showPlatformFilter && <ResourcePlatformFilter />}
+            {Extra && <Extra />}
+          </div>
         </div>
-        <div className="flex min-w-0 flex-col">
-          <div className="text-md font-bold text-foreground">{title ?? defaultTitle}</div>
-          <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
-        </div>
-      </div>
-      <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 md:w-auto md:flex-1">
-        {showSearch && <SearchField className="w-full sm:w-64" onSearch={onSearch} />}
-        {showTagFilter && <ResourceTagFilter />}
-        {showPlatformFilter && <ResourcePlatformFilter />}
-        {Extra && <Extra />}
-        {showAdd && (
-          <Button
-            type="button"
-            onClick={onAdd}
-            disabled={addDisabled}
-            className="inline-flex items-center bg-primary hover:bg-primary/80 rounded-sm text-sm px-2.5 py-2.5">
-            <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 };

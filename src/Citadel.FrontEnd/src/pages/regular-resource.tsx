@@ -1,5 +1,6 @@
+import { ResourceOverview } from '@/components/custom/resource-overview';
+import { AppContent } from '@/components/custom/app-content';
 import { ResourceType } from '@/api/types';
-import { PageContainer } from '@/components/custom/common';
 import TaskSheet from '@/components/custom/task-sheet';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMemo, useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ const EMPTY_ITEMS: never[] = [];
 export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true }: RegularResourceViewProps<T>) => {
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
@@ -31,10 +32,33 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
     [items, search, Components],
   );
 
+  const overview = Components.overview;
+  const requestedFilter =
+    searchParams.get('updates') === 'available' && overview?.filters.some((filter) => filter.id === 'updates')
+      ? 'updates'
+      : searchParams.get('overview');
+  const activeFilter = overview?.filters.find((filter) => filter.id === requestedFilter);
+  const activeId = activeFilter?.id ?? 'all';
+  const visibleItems = useMemo(
+    () => (activeFilter?.matches ? filtered.filter(activeFilter.matches) : filtered),
+    [filtered, activeFilter],
+  );
+  const selectOverview = (id: string) => {
+    const nextId = id === activeId ? 'all' : id;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('overview');
+      if (overview?.filters.some((filter) => filter.id === 'updates')) next.delete('updates');
+      if (nextId === 'updates') next.set('updates', 'available');
+      else if (nextId !== 'all') next.set('overview', nextId);
+      return next;
+    });
+  };
+
   const [_, setSelected] = useSelectedResources(type as ResourceType);
   useEffect(() => {
     return () => setSelected([]);
-  }, [type, setSelected]);
+  }, [type, setSelected, activeId]);
 
   const hasActiveUrlFilters =
     (headerCfg.showTagFilter && searchParams.getAll('tags').some((tag) => tag.trim().length > 0)) ||
@@ -45,7 +69,7 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
 
   return (
     <div className="flex-col justify-between relative">
-      <PageContainer className="flex flex-col gap-4">
+      <AppContent className="flex flex-col gap-(--section-gap)">
         <ResourceHeader
           type={type}
           icon={Components.Icon}
@@ -65,15 +89,28 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
 
         {Components.SubHeader && <Components.SubHeader />}
 
+        {overview && !isLoading && (
+          <ResourceOverview
+            label={overview.label}
+            activeId={activeId}
+            onSelect={selectOverview}
+            metrics={overview.filters.map(({ matches, ...filter }) => ({
+              ...filter,
+              value: matches ? filtered.filter(matches).length : filtered.length,
+            }))}
+          />
+        )}
+
         <Content
-          items={filtered}
+          key={Components.GroupActions ? activeId : undefined}
+          items={visibleItems}
           actions={Components.DropdownActions ?? {}}
           isLoading={isLoading}
-          isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
+          isFiltered={Boolean(search.trim()) || hasActiveUrlFilters || activeId !== 'all'}
         />
-      </PageContainer>
+      </AppContent>
 
-      {Components.GroupActions && <Components.GroupActions items={items ?? EMPTY_ITEMS} />}
+      {Components.GroupActions && <Components.GroupActions items={overview ? visibleItems : (items ?? EMPTY_ITEMS)} />}
       {showTaskSheet && type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type as ResourceType} />}
     </div>
   );

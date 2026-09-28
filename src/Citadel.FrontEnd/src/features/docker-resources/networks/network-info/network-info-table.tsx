@@ -1,40 +1,19 @@
 import { DockerNetworkDetailsView } from '@/api/generated/api.types';
-import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
-
-const columns: ColumnDef<DockerNetworkDetailsView>[] = [
-  {
-    accessorKey: 'driver',
-    header: () => <span>Driver</span>,
-    cell: ({ row }) => <span>{row.original.driver}</span>,
-  },
-  {
-    accessorKey: 'scope',
-    header: () => <span>Scope</span>,
-    cell: ({ row }) => <span>{row.original.scope}</span>,
-  },
-  {
-    accessorKey: 'attachable',
-    header: () => <span>Attachable</span>,
-    cell: ({ row }) => <span>{row.original.attachable ? 'true' : 'false'}</span>,
-  },
-  {
-    accessorKey: 'internal',
-    header: () => <span>Internal</span>,
-    cell: ({ row }) => <span>{row.original.internal ? 'true' : 'false'}</span>,
-  },
-  {
-    accessorKey: 'ingress',
-    header: () => <span>Ingress</span>,
-    cell: ({ row }) => <span>{row.original.ingress ? 'true' : 'false'}</span>,
-  },
-];
+import { DetailFacts } from '@/components/custom/resource-detail';
 
 export const NetworkInfoTable = ({ network }: { network: DockerNetworkDetailsView | undefined }) => {
-  if (!network) return <></>;
+  if (!network) return null;
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
-      <DataTable columns={columns} data={network ? [{ ...network }] : []} isLoading={false} />
-    </div>
+    <DetailFacts
+      resource={network}
+      items={[
+        { label: 'Driver', value: network.driver },
+        { label: 'Scope', value: network.scope },
+        { label: 'Connected containers', value: Object.keys(network.containers ?? {}).length },
+        { label: 'Attachable', value: network.attachable ? 'Yes' : 'No' },
+        { label: 'Internal network', value: network.internal ? 'Yes' : 'No' },
+        { label: 'Ingress', value: network.ingress ? 'Yes' : 'No' },
+      ]}
+    />
   );
 };
