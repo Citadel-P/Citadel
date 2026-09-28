@@ -1,37 +1,30 @@
 import { DockerVolumeResultView } from '@/api/generated/api.types';
-import { DataTable } from '@/components/ui/data-table';
+import { DetailFacts } from '@/components/custom/resource-detail';
 import { byteTransform } from '@/lib/bytes.helper';
-import { fromNow } from '@/lib/dayjs.helper';
-import { ColumnDef } from '@tanstack/react-table';
-
-const columns: ColumnDef<DockerVolumeResultView>[] = [
-  {
-    accessorKey: 'driver',
-    header: () => <span>Driver</span>,
-    cell: ({ row }) => <span>{row.original.driver}</span>,
-  },
-  {
-    accessorKey: 'scope',
-    header: () => <span>Scope</span>,
-    cell: ({ row }) => <span>{row.original.scope}</span>,
-  },
-  {
-    accessorKey: 'created',
-    header: () => <span>Created</span>,
-    cell: ({ row }) => <span>{fromNow(new Date(row.original.createdAt).getTime())} </span>,
-  },
-  {
-    accessorKey: 'size',
-    header: () => <span>Size</span>,
-    cell: ({ row }) => <span>{byteTransform(row.original.usageData?.size, 2)}</span>,
-  },
-];
+import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
 export const VolumeInfoTable = ({ volume }: { volume: DockerVolumeResultView | undefined }) => {
-  if (!volume) return <></>;
+  const formatDateTime = useProfileDateTimeFormatter();
+  if (!volume) return null;
+  const size = volume.usageData?.size;
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
-      <DataTable columns={columns} data={volume ? [{ ...volume }] : []} isLoading={false} />
-    </div>
+    <DetailFacts
+      resource={volume}
+      items={[
+        { label: 'Driver', value: volume.driver },
+        { label: 'Scope', value: volume.scope },
+        {
+          label: 'Size',
+          value:
+            size != null && Number.isFinite(Number(size)) && Number(size) >= 0
+              ? byteTransform(size, 2)
+              : 'Not available',
+        },
+        { label: 'Created', value: <TimestampCell value={volume.createdAt} formatDateTime={formatDateTime} /> },
+        { label: 'Mount point', value: volume.mountpoint || 'Not available' },
+        { label: 'Attached containers', value: volume.containers?.length ?? 0 },
+      ]}
+    />
   );
 };

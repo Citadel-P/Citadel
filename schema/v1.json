@@ -10114,6 +10114,16 @@
       },
       "PatchUserPreferencesRequest": {
         "properties": {
+          "contentLayout": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserContentLayout"
+              }
+            ]
+          },
           "dateTimeFormat": {
             "oneOf": [
               {
@@ -10124,6 +10134,36 @@
               }
             ]
           },
+          "density": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserUiDensity"
+              }
+            ]
+          },
+          "font": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserUiFont"
+              }
+            ]
+          },
+          "radius": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserUiRadius"
+              }
+            ]
+          },
           "theme": {
             "oneOf": [
               {
@@ -10131,6 +10171,16 @@
               },
               {
                 "$ref": "#/components/schemas/UserTheme"
+              }
+            ]
+          },
+          "themeColor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserThemeColor"
               }
             ]
           },
@@ -17343,6 +17393,14 @@
         ],
         "type": "object"
       },
+      "UserContentLayout": {
+        "enum": [
+          "Compact",
+          "Wide",
+          "Full"
+        ],
+        "type": "string"
+      },
       "UserDateTimeFormat": {
         "enum": [
           "System",
@@ -17353,14 +17411,29 @@
       },
       "UserPreferencesView": {
         "properties": {
+          "contentLayout": {
+            "$ref": "#/components/schemas/UserContentLayout"
+          },
           "dateTimeFormat": {
             "$ref": "#/components/schemas/UserDateTimeFormat"
+          },
+          "density": {
+            "$ref": "#/components/schemas/UserUiDensity"
+          },
+          "font": {
+            "$ref": "#/components/schemas/UserUiFont"
           },
           "isPersisted": {
             "type": "boolean"
           },
+          "radius": {
+            "$ref": "#/components/schemas/UserUiRadius"
+          },
           "theme": {
             "$ref": "#/components/schemas/UserTheme"
+          },
+          "themeColor": {
+            "$ref": "#/components/schemas/UserThemeColor"
           },
           "timeZone": {
             "type": [
@@ -17372,6 +17445,11 @@
         "required": [
           "dateTimeFormat",
           "theme",
+          "themeColor",
+          "font",
+          "radius",
+          "contentLayout",
+          "density",
           "isPersisted"
         ],
         "type": "object"
@@ -17567,6 +17645,45 @@
           "System",
           "Light",
           "Dark"
+        ],
+        "type": "string"
+      },
+      "UserThemeColor": {
+        "enum": [
+          "Neutral",
+          "Blue",
+          "Indigo",
+          "Violet",
+          "Emerald",
+          "Yellow",
+          "Orange",
+          "Rose"
+        ],
+        "type": "string"
+      },
+      "UserUiDensity": {
+        "enum": [
+          "Compact",
+          "Comfortable"
+        ],
+        "type": "string"
+      },
+      "UserUiFont": {
+        "enum": [
+          "Geist",
+          "Inter",
+          "IbmPlexSans",
+          "SourceSans3",
+          "System"
+        ],
+        "type": "string"
+      },
+      "UserUiRadius": {
+        "enum": [
+          "None",
+          "Small",
+          "Medium",
+          "Large"
         ],
         "type": "string"
       },

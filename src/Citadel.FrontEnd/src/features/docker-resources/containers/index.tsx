@@ -1,6 +1,7 @@
-import { Box } from 'lucide-react';
+import { Box, CirclePlay, CircleStop, CircleEllipsis } from 'lucide-react';
+import { ContainerStateStatus, type ContainerView } from '@/api/generated/api.types';
 import { ContainersTable } from './table';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { ContainerDropdownActions, ContainerGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -55,11 +56,43 @@ const UnmanagedContainersFilter = () => {
   );
 };
 
-export const ContainerComponents: RequiredComponents = {
+export const ContainerComponents: RegularResourceComponents = {
   Icon: Box,
-  Content: ({ items, isLoading, actions }) => {
-    return <ContainersTable items={items} isLoading={isLoading} actions={actions} />;
+  overview: {
+    label: 'Container overview',
+    filters: [
+      { id: 'all', label: 'All containers', description: 'All matching containers', icon: Box },
+      {
+        id: 'running',
+        label: 'Running',
+        description: 'Currently running',
+        icon: CirclePlay,
+        tone: 'success',
+        matches: (item: ContainerView) => !item.projectionStaleSince && item.state === ContainerStateStatus.Running,
+      },
+      {
+        id: 'stopped',
+        label: 'Stopped',
+        description: 'Exited or not started',
+        icon: CircleStop,
+        matches: (item: ContainerView) =>
+          !item.projectionStaleSince &&
+          [ContainerStateStatus.Exited, ContainerStateStatus.Created].includes(item.state),
+      },
+      {
+        id: 'other',
+        label: 'Other states',
+        description: 'Paused, transitioning, unavailable or stale',
+        icon: CircleEllipsis,
+        matches: (item: ContainerView) =>
+          Boolean(item.projectionStaleSince) ||
+          ![ContainerStateStatus.Running, ContainerStateStatus.Exited, ContainerStateStatus.Created].includes(
+            item.state,
+          ),
+      },
+    ],
   },
+  Content: ContainersTable,
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const [searchParams] = useSearchParams();
@@ -78,6 +111,8 @@ export const ContainerComponents: RequiredComponents = {
     };
   },
   header: {
+    subtitle: 'Monitor container state, resource usage, and workload operations.',
+    activeFilterParams: ['unmanaged'],
     showAdd: false,
     showSearch: true,
     Extra: UnmanagedContainersFilter,

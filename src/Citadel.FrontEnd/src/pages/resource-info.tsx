@@ -1,15 +1,18 @@
+import { AppContent } from '@/components/custom/app-content';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { PageContainer } from '@/components/custom/common';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 import Loader from '@/components/ui/loader';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
+import { Badge } from '@/components/ui/badge';
+import { Box } from 'lucide-react';
 
 export const ResourceInfoView = <T extends { id: string; name: string }>({
   Components,
   type,
+  showHeaderId = true,
 }: ResourceInfoViewProps<T>) => {
   const { platformId = '', resourceId = '' } = useParams<{
     platformId: string;
@@ -17,12 +20,13 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
   }>();
   const { resource, isLoading, error } = Components.useData(platformId, resourceId);
   const Header = Components.Header;
+  const Icon = Header.Icon ?? Box;
   const errorDetail = (error as { error?: ProblemDetails } | null)?.error;
 
   return (
     <div className="flex-col justify-between relative">
-      <PageContainer className="max-w-full border">
-        <div className="flex flex-col gap-2">
+      <AppContent>
+        <div className="flex flex-col gap-(--section-gap)">
           {(isLoading || !resource) && !error ? (
             <Loader />
           ) : error ? (
@@ -32,23 +36,46 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
           ) : (
             resource && (
               <>
-                <div className="flex flex-col sm:flex-row gap-2 items-start justify-between">
-                  <div className="flex items-center sm:gap-2">
-                    {Header.Indicator && <Header.Indicator resource={resource} />}
-                    <div className="flex flex-col text-md font-bold text-foreground min-w-0">
-                      <span className="inline-flex min-w-0 items-center gap-1.5">
-                        <span className="truncate">{resource.name}</span>
+                <header className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card shadow-xs lg:flex-row lg:items-center">
+                  <div className="flex min-w-0 flex-1 items-start gap-4 p-(--surface-padding)">
+                    <span
+                      aria-hidden="true"
+                      className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary dark:text-foreground">
+                      <Icon className="size-6" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h1 className="min-w-0 max-w-full text-2xl font-semibold tracking-tight wrap-anywhere">
+                          {resource.name}
+                        </h1>
+                        {Header.Status ? (
+                          <Header.Status resource={resource} />
+                        ) : Header.Indicator ? (
+                          <Badge variant="outline">
+                            <Header.Indicator resource={resource} />
+                          </Badge>
+                        ) : null}
                         {Header.NameSuffix && <Header.NameSuffix resource={resource} />}
-                      </span>
-                      <span className="text-sm text-foreground/40 min-w-0 max-w-50 xl:max-w-full">
-                        <CopyToClipboard textToCopy={resource.id ?? '-'} />
-                      </span>
+                      </div>
+                      {showHeaderId && resource.id !== resource.name && (
+                        <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                          <span className="shrink-0">ID</span>
+                          <CopyToClipboard
+                            textToCopy={resource.id ?? '-'}
+                            textClassName="font-mono"
+                            groupClassName="[&_button]:visible [&_svg]:text-muted-foreground"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex w-full min-w-0 flex-wrap items-center gap-4 sm:w-auto">
+                  <div
+                    role="group"
+                    aria-label={`${type} actions`}
+                    className="flex min-w-0 flex-wrap items-center gap-3 border-t bg-muted/10 px-(--surface-padding) py-3 lg:max-w-[55%] lg:shrink-0 lg:justify-end lg:border-t-0 lg:bg-transparent lg:py-(--surface-padding)">
                     <Header.ActionButtons resource={resource} />
                   </div>
-                </div>
+                </header>
                 {Components.SubHeader && <Components.SubHeader resource={resource} />}
                 <ResourceTabs
                   localKey={`${type}-info-${resourceId}`}
@@ -60,12 +87,13 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
             )
           )}
         </div>
-      </PageContainer>
+      </AppContent>
     </div>
   );
 };
 
 export type ResourceInfoViewProps<T = any> = {
   type: string;
+  showHeaderId?: boolean;
   Components: RequiredDockerInfoComponents<T>;
 };

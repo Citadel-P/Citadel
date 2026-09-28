@@ -22,17 +22,36 @@ describe('StateBadge', () => {
 
   it('shows a paused state as a warning', () => {
     render(<StateBadge value="Paused" />);
-    expect(screen.getByText('Paused')).toHaveClass('text-orange-500');
+    expect(screen.getByText('Paused')).toHaveClass('text-orange-700');
   });
 
   it.each([
     ['activity', 'Information', 'Info', 'text-blue-700'],
     ['activity', 'Failure', 'Failure', 'text-red-700'],
     ['alertSeverity', 'Critical', 'Critical', 'text-red-700'],
-    ['alertEvent', 'Acknowledged', 'Acknowledged', 'text-orange-600'],
+    ['alertEvent', 'Acknowledged', 'Acknowledged', 'text-orange-700'],
     ['alertEvent', 'Resolved', 'Resolved', 'text-green-700'],
   ] as const)('maps %s value %s to its existing label and color', (kind, value, label, className) => {
     render(<StateBadge value={value} kind={kind} />);
     expect(screen.getByText(label)).toHaveClass(className);
+  });
+  it('distinguishes a running container from an executing job', () => {
+    const { rerender } = render(<StateBadge value="Running" kind="container" />);
+    expect(screen.getByText('Running')).toHaveClass('text-green-700');
+    rerender(<StateBadge value="Running" kind="run" />);
+    expect(screen.getByText('Running')).toHaveClass('text-blue-700');
+  });
+
+  it('shows processing while a resource command is in progress', () => {
+    const { rerender } = render(<StateBadge value="Healthy" isProcessing />);
+    expect(screen.getByText('Processing')).toBeVisible();
+    expect(screen.queryByText('Healthy')).not.toBeInTheDocument();
+    rerender(<StateBadge value="Healthy" />);
+    expect(screen.getByText('Healthy')).toBeVisible();
+  });
+
+  it('preserves unknown activity states instead of labelling them failures', () => {
+    render(<StateBadge value={null} kind="activity" />);
+    expect(screen.getByText('Unknown')).toHaveClass('text-muted-foreground');
   });
 });

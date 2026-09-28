@@ -27,7 +27,10 @@ mod service;
 
 pub mod model;
 
-pub use model::{UserDateTimeFormat, UserPreferences, UserTheme};
+pub use model::{
+    UserAppearance, UserContentLayout, UserDateTimeFormat, UserPreferences, UserTheme,
+    UserThemeColor, UserUiDensity, UserUiFont, UserUiRadius,
+};
 
 pub use commands::{
     ChangeCurrentPassword, PatchUserPreferences, UpdateCurrentProfile, UserPreferencesUpdate,

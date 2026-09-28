@@ -42,8 +42,9 @@ pub use profile::{
     CurrentProfileAuthorizationDetails, CurrentProfileDetails, CurrentProfileRecord,
     PasswordChangeOutcome, PatchUserPreferences, ProfileRepository, ProfileResourceInfo,
     ProfileService, ResourceCapabilities, RevokeOtherProfileSessionsDetails, UpdateCurrentProfile,
-    UserDateTimeFormat, UserPreferences, UserPreferencesDetails, UserPreferencesUpdate,
-    UserSessionSummaryDetails, UserSessionsDetails, UserTheme,
+    UserAppearance, UserContentLayout, UserDateTimeFormat, UserPreferences, UserPreferencesDetails,
+    UserPreferencesUpdate, UserSessionSummaryDetails, UserSessionsDetails, UserTheme,
+    UserThemeColor, UserUiDensity, UserUiFont, UserUiRadius,
 };
 pub mod roles;
 pub use roles::{

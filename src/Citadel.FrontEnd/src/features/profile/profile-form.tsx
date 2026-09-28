@@ -4,17 +4,9 @@ import {
   UserDateTimeFormat,
   UserPreferencesView,
   UserSessionSummaryView,
-  UserTheme,
 } from '@/api/generated/api.types';
 import { SelectField } from '@/components/custom/common';
-import {
-  defineField,
-  defineGroupField,
-  defineSection,
-  FieldChange,
-  FieldInput,
-  FormShell,
-} from '@/components/custom/form-builder';
+import { defineField, defineGroupField, defineSection, FieldInput, FormShell } from '@/components/custom/form-builder';
 import { getBrowserTimezone, TimezoneSelectField } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,12 +21,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Constants } from '@/lib/constants';
-import { useLayoutContext } from '@/lib/context/layout-context';
+import { AppearanceCustomizer } from '@/components/custom/appearance-customizer';
+import { useAppearance } from '@/lib/appearance/appearance-context';
+import { FONT_OPTIONS } from '@/lib/appearance/appearance-config';
 import { useMutate, useRead } from '@/lib/hooks';
-import { toThemeMode } from '@/lib/theme-preferences';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock, KeyRound, Laptop, MapPin, ShieldCheck, Users } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ProfileDateFormatter } from './utils';
 import { ProfileMfaCommand } from './mfa/profile-mfa';
@@ -43,12 +36,6 @@ const DATE_TIME_FORMAT_OPTIONS = [
   { value: UserDateTimeFormat.System, label: 'System' },
   { value: UserDateTimeFormat.TwentyFourHour, label: '24-hour' },
   { value: UserDateTimeFormat.TwelveHour, label: '12-hour' },
-];
-
-const THEME_OPTIONS = [
-  { value: UserTheme.System, label: 'System' },
-  { value: UserTheme.Light, label: 'Light' },
-  { value: UserTheme.Dark, label: 'Dark' },
 ];
 
 type ProfileFormValue = {
@@ -60,7 +47,7 @@ type ProfileFormValue = {
   teams: ProfileResourceInfoView[];
   timeZone: string;
   dateTimeFormat: UserDateTimeFormat;
-  theme: UserTheme;
+  appearance: string;
   passwordCommands: string;
   mfaCommands: string;
   sessionCommands: string;
@@ -78,7 +65,6 @@ export function ProfileForm({
   formatDate: ProfileDateFormatter;
 }) {
   const queryClient = useQueryClient();
-  const { setThemeMode } = useLayoutContext();
   const updateProfile = useMutate('updateCurrentProfile');
   const patchPreferences = useMutate('patchProfilePreferences');
   const [update, setUpdate] = useState<Partial<ProfileFormValue>>({});
@@ -93,7 +79,7 @@ export function ProfileForm({
       teams: profile.teams,
       timeZone: preferences?.timeZone ?? getBrowserTimezone(),
       dateTimeFormat: preferences?.dateTimeFormat ?? UserDateTimeFormat.System,
-      theme: preferences?.theme ?? UserTheme.System,
+      appearance: '',
       passwordCommands: '',
       mfaCommands: '',
       sessionCommands: '',
@@ -101,17 +87,11 @@ export function ProfileForm({
     [preferences, profile],
   );
 
-  useEffect(() => {
-    setThemeMode(toThemeMode(original.theme));
-  }, [original.theme, setThemeMode]);
-
   const handleSave = async (payload: ProfileFormValue) => {
     const displayName = payload.displayName.trim();
     const profileChanged = displayName !== original.displayName;
     const preferencesChanged =
-      payload.timeZone !== original.timeZone ||
-      payload.dateTimeFormat !== original.dateTimeFormat ||
-      payload.theme !== original.theme;
+      payload.timeZone !== original.timeZone || payload.dateTimeFormat !== original.dateTimeFormat;
 
     if (profileChanged) {
       await updateProfile.mutateAsync({ data: { displayName } });
@@ -122,7 +102,6 @@ export function ProfileForm({
         data: {
           timeZone: payload.timeZone,
           dateTimeFormat: payload.dateTimeFormat,
-          theme: payload.theme,
         },
       });
     }
@@ -209,7 +188,7 @@ export function ProfileForm({
                   <TimezoneSelectField
                     value={value ?? getBrowserTimezone()}
                     onChange={(timeZone) => set({ timeZone })}
-                    className="w-100"
+                    className="w-full max-w-100"
                   />
                 ),
               }),
@@ -230,16 +209,11 @@ export function ProfileForm({
                 ),
               }),
               defineField({
-                key: 'theme',
-                label: 'Theme',
-                description: 'The selected theme is previewed immediately in this browser.',
-                render: (value, set) => (
-                  <ThemeField
-                    value={value ?? UserTheme.System}
-                    set={set}
-                    onPreview={(theme) => setThemeMode(toThemeMode(theme))}
-                  />
-                ),
+                key: 'appearance',
+                label: 'Appearance',
+                description: 'Customize your workspace. Changes are saved automatically.',
+                ignoreFormDisabled: true,
+                render: () => <ProfileAppearance />,
               }),
             ],
           }),
@@ -289,7 +263,6 @@ export function ProfileForm({
       profile.authentication.canUseLocalPasswordMfa,
       profile.authentication.canChangePassword,
       profile.authentication.oidcProviderName,
-      setThemeMode,
     ],
   );
 
@@ -306,35 +279,21 @@ export function ProfileForm({
       draftVersion={1}
       onReset={() => {
         setUpdate({});
-        setThemeMode(toThemeMode(original.theme));
       }}
     />
   );
 }
 
-function ThemeField({
-  value,
-  set,
-  onPreview,
-}: {
-  value: UserTheme;
-  set: FieldChange<ProfileFormValue>;
-  onPreview: (theme: UserTheme) => void;
-}) {
+function ProfileAppearance() {
+  const { preferences } = useAppearance();
   return (
-    <SelectField
-      value={value}
-      onChange={(theme) => {
-        const next = theme as UserTheme;
-        set({ theme: next });
-        onPreview(next);
-      }}
-      options={THEME_OPTIONS}
-      placeholder="Theme"
-      allLabel="Theme"
-      selectableLabel={false}
-      className="max-w-100"
-    />
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {preferences.mode} · {preferences.color} ·{' '}
+        {FONT_OPTIONS.find((option) => option.value === preferences.font)?.label} · {preferences.contentLayout}
+      </p>
+      <AppearanceCustomizer showLabel />
+    </div>
   );
 }
 

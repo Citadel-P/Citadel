@@ -10,6 +10,43 @@
  * ---------------------------------------------------------------
  */
 
+export enum UserThemeColor {
+  Neutral = "Neutral",
+  Blue = "Blue",
+  Indigo = "Indigo",
+  Violet = "Violet",
+  Emerald = "Emerald",
+  Yellow = "Yellow",
+  Orange = "Orange",
+  Rose = "Rose",
+}
+
+export enum UserUiRadius {
+  None = "None",
+  Small = "Small",
+  Medium = "Medium",
+  Large = "Large",
+}
+
+export enum UserUiFont {
+  Geist = "Geist",
+  Inter = "Inter",
+  IbmPlexSans = "IbmPlexSans",
+  SourceSans3 = "SourceSans3",
+  System = "System",
+}
+
+export enum UserUiDensity {
+  Compact = "Compact",
+  Comfortable = "Comfortable",
+}
+
+export enum UserContentLayout {
+  Compact = "Compact",
+  Wide = "Wide",
+  Full = "Full",
+}
+
 /** @default "GitHub" */
 export enum WebhookProvider {
   GitHub = "GitHub",
@@ -6897,9 +6934,14 @@ export interface PatchUserInput {
 }
 
 export interface PatchUserPreferencesInput {
-  timeZone: null | string;
-  dateTimeFormat: null | UserDateTimeFormat;
-  theme: null | UserTheme;
+  contentLayout?: null | UserContentLayout;
+  dateTimeFormat?: null | UserDateTimeFormat;
+  density?: null | UserUiDensity;
+  font?: null | UserUiFont;
+  radius?: null | UserUiRadius;
+  theme?: null | UserTheme;
+  themeColor?: null | UserThemeColor;
+  timeZone?: string | null;
 }
 
 export interface PermissionInput {
@@ -9454,10 +9496,15 @@ export interface UserActivitySnapshot {
 }
 
 export interface UserPreferencesView {
-  timeZone: null | string;
+  contentLayout: UserContentLayout;
   dateTimeFormat: UserDateTimeFormat;
-  theme: UserTheme;
+  density: UserUiDensity;
+  font: UserUiFont;
   isPersisted: boolean;
+  radius: UserUiRadius;
+  theme: UserTheme;
+  themeColor: UserThemeColor;
+  timeZone?: string | null;
 }
 
 export interface UserResourceAccessInput {

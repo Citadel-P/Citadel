@@ -1,8 +1,9 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import {
   ActivityStatus,
@@ -45,7 +46,8 @@ export const DeploymentFormComponents: RequiredFormComponents = {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return (
-          <StateIndicator
+          <StateBadge
+            indicator={<StateIndicator value={(resource as DeploymentView).status} className="mr-0" />}
             value={(resource as DeploymentView).status}
             isProcessing={(resource as DeploymentView).controlState === ResourceControlState.Processing}
           />
@@ -55,13 +57,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         const groupedActions = Object.values(DeploymentActions).filter(
           (action) => action !== DeploymentActions.checkUpdates,
         );
-        return (
-          <GenericActionBarButtons
-            resource={resource}
-            actions={groupedActions}
-            standaloneActions={[DeploymentActions.checkUpdates]}
-          />
-        );
+        return <GenericActionBarButtons resource={resource} actions={groupedActions} />;
       },
       Tags: ({ resource }: { resource: DeploymentView }) => (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -72,6 +68,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
             disabled={!hasCapability(resource, 'canWrite')}
           />
           <DuplicateDeploymentConfigButton deployment={resource} />
+          <DeploymentActions.checkUpdates resource={resource} />
         </div>
       ),
     },

@@ -51,7 +51,7 @@ export const ResourcePlatformFilter = () => {
       {selectedPlatform && (
         <button
           type="button"
-          className="inline-flex h-9 max-w-48 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
+          className="inline-flex h-(--control-height) max-w-48 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
           title={`Clear ${selectedPlatform.name} platform filter`}
           onClick={() => setSelectedPlatformId(undefined)}>
           <Minus className="size-3 shrink-0" />
@@ -60,7 +60,11 @@ export const ResourcePlatformFilter = () => {
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" className="h-9 shrink-0 rounded-sm px-2.5" disabled={isLoading}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-(--control-height) shrink-0 rounded-sm px-2.5"
+            disabled={isLoading}>
             <Server className="size-3.5" />
             Platform Filter
           </Button>
@@ -79,7 +83,9 @@ export const ResourcePlatformFilter = () => {
                     className="cursor-pointer">
                     <StateIndicator value={platform.status} kind="platform" />
                     <span className="min-w-0 flex-1 truncate">{platform.name}</span>
-                    <Check className={cn('size-3.5', selectedPlatformId === platform.id ? 'opacity-100' : 'opacity-0')} />
+                    <Check
+                      className={cn('size-3.5', selectedPlatformId === platform.id ? 'opacity-100' : 'opacity-0')}
+                    />
                   </CommandItem>
                 ))}
               </CommandGroup>

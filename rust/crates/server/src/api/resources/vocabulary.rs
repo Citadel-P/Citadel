@@ -159,3 +159,50 @@ impl utoipa::PartialSchema for ActorIdSchema {
             .into()
     }
 }
+
+#[derive(utoipa::ToSchema)]
+#[schema(as = UserThemeColor)]
+pub enum UserThemeColorSchema {
+    Neutral,
+    Blue,
+    Indigo,
+    Violet,
+    Emerald,
+    Yellow,
+    Orange,
+    Rose,
+}
+
+#[derive(utoipa::ToSchema)]
+#[schema(as = UserUiFont)]
+pub enum UserUiFontSchema {
+    Geist,
+    Inter,
+    IbmPlexSans,
+    SourceSans3,
+    System,
+}
+
+#[derive(utoipa::ToSchema)]
+#[schema(as = UserUiRadius)]
+pub enum UserUiRadiusSchema {
+    None,
+    Small,
+    Medium,
+    Large,
+}
+
+#[derive(utoipa::ToSchema)]
+#[schema(as = UserContentLayout)]
+pub enum UserContentLayoutSchema {
+    Compact,
+    Wide,
+    Full,
+}
+
+#[derive(utoipa::ToSchema)]
+#[schema(as = UserUiDensity)]
+pub enum UserUiDensitySchema {
+    Compact,
+    Comfortable,
+}

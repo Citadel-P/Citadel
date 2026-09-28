@@ -3,7 +3,7 @@ import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-conn
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
-import { useLayoutContext } from '@/lib/context/layout-context';
+import { useAppearance } from '@/lib/appearance/appearance-context';
 import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import { nanoid } from 'nanoid';
 import '@xterm/xterm/css/xterm.css';
@@ -162,16 +162,18 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
     startExecProcess = 'StartExecProcess',
   } = methodNames;
 
-  const { theme } = useLayoutContext();
+  const { effectiveMode } = useAppearance();
+  const terminalMode = useRef(effectiveMode);
   const [shell, setShell] = useState<Shell>('bash');
   const [isActive, setIsActive] = useState(false);
 
   const sessionId = useMemo(() => nanoid(), []);
-  const groupId = swarmPlatformId && swarmTaskId
-    ? `swarm-task-exec:${swarmPlatformId}:${swarmTaskId}:${sessionId}`
-    : containerId
-      ? `container-exec:${containerId}:${sessionId}`
-      : undefined;
+  const groupId =
+    swarmPlatformId && swarmTaskId
+      ? `swarm-task-exec:${swarmPlatformId}:${swarmTaskId}:${sessionId}`
+      : containerId
+        ? `container-exec:${containerId}:${sessionId}`
+        : undefined;
   const targetIds = useMemo(() => {
     if (swarmPlatformId && swarmTaskId) return [swarmPlatformId, swarmTaskId];
     if (stackId && containerId) return [stackId, containerId];
@@ -195,7 +197,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
       convertEol: true,
       fontFamily: 'monospace',
       fontSize: 13,
-      theme: theme.mode === 'dark' ? THEMES.dark : THEMES.light,
+      theme: THEMES[terminalMode.current],
     });
 
     term.loadAddon(fitAddon);
@@ -233,7 +235,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [containerId, disabled, groupId, sessionId, targetIds, sendExecInput, resizeExec, theme.mode]);
+  }, [containerId, disabled, groupId, sessionId, targetIds, sendExecInput, resizeExec]);
 
   useEffect(() => {
     if (!disabled) return;
@@ -245,9 +247,10 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
 
   useEffect(() => {
     if (termRef.current) {
-      termRef.current.options.theme = theme.mode === 'dark' ? THEMES.dark : THEMES.light;
+      termRef.current.options.theme = effectiveMode === 'dark' ? THEMES.dark : THEMES.light;
     }
-  }, [theme.mode]);
+    terminalMode.current = effectiveMode;
+  }, [effectiveMode]);
 
   const handleExecOutput = useCallback((data: Uint8Array | ArrayBuffer) => {
     termRef.current?.write(new Uint8Array(data));

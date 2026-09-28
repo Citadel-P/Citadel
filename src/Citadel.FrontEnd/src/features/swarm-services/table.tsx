@@ -44,9 +44,11 @@ export const SwarmServicesTable = ({
   items,
   actions,
   isLoading,
+  isFiltered,
 }: {
   items: ManagedSwarmServiceView[];
   isLoading: boolean;
+  isFiltered?: boolean;
   actions: SwarmServiceActions;
 }) => {
   const [, setSelected] = useSelectedResources<ManagedSwarmServiceView>('SwarmService');
@@ -82,7 +84,14 @@ export const SwarmServicesTable = ({
       enableRowSelection={isServiceRow}
       enableSubRowSelection={false}
       onSelectionChange={onSelectionChange}
-      emptyState={{ title: 'No managed Services found.' }}
+      emptyState={
+        isFiltered
+          ? {
+              title: 'No services match the current filters.',
+              description: 'Select another overview card or adjust the search and filters.',
+            }
+          : { title: 'No managed Services found.' }
+      }
     />
   );
 };

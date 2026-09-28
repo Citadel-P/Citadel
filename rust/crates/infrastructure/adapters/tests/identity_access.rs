@@ -103,6 +103,19 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     assert_eq!(preferences.theme, UserTheme::System);
     assert!(!preferences.is_persisted);
     assert_eq!(
+        preferences.theme_color,
+        citadel_identity::UserThemeColor::Neutral
+    );
+    assert_eq!(preferences.radius, citadel_identity::UserUiRadius::None);
+    assert_eq!(
+        preferences.content_layout,
+        citadel_identity::UserContentLayout::Full
+    );
+    assert_eq!(
+        preferences.density,
+        citadel_identity::UserUiDensity::Comfortable
+    );
+    assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM userpreferences WHERE userid = $1")
             .bind(owner.subject_id)
             .fetch_one(&pool)
@@ -117,6 +130,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
                 time_zone: PatchField::Value("Europe/Paris".into()),
                 date_time_format: PatchField::Value(UserDateTimeFormat::TwentyFourHour),
                 theme: PatchField::Value(UserTheme::Dark),
+                ..PatchUserPreferences::default()
             },
         )
         .await
@@ -128,6 +142,19 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     assert_eq!(preferences.theme, UserTheme::Dark);
     assert!(preferences.is_persisted);
+    assert_eq!(
+        preferences.theme_color,
+        citadel_identity::UserThemeColor::Neutral
+    );
+    assert_eq!(preferences.radius, citadel_identity::UserUiRadius::None);
+    assert_eq!(
+        preferences.content_layout,
+        citadel_identity::UserContentLayout::Full
+    );
+    assert_eq!(
+        preferences.density,
+        citadel_identity::UserUiDensity::Comfortable
+    );
     let stored = sqlx::query_as::<_, (String, String, String)>(
         "SELECT timezone, datetimeformat, theme FROM userpreferences WHERE userid = $1",
     )
@@ -143,6 +170,67 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
             "Dark".to_owned()
         )
     );
+    // Appearance fields round-trip independently of the locale and mode.
+    let appearance = profiles.patch_preferences(&owner, serde_json::from_value(serde_json::json!({
+        "themeColor": "Yellow", "font": "Inter", "radius": "Large", "contentLayout": "Full", "density": "Comfortable"
+    })).unwrap()).await.unwrap();
+    assert_eq!(
+        appearance.theme_color,
+        citadel_identity::UserThemeColor::Yellow
+    );
+    assert_eq!(appearance.font, citadel_identity::UserUiFont::Inter);
+    assert_eq!(appearance.radius, citadel_identity::UserUiRadius::Large);
+    assert_eq!(
+        appearance.content_layout,
+        citadel_identity::UserContentLayout::Full
+    );
+    assert_eq!(
+        appearance.density,
+        citadel_identity::UserUiDensity::Comfortable
+    );
+    assert_eq!(appearance.theme, UserTheme::Dark);
+    let before: (chrono::DateTime<Utc>, i64) = sqlx::query_as("SELECT updatedat,(SELECT count(*) FROM activityevents) FROM userpreferences WHERE userid=$1").bind(owner.subject_id).fetch_one(&pool).await.unwrap();
+    profiles
+        .patch_preferences(
+            &owner,
+            serde_json::from_value(serde_json::json!({"font":"Inter"})).unwrap(),
+        )
+        .await
+        .unwrap();
+    let after: (chrono::DateTime<Utc>, i64) = sqlx::query_as("SELECT updatedat,(SELECT count(*) FROM activityevents) FROM userpreferences WHERE userid=$1").bind(owner.subject_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        before, after,
+        "no-op appearance patch must not update timestamps or write activity"
+    );
+    profiles
+        .patch_preferences(
+            &owner,
+            serde_json::from_value(serde_json::json!({"font":"System"})).unwrap(),
+        )
+        .await
+        .unwrap();
+    let after = profiles.get_preferences(&owner).await.unwrap();
+    assert_eq!(after.font, citadel_identity::UserUiFont::System);
+    assert_eq!(after.theme_color, citadel_identity::UserThemeColor::Yellow);
+    assert_eq!(after.time_zone.as_deref(), Some("Europe/Paris"));
+    for invalid in [
+        serde_json::json!({"font":"ComicSans"}),
+        serde_json::json!({"radius":"huge"}),
+        serde_json::json!({"density":"roomy"}),
+    ] {
+        assert!(serde_json::from_value::<PatchUserPreferences>(invalid).is_err());
+    }
+    for field in ["themeColor", "font", "radius", "contentLayout", "density"] {
+        assert!(
+            profiles
+                .patch_preferences(
+                    &owner,
+                    serde_json::from_value(serde_json::json!({field: null})).unwrap()
+                )
+                .await
+                .is_err()
+        );
+    }
     let time_zone_patch = profiles.patch_preferences(
         &owner,
         PatchUserPreferences {
@@ -811,7 +899,6 @@ VALUES
         .unwrap();
     for required in [
         ActivityEventType::UserProfileUpdated,
-        ActivityEventType::UserPreferencesUpdated,
         ActivityEventType::UserPasswordChanged,
         ActivityEventType::UserSessionRevoked,
         ActivityEventType::UserOtherSessionsRevoked,
@@ -824,6 +911,13 @@ VALUES
             "missing {required:?}"
         );
     }
+    assert!(
+        user_activities
+            .items
+            .iter()
+            .all(|activity| activity.event_type != ActivityEventType::UserPreferencesUpdated),
+        "preference saves must not create activity history"
+    );
     assert!(user_activities.items.iter().all(|activity| {
         let normalized = activity.info_json.to_ascii_lowercase();
         !normalized.contains("correct-horse")

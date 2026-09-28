@@ -1,4 +1,5 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ContainerLogs } from './container-logs';
@@ -6,7 +7,7 @@ import { ContainerDetailsView, useContainerInfoGroup } from '../hooks/useContain
 import { ContainerInspect } from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions, getContainerManagementAction } from './actions';
-import { ContainerInfoTable } from './container-info-table';
+import { ContainerOverview } from './container-info-table';
 import { ContainerStateStatus, ContainerDataView, ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
@@ -15,6 +16,7 @@ import { ContainerExec } from './container-exec';
 import { SystemContainerBadge } from '../system-container-badge';
 import { useAppContext } from '@/lib/context/app-context';
 import { UnmanagedResourceIcon } from '@/components/custom/common';
+import { Box } from 'lucide-react';
 
 const groupedContainerInfoActions = Object.values(ContainerInfoActions).filter(
   (action) => action !== ContainerInfoActions.adopt && action !== ContainerInfoActions.importStack,
@@ -44,28 +46,20 @@ const ContainerNameSuffix = ({ resource }: { resource: ContainerDetailsView }) =
 
 export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDetailsView> = {
   Header: {
-    Indicator: ({ resource }) => {
-      return (
-        <StateIndicator
-          value={resource.state}
-          isProcessing={resource.controlState === ResourceControlState.Processing}
-          kind="container"
-        />
-      );
-    },
+    Icon: Box,
+    Status: ({ resource }) => (
+      <StateBadge
+        indicator={<StateIndicator value={resource.state} className="mr-0" kind="container" />}
+        value={resource.state}
+        kind="container"
+        isProcessing={resource.controlState === ResourceControlState.Processing}
+      />
+    ),
     NameSuffix: ContainerNameSuffix,
     ActionButtons: ContainerInfoActionButtons,
   },
   SubHeader: ({ resource }) => {
-    return (
-      <ContainerInfoTable
-        container={resource}
-        displayOptions={{
-          DisplayStatus: true,
-          DisplayPlatformName: true,
-        }}
-      />
-    );
+    return <ContainerOverview container={resource} />;
   },
   Tabs: [
     {
@@ -104,7 +98,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
 };
 
 export const ImageName = ({ image }: { image: ImageView | undefined }) => {
-  if (image === undefined || image?.name === undefined) return <div className="text-muted">{'<none>'}</div>;
+  if (image === undefined || image?.name === undefined) return <div className="text-muted-foreground">{'<none>'}</div>;
   return (
     <Link
       to={`/platforms/${image.platformId}/images/${image?.dockerImageId?.slice(0, 24)}`}

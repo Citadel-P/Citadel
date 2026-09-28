@@ -220,17 +220,17 @@ const PlatformResourceSummaryContent = ({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-3 py-3">
+      <div className="space-y-4">
         <div
           className={cn(
-            'grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-4',
+            'grid gap-px overflow-hidden rounded-lg border bg-border shadow-xs sm:grid-cols-2 lg:grid-cols-4',
             platform.type === PlatformType.DockerSwarm ? 'xl:grid-cols-5' : 'xl:grid-cols-7',
           )}>
           {resourceMetrics.map((metric) => (
             <PlatformResourceMetric key={metric.label} {...metric} />
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
+        <div className="grid gap-4 rounded-lg border bg-card p-(--surface-padding) shadow-xs sm:grid-cols-2 xl:grid-cols-5">
           <SystemMetric icon={Cpu} label="CPU" value={`${platform.cpuCount ?? '-'} cores`} />
           <SystemMetric icon={MemoryStick} label="Memory" value={byteTransform(platform.memTotal, 2)} />
           <SystemMetric
@@ -444,7 +444,8 @@ export const DiskUsageChart = ({
   );
   const unavailable = (
     <DiskChartState compact={hasHistoricalData} title="Disk metrics unavailable">
-      Expose the Docker host filesystem through CITADEL_HOST_ROOT (default /host). In Core or Agent containers, mount /:/host:ro. Native Core connected to Docker Desktop needs an Agent on that host.
+      Expose the Docker host filesystem through CITADEL_HOST_ROOT (default /host). In Core or Agent containers, mount
+      /:/host:ro. Native Core connected to Docker Desktop needs an Agent on that host.
     </DiskChartState>
   );
   const noHistory = (
@@ -610,7 +611,7 @@ export const PlatformResourceMetric = ({
       <div className="min-w-0">
         <div className="truncate text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="truncate text-sm font-semibold tabular-nums text-foreground">{value}</span>
+          <span className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</span>
           {detail !== undefined && (
             <>
               <span className="h-3 w-px shrink-0 bg-border" />
@@ -628,7 +629,7 @@ export const PlatformResourceMetric = ({
   return (
     <Link
       to={to}
-      className="min-w-0 bg-background p-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      className="min-w-0 bg-card p-4 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       {content}
     </Link>
   );
@@ -670,10 +671,12 @@ const SystemMetric = ({
   value: React.ReactNode;
   title?: string;
 }) => (
-  <div className="inline-flex min-w-0 items-center gap-1.5" title={title}>
-    <Icon className="h-3.5 w-3.5 shrink-0" />
-    <span>{label}</span>
-    <span className="max-w-48 truncate font-medium tabular-nums text-foreground">{value}</span>
+  <div className="min-w-0 space-y-2" title={title}>
+    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <Icon className="size-3.5 shrink-0" />
+      <span>{label}</span>
+    </div>
+    <div className="text-sm font-medium tabular-nums text-foreground [overflow-wrap:anywhere]">{value}</div>
   </div>
 );
 

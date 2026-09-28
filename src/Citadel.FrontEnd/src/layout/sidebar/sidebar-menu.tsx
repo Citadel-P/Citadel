@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, useRef, Fragment, useMemo } from 'react';
-import { useLayoutContext } from '@/lib/context/layout-context';
-import { ISubMenuItem, MenuItems, PlatformMenu, IMenuItem } from './menu-items';
+import { useState, useMemo } from 'react';
+import { ISubMenuItem, MenuItems } from './menu-items';
 import { ChevronRight } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { SidebarSubMenu } from './sidebar-sidemenu';
 import { useAppContext } from '@/lib/context/app-context';
 import clsx from 'clsx';
@@ -14,69 +13,23 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { useRead } from '@/lib/hooks';
-import { PlatformType } from '@/api/generated/api.types';
+import { SidebarPlatforms } from './sidebar-platforms';
+import { isSidebarRouteActive } from './sidebar-routes';
 
 export const SidebarMenu = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { currentPlatform, platforms, unresolvedAlertCount } = useAppContext();
-  const { toggleSidebar, sidebarMinimized } = useLayoutContext();
+  const { pathname } = useLocation();
+  const { unresolvedAlertCount } = useAppContext();
+  const { toggleSidebar, state, isMobile } = useSidebar();
+  const sidebarMinimized = state === 'collapsed' && !isMobile;
   const { data: profileResponse } = useRead('getCurrentProfile');
   const authorization = profileResponse?.data?.authorization;
-
-  const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
-  const addedPlatformIdsRef = useRef<Set<string>>(new Set());
-
-  const isRouteActive = useCallback(
-    (path: string) =>
-      location.pathname === path ||
-      `${location.pathname}${location.search}` === path ||
-      (location.pathname === '/' && path === ''),
-    [location.pathname, location.search],
-  );
-
-  const addPlatformToMenu = useCallback(
-    (platform: { id: string; name: string; type: PlatformType }) => {
-      if (!platform?.id || addedPlatformIdsRef.current.has(platform.id)) return;
-
-      const platformRoute = `/platforms/edit/${platform.id}`;
-      const platformMenu = PlatformMenu(platform);
-
-      platformMenu.children?.forEach((item) => {
-        item.active = isRouteActive(item.route ?? '');
-      });
-      platformMenu.expanded = platformMenu.children?.some((menu) => menu.active) || false;
-      addedPlatformIdsRef.current.add(platform.id);
-
-      setMenuItems((prev) => {
-        const baseMenuIndex = prev.findIndex((menu) => menu.group === 'Infrastructure');
-        if (baseMenuIndex === -1) return prev;
-
-        const baseMenu = prev[baseMenuIndex];
-        if (baseMenu.items.some((i) => i.route === platformRoute)) return prev;
-
-        const updatedBase = { ...baseMenu, items: [...baseMenu.items, platformMenu] };
-        return [...prev.slice(0, baseMenuIndex), updatedBase, ...prev.slice(baseMenuIndex + 1)];
-      });
-    },
-    [isRouteActive],
-  );
-
-  // Clean up removed platforms
-  useEffect(() => {
-    const baseMenu = menuItems.find((menu) => menu.group === 'Infrastructure');
-    if (!baseMenu) return;
-
-    const ids = new Set<string>();
-    baseMenu.items.forEach((item) => {
-      const match = item.route?.match(/\/platforms\/(?:edit\/)?([^/]+)/);
-      if (match?.[1]) ids.add(match[1]);
-    });
-    addedPlatformIdsRef.current = ids;
-  }, [menuItems]);
+  const [expansion, setExpansion] = useState<{ pathname: string; items: Record<string, boolean> }>({
+    pathname,
+    items: {},
+  });
 
   const displayedMenuItems = useMemo(() => {
     const canDisplay = (item: ISubMenuItem) => {
@@ -84,117 +37,49 @@ export const SidebarMenu = () => {
         case 'administrator':
           return authorization?.isAdministrator === true;
         case 'alertRules':
-          return authorization?.alertRules.canRead === true;
+          return authorization?.alertRules?.canRead === true;
         case 'bindings':
-          return authorization?.bindings.canRead === true;
+          return authorization?.bindings?.canRead === true;
         case 'tags':
-          return authorization?.tags.canRead === true;
+          return authorization?.tags?.canRead === true;
         default:
           return true;
       }
     };
-
     const withRouteState = (items: ISubMenuItem[]): ISubMenuItem[] =>
       items.flatMap((item) => {
         if (!canDisplay(item)) return [];
-
         const children = item.children ? withRouteState(item.children) : undefined;
-        if (item.children && children?.length === 0) return [];
-
-        const hasActiveChild = children ? children.some((c) => c.active) : false;
-        const isActive = !!item.route && isRouteActive(item.route);
-
-        return [
-          {
-            ...item,
-            active: isActive,
-            expanded: item.children ? (item.expanded ?? hasActiveChild) : isActive,
-            children,
-          },
-        ];
+        if (item.children && !children?.length) return [];
+        const active = isSidebarRouteActive(pathname, item.route) || !!children?.some((child) => child.active);
+        const explicitExpansion =
+          expansion.pathname === pathname ? expansion.items[item.route ?? item.label] : undefined;
+        return [{ ...item, active, children, expanded: explicitExpansion ?? active }];
       });
-
-    return menuItems.map((menu) => ({
-      ...menu,
-      items: withRouteState(menu.items),
-    }));
-  }, [authorization, menuItems, isRouteActive]);
-
-  useEffect(() => {
-    if (currentPlatform?.id) {
-      addPlatformToMenu({
-        id: currentPlatform.id,
-        name: currentPlatform.name ?? '',
-        type: currentPlatform.type,
-      });
-    }
-  }, [currentPlatform, addPlatformToMenu]);
-
-  useEffect(() => {
-    if (!platforms) return;
-
-    const livePlatformIds = new Set(platforms.map((platform) => platform.id).filter(Boolean));
-
-    setMenuItems((prev) => {
-      let changed = false;
-
-      const next = prev.map((menu) => {
-        if (menu.group !== 'Infrastructure') return menu;
-
-        const items = menu.items.filter((item) => {
-          if (!item.isPlatform) return true;
-
-          const platformId = getMenuPlatformId(item);
-          const keep = !!platformId && livePlatformIds.has(platformId);
-
-          if (!keep) {
-            changed = true;
-            if (platformId) addedPlatformIdsRef.current.delete(platformId);
-          }
-
-          return keep;
-        });
-
-        return changed ? { ...menu, items } : menu;
-      });
-
-      return changed ? next : prev;
-    });
-  }, [platforms]);
+    return MenuItems.map((menu) => ({ ...menu, items: withRouteState(menu.items) })).filter(
+      (menu) => menu.items.length,
+    );
+  }, [authorization, pathname, expansion]);
 
   const toggleMenu = (menu: ISubMenuItem) => {
-    if (menu.disabled) return;
-
-    const targetLabel = menu.label;
-    const targetRoute = menu.route;
-
-    const update = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((i) => ({
-        ...i,
-        expanded: i.label === targetLabel && i.route === targetRoute ? !i.expanded : i.expanded,
-        children: i.children ? update(i.children) : undefined,
-      }));
-
-    setMenuItems((prev) =>
-      prev.map((group) => ({
-        ...group,
-        items: update(group.items),
-      })),
-    );
-
-    if (sidebarMinimized && menu.children) toggleSidebar();
-    else if (!menu.children && menu.route) navigate(menu.route);
+    if (menu.disabled || !menu.children) return;
+    setExpansion((previous) => ({
+      pathname,
+      items: { ...(previous.pathname === pathname ? previous.items : {}), [menu.route ?? menu.label]: !menu.expanded },
+    }));
+    if (sidebarMinimized) toggleSidebar();
   };
 
   return (
-    <Fragment>
-      {displayedMenuItems.map((menu, i) => (
-        <SidebarGroup key={menu.group || i}>
+    <>
+      <SidebarPlatforms />
+      {displayedMenuItems.map((menu) => (
+        <SidebarGroup key={menu.group}>
           <SidebarGroupLabel>{menu.group}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenuList>
               {menu.items.map((item) => (
-                <SidebarMenuItem key={item.label}>
+                <SidebarMenuItem key={item.route ?? item.label}>
                   <SidebarRow
                     item={item}
                     minimized={!!sidebarMinimized}
@@ -206,11 +91,9 @@ export const SidebarMenu = () => {
               ))}
             </SidebarMenuList>
           </SidebarGroupContent>
-
-          {menu.separator && <SidebarSeparator className="mt-3 border-dashed" />}
         </SidebarGroup>
       ))}
-    </Fragment>
+    </>
   );
 };
 
@@ -232,10 +115,10 @@ function SidebarRow({
       data-sidebar-icon
       className={clsx(
         'relative flex size-3.5 shrink-0 items-center justify-center [&>svg]:size-3.5',
-        item.active ? 'text-primary' : 'text-sidebar-foreground/70',
+        item.active ? 'text-sidebar-foreground' : 'text-muted-foreground',
       )}>
       {item.icon}
-      {hasBadge && (
+      {hasBadge && minimized && (
         <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-destructive ring-1 ring-background" />
       )}
     </span>
@@ -244,6 +127,7 @@ function SidebarRow({
   if (item.children) {
     return (
       <SidebarMenuButton
+        aria-label={item.label}
         tooltip={item.label}
         isActive={item.active}
         onClick={onClick}
@@ -268,7 +152,7 @@ function SidebarRow({
   return (
     <>
       <SidebarMenuButton asChild tooltip={item.label} isActive={item.active} className={clsx(hasBadge && 'pr-10')}>
-        <Link to={item.route ?? '/'} onClick={onClick}>
+        <Link to={item.route ?? '/'} aria-label={item.label} aria-current={item.active ? 'page' : undefined}>
           {icon}
           <span data-sidebar-label className="truncate">
             {item.label}
@@ -279,5 +163,3 @@ function SidebarRow({
     </>
   );
 }
-
-const getMenuPlatformId = (item: ISubMenuItem) => item.route?.match(/^\/platforms\/edit\/([^/]+)/)?.[1];

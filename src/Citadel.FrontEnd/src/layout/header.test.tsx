@@ -1,3 +1,4 @@
+import { AppearanceProvider } from '@/lib/appearance/appearance-provider';
 import { screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { useLocation } from 'react-router';
@@ -123,16 +124,15 @@ describe('Header', () => {
           }}>
           <LayoutContext.Provider
             value={{
-              theme: { mode: 'light', color: 'base' },
               sidebarMinimized: false,
               mobileMenuVisible: false,
               toggleSidebar: vi.fn(),
               setSidebarOpen: vi.fn(),
               toggleMobileMenu: vi.fn(),
-              toggleThemeColor: vi.fn(),
-              setThemeMode: vi.fn(),
             }}>
-            <Header />
+            <AppearanceProvider>
+              <Header />
+            </AppearanceProvider>
           </LayoutContext.Provider>
         </AppContext.Provider>
       </Provider>,
@@ -168,3 +168,15 @@ function AlertTestRoot({ showBell = false }: { showBell?: boolean }) {
     </Provider>
   );
 }
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((media: string) => ({
+      matches: false,
+      media,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+});

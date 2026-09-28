@@ -344,3 +344,15 @@ fn catalog_activity_uses_compatible_fields_and_git_creation_status() {
     assert!(json.get("GitRepo").is_some());
     assert!(json.get("Repository").is_none());
 }
+
+#[test]
+fn appearance_changes_are_allowed_in_preference_activity() {
+    let changes = vec![
+        ActivityChangedField::theme_color("Blue", "Violet"),
+        ActivityChangedField::font("Geist", "Inter"),
+        ActivityChangedField::radius("Medium", "Large"),
+        ActivityChangedField::content_layout("Wide", "Full"),
+        ActivityChangedField::density("Compact", "Comfortable"),
+    ];
+    assert!(ActivityEventInfo::user_preferences_updated(changes).is_ok());
+}

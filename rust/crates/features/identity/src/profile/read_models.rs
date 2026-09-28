@@ -54,6 +54,12 @@ pub struct UserPreferencesDetails {
     pub time_zone: Option<String>,
     pub date_time_format: UserDateTimeFormat,
     pub theme: UserTheme,
+    pub theme_color: UserThemeColor,
+    pub font: UserUiFont,
+    pub radius: UserUiRadius,
+    pub content_layout: UserContentLayout,
+    pub density: UserUiDensity,
+
     pub is_persisted: bool,
 }
 

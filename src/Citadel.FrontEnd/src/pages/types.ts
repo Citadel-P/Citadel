@@ -1,3 +1,4 @@
+import type { OverviewFilter } from '@/components/custom/resource-overview';
 import { ResourceCapabilities } from '@/api/generated/api.types';
 
 type ResourceContentProps<T = any> = {
@@ -36,6 +37,7 @@ interface BaseResourceComponents<T = any> {
  * Defines the components needed to render a regular resource page.
  */
 export interface RegularResourceComponents<T = any> extends BaseResourceComponents<T> {
+  overview?: { label: string; filters: OverviewFilter<T>[] };
   /** The main content component */
   Content: React.FC<ResourceContentProps<T>>;
   Tabs?: never;
@@ -89,6 +91,8 @@ export interface RequiredFormComponents<T = any> {
 export interface RequiredDockerInfoComponents<T = any> {
   /** Configuration for header  */
   Header: {
+    Icon?: React.ComponentType<{ className?: string }>;
+    Status?: React.FC<{ resource: T }>;
     Indicator?: React.FC<{ resource: T }>;
     NameSuffix?: React.FC<{ resource: T }>;
     ActionButtons: React.FC<{ resource: T }>;

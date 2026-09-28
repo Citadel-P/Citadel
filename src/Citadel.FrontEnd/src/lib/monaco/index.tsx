@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { DiffEditor, Editor, Monaco, type OnMount } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
-import { useLayoutContext } from '@/lib/context/layout-context';
+import { useAppearance } from '@/lib/appearance/appearance-context';
 import { useLocalStorage, useWindowDimensions } from '../hooks';
 import { cn, serializeData } from '../utils';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -148,8 +148,8 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
 };
 
 function useThemeEditor() {
-  const { theme } = useLayoutContext();
-  const currentTheme = theme.mode === 'dark' ? 'vs-dark' : 'custom-light';
+  const { effectiveMode } = useAppearance();
+  const currentTheme = effectiveMode === 'dark' ? 'vs-dark' : 'custom-light';
 
   const handleBeforeMount = useCallback((monaco: Monaco) => {
     monaco.editor.defineTheme('custom-light', {

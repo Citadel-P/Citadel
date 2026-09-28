@@ -226,3 +226,50 @@ async fn initial_baseline_includes_job_state_and_restart_preserves_git_refs() {
     drop(connection);
     database.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_preferences() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    let installed = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(installed.applied, 1);
+    assert_eq!(installed.already_applied, 0);
+    let user = Uuid::now_v7();
+    sqlx::query("INSERT INTO users(id,actorid,createdbyactorid,name,email) VALUES ($1,$2,$2,'existing-user','existing@example.test')").bind(user).bind(Uuid::from_u128(1)).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO userpreferences(userid,timezone,datetimeformat,theme,updatedat) VALUES ($1,'Europe/Paris','TwentyFourHour','Dark','2026-01-01T00:00:00Z')").bind(user).execute(&mut connection).await.unwrap();
+    let outcome = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(outcome.applied, 0);
+    assert_eq!(outcome.already_applied, 1);
+    let row: (String,String,String,String,String,String,String,String) = sqlx::query_as("SELECT timezone,datetimeformat,theme,themecolor,font,radius,contentlayout,density FROM userpreferences WHERE userid=$1").bind(user).fetch_one(&mut connection).await.unwrap();
+    assert_eq!(
+        row,
+        (
+            "Europe/Paris".into(),
+            "TwentyFourHour".into(),
+            "Dark".into(),
+            "Neutral".into(),
+            "Geist".into(),
+            "None".into(),
+            "Full".into(),
+            "Comfortable".into()
+        )
+    );
+    let preserved: bool = sqlx::query_scalar(
+        "SELECT updatedat='2026-01-01T00:00:00Z'::timestamptz FROM userpreferences WHERE userid=$1",
+    )
+    .bind(user)
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert!(preserved);
+    assert_eq!(
+        MigrationRunner::migrate(&database.url)
+            .await
+            .unwrap()
+            .applied,
+        0
+    );
+    drop(connection);
+    database.close().await;
+}

@@ -15,7 +15,10 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedCont
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-2 text-sm items-center">
         <Box width={13} height={13} className="text-primary" />
-        <Link to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`} title={row.original.name} className="table-link">
+        <Link
+          to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`}
+          title={row.original.name}
+          className="table-link">
           {truncate(row.original.name, 24)}
         </Link>
       </div>
@@ -65,7 +68,7 @@ export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetailsV
   );
   if (!network) return <></>;
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
+    <div className="min-w-0">
       <DataTable columns={columns(currentPlatform?.id)} data={containers} isLoading={false} />
     </div>
   );

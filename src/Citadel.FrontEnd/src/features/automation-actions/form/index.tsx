@@ -1,3 +1,4 @@
+import { StateBadge } from '@/components/custom/state-badge';
 import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -27,11 +28,19 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
         const action = resource as AutomationActionView;
         const status = action.latestRun?.status ?? action.enabled;
         return (
-          <StateIndicator
+          <StateBadge
             value={status}
+            kind={typeof status === 'boolean' ? 'default' : 'run'}
+            label={typeof status === 'boolean' ? (status ? 'Enabled' : 'Disabled') : undefined}
             isProcessing={action.controlState === ResourceControlState.Processing}
-            enableLabel={typeof status === 'boolean'}
-            kind={typeof status === 'boolean' ? undefined : 'automationActionRun'}
+            indicator={
+              <StateIndicator
+                value={status}
+                enableLabel={typeof status === 'boolean'}
+                kind={typeof status === 'boolean' ? undefined : 'automationActionRun'}
+                className="mr-0"
+              />
+            }
           />
         );
       },

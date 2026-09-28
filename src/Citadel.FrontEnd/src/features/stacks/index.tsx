@@ -1,15 +1,17 @@
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { StackDropdownActions, StackGroupActions } from './actions';
 import { StacksTable } from './table';
 import { useStacksGroup } from './hooks/useStacksGroup';
 import { CitadelIcons } from '@/lib/icons';
-import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
+import { UpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
 import { hasStackUpdateAvailable } from './update-status';
+import { StackReleaseStatus, type StackView } from '@/api/generated/api.types';
+import { Layers, CircleCheck, TriangleAlert, ArrowUpCircle, CircleStop } from 'lucide-react';
 
 const EMPTY_STACKS: never[] = [];
 
-export const StackComponents: RequiredComponents = {
+export const StackComponents: RegularResourceComponents<StackView> = {
   Icon: CitadelIcons.Stack,
   header: {
     subtitle: 'Run and manage stacks on your servers.',
@@ -20,7 +22,58 @@ export const StackComponents: RequiredComponents = {
     Extra: UpdatesAvailableFilter,
     activeFilterParams: ['updates'],
   },
-  Content: StackListContent,
+  overview: {
+    label: 'Stack overview',
+    filters: [
+      { id: 'all', label: 'All stacks', description: 'All matching stacks', icon: Layers },
+      {
+        id: 'healthy',
+        label: 'Healthy',
+        description: 'Workloads running normally',
+        icon: CircleCheck,
+        tone: 'success',
+        matches: (item) => item.status === StackReleaseStatus.Healthy,
+      },
+      {
+        id: 'attention',
+        label: 'Needs attention',
+        description: 'Degraded, failed or timed out',
+        icon: TriangleAlert,
+        tone: 'warning',
+        matches: (item) =>
+          [StackReleaseStatus.Degraded, StackReleaseStatus.Failed, StackReleaseStatus.TimedOut].includes(item.status),
+      },
+      {
+        id: 'stopped',
+        label: 'Stopped',
+        description: 'Stopped stacks',
+        icon: CircleStop,
+        matches: (item) => item.status === StackReleaseStatus.Stopped,
+      },
+      {
+        id: 'updates',
+        label: 'Updates available',
+        description: 'Detected image or Git changes',
+        icon: ArrowUpCircle,
+        matches: hasStackUpdateAvailable,
+      },
+    ],
+  },
+  Content: ({ items, actions, isLoading, isFiltered }) => (
+    <StacksTable
+      items={items}
+      actions={actions}
+      isLoading={isLoading}
+      emptyState={
+        isFiltered
+          ? {
+              title: 'No stacks match the current filters.',
+              description: 'Select another overview card or adjust the search and filters.',
+            }
+          : undefined
+      }
+    />
+  ),
   DropdownActions: StackDropdownActions,
   GroupActions: ({ items }) => {
     return <ActionBar type="Stack" items={items} actions={Object.values(StackGroupActions)} />;
@@ -41,16 +94,3 @@ export const StackComponents: RequiredComponents = {
     );
   },
 };
-
-function StackListContent({ items, actions, isLoading }: React.ComponentProps<typeof StacksTable>) {
-  const { updatesAvailableOnly } = useUpdatesAvailableFilter();
-  const visibleItems = updatesAvailableOnly ? items.filter(hasStackUpdateAvailable) : items;
-  const emptyState = updatesAvailableOnly
-    ? {
-        title: 'No updates available',
-        description: 'No available updates were detected for the current filters.',
-      }
-    : undefined;
-
-  return <StacksTable items={visibleItems} actions={actions} isLoading={isLoading} emptyState={emptyState} />;
-}

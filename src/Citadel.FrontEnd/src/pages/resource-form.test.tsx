@@ -1,6 +1,6 @@
 import { ResourceForm } from './resource-form';
 import { http, HttpResponse } from 'msw';
-import { Route, Routes } from 'react-router';
+import { Link, Route, Routes } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { waitFor } from '@testing-library/react';
@@ -11,32 +11,58 @@ vi.hoisted(() => {
   document.queryCommandSupported = () => false;
 });
 
-vi.mock('@/features', () => ({
-  ResourceFormComponents: {
-    ServiceAccount: {
-      EditForm: {
-        skipMetadataUpdate: true,
-        supportsHeaderRename: true,
-        Header: {
-          canEditDescription: false,
-          Indicator: () => null,
-          ActionButtons: () => null,
-        },
-        Tabs: [],
-        useData: () => ({
-          item: {
-            id: '019ffb55-f35e-7178-91f2-281696860dc7',
-            name: 'old-account-name',
-            description: null,
-            status: 'Active',
-            capabilities: { canWrite: true },
+vi.mock('@/features', async () => {
+  const { useMemo, useRef } = await import('react');
+  const item = (id: string, name: string) => ({ id, name, description: null, capabilities: { canWrite: true } });
+  return {
+    ResourceFormComponents: {
+      Deployment: {
+        EditForm: {
+          skipMetadataUpdate: true,
+          Header: { Indicator: () => null, ActionButtons: () => null },
+          Tabs: [],
+          useData: (id: string) => {
+            const originalId = useRef(id);
+            return { item: item(originalId.current, `Deployment ${originalId.current}`), isLoading: false };
           },
-          isLoading: false,
-        }),
+        },
+      },
+      Platform: {
+        EditForm: {
+          skipMetadataUpdate: true,
+          Header: { Indicator: () => null, ActionButtons: () => null },
+          Tabs: [],
+          useData: (id: string) => {
+            const resource = useMemo(() => item(id, `Platform ${id}`), [id]);
+            return { item: resource, isLoading: false };
+          },
+        },
+      },
+      ServiceAccount: {
+        EditForm: {
+          skipMetadataUpdate: true,
+          supportsHeaderRename: true,
+          Header: {
+            canEditDescription: false,
+            Indicator: () => null,
+            ActionButtons: () => null,
+          },
+          Tabs: [],
+          useData: () => ({
+            item: {
+              id: '019ffb55-f35e-7178-91f2-281696860dc7',
+              name: 'old-account-name',
+              description: null,
+              status: 'Active',
+              capabilities: { canWrite: true },
+            },
+            isLoading: false,
+          }),
+        },
       },
     },
-  },
-}));
+  };
+});
 
 vi.mock('@/components/custom/resource-tabs', () => ({ ResourceTabs: () => null }));
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => null }));
@@ -64,5 +90,43 @@ describe('ResourceForm header rename', () => {
     await view.user.type(nameInput, 'renamed-account{Enter}');
 
     await waitFor(() => expect(requestBody).toEqual({ id: accountId, name: 'renamed-account' }));
+  });
+});
+
+describe('ResourceForm navigation', () => {
+  it('remounts data hooks when switching between resource types with different hook orders', async () => {
+    const view = renderCitadel(
+      <>
+        <Link to="/platforms/edit/shared-id">Open platform</Link>
+        <Link to="/deployments/edit/shared-id">Open deployment</Link>
+        <Routes>
+          <Route path="/:type/edit/:id" element={<ResourceForm mode="edit" />} />
+        </Routes>
+      </>,
+      { route: '/deployments/edit/shared-id' },
+    );
+
+    expect(view.getByText('Deployment shared-id')).toBeVisible();
+    await view.user.click(view.getByRole('link', { name: 'Open platform' }));
+    expect(view.getByText('Platform shared-id')).toBeVisible();
+    await view.user.click(view.getByRole('link', { name: 'Open deployment' }));
+    expect(view.getByText('Deployment shared-id')).toBeVisible();
+  });
+
+  it('resets resource-specific hook state when opening another resource of the same type', async () => {
+    const view = renderCitadel(
+      <>
+        <Link to="/deployments/edit/second-id">Open second deployment</Link>
+        <Routes>
+          <Route path="/:type/edit/:id" element={<ResourceForm mode="edit" />} />
+        </Routes>
+      </>,
+      { route: '/deployments/edit/first-id' },
+    );
+
+    expect(view.getByText('Deployment first-id')).toBeVisible();
+    await view.user.click(view.getByRole('link', { name: 'Open second deployment' }));
+    expect(view.getByText('Deployment second-id')).toBeVisible();
+    expect(view.queryByText('Deployment first-id')).not.toBeInTheDocument();
   });
 });

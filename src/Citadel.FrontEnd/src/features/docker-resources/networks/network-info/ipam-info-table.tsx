@@ -33,7 +33,7 @@ export const IPAMInfoTable = ({ ipam }: { ipam: IpAddressManagementConfig | unde
   if (!ipam) return <></>;
 
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
+    <div className="min-w-0">
       <DataTable columns={columns} data={config ?? []} isLoading={false} />
     </div>
   );

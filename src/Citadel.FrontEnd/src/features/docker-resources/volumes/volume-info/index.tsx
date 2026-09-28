@@ -1,21 +1,28 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { HardDrive } from 'lucide-react';
+import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
 import { DockerVolumeResultView } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { useRead } from '@/lib/hooks';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { VolumeInfoTable } from './volume-info-table';
 import { VolumeInfoActions } from './actions';
-import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useSearchParams } from 'react-router';
 
 export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResultView> = {
   Header: {
-    Indicator: ({ resource }) => {
-      return <StateIndicator value={resource?.inUse ?? false} />;
-    },
+    Icon: HardDrive,
+    Status: ({ resource }) => (
+      <StateBadge
+        indicator={<StateIndicator value={resource.inUse} className="mr-0" />}
+        value={resource.inUse}
+        label={resource.inUse ? 'In use' : 'Unused'}
+      />
+    ),
     ActionButtons: ({ resource }) => {
       return <GenericActionBarButtons resource={resource} actions={Object.values(VolumeInfoActions)} />;
     },
@@ -42,17 +49,22 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
 
 const InspectVolumeWrapper = ({ resource }: { resource: DockerVolumeResultView }) => {
   return (
-    <div className="flex flex-col gap-8">
-      <Section title="Details" Icon={Info}>
+    <div className="flex flex-col gap-(--section-gap)">
+      <DetailSection
+        title="Volume configuration"
+        description="Storage location, driver, and capacity reported by Docker."
+        icon={Info}>
         <VolumeInfoTable volume={resource} />
-        <KeyPairEntries items={resource?.options} />
-      </Section>
-      {Object.keys(resource?.containers ?? {}).length !== 0 && (
-        <Section title="Containers" Icon={Box}>
+      </DetailSection>
+      <DetailSection title={`Attached containers (${resource.containers?.length ?? 0})`} icon={Box}>
+        {resource.containers?.length ? (
           <ContainerInfoTable volume={resource} />
-        </Section>
-      )}
-      <DockerLabelsSection labels={resource?.labels} />
+        ) : (
+          <p className="text-sm text-muted-foreground">No containers currently reference this volume.</p>
+        )}
+      </DetailSection>
+      <DetailMetadata title="Driver options" items={resource.options} />
+      <DetailMetadata items={resource.labels} />
     </div>
   );
 };

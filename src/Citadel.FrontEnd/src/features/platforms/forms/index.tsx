@@ -1,6 +1,7 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
 import { PlatformType, PlatformView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -27,7 +28,7 @@ const PlatformSubHeader = ({ resource }: { resource: PlatformFormResource }) => 
   return (
     <>
       {resource.type === PlatformType.DockerSwarm && (
-        <div className='mt-2 flex flex-col gap-2'>
+        <div className="mt-2 flex flex-col gap-2">
           <SwarmPlatformSummary
             platformId={resource.id}
             networkCount={resource.networkCount}
@@ -55,7 +56,12 @@ export const PlatformFormComponents: RequiredFormComponents<PlatformFormResource
   },
   EditForm: {
     Header: {
-      Indicator: ({ resource }) => <StateIndicator value={resource.status} kind="platform" />,
+      Indicator: ({ resource }) => (
+        <StateBadge
+          indicator={<StateIndicator value={resource.status} className="mr-0" kind="platform" />}
+          value={resource.status}
+        />
+      ),
       ActionButtons: ({ resource }) => (
         <GenericActionBarButtons resource={resource} actions={[PlatformInfoActions.delete]} />
       ),

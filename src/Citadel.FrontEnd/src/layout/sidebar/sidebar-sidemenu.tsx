@@ -1,9 +1,8 @@
 import { Link } from 'react-router';
-import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
-import { SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from '@/components/ui/sidebar';
+import { SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, useSidebar } from '@/components/ui/sidebar';
 
 interface IProps {
   submenu: ISubMenuItem;
@@ -11,13 +10,14 @@ interface IProps {
 }
 
 export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
-  const { sidebarMinimized } = useLayoutContext();
+  const { state, isMobile } = useSidebar();
+  const sidebarMinimized = state === 'collapsed' && !isMobile;
   const expanded = !!submenu.expanded;
 
   if (sidebarMinimized || !expanded) return null;
 
   return (
-    <SidebarMenuSub className="animate-in fade-in-0 slide-in-from-top-1 overflow-hidden duration-150">
+    <SidebarMenuSub className="animate-in fade-in-0 slide-in-from-top-1 overflow-hidden duration-150 motion-reduce:animate-none">
       {submenu.children?.map((sub) => (
         <SidebarMenuSubItem key={sub.label}>
           <SubRow sub={sub} toggleMenu={toggleMenu} />
@@ -44,11 +44,7 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
 
   if (sub.children) {
     return (
-      <SidebarMenuSubButton
-        type="button"
-        onClick={() => toggleMenu(sub)}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleMenu(sub)}
-        aria-expanded={!!sub.expanded}>
+      <SidebarMenuSubButton type="button" onClick={() => toggleMenu(sub)} aria-expanded={!!sub.expanded}>
         {sub.icon && <span className="flex items-center">{sub.icon}</span>}
         <span className="flex-1 text-left">{sub.label}</span>
         <ChevronRight
@@ -64,7 +60,7 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
 
   return (
     <SidebarMenuSubButton asChild isActive={sub.active}>
-      <Link to={sub.route ?? '/'} onClick={() => toggleMenu(sub)}>
+      <Link to={sub.route ?? '/'} aria-current={sub.active ? 'page' : undefined}>
         {sub.icon && <span className="flex items-center">{sub.icon}</span>}
         <span className="truncate">{sub.label}</span>
       </Link>

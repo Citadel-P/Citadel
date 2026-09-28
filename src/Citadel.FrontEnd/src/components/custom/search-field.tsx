@@ -29,10 +29,10 @@ export const SearchField = ({ onSearch, placeholder = 'Search', className = '' }
         placeholder={placeholder}
         value={searchTerm}
         onChange={handleSearchChange}
-        className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 rounded-full text-sm focus:outline-hidden focus-visible:ring-transparent"
+        className="bg-background placeholder:text-muted-foreground h-(--control-height) pl-3 pr-9 rounded-md text-sm"
         aria-label="Search resources by name"
       />
-      <Search className="absolute text-slate-300 right-0 top-0 mt-1.5 mr-4 h4 w-4 pointer-events-none" />
+      <Search className="absolute text-muted-foreground right-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none" />
     </div>
   );
 };

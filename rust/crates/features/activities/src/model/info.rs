@@ -733,10 +733,19 @@ impl ActivityEventInfo {
         if changes.is_empty() {
             return Err(ActivityInvariantError::EmptyChanges);
         }
-        if changes
-            .iter()
-            .any(|change| !matches!(change.name(), "TimeZone" | "DateTimeFormat" | "Theme"))
-        {
+        if changes.iter().any(|change| {
+            !matches!(
+                change.name(),
+                "TimeZone"
+                    | "DateTimeFormat"
+                    | "Theme"
+                    | "ThemeColor"
+                    | "Font"
+                    | "Radius"
+                    | "ContentLayout"
+                    | "Density"
+            )
+        }) {
             return Err(ActivityInvariantError::InvalidChangedField);
         }
         Ok(Self::UserPreferencesUpdated { changes })

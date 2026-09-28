@@ -1,8 +1,9 @@
+import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { StackForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StackActions } from './actions';
-import { StateIndicator } from '@/components/custom/state-indicator';
+import { StateBadge } from '@/components/custom/state-badge';
 import { useStackGroup } from './hooks/useStackGroup';
 import {
   ContainerDataView,
@@ -89,7 +90,8 @@ export const StackFormComponents: RequiredFormComponents = {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return (
-          <StateIndicator
+          <StateBadge
+            indicator={<StateIndicator value={(resource as StackView).status} className="mr-0" />}
             value={(resource as StackView).status}
             isProcessing={(resource as StackView).controlState === ResourceControlState.Processing}
           />
@@ -97,13 +99,7 @@ export const StackFormComponents: RequiredFormComponents = {
       },
       ActionButtons: ({ resource }) => {
         const groupedActions = Object.values(StackActions).filter((action) => action !== StackActions.checkUpdates);
-        return (
-          <GenericActionBarButtons
-            resource={resource}
-            actions={groupedActions}
-            standaloneActions={[StackActions.checkUpdates]}
-          />
-        );
+        return <GenericActionBarButtons resource={resource} actions={groupedActions} />;
       },
       Tags: ({ resource }: { resource: StackView }) => (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -114,6 +110,7 @@ export const StackFormComponents: RequiredFormComponents = {
             disabled={!hasCapability(resource, 'canWrite')}
           />
           <DuplicateStackConfigButton stack={resource} />
+          <StackActions.checkUpdates resource={resource} />
         </div>
       ),
     },

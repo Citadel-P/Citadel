@@ -8,9 +8,11 @@ import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
 import { ColumnDef } from '@tanstack/react-table';
-import { Clock, Server } from 'lucide-react';
+import { Clock, Server, Info } from 'lucide-react';
+import { DetailFacts, DetailSection } from '@/components/custom/resource-detail';
+import Loader from '@/components/ui/loader';
 import { Link } from 'react-router';
-import { useRead } from '@/lib/hooks';
+import { useLocalStorage, useRead } from '@/lib/hooks';
 import { useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ImageName } from '.';
@@ -55,10 +57,10 @@ const StatusCell = ({
   finishedAt?: string | null;
 }) => {
   const statusSnapshot = useMemo(() => {
-    if (state === ContainerStateStatus.Created) return undefined;
+    if (state === ContainerStateStatus.Created) return 'Not started';
 
     const baseDate = state === ContainerStateStatus.Running ? new Date(startedAt) : new Date(finishedAt!);
-
+    if (!Number.isFinite(baseDate.getTime()) || baseDate.getUTCFullYear() <= 1970) return 'Not available';
     return fromNow(baseDate);
   }, [state, startedAt, finishedAt]);
 
@@ -150,25 +152,96 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
   return [...cols, ...coreCols];
 };
 
-export const ContainerInfoTable = ({
-  container,
-  displayOptions,
-}: {
-  container?: ContainerDataView | undefined;
-  displayOptions: DisplayOptions;
-}) => {
+export const ContainerOverview = ({ container }: { container?: ContainerDataView | undefined }) => {
+  const [overviewOpen, setOverviewOpen] = useLocalStorage('container-overview-open', true);
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
+  const state = container?.state ?? containerInfo?.state ?? ContainerStateStatus.Unknown;
+  const stats = container?.containerStat;
+  const running = state === ContainerStateStatus.Running;
 
   return (
-    <div className="rounded-sm border p-1 shadow-xs">
-      <ContainerInfoTableRenderer
-        containerInfo={containerInfo}
-        container={container}
-        displayOptions={displayOptions}
-        isLoading={isLoading}
-      />
-    </div>
+    <DetailSection
+      title="Container overview"
+      description="Runtime usage, image, and resource connections."
+      icon={Info}
+      collapse={{ open: overviewOpen !== false, onOpenChange: setOverviewOpen }}>
+      {isLoading ? (
+        <>
+          <DetailFacts resource={container} items={[]} />
+          <Loader />
+        </>
+      ) : !containerInfo ? (
+        <>
+          <DetailFacts resource={container} items={[]} />
+          <p className="text-sm text-muted-foreground">Container details are not available.</p>
+        </>
+      ) : (
+        <DetailFacts
+          resource={{ id: container?.id ?? containerInfo.containerId, name: container?.name ?? containerInfo.name }}
+          items={[
+            {
+              label: 'Platform',
+              value: <PlatformCell name={containerInfo.platformName} id={containerInfo.platformId} />,
+            },
+            { label: 'Image', value: <ImageName image={containerInfo.imageView ?? undefined} /> },
+            {
+              label: 'Networks',
+              value: Object.keys(containerInfo.networks ?? {}).length ? (
+                <DockerNetworksCell networks={containerInfo.networks} platformId={containerInfo.platformId} />
+              ) : (
+                'None'
+              ),
+            },
+            {
+              label: 'Volumes',
+              value: containerInfo.volumes?.length ? (
+                <DockerVolumesCell volumes={containerInfo.volumes} platformId={containerInfo.platformId} />
+              ) : (
+                'None'
+              ),
+            },
+            {
+              label: 'Ports',
+              value: Object.keys(containerInfo.ports ?? {}).length ? (
+                <PortsDisplay ports={containerInfo.ports} compact maxVisible={3} />
+              ) : (
+                'None published'
+              ),
+            },
+            {
+              label: 'CPU usage',
+              value: !running ? (
+                'Not running'
+              ) : stats?.cpuUsage == null ? (
+                'Waiting for sample'
+              ) : (
+                <CPUCell state={state} stats={stats} />
+              ),
+            },
+            {
+              label: 'Memory usage',
+              value: !running ? (
+                'Not running'
+              ) : stats?.memoryActive == null ? (
+                'Waiting for sample'
+              ) : (
+                <MemoryUsageCell state={state} stats={stats} />
+              ),
+            },
+            {
+              label: running ? 'Started' : 'Finished',
+              value:
+                state === ContainerStateStatus.Created ? (
+                  'Not started'
+                ) : (
+                  <StatusCell state={state} startedAt={containerInfo.startedAt} finishedAt={containerInfo.finishedAt} />
+                ),
+            },
+          ]}
+        />
+      )}
+    </DetailSection>
   );
 };
 
