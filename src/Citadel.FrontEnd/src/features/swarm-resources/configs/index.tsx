@@ -17,8 +17,8 @@ export const ConfigComponents: RegularResourceComponents = {
   DropdownActions: ConfigDropdownActions,
   GroupActions: ({ items }) => <ActionBar type="Config" items={items} actions={Object.values(ConfigGroupActions)} />,
   useData: (platformId) => {
-    const { items, capabilities, isLoading } = useConfigsGroup(platformId);
-    return { items, isLoading, capabilities };
+    const { items, capabilities, isLoading, error, refetch, isFetching } = useConfigsGroup(platformId);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

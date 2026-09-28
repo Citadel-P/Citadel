@@ -144,7 +144,7 @@ describe('SwarmServiceFormComponents', () => {
   });
 
   it('opens a platform-scoped duplicate draft from the resource header', async () => {
-    const Tags = SwarmServiceFormComponents.EditForm!.Header.Tags;
+    const Tags = SwarmServiceFormComponents.EditForm!.Header.Tags!;
     const resource = managedService();
     server.use(
       http.get('http://localhost/api/v1/tags', () =>

@@ -79,8 +79,11 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
       },
     ],
     useData(id: string) {
-      const { data, isLoading } = useRead('getAutomationAction', { id });
+      const { data, isLoading, error, refetch, isFetching } = useRead('getAutomationAction', { id });
       return {
+        error,
+        refetch,
+        isFetching,
         item: data?.data
           ? ({
               ...data.data,

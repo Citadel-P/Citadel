@@ -1,5 +1,5 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
@@ -116,9 +116,9 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         },
       },
     ],
-    useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { deployment, isLoading } = useDeploymentGroup(id);
-      return { item: deployment, isLoading };
+    useData: function (id: string): ResourceFormDataHookResult {
+      const { deployment, isLoading, error, refetch, isFetching } = useDeploymentGroup(id);
+      return { error, refetch, isFetching, item: deployment, isLoading };
     },
   },
 };

@@ -8,7 +8,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 
 export const usePlatformGroup = (id: string) => {
   const args = useMemo(() => ({ id }), [id]);
-  const { data, isLoading } = useRead('getPlatfom', args, { enabled: Boolean(id) });
+  const { data, isLoading, error, refetch, isFetching } = useRead('getPlatfom', args, { enabled: Boolean(id) });
   const [platform, setPlatform] = useState<PlatformView | undefined>();
   const lastDataRef = useRef<PlatformView | undefined>(undefined);
 
@@ -46,6 +46,7 @@ export const usePlatformGroup = (id: string) => {
         if (next.type === 'Docker') {
           const descriptor = {
             ...(next.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
+            $type: 'Docker' as const,
           };
 
           descriptor.containerCount = stats.containerCount;
@@ -87,5 +88,5 @@ export const usePlatformGroup = (id: string) => {
     removeEventListeners,
   });
 
-  return { platform, isLoading };
+  return { error, refetch, isFetching, platform, isLoading };
 };

@@ -41,7 +41,7 @@ export type SwarmServiceListView = Pick<
 
 export type SwarmServiceInfoView = SwarmServiceView & {
   platformId: string;
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
   tasks: SwarmTaskView[];
   managedServiceId?: string;
   canAdopt?: boolean;
@@ -85,6 +85,9 @@ export const useServicesGroup = (platformId: string) => {
   return {
     items,
     capabilities: managedGroup.capabilities,
+    error: query.error ?? taskGroup.error ?? managedGroup.error,
+    refetch: () => Promise.all([query.refetch(), taskGroup.refetch(), managedGroup.refetch()]),
+    isFetching: query.isFetching || taskGroup.isFetching || managedGroup.isFetching,
     isLoading: query.isLoading || taskGroup.isLoading || managedGroup.isLoading,
   };
 };
@@ -92,7 +95,7 @@ export const useServicesGroup = (platformId: string) => {
 const toDraftListView = (service: ManagedSwarmServiceView): SwarmServiceListView => ({
   id: service.dockerServiceId ?? service.id,
   name: service.name,
-  mode: service.spec.schedulingMode,
+  mode: service.spec.schedulingMode ?? 'Replicated',
   image:
     'imageTag' in service.spec.image
       ? service.spec.image.imageTag
@@ -154,8 +157,10 @@ export const useServiceInfoGroup = (platformId: string, resourceId: string) => {
   ]);
   return {
     resource,
+    error: query.error ?? taskGroup.error ?? managedGroup.error,
+    refetch: () => Promise.all([query.refetch(), taskGroup.refetch(), managedGroup.refetch()]),
+    isFetching: query.isFetching || taskGroup.isFetching || managedGroup.isFetching,
     isLoading: query.isLoading || taskGroup.isLoading || managedGroup.isLoading,
-    error: query.error,
   };
 };
 

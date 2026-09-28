@@ -26,7 +26,7 @@ const nodeAvailabilityAction = (
   type: 'command' as const,
   icon,
   mutateKey: 'updateSwarmNodesAvailability' as const,
-  requiredCapabilities: ['canWrite'] as const,
+  requiredCapabilities: ['canWrite' as const],
   confirm,
   resourceType: 'Node' as const,
   argName: 'variables' as const,

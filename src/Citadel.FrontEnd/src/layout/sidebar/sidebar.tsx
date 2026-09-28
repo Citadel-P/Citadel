@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import LogoIcon from '@/assets/logo.svg';
+import LogoIcon from '@/assets/logo.svg?react';
 import { SidebarMenu } from './sidebar-menu';
 import { Link } from 'react-router';
 import { useRead } from '@/lib/hooks';

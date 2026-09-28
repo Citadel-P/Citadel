@@ -22,8 +22,8 @@ export const BuildComponents: RequiredComponents<BuildProjectView> = {
   DropdownActions: BuildDropdownActions,
   GroupActions: ({ items }) => <ActionBar type="Build" items={items} actions={Object.values(BuildGroupActions)} />,
   useData(): ResourceDataHookResult<BuildProjectView> {
-    const { projects, isLoading, capabilities } = useBuildsGroup();
-    return { items: projects ?? EMPTY_BUILDS, isLoading, capabilities };
+    const { projects, isLoading, capabilities, error, refetch, isFetching } = useBuildsGroup();
+    return { error, refetch, isFetching, items: projects ?? EMPTY_BUILDS, isLoading, capabilities };
   },
   filterItems: filterBuilds,
 };

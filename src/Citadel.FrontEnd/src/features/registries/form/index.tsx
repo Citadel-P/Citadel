@@ -1,7 +1,7 @@
 import { RegistryForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RegistryActions } from './actions';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { RegistryConfigView, RegistryView } from '@/api/generated/api.types';
@@ -46,9 +46,9 @@ export const RegistryFormComponents: RequiredFormComponents = {
         },
       },
     ],
-    useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getRegistryConfig', { id });
-      return { item: data?.data, isLoading };
+    useData: function (id?: string): ResourceFormDataHookResult {
+      const { data, isLoading, error, refetch, isFetching } = useRead('getRegistryConfig', { id });
+      return { error, refetch, isFetching, item: data?.data, isLoading };
     },
   },
 };

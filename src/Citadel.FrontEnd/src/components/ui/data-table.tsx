@@ -15,7 +15,7 @@ import {
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useRef, useState } from 'react';
-import Loader from './loader';
+import { TableSkeletonRows } from './table-skeleton';
 
 export interface DataTableEmptyState {
   title: string;
@@ -99,7 +99,12 @@ export function DataTable<TData extends Identifiable, TValue>({
 
   return (
     <div data-slot="data-table">
-      <Table>
+      {isLoading && !data.length && (
+        <span role="status" className="sr-only">
+          Loading rows…
+        </span>
+      )}
+      <Table aria-busy={isLoading && !data.length}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -122,18 +127,17 @@ export function DataTable<TData extends Identifiable, TValue>({
                 ))}
               </TableRow>
             ))
+          ) : isLoading ? (
+            <TableSkeletonRows columns={table.getVisibleLeafColumns().length} />
           ) : (
             <TableRow className="group">
               <TableCell colSpan={columns.length} className="h-24 border-0 px-3 text-sm">
-                {isLoading && <Loader />}
-                {!isLoading && (
-                  <div className="flex flex-col items-center justify-center gap-1 p-4 text-center">
-                    <div className="text-sm font-medium text-foreground">{emptyState?.title ?? 'No results.'}</div>
-                    {emptyState?.description && (
-                      <div className="text-xs text-muted-foreground">{emptyState.description}</div>
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-col items-center justify-center gap-1 p-4 text-center">
+                  <div className="text-sm font-medium text-foreground">{emptyState?.title ?? 'No results.'}</div>
+                  {emptyState?.description && (
+                    <div className="text-xs text-muted-foreground">{emptyState.description}</div>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           )}

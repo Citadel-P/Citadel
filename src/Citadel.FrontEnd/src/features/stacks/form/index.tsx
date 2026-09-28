@@ -1,5 +1,5 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { StackForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StackActions } from './actions';
@@ -158,9 +158,9 @@ export const StackFormComponents: RequiredFormComponents = {
         },
       },
     ],
-    useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { stack, isLoading } = useStackGroup(id);
-      return { item: stack, isLoading };
+    useData: function (id: string): ResourceFormDataHookResult {
+      const { stack, isLoading, error, refetch, isFetching } = useStackGroup(id);
+      return { error, refetch, isFetching, item: stack, isLoading };
     },
   },
 };

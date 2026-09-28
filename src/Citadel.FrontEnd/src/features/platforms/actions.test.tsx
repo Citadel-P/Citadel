@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { PlatformView } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
@@ -45,7 +46,7 @@ describe('Platform deletion navigation', () => {
   });
 
   it('stays on the edit page when deletion fails', async () => {
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorToast = vi.spyOn(toast, 'error');
     server.use(
       http.delete('http://localhost/api/v1/platforms', () =>
         HttpResponse.json({ title: 'Deletion failed', status: 500 }, { status: 500 }),
@@ -65,11 +66,13 @@ describe('Platform deletion navigation', () => {
       await user.type(dialog.getByRole('textbox'), platform.name);
       await user.click(dialog.getByRole('button', { name: 'Delete' }));
 
-      await waitFor(() => expect(errorLog).toHaveBeenCalled());
-      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(errorToast).toHaveBeenCalledWith('Request failed', { description: 'Deletion failed' }));
+      expect(screen.getByRole('dialog')).toBeVisible();
+      expect(dialog.getByRole('textbox')).toHaveValue(platform.name);
+      await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());
       expect(screen.getByTestId('location')).toHaveTextContent(route);
     } finally {
-      errorLog.mockRestore();
+      errorToast.mockRestore();
     }
   });
 });

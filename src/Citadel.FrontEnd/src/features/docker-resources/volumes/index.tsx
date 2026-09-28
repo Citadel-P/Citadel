@@ -19,8 +19,8 @@ export const VolumeComponents: RequiredComponents = {
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { volumes, capabilities, isLoading } = useVolumesGroup(platformId);
-    return { items: volumes?.volumes ?? EMPTY_VOLUMES, isLoading, capabilities };
+    const { volumes, capabilities, isLoading, error, refetch, isFetching } = useVolumesGroup(platformId);
+    return { error, refetch, isFetching, items: volumes?.volumes ?? EMPTY_VOLUMES, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

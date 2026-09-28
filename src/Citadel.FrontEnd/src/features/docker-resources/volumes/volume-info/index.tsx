@@ -38,12 +38,12 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
   useData: (platformId: string, resourceId: string) => {
     const [searchParams] = useSearchParams();
     const dockerNodeId = searchParams.get('dockerNodeId') ?? undefined;
-    const { data, isLoading, error } = useRead(`inspectVolume`, {
+    const { data, isLoading, error, refetch, isFetching } = useRead(`inspectVolume`, {
       platformId,
       name: resourceId,
       query: { dockerNodeId },
     });
-    return { resource: data?.data, isLoading, error };
+    return { refetch, isFetching, resource: data?.data, isLoading, error };
   },
 };
 

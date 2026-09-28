@@ -38,7 +38,7 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
   if (!canUseLocalPassword) return <MfaUnavailablePanel />;
 
   const enabled = status?.enabled === true;
-  const remainingRecoveryCodes = status?.remainingRecoveryCodes ?? 0;
+  const remainingRecoveryCodes = Number(status?.remainingRecoveryCodes ?? 0);
   const recoveryState = getRecoveryState(enabled, remainingRecoveryCodes);
 
   return (

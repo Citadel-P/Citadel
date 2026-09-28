@@ -44,8 +44,8 @@ export const PlatformComponents: RegularResourceComponents<PlatformView> = {
   },
   DropdownActions: PlatformDropdownActions,
   useData: function (): ResourceDataHookResult<any> {
-    const { platformsMessage, capabilities, isLoading } = usePlatformsGroup();
-    return { items: platformsMessage ?? EMPTY_PLATFORMS, isLoading, capabilities };
+    const { platformsMessage, capabilities, isLoading, error, refetch, isFetching } = usePlatformsGroup();
+    return { error, refetch, isFetching, items: platformsMessage ?? EMPTY_PLATFORMS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

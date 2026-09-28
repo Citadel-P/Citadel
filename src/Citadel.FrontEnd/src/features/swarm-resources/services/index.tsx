@@ -26,8 +26,8 @@ export const ServiceComponents: RegularResourceComponents<SwarmServiceListView> 
     />
   ),
   useData: (platformId) => {
-    const { items, capabilities, isLoading } = useServicesGroup(platformId);
-    return { items, isLoading, capabilities };
+    const { items, capabilities, isLoading, error, refetch, isFetching } = useServicesGroup(platformId);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

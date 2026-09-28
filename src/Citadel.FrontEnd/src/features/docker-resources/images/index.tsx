@@ -12,8 +12,8 @@ export const ImageComponents: RequiredComponents = {
   Icon: HardDrive,
   Content: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { imagesInfo, capabilities, isLoading } = useImagesGroup(platformId);
-    return { items: imagesInfo?.images ?? EMPTY_IMAGES, isLoading, capabilities };
+    const { imagesInfo, capabilities, isLoading, error, refetch, isFetching } = useImagesGroup(platformId);
+    return { error, refetch, isFetching, items: imagesInfo?.images ?? EMPTY_IMAGES, isLoading, capabilities };
   },
   header: {
     showAdd: false,

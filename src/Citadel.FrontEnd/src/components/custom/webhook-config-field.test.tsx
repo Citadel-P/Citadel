@@ -1,3 +1,4 @@
+import type { BuildWebhookConfig } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { useState } from 'react';
@@ -13,7 +14,7 @@ describe('WebhookConfigField', () => {
     });
 
     function Harness() {
-      const [value, setValue] = useState({ enabled: true });
+      const [value, setValue] = useState<BuildWebhookConfig>({ enabled: true });
       return (
         <WebhookConfigField
           resourceType="swarm-service"
@@ -34,9 +35,7 @@ describe('WebhookConfigField', () => {
     expect(screen.getAllByRole('combobox')[1]).toHaveTextContent('Shared secret (Bearer header)');
     const inputs = screen.getAllByRole('textbox');
     expect(inputs[0]).toHaveValue('ab'.repeat(32));
-    expect(inputs[1]).toHaveValue(
-      `${window.location.origin}/listener/generic/swarm-service/service-id/update`,
-    );
+    expect(inputs[1]).toHaveValue(`${window.location.origin}/listener/generic/swarm-service/service-id/update`);
     expect(screen.getAllByRole('combobox')[0]).toHaveTextContent('Generic / CI');
   });
 });

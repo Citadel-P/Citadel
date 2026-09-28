@@ -4,7 +4,7 @@ import { useUserQuery } from '@/lib/atoms';
 export const useUsersList = (userName?: string, pageSize?: number) => {
   const [query] = useUserQuery();
 
-  const { data, isLoading } = useRead('listUsers', {
+  const { data, isLoading, error, refetch, isFetching } = useRead('listUsers', {
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
@@ -12,8 +12,5 @@ export const useUsersList = (userName?: string, pageSize?: number) => {
     },
   });
 
-  return {
-    pagedUsers: data?.data.pagedResult,
-    isLoading,
-  };
+  return { error, refetch, isFetching, pagedUsers: data?.data.pagedResult, isLoading };
 };

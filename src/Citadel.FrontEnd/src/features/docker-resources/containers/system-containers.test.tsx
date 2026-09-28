@@ -45,6 +45,7 @@ const ContainerActionsContext = ({
       isLoading: false,
       currentPlatform: { id: 'platform-id', type: platformType } as PlatformView,
       platforms: [],
+      applicationInfo: undefined,
       unresolvedAlertCount: 0,
       liveAlertEvents: {},
       receivedAlertEventIds: [],

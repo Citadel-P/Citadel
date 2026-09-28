@@ -79,8 +79,8 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { deployments, capabilities, isLoading } = useDeploymentsGroup();
-    return { items: deployments ?? EMPTY_DEPLOYMENTS, isLoading, capabilities };
+    const { deployments, capabilities, isLoading, error, refetch, isFetching } = useDeploymentsGroup();
+    return { error, refetch, isFetching, items: deployments ?? EMPTY_DEPLOYMENTS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

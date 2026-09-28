@@ -221,6 +221,7 @@ function AlertEventPreview({
 const alertResourceIconStyles: Record<AlertResourceType, string> = {
   [AlertResourceType.Platform]: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
   [AlertResourceType.Deployment]: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  [AlertResourceType.SwarmService]: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   [AlertResourceType.Stack]: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   [AlertResourceType.GitRepository]: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
   [AlertResourceType.Webhook]: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',

@@ -33,7 +33,7 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     if (selectedTagNames.length === 0) return undefined;
     return { query: { tags: selectedTagNames } };
   }, [selectedTagNames]);
-  const { data, isLoading } = useRead('listPlatforms', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs);
   const [platforms, setPlatforms] = useState<PlatformView[] | undefined>();
   const lastFetchedRef = useRef<PlatformView[]>([]);
   const capabilities = data?.data?.capabilities;
@@ -94,45 +94,43 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     setPlatforms((current) => current?.filter((p) => p.id !== id));
   }, []);
 
-  const handlePlatformStatsUpdated = useCallback(
-    (stats: PlatformStatsBatchView) => {
-      setPlatforms((current) => {
-        if (!current) return current;
-        const existingIndex = current.findIndex((p) => p.id === stats.platformId);
+  const handlePlatformStatsUpdated = useCallback((stats: PlatformStatsBatchView) => {
+    setPlatforms((current) => {
+      if (!current) return current;
+      const existingIndex = current.findIndex((p) => p.id === stats.platformId);
 
-        if (existingIndex === -1) {
-          return current;
-        }
+      if (existingIndex === -1) {
+        return current;
+      }
 
-        const updatedPlatforms = [...current];
-        const target = { ...updatedPlatforms[existingIndex] };
+      const updatedPlatforms = [...current];
+      const target = { ...updatedPlatforms[existingIndex] };
 
-        target.stats = [stats.stat];
-        target.networkCount = stats.networkCount;
-        target.volumeCount = stats.volumeCount;
-        target.imageCount = stats.imageCount;
-        target.memTotal = stats.memTotal;
+      target.stats = [stats.stat];
+      target.networkCount = stats.networkCount;
+      target.volumeCount = stats.volumeCount;
+      target.imageCount = stats.imageCount;
+      target.memTotal = stats.memTotal;
 
-        if (target.type === 'Docker') {
-          const descriptor = {
-            ...(target.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
-          };
+      if (target.type === 'Docker') {
+        const descriptor = {
+          ...(target.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
+          $type: 'Docker' as const,
+        };
 
-          descriptor.containerCount = stats.containerCount;
-          descriptor.containersRunning = stats.containersRunning;
-          descriptor.containersPaused = stats.containersPaused;
-          descriptor.containersStopped = stats.containersStopped;
+        descriptor.containerCount = stats.containerCount;
+        descriptor.containersRunning = stats.containersRunning;
+        descriptor.containersPaused = stats.containersPaused;
+        descriptor.containersStopped = stats.containersStopped;
 
-          target.platformDescriptor = descriptor;
-        }
+        target.platformDescriptor = descriptor;
+      }
 
-        updatedPlatforms[existingIndex] = target;
+      updatedPlatforms[existingIndex] = target;
 
-        return updatedPlatforms;
-      });
-    },
-    [],
-  );
+      return updatedPlatforms;
+    });
+  }, []);
 
   const platformsMessage = useMemo(() => platforms?.filter(matchesActiveFilters), [platforms, matchesActiveFilters]);
 
@@ -162,10 +160,5 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     removeEventListeners,
   });
 
-  return {
-    platformsMessage,
-    capabilities,
-    isLoading,
-    selectedTagNames,
-  };
+  return { error, refetch, isFetching, platformsMessage, capabilities, isLoading, selectedTagNames };
 };

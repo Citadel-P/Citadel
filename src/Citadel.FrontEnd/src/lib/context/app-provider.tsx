@@ -13,7 +13,13 @@ const AppProviderContent: React.FC<{
 }> = ({ children, applicationInfo }) => {
   const { platformId, type, id } = useParams();
   const selectedPlatformId = platformId ?? (type === 'platforms' ? id : undefined);
-  const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: selectedPlatformId });
+  const {
+    data: platformData,
+    isLoading: platformIsLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useRead('getPlatfom', { id: selectedPlatformId });
   const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup({ useTagFilter: false });
   const alertEventsGroup = useAlertEventsGroup();
 
@@ -29,12 +35,23 @@ const AppProviderContent: React.FC<{
   const contextValue = useMemo(
     () => ({
       isLoading: platformIsLoading || platformsIsLoading,
+      platformRead: { error, refetch, isFetching },
       currentPlatform,
       platforms: platformsMessage,
       applicationInfo,
       ...alertEventsGroup,
     }),
-    [platformIsLoading, platformsIsLoading, currentPlatform, platformsMessage, applicationInfo, alertEventsGroup],
+    [
+      platformIsLoading,
+      platformsIsLoading,
+      currentPlatform,
+      platformsMessage,
+      applicationInfo,
+      alertEventsGroup,
+      error,
+      refetch,
+      isFetching,
+    ],
   );
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };

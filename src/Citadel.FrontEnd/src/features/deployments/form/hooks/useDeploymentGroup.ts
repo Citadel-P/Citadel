@@ -7,7 +7,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useDeploymentGroup = (deploymentId: string) => {
-  const { data, isLoading } = useRead('getDeployment', { deploymentId });
+  const { data, isLoading, error, refetch, isFetching } = useRead('getDeployment', { deploymentId });
   const queryClient = useQueryClient();
 
   const handleDeploymentInfoUpdated = useCallback(
@@ -47,7 +47,7 @@ export const useDeploymentGroup = (deploymentId: string) => {
     removeEventListeners,
   });
 
-  return { deployment: data?.data, isLoading };
+  return { error, refetch, isFetching, deployment: data?.data, isLoading };
 };
 
 export const mergeDeploymentInfo = (current: DeploymentView, update: DeploymentView): DeploymentView => {

@@ -467,8 +467,8 @@ export const GitRepoComponents: RequiredComponents = {
     addButtonTitle: 'Add Repository',
   },
   useData(): ResourceDataHookResult<GitRepositoryView> {
-    const { gitRepos, capabilities, isLoading } = useGitReposGroup();
-    return { items: gitRepos ?? EMPTY_GIT_REPOS, isLoading, capabilities };
+    const { gitRepos, capabilities, isLoading, error, refetch, isFetching } = useGitReposGroup();
+    return { error, refetch, isFetching, items: gitRepos ?? EMPTY_GIT_REPOS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

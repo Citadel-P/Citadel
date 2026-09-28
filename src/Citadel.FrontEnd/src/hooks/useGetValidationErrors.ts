@@ -4,11 +4,11 @@ export const useGetValidationErrors = (error: Error | null): string | undefined 
   if (!error) return undefined;
 
   const problem = (error as { error?: ProblemDetails }).error;
-  if (problem?.status === 400) {
+  if (Number(problem?.status) === 400) {
     return getValidationErrors(problem as HttpValidationProblemDetails);
   }
 
-  if (problem?.status && problem.status > 400 && problem.status <= 499) {
+  if (problem?.status && Number(problem.status) > 400 && Number(problem.status) <= 499) {
     return problem.detail!;
   }
 

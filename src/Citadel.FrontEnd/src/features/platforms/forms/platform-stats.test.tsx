@@ -1,3 +1,4 @@
+import { createPlatform as platformDefaults } from '@/test/factories/resources';
 import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -65,6 +66,7 @@ describe('platform disk statistics', () => {
 
   it('does not fall back to an older disk sample when the newest is unavailable', () => {
     const platform = {
+      ...platformDefaults(),
       status: PlatformStatus.Online,
       stats: [
         {
@@ -95,6 +97,7 @@ describe('platform disk statistics', () => {
       },
     ]);
     const platform = {
+      ...platformDefaults(),
       status: PlatformStatus.Online,
       stats: [
         {
@@ -114,6 +117,7 @@ describe('platform disk statistics', () => {
 
   it('derives available bytes from the newest complete sample', () => {
     const platform = {
+      ...platformDefaults(),
       status: PlatformStatus.Online,
       stats: [
         {
@@ -135,6 +139,7 @@ describe('platform disk statistics', () => {
 
   it('renders the current disk summary with its filesystem tooltip', () => {
     const platform = {
+      ...platformDefaults(),
       id: 'platform-1',
       status: PlatformStatus.Online,
       stats: [
@@ -162,6 +167,7 @@ describe('platform disk statistics', () => {
 
   it('renders workload status counts with the platform list icon colors', () => {
     const platform = {
+      ...platformDefaults(),
       id: 'platform-1',
       status: PlatformStatus.Online,
       deploymentStatusCounts: {
@@ -187,6 +193,8 @@ describe('platform disk statistics', () => {
       imageCount: 12,
       volumeCount: 8,
       platformDescriptor: {
+        $type: 'Docker',
+        daemonId: 'daemon-id',
         containerCount: 6,
         containersRunning: 4,
         containersStopped: 1,
@@ -208,6 +216,7 @@ describe('platform disk statistics', () => {
             dockerVolumePolicyCount: 1,
             stackPolicyCount: 1,
             deploymentPolicyCount: 1,
+            swarmServicePolicyCount: 0,
             attentionPolicyCount: 0,
             lastRunStatus: null,
             lastRunAt: null,
@@ -236,17 +245,20 @@ describe('platform disk statistics', () => {
 
   it('leaves Swarm-specific backup and network cards for the upper summary', () => {
     const platform = {
+      ...platformDefaults(),
       id: 'swarm-1',
       type: PlatformType.DockerSwarm,
       status: PlatformStatus.Online,
       platformDescriptor: {
+        $type: 'Docker',
+        daemonId: 'daemon-id',
         containerCount: 1,
         containersRunning: 1,
         containersStopped: 0,
         containersPaused: 0,
       },
-      deploymentStatusCounts: { total: 0 },
-      stackStatusCounts: { total: 0 },
+      deploymentStatusCounts: platformDefaults().deploymentStatusCounts,
+      stackStatusCounts: platformDefaults().stackStatusCounts,
       stats: [],
     } as PlatformView;
 
@@ -262,6 +274,7 @@ describe('platform disk statistics', () => {
 
   it('does not report valid current metrics as unavailable while history is empty', () => {
     const platform = {
+      ...platformDefaults(),
       status: PlatformStatus.Online,
       stats: [
         {

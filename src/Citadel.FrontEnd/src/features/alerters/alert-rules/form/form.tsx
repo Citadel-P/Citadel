@@ -173,6 +173,7 @@ export const AlertRuleForm = ({
                 ? [
                     defineField<AlertRuleInput, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'A human-readable label for the alert rule.',

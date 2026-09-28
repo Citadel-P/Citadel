@@ -96,7 +96,7 @@ export const ContainerComponents: RegularResourceComponents = {
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const [searchParams] = useSearchParams();
-    const { containersInfo, capabilities, isLoading } = useContainersGroup(platformId);
+    const { containersInfo, capabilities, isLoading, error, refetch, isFetching } = useContainersGroup(platformId);
     const unmanagedOnly = searchParams.get('unmanaged') === 'true';
     const containers = containersInfo?.containers ?? EMPTY_CONTAINERS;
     const items = useMemo(() => {
@@ -104,11 +104,7 @@ export const ContainerComponents: RegularResourceComponents = {
       return unmanagedOnly ? visibleContainers.filter(isUnmanagedContainer) : visibleContainers;
     }, [containers, unmanagedOnly]);
 
-    return {
-      items,
-      isLoading,
-      capabilities,
-    };
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   header: {
     subtitle: 'Monitor container state, resource usage, and workload operations.',

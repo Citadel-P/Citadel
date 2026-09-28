@@ -2,7 +2,7 @@ import { BackupRepositoryView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { BackupRepositoryInfoActions } from '../actions';
 import { BackupRepositoryForm } from './form';
@@ -33,9 +33,9 @@ export const BackupRepositoryFormComponents: RequiredFormComponents = {
         ),
       },
     ],
-    useData(id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getBackupRepository', { id });
-      return { item: data?.data, isLoading };
+    useData(id?: string): ResourceFormDataHookResult {
+      const { data, isLoading, error, refetch, isFetching } = useRead('getBackupRepository', { id });
+      return { error, refetch, isFetching, item: data?.data, isLoading };
     },
     skipMetadataUpdate: true,
   },

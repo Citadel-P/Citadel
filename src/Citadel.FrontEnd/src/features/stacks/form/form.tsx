@@ -1,3 +1,4 @@
+import { useFormDraftKey } from '@/lib/form-drafts';
 import {
   PlatformView,
   StackConfigView,
@@ -48,7 +49,7 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FolderInput, GitBranch, KeyRound, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import * as monaco from 'monaco-editor';
+import { DiagnosticSeverity } from '@/lib/monaco/diagnostics';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
@@ -231,7 +232,7 @@ const getComposeVariableDiagnostics = (
           lineNumber: lineIndex + 1,
           startColumn,
           endColumn,
-          severity: monaco.MarkerSeverity.Warning,
+          severity: DiagnosticSeverity.Warning,
           message: `Unsupported Compose variable expression '${match[0]}'.`,
         });
         continue;
@@ -243,7 +244,7 @@ const getComposeVariableDiagnostics = (
           lineNumber: lineIndex + 1,
           startColumn,
           endColumn,
-          severity: monaco.MarkerSeverity.Warning,
+          severity: DiagnosticSeverity.Warning,
           message: `${name} is not defined in stack or global variables.`,
         });
       }
@@ -827,6 +828,7 @@ export const StackForm = ({
     : duplicateFrom
       ? `stack:duplicate:${duplicateFrom}`
       : `stack:${id ?? 'new'}`;
+  const scopedDraftKey = useFormDraftKey(formDraftKey);
   const stackView = stackViewData?.data;
   const original = resource ?? EMPTY_STACK_CONFIG;
   const formOriginal = useMemo(
@@ -1019,11 +1021,11 @@ export const StackForm = ({
   );
 
   const refreshData = useCallback(() => {
-    localStorage.removeItem(formDraftKey);
+    if (scopedDraftKey) localStorage.removeItem(scopedDraftKey);
     queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: id }] });
     queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: id }] });
     queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: id }] });
-  }, [formDraftKey, id, queryClient]);
+  }, [scopedDraftKey, id, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;
@@ -1182,8 +1184,9 @@ export const StackForm = ({
                   id: 'details',
                   label: 'Details',
                   items: [
-                    defineField({
+                    defineField<StackInput, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this workload.',
@@ -1192,14 +1195,15 @@ export const StackForm = ({
                         <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="stack-name" />
                       ),
                     }),
-                    defineField({
+                    defineField<StackInput, 'description'>({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description of this workload.',
                       render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
                     }),
-                    defineField({
+                    defineField<StackInput, 'tagIds'>({
                       key: 'tagIds',
                       label: 'Tags',
                       required: false,
@@ -1212,7 +1216,7 @@ export const StackForm = ({
                 }),
               ]
             : []),
-          defineField({
+          defineField<StackInput, 'platformId'>({
             key: 'platformId',
             label: 'Platform',
             required: true,
@@ -1292,7 +1296,7 @@ export const StackForm = ({
                   description:
                     'Select a repository branch and the Compose files that define this stack. Use one stack per Compose project in a monorepo.',
                   items: [
-                    defineField({
+                    defineField<StackInput, 'spec.gitRepoId'>({
                       key: 'spec.gitRepoId',
                       label: 'Repository',
                       required: true,
@@ -1334,7 +1338,7 @@ export const StackForm = ({
                         </div>
                       ),
                     }),
-                    defineField({
+                    defineField<StackInput, 'spec.branch'>({
                       key: 'spec.branch',
                       label: 'Branch',
                       required: true,
@@ -1359,7 +1363,7 @@ export const StackForm = ({
                         />
                       ),
                     }),
-                    defineField({
+                    defineField<StackInput, 'spec.commitSha'>({
                       key: 'spec.commitSha',
                       label: 'Pin Commit SHA',
                       description:
@@ -1393,7 +1397,7 @@ export const StackForm = ({
                         </div>
                       ),
                     }),
-                    defineField({
+                    defineField<StackInput, 'spec.composePaths'>({
                       key: 'spec.composePaths',
                       label: 'Compose Paths',
                       required: true,
@@ -1442,7 +1446,7 @@ export const StackForm = ({
                         />
                       ),
                     }),
-                    defineField({
+                    defineField<StackInput, 'spec.composeEnvFilesFromRepo'>({
                       key: 'spec.composeEnvFilesFromRepo',
                       label: 'Compose Env Files',
                       description:
@@ -1514,7 +1518,7 @@ export const StackForm = ({
                     id: 'manual_stack_source',
                     label: 'Compose File',
                     items: [
-                      defineField({
+                      defineField<StackInput, 'spec.composeFile'>({
                         key: 'spec.composeFile',
                         label: 'Compose File',
                         required: true,
@@ -1792,7 +1796,7 @@ export const StackForm = ({
                           ? 'Disabled during import. Edit the stack after importing it to configure drift management.'
                           : 'Detect runtime differences between the compose file and the containers currently running on the platform.',
                         items: [
-                          defineField({
+                          defineField<StackInput, 'driftPolicy.mode'>({
                             key: 'driftPolicy.mode',
                             label: 'Mode',
                             description: 'Choose how this stack handles drift checks.',
@@ -1904,7 +1908,7 @@ export const StackForm = ({
                         description:
                           "Execute a shell command before running docker compose up. The 'path' is relative to the Run Directory",
                         items: [
-                          defineField({
+                          defineField<StackInput, 'spec.preDeploy.path'>({
                             key: 'spec.preDeploy.path',
                             label: 'Path',
                             render: (val, set) => (
@@ -1926,7 +1930,7 @@ export const StackForm = ({
                               />
                             ),
                           }),
-                          defineField({
+                          defineField<StackInput, 'spec.preDeploy.commands'>({
                             key: 'spec.preDeploy.commands',
                             label: 'Commands',
                             required: false,
@@ -1958,7 +1962,7 @@ export const StackForm = ({
                         description:
                           "Execute a shell command after running docker compose up. The 'path' is relative to the Run Directory",
                         items: [
-                          defineField({
+                          defineField<StackInput, 'spec.postDeploy.path'>({
                             key: 'spec.postDeploy.path',
                             label: 'Path',
                             render: (val, set) => (
@@ -1980,7 +1984,7 @@ export const StackForm = ({
                               />
                             ),
                           }),
-                          defineField({
+                          defineField<StackInput, 'spec.postDeploy.commands'>({
                             key: 'spec.postDeploy.commands',
                             label: 'Commands',
                             required: false,
@@ -2006,7 +2010,7 @@ export const StackForm = ({
                         ],
                       }),
 
-                      defineField({
+                      defineField<StackInput, 'spec.destroyBeforeDeploy'>({
                         key: 'spec.destroyBeforeDeploy',
                         label: 'Destroy',
                         description: `Ensure 'docker compose down' is run before redeploying the Stack.`,

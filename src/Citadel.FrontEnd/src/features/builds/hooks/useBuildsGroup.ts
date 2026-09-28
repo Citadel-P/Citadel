@@ -12,7 +12,7 @@ export const useBuildsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading } = useRead('listBuildProjects', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs);
   const [projects, setProjects] = useState<BuildProjectView[] | undefined>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<BuildProjectView[]>([]);
@@ -87,10 +87,5 @@ export const useBuildsGroup = () => {
     removeEventListeners,
   });
 
-  return {
-    projects: projects ?? [],
-    isLoading,
-    capabilities,
-    selectedTagNames,
-  };
+  return { error, refetch, isFetching, projects: projects ?? [], isLoading, capabilities, selectedTagNames };
 };

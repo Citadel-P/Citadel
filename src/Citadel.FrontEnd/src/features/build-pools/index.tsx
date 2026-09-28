@@ -22,8 +22,8 @@ export const BuildPoolComponents: RequiredComponents<BuildAgentPoolView> = {
     <ActionBar type="BuildAgentPool" items={items} actions={Object.values(BuildPoolGroupActions)} />
   ),
   useData(): ResourceDataHookResult<BuildAgentPoolView> {
-    const { pools, isLoading, capabilities } = useBuildPoolsGroup();
-    return { items: pools, isLoading, capabilities };
+    const { pools, isLoading, capabilities, error, refetch, isFetching } = useBuildPoolsGroup();
+    return { error, refetch, isFetching, items: pools, isLoading, capabilities };
   },
   filterItems: filterBuildPools,
 };

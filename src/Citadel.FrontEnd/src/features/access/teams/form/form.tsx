@@ -150,6 +150,7 @@ export const TeamForm = ({
                 ? [
                     defineField<TeamInput, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Team Name',
                       description: 'Provide a unique name to identify this team.',
                       required: true,

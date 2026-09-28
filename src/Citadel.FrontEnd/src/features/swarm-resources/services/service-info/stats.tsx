@@ -43,7 +43,7 @@ export const ServiceStats = ({
         </AlertMessage>
       )}
       <ContainerStatsCharts
-        resource={{ state: service.runningTaskCount > 0 ? 'Running' : 'Offline', containerStat: latestStat }}
+        resource={{ state: Number(service.runningTaskCount) > 0 ? 'Running' : 'Offline', containerStat: latestStat }}
         memory={stats}
         cpu={stats}
         network={stats}

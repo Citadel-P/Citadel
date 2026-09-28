@@ -11,14 +11,21 @@ export type SwarmSecretInfoView = SwarmSecretView & {
   platformId: string;
   description: null;
   status: boolean;
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
 };
 
 export const useSecretsGroup = (platformId: string) => {
   const args = useMemo(() => ({ platformId }), [platformId]);
   const query = useRead('listSwarmSecrets', args);
   const items = useLiveSwarmItems(platformId, 'listSwarmSecrets', args, query, selectSecrets);
-  return { items, capabilities: query.data?.data.capabilities, isLoading: query.isLoading };
+  return {
+    items,
+    capabilities: query.data?.data.capabilities,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };
 
 export const useSecretInfoGroup = (platformId: string, resourceId: string) => {
@@ -43,11 +50,16 @@ export const useSecretInfoGroup = (platformId: string, resourceId: string) => {
             description: null,
             status: secret.inUse,
             capabilities:
-              secret.capabilities ??
-              (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+              secret.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
           }
         : undefined,
     [currentPlatform, platformId, secret],
   );
-  return { resource, isLoading: query.isLoading, error: query.error };
+  return {
+    resource,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };

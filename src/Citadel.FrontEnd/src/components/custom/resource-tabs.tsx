@@ -8,15 +8,15 @@ import { useLocation, useNavigate } from 'react-router';
 
 const getTabHash = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
 
-export const ResourceTabs = ({
+export const ResourceTabs = <T extends RequiredFormFields>({
   localKey,
   resource,
   tabs,
   metadataChanged,
 }: {
   localKey: string;
-  resource: RequiredFormFields;
-  tabs: ResourceTabElement<any>[];
+  resource: T;
+  tabs: ResourceTabElement<T>[];
   metadataChanged?: boolean;
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
@@ -70,7 +70,7 @@ export const ResourceTabs = ({
               key={tab.label}
               value={tab.label}
               disabled={tab.disabled?.(resource) ?? false}
-              className="h-[calc(var(--control-height)+0.5rem)] shrink-0 rounded-none px-4 after:inset-x-3 after:h-0.5 after:rounded-none data-[state=active]:bg-primary/10">
+              className="h-[calc(var(--control-height)+0.5rem)] shrink-0 rounded-none px-4 after:inset-x-3 after:h-0.5 after:rounded-none data-[state=active]:bg-primary/10 data-[state=active]:hover:bg-primary/10">
               {tab.Label ? <tab.Label /> : tab.label}
             </TabsTrigger>
           ))}

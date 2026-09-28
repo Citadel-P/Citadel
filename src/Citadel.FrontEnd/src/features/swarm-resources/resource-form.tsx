@@ -31,6 +31,7 @@ export const SwarmDataResourceForm = ({
         items: [
           defineField({
             key: 'name',
+            persistDraft: true,
             label: 'Name',
             description: `The Swarm ${kind} name.`,
             required: true,

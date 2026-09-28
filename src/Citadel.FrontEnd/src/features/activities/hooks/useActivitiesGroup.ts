@@ -13,7 +13,7 @@ export const useActivitiesGroup = (
 ) => {
   const [query] = useActivityQuery();
 
-  const { data, isLoading } = useRead('listActivities', {
+  const { data, isLoading, error, refetch, isFetching } = useRead('listActivities', {
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
@@ -72,5 +72,5 @@ export const useActivitiesGroup = (
     skip: !resourceId || !resourceType,
   });
 
-  return { pagedActivities, isLoading };
+  return { error, refetch, isFetching, pagedActivities, isLoading };
 };

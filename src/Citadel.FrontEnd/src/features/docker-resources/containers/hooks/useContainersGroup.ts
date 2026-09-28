@@ -8,7 +8,7 @@ import { applyContainerChange, applyContainerStatePatches, reconcileContainerOrd
 import type { ContainerStatePatch } from './container-order';
 
 export const useContainersGroup = (platformId?: string) => {
-  const { data, isLoading } = useRead('listContainers', { id: platformId });
+  const { data, isLoading, error, refetch, isFetching } = useRead('listContainers', { id: platformId });
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
   const capabilities = data?.data.capabilities;
 
@@ -157,5 +157,5 @@ export const useContainersGroup = (platformId?: string) => {
     skip: !platformId,
   });
 
-  return { containersInfo, capabilities, isLoading };
+  return { error, refetch, isFetching, containersInfo, capabilities, isLoading };
 };

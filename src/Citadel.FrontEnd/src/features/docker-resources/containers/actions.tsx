@@ -107,6 +107,19 @@ export const createContainerActions = <T extends BaseContainerResource>(
     return selected.every((resource) => getActionTargets(resource, action).some(predicate));
   };
 
+  const disabledReason = (resources: T | T[], action: ContainerActionKey) => {
+    const selected = Array.isArray(resources) ? resources : [resources];
+    const targets = selected.flatMap((resource) => getActionTargets(resource, action));
+    if (!targets.length) return 'Select a container first.';
+    if (targets.some((target) => target.isSystem)) return 'Citadel system containers are protected from this action.';
+    if (targets.some((target) => target.isSwarmTask)) return 'Manage Swarm task containers through their service.';
+    if (targets.some(isStale)) return 'Container state is out of date. Refresh before trying again.';
+    if (targets.some(isProcessing)) return 'A container operation is already in progress.';
+    if (targets.some((target) => target.state === ContainerStateStatus.Offline))
+      return 'The container platform is offline.';
+    return 'This action is unavailable for one or more selected container states.';
+  };
+
   const startAction: CommandAction<T, 'startContainers'> = {
     key: 'start',
     type: 'command',
@@ -114,6 +127,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     mutateKey: 'startContainers',
     useVariables: (r) => useVariables(r, 'start'),
     canExecute: (r) => canExecute(r, 'start', canStart),
+    disabledReason: (r) => disabledReason(r, 'start'),
   };
 
   const stopAction: CommandAction<T, 'stopContainers'> = {
@@ -123,6 +137,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     mutateKey: 'stopContainers',
     useVariables: (r) => useVariables(r, 'stop'),
     canExecute: (r) => canExecute(r, 'stop', canStop),
+    disabledReason: (r) => disabledReason(r, 'stop'),
   };
 
   const pauseAction: ToggleAction<T, 'pauseContainers' | 'unpauseContainers'> = {
@@ -134,6 +149,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
       mutateKey: 'pauseContainers',
       useVariables: (r) => useVariables(r, 'pause'),
       canExecute: (r) => canExecute(r, 'pause', canPause),
+      disabledReason: (r) => disabledReason(r, 'pause'),
     },
     secondary: {
       title: 'Resume',
@@ -141,6 +157,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
       mutateKey: 'unpauseContainers',
       useVariables: (r) => useVariables(r, 'unpause'),
       canExecute: (r) => canExecute(r, 'unpause', canUnpause),
+      disabledReason: (r) => disabledReason(r, 'unpause'),
     },
   };
 
@@ -151,6 +168,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     mutateKey: 'restartContainers',
     useVariables: (r) => useVariables(r, 'restart'),
     canExecute: (r) => canExecute(r, 'restart', canRestart),
+    disabledReason: (r) => disabledReason(r, 'restart'),
   };
 
   return { startAction, stopAction, pauseAction, restartAction };

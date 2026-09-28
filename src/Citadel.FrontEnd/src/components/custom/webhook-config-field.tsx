@@ -206,7 +206,7 @@ export function WebhookConfigField({
               description="Only push events for this branch trigger the action. Leave empty to accept the resource default branch."
               className={'border-t pt-3 pb-2'}>
               <FieldInput
-                value={branchFilter}
+                value={branchFilter ?? undefined}
                 placeholder="eg: main"
                 disabled={disabled || enableDisabled}
                 onChange={(next) => patch({ branchFilter: next || null })}
@@ -225,7 +225,7 @@ export function WebhookConfigField({
             <div className="flex max-w-140 flex-col gap-2 sm:flex-row">
               <FieldInput
                 className="font-mono text-xs"
-                value={secret}
+                value={secret ?? undefined}
                 disabled={disabled || enableDisabled}
                 onChange={(next) => patch({ secret: next || null })}
               />

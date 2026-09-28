@@ -175,6 +175,7 @@ export const RegistryForm = ({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       description: 'Provide a unique name to identify this registry.',
                       required: true,
@@ -186,6 +187,7 @@ export const RegistryForm = ({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional notes to describe the registry’s purpose or usage.',
@@ -197,11 +199,7 @@ export const RegistryForm = ({
                       required: false,
                       description: 'Optional tags for filtering and grouping this registry.',
                       render: (val, set) => (
-                        <ResourceTagSelector
-                          value={val}
-                          disabled={disabled}
-                          onChange={(tagIds) => set({ tagIds })}
-                        />
+                        <ResourceTagSelector value={val} disabled={disabled} onChange={(tagIds) => set({ tagIds })} />
                       ),
                     }),
                   ],

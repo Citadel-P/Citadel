@@ -92,8 +92,8 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
   ],
 
   useData: (platformId: string, resourceId: string) => {
-    const { containerInfo, isLoading, error } = useContainerInfoGroup(resourceId, platformId);
-    return { resource: containerInfo, isLoading, error: error as any };
+    const { containerInfo, isLoading, error, refetch, isFetching } = useContainerInfoGroup(resourceId, platformId);
+    return { refetch, isFetching, resource: containerInfo, isLoading, error: error as any };
   },
 };
 

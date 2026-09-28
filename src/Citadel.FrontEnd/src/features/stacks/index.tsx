@@ -80,8 +80,8 @@ export const StackComponents: RegularResourceComponents<StackView> = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { stacks, capabilities, isLoading } = useStacksGroup();
-    return { items: stacks ?? EMPTY_STACKS, isLoading, capabilities };
+    const { stacks, capabilities, isLoading, error, refetch, isFetching } = useStacksGroup();
+    return { error, refetch, isFetching, items: stacks ?? EMPTY_STACKS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

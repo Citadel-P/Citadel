@@ -5,7 +5,7 @@ import { StateBadge } from '@/components/custom/state-badge';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { PlatformInfoActions } from '../actions';
 import { usePlatformBackupSummaries } from '../platform-backups';
 import { PlatformForm } from './form';
@@ -91,9 +91,9 @@ export const PlatformFormComponents: RequiredFormComponents<PlatformFormResource
         Content: ({ resource }) => <ActivitiesTab resourceId={resource.id} resourceType="Platform" />,
       },
     ],
-    useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { platform, isLoading } = usePlatformGroup(id);
-      return { item: platform ? toFormResource(platform) : undefined, isLoading };
+    useData: function (id: string): ResourceFormDataHookResult {
+      const { platform, isLoading, error, refetch, isFetching } = usePlatformGroup(id);
+      return { error, refetch, isFetching, item: platform ? toFormResource(platform) : undefined, isLoading };
     },
   },
 };

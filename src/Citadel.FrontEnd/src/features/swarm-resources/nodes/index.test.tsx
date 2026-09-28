@@ -106,6 +106,7 @@ const node = (overrides: Partial<SwarmNodeView> = {}): SwarmNodeView => ({
     canViewLogs: false,
     canInspect: true,
     canOpenTerminal: false,
+    canManageNodeAgents: false,
     canPull: false,
   },
   ...overrides,

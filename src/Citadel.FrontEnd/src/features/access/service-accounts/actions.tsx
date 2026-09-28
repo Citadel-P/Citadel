@@ -20,7 +20,9 @@ export const {
         return {
           canExecute,
           isPending: false,
-          run: () => canExecute && selected && navigate(`/access/service-accounts/edit/${selected.id}`),
+          run: () => {
+            if (canExecute && selected) return navigate(`/access/service-accounts/edit/${selected.id}`);
+          },
         };
       },
     })

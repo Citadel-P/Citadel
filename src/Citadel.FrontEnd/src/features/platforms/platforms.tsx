@@ -1,4 +1,4 @@
-import Loader from '@/components/ui/loader';
+import { ResourceCardsSkeleton } from '@/pages/resource-skeleton';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { PlatformType, PlatformView } from '@/api/generated/api.types';
@@ -23,7 +23,7 @@ export const Platforms = ({
 
   return (
     <>
-      {isLoading && <Loader />}
+      {isLoading && !items?.length && <ResourceCardsSkeleton />}
       {(!items || !items.length) &&
         !isLoading &&
         (isFiltered ? (

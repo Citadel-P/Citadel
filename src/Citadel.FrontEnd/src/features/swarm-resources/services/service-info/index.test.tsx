@@ -98,7 +98,7 @@ describe('ServiceInfoComponents', () => {
     expect(screen.getByRole('tab', { name: 'Stats' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Adopt Service' })).toBeVisible();
-    const actionGroup = screen.getByRole('group');
+    const actionGroup = screen.getByRole('group', { name: 'Service actions' });
     expect(actionGroup).toContainElement(screen.getByRole('button', { name: 'Restart Service' }));
     expect(actionGroup).toContainElement(screen.getByRole('button', { name: 'Delete' }));
   });

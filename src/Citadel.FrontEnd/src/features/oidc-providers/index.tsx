@@ -25,8 +25,15 @@ export const OidcProviderComponents: RequiredComponents<OidcProviderView> = {
     <ActionBar type="OidcProvider" items={items} actions={Object.values(OidcProviderGroupActions)} />
   ),
   useData(): ResourceDataHookResult<OidcProviderView> {
-    const { data, isLoading } = useRead('listOidcProviders');
-    return { items: data?.data.providers ?? EMPTY_OIDC_PROVIDERS, isLoading, capabilities: EMPTY_CAPABILITIES };
+    const { data, isLoading, error, refetch, isFetching } = useRead('listOidcProviders');
+    return {
+      error,
+      refetch,
+      isFetching,
+      items: data?.data.providers ?? EMPTY_OIDC_PROVIDERS,
+      isLoading,
+      capabilities: EMPTY_CAPABILITIES,
+    };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

@@ -3,8 +3,8 @@ import { ContainerView } from '@/api/generated/api.types';
 export interface ContainerStatePatch {
   id: string;
   containerId: string;
-  state?: string;
-  controlState?: string;
+  state?: ContainerView['state'];
+  controlState?: ContainerView['controlState'];
   updated?: number;
   dockerNodeId?: string | null;
 }

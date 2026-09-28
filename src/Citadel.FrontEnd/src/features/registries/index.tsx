@@ -26,10 +26,17 @@ export const RegistryComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { selectedTagNames } = useResourceTagFilter();
-    const { data, isLoading } = useRead(`listRegistries`, {
+    const { data, isLoading, error, refetch, isFetching } = useRead(`listRegistries`, {
       query: { includeDisabled: true, ...(selectedTagNames.length > 0 ? { tags: selectedTagNames } : {}) },
     });
-    return { items: data?.data?.registries ?? EMPTY_REGISTRIES, isLoading, capabilities: data?.data?.capabilities };
+    return {
+      error,
+      refetch,
+      isFetching,
+      items: data?.data?.registries ?? EMPTY_REGISTRIES,
+      isLoading,
+      capabilities: data?.data?.capabilities,
+    };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

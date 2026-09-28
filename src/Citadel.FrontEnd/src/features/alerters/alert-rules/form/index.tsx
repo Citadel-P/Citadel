@@ -1,7 +1,7 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { AlertRuleForm } from './form';
 import { StateBadge } from '@/components/custom/state-badge';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ActivitiesTab } from '@/features/activities';
@@ -47,9 +47,9 @@ export const AlertRuleFormComponents: RequiredFormComponents = {
         },
       },
     ],
-    useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getAlertRuleConfig', { id });
-      return { item: data?.data as any, isLoading };
+    useData: function (id?: string): ResourceFormDataHookResult {
+      const { data, isLoading, error, refetch, isFetching } = useRead('getAlertRuleConfig', { id });
+      return { error, refetch, isFetching, item: data?.data as any, isLoading };
     },
   },
 };

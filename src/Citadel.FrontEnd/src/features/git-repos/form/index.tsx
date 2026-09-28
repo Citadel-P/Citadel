@@ -1,7 +1,7 @@
 import { GitRepoForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { GitRepoActions } from './actions';
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ActivityStatus, GitRepositoryView, LatestActivityView, ResourceControlState } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
@@ -75,9 +75,9 @@ export const GitRepoFormComponents: RequiredFormComponents = {
         },
       },
     ],
-    useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { gitRepo, isLoading } = useGitRepoGroup(id);
-      return { item: gitRepo as any, isLoading };
+    useData: function (id?: string): ResourceFormDataHookResult {
+      const { gitRepo, isLoading, error, refetch, isFetching } = useGitRepoGroup(id);
+      return { error, refetch, isFetching, item: gitRepo as any, isLoading };
     },
   },
 };

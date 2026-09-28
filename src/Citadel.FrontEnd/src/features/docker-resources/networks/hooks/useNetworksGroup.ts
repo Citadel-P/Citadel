@@ -8,7 +8,7 @@ import {
 import { useRead } from '@/lib/hooks';
 
 export const useNetworksGroup = (platformId?: string) => {
-  const { data, isLoading } = useRead('listNetworks', { platformId });
+  const { data, isLoading, error, refetch, isFetching } = useRead('listNetworks', { platformId });
   const [networks, setNetworks] = useState<NetworksView | undefined>(data?.data);
   const lastDataRef = useRef<NetworksView | undefined>(data?.data);
   const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
@@ -19,7 +19,9 @@ export const useNetworksGroup = (platformId?: string) => {
       lastDataRef.current = data.data;
       const snapshot = nodeSnapshotRef.current;
       const clusterNetworks = snapshot ? data.data.networks.filter((network) => !network.dockerNodeId) : [];
-      setNetworks(snapshot ? { ...data.data, networks: [...clusterNetworks, ...(snapshot.networks ?? [])] } : data.data);
+      setNetworks(
+        snapshot ? { ...data.data, networks: [...clusterNetworks, ...(snapshot.networks ?? [])] } : data.data,
+      );
     }
   }, [data?.data]);
 
@@ -38,7 +40,10 @@ export const useNetworksGroup = (platformId?: string) => {
               networks: [network, ...prev.networks],
             };
           }
-          return { ...prev, networks: prev.networks.map((value, index) => index === existingIndex ? network : value) };
+          return {
+            ...prev,
+            networks: prev.networks.map((value, index) => (index === existingIndex ? network : value)),
+          };
 
         case 'destroy':
           if (existingIndex !== -1) {
@@ -73,5 +78,5 @@ export const useNetworksGroup = (platformId?: string) => {
 
   useDockerDaemonGroup(platformId, { onNetworkEvent, onSwarmNodeLocalResourcesUpdated });
 
-  return { networks, isLoading, capabilities };
+  return { error, refetch, isFetching, networks, isLoading, capabilities };
 };

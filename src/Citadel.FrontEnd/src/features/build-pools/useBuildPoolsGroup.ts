@@ -11,7 +11,7 @@ export const useBuildPoolsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading } = useRead('listBuildAgentPools', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildAgentPools', readArgs);
   const [pools, setPools] = useState<BuildAgentPoolView[] | undefined>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<BuildAgentPoolView[]>([]);
@@ -83,9 +83,5 @@ export const useBuildPoolsGroup = () => {
     removeEventListeners,
   });
 
-  return {
-    pools: pools ?? [],
-    isLoading,
-    capabilities,
-  };
+  return { error, refetch, isFetching, pools: pools ?? [], isLoading, capabilities };
 };

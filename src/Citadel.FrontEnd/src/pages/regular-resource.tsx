@@ -1,3 +1,5 @@
+import { canShowCachedResource } from '@/lib/request-error';
+import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { ResourceOverview } from '@/components/custom/resource-overview';
 import { AppContent } from '@/components/custom/app-content';
 import { ResourceType } from '@/api/types';
@@ -7,6 +9,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { RegularResourceComponents } from './types';
 import { ResourceHeader } from './resource-header';
+import { ResourceOverviewSkeleton } from './resource-skeleton';
 
 type RegularResourceViewProps<T = any> = {
   Components: RegularResourceComponents<T>;
@@ -23,7 +26,7 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const { items, capabilities, isLoading = false } = Components.useData?.(platformId) ?? {};
+  const { items, capabilities, isLoading = false, error, refetch, isFetching } = Components.useData?.(platformId) ?? {};
   const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
   const AddDialog = headerCfg.AddDialog;
 
@@ -66,6 +69,10 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
     (headerCfg.activeFilterParams?.some((parameter) => Boolean(searchParams.get(parameter)?.trim())) ?? false);
 
   const Content = Components.Content;
+  const hasItems = Array.isArray(items)
+    ? items.length > 0
+    : Boolean((items as { items?: unknown[] } | undefined)?.items?.length);
+  const showContent = !error || (hasItems && canShowCachedResource(error));
 
   return (
     <div className="flex-col justify-between relative">
@@ -89,7 +96,10 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
 
         {Components.SubHeader && <Components.SubHeader />}
 
-        {overview && !isLoading && (
+        {overview && isLoading && !hasItems && showContent && (
+          <ResourceOverviewSkeleton count={overview.filters.length} />
+        )}
+        {overview && (!isLoading || hasItems) && showContent && (
           <ResourceOverview
             label={overview.label}
             activeId={activeId}
@@ -101,16 +111,23 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
           />
         )}
 
-        <Content
-          key={Components.GroupActions ? activeId : undefined}
-          items={visibleItems}
-          actions={Components.DropdownActions ?? {}}
-          isLoading={isLoading}
-          isFiltered={Boolean(search.trim()) || hasActiveUrlFilters || activeId !== 'all'}
-        />
+        {!!error && (
+          <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale={hasItems && showContent} />
+        )}
+        {showContent && (
+          <Content
+            key={Components.GroupActions ? activeId : undefined}
+            items={visibleItems}
+            actions={Components.DropdownActions ?? {}}
+            isLoading={isLoading}
+            isFiltered={Boolean(search.trim()) || hasActiveUrlFilters || activeId !== 'all'}
+          />
+        )}
       </AppContent>
 
-      {Components.GroupActions && <Components.GroupActions items={overview ? visibleItems : (items ?? EMPTY_ITEMS)} />}
+      {!error && Components.GroupActions && (
+        <Components.GroupActions items={overview ? visibleItems : (items ?? EMPTY_ITEMS)} />
+      )}
       {showTaskSheet && type !== 'Alert' && type !== 'Activity' && <TaskSheet type={type as ResourceType} />}
     </div>
   );

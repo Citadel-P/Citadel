@@ -5,7 +5,7 @@ import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const useBackupRepositoriesGroup = () => {
-  const { data, isLoading } = useRead('listBackupRepositories');
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories');
   const [repositories, setRepositories] = useState<BackupRepositoryView[] | undefined>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<BackupRepositoryView[]>([]);
@@ -56,5 +56,5 @@ export const useBackupRepositoriesGroup = () => {
     removeEventListeners,
   });
 
-  return { repositories, isLoading, capabilities };
+  return { error, refetch, isFetching, repositories, isLoading, capabilities };
 };

@@ -1,4 +1,4 @@
-import { OidcProviderView } from '@/api/generated/api.types';
+import { OidcProviderView, ResourceCapabilities } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
@@ -7,7 +7,7 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { OidcProviderInfoActions } from '../actions';
 import { OidcProviderForm } from './form';
 
-type OidcProviderFormResource = OidcProviderView & RequiredFormFields;
+type OidcProviderFormResource = OidcProviderView & RequiredFormFields & { capabilities: ResourceCapabilities };
 
 export const OidcProviderFormComponents: RequiredFormComponents<OidcProviderFormResource> = {
   AddForm: {
@@ -20,7 +20,9 @@ export const OidcProviderFormComponents: RequiredFormComponents<OidcProviderForm
     Header: {
       canEditTitle: true,
       canEditDescription: true,
-      Indicator: ({ resource }) => <StateIndicator value={Boolean((resource as OidcProviderView).enabled)} enableLabel />,
+      Indicator: ({ resource }) => (
+        <StateIndicator value={Boolean((resource as OidcProviderView).enabled)} enableLabel />
+      ),
       ActionButtons: ({ resource }) => {
         const { edit: _edit, ...actions } = OidcProviderInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
@@ -37,8 +39,11 @@ export const OidcProviderFormComponents: RequiredFormComponents<OidcProviderForm
       },
     ],
     useData(id: string) {
-      const { data, isLoading } = useRead('getOidcProvider', { id });
+      const { data, isLoading, error, refetch, isFetching } = useRead('getOidcProvider', { id });
       return {
+        error,
+        refetch,
+        isFetching,
         item: data?.data
           ? ({
               ...data.data,

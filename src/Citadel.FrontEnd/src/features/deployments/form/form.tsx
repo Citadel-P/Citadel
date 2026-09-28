@@ -1,3 +1,4 @@
+import { useFormDraftKey } from '@/lib/form-drafts';
 import {
   CreateDeploymentInput,
   PlatformView,
@@ -233,6 +234,7 @@ export const DeploymentForm = ({
     : duplicateFrom
       ? `deployment:duplicate:${duplicateFrom}`
       : `deployment:${id ?? 'new'}`;
+  const scopedDraftKey = useFormDraftKey(formDraftKey);
 
   const original = resource ?? ({} as DeploymentConfigView);
 
@@ -336,9 +338,9 @@ export const DeploymentForm = ({
   }, [adoptFrom, adoptionDraft?.draft, adoptionDraft?.previewFingerprint]);
 
   const refreshData = useCallback(() => {
-    localStorage.removeItem(formDraftKey);
+    if (scopedDraftKey) localStorage.removeItem(scopedDraftKey);
     queryClient.invalidateQueries({ queryKey: ['getDeploymentConfig', { deploymentId: id }] });
-  }, [formDraftKey, id, queryClient]);
+  }, [scopedDraftKey, id, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;
@@ -393,6 +395,7 @@ export const DeploymentForm = ({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this workload.',
@@ -407,6 +410,7 @@ export const DeploymentForm = ({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description of this workload.',
@@ -470,7 +474,9 @@ export const DeploymentForm = ({
                                 ? ({ $type: 'Build', buildProjectId: '', redeployOnBuild: false } as any)
                                 : ({ $type: v } as any),
                             updateBehavior:
-                              v === ImageSource.build ? UpdateBehavior.Disabled : prev.spec?.updateBehavior,
+                              v === ImageSource.build
+                                ? UpdateBehavior.Disabled
+                                : (prev.spec?.updateBehavior ?? UpdateBehavior.Disabled),
                             ports: portsAfterImageSourceChange(!!adoptFrom, prev.spec?.ports),
                           },
                         }))

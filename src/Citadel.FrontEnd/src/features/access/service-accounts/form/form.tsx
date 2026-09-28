@@ -54,7 +54,7 @@ import { getTokenExpirationPresets, isValidTokenExpiration } from './token-expir
 
 type ServiceAccountInput = CreateServiceAccountInput;
 type ServiceAccountFormResource = Partial<ServiceAccountInput> &
-  Pick<ServiceAccountView, 'id' | 'name' | 'description' | 'isEnabled'> & {
+  Pick<ServiceAccountView, 'id' | 'name' | 'description' | 'isEnabled' | 'actorId'> & {
     teams?: ResourceInfo[] | null;
     roles?: ResourceInfo[] | null;
     archivedAtUtc?: string | null;
@@ -71,7 +71,7 @@ const normalize = (resource?: ServiceAccountFormResource): ServiceAccountInput =
         roleIds: extractIds(resource.roles),
         resourceAccesses: (resource as ServiceAccountView).resourceAccesses as ServiceAccountResourceAccessInput[],
       } as ServiceAccountInput)
-    : ({ isEnabled: true, description: null, teamIds: [], roleIds: [], resourceAccesses: [] } as ServiceAccountInput);
+    : { name: '', isEnabled: true, description: null, teamIds: [], roleIds: [], resourceAccesses: [] };
 
 const TeamField = ({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) => {
   const [search, setSearch] = useState('');
@@ -248,6 +248,7 @@ export const ServiceAccountForm = ({
             items: [
               defineField<ServiceAccountInput, 'name'>({
                 key: 'name',
+                persistDraft: true,
                 label: 'Name',
                 required: true,
                 validate: (value) =>
@@ -258,6 +259,7 @@ export const ServiceAccountForm = ({
               }),
               defineField<ServiceAccountInput, 'description'>({
                 key: 'description',
+                persistDraft: true,
                 label: 'Description',
                 render: (value, set) => (
                   <Textarea

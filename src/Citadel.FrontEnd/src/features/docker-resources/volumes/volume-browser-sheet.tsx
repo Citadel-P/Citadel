@@ -340,7 +340,7 @@ async function readDownloadProblem(error: unknown): Promise<{ title: string; det
       if (problem) {
         return {
           title: problem.title ?? `Download failed (${error.status})`,
-          detail: problem.detail,
+          detail: problem.detail ?? undefined,
         };
       }
     }
@@ -356,7 +356,7 @@ async function readDownloadProblem(error: unknown): Promise<{ title: string; det
   if (problem) {
     return {
       title: problem.title ?? 'Download failed',
-      detail: problem.detail,
+      detail: problem.detail ?? undefined,
     };
   }
 

@@ -1,4 +1,4 @@
-import NotFound404 from '@/assets/404.svg';
+import NotFound404 from '@/assets/404.svg?react';
 
 export default function NotFound() {
   return (

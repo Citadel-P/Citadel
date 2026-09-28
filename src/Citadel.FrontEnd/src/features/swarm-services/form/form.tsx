@@ -263,7 +263,7 @@ export const SwarmServiceForm = ({
     [currentSpec.networkIds, networkItems],
   );
   const selectedIngressNetworks = useMemo(
-    () => networkItems.filter((network) => network.isIngress && currentSpec.networkIds.includes(network.id)),
+    () => networkItems.filter((network) => network.isIngress && currentSpec.networkIds?.includes(network.id)),
     [currentSpec.networkIds, networkItems],
   );
   const secretOptions = useMemo(
@@ -325,6 +325,7 @@ export const SwarmServiceForm = ({
                   items: [
                     defineField<FormValue, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this managed Service.',
@@ -339,6 +340,7 @@ export const SwarmServiceForm = ({
                     }),
                     defineField<FormValue, 'description'>({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional description of this Service.',
                       render: (value, set) => (
@@ -795,7 +797,6 @@ export const SwarmServiceForm = ({
                   label: 'Webhook',
                   title: 'Webhook',
                   description: 'Trigger an image update check from a Git provider, CI system, or external caller.',
-                  disabled: !automatedOperationsEnabled,
                   requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
                   items: [
                     defineField<FormValue, 'spec.webhook'>({

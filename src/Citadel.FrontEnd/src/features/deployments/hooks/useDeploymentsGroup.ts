@@ -15,7 +15,7 @@ export const useDeploymentsGroup = () => {
     if (selectedPlatformId) query.platformId = selectedPlatformId;
     return Object.keys(query).length > 0 ? { query } : undefined;
   }, [selectedPlatformId, selectedTagNames]);
-  const { data, isLoading } = useRead('listDeployments', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listDeployments', readArgs);
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<DeploymentView[]>([]);
@@ -41,29 +41,32 @@ export const useDeploymentsGroup = () => {
     [selectedPlatformId, selectedTagNames],
   );
 
-  const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView, action: string) => {
-    setDeployments((prev) => {
-      if (!prev) return prev;
-      if (action === 'create') {
-        return matchesActiveFilters(deployment) ? [...prev, deployment] : prev;
-      }
-      if (action === 'delete') {
-        return prev.filter((d) => d.id !== deployment.id);
-      }
+  const handleDeploymentInfoUpdated = useCallback(
+    (deployment: DeploymentView, action: string) => {
+      setDeployments((prev) => {
+        if (!prev) return prev;
+        if (action === 'create') {
+          return matchesActiveFilters(deployment) ? [...prev, deployment] : prev;
+        }
+        if (action === 'delete') {
+          return prev.filter((d) => d.id !== deployment.id);
+        }
 
-      const index = prev.findIndex((d) => d.id === deployment.id);
-      if (!matchesActiveFilters(deployment)) {
-        return index === -1 ? prev : prev.filter((d) => d.id !== deployment.id);
-      }
+        const index = prev.findIndex((d) => d.id === deployment.id);
+        if (!matchesActiveFilters(deployment)) {
+          return index === -1 ? prev : prev.filter((d) => d.id !== deployment.id);
+        }
 
-      if (index !== -1) {
-        const updated = [...prev];
-        updated[index] = deployment;
-        return updated;
-      }
-      return [...prev, deployment];
-    });
-  }, [matchesActiveFilters]);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = deployment;
+          return updated;
+        }
+        return [...prev, deployment];
+      });
+    },
+    [matchesActiveFilters],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -85,5 +88,5 @@ export const useDeploymentsGroup = () => {
     removeEventListeners,
   });
 
-  return { deployments, isLoading, capabilities, selectedTagNames, selectedPlatformId };
+  return { error, refetch, isFetching, deployments, isLoading, capabilities, selectedTagNames, selectedPlatformId };
 };

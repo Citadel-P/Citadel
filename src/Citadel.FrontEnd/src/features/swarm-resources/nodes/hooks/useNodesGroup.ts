@@ -11,7 +11,7 @@ export type SwarmNodeListView = SwarmNodeView & { name: string; tasks: SwarmTask
 export type SwarmNodeInfoView = SwarmNodeView & {
   name: string;
   platformId: string;
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
   tasks: SwarmTaskView[];
 };
 
@@ -27,7 +27,13 @@ export const useNodesGroup = (platformId: string) => {
     () => nodes.map((node) => ({ ...node, name: node.hostname || node.id, tasks: tasksByNode.get(node.id) ?? [] })),
     [nodes, tasksByNode],
   );
-  return { items, isLoading: query.isLoading || taskGroup.isLoading };
+  return {
+    items,
+    error: query.error ?? taskGroup.error,
+    refetch: () => Promise.all([query.refetch(), taskGroup.refetch()]),
+    isFetching: query.isFetching || taskGroup.isFetching,
+    isLoading: query.isLoading || taskGroup.isLoading,
+  };
 };
 
 export const useNodeInfoGroup = (platformId: string, nodeId: string) => {
@@ -60,8 +66,10 @@ export const useNodeInfoGroup = (platformId: string, nodeId: string) => {
   );
   return {
     resource,
+    error: query.error ?? taskGroup.error,
+    refetch: () => Promise.all([query.refetch(), taskGroup.refetch()]),
+    isFetching: query.isFetching || taskGroup.isFetching,
     isLoading: query.isLoading || taskGroup.isLoading,
-    error: query.error,
   };
 };
 

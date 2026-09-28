@@ -1,4 +1,5 @@
 import { PlatformConnectorType, PlatformType } from '@/api/generated/api.types';
+import { createPlatform } from '@/test/factories/resources';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor } from '@testing-library/react';
@@ -43,15 +44,36 @@ describe('Platform creation form', () => {
       tagIds: [],
     });
   });
+
+  it('preserves the current address when editing a local Platform when the submitted address is null', async () => {
+    const platform = createPlatform({ id: 'local-platform', address: 'http://localhost.docker' });
+    let requestBody: unknown;
+    server.use(
+      http.patch(`http://localhost/api/v1/platforms/${platform.id}`, async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json(platform);
+      }),
+    );
+
+    function EditPlatformHarness() {
+      const { save } = usePlatformForm('edit', platform);
+      return (
+        <button onClick={() => save({ name: 'renamed', address: null, connectorType: PlatformConnectorType.Local })}>
+          Save Platform
+        </button>
+      );
+    }
+
+    const { user } = renderCitadel(<EditPlatformHarness />);
+    await user.click(screen.getByRole('button', { name: 'Save Platform' }));
+    await waitFor(() => expect(requestBody).toMatchObject({ name: 'renamed', address: platform.address }));
+  });
 });
 
 const CreatePlatformHarness = () => {
   const { save } = usePlatformForm();
   return (
-    <button
-      type="button"
-      onClick={() => save({ ...createDefaultPlatformInput(), name: 'local-docker' })}
-    >
+    <button type="button" onClick={() => save({ ...createDefaultPlatformInput(), name: 'local-docker' })}>
       Create fixture Platform
     </button>
   );

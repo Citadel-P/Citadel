@@ -27,6 +27,7 @@ const appContext = {
   isLoading: false,
   currentPlatform: { id: 'platform-1', type: PlatformType.DockerSwarm } as PlatformView,
   platforms: [],
+  applicationInfo: undefined,
   unresolvedAlertCount: 0,
   liveAlertEvents: {},
   receivedAlertEventIds: [],

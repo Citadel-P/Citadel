@@ -11,14 +11,21 @@ export type SwarmConfigInfoView = SwarmConfigView & {
   platformId: string;
   description: null;
   status: boolean;
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
 };
 
 export const useConfigsGroup = (platformId: string) => {
   const args = useMemo(() => ({ platformId }), [platformId]);
   const query = useRead('listSwarmConfigs', args);
   const items = useLiveSwarmItems(platformId, 'listSwarmConfigs', args, query, selectConfigs);
-  return { items, capabilities: query.data?.data.capabilities, isLoading: query.isLoading };
+  return {
+    items,
+    capabilities: query.data?.data.capabilities,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };
 
 export const useConfigInfoGroup = (platformId: string, resourceId: string) => {
@@ -48,5 +55,11 @@ export const useConfigInfoGroup = (platformId: string, resourceId: string) => {
         : undefined,
     [config, currentPlatform, platformId],
   );
-  return { resource, isLoading: query.isLoading, error: query.error };
+  return {
+    resource,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };

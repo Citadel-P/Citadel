@@ -1,3 +1,4 @@
+import { notifyRequestError } from '@/lib/request-error';
 import { Loader2, MoreHorizontal } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -15,7 +16,6 @@ import { Input } from '../ui/input';
 import { ConfirmButton } from './action-with-dialog';
 import React from 'react';
 import { ActionData, DropdownActionComponent } from '@/pages/types';
-import { ProblemDetails } from '@/api/generated/api.types';
 import { useDialogHotkeys } from '@/lib/hooks';
 
 export interface DropdownAction {
@@ -126,41 +126,41 @@ export const RowActionDropdown = <T,>({
   );
 };
 
-const ActionDialog = ({ action, onClose }: { action: { key: string; data?: ActionData } | null; onClose: () => void }) => {
-  const [input, setInput] = useState('')
-  const [loading, setIsLoading] = useState(false)
-  const confirmButtonRef = useRef<HTMLButtonElement>(null)
+const ActionDialog = ({
+  action,
+  onClose,
+}: {
+  action: { key: string; data?: ActionData } | null;
+  onClose: () => void;
+}) => {
+  const [input, setInput] = useState('');
+  const [loading, setIsLoading] = useState(false);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
-  const hasData = !!action?.data
-  const isConfirmDisabled = action?.data ? (action.data.disabled || action.data.name !== input || loading) : true
+  const hasData = !!action?.data;
+  const isConfirmDisabled = action?.data ? action.data.disabled || action.data.name !== input || loading : true;
 
   const handleConfirm = () => {
-    if (!action?.data) return
+    if (!action?.data) return;
     try {
-      setIsLoading(true)
-      const maybePromise = action.data.onClick?.()
+      setIsLoading(true);
+      const maybePromise = action.data.onClick?.();
       Promise.resolve(maybePromise)
-        //.then(() => onClose())
-        .catch((err) => {
-          const problem = (err as any)?.error as ProblemDetails
-          if (problem && problem.status === 400) {
-            toast.error(`400: ${problem.title ?? 'Bad Request'}`, {
-              description: problem?.detail,
-            })
-          }
-        })
-        .finally(() => setIsLoading(false))
-    } catch {
-      setIsLoading(false)
+        .then(() => onClose())
+        .catch(notifyRequestError)
+        .finally(() => setIsLoading(false));
+    } catch (error) {
+      notifyRequestError(error);
+      setIsLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     if (hasData) {
-      setInput('')
-      setIsLoading(false)
+      setInput('');
+      setIsLoading(false);
     }
-  }, [hasData])
+  }, [hasData]);
 
   useDialogHotkeys({
     enabled: hasData,
@@ -168,9 +168,9 @@ const ActionDialog = ({ action, onClose }: { action: { key: string; data?: Actio
     onCancel: onClose,
     confirmDisabled: isConfirmDisabled,
     confirmButtonRef,
-  })
+  });
 
-  if (!hasData) return null
+  if (!hasData) return null;
 
   const { name, title, icon, variant, description } = action.data!;
 
@@ -184,8 +184,8 @@ const ActionDialog = ({ action, onClose }: { action: { key: string; data?: Actio
         <div className="flex flex-col gap-4 my-4">
           <p
             onClick={() => {
-              navigator.clipboard.writeText(name)
-              toast(`Copied "${name}" to clipboard!`)
+              navigator.clipboard.writeText(name);
+              toast(`Copied "${name}" to clipboard!`);
             }}
             className="cursor-pointer break-all">
             Please enter <b>{name}</b> below to confirm this action.
@@ -207,8 +207,8 @@ const ActionDialog = ({ action, onClose }: { action: { key: string; data?: Actio
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
+  );
+};
 
 export const DropdownActionButton = forwardRef<
   HTMLDivElement,

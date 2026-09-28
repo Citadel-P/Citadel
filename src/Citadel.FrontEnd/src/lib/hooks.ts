@@ -1,3 +1,4 @@
+import { notifyRequestError, requestErrorStatus } from '@/lib/request-error';
 import { resources } from '@/api/generated/resources';
 import {
   useMutation,
@@ -13,7 +14,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import {
   AnyFn,
-  ApiFn,
   Cancellable,
   KnownResourceName,
   PluralResourceMap,
@@ -23,7 +23,7 @@ import {
   UseMutateVariables,
   UseReadArgs,
 } from '@/api/types';
-import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
+import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
 import {
@@ -32,8 +32,8 @@ import {
   QueueBackupRunInput,
   RunAutomationActionInput,
   TestAutomationActionInput,
-  ProblemDetails,
   PullImageInput,
+  RestoreVolumeInput,
   RollbackStackInput,
   ScaleSwarmServiceInput,
 } from '@/api/generated/api.types';
@@ -98,7 +98,7 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
   const resDef = resources[resource];
   if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
 
-  const fn = apiClient.api[resource] as ApiFn<TResource>;
+  const fn = apiClient.api[resource] as AnyFn;
 
   const mutation = useMutation<ResourceResponse<TResource>, Error, TVariables>({
     mutationKey: [resource],
@@ -223,14 +223,10 @@ export function useConfirmByName(args: {
       const maybe = onConfirm?.();
       Promise.resolve(maybe)
         .then(() => onClose?.())
-        .catch((err) => {
-          const problem = (err as any)?.error as ProblemDetails;
-          if (problem && problem.status === 400) {
-            toast.error(`400: ${problem.title ?? 'Bad Request'}`, { description: problem?.detail });
-          }
-        })
+        .catch(notifyRequestError)
         .finally(() => setIsLoading(false));
-    } catch {
+    } catch (error) {
+      notifyRequestError(error);
       setIsLoading(false);
     }
   }, [onConfirm, onClose]);
@@ -275,25 +271,20 @@ export function useHTTPErrorHandler() {
   const client = useQueryClient();
 
   useEffect(() => {
-    const handleError = (error: ProblemDetails) => {
-      if (!error) return;
-      if (error.status != null) {
-        if (error.status === 401) return;
-        toast.error(error.status + ' ' + error.title, {
-          description: error.status === 400 ? getValidationErrors(error) : error.detail,
-        });
-      }
+    const handleError = (error: unknown) => {
+      if (requestErrorStatus(error) === 401) return; // Authentication owns session recovery.
+      notifyRequestError(error);
     };
     const mutationUnsubscribe = client.getMutationCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {
-        handleError(event.action.error.error);
+        handleError(event.action.error);
       }
     });
 
     const queryUnsubscribe = client.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {
         if ((event.query.meta as { suppressErrorToast?: boolean } | undefined)?.suppressErrorToast) return;
-        handleError(event.action.error.error);
+        handleError(event.action.error);
       }
     });
 
@@ -390,6 +381,7 @@ export const useWindowDimensions = () => {
 
 type PulledStreamProps =
   | PullImageInput
+  | RestoreVolumeInput
   | ApplyDeploymentInput
   | ApplyStackInput
   | RollbackStackInput
@@ -950,7 +942,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     mutate,
   } = usePulledStream(handleChunkReceived, endpoint, resetTimer, method);
 
-  const logs = useMemo(() => {
+  const logs = useMemo<StreamLogEntry[]>(() => {
     const activeLogs = Array.from(activeItems.values()).map((message) => ({ message }));
     const combined = [...history, ...activeLogs];
     if (combined.length === 0 && isPending) return [{ message: pendingMessage ?? 'Connecting to registry...' }];

@@ -53,12 +53,12 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   useData: (platformId: string, resourceId: string) => {
     const [searchParams] = useSearchParams();
     const dockerNodeId = searchParams.get('dockerNodeId') ?? undefined;
-    const { data, isLoading, error } = useRead('inspectImage', {
+    const { data, isLoading, error, refetch, isFetching } = useRead('inspectImage', {
       platformId,
       imageId: resourceId,
       query: { dockerNodeId },
     });
-    return { resource: data?.data, isLoading, error };
+    return { refetch, isFetching, resource: data?.data, isLoading, error };
   },
 };
 

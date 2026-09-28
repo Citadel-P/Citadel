@@ -51,7 +51,7 @@ export const SwarmLogs = ({
   platformId: string;
   resourceId: string;
   resource: 'service' | 'task';
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
 }) => {
   const appContext = useContext(AppContext);
   const currentPlatform = appContext?.currentPlatform;

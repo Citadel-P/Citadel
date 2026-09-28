@@ -98,8 +98,7 @@ export const GitRepoForm = ({
       syncIntervalMinutes: 5,
       webhook: { enabled: false },
     } as GitRepositoryConfigView);
-  const currentSyncMode =
-    update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
+  const currentSyncMode = update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
@@ -134,6 +133,7 @@ export const GitRepoForm = ({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'A unique name to identify this repository.',
@@ -144,6 +144,7 @@ export const GitRepoForm = ({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional notes about this repository.',
                       render: (val, set) => (
@@ -159,11 +160,7 @@ export const GitRepoForm = ({
                       label: 'Tags',
                       description: 'Optional tags for filtering and grouping this repository.',
                       render: (val, set) => (
-                        <ResourceTagSelector
-                          value={val}
-                          disabled={disabled}
-                          onChange={(tagIds) => set({ tagIds })}
-                        />
+                        <ResourceTagSelector value={val} disabled={disabled} onChange={(tagIds) => set({ tagIds })} />
                       ),
                     }),
                   ],
@@ -253,7 +250,8 @@ export const GitRepoForm = ({
                       label: 'Pull interval',
                       required: true,
                       description: 'How often Citadel checks this repository for changes, in minutes.',
-                      validate: (v) => (v === undefined || v === null || v < 1 ? 'Interval must be at least 1 minute' : null),
+                      validate: (v) =>
+                        v === undefined || v === null || v < 1 ? 'Interval must be at least 1 minute' : null,
                       render: (val, set) => (
                         <FieldInput
                           type="number"

@@ -75,7 +75,7 @@ export const ActionButton = forwardRef<
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex min-w-0 flex-1 cursor-not-allowed" tabIndex={0}>
+          <span className="inline-flex min-w-max flex-1 cursor-not-allowed" tabIndex={0}>
             {button}
           </span>
         </TooltipTrigger>
@@ -122,6 +122,7 @@ export const ActionWithDialog = ({
   icon,
   iconPosition,
   disabled,
+  disabledReason,
   onClick,
   additional,
   targetClassName,
@@ -136,6 +137,7 @@ export const ActionWithDialog = ({
   icon: ReactNode;
   iconPosition?: 'left' | 'right';
   disabled?: boolean;
+  disabledReason?: string;
   onClick?: () => void | Promise<unknown>;
   additional?: ReactNode;
   targetClassName?: string;
@@ -184,6 +186,7 @@ export const ActionWithDialog = ({
             icon={icon}
             iconPosition={iconPosition}
             disabled={disabled}
+            disabledReason={disabledReason}
             onClick={() => setOpen(true)}
             loading={isLoading}
             variant={variant}
@@ -259,6 +262,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
   icon,
   iconPosition,
   disabled,
+  disabledReason,
   onClick,
   additional,
   targetClassName,
@@ -271,6 +275,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
   icon: ReactNode;
   iconPosition?: 'left' | 'right';
   disabled?: boolean;
+  disabledReason?: string;
   onClick?: () => void | Promise<unknown>;
   additional?: ReactNode;
   targetClassName?: string;
@@ -308,6 +313,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
           icon={icon}
           iconPosition={iconPosition}
           disabled={disabled}
+          disabledReason={disabledReason}
           onClick={() => setOpen(true)}
           loading={isLoading}
           variant={variant}

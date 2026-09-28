@@ -1,4 +1,4 @@
-import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { RequiredFormComponents, ResourceFormDataHookResult } from '@/pages/types';
 import { TeamForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useRead } from '@/lib/hooks';
@@ -40,9 +40,9 @@ export const TeamFormComponents: RequiredFormComponents = {
       },
     ],
 
-    useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getTeam', { id });
-      return { item: data?.data as any, isLoading };
+    useData: function (id?: string): ResourceFormDataHookResult {
+      const { data, isLoading, error, refetch, isFetching } = useRead('getTeam', { id });
+      return { error, refetch, isFetching, item: data?.data as any, isLoading };
     },
   },
 };

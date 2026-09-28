@@ -1,3 +1,6 @@
+import { toast } from 'sonner';
+import { pickDraftFields, useFormDraftKey } from '@/lib/form-drafts';
+import { notifyRequestError } from '@/lib/request-error';
 import React, { useMemo, useState, useCallback, useRef, memo, Ref, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +48,8 @@ export interface FieldConfig<T> {
   ignoreFormDisabled?: boolean;
   validate?: (value: any) => string | null;
   hideValidationMessage?: boolean;
+  /** Opt in only after auditing this scalar field for credentials or other secrets. */
+  persistDraft?: boolean;
   render: (value: any, set: FieldChange<T>) => React.ReactNode;
 }
 
@@ -108,7 +113,7 @@ interface StoredDraft<T> {
 /*                               Schema helpers                               */
 /* -------------------------------------------------------------------------- */
 
-export function defineField<T, K extends Path<T>>(
+export function defineField<T, K extends Path<T> = Path<T>>(
   config: Omit<FieldConfig<T>, 'key'> & { key: K },
 ): FieldItemConfig<T> {
   return {
@@ -862,6 +867,8 @@ function loadDraft<T>(key: string, expectedVersion?: string | number): StoredDra
     if (!parsed || typeof parsed !== 'object') return null;
 
     if (expectedVersion !== undefined && parsed.version !== expectedVersion) {
+      clearDraft(key);
+      toast.info('An older browser draft was discarded because the saved fields changed.');
       return null;
     }
 
@@ -910,8 +917,8 @@ export function FormShell<T>({
   disabled,
   mode = 'edit',
   pending = false,
-  draftKey,
-  draftVersion,
+  draftKey: unscopedDraftKey,
+  draftVersion: schemaVersion,
   onReset,
   saveLabel = 'Save',
   saveDisabled = false,
@@ -933,6 +940,7 @@ export function FormShell<T>({
   saveDisabled?: boolean;
   confirmSave?: (payload: T) => Promise<boolean>;
 }) {
+  const draftKey = useFormDraftKey(unscopedDraftKey);
   const updateRef = React.useRef(update);
   updateRef.current = update;
 
@@ -946,6 +954,18 @@ export function FormShell<T>({
   const sections = Object.keys(schema);
 
   const fieldMap = useMemo(() => extractFieldMap(schema), [schema]);
+  const draftPaths = JSON.stringify(
+    Object.values(fieldMap)
+      .filter((field) => field.persistDraft)
+      .map((field) => field.key),
+  );
+  const safeDraft = useCallback(
+    (value: Partial<T>) => pickDraftFields(value, JSON.parse(draftPaths) as string[]),
+    [draftPaths],
+  );
+  // Compare only persisted fields: no credentials enter the draft or its version.
+  const draftVersion = JSON.stringify([schemaVersion, safeDraft(original as Partial<T>)]);
+  const lastDraftKey = useRef(draftKey);
   const effectiveOriginal = useMemo(() => optimisticOriginal ?? original, [optimisticOriginal, original]);
   const merged = useMemo(() => deepMerge<T>(effectiveOriginal, update), [effectiveOriginal, update]);
 
@@ -1051,16 +1071,29 @@ export function FormShell<T>({
 
   /* ------------------------- Load draft on first mount ------------------------- */
   useEffect(() => {
+    if (lastDraftKey.current !== draftKey) {
+      setUpdate({});
+      setOptimisticOriginal(null);
+      setTouched({});
+      setPreviewOpen(false);
+      setDraftInfo({ hasDraft: false });
+      setDraftLoadedBanner(false);
+      lastDraftKey.current = draftKey;
+    }
     if (!draftKey) return;
-    if (typeof window === 'undefined') return;
-
     const stored = loadDraft<Partial<T>>(draftKey, draftVersion);
     if (!stored || !stored.update) return;
 
-    setUpdate((prev) => deepMerge<Partial<T>>(prev ?? {}, stored.update));
+    const restored = safeDraft(stored.update);
+    if (!Object.keys(restored).length) {
+      clearDraft(draftKey);
+      return;
+    }
+    persistDraft(draftKey, draftVersion, restored);
+    setUpdate((prev) => deepMerge<Partial<T>>(prev ?? {}, restored));
     setDraftInfo({ hasDraft: true, savedAt: stored.savedAt });
     setDraftLoadedBanner(true);
-  }, [draftKey, draftVersion, setUpdate]);
+  }, [draftKey, draftVersion, setUpdate, safeDraft]);
 
   /* ----------------------------- Field change API ----------------------------- */
   const handleChange = useCallback(
@@ -1079,13 +1112,19 @@ export function FormShell<T>({
       setUpdate(next);
 
       if (draftKey && typeof window !== 'undefined') {
-        const savedAt = persistDraft<Partial<T>>(draftKey, draftVersion, next);
+        const safeUpdate = safeDraft(next);
+        if (!Object.keys(safeUpdate).length) {
+          clearDraft(draftKey);
+          setDraftInfo({ hasDraft: false });
+          return;
+        }
+        const savedAt = persistDraft<Partial<T>>(draftKey, draftVersion, safeUpdate);
         if (savedAt) {
           setDraftInfo({ hasDraft: true, savedAt });
         }
       }
     },
-    [disabled, setUpdate, draftKey, draftVersion],
+    [disabled, setUpdate, draftKey, draftVersion, safeDraft],
   );
 
   // Use a Ref for handleChange to ensure the cached handlers always call the latest version
@@ -1174,12 +1213,13 @@ export function FormShell<T>({
         setDraftInfo({ hasDraft: false, savedAt: undefined });
         setDraftLoadedBanner(false);
       }
-    } catch {
+    } catch (error) {
+      notifyRequestError(error);
       if (draftKey && typeof window !== 'undefined' && backupDraft && backupDraft.update) {
-        persistDraft<Partial<T>>(draftKey, backupDraft.version, backupDraft.update);
+        persistDraft<Partial<T>>(draftKey, backupDraft.version, safeDraft(backupDraft.update));
       }
     }
-  }, [validateAll, merged, confirmSave, onSave, draftKey, draftVersion, setUpdate]);
+  }, [validateAll, merged, confirmSave, onSave, draftKey, draftVersion, setUpdate, safeDraft]);
 
   /* -------------------------------------------------------------------------- */
   /*                                    UI                                     */
@@ -1187,11 +1227,16 @@ export function FormShell<T>({
 
   return (
     <div ref={formRef} className="flex flex-col gap-6">
+      {draftKey && (
+        <p className="text-xs text-muted-foreground">
+          Browser drafts save only the name and description. Re-enter other unsaved settings after leaving this page.
+        </p>
+      )}
       {/* Draft banner (if we restored a draft) */}
       {draftLoadedBanner && (
         <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-3">
           <div className="flex flex-row gap-0.5">
-            <span>Restored an unsaved draft from this browser</span>
+            <span>Restored saved fields from this browser. Re-enter credentials and other unsaved settings.</span>
             {lastSavedAtLabel && <span>(updated {lastSavedAtLabel}).</span>}
           </div>
           <div className="flex items-center gap-1">

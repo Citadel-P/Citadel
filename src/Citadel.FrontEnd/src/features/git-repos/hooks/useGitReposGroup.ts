@@ -7,7 +7,7 @@ import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useGitReposGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
-  const { data, isLoading } = useRead(
+  const { data, isLoading, error, refetch, isFetching } = useRead(
     'listGitRepositories',
     selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
@@ -63,5 +63,5 @@ export const useGitReposGroup = () => {
     removeEventListeners,
   });
 
-  return { gitRepos, capabilities, isLoading, selectedTagNames };
+  return { error, refetch, isFetching, gitRepos, capabilities, isLoading, selectedTagNames };
 };

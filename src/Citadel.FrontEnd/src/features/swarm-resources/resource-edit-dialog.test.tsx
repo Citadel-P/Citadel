@@ -24,6 +24,7 @@ const capabilities = {
   canViewLogs: false,
   canInspect: true,
   canOpenTerminal: false,
+  canManageNodeAgents: false,
   canPull: false,
 };
 

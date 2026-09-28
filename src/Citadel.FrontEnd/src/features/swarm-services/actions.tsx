@@ -25,8 +25,10 @@ export const applySwarmServiceAction: ActionConfig<ManagedSwarmServiceView, any>
     return {
       canExecute,
       isPending: false,
-      run: () =>
-        canExecute && open({ kind: 'swarmService', payload: { id: service.id, name: service.name, action: 'apply' } }),
+      run: () => {
+        if (canExecute)
+          open({ kind: 'swarmService', payload: { id: service.id, name: service.name, action: 'apply' } });
+      },
     };
   },
 };
@@ -46,9 +48,10 @@ export const forceUpdateSwarmServiceAction: ActionConfig<ManagedSwarmServiceView
     return {
       canExecute,
       isPending: false,
-      run: () =>
-        canExecute &&
-        open({ kind: 'swarmService', payload: { id: service.id, name: service.name, action: 'force-update' } }),
+      run: () => {
+        if (canExecute)
+          open({ kind: 'swarmService', payload: { id: service.id, name: service.name, action: 'force-update' } });
+      },
     };
   },
 };

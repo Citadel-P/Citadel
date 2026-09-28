@@ -147,7 +147,7 @@ export const NodesTable = ({
             <RowActionMenu
               resource={row.original.node}
               actions={actions}
-              onAction={({ key }) => key === 'edit' && setEditing(row.original.node)}
+              onAction={({ key }) => key === 'edit' && isNodeRow(row.original) && setEditing(row.original.node)}
             />
           ) : null,
         enableSorting: false,

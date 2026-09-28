@@ -30,8 +30,15 @@ export const AlertEventComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { pagedAlertEvents, isLoading } = useAlertEventsList();
-    return { items: pagedAlertEvents?.items ?? EMPTY_ALERT_EVENTS, isLoading, capabilities: undefined };
+    const { pagedAlertEvents, isLoading, error, refetch, isFetching } = useAlertEventsList();
+    return {
+      error,
+      refetch,
+      isFetching,
+      items: pagedAlertEvents?.items ?? EMPTY_ALERT_EVENTS,
+      isLoading,
+      capabilities: undefined,
+    };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { Link, Route, Routes } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 
 const accountId = '019ffb55-f35e-7178-91f2-281696860dc7';
 
@@ -12,55 +12,75 @@ vi.hoisted(() => {
 });
 
 vi.mock('@/features', async () => {
-  const { useMemo, useRef } = await import('react');
+  const { useMemo, useRef, createElement } = await import('react');
+  const { ResourceFormView } = await import('./resource-form-view');
+  const { useRead } = await import('@/lib/hooks');
   const item = (id: string, name: string) => ({ id, name, description: null, capabilities: { canWrite: true } });
-  return {
-    ResourceFormComponents: {
-      Deployment: {
-        EditForm: {
-          skipMetadataUpdate: true,
-          Header: { Indicator: () => null, ActionButtons: () => null },
-          Tabs: [],
-          useData: (id: string) => {
-            const originalId = useRef(id);
-            return { item: item(originalId.current, `Deployment ${originalId.current}`), isLoading: false };
-          },
-        },
-      },
-      Platform: {
-        EditForm: {
-          skipMetadataUpdate: true,
-          Header: { Indicator: () => null, ActionButtons: () => null },
-          Tabs: [],
-          useData: (id: string) => {
-            const resource = useMemo(() => item(id, `Platform ${id}`), [id]);
-            return { item: resource, isLoading: false };
-          },
-        },
-      },
-      ServiceAccount: {
-        EditForm: {
-          skipMetadataUpdate: true,
-          supportsHeaderRename: true,
-          Header: {
-            canEditDescription: false,
-            Indicator: () => null,
-            ActionButtons: () => null,
-          },
-          Tabs: [],
-          useData: () => ({
-            item: {
-              id: '019ffb55-f35e-7178-91f2-281696860dc7',
-              name: 'old-account-name',
-              description: null,
-              status: 'Active',
-              capabilities: { canWrite: true },
-            },
-            isLoading: false,
-          }),
+  const components = {
+    Registry: {
+      EditForm: {
+        skipMetadataUpdate: true,
+        Header: { Indicator: () => null, ActionButtons: () => null },
+        Tabs: [],
+        useData: (id: string) => {
+          const { data, isLoading, error, refetch, isFetching } = useRead('getRegistryConfig', { id });
+          return { item: data?.data, isLoading, error, refetch, isFetching };
         },
       },
     },
+    Deployment: {
+      EditForm: {
+        skipMetadataUpdate: true,
+        Header: { Indicator: () => null, ActionButtons: () => null },
+        Tabs: [],
+        useData: (id: string) => {
+          const originalId = useRef(id);
+          return { item: item(originalId.current, `Deployment ${originalId.current}`), isLoading: false };
+        },
+      },
+    },
+    Platform: {
+      EditForm: {
+        skipMetadataUpdate: true,
+        Header: { Indicator: () => null, ActionButtons: () => null },
+        Tabs: [],
+        useData: (id: string) => {
+          const resource = useMemo(() => item(id, `Platform ${id}`), [id]);
+          return { item: resource, isLoading: false };
+        },
+      },
+    },
+    ServiceAccount: {
+      EditForm: {
+        skipMetadataUpdate: true,
+        supportsHeaderRename: true,
+        Header: {
+          canEditDescription: false,
+          Indicator: () => null,
+          ActionButtons: () => null,
+        },
+        Tabs: [],
+        useData: () => ({
+          item: {
+            id: '019ffb55-f35e-7178-91f2-281696860dc7',
+            name: 'old-account-name',
+            description: null,
+            status: 'Active',
+            capabilities: { canWrite: true },
+          },
+          isLoading: false,
+        }),
+      },
+    },
+  };
+  return {
+    ResourceFormPages: Object.fromEntries(
+      Object.entries(components).map(([type, Components]) => [
+        type,
+        (props: { mode: 'add' | 'edit'; type: import('@/api/types').ResourceType }) =>
+          createElement(ResourceFormView, { ...props, Components: { AddForm: {}, ...Components } }),
+      ]),
+    ),
   };
 });
 
@@ -128,5 +148,28 @@ describe('ResourceForm navigation', () => {
     await view.user.click(view.getByRole('link', { name: 'Open second deployment' }));
     expect(view.getByText('Deployment second-id')).toBeVisible();
     expect(view.queryByText('Deployment first-id')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceForm failed reads', () => {
+  it.each([403, 404, 503])('replaces the loader with a recoverable error for HTTP %s', async (status) => {
+    server.use(
+      http.get('http://localhost/api/v1/registries/failing/_cfg', () => HttpResponse.json({ status }, { status })),
+    );
+    const { user } = renderCitadel(
+      <Routes>
+        <Route path="/:type/edit/:id" element={<ResourceForm mode="edit" />} />
+      </Routes>,
+      { route: '/registries/edit/failing' },
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load this resource');
+    server.use(
+      http.get('http://localhost/api/v1/registries/failing/_cfg', () =>
+        HttpResponse.json({ id: 'failing', name: 'Recovered registry', capabilities: { canWrite: true } }),
+      ),
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Recovered registry')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

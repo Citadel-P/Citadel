@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import { ErrorBoundary } from '@/components/custom/error-boundary';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from '@/components/ui/sonner';
 import '@fontsource-variable/geist/index.css';
@@ -15,9 +16,7 @@ import { ApiClientProvider } from './api/api-client-provider';
 import { AuthProvider } from './features/auth/auth-provider';
 import LoadingBarWrapper from './components/custom/loading-bar-wrapper';
 import { Router } from './router';
-import { preloadMonaco } from './lib/monaco/monaco-preloader';
 import { SetupProvider } from './features/setup/setup-provider';
-import { useSetupContext } from './features/setup/setup-context';
 
 const initialAppearance = readBootstrapAppearance();
 applyAppearanceToDocument(initialAppearance);
@@ -29,32 +28,21 @@ void document.fonts
   .then(() => {
     createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
-        <QueryClientWrapper>
-          <ApiClientProvider>
-            <SetupProvider>
-              <AuthProvider>
-                <AppearanceProvider>
-                  <LoadingBarWrapper />
-                  <AppInitializer />
-                  <Router />
-                  <Toaster richColors toastOptions={{}} />
-                </AppearanceProvider>
-              </AuthProvider>
-            </SetupProvider>
-          </ApiClientProvider>
-        </QueryClientWrapper>
+        <ErrorBoundary root>
+          <QueryClientWrapper>
+            <ApiClientProvider>
+              <SetupProvider>
+                <AuthProvider>
+                  <AppearanceProvider>
+                    <LoadingBarWrapper />
+                    <Router />
+                    <Toaster richColors toastOptions={{}} />
+                  </AppearanceProvider>
+                </AuthProvider>
+              </SetupProvider>
+            </ApiClientProvider>
+          </QueryClientWrapper>
+        </ErrorBoundary>
       </React.StrictMode>,
     );
   });
-
-// Load monaco once Citadel is started
-function AppInitializer() {
-  const { isSetupReady, requiresSetup, error } = useSetupContext();
-
-  useEffect(() => {
-    if (!isSetupReady || requiresSetup || error) return;
-    preloadMonaco();
-  }, [isSetupReady, requiresSetup, error]);
-
-  return null;
-}

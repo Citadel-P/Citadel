@@ -6,7 +6,6 @@ import {
   BackupRepositoryType,
   BackupRepositoryView,
   BackupSourceSpec,
-  BackupSourceSpecCitadelSystemBackupSource,
   BackupSourceSpecDeploymentBackupSource,
   BackupSourceSpecDockerVolumeBackupSource,
   BackupSourceSpecStackBackupSource,
@@ -229,6 +228,7 @@ export function BackupPolicyForm({
                   items: [
                     defineField<BackupPolicyFormValue, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Unique name for this backup policy.',
@@ -244,6 +244,7 @@ export function BackupPolicyForm({
                     }),
                     defineField<BackupPolicyFormValue, 'description'>({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional notes for operators.',
@@ -1161,14 +1162,14 @@ function volumeKindLabel(kind: StackVolumeKind) {
   }
 }
 
-function createCitadelSystemSource(): BackupSourceSpecCitadelSystemBackupSource {
+function createCitadelSystemSource(): Extract<BackupSourceSpec, { $type: 'CitadelSystem' }> {
   return {
     $type: BackupSourceType.CitadelSystem,
     stableKey: null,
   };
 }
 
-function createDockerVolumeSource(): BackupSourceSpecDockerVolumeBackupSource {
+function createDockerVolumeSource(): Extract<BackupSourceSpec, { $type: 'DockerVolume' }> {
   return {
     $type: BackupSourceType.DockerVolume,
     platformId: '',
@@ -1178,7 +1179,7 @@ function createDockerVolumeSource(): BackupSourceSpecDockerVolumeBackupSource {
   };
 }
 
-function createStackSource(): BackupSourceSpecStackBackupSource {
+function createStackSource(): Extract<BackupSourceSpec, { $type: 'Stack' }> {
   return {
     $type: BackupSourceType.Stack,
     stackId: '',
@@ -1186,7 +1187,7 @@ function createStackSource(): BackupSourceSpecStackBackupSource {
   };
 }
 
-function createDeploymentSource(): BackupSourceSpecDeploymentBackupSource {
+function createDeploymentSource(): Extract<BackupSourceSpec, { $type: 'Deployment' }> {
   return {
     $type: BackupSourceType.Deployment,
     deploymentId: '',
@@ -1194,7 +1195,7 @@ function createDeploymentSource(): BackupSourceSpecDeploymentBackupSource {
   };
 }
 
-function createSwarmServiceSource(): BackupSourceSpecSwarmServiceBackupSource {
+function createSwarmServiceSource(): Extract<BackupSourceSpec, { $type: 'SwarmService' }> {
   return {
     $type: BackupSourceType.SwarmService,
     swarmServiceId: '',
@@ -1207,7 +1208,7 @@ function isSourceLocked(resource?: BackupPolicyView) {
 }
 
 function getRepositoryCompatibilityMessage(
-  sourceType: BackupSourceType,
+  sourceType: BackupSourceSpec['$type'],
   repository?: BackupRepositoryView,
   sourcePlatform?: PlatformView,
   sourcePlatformId?: string,

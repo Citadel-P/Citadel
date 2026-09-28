@@ -1,5 +1,5 @@
 import { useMemo, useState, FormEvent } from 'react';
-import LogoIcon from '@/assets/logo.svg';
+import LogoIcon from '@/assets/logo.svg?react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoaderCircle, ShieldCheck } from 'lucide-react';
