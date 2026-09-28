@@ -276,7 +276,7 @@ const runColumns = (
     header: ({ column }) => <SortableCell cellName="Added" column={column} />,
     cell: ({ row }) => (
       <span className="text-sm tabular-nums">
-        {(row.original.bytesAdded ?? 0) > 0 ? byteTransform(row.original.bytesAdded, 2) : '-'}
+        {Number(row.original.bytesAdded ?? 0) > 0 ? byteTransform(row.original.bytesAdded, 2) : '-'}
       </span>
     ),
     sortingFn: (rowA, rowB) => Number(rowA.original.bytesAdded ?? 0) - Number(rowB.original.bytesAdded ?? 0),

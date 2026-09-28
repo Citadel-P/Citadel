@@ -34,6 +34,8 @@ function formatBuildRunLogTimestamp(value: unknown): string | undefined {
 }
 
 function getBuildRunLogSeverity(message: string): LogSeverity | undefined {
+  // ANSI escape sequences start with the ESC control character.
+  // eslint-disable-next-line no-control-regex
   const plain = message.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').trim();
   const text = plain.replace(/^#\d+\s+(?:\d+(?:\.\d+)?\s+)?/, '');
 

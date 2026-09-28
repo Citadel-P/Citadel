@@ -6,7 +6,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useStackGroup = (stackId: string) => {
-  const { data, isLoading } = useRead('getStack', { stackId });
+  const { data, isLoading, error, refetch, isFetching } = useRead('getStack', { stackId });
   const queryClient = useQueryClient();
   const [stackUpdate, setStackUpdate] = useState<Partial<StackView> | null>(null);
 
@@ -60,5 +60,5 @@ export const useStackGroup = (stackId: string) => {
     removeEventListeners,
   });
 
-  return { stack, isLoading };
+  return { error, refetch, isFetching, stack, isLoading };
 };

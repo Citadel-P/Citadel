@@ -142,6 +142,7 @@ export const PlatformForm = ({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Provide a unique name for this platform.',
@@ -152,6 +153,7 @@ export const PlatformForm = ({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description.',
@@ -207,9 +209,7 @@ export const PlatformForm = ({
                         <FieldSwitch
                           id="prune-historical-swarm-task-containers"
                           checked={value !== false}
-                          onChange={(pruneHistoricalSwarmTaskContainers) =>
-                            set({ pruneHistoricalSwarmTaskContainers })
-                          }
+                          onChange={(pruneHistoricalSwarmTaskContainers) => set({ pruneHistoricalSwarmTaskContainers })}
                           disabled={formDisabled}
                         />
                       ),

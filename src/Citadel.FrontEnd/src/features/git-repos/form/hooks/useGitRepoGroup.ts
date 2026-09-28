@@ -5,7 +5,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useGitRepoGroup = (id: string | undefined) => {
-  const { data, isLoading } = useRead('getGitRepository', { id });
+  const { data, isLoading, error, refetch, isFetching } = useRead('getGitRepository', { id });
   const [gitRepo, setGitRepo] = useState<GitRepositoryView | undefined>(data?.data);
   const lastDataRef = useRef<GitRepositoryView | undefined>(data?.data);
 
@@ -53,5 +53,5 @@ export const useGitRepoGroup = (id: string | undefined) => {
     removeEventListeners,
   });
 
-  return { gitRepo, isLoading };
+  return { error, refetch, isFetching, gitRepo, isLoading };
 };

@@ -1,3 +1,4 @@
+import { createManagedSwarmService } from '@/test/factories/resources';
 import {
   ManagedSwarmServiceView,
   PlatformType,
@@ -259,6 +260,7 @@ describe('SwarmServiceForm', () => {
 
   it('hydrates an external registry and image reference when editing', () => {
     const resource = {
+      ...createManagedSwarmService(),
       id: 'service-id',
       name: 'redis-service',
       platformId,
@@ -289,6 +291,7 @@ describe('SwarmServiceForm', () => {
 
   it('disables an enabled webhook when image update behavior is disabled', async () => {
     const resource = {
+      ...createManagedSwarmService(),
       id: 'service-id',
       name: 'redis-service',
       platformId,

@@ -1,4 +1,4 @@
-import LogoIcon from '@/assets/logo.svg';
+import LogoIcon from '@/assets/logo.svg?react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

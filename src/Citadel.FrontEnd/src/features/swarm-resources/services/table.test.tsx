@@ -1,3 +1,4 @@
+import { createSwarmTask } from '@/test/factories/resources';
 import {
   ContainerDataView,
   ContainerStateStatus,
@@ -12,6 +13,7 @@ import { ServicesTable } from './table';
 describe('ServicesTable', () => {
   it('shows streamed task CPU and memory when runtime containers are supplied', async () => {
     const task = {
+      ...createSwarmTask(),
       id: 'task-1',
       name: 'web.1',
       serviceId: 'service-1',

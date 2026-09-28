@@ -1,3 +1,5 @@
+import { canShowCachedResource } from '@/lib/request-error';
+import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { AppContent } from '@/components/custom/app-content';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { SearchField } from '@/components/custom/search-field';
@@ -155,18 +157,27 @@ type TabContentWrapperProps<T> = {
 };
 
 const TabContentWrapper = <T,>({ tab, Components, search }: TabContentWrapperProps<T>) => {
-  const { items = [], isLoading = false } = tab.useData?.() ?? {};
+  const { items = [], isLoading = false, error, refetch, isFetching } = tab.useData?.() ?? {};
   const filtered = Components.filterItems ? Components.filterItems(items, search) : items;
+  const hasItems = Array.isArray(items)
+    ? items.length > 0
+    : Boolean((items as { items?: unknown[] } | undefined)?.items?.length);
+  const showContent = !error || (hasItems && canShowCachedResource(error));
   const GroupActions = tab.GroupActions ?? Components.GroupActions;
   return (
     <>
-      <tab.Content
-        items={filtered}
-        actions={tab.DropdownActions ?? Components.DropdownActions ?? {}}
-        isLoading={isLoading}
-        isFiltered={!!search.trim()}
-      />
-      {GroupActions && <GroupActions items={items} />}
+      {!!error && (
+        <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale={hasItems && showContent} />
+      )}
+      {showContent && (
+        <tab.Content
+          items={filtered}
+          actions={tab.DropdownActions ?? Components.DropdownActions ?? {}}
+          isLoading={isLoading}
+          isFiltered={!!search.trim()}
+        />
+      )}
+      {!error && GroupActions && <GroupActions items={items} />}
     </>
   );
 };

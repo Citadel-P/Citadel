@@ -1,16 +1,21 @@
+import { Suspense } from 'react';
+import { ResourceSkeleton } from './resource-skeleton';
 import { useResourceParamType } from '@/lib/hooks';
 import { DockerResourceType } from '@/api/types';
 import NotFound from './not-found';
-import { DockerResourceInfoComponents } from '@/features';
-import { ResourceInfoView } from './resource-info';
+import { DockerResourceInfoPages } from '@/features';
 
 const ResourceDockerInfoPage = () => {
   const { type } = useResourceParamType()!;
 
-  const Components = DockerResourceInfoComponents[type as DockerResourceType];
-  if (!Components) return <NotFound />;
+  const Page = DockerResourceInfoPages[type as DockerResourceType];
+  if (!Page) return <NotFound />;
 
-  return <ResourceInfoView key={type} Components={Components} type={type as DockerResourceType} showHeaderId={false} />;
+  return (
+    <Suspense fallback={<ResourceSkeleton variant={'detail'} />}>
+      <Page key={type} type={type as DockerResourceType} showHeaderId={false} />
+    </Suspense>
+  );
 };
 
 export default ResourceDockerInfoPage;

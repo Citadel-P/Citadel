@@ -150,7 +150,7 @@ export const ServiceMountsField = ({
             value={mount.kind}
             disabled={disabled}
             onValueChange={(kind: SwarmServiceMountKind) => update(index, { kind })}>
-            <SelectTrigger className='w-30' aria-label={`Mount type ${index + 1}`}>
+            <SelectTrigger className="w-30" aria-label={`Mount type ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background">
@@ -206,8 +206,10 @@ export const ServiceReferencesField = ({
   onChange: (value: Array<SwarmServiceSecretReference | SwarmServiceConfigReference>) => void;
   disabled?: boolean;
 }) => {
-  const idKey = kind === 'secret' ? 'secretId' : 'configId';
-  const nameKey = kind === 'secret' ? 'secretName' : 'configName';
+  const createReference = (resource: SwarmNamedResource): SwarmServiceSecretReference | SwarmServiceConfigReference =>
+    kind === 'secret'
+      ? { secretId: resource.id, secretName: resource.name, targetName: resource.name }
+      : { configId: resource.id, configName: resource.name, targetName: resource.name };
   const readId = (reference: SwarmServiceSecretReference | SwarmServiceConfigReference) =>
     kind === 'secret'
       ? (reference as SwarmServiceSecretReference).secretId
@@ -216,9 +218,7 @@ export const ServiceReferencesField = ({
     const resource = resources.find((item) => item.id === resourceId);
     if (!resource) return;
     const next = [...value];
-    next[index] = { [idKey]: resource.id, [nameKey]: resource.name, targetName: resource.name } as
-      | SwarmServiceSecretReference
-      | SwarmServiceConfigReference;
+    next[index] = createReference(resource);
     onChange(next);
   };
   const updateTarget = (index: number, targetName: string) => {
@@ -281,12 +281,7 @@ export const ServiceReferencesField = ({
         onClick={() => {
           const resource = resources.find((item) => !selected.has(item.id));
           if (!resource) return;
-          onChange([
-            ...value,
-            { [idKey]: resource.id, [nameKey]: resource.name, targetName: resource.name } as
-              | SwarmServiceSecretReference
-              | SwarmServiceConfigReference,
-          ]);
+          onChange([...value, createReference(resource)]);
         }}>
         <Plus className="mr-2 h-4 w-4" />
         Add {kind}

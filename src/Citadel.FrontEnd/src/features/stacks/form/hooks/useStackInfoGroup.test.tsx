@@ -44,6 +44,7 @@ describe('useStackInfoGroup', () => {
           isLoading: false,
           currentPlatform: undefined,
           platforms: undefined,
+          applicationInfo: undefined,
           unresolvedAlertCount: 0,
           liveAlertEvents: {},
           receivedAlertEventIds: [],

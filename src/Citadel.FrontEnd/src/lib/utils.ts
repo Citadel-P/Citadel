@@ -92,7 +92,7 @@ export const getTaskName = (task: {
   id: string;
   name?: string | null;
   serviceName?: string | null;
-  slot?: number | null;
+  slot?: number | string | null;
 }) => {
   const name = task.name?.trim();
   if (name) return name;

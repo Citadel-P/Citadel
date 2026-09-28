@@ -34,14 +34,16 @@ import { useParams } from 'react-router';
 
 export type BackupRepositoryFormInput = BackupRepositoryInput & Partial<BackupRepositoryView>;
 
-export const createFileSystemSpec = (): BackupRepositorySpecFileSystemBackupRepositorySpec => ({
+export const createFileSystemSpec = (): BackupRepositorySpecFileSystemBackupRepositorySpec & {
+  $type: 'FileSystem';
+} => ({
   $type: 'FileSystem',
   location: BackupExecutionLocation.Core,
   platformId: null,
   path: '',
 });
 
-export const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec => ({
+export const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec & { $type: 'S3Compatible' } => ({
   $type: 'S3Compatible',
   endpoint: '',
   bucket: '',
@@ -148,6 +150,7 @@ export function BackupRepositoryForm({
                 ? [
                     defineField<BackupRepositoryFormInput, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Unique name for this repository.',
@@ -196,10 +199,10 @@ export function BackupRepositoryForm({
                 description: 'Stored secret used as the Restic repository password.',
                 render: (value, set) => (
                   <SecretSelector
-                    value={value}
+                    value={value ?? undefined}
                     disabled={mode === 'edit'}
                     targetResourceId={id}
-                    onChange={(passwordSecretId) => set({ passwordSecretId })}
+                    onChange={(passwordSecretId) => set({ passwordSecretId: passwordSecretId ?? '' })}
                   />
                 ),
               }),
@@ -580,7 +583,7 @@ export function getRepositoryOperationContext(repository: BackupRepositoryView):
     const location = fileSystem.location ?? BackupExecutionLocation.Core;
     return {
       location,
-      platformId: location === BackupExecutionLocation.Platform ? fileSystem.platformId ?? null : null,
+      platformId: location === BackupExecutionLocation.Platform ? (fileSystem.platformId ?? null) : null,
     };
   }
 

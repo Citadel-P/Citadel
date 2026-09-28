@@ -11,7 +11,7 @@ export const useAutomationActionsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading } = useRead('listAutomationActions', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listAutomationActions', readArgs);
   const [actions, setActions] = useState<AutomationActionView[] | undefined>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<AutomationActionView[]>([]);
@@ -37,28 +37,31 @@ export const useAutomationActionsGroup = () => {
     [selectedTagNames],
   );
 
-  const handleAutomationActionInfoUpdated = useCallback((action: AutomationActionView, actionName: string) => {
-    setActions((prev) => {
-      if (!prev) return prev;
-      if (actionName === 'create') {
-        return matchesActiveFilters(action) ? [...prev, action] : prev;
-      }
-      if (actionName === 'delete') {
-        return prev.filter((item) => item.id !== action.id);
-      }
+  const handleAutomationActionInfoUpdated = useCallback(
+    (action: AutomationActionView, actionName: string) => {
+      setActions((prev) => {
+        if (!prev) return prev;
+        if (actionName === 'create') {
+          return matchesActiveFilters(action) ? [...prev, action] : prev;
+        }
+        if (actionName === 'delete') {
+          return prev.filter((item) => item.id !== action.id);
+        }
 
-      const index = prev.findIndex((item) => item.id === action.id);
-      if (!matchesActiveFilters(action)) {
-        return index === -1 ? prev : prev.filter((item) => item.id !== action.id);
-      }
+        const index = prev.findIndex((item) => item.id === action.id);
+        if (!matchesActiveFilters(action)) {
+          return index === -1 ? prev : prev.filter((item) => item.id !== action.id);
+        }
 
-      if (index === -1) return [...prev, action];
+        if (index === -1) return [...prev, action];
 
-      const updated = [...prev];
-      updated[index] = action;
-      return updated;
-    });
-  }, [matchesActiveFilters]);
+        const updated = [...prev];
+        updated[index] = action;
+        return updated;
+      });
+    },
+    [matchesActiveFilters],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -80,5 +83,5 @@ export const useAutomationActionsGroup = () => {
     removeEventListeners,
   });
 
-  return { actions, isLoading, capabilities, selectedTagNames };
+  return { error, refetch, isFetching, actions, isLoading, capabilities, selectedTagNames };
 };

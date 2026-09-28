@@ -30,8 +30,8 @@ export const BackupPolicyComponents: RequiredComponents<BackupPolicyView> = {
     <ActionBar type="BackupPolicy" items={items} actions={Object.values(BackupPolicyGroupActions)} />
   ),
   useData(): ResourceDataHookResult<BackupPolicyView> {
-    const { policies, isLoading, capabilities } = useBackupPoliciesGroup();
-    return { items: policies, isLoading, capabilities };
+    const { policies, isLoading, capabilities, error, refetch, isFetching } = useBackupPoliciesGroup();
+    return { error, refetch, isFetching, items: policies, isLoading, capabilities };
   },
   filterItems: filterBackupPolicies,
 };

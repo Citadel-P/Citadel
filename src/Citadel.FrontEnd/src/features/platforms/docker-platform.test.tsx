@@ -1,3 +1,4 @@
+import { createPlatform as platformDefaults } from '@/test/factories/resources';
 import {
   PlatformConnectorType,
   PlatformStatus,
@@ -23,6 +24,7 @@ beforeEach(() => {
 
 const createPlatform = (diskUsage: number | null): PlatformView =>
   ({
+    ...platformDefaults(),
     id: 'platform-1',
     name: 'Platform',
     type: PlatformType.Docker,
@@ -60,6 +62,8 @@ const createPlatform = (diskUsage: number | null): PlatformView =>
       unknown: 0,
     },
     platformDescriptor: {
+      $type: 'Docker',
+      daemonId: 'daemon-id',
       operatingSystem: 'Linux',
       containerCount: 1,
       containersRunning: 1,

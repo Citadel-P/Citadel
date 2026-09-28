@@ -11,12 +11,13 @@ import { configureMonacoYaml } from 'monaco-yaml';
 import composeSpecSchema from '@/api/schema/compose-spec.json';
 import dockerStackComposeSchema from '@/api/schema/docker-stack-compose-v3.13.json';
 
-let isPreloaded = false;
+let initialization: Promise<void> | undefined;
 
-export function preloadMonaco() {
-  if (isPreloaded) return;
-  isPreloaded = true;
+export function initializeMonaco() {
+  return (initialization ??= initialize());
+}
 
+async function initialize() {
   self.MonacoEnvironment = {
     getWorker(_workerId, label) {
       if (label === 'json') {
@@ -88,27 +89,13 @@ export function preloadMonaco() {
   // Configure loader to use local monaco instance
   loader.config({ monaco });
 
-  const run = async () => {
-    try {
-      const monacoInstance = await loader.init();
-
-      const [{ registerYaml }, { registerKeyValue }, { registerStringList }] = await Promise.all([
-        import('./yaml'),
-        import('./key_value'),
-        import('./string_list'),
-      ]);
-
-      registerYaml(monacoInstance);
-      registerKeyValue(monacoInstance);
-      registerStringList(monacoInstance);
-    } catch (err) {
-      console.error('Monaco setup failed:', err);
-    }
-  };
-
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(run);
-  } else {
-    setTimeout(run, 2000);
-  }
+  const [monacoInstance, { registerYaml }, { registerKeyValue }, { registerStringList }] = await Promise.all([
+    loader.init(),
+    import('./yaml'),
+    import('./key_value'),
+    import('./string_list'),
+  ]);
+  registerYaml(monacoInstance);
+  registerKeyValue(monacoInstance);
+  registerStringList(monacoInstance);
 }

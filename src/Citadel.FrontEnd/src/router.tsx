@@ -3,17 +3,17 @@ import Layout from '@/layout/layout';
 import NotFound from '@/pages/not-found';
 import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
-import { ResourceForm } from './pages/resource-form';
 import { RequireAuth, RequireNoAuth } from './features/auth/auth-route-guards';
 import { RequireSetup, RequireSetupComplete } from './features/setup/setup-route-guards';
+import { ResourceForm } from '@/pages/resource-form';
+import Resources from '@/pages/resource';
+import PlatformResource from '@/pages/platform-resource';
 
 export { REDIRECT_TO_KEY } from './features/auth/auth-route-guards';
 
 const Login = lazy(() => import('@/features/auth/login'));
 const MfaVerify = lazy(() => import('@/features/auth/mfa/verify'));
 const MandatoryMfaSetup = lazy(() => import('@/features/auth/mfa/mandatory-setup'));
-const Resources = lazy(() => import('@/pages/resource'));
-const PlatformResource = lazy(() => import('@/pages/platform-resource'));
 const Profile = lazy(() => import('@/features/profile'));
 const License = lazy(() => import('@/features/license'));
 const InitialSetup = lazy(() => import('@/features/setup'));

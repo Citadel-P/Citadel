@@ -24,7 +24,7 @@ vi.mock('@/features/swarm/platform-summary', () => ({
 
 describe('Platform form summary', () => {
   it('includes the Swarm summary directly on a Swarm platform page', () => {
-    const SubHeader = PlatformFormComponents.EditForm.SubHeader!;
+    const SubHeader = PlatformFormComponents.EditForm!.SubHeader!;
 
     render(<SubHeader resource={{ id: 'swarm-1', type: PlatformType.DockerSwarm } as PlatformView} />);
 
@@ -35,7 +35,7 @@ describe('Platform form summary', () => {
   });
 
   it('does not request a Swarm summary for a standalone Docker platform', () => {
-    const SubHeader = PlatformFormComponents.EditForm.SubHeader!;
+    const SubHeader = PlatformFormComponents.EditForm!.SubHeader!;
 
     render(<SubHeader resource={{ id: 'docker-1', type: PlatformType.Docker } as PlatformView} />);
 

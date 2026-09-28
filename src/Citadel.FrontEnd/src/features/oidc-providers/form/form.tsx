@@ -97,6 +97,7 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
                 ? [
                     defineField<OidcProviderFormValue, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Stable internal identifier for this provider.',
@@ -106,6 +107,7 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
                     }),
                     defineField<OidcProviderFormValue, 'description'>({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional note shown in the provider header.',
                       render: (value, set) => (

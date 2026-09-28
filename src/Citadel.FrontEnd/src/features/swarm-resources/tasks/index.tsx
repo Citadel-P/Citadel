@@ -14,8 +14,8 @@ export const TaskComponents: RegularResourceComponents = {
   },
   Content: ({ items, isLoading }) => <TasksTable items={items} isLoading={isLoading} />,
   useData: (platformId) => {
-    const { items, isLoading } = useTasksGroup(platformId);
-    return { items, isLoading, capabilities: undefined };
+    const { items, isLoading, error, refetch, isFetching } = useTasksGroup(platformId);
+    return { error, refetch, isFetching, items, isLoading, capabilities: undefined };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

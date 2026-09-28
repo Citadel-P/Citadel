@@ -24,12 +24,8 @@ export const BackupRepositoryComponents: RequiredComponents<BackupRepositoryView
     <ActionBar type="BackupRepository" items={items} actions={Object.values(BackupRepositoryGroupActions)} />
   ),
   useData(): ResourceDataHookResult<BackupRepositoryView> {
-    const { repositories, isLoading, capabilities } = useBackupRepositoriesGroup();
-    return {
-      items: repositories ?? EMPTY_REPOSITORIES,
-      isLoading,
-      capabilities,
-    };
+    const { repositories, isLoading, capabilities, error, refetch, isFetching } = useBackupRepositoriesGroup();
+    return { error, refetch, isFetching, items: repositories ?? EMPTY_REPOSITORIES, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

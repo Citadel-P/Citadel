@@ -1,3 +1,4 @@
+import type { ResourceReadState } from '@/components/custom/resource-read-error';
 import type { OverviewFilter } from '@/components/custom/resource-overview';
 import { ResourceCapabilities } from '@/api/generated/api.types';
 
@@ -81,7 +82,7 @@ export interface RequiredFormComponents<T = any> {
     /** Tabs configuration */
     Tabs: ResourceTabElement<T>[];
     /** Main Data hook for this workload */
-    useData: (id: string) => { item?: RequiredFormFields; isLoading: boolean };
+    useData: (id: string) => ResourceFormDataHookResult;
   };
 }
 
@@ -110,10 +111,10 @@ export interface RequiredDockerInfoComponents<T = any> {
 /** Swarm resource details use the same page contract as Docker resource details. */
 export type RequiredSwarmInfoComponents<T = any> = RequiredDockerInfoComponents<T>;
 
-export interface ResourceDataHookResult<T> {
+export interface ResourceDataHookResult<T> extends ResourceReadState {
   items: T[];
   isLoading: boolean;
-  capabilities: ResourceCapabilities | undefined;
+  capabilities?: ResourceCapabilities;
 }
 
 export interface TabHeaderOptions {
@@ -174,10 +175,10 @@ export interface ResourceTabElement<T> {
   Content: React.FC<ResourceTabContentProps<T>>;
 }
 
-interface ResourceInfoHookResult<T> {
+interface ResourceInfoHookResult<T> extends ResourceReadState {
   resource: T | undefined;
   isLoading: boolean;
-  error: Error | null;
+  error?: unknown;
 }
 
 interface HeaderOptions {
@@ -228,4 +229,9 @@ export type DropdownActionComponent<T = any> = React.FC<{
   onAction?: (actionKey: string, actionData?: ActionData) => void;
 }>;
 
-export type RequiredFormFields = { name: string; description: string | null; status: unknown };
+export type RequiredFormFields = { name: string; description: string | null; status?: unknown };
+
+export interface ResourceFormDataHookResult extends ResourceReadState {
+  item?: RequiredFormFields;
+  isLoading: boolean;
+}

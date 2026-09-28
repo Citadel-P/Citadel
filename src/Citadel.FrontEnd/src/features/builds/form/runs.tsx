@@ -83,7 +83,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
     () => pickMostAdvancedBuildRun(selectedRunFromList, selectedRunFromQuery),
     [selectedRunFromList, selectedRunFromQuery],
   );
-  const displayedRuns = useMemo(() => mergeSelectedRun(visibleRuns, selectedRun), [selectedRun, visibleRuns]);
+  const displayedRuns = useMemo(() => mergeSelectedRun(visibleRuns, selectedRun ?? undefined), [selectedRun, visibleRuns]);
   const logs = useRead('getBuildRunLogs', { id: logRunId ?? '' }, {
     enabled: Boolean(logRunId),
   });
@@ -215,7 +215,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
 
       <BuildRunLogsSheet
         open={Boolean(logRunId)}
-        run={selectedRun}
+        run={selectedRun ?? undefined}
         logs={logViewerEntries}
         logEntryCount={logEntries.length}
         isLoading={logs.isLoading}

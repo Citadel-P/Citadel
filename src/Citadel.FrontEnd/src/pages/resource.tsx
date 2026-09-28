@@ -1,23 +1,17 @@
-import { ResourceComponents } from '@/features';
+import { Suspense } from 'react';
+import { ResourcePages } from '@/features';
 import { useResourceParamType } from '@/lib/hooks';
-import { TabbedResourceComponents, RequiredComponents } from './types';
+import { ResourceSkeleton } from './resource-skeleton';
 import NotFound from './not-found';
-import { RegularResourceView } from './regular-resource';
-import { TabbedResourceView } from './tabbed-resource';
 
 const ResourcePage = () => {
   const { type, tab } = useResourceParamType();
-  const Components = ResourceComponents[type];
-  
-  if (!Components) return <NotFound />;
-
-  if (isTabbedResource(Components)) {
-    return <TabbedResourceView key={type} Components={Components} type={type} tab={tab} />;
-  }
-  return <RegularResourceView key={type} Components={Components} type={type} />;
+  const Page = ResourcePages[type];
+  if (!Page) return <NotFound />;
+  return (
+    <Suspense fallback={<ResourceSkeleton variant={type === 'Platform' ? 'platform' : 'list'} />}>
+      <Page key={type} type={type} tab={tab} />
+    </Suspense>
+  );
 };
-
-const isTabbedResource = <T,>(Components: RequiredComponents<T>): Components is TabbedResourceComponents<T> =>
-  Array.isArray(Components.Tabs) && Components.Tabs.length > 0;
-
 export default ResourcePage;

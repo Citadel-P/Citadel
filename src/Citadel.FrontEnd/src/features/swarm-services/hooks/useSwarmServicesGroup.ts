@@ -22,7 +22,7 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
     if (effectivePlatformId) query.platformId = effectivePlatformId;
     return Object.keys(query).length ? { query } : undefined;
   }, [effectivePlatformId, effectiveTagNames]);
-  const { data, isLoading } = useRead('listManagedSwarmServices', args);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listManagedSwarmServices', args);
   const [services, setServices] = useState<ManagedSwarmServiceView[]>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilities>();
   const lastResult = useRef<ManagedSwarmServiceView[]>(undefined);
@@ -117,5 +117,5 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
   );
   useRealtimeGroup({ groupName: groupNames, setupEventListeners, removeEventListeners });
 
-  return { services, capabilities, isLoading };
+  return { error, refetch, isFetching, services, capabilities, isLoading };
 };

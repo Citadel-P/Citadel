@@ -113,8 +113,8 @@ export const ActivityComponents: RequiredComponents = {
     Extra: SearchSection,
   },
   useData: function (): ResourceDataHookResult<any> {
-    const { pagedActivities, isLoading } = useActivitiesGroup();
-    return { items: pagedActivities as any, isLoading, capabilities: undefined };
+    const { pagedActivities, isLoading, error, refetch, isFetching } = useActivitiesGroup();
+    return { error, refetch, isFetching, items: pagedActivities as any, isLoading, capabilities: undefined };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

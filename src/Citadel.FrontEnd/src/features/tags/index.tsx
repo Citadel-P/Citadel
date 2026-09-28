@@ -23,8 +23,11 @@ export const TagComponents: RequiredComponents<TagView> = {
     return <ActionBar type="Tag" items={items} actions={Object.values(TagGroupActions)} />;
   },
   useData(): ResourceDataHookResult<TagView> {
-    const { data, isLoading } = useRead('listTags');
+    const { data, isLoading, error, refetch, isFetching } = useRead('listTags');
     return {
+      error,
+      refetch,
+      isFetching,
       items: data?.data.tags ?? EMPTY_TAGS,
       isLoading,
       capabilities: data?.data.capabilities,

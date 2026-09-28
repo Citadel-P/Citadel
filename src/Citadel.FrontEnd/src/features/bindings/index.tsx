@@ -324,13 +324,13 @@ export const BindingComponents: RequiredComponents<ResourceBindingView> = {
     Extra: BindingsAddButton,
   },
   useData(): ResourceDataHookResult<ResourceBindingView> {
-    const { data, isLoading } = useRead('getGlobalResourceBindings');
+    const { data, isLoading, error, refetch, isFetching } = useRead('getGlobalResourceBindings');
     const capabilities = data?.data.capabilities ?? EMPTY_CAPABILITIES;
     const entries = useMemo(
       () => (data?.data.entries ?? []).map((entry) => ({ ...entry, capabilities })),
       [data?.data.entries, capabilities],
     );
-    return { items: entries, isLoading, capabilities };
+    return { error, refetch, isFetching, items: entries, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

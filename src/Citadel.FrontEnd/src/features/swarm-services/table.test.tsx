@@ -1,3 +1,4 @@
+import { createManagedSwarmService } from '@/test/factories/resources';
 import { ManagedSwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
@@ -27,6 +28,7 @@ describe('SwarmServicesTable', () => {
 
 const service = (): ManagedSwarmServiceView =>
   ({
+    ...createManagedSwarmService(),
     id: 'managed-service-1',
     platformId,
     name: 'web',

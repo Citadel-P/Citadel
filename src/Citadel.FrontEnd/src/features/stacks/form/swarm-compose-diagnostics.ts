@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor';
+import { DiagnosticSeverity } from '@/lib/monaco/diagnostics';
 import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, type Node, type Pair, type YAMLMap } from 'yaml';
 
 import type { MonacoDiagnostic } from '@/lib/monaco';
@@ -84,7 +84,7 @@ const nodeValue = (pair: Pair | undefined): Node | null => {
   return isNode(value) ? value : null;
 };
 
-const addDiagnostic = (context: DiagnosticContext, node: unknown, message: string, severity: monaco.MarkerSeverity) => {
+const addDiagnostic = (context: DiagnosticContext, node: unknown, message: string, severity: DiagnosticSeverity) => {
   const range = isNode(node) ? node.range : undefined;
   const start = context.lineCounter.linePos(range?.[0] ?? 0);
   const end = context.lineCounter.linePos(range?.[1] ?? (range?.[0] ?? 0) + 1);
@@ -114,7 +114,7 @@ const validateKeys = (
     if (allowedKeys.has(normalized) || extensionAllowed) continue;
 
     const fieldPath = path ? `${path}.${key}` : key;
-    addDiagnostic(context, pair.key, `'${fieldPath}' is not supported by Swarm Stacks.`, monaco.MarkerSeverity.Error);
+    addDiagnostic(context, pair.key, `'${fieldPath}' is not supported by Swarm Stacks.`, DiagnosticSeverity.Error);
   }
 };
 
@@ -144,7 +144,7 @@ const validateEnum = (
     context,
     pair?.value ?? pair?.key,
     `'${parentPath}.${key}' has unsupported value '${value}'.`,
-    monaco.MarkerSeverity.Error,
+    DiagnosticSeverity.Error,
   );
 };
 
@@ -172,7 +172,7 @@ const validateReservedLabels = (parent: YAMLMap, context: DiagnosticContext) => 
       context,
       candidate.node,
       `Label '${candidate.name}' is reserved for Citadel ownership.`,
-      monaco.MarkerSeverity.Error,
+      DiagnosticSeverity.Error,
     );
   }
 };
@@ -242,7 +242,7 @@ const validateMounts = (service: YAMLMap, servicePath: string, context: Diagnost
           context,
           item,
           'Bind mounts require the same host path on every eligible Swarm node.',
-          monaco.MarkerSeverity.Warning,
+          DiagnosticSeverity.Warning,
         );
       }
       return;
@@ -260,7 +260,7 @@ const validateMounts = (service: YAMLMap, servicePath: string, context: Diagnost
         context,
         findPair(item, 'type')?.value ?? item,
         'Bind mounts require the same host path on every eligible Swarm node.',
-        monaco.MarkerSeverity.Warning,
+        DiagnosticSeverity.Warning,
       );
     }
   });
@@ -284,7 +284,7 @@ const validatePorts = (service: YAMLMap, servicePath: string, context: Diagnosti
         context,
         item,
         'A fixed Host-mode published port can schedule only where that port is available.',
-        monaco.MarkerSeverity.Warning,
+        DiagnosticSeverity.Warning,
       );
     }
   });
@@ -326,7 +326,7 @@ const validateDefinitions = (
         context,
         pair.key,
         `Volume '${name}' uses the node-local driver and is not portable between nodes.`,
-        monaco.MarkerSeverity.Warning,
+        DiagnosticSeverity.Warning,
       );
     }
   }
@@ -356,7 +356,7 @@ export const getSwarmComposeDiagnostics = (
       context,
       findPair(root, 'services')?.key ?? root,
       'Compose must define at least one Service.',
-      monaco.MarkerSeverity.Error,
+      DiagnosticSeverity.Error,
     );
     return context.diagnostics;
   }
@@ -387,7 +387,7 @@ export const getSwarmComposeDiagnostics = (
         context,
         pair.key,
         `Service '${serviceName}' requires an image or a Citadel Build binding that produces a registry image.`,
-        monaco.MarkerSeverity.Error,
+        DiagnosticSeverity.Error,
       );
     }
     if (build && !hasBuildBinding) {
@@ -395,7 +395,7 @@ export const getSwarmComposeDiagnostics = (
         context,
         build.key,
         `Service '${serviceName}' uses build without a Citadel Build binding.`,
-        monaco.MarkerSeverity.Error,
+        DiagnosticSeverity.Error,
       );
     }
   }

@@ -138,8 +138,10 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       },
     ],
     useData(id: string) {
-      const { data, isLoading } = useRead('getBuildAgentPool', { id });
-      const [pool, setPool] = useState<BuildPoolFormResource | undefined>(data?.data as BuildPoolFormResource | undefined);
+      const { data, isLoading, error, refetch, isFetching } = useRead('getBuildAgentPool', { id });
+      const [pool, setPool] = useState<BuildPoolFormResource | undefined>(
+        data?.data as BuildPoolFormResource | undefined,
+      );
       const lastDataRef = useRef<BuildAgentPoolView | undefined>(data?.data);
 
       useEffect(() => {
@@ -178,7 +180,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
         removeEventListeners,
       });
 
-      return { item: pool, isLoading };
+      return { error, refetch, isFetching, item: pool, isLoading };
     },
   },
 };
@@ -260,8 +262,7 @@ function BuildPoolForm({
     [],
   );
   const setAwsSpec = useCallback(
-    (patch: Partial<AwsEc2ProviderSpec>) =>
-      setProviderSpec({ ...normalizeAwsSpec(providerSpec), ...patch }),
+    (patch: Partial<AwsEc2ProviderSpec>) => setProviderSpec({ ...normalizeAwsSpec(providerSpec), ...patch }),
     [providerSpec, setProviderSpec],
   );
   const setVmSpec = useCallback(
@@ -283,6 +284,7 @@ function BuildPoolForm({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal name used when selecting this pool from a build project.',
@@ -294,6 +296,7 @@ function BuildPoolForm({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional notes about where these builders run.',
                       render: (value, set) => (
@@ -321,7 +324,11 @@ function BuildPoolForm({
                 label: 'Enabled',
                 description: 'Disabled pools cannot be selected for new build runs.',
                 render: (value, set) => (
-                  <FieldSwitch id="build-pool-enabled" checked={value !== false} onChange={(enabled) => set({ enabled })} />
+                  <FieldSwitch
+                    id="build-pool-enabled"
+                    checked={value !== false}
+                    onChange={(enabled) => set({ enabled })}
+                  />
                 ),
               }),
             ],
@@ -342,7 +349,8 @@ function BuildPoolForm({
                 dirtyKey: 'providerSpec.provider',
                 label: 'Type',
                 required: true,
-                description: 'AWS EC2 provisions temporary builders. Self-managed VM uses pre-provisioned builder hosts.',
+                description:
+                  'AWS EC2 provisions temporary builders. Self-managed VM uses pre-provisioned builder hosts.',
                 render: () => (
                   <FieldSelect
                     value={provider}
@@ -386,14 +394,42 @@ function BuildPoolForm({
             id: 'timeouts',
             label: 'Capacity and Timeouts',
             items: [
-              defineNumberField('maxActiveBuilders', 'Max active builders', 'Maximum concurrently leased builders from this pool.'),
-              defineNumberField('queueTimeoutSeconds', 'Queue timeout seconds', 'Maximum time a run can wait for a builder.'),
-              defineNumberField('maximumInstanceLifetimeSeconds', 'Max lifetime seconds', 'Hard lifetime cap for temporary builders.'),
-              defineNumberField('provisioningTimeoutSeconds', 'Provisioning timeout', 'Time allowed for builder provisioning.'),
-              defineNumberField('registrationTimeoutSeconds', 'Registration timeout', 'Time allowed for the builder to connect back.'),
-              defineNumberField('heartbeatTimeoutSeconds', 'Heartbeat timeout', 'Time without heartbeat before a builder is stale.'),
+              defineNumberField(
+                'maxActiveBuilders',
+                'Max active builders',
+                'Maximum concurrently leased builders from this pool.',
+              ),
+              defineNumberField(
+                'queueTimeoutSeconds',
+                'Queue timeout seconds',
+                'Maximum time a run can wait for a builder.',
+              ),
+              defineNumberField(
+                'maximumInstanceLifetimeSeconds',
+                'Max lifetime seconds',
+                'Hard lifetime cap for temporary builders.',
+              ),
+              defineNumberField(
+                'provisioningTimeoutSeconds',
+                'Provisioning timeout',
+                'Time allowed for builder provisioning.',
+              ),
+              defineNumberField(
+                'registrationTimeoutSeconds',
+                'Registration timeout',
+                'Time allowed for the builder to connect back.',
+              ),
+              defineNumberField(
+                'heartbeatTimeoutSeconds',
+                'Heartbeat timeout',
+                'Time without heartbeat before a builder is stale.',
+              ),
               defineNumberField('cleanupTimeoutSeconds', 'Cleanup timeout', 'Time allowed for builder cleanup.'),
-              defineNumberField('failureRetentionMinutes', 'Failure retention minutes', 'How long failed builders may be retained for inspection.'),
+              defineNumberField(
+                'failureRetentionMinutes',
+                'Failure retention minutes',
+                'How long failed builders may be retained for inspection.',
+              ),
             ],
           }),
         ],
@@ -480,7 +516,9 @@ function awsEc2Fields(
         label: 'Region',
         required: true,
         description: 'AWS region where builder instances are launched.',
-        render: () => <FieldInput value={awsSpec.region} disabled={disabled} onChange={(region) => setAwsSpec({ region })} />,
+        render: () => (
+          <FieldInput value={awsSpec.region} disabled={disabled} onChange={(region) => setAwsSpec({ region })} />
+        ),
       }),
       defineField({
         id: 'aws-instance-type',
@@ -521,7 +559,9 @@ function awsEc2Fields(
         label: 'AMI ID',
         required: true,
         description: 'AMI that boots the Citadel builder runtime.',
-        render: () => <FieldInput value={awsSpec.amiId} disabled={disabled} onChange={(amiId) => setAwsSpec({ amiId })} />,
+        render: () => (
+          <FieldInput value={awsSpec.amiId} disabled={disabled} onChange={(amiId) => setAwsSpec({ amiId })} />
+        ),
       }),
       defineField({
         id: 'aws-root-volume-size-gb',
@@ -546,7 +586,9 @@ function awsEc2Fields(
         label: 'Subnet ID',
         required: true,
         description: 'Subnet where builders are launched.',
-        render: () => <FieldInput value={awsSpec.subnetId} disabled={disabled} onChange={(subnetId) => setAwsSpec({ subnetId })} />,
+        render: () => (
+          <FieldInput value={awsSpec.subnetId} disabled={disabled} onChange={(subnetId) => setAwsSpec({ subnetId })} />
+        ),
       }),
       defineField({
         id: 'aws-security-group-ids',
@@ -656,7 +698,8 @@ function selfManagedVmFields(
         dirtyKey: 'providerSpec.connectionMode',
         label: 'Connection mode',
         required: true,
-        description: 'Inbound Agent requires Core to reach the builder. Edge Agent uses the outbound Edge Agent channel.',
+        description:
+          'Inbound Agent requires Core to reach the builder. Edge Agent uses the outbound Edge Agent channel.',
         render: () => (
           <FieldSelect
             value={connectionMode}
@@ -845,11 +888,11 @@ function EdgeBuildPoolEnrollmentPanel({
                 ? `Token expires ${formatDate(enrollment.expiresAtUtc)}. It is shown once.`
                 : isRevoked
                   ? 'This build pool Edge Agent binding was revoked. Create a new build pool to enroll a fresh agent.'
-                : edgeStatus?.enrollmentExpiresAtUtc
-                  ? `Active token expires ${formatDate(edgeStatus.enrollmentExpiresAtUtc)}. Generate a new token to show a fresh value.`
-                  : hasBinding
-                    ? `Target address: edge-build-pool://${poolId}`
-                    : 'Generate a one-time token and run the Docker command on the builder host.'}
+                  : edgeStatus?.enrollmentExpiresAtUtc
+                    ? `Active token expires ${formatDate(edgeStatus.enrollmentExpiresAtUtc)}. Generate a new token to show a fresh value.`
+                    : hasBinding
+                      ? `Target address: edge-build-pool://${poolId}`
+                      : 'Generate a one-time token and run the Docker command on the builder host.'}
             </div>
           </div>
         </div>
@@ -861,7 +904,13 @@ function EdgeBuildPoolEnrollmentPanel({
           disabled={disabled || isPending || isEdgeStatusLoading || isRevoked}
           onClick={onRegenerate}>
           {(isPending || isEdgeStatusLoading) && <Loader2 className="size-4 animate-spin" />}
-          {isRevoked ? 'Binding Revoked' : hasBinding ? 'Rotate Enrollment Token' : enrollment ? 'Generate New Token' : 'Generate Enrollment Token'}
+          {isRevoked
+            ? 'Binding Revoked'
+            : hasBinding
+              ? 'Rotate Enrollment Token'
+              : enrollment
+                ? 'Generate New Token'
+                : 'Generate Enrollment Token'}
         </Button>
       </div>
 

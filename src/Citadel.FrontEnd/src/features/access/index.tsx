@@ -38,11 +38,8 @@ export const AccessComponents: TabbedResourceComponents = {
         return <ActionBar type="User" items={items} actions={Object.values(UserGroupActions)} />;
       },
       useData: () => {
-        const { pagedUsers, isLoading } = useUsersList();
-        return {
-          items: pagedUsers as any,
-          isLoading,
-        };
+        const { pagedUsers, isLoading, error, refetch, isFetching } = useUsersList();
+        return { error, refetch, isFetching, items: pagedUsers as any, isLoading };
       },
     },
     {
@@ -62,11 +59,8 @@ export const AccessComponents: TabbedResourceComponents = {
         addButtonUrl: '/access/teams/add',
       },
       useData: () => {
-        const { pagedUsers, isLoading } = useTeamsList();
-        return {
-          items: pagedUsers as any,
-          isLoading,
-        };
+        const { pagedUsers, isLoading, error, refetch, isFetching } = useTeamsList();
+        return { error, refetch, isFetching, items: pagedUsers as any, isLoading };
       },
     },
     {
@@ -80,11 +74,8 @@ export const AccessComponents: TabbedResourceComponents = {
         Extra: AddRoleButton,
       },
       useData: () => {
-        const { data, isLoading } = useRead('listRoles');
-        return {
-          items: data?.data.roles as any,
-          isLoading,
-        };
+        const { data, isLoading, error, refetch, isFetching } = useRead('listRoles');
+        return { error, refetch, isFetching, items: data?.data.roles as any, isLoading };
       },
     },
     {
@@ -104,8 +95,8 @@ export const AccessComponents: TabbedResourceComponents = {
         Extra: AddServiceAccountButton,
       },
       useData: () => {
-        const { pagedServiceAccounts, isLoading } = useServiceAccountsList();
-        return { items: pagedServiceAccounts as any, isLoading };
+        const { pagedServiceAccounts, isLoading, error, refetch, isFetching } = useServiceAccountsList();
+        return { error, refetch, isFetching, items: pagedServiceAccounts as any, isLoading };
       },
     },
   ],

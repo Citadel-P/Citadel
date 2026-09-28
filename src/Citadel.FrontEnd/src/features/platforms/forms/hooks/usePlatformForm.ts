@@ -103,26 +103,26 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
       };
 
       const response = await createPlatform.mutateAsync({ data: payload });
-      const platform = response.data;
+      const created = response.data;
       await queryClient.invalidateQueries({ queryKey: ['listPlatforms'] });
 
       if (!isEdge) {
-        toast.success(`Platform "${platform.name}" created`);
+        toast.success(`Platform "${created.name}" created`);
         navigate('/platforms');
         return;
       }
 
-      setCreatedPlatform(platform);
-      toast.success(`Edge Agent platform "${platform.name}" created`);
+      setCreatedPlatform(created);
+      toast.success(`Edge Agent platform "${created.name}" created`);
 
       try {
-        await generateEnrollment(platform.id);
+        await generateEnrollment(created.id);
       } catch (error) {
         const detail = (error as any)?.error?.detail ?? (error as Error)?.message;
         toast.error('Platform created, but enrollment token generation failed', { description: detail });
       }
     },
-    [createPlatform, generateEnrollment, mode, navigate, platformId, queryClient, updatePlatform],
+    [createPlatform, generateEnrollment, mode, navigate, platform?.address, platformId, queryClient, updatePlatform],
   );
 
   const regenerateEnrollment = useCallback(async () => {

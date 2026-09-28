@@ -18,8 +18,8 @@ export const NodeComponents: RegularResourceComponents<SwarmNodeListView> = {
   DropdownActions: { edit: NodeEditDropdownAction },
   GroupActions: ({ items }) => <ActionBar type="Node" items={items} actions={Object.values(NodeGroupActions)} />,
   useData: (platformId) => {
-    const { items, isLoading } = useNodesGroup(platformId);
-    return { items, isLoading, capabilities: undefined };
+    const { items, isLoading, error, refetch, isFetching } = useNodesGroup(platformId);
+    return { error, refetch, isFetching, items, isLoading, capabilities: undefined };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

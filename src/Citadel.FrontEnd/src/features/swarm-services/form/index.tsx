@@ -102,8 +102,8 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
       },
     ],
     useData: (id) => {
-      const { service, isLoading } = useSwarmServiceGroup(id);
-      return { item: service, isLoading };
+      const { service, isLoading, error, refetch, isFetching } = useSwarmServiceGroup(id);
+      return { error, refetch, isFetching, item: service, isLoading };
     },
   },
 };
@@ -133,8 +133,9 @@ const SwarmServiceFailureAlert = ({ resource }: { resource: ManagedSwarmServiceV
 const SwarmServicePendingChangesAlert = ({ resource }: { resource: ManagedSwarmServiceView }) => {
   if (!resource.hasPendingDesiredChanges || resource.controlState === ResourceControlState.Processing) return null;
 
-  const desiredReplicas = resource.spec.replicas ?? 0;
-  const isStoppedBelowDesired = resource.desiredTaskCount === 0 && desiredReplicas > 0;
+  const desiredReplicas = Number(resource.spec.replicas ?? 0);
+  const isStoppedBelowDesired =
+    resource.desiredTaskCount != null && Number(resource.desiredTaskCount) === 0 && desiredReplicas > 0;
 
   return (
     <AlertMessage type="warning" title="Changes not applied">
@@ -348,7 +349,7 @@ const DOCKER_SWARM_TASK_DETAIL = /(?:^|,)com\.docker\.swarm\.task\.id=([^,\s]+)/
 
 const parseServiceLogs = (
   lines: string[],
-  tasks: { id: string; name?: string | null; serviceName?: string | null; slot?: number | null }[],
+  tasks: { id: string; name?: string | null; serviceName?: string | null; slot?: number | string | null }[],
 ): LogEntry[] => {
   const taskNamesById = new Map(tasks.map((task) => [task.id, getTaskName(task)]));
   const taskNames = [...taskNamesById.values()];

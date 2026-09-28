@@ -9,7 +9,9 @@ import { CreateVolumeInput, PlatformType } from '@/api/generated/api.types';
 import { Constants } from '@/lib/constants';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle } from 'lucide-react';
-import { KeyValuePairInput } from '@/components/custom/key-value-pair-input';
+import { KeyValuePairInput, type KVPair } from '@/components/custom/key-value-pair-input';
+
+type VolumeFormInput = Omit<CreateVolumeInput, 'labels' | 'options'> & { labels?: KVPair[]; options?: KVPair[] };
 
 export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
   const navigate = useNavigate();
@@ -17,14 +19,14 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
   const { mutateAsync, isPending } = useMutate('createVolume');
   const isSwarmPlatform = currentPlatform?.type === PlatformType.DockerSwarm;
 
-  const [update, setUpdate] = useState<Partial<CreateVolumeInput>>({
+  const [update, setUpdate] = useState<Partial<VolumeFormInput>>({
     driver: 'local',
     platformId: currentPlatform?.id ?? '',
   });
 
-  const original = { platformId: currentPlatform?.id ?? '' } as CreateVolumeInput;
+  const original = { platformId: currentPlatform?.id ?? '' } as VolumeFormInput;
 
-  const onSave = async (merged: CreateVolumeInput) => {
+  const onSave = async (merged: VolumeFormInput) => {
     const payload = {
       ...merged,
       platformId: currentPlatform?.id ?? '',
@@ -41,11 +43,12 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
   };
 
   const schema = {
-    basic: defineSection<CreateVolumeInput>({
+    basic: defineSection<VolumeFormInput>({
       title: 'Basic Configuration',
       items: [
         defineField({
           key: 'name',
+          persistDraft: true,
           label: 'Name',
           description: `The new volume's name. If not specified, Docker generates a name.`,
           validate: (v) =>
@@ -82,7 +85,7 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
       ],
     }),
 
-    advanced: defineSection<CreateVolumeInput>({
+    advanced: defineSection<VolumeFormInput>({
       title: 'Advanced (Optional)',
       items: [
         defineField({

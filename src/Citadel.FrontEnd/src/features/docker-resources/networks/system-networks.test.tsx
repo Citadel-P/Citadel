@@ -36,7 +36,7 @@ describe('system networks', () => {
   it('shows the System badge in the network detail header', () => {
     const NameSuffix = NetworkInfoComponents.Header.NameSuffix!;
 
-    render(<NameSuffix resource={{ ...network(true), containers: {} } as DockerNetworkDetailsView} />);
+    render(<NameSuffix resource={{ ...network(true), containers: {}, peers: [] } as DockerNetworkDetailsView} />);
 
     expect(screen.getByLabelText('Docker system network')).toBeVisible();
   });

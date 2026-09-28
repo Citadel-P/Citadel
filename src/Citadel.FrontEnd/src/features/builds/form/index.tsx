@@ -81,7 +81,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       },
     ],
     useData(id: string) {
-      const { data, isLoading } = useRead('getBuildProject', { id });
+      const { data, isLoading, error, refetch, isFetching } = useRead('getBuildProject', { id });
       const [build, setBuild] = useState<BuildFormResource | undefined>(data?.data as BuildFormResource | undefined);
       const lastDataRef = useRef<BuildProjectView | undefined>(data?.data);
 
@@ -121,10 +121,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
         removeEventListeners,
       });
 
-      return {
-        item: build,
-        isLoading,
-      };
+      return { error, refetch, isFetching, item: build, isLoading };
     },
   },
 };

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import type { ContainerStatePatch } from './container-order';
@@ -61,7 +61,13 @@ export const mergeContainerRuntimeUpdate = (
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
   const containerReference = normalizeContainerReference(containerId);
 
-  const { data, isLoading } = useRead('getContainer', { id: containerReference });
+  const {
+    data,
+    isLoading,
+    error: queryError,
+    refetch,
+    isFetching,
+  } = useRead('getContainer', { id: containerReference });
   const { currentPlatform } = useAppContext();
 
   const containerData = useMemo(() => (data?.data ? toContainerDetailsView(data.data) : undefined), [data]);
@@ -74,7 +80,9 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     containerData?.dockerNodeId,
   ]);
   const currentIdentity = useRef(identity);
-  currentIdentity.current = identity;
+  useLayoutEffect(() => {
+    currentIdentity.current = identity;
+  }, [identity]);
   const [live, setLive] = useState<{ identity: string; value: Partial<ContainerDataView> | undefined }>();
   const liveContainerInfo = live?.identity === identity ? live.value : undefined;
   const setLiveContainerInfo = useCallback(
@@ -113,8 +121,8 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
       return {
         error: {
           detail: 'Platform is disconnected or unavailable.',
-          status: 404,
-          title: 'Not Found',
+          status: 503,
+          title: 'Platform unavailable',
         } as ProblemDetails,
       };
     }
@@ -226,9 +234,5 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     skip: !containerData?.resourceId,
   });
 
-  return {
-    containerInfo,
-    isLoading,
-    error,
-  };
+  return { refetch, isFetching, containerInfo, isLoading, error: queryError ?? error };
 };

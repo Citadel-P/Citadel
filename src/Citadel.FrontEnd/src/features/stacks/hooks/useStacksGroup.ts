@@ -15,7 +15,7 @@ export const useStacksGroup = () => {
     if (selectedPlatformId) query.platformId = selectedPlatformId;
     return Object.keys(query).length > 0 ? { query } : undefined;
   }, [selectedPlatformId, selectedTagNames]);
-  const { data, isLoading } = useRead('listStacks', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listStacks', readArgs);
   const [stacks, setStacks] = useState<StackView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<StackView[]>([]);
@@ -42,44 +42,47 @@ export const useStacksGroup = () => {
     [selectedPlatformId, selectedTagNames],
   );
 
-  const handleStackInfoUpdated = useCallback((stack: StackView, action: string) => {
-    setStacks((prev) => {
-      if (!prev) return prev;
-      if (action === 'create') {
-        deletedStackIdsRef.current.delete(stack.id);
-        const index = prev.findIndex((current) => current.id === stack.id);
+  const handleStackInfoUpdated = useCallback(
+    (stack: StackView, action: string) => {
+      setStacks((prev) => {
+        if (!prev) return prev;
+        if (action === 'create') {
+          deletedStackIdsRef.current.delete(stack.id);
+          const index = prev.findIndex((current) => current.id === stack.id);
+          if (!matchesActiveFilters(stack)) {
+            return index === -1 ? prev : prev.filter((current) => current.id !== stack.id);
+          }
+          if (index === -1) {
+            return [...prev, stack];
+          }
+
+          const updated = [...prev];
+          updated[index] = stack;
+          return updated;
+        }
+        if (action === 'delete') {
+          deletedStackIdsRef.current.add(stack.id);
+          return prev.filter((d) => d.id !== stack.id);
+        }
+        if (deletedStackIdsRef.current.has(stack.id)) {
+          return prev;
+        }
+
+        const index = prev.findIndex((d) => d.id === stack.id);
         if (!matchesActiveFilters(stack)) {
-          return index === -1 ? prev : prev.filter((current) => current.id !== stack.id);
-        }
-        if (index === -1) {
-          return [...prev, stack];
+          return index === -1 ? prev : prev.filter((d) => d.id !== stack.id);
         }
 
-        const updated = [...prev];
-        updated[index] = stack;
-        return updated;
-      }
-      if (action === 'delete') {
-        deletedStackIdsRef.current.add(stack.id);
-        return prev.filter((d) => d.id !== stack.id);
-      }
-      if (deletedStackIdsRef.current.has(stack.id)) {
-        return prev;
-      }
-
-      const index = prev.findIndex((d) => d.id === stack.id);
-      if (!matchesActiveFilters(stack)) {
-        return index === -1 ? prev : prev.filter((d) => d.id !== stack.id);
-      }
-
-      if (index !== -1) {
-        const updated = [...prev];
-        updated[index] = stack;
-        return updated;
-      }
-      return [...prev, stack];
-    });
-  }, [matchesActiveFilters]);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = stack;
+          return updated;
+        }
+        return [...prev, stack];
+      });
+    },
+    [matchesActiveFilters],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -101,5 +104,5 @@ export const useStacksGroup = () => {
     removeEventListeners,
   });
 
-  return { stacks, isLoading, capabilities, selectedTagNames, selectedPlatformId };
+  return { error, refetch, isFetching, stacks, isLoading, capabilities, selectedTagNames, selectedPlatformId };
 };

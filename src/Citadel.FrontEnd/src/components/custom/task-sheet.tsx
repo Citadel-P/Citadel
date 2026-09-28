@@ -349,7 +349,7 @@ function EventSheetTitle({
 type InfoOf<T extends ActivityEventInfo['$type']> = Extract<ActivityEventInfo, { $type: T }>;
 
 type ActivityInfoRendererMap = {
-  [K in ActivityEventInfo['$type']]: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
+  [K in ActivityEventInfo['$type']]?: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
@@ -1363,7 +1363,7 @@ function BackupRunItemsList({ items }: { items: BackupRunItemView[] }) {
         <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs">
           <span className="truncate font-medium">{item.volumeName}</span>
           <span className="text-muted-foreground tabular-nums">
-            {(item.bytesAdded ?? 0) > 0 ? byteTransform(item.bytesAdded, 2) : '-'}
+            {Number(item.bytesAdded ?? 0) > 0 ? byteTransform(item.bytesAdded, 2) : '-'}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <StateIndicator value={item.status} isProcessing={item.status === BackupRunItemStatus.Running} />
@@ -1416,10 +1416,12 @@ function useApplyDeploymentProgress(params: DeployParams) {
 }
 
 function useSwarmServiceProgress(params: SwarmServiceMutationParams) {
-  const request: ScaleSwarmServiceInput | Record<string, never> = useMemo(
-    () => (params.action === 'scale' ? { replicas: params.replicas ?? 0 } : {}),
-    [params.action, params.replicas],
-  );
+  const request: ScaleSwarmServiceInput | Record<string, never> = useMemo<
+    ScaleSwarmServiceInput | Record<string, never>
+  >((): ScaleSwarmServiceInput | Record<string, never> => {
+    if (params.action === 'scale') return { replicas: params.replicas ?? 0 };
+    return {};
+  }, [params.action, params.replicas]);
 
   return useStreamProgress<ScaleSwarmServiceInput | Record<string, never>, SwarmServiceProgressItem>({
     endpoint: `api/v1/swarmServices/${params.id}/${params.action}`,
@@ -1620,7 +1622,10 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<RunAutomationActionInput | AutomationActionTestDraftInput, AutomationActionRunStreamItem>({
+  const state = useStreamProgress<
+    RunAutomationActionInput | AutomationActionTestDraftInput,
+    AutomationActionRunStreamItem
+  >({
     endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
     request,
     successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',

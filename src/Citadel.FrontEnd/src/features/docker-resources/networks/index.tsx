@@ -18,8 +18,8 @@ export const NetworkComponents: RequiredComponents = {
     return <ActionBar type="Network" items={items} actions={Object.values(NetworkGroupActions)} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { networks, isLoading, capabilities } = useNetworksGroup(platformId);
-    return { items: networks?.networks ?? EMPTY_NETWORKS, isLoading, capabilities };
+    const { networks, isLoading, capabilities, error, refetch, isFetching } = useNetworksGroup(platformId);
+    return { error, refetch, isFetching, items: networks?.networks ?? EMPTY_NETWORKS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

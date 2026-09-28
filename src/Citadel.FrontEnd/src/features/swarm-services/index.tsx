@@ -70,8 +70,8 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
     />
   ),
   useData: (): ResourceDataHookResult<any> => {
-    const { services, capabilities, isLoading } = useSwarmServicesGroup();
-    return { items: services ?? EMPTY, capabilities, isLoading };
+    const { services, capabilities, isLoading, error, refetch, isFetching } = useSwarmServicesGroup();
+    return { error, refetch, isFetching, items: services ?? EMPTY, capabilities, isLoading };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

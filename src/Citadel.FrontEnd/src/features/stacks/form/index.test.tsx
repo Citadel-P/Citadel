@@ -1,5 +1,6 @@
 import {
   ContainerStateStatus,
+  ContainerDataView,
   PlatformType,
   ResourceControlState,
   StackDriftMode,
@@ -12,8 +13,22 @@ import { StackFormComponents } from '.';
 
 const { useReadMock, useServicesGroupMock, useStackInfoGroupMock } = vi.hoisted(() => ({
   useReadMock: vi.fn(() => ({ data: undefined, error: undefined })),
-  useServicesGroupMock: vi.fn(() => ({ items: [], isLoading: false })),
-  useStackInfoGroupMock: vi.fn(() => ({ containersInfo: [], isLoading: false, error: undefined })),
+  useServicesGroupMock: vi.fn(() => ({
+    items: [] as Array<{
+      id: string;
+      name: string;
+      labels: Record<string, string>;
+      capabilities?: { canViewLogs: boolean; canInspect: boolean };
+      runningTaskCount?: number;
+      tasks?: Array<{ id: string }>;
+    }>,
+    isLoading: false,
+  })),
+  useStackInfoGroupMock: vi.fn(() => ({
+    containersInfo: [] as Array<Pick<ContainerDataView, 'id' | 'name'> & Partial<ContainerDataView>>,
+    isLoading: false,
+    error: undefined,
+  })),
 }));
 
 vi.mock('@/lib/hooks', async (importOriginal) => ({
@@ -102,7 +117,11 @@ describe('Stack tabs', () => {
 
   beforeEach(() => {
     useServicesGroupMock.mockReturnValue({ items: [], isLoading: false });
-    useStackInfoGroupMock.mockReturnValue({ containersInfo: [], isLoading: false, error: undefined });
+    useStackInfoGroupMock.mockReturnValue({
+      containersInfo: [] as Array<Pick<ContainerDataView, 'id' | 'name'> & Partial<ContainerDataView>>,
+      isLoading: false,
+      error: undefined,
+    });
   });
 
   it('enables Services for an applied Swarm Stack', () => {
@@ -225,7 +244,7 @@ describe('Stack tabs', () => {
           image: 'henrygd/beszel:latest',
           imageId: 'sha256:beszel',
           state: ContainerStateStatus.Running,
-          controlState: ResourceControlState.Managed,
+          controlState: ResourceControlState.Idle,
           isSystem: false,
           systemRole: null,
           hasCitadelOwnershipLabels: true,
@@ -258,7 +277,7 @@ describe('Stack tabs', () => {
           image: 'redis:latest',
           imageId: 'sha256:redis',
           state: ContainerStateStatus.Running,
-          controlState: ResourceControlState.Managed,
+          controlState: ResourceControlState.Idle,
           isSystem: false,
           systemRole: null,
           hasCitadelOwnershipLabels: true,

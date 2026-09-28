@@ -17,8 +17,8 @@ export const SecretComponents: RegularResourceComponents = {
   DropdownActions: SecretDropdownActions,
   GroupActions: ({ items }) => <ActionBar type="Secret" items={items} actions={Object.values(SecretGroupActions)} />,
   useData: (platformId) => {
-    const { items, capabilities, isLoading } = useSecretsGroup(platformId);
-    return { items, isLoading, capabilities };
+    const { items, capabilities, isLoading, error, refetch, isFetching } = useSecretsGroup(platformId);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

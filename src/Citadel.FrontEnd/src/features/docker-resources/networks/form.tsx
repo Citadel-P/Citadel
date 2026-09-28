@@ -119,6 +119,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
       items: [
         defineField({
           key: 'name',
+          persistDraft: true,
           label: 'Name',
           description: "The network's name.",
           required: true,

@@ -9,7 +9,7 @@ import {
   SwarmOverviewView,
   TagSummaryView,
 } from '@/api/generated/api.types';
-import DockerIcon from '@/assets/docker.svg';
+import DockerIcon from '@/assets/docker.svg?react';
 import { Link } from 'react-router';
 import { Box, Cpu, HardDrive, Layers, MemoryStick, Network, PlugZap, Rocket, Workflow } from 'lucide-react';
 import { cn, toFixedNumber } from '@/lib/utils';
@@ -67,6 +67,7 @@ const LiveSwarmPlatform = ({
         ...platform,
         platformDescriptor: {
           ...descriptor,
+          $type: 'DockerSwarm' as const,
           nodes: overview.nodeCount,
           managers: overview.managerCount,
           runningTaskCount: overview.runningTaskCount,
@@ -96,10 +97,10 @@ const DockerPlatformCard = ({
     : undefined;
   const isOnline = platform.status === PlatformStatus.Online;
   const lastSnapshot = platform.stats?.at(0)?.created
-    ? new Date(platform.stats[0].created! * 1000).getTime()
+    ? new Date(Number(platform.stats[0].created) * 1000).getTime()
     : undefined;
-  const cpuUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.cpuUsage)) || 0 : 0;
-  const memUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.memoryUsage)) || 0 : 0;
+  const cpuUsage = platform.stats && isOnline ? Number(toFixedNumber(Number(platform.stats[0]?.cpuUsage))) || 0 : 0;
+  const memUsage = platform.stats && isOnline ? Number(toFixedNumber(Number(platform.stats[0]?.memoryUsage))) || 0 : 0;
   const currentStat = platform.stats?.[0];
   const rawDiskUsage = currentStat?.diskUsage;
   const parsedDiskUsage = rawDiskUsage == null ? null : Number(rawDiskUsage);

@@ -26,8 +26,8 @@ export const AutomationActionComponents: RequiredComponents<AutomationActionView
     <ActionBar type="AutomationAction" items={items} actions={Object.values(AutomationActionGroupActions)} />
   ),
   useData(): ResourceDataHookResult<AutomationActionView> {
-    const { actions, isLoading, capabilities } = useAutomationActionsGroup();
-    return { items: actions ?? EMPTY_AUTOMATION_ACTIONS, isLoading, capabilities };
+    const { actions, isLoading, capabilities, error, refetch, isFetching } = useAutomationActionsGroup();
+    return { error, refetch, isFetching, items: actions ?? EMPTY_AUTOMATION_ACTIONS, isLoading, capabilities };
   },
   filterItems: filterAutomationActions,
 };

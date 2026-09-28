@@ -96,7 +96,7 @@ describe('AutomationActionForm licensing', () => {
               mode="edit"
               resource={{
                 ...action,
-                capabilities: { ...action.capabilities, canExecute: true },
+                capabilities: { canRead: true, canWrite: true, ...action.capabilities, canExecute: true },
               }}
             />
           }
@@ -138,7 +138,7 @@ describe('AutomationActionForm licensing', () => {
         resource={{
           ...action,
           ...changes,
-          capabilities: { ...action.capabilities, canExecute: true },
+          capabilities: { canRead: true, canWrite: true, ...action.capabilities, canExecute: true },
         }}
       />,
     );

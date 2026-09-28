@@ -172,6 +172,7 @@ export const UserForm = ({
                 ? [
                     defineField<UserInput, 'name'>({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Username',
                       description: 'Provide a unique name to identify this User.',
                       required: true,

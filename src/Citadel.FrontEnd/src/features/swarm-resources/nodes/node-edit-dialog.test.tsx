@@ -69,6 +69,7 @@ const node: SwarmNodeView = {
     canViewLogs: false,
     canInspect: true,
     canOpenTerminal: false,
+    canManageNodeAgents: false,
     canPull: false,
   },
 };

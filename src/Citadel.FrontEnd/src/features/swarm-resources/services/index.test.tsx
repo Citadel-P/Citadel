@@ -1,5 +1,8 @@
 import {
   ManagedSwarmServiceView,
+  AutoUpdateStatus,
+  PlatformStatus,
+  SwarmServiceSchedulingMode,
   ResourceControlState,
   SwarmServiceHealth,
   SwarmServiceOwnership,
@@ -81,7 +84,7 @@ describe('ServiceComponents', () => {
     const serviceLink = await screen.findByRole('link', { name: 'web' });
     expect(serviceLink).toHaveAttribute('href', `/platforms/${platformId}/services/service-1`);
     expect(serviceLink.parentElement?.querySelector('.bg-green-500')).not.toBeNull();
-    expect(screen.getByText('Paused')).toHaveClass('text-orange-500');
+    expect(screen.getByText('Paused')).toHaveClass('border-orange-300', 'text-orange-700');
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
 
     await act(async () => screen.getByRole('button', { name: 'Expand service web' }).click());
@@ -280,7 +283,7 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   spec: {
     image: { $type: 'External', registryId: 'registry-1', imageTag: 'nginx:latest' },
     updateBehavior: UpdateBehavior.Disabled,
-    schedulingMode: 'Replicated',
+    schedulingMode: SwarmServiceSchedulingMode.Replicated,
     replicas: 2,
     command: [],
     arguments: [],
@@ -295,7 +298,7 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   health: SwarmServiceHealth.Unknown,
   synchronizationState: SwarmServiceSynchronizationState.NeverApplied,
   controlState: ResourceControlState.Idle,
-  autoUpdateState: { lastCheckedAt: '0001-01-01T00:00:00Z', status: 'Unknown' },
+  autoUpdateState: { lastCheckedAt: '0001-01-01T00:00:00Z', status: AutoUpdateStatus.Unknown },
   appliedImageDigest: null,
   hasPendingDesiredChanges: true,
   hasRuntimeDrift: false,
@@ -303,10 +306,11 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   createdAt: '2026-08-06T12:00:00Z',
   updatedAt: '2026-08-06T12:00:00Z',
   platformName: 'Swarm',
-  platformStatus: 'Online',
+  platformStatus: PlatformStatus.Online,
   runningTaskCount: null,
   desiredTaskCount: null,
   updateState: null,
+  updateMessage: null,
   currentOperation: null,
   tags: [],
   ...overrides,
@@ -329,6 +333,7 @@ const service = (overrides: Partial<SwarmServiceView> = {}): SwarmServiceView =>
   labels: {},
   ownership: SwarmServiceOwnership.Unmanaged,
   dockerStackNamespace: null,
+  stackId: null,
   ownershipDiagnostic: null,
   createdAt: '2026-08-04T11:00:00Z',
   updatedAt: '2026-08-04T12:00:00Z',

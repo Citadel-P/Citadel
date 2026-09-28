@@ -111,7 +111,7 @@ describe('TaskComponents', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: 'web.3' })).toBeVisible());
     expect(screen.queryByRole('link', { name: 'web.1' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'web.2' })).toBeVisible();
-    expect(screen.getByText('Shutdown')).toHaveClass('text-gray-700');
+    expect(screen.getByText('Shutdown')).toHaveClass('border-border', 'text-muted-foreground');
     expect(requestCount).toBe(1);
   });
 });

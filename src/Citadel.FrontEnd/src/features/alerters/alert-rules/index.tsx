@@ -408,10 +408,10 @@ export const AlertRuleComponents: RequiredComponents = {
     Extra: AddAlertRuleButton,
   },
   useData(): ResourceDataHookResult<AlertRuleView> {
-    const { data, isLoading } = useRead('listAlertRules');
+    const { data, isLoading, error, refetch, isFetching } = useRead('listAlertRules');
     const capabilities = data?.data.capabilities;
     const items = data?.data.alertRules ?? EMPTY_ALERT_RULES;
-    return { items, isLoading, capabilities };
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

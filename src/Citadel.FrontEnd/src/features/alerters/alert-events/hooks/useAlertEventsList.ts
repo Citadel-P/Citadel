@@ -9,7 +9,7 @@ export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceT
   const [query] = useAlertEventQuery();
   const { liveAlertEvents, receivedAlertEventIds } = useAppContext();
 
-  const { data, isLoading } = useRead('listAlertEvents', {
+  const { data, isLoading, error, refetch, isFetching } = useRead('listAlertEvents', {
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
@@ -79,5 +79,5 @@ export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceT
     };
   }, [serverPagedAlertEvents, receivedAlertEventIds, liveAlertEvents, resourceType, resourceId, query]);
 
-  return { pagedAlertEvents, isLoading };
+  return { error, refetch, isFetching, pagedAlertEvents, isLoading };
 };

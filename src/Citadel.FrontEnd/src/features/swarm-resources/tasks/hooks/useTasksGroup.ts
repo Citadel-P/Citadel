@@ -8,7 +8,7 @@ import { useLiveSwarmItems, useLiveSwarmResource } from '../../hooks/useSwarmRes
 
 export type SwarmTaskInfoView = SwarmTaskView & {
   platformId: string;
-  capabilities?: PlatformCapabilities;
+  capabilities?: PlatformCapabilities | null;
 };
 
 const TASK_LIMIT = 200;
@@ -18,7 +18,13 @@ export const useTasksGroup = (platformId: string) => {
   const args = useMemo(() => ({ platformId, query: { limit: TASK_LIMIT } }), [platformId]);
   const query = useRead('listSwarmTasks', args);
   const items = useLiveSwarmItems(platformId, 'listSwarmTasks', args, query, selectTasks);
-  return { items, isLoading: query.isLoading };
+  return {
+    items,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };
 
 export const useServiceTasksGroup = (platformId: string, serviceId: string | null) => {
@@ -54,7 +60,14 @@ export const useServiceTasksGroup = (platformId: string, serviceId: string | nul
   const runtime =
     liveRuntime?.platformId === platformId && liveRuntime.service.id === serviceId ? liveRuntime.service : undefined;
 
-  return { items, runtime, isLoading: query.isLoading };
+  return {
+    items,
+    runtime,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };
 
 export const useTaskInfoGroup = (platformId: string, resourceId: string) => {
@@ -83,5 +96,11 @@ export const useTaskInfoGroup = (platformId: string, resourceId: string) => {
         : undefined,
     [currentPlatform, platformId, task],
   );
-  return { resource, isLoading: query.isLoading, error: query.error };
+  return {
+    resource,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };

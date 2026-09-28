@@ -1,5 +1,10 @@
 import { Input } from '@/components/ui/input';
-import { renderCitadel } from '@/test/render-citadel';
+import { renderCitadel as renderApp } from '@/test/render-citadel';
+import { scopedDraftKey } from '@/lib/form-drafts';
+import type { ReactElement } from 'react';
+const token = `header.${btoa(JSON.stringify({ sub: 'draft-test-user' }))}.signature`;
+const renderCitadel = (ui: ReactElement) => renderApp(ui, { auth: { accessToken: token } });
+const storageKey = (key: string) => scopedDraftKey(key, token, 'http://localhost')!;
 import { screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { defineField, defineGroupField, FormSchema, FormShell } from './form-builder';
@@ -24,6 +29,7 @@ const schema: FormSchema<TestConfiguration> = {
     items: [
       defineField<TestConfiguration, 'name'>({
         key: 'name',
+        persistDraft: true,
         label: 'Name',
         required: true,
         render: (value, set) => (
@@ -32,6 +38,7 @@ const schema: FormSchema<TestConfiguration> = {
       }),
       defineField<TestConfiguration, 'description'>({
         key: 'description',
+        persistDraft: true,
         label: 'Description',
         render: (value, set) => (
           <Input
@@ -57,6 +64,7 @@ const licensedSchema: FormSchema<TestConfiguration> = {
         items: [
           defineField<TestConfiguration, 'name'>({
             key: 'name',
+            persistDraft: true,
             label: 'Name',
             render: (value, set) => (
               <Input
@@ -78,6 +86,7 @@ const licensedFieldSchema: FormSchema<TestConfiguration> = {
     items: [
       defineField<TestConfiguration, 'name'>({
         key: 'name',
+        persistDraft: true,
         label: 'Redeploy On Build',
         description: 'Automatically redeploy this deployment after the selected build succeeds.',
         requiredLicense: 'Team',
@@ -161,14 +170,14 @@ describe('FormShell', () => {
     const descriptionInput = screen.getByRole('textbox', { name: 'Description input' });
     await user.clear(descriptionInput);
     await user.type(descriptionInput, 'Updated description');
-    const storedDraft = JSON.parse(localStorage.getItem('form-draft')!);
+    const storedDraft = JSON.parse(localStorage.getItem(storageKey('form-draft'))!);
 
     await user.click(enabledSaveButton()!);
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledOnce();
     });
-    expect(JSON.parse(localStorage.getItem('form-draft')!)).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(storageKey('form-draft'))!)).toMatchObject({
       version: storedDraft.version,
       update: storedDraft.update,
     });
@@ -186,7 +195,7 @@ describe('FormShell', () => {
     const descriptionInput = screen.getByRole('textbox', { name: 'Description input' });
     await user.clear(descriptionInput);
     await user.type(descriptionInput, 'Updated description');
-    const storedDraft = JSON.parse(localStorage.getItem('form-confirmation-draft')!);
+    const storedDraft = JSON.parse(localStorage.getItem(storageKey('form-confirmation-draft'))!);
 
     await user.click(enabledSaveButton()!);
 
@@ -194,7 +203,7 @@ describe('FormShell', () => {
       expect(confirmSave).toHaveBeenCalledOnce();
     });
     expect(onSave).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem('form-confirmation-draft')!)).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(storageKey('form-confirmation-draft'))!)).toMatchObject({
       version: storedDraft.version,
       update: storedDraft.update,
     });
@@ -240,8 +249,8 @@ describe('FormShell', () => {
     await user.type(screen.getByRole('textbox', { name: 'Name input' }), 'worker');
     expect(within(nav).getByRole('link', { name: 'Name, Edited' })).toBeVisible();
     expect(within(nav).queryByText('Needs attention')).not.toBeInTheDocument();
-    await user.click(screen.getAllByRole('button', { name: 'Reset', exact: true })[0]);
-    expect(within(nav).getByRole('link', { name: 'Name', exact: true })).toBeVisible();
+    await user.click(screen.getAllByRole('button', { name: 'Reset' })[0]);
+    expect(within(nav).getByRole('link', { name: 'Name' })).toBeVisible();
     expect(within(nav).queryByText('Edited')).not.toBeInTheDocument();
   });
 
@@ -257,8 +266,8 @@ describe('FormShell', () => {
       clientHeight: { configurable: true, value: 700 },
       scrollTop: { configurable: true, writable: true, value: 0 },
     });
-    const first = screen.getByRole('link', { name: 'Name', exact: true });
-    const last = screen.getByRole('link', { name: 'Description', exact: true });
+    const first = screen.getByRole('link', { name: 'Name' });
+    const last = screen.getByRole('link', { name: 'Description' });
     expect(first).toHaveAttribute('aria-current', 'location');
     root.scrollTop = 300;
     root.dispatchEvent(new Event('scroll'));
@@ -296,4 +305,110 @@ describe('FormShell', () => {
     expect(screen.getByText('Automatically redeploy this deployment after the selected build succeeds.')).toBeVisible();
     expect(screen.getByLabelText('Requires a Team license')).toBeVisible();
   });
+});
+
+type Credentials = { name: string; password: string; config: { clientSecret: string } };
+const credentialsOriginal: Credentials = { name: '', password: '', config: { clientSecret: '' } };
+const credentialsSchema: FormSchema<Credentials> = {
+  general: {
+    items: [
+      defineField<Credentials, 'name'>({
+        key: 'name',
+        label: 'Name',
+        persistDraft: true,
+        render: (value, set) => (
+          <Input aria-label="Resource name" value={value ?? ''} onChange={(e) => set({ name: e.target.value })} />
+        ),
+      }),
+      defineField<Credentials, 'password'>({
+        key: 'password',
+        label: 'Password',
+        render: (value, set) => (
+          <Input
+            aria-label="Password"
+            type="password"
+            value={value ?? ''}
+            onChange={(e) => set({ password: e.target.value })}
+          />
+        ),
+      }),
+      defineField<Credentials, 'config.clientSecret'>({
+        key: 'config.clientSecret',
+        label: 'Client secret',
+        render: (value, set) => (
+          <Input
+            aria-label="Client secret"
+            type="password"
+            value={value ?? ''}
+            onChange={(e) => set({ config: { clientSecret: e.target.value } })}
+          />
+        ),
+      }),
+    ],
+  },
+};
+function CredentialsForm({
+  onSave = async () => {},
+  saved = credentialsOriginal,
+}: {
+  onSave?: (value: Credentials) => Promise<void>;
+  saved?: Credentials;
+}) {
+  const [update, setUpdate] = useState<Partial<Credentials>>({});
+  return (
+    <FormShell
+      schema={credentialsSchema}
+      original={saved}
+      update={update}
+      setUpdate={setUpdate}
+      onSave={onSave}
+      draftKey="registry:security-test"
+      draftVersion={1}
+    />
+  );
+}
+
+describe('FormShell draft privacy', () => {
+  it('retains credentials for submission but stores and restores only audited fields', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('retry later'));
+    const { user, unmount } = renderCitadel(<CredentialsForm onSave={onSave} />);
+    await user.type(screen.getByLabelText('Resource name'), 'private registry');
+    await user.type(screen.getByLabelText('Password', { exact: true, selector: 'input' }), 'password-value');
+    await user.type(screen.getByLabelText('Client secret', { exact: true, selector: 'input' }), 'client-secret-value');
+    const stored = localStorage.getItem(storageKey('registry:security-test'))!;
+    expect(JSON.parse(stored).update).toEqual({ name: 'private registry' });
+    expect(stored).not.toContain('password-value');
+    expect(stored).not.toContain('client-secret-value');
+    await user.click(enabledSaveButton()!);
+    expect(onSave).toHaveBeenCalledWith({
+      name: 'private registry',
+      password: 'password-value',
+      config: { clientSecret: 'client-secret-value' },
+    });
+    unmount();
+    renderCitadel(<CredentialsForm />);
+    expect(screen.getByLabelText('Resource name')).toHaveValue('private registry');
+    expect(screen.getByLabelText('Password', { exact: true, selector: 'input' })).toHaveValue('');
+    expect(screen.getByLabelText('Client secret', { exact: true, selector: 'input' })).toHaveValue('');
+  });
+
+  it('does not restore another account’s draft', () => {
+    localStorage.setItem(
+      storageKey('registry:security-test'),
+      JSON.stringify({ version: 1, savedAt: 'now', update: { name: 'alice' } }),
+    );
+    const otherToken = `header.${btoa(JSON.stringify({ sub: 'other-user' }))}.signature`;
+    renderApp(<CredentialsForm />, { auth: { accessToken: otherToken } });
+    expect(screen.getByLabelText('Resource name')).toHaveValue('');
+    expect(screen.getByLabelText('Password', { exact: true, selector: 'input' })).toHaveValue('');
+  });
+});
+
+it('discards a draft when its saved fields have changed on the server', async () => {
+  const first = renderCitadel(<CredentialsForm />);
+  await first.user.type(screen.getByLabelText('Resource name'), 'old local edit');
+  first.unmount();
+  renderCitadel(<CredentialsForm saved={{ ...credentialsOriginal, name: 'new server name' }} />);
+  expect(screen.getByLabelText('Resource name')).toHaveValue('new server name');
+  expect(localStorage.getItem(storageKey('registry:security-test'))).toBeNull();
 });

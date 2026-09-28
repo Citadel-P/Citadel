@@ -10,14 +10,14 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useImagesGroup = (platformId?: string) => {
-  const { data, isLoading } = useRead('listImages', { platformId });
+  const { data, isLoading, error, refetch, isFetching } = useRead('listImages', { platformId });
   const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesView>();
   const [nodeSnapshot, setNodeSnapshot] = useState<SwarmNodeLocalResourcesUpdate>();
   const capabilities = data?.data.capabilities;
 
   const imagesInfo = useMemo<ImagesView | undefined>(() => {
     const source = realtimeImagesInfo ?? data?.data;
-    return source && nodeSnapshot?.platformId === platformId && nodeSnapshot.images
+    return source && nodeSnapshot && nodeSnapshot.platformId === platformId && nodeSnapshot.images
       ? { ...source, images: nodeSnapshot.images }
       : source;
   }, [data, nodeSnapshot, platformId, realtimeImagesInfo]);
@@ -141,9 +141,5 @@ export const useImagesGroup = (platformId?: string) => {
     skip: !platformId,
   });
 
-  return {
-    imagesInfo,
-    isLoading,
-    capabilities,
-  };
+  return { error, refetch, isFetching, imagesInfo, isLoading, capabilities };
 };

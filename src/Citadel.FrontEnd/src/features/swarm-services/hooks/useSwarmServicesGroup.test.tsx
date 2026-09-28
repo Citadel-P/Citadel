@@ -1,3 +1,4 @@
+import { createManagedSwarmService } from '@/test/factories/resources';
 import { ManagedSwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
@@ -60,6 +61,7 @@ const TaskNames = () => {
 
 const service = (tasks: SwarmTaskView[]): ManagedSwarmServiceView =>
   ({
+    ...createManagedSwarmService(),
     id: 'managed-service-1',
     platformId,
     name: 'web',

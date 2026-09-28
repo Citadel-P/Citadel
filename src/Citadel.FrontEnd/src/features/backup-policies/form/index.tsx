@@ -70,11 +70,8 @@ export const BackupPolicyFormComponents: RequiredFormComponents<BackupPolicyForm
       },
     ],
     useData(id: string) {
-      const { data, isLoading } = useRead('getBackupPolicy', { id });
-      return {
-        item: data?.data as BackupPolicyFormResource | undefined,
-        isLoading,
-      };
+      const { data, isLoading, error, refetch, isFetching } = useRead('getBackupPolicy', { id });
+      return { error, refetch, isFetching, item: data?.data as BackupPolicyFormResource | undefined, isLoading };
     },
   },
 };

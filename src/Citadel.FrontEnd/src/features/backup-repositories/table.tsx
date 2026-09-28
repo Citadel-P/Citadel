@@ -1,8 +1,6 @@
 import {
   BackupExecutionLocation,
   BackupRepositorySpec,
-  BackupRepositorySpecFileSystemBackupRepositorySpec,
-  BackupRepositorySpecS3CompatibleBackupRepositorySpec,
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
@@ -56,7 +54,13 @@ export function BackupRepositoriesTable({
   );
 }
 
-function RepositoryCard({ repository, actions }: { repository: BackupRepositoryView; actions: BackupRepositoryActions }) {
+function RepositoryCard({
+  repository,
+  actions,
+}: {
+  repository: BackupRepositoryView;
+  actions: BackupRepositoryActions;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const validate = useMutate('validateBackupRepository');
@@ -129,12 +133,7 @@ function RepositoryCard({ repository, actions }: { repository: BackupRepositoryV
 
   const cardActions = {
     edit: () => (
-      <DropdownActionButton
-        title="Edit"
-        icon={<Eye className="h-4 w-4" />}
-        disabled={!canRead}
-        onClick={openEdit}
-      />
+      <DropdownActionButton title="Edit" icon={<Eye className="h-4 w-4" />} disabled={!canRead} onClick={openEdit} />
     ),
     validate: () =>
       operationAction(
@@ -234,8 +233,8 @@ export const destinationText = (spec: BackupRepositorySpec) => {
   return '-';
 };
 
-const isFileSystemSpec = (spec: BackupRepositorySpec): spec is BackupRepositorySpecFileSystemBackupRepositorySpec =>
+const isFileSystemSpec = (spec: BackupRepositorySpec): spec is Extract<BackupRepositorySpec, { $type: 'FileSystem' }> =>
   spec?.$type === 'FileSystem';
 
-const isS3Spec = (spec: BackupRepositorySpec): spec is BackupRepositorySpecS3CompatibleBackupRepositorySpec =>
+const isS3Spec = (spec: BackupRepositorySpec): spec is Extract<BackupRepositorySpec, { $type: 'S3Compatible' }> =>
   spec?.$type === 'S3Compatible';

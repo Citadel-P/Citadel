@@ -148,3 +148,53 @@ describe('createActionsBuilder', () => {
     expect(screen.getAllByRole('button', { name: /restart/i })).toHaveLength(2);
   });
 });
+
+describe('action failure recovery', () => {
+  it('reports custom action network failures', async () => {
+    const { toast } = await import('sonner');
+    const notice = vi.spyOn(toast, 'error');
+    const { info } = createActionsBuilder<{ name: string }>()
+      .addAction({
+        key: 'sync',
+        type: 'command',
+        icon: RefreshCw,
+        useHandler: () => ({
+          run: async () => {
+            throw new TypeError('Failed to fetch');
+          },
+        }),
+      })
+      .build();
+    const Action = info.sync;
+    render(<Action resource={{ name: 'demo' }} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Sync' }));
+    expect(notice).toHaveBeenCalledWith(
+      'Request failed',
+      expect.objectContaining({ description: expect.stringContaining('Check your connection') }),
+    );
+  });
+
+  it('keeps a failed confirmation open and allows retry', async () => {
+    const { toast } = await import('sonner');
+    const notice = vi.spyOn(toast, 'error');
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce({ status: 409, error: { detail: 'Resource is busy.' } })
+      .mockResolvedValue(undefined);
+    const { info } = createActionsBuilder<{ name: string }>()
+      .addAction({ key: 'sync', type: 'command', icon: RefreshCw, confirm: true, useHandler: () => ({ run }) })
+      .build();
+    const Action = info.sync;
+    const user = userEvent.setup();
+    render(<Action resource={{ name: 'demo' }} />);
+    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await user.type(screen.getByRole('textbox'), 'demo');
+    const { within, waitFor } = await import('@testing-library/react');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sync' }));
+    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(notice).toHaveBeenCalledWith('Request failed', { description: 'Resource is busy.' });
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sync' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+});

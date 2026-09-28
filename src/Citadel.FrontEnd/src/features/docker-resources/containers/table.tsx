@@ -332,7 +332,7 @@ export const buildContainerRows = (
     stackGroups.get(stackName)?.push(container);
   }
 
-  return orderedRows.flatMap((row) => {
+  return orderedRows.flatMap<ContainerActionResource>((row) => {
     if (row.type === 'container') return [row.container];
 
     const groupContainers = stackGroups.get(row.stackName) ?? [];

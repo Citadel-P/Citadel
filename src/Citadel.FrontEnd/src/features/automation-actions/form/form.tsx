@@ -152,6 +152,7 @@ export function AutomationActionForm({
                 ? [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Stable name used in Citadel activity and run history.',
@@ -165,6 +166,7 @@ export function AutomationActionForm({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional note shown in the action header.',
                       render: (value, set) => (

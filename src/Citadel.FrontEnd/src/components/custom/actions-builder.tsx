@@ -1,3 +1,4 @@
+import { notifyRequestError } from '@/lib/request-error';
 import { LucideIcon } from 'lucide-react';
 import { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -22,6 +23,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
   onClick?: (resources: R[] | R) => void;
   isVisible?: (resources: R | R[]) => boolean;
   canExecute?: (r: R | R[]) => boolean;
+  disabledReason?: (r: R | R[]) => string;
   confirm?: boolean;
   confirmationDescription?: ReactNode;
   destructive?: boolean;
@@ -58,6 +60,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
   confirm?: boolean;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   canExecute?: (r: R) => boolean;
+  disabledReason?: (r: R | R[]) => string;
   useVariables?: (resources: R | R[]) => K extends KnownResourceName ? PrimaryArg<K> | UseMutateVariables<K> : any;
   useHandler?: (ctx: { resources: R | R[] }) => {
     run: () => void | Promise<void>;
@@ -145,7 +148,9 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
                   variant: variant,
                   description: act.confirmationDescription,
                 })
-            : run
+            : () => {
+                void run().catch(notifyRequestError);
+              }
         }
       />
     );
@@ -166,6 +171,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
           onClick={run}
           description={act.confirmationDescription}
           disabled={!canExecute || isPending}
+          disabledReason={!canExecute ? disabledReason : undefined}
         />
       );
     }
@@ -176,7 +182,9 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         iconPosition="left"
         variant={variant}
         icon={<act.icon className="h-4 w-4" />}
-        onClick={run}
+        onClick={() => {
+          void run().catch(notifyRequestError);
+        }}
         disabled={!canExecute || isPending}
         disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
@@ -196,6 +204,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
           icon={<act.icon className="h-4 w-4" />}
           onClick={run}
           disabled={!canExecute || isPending}
+          disabledReason={!canExecute ? disabledReason : undefined}
           variant={variant}
         />
       );
@@ -207,7 +216,9 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         iconPosition="left"
         variant={variant}
         icon={<act.icon className="h-4 w-4" />}
-        onClick={run}
+        onClick={() => {
+          void run().catch(notifyRequestError);
+        }}
         disabled={!canExecute || isPending}
         disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
@@ -247,7 +258,9 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
                   disabled: !canExecute,
                   variant: variant,
                 })
-            : run
+            : () => {
+                void run().catch(notifyRequestError);
+              }
         }
         disabled={!canExecute || isPending}
         loading={isPending}
@@ -277,6 +290,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
           icon={<config.icon className="h-4 w-4" />}
           onClick={run}
           disabled={!canExecute || isPending}
+          disabledReason={!canExecute ? disabledReason : undefined}
         />
       );
     }
@@ -287,7 +301,9 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         icon={<config.icon className="h-4 w-4" />}
         iconPosition="left"
         variant={variant}
-        onClick={run}
+        onClick={() => {
+          void run().catch(notifyRequestError);
+        }}
         disabled={!canExecute || isPending}
         disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
@@ -315,6 +331,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
           icon={<config.icon className="h-4 w-4" />}
           onClick={run}
           disabled={!canExecute || isPending}
+          disabledReason={!canExecute ? disabledReason : undefined}
         />
       );
     }
@@ -325,7 +342,9 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         variant={variant}
         title={config.title}
         icon={<config.icon className="h-4 w-4" />}
-        onClick={run}
+        onClick={() => {
+          void run().catch(notifyRequestError);
+        }}
         disabled={!canExecute || isPending}
         disabledReason={!canExecute ? disabledReason : undefined}
         loading={isPending}
@@ -343,6 +362,7 @@ function useUnifiedExecutor<R>(
     invalidate?: any;
     argName?: 'params' | 'data' | 'variables';
     canExecute?: any;
+    disabledReason?: (r: R | R[]) => string;
     useVariables?: any;
     useSuccessHandler?: any;
     onSuccess?: any;
@@ -359,7 +379,7 @@ function useUnifiedExecutor<R>(
 
   if (act.useHandler) {
     const handler = act.useHandler({ resources });
-    const canExecute = (handler.canExecute ?? true) && capabilitiesAllow;
+    const canExecute = (handler.canExecute ?? true) && (act.canExecute?.(resources) ?? true) && capabilitiesAllow;
     return {
       run: async () => await handler.run(),
       canExecute,
@@ -367,7 +387,9 @@ function useUnifiedExecutor<R>(
       disabledReason: canExecute
         ? undefined
         : capabilitiesAllow
-          ? handler.disabledReason
+          ? (handler.disabledReason ??
+            act.disabledReason?.(resources) ??
+            'This action is unavailable in the current resource state.')
           : 'You do not have permission to perform this action.',
     };
   }
@@ -379,6 +401,7 @@ function useMutationLogic<R, K extends KnownResourceName>(
   act: {
     mutateKey?: K;
     canExecute?: (r: any) => boolean;
+    disabledReason?: (r: R | R[]) => string;
     useVariables?: (r: any) => any;
     useSuccessHandler?: (ctx: any) => any;
     onSuccess?: (ctx: any) => any;
@@ -410,13 +433,23 @@ function useMutationLogic<R, K extends KnownResourceName>(
       if (invalidate) client.invalidateQueries({ queryKey: [invalidate] });
       if (showToast) {
         const name = Array.isArray(resources) ? `${resources.length} items` : (resources as any).name;
-        toast.success(`${title} executed for ${name}`);
+        toast.success(`${title} requested for ${name}`);
       }
       if (successCallback) successCallback();
     } catch (err) {
-      console.error(err);
+      notifyRequestError(err);
+      throw err;
     }
   };
 
-  return { run, isPending, canExecute, disabledReason: undefined };
+  return {
+    run,
+    isPending,
+    canExecute,
+    disabledReason: canExecute
+      ? undefined
+      : !capabilitiesAllow
+        ? 'You do not have permission to perform this action.'
+        : (act.disabledReason?.(resources) ?? 'This action is unavailable in the current resource state.'),
+  };
 }

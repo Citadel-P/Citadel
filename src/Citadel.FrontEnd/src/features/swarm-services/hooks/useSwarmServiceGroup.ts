@@ -18,7 +18,7 @@ export const normalizeManagedSwarmService = (
     capabilities: update.capabilities ?? current?.capabilities,
     tasks:
       update.tasks ??
-      (update.synchronizationState === SwarmServiceSynchronizationState.RuntimeMissing ? [] : current?.tasks ?? []),
+      (update.synchronizationState === SwarmServiceSynchronizationState.RuntimeMissing ? [] : (current?.tasks ?? [])),
     spec: {
       ...update.spec,
       image: normalizedImage as ManagedSwarmServiceView['spec']['image'],
@@ -30,7 +30,8 @@ const isSwarmServiceImage = (value: unknown): value is ManagedSwarmServiceView['
   value !== null &&
   typeof value === 'object' &&
   !Array.isArray(value) &&
-  ('$type' in value && (value.$type === 'External' || value.$type === 'Build'));
+  '$type' in value &&
+  (value.$type === 'External' || value.$type === 'Build');
 
 const normalizeMessagePackUnion = (value: unknown): unknown => {
   if (
@@ -47,7 +48,7 @@ const normalizeMessagePackUnion = (value: unknown): unknown => {
 };
 
 export const useSwarmServiceGroup = (id: string) => {
-  const { data, isLoading } = useRead('getManagedSwarmService', { id });
+  const { data, isLoading, error, refetch, isFetching } = useRead('getManagedSwarmService', { id });
   const queryClient = useQueryClient();
   const onUpdated = useCallback(
     (service: ManagedSwarmServiceView, action: string) => {
@@ -68,5 +69,5 @@ export const useSwarmServiceGroup = (id: string) => {
     [onUpdated],
   );
   useRealtimeGroup({ groupName: `swarm-service:${id}`, skip: !id, setupEventListeners, removeEventListeners });
-  return { service: data?.data, isLoading };
+  return { error, refetch, isFetching, service: data?.data, isLoading };
 };

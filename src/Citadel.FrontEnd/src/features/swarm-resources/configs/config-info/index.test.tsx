@@ -112,6 +112,7 @@ const appContext = {
     },
   } as PlatformView,
   platforms: [],
+  applicationInfo: undefined,
   unresolvedAlertCount: 0,
   liveAlertEvents: {},
   receivedAlertEventIds: [],

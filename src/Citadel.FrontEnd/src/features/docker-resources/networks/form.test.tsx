@@ -37,6 +37,7 @@ const appContext = (type: PlatformType) => ({
   isLoading: false,
   currentPlatform: { id: 'platform-1', type } as PlatformView,
   platforms: [],
+  applicationInfo: undefined,
   unresolvedAlertCount: 0,
   liveAlertEvents: {},
   receivedAlertEventIds: [],

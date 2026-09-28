@@ -1,6 +1,6 @@
 import { KeyRound, Network, Settings } from 'lucide-react';
 import { JSX } from 'react';
-import DockerIcon from '@/assets/docker.min.svg';
+import DockerIcon from '@/assets/docker.min.svg?react';
 import { CitadelIcons } from '@/lib/icons';
 import { PlatformType } from '@/api/generated/api.types';
 interface IMenuItem {

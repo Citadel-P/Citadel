@@ -19,6 +19,7 @@ describe('platform backup summary', () => {
       dockerVolumePolicyCount: 1,
       stackPolicyCount: 2,
       deploymentPolicyCount: 1,
+      swarmServicePolicyCount: 0,
       attentionPolicyCount: 1,
     });
 
@@ -42,6 +43,7 @@ const createSummary = (overrides: Partial<PlatformBackupSummaryView> = {}): Plat
   dockerVolumePolicyCount: 0,
   stackPolicyCount: 0,
   deploymentPolicyCount: 0,
+  swarmServicePolicyCount: 0,
   attentionPolicyCount: 0,
   lastRunStatus: null,
   lastRunAt: null,

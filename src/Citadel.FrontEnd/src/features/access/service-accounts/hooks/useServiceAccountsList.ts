@@ -3,7 +3,7 @@ import { useUserQuery } from '@/lib/atoms';
 
 export const useServiceAccountsList = (name?: string, pageSize?: number) => {
   const [query] = useUserQuery();
-  const { data, isLoading } = useRead('listServiceAccounts', {
+  const { data, isLoading, error, refetch, isFetching } = useRead('listServiceAccounts', {
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
@@ -11,5 +11,5 @@ export const useServiceAccountsList = (name?: string, pageSize?: number) => {
       IncludeArchived: false,
     },
   });
-  return { pagedServiceAccounts: data?.data.pagedResult, isLoading };
+  return { error, refetch, isFetching, pagedServiceAccounts: data?.data.pagedResult, isLoading };
 };

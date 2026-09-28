@@ -32,6 +32,7 @@ const appContext = (status: PlatformStatus) => ({
       status,
     } as PlatformView,
   ],
+  applicationInfo: undefined,
   unresolvedAlertCount: 0,
   liveAlertEvents: {},
   receivedAlertEventIds: [],
@@ -47,7 +48,16 @@ describe('SwarmLogs', () => {
           platformId={platformId}
           resourceId="service-1"
           resource="service"
-          capabilities={{ canViewLogs: true }}
+          capabilities={{
+            canRead: true,
+            canWrite: false,
+            canExecute: false,
+            canViewLogs: true,
+            canInspect: false,
+            canOpenTerminal: false,
+            canPull: false,
+            canManageNodeAgents: false,
+          }}
         />
       </AppContext.Provider>,
     );
@@ -67,7 +77,16 @@ describe('SwarmLogs', () => {
           platformId={platformId}
           resourceId="service-1"
           resource="service"
-          capabilities={{ canViewLogs: true }}
+          capabilities={{
+            canRead: true,
+            canWrite: false,
+            canExecute: false,
+            canViewLogs: true,
+            canInspect: false,
+            canOpenTerminal: false,
+            canPull: false,
+            canManageNodeAgents: false,
+          }}
         />
       </AppContext.Provider>,
     );

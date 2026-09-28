@@ -37,6 +37,23 @@ const NameCell = ({ row }: { row: Row<TestRow> }) => (
   </div>
 );
 
+it('shows initial loading without a false empty state and keeps rows visible during refresh', () => {
+  const { rerender } = render(<DataTable columns={columns} data={[]} isLoading />);
+  expect(screen.getByRole('status')).toHaveTextContent('Loading rows');
+  expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+  expect(screen.queryByText('No results.')).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+
+  rerender(<DataTable columns={columns} data={[{ id: 'api', name: 'API' }]} isLoading />);
+  expect(screen.getByText('API')).toBeVisible();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'false');
+
+  rerender(<DataTable columns={columns} data={[]} isLoading={false} />);
+  expect(screen.getByText('No results.')).toBeVisible();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+
 describe('DataTable nested row selection', () => {
   it('reports an individually selected child row', async () => {
     const onSelectionChange = vi.fn();

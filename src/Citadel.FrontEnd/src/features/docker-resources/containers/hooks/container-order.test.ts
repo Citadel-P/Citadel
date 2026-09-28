@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ContainerView } from '@/api/generated/api.types';
-import {
-  applyContainerChange,
-  applyContainerStatePatches,
-  reconcileContainerOrder,
-} from './container-order';
+import { ContainerView, ContainerStateStatus, ResourceControlState } from '@/api/generated/api.types';
+import { applyContainerChange, applyContainerStatePatches, reconcileContainerOrder } from './container-order';
 
 it('applies container updates, creation and deletion without removing or replacing unrelated rows', () => {
   const a = container('a');
@@ -21,11 +17,23 @@ it('applies container updates, creation and deletion without removing or replaci
 it('applies state patches without replacing other fields or touching unrelated rows', () => {
   const a = { ...container('a'), name: 'keep-me', controlState: 'Idle' } as ContainerView;
   const b = container('b');
-  const result = applyContainerStatePatches([a, b], [
-    { id: a.id, containerId: a.containerId, state: 'Exited', controlState: 'Processing' },
-  ]);
+  const result = applyContainerStatePatches(
+    [a, b],
+    [
+      {
+        id: a.id,
+        containerId: a.containerId,
+        state: ContainerStateStatus.Exited,
+        controlState: ResourceControlState.Processing,
+      },
+    ],
+  );
 
-  expect(result[0]).toEqual({ ...a, state: 'Exited', controlState: 'Processing' });
+  expect(result[0]).toEqual({
+    ...a,
+    state: ContainerStateStatus.Exited,
+    controlState: ResourceControlState.Processing,
+  });
   expect(result[0].name).toBe('keep-me');
   expect(result[1]).toBe(b);
 });

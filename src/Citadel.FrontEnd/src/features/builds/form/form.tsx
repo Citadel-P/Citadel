@@ -232,7 +232,6 @@ const BuildPoolField = ({
   );
 };
 
-
 function formatConnectorType(connectorType?: PlatformConnectorType) {
   switch (connectorType) {
     case PlatformConnectorType.Agent:
@@ -333,8 +332,7 @@ const BuildSecretsField = ({
     <div className="flex flex-col gap-3">
       {buildSecrets.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Add secrets only when your Dockerfile uses BuildKit secret mounts such as
-          {' '}
+          Add secrets only when your Dockerfile uses BuildKit secret mounts such as{' '}
           <span className="font-mono">RUN --mount=type=secret,id=npmrc</span>.
         </p>
       ) : null}
@@ -549,6 +547,7 @@ export const BuildForm = ({
                   items: [
                     defineField({
                       key: 'name',
+                      persistDraft: true,
                       label: 'Name',
                       description: 'Internal identifier for this workload.',
                       required: true,
@@ -560,6 +559,7 @@ export const BuildForm = ({
                     }),
                     defineField({
                       key: 'description',
+                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional description of this workload.',
                       render: (value, set) => (
@@ -722,27 +722,27 @@ export const BuildForm = ({
                   ]
                 : [
                     defineField<BuildInput, 'platformId'>({
-                key: 'platformId',
-                label: 'Platform',
-                description:
-                  'Docker platform that runs the build. Local, agent, and edge-agent connectors are supported.',
-                required: true,
-                validate: (value) =>
-                  platformsData && value && !platforms.some((platform) => platform.id === value)
-                    ? 'Select an available Docker platform.'
-                    : null,
-                render: (value, set) => (
-                  <BuildPlatformField
-                    value={value}
-                    options={platformOptions}
-                    hasLoaded={Boolean(platformsData)}
-                    isLoading={isLoadingPlatforms}
-                    selectedConnectorType={platforms.find((platform) => platform.id === value)?.connectorType}
-                    disabled={disabled}
-                    onChange={(platformId) => set({ platformId })}
-                  />
-                ),
-              }),
+                      key: 'platformId',
+                      label: 'Platform',
+                      description:
+                        'Docker platform that runs the build. Local, agent, and edge-agent connectors are supported.',
+                      required: true,
+                      validate: (value) =>
+                        platformsData && value && !platforms.some((platform) => platform.id === value)
+                          ? 'Select an available Docker platform.'
+                          : null,
+                      render: (value, set) => (
+                        <BuildPlatformField
+                          value={value}
+                          options={platformOptions}
+                          hasLoaded={Boolean(platformsData)}
+                          isLoading={isLoadingPlatforms}
+                          selectedConnectorType={platforms.find((platform) => platform.id === value)?.connectorType}
+                          disabled={disabled}
+                          onChange={(platformId) => set({ platformId })}
+                        />
+                      ),
+                    }),
                   ]),
               defineField({
                 key: 'registryId',

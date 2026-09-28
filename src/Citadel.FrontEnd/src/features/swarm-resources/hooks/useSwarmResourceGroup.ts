@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router';
 
 type QueryState<T> = { data?: { data?: T } };
 type CachedResponse<T> = { data: T };
-type LiveSwarmResource = { id: string; capabilities?: PlatformCapabilities };
-type SwarmCollection<T> = { items: T[]; capabilities?: PlatformCapabilities };
+type LiveSwarmResource = { id: string; capabilities?: PlatformCapabilities | null };
+type SwarmCollection<T> = { items: T[]; capabilities?: PlatformCapabilities | null };
 
 export const useLiveSwarmItems = <T extends LiveSwarmResource>(
   platformId: string,

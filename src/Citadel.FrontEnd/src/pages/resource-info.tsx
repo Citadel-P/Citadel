@@ -1,9 +1,9 @@
+import { canShowCachedResource } from '@/lib/request-error';
 import { AppContent } from '@/components/custom/app-content';
-import { ProblemDetails } from '@/api/generated/api.types';
-import { AlertMessage } from '@/components/custom/alert-message';
+import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
-import Loader from '@/components/ui/loader';
+import { ResourceSkeleton } from './resource-skeleton';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
 import { Badge } from '@/components/ui/badge';
@@ -18,21 +18,25 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
     platformId: string;
     resourceId: string;
   }>();
-  const { resource, isLoading, error } = Components.useData(platformId, resourceId);
+  const { resource, isLoading, error, refetch, isFetching } = Components.useData(platformId, resourceId);
+  if (error && !canShowCachedResource(error))
+    return (
+      <AppContent>
+        <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} />
+      </AppContent>
+    );
   const Header = Components.Header;
   const Icon = Header.Icon ?? Box;
-  const errorDetail = (error as { error?: ProblemDetails } | null)?.error;
 
   return (
     <div className="flex-col justify-between relative">
       <AppContent>
         <div className="flex flex-col gap-(--section-gap)">
-          {(isLoading || !resource) && !error ? (
-            <Loader />
-          ) : error ? (
-            <AlertMessage title={`${errorDetail?.status ?? ''} ${errorDetail?.title ?? 'Error'}`.trim()} type="error">
-              {errorDetail?.detail ?? 'Unknown error'}
-            </AlertMessage>
+          {!!error && resource && <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale />}
+          {isLoading && !resource ? (
+            <ResourceSkeleton variant="detail" embedded />
+          ) : !resource ? (
+            <ResourceReadError error={error ?? { status: 404 }} refetch={refetch} isFetching={isFetching} />
           ) : (
             resource && (
               <>

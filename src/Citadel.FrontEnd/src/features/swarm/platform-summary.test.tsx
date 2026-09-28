@@ -152,12 +152,84 @@ describe('SwarmPlatformSummary', () => {
 function emptyInventory(): SwarmInventoryUpdate {
   return {
     platformId,
-    nodes: { items: [] },
-    services: { items: [] },
-    tasks: { items: [] },
-    networks: { items: [] },
-    secrets: { items: [] },
-    configs: { items: [] },
+    nodes: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
+    services: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
+    tasks: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
+    networks: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
+    secrets: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
+    configs: {
+      items: [],
+      capabilities: {
+        canRead: true,
+        canWrite: false,
+        canExecute: false,
+        canInspect: true,
+        canViewLogs: true,
+        canOpenTerminal: false,
+        canPull: false,
+        canManageNodeAgents: false,
+      },
+    },
   };
 }
 
@@ -181,6 +253,16 @@ function overview() {
   return {
     platformId,
     health: 'Healthy',
+    capabilities: {
+      canRead: true,
+      canWrite: false,
+      canExecute: false,
+      canInspect: true,
+      canViewLogs: true,
+      canOpenTerminal: false,
+      canPull: false,
+      canManageNodeAgents: false,
+    },
     message: null,
     isStale: false,
     nodeCount: 0,

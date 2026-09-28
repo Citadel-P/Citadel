@@ -23,7 +23,7 @@ const failedApply: LatestActivityView = {
   info: {
     $type: 'DeploymentApplied',
     deployment: null,
-    result: { message, code: 500 },
+    result: { message },
   },
 };
 

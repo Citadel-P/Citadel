@@ -29,7 +29,7 @@ export function LiveConnectionIndicator() {
   const { liveConnectionState, interruptedAt, retryConnection } = useRealtimeContext();
   const [visibleInterruptionAt, setVisibleInterruptionAt] = useState<number>();
   const [retryPending, setRetryPending] = useState(false);
-  const recoveryToastForRef = useRef<number>();
+  const recoveryToastForRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (

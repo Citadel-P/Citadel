@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     svgr({
-      include: '**/*.svg',
+      include: '**/*.svg?react',
       svgrOptions: {
         exportType: 'default',
       },

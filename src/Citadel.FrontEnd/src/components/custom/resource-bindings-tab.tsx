@@ -35,17 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate, useRead } from '@/lib/hooks';
-import {
-  ChevronDown,
-  ExternalLink,
-  KeyRound,
-  LoaderCircle,
-  MoveUpRight,
-  Pencil,
-  Plus,
-  Trash2,
-  Variable,
-} from 'lucide-react';
+import { ChevronDown, KeyRound, LoaderCircle, MoveUpRight, Pencil, Plus, Trash2, Variable } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -72,7 +62,7 @@ export const ResourceBindingSummary = ({
   title = 'Bindings',
   description = 'Resource-specific values are managed in the Bindings tab. Global bindings are resolved during deploy.',
 }: {
-  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
   resourceId: string;
   title?: string;
   description?: string;
@@ -117,7 +107,7 @@ export const ResourceBindingsTab = ({
   resourceId,
   disabled,
 }: {
-  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
   resourceId: string;
   disabled?: boolean;
 }) => {
@@ -163,9 +153,12 @@ const ResourceBindingsTabEditor = ({
   canManageGlobalSecrets,
   allowMountedFile,
 }: {
-  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
   resourceId: string;
-  queryArgs: { scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment; resourceId: string };
+  queryArgs: {
+    scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
+    resourceId: string;
+  };
   disabled?: boolean;
   isLoading: boolean;
   serverEntries: ResourceBindingView[];
@@ -426,9 +419,12 @@ const createResourceBindingActions = ({
   onEdit,
 }: {
   disabled?: boolean;
-  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
   resourceId: string;
-  queryArgs: { scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment; resourceId: string };
+  queryArgs: {
+    scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
+    resourceId: string;
+  };
   onEdit: (entry: ResourceBindingView) => void;
 }) =>
   createActionsBuilder<ResourceBindingView>()
@@ -837,7 +833,12 @@ export const ResourceBindingAddDropdown = ({
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button type="button" variant="outline" size="sm" disabled={disabled} className='bg-primary hover:bg-primary/80 hover:text-primary-foreground text-primary-foreground h-9'>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        className="bg-primary hover:bg-primary/80 hover:text-primary-foreground text-primary-foreground h-9">
         Add Binding
         <ChevronDown className="size-3.5" />
       </Button>
@@ -863,7 +864,7 @@ export const useSecretCreation = (
   addSecretBinding: (secret?: SecretDefinitionView) => boolean | Promise<boolean>,
   existingSecrets: SecretDefinitionView[] = EMPTY_SECRET_DEFINITIONS,
   options?: {
-    scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+    scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment | ResourceBindingScope.SwarmService;
     resourceId: string;
     allowExternalSecrets: boolean;
   },

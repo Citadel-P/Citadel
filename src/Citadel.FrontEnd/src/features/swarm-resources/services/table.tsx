@@ -210,7 +210,7 @@ export const ServicesTable = ({
       data={rows}
       isLoading={isLoading}
       getSubRows={getSubRows}
-      enableRowSelection={selectable ? (row) => isServiceRow(row) : false}
+      enableRowSelection={selectable ? (row) => isServiceRow(row) : undefined}
       enableSubRowSelection={false}
       onSelectionChange={
         selectable
@@ -253,7 +253,7 @@ const aggregateTaskStats = (
 ): ContainerStatView | undefined => {
   const stats = service.tasks
     .map((task) => containers.get(task.id))
-    .filter((container) => container?.state === ContainerStateStatus.Running)
+    .filter((container): container is ContainerDataView => container?.state === ContainerStateStatus.Running)
     .map((container) => container.containerStat)
     .filter((stat): stat is ContainerStatView => stat !== null && stat !== undefined);
   if (stats.length === 0) return undefined;
