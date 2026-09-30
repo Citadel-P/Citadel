@@ -73,6 +73,8 @@ const createPlatform = (diskUsage: number | null): PlatformView =>
     stats: [
       {
         created: 1,
+        rxBytes: 0,
+        txBytes: 0,
         cpuUsage: 10,
         memoryUsage: 20,
         diskUsage,

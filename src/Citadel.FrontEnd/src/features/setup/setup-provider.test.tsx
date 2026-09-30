@@ -12,6 +12,7 @@ function SetupProbe() {
   const setup = useSetupContext();
   return (
     <>
+      <span data-testid="policy">{setup.passwordMinimumLength}–{setup.passwordMaximumLength}</span>
       <span data-testid="setup-status">
         {!setup.isSetupReady ? 'loading' : setup.requiresSetup ? 'pending' : setup.error ? 'error' : 'complete'}
       </span>
@@ -31,7 +32,7 @@ describe('SetupProvider', () => {
     server.use(
       http.get(statusUrl, () => {
         requests += 1;
-        return HttpResponse.json({ requiresSetup: true });
+        return HttpResponse.json({ requiresSetup: true, passwordMinimumLength: 8, passwordMaximumLength: 128 });
       }),
     );
 
@@ -46,6 +47,7 @@ describe('SetupProvider', () => {
 
     expect(await screen.findByText('pending')).toBeInTheDocument();
     expect(requests).toBe(1);
+    expect(screen.getByTestId('policy')).toHaveTextContent('8–128');
   });
 
   it('reports an unreachable server as a connection problem', async () => {

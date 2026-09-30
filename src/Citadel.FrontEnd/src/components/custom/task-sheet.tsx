@@ -1,5 +1,4 @@
 import { memo, ReactNode, useCallback, useEffect, useMemo } from 'react';
-import type { AutomationActionTestDraftInput } from '@/api/automation-draft';
 import {
   Calendar,
   Check,
@@ -24,13 +23,13 @@ import {
   AlertEventStatus,
   AlertEventView,
   ApplyDeploymentInput,
-  AcknowledgeAlertEventsInput,
+  Ids,
   DeploymentStreamItem,
   ActivityEventInfo,
   PullImageInput,
   PullImageStreamItem,
-  ResolveAlertEventsInput,
-  RegistryView,
+  ResolveInput,
+  AuthorizedRegistryView,
   ActivityStatus,
   ActivityEventInfoGitRepoPulled,
   ActivityEventInfoGitRepoCloned,
@@ -50,9 +49,9 @@ import {
   BackupRunStreamItem,
   BackupRestoreStatus,
   RollbackStackInput,
-  RunAutomationActionInput,
-  QueueBackupRunInput,
-  RestoreVolumeInput,
+  RunInput,
+  ServerBackupsHttpQueueInput,
+  RestoreInput,
   StackReleaseStatus,
   StackReleaseSource,
   StackSnapshot,
@@ -92,14 +91,14 @@ type SwarmNodeAgentParams = {
 };
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
-type BackupRunParams = { id: string; name: string } & QueueBackupRunInput;
+type BackupRunParams = { id: string; name: string } & ServerBackupsHttpQueueInput;
 type BackupRunLogsParams = {
   id: string;
   name: string;
   trigger: string;
   items: BackupRunItemView[];
 };
-type BackupRestoreRunParams = { id: string; name: string } & RestoreVolumeInput;
+type BackupRestoreRunParams = { id: string; name: string } & RestoreInput;
 type BackupRestoreRunLogsParams = {
   id: string;
   name: string;
@@ -108,7 +107,8 @@ type BackupRestoreRunLogsParams = {
 type AutomationActionRunParams = {
   id: string;
   name: string;
-} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & AutomationActionTestDraftInput));
+  mode: 'run' | 'test';
+} & RunInput;
 
 type BackupRestoreRunStreamItem = {
   restoreRunId: string;
@@ -245,12 +245,12 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
   const canResolve = event.status !== AlertEventStatus.Resolved;
 
   const handleAcknowledge = async () => {
-    const input: AcknowledgeAlertEventsInput = { ids: [event.id] };
+    const input: Ids = { ids: [event.id] };
     await acknowledgeAlertEvents({ data: input });
   };
 
   const handleResolve = async () => {
-    const input: ResolveAlertEventsInput = { ids: [event.id], resolutionNote: null };
+    const input: ResolveInput = { ids: [event.id], resolutionNote: null };
     await resolveAlertEvents({ data: input });
   };
 
@@ -508,7 +508,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
         resourceId={activity.resourceId}
         title="Imported configuration"
       />
-      <KeyValueBlock label="Compose project" value={info.composeProject} />
+      <KeyValueBlock label="Compose project" value={info.projectName} />
       <KeyValueBlock label="Imported services" value={info.serviceNames} />
     </div>
   ),
@@ -1377,7 +1377,7 @@ function BackupRunItemsList({ items }: { items: BackupRunItemView[] }) {
 
 function useImagePullProgress(params: PullImageParams) {
   const { currentPlatform } = useAppContext();
-  const [registryFilter] = useResourceFilter<{ item: RegistryView }>('Registry');
+  const [registryFilter] = useResourceFilter<{ item: AuthorizedRegistryView }>('Registry');
 
   const registryId = params.registryId ?? registryFilter?.item?.id ?? '';
   const platformId = currentPlatform?.id ?? '';
@@ -1488,7 +1488,7 @@ function getStackStreamMessageSeverity(item: StackStreamItem) {
     return 'warning';
   }
 
-  const message = (item.progressMessage ?? item.message)?.trim();
+  const message = item.message?.trim();
   if (message === 'Stack applied with status Degraded.') {
     return 'warning';
   }
@@ -1522,12 +1522,12 @@ function useRollbackStackProgress(params: StackRollbackParams) {
 }
 
 function useBackupRunProgress(params: BackupRunParams) {
-  const { id, trigger, triggerSourceId } = params;
+  const { id, trigger } = params;
   const queryClient = useQueryClient();
 
-  const request: QueueBackupRunInput = useMemo(() => ({ trigger, triggerSourceId }), [trigger, triggerSourceId]);
+  const request: ServerBackupsHttpQueueInput = useMemo(() => ({ trigger }), [trigger]);
 
-  const state = useStreamProgress<QueueBackupRunInput, BackupRunStreamItem>({
+  const state = useStreamProgress<ServerBackupsHttpQueueInput, BackupRunStreamItem>({
     endpoint: `api/v1/backupPolicies/${encodeURIComponent(id)}/run`,
     request,
     successMessage: 'Backup run finished',
@@ -1566,7 +1566,7 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
     params;
   const queryClient = useQueryClient();
 
-  const request: RestoreVolumeInput = useMemo(
+  const request: RestoreInput = useMemo(
     () => ({
       targetPlatformId,
       targetVolumeName,
@@ -1577,7 +1577,7 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
     [overwriteExisting, sourceBackupRunItemId, targetDockerNodeId, targetPlatformId, targetVolumeName],
   );
 
-  const state = useStreamProgress<RestoreVolumeInput, BackupRestoreRunStreamItem>({
+  const state = useStreamProgress<RestoreInput, BackupRestoreRunStreamItem>({
     endpoint: `api/v1/backupRuns/${encodeURIComponent(id)}/restoreVolume/run`,
     request,
     successMessage: 'Restore run finished',
@@ -1614,7 +1614,7 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
   const { id, mode } = params;
   const queryClient = useQueryClient();
 
-  const request: RunAutomationActionInput | AutomationActionTestDraftInput = useMemo(() => {
+  const request: RunInput = useMemo(() => {
     if (params.mode === 'run') {
       return { argsJson: params.argsJson, timeoutSeconds: params.timeoutSeconds };
     }
@@ -1622,10 +1622,7 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<
-    RunAutomationActionInput | AutomationActionTestDraftInput,
-    AutomationActionRunStreamItem
-  >({
+  const state = useStreamProgress<RunInput, AutomationActionRunStreamItem>({
     endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
     request,
     successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',

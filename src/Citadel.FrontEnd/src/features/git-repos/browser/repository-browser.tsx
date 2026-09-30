@@ -2,7 +2,7 @@ import {
   GitRepositoryEntryType,
   GitRepositoryFileContentView,
   GitRepositoryRefView,
-  GitRepositoryView,
+  AuthorizedGitRepositoryView,
 } from '@/api/generated/api.types';
 import { useApiClientContext } from '@/api/api-client-context';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -16,7 +16,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { getRepositoryFileLanguage } from './file-language';
 
 type RepositoryBrowserProps = {
-  repository: GitRepositoryView;
+  repository: AuthorizedGitRepositoryView;
   branch?: string | null;
   commitSha?: string | null;
   initialPath?: string | null;
@@ -223,8 +223,8 @@ function mapRepositoryEntry(entry: {
   name: string;
   path: string;
   type: GitRepositoryEntryType;
-  size: number | string | null;
-  targetCommitSha: string | null;
+  size?: number | string | null;
+  targetCommitSha?: string | null;
 }): BrowserEntry {
   return {
     name: entry.name,

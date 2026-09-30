@@ -47,6 +47,7 @@ use uuid::Uuid;
 pub struct StacksHttpState {
     pub identity: Arc<IdentityService>,
     pub stacks: Arc<StackService>,
+    pub platforms: Arc<citadel_platforms::PlatformReadService>,
 }
 
 pub fn router(state: StacksHttpState) -> Router {
@@ -181,7 +182,7 @@ state_action!(
     operation_id = "startStacks",
     tag = "Stacks",
     summary = "Start Stacks",
-    request_body = ref("#/components/schemas/StackIds"),
+    request_body = Vec<Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -200,7 +201,7 @@ state_action!(
     operation_id = "stopStacks",
     tag = "Stacks",
     summary = "Stop Stacks",
-    request_body = ref("#/components/schemas/StackIds"),
+    request_body = Vec<Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -219,7 +220,7 @@ state_action!(
     operation_id = "pauseStacks",
     tag = "Stacks",
     summary = "Pause Stacks",
-    request_body = ref("#/components/schemas/StackIds"),
+    request_body = Vec<Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -238,7 +239,7 @@ state_action!(
     operation_id = "resumeStacks",
     tag = "Stacks",
     summary = "Resume Stacks",
-    request_body = ref("#/components/schemas/StackIds"),
+    request_body = Vec<Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -257,7 +258,7 @@ state_action!(
     operation_id = "restartStacks",
     tag = "Stacks",
     summary = "Restart Stacks",
-    request_body = ref("#/components/schemas/StackIds"),
+    request_body = Vec<Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -392,21 +393,86 @@ async fn preflight(
         &headers,
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
-    let value = api_result(
+    authorize_git_source(&state, &principal, &input.spec, &headers).await?;
+    api_result(
+        state
+            .identity
+            .authorize_resource(
+                &principal,
+                ResourceType::Platform,
+                input.platform_id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        &headers,
+    )?;
+    let platform = api_result(
+        state
+            .platforms
+            .get_platform(input.platform_id)
+            .await
+            .map_err(crate::api::error::ApiError::internal),
+        &headers,
+    )?
+    .ok_or_else(|| {
+        crate::api::error::HttpError::from_parts(crate::api::error::ApiError::NotFound, &headers)
+    })?;
+    if platform.platform_type != "DockerSwarm" {
+        return Err(crate::api::error::HttpError::from_parts(
+            crate::api::error::ApiError::Validation(
+                "Swarm preflight requires a Docker Swarm platform.".into(),
+            ),
+            &headers,
+        ));
+    }
+    let mut value = api_result(
         state
             .stacks
-            .preflight_swarm(
-                &input.compose_files,
-                &input
-                    .build_image_bindings
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>(),
+            .preflight_swarm_source(
+                input.platform_id,
+                &input.name,
+                input.stack_source.into(),
+                &input.spec.into(),
+                input.drift_policy.map(Into::into).as_ref(),
             )
             .await
             .map_err(stack_error),
         &headers,
     )?;
+    let descriptor = &platform.platform_descriptor;
+    for (invalid, code, message) in [
+        (
+            platform.status != "Online",
+            "platform.offline",
+            "The selected Swarm platform is offline.",
+        ),
+        (
+            !descriptor
+                .get("controlAvailable")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                || !descriptor
+                    .get("localNodeState")
+                    .and_then(Value::as_str)
+                    .is_some_and(|s| s.eq_ignore_ascii_case("active")),
+            "platform.manager_required",
+            "The selected connector must target an active Swarm manager.",
+        ),
+    ] {
+        if invalid {
+            value.is_compatible = false;
+            value
+                .issues
+                .push(citadel_stacks::SwarmStackCompatibilityIssue {
+                    severity: citadel_stacks::SwarmStackCompatibilitySeverity::Error,
+                    code: code.into(),
+                    message: message.into(),
+                    field_path: Some("platformId".into()),
+                });
+        }
+    }
+
     Ok(no_store(
         Json(SwarmStackCompatibilityReport::from(value)).into_response(),
     ))
@@ -602,7 +668,13 @@ async fn import(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -647,7 +719,13 @@ async fn create(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -692,7 +770,13 @@ async fn update(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -702,8 +786,8 @@ async fn update(
     tag = "Stacks",
     summary = "Update Stack metadata",
     request_body(content(
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+        (PatchStackMetadataInput = "application/merge-patch+json"),
+        (PatchStackMetadataInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = StackView, content_type = "application/json"),
@@ -718,20 +802,13 @@ async fn update_metadata(
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
-    input: Result<Json<Value>, JsonRejection>,
+    input: Result<Json<PatchStackMetadataInput>, JsonRejection>,
 ) -> HttpResult {
     let (principal, id) =
         actor_and_id::<policy::WriteStack>(&state, principal, path, &headers).await?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
-    let description = match input.as_object().and_then(|value| value.get("description")) {
-        Some(Value::String(value)) => Some(value.clone()),
-        Some(Value::Null) => None,
-        Some(_) => {
-            return Err(crate::api::error::HttpError::from_parts(
-                ApiError::Validation("Description must be a string or null.".to_owned()),
-                &headers,
-            ));
-        }
+    let description = match input.description {
+        Some(description) => description,
         None => {
             return crate::api::routes::stacks::get(
                 State(state),
@@ -755,7 +832,13 @@ async fn update_metadata(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -794,7 +877,13 @@ async fn rename(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -873,7 +962,13 @@ async fn check_updates(
             }),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -884,7 +979,7 @@ async fn check_updates(
     summary = "Apply a Stack and stream progress",
     request_body = ApplyStackInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/StackStreamItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<StackStreamItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     security(("Bearer" = [])),
@@ -922,7 +1017,7 @@ async fn apply(
     summary = "Roll back a Stack and stream progress",
     request_body = RollbackStackInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/StackStreamItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<StackStreamItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     security(("Bearer" = [])),
@@ -1025,7 +1120,13 @@ async fn update_drift_policy(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1100,7 +1201,14 @@ async fn list(
     )?;
     Ok(no_store(
         Json(StacksView {
-            stacks: value.into_iter().map(StackView::from).collect(),
+            stacks: api_result(
+                value
+                    .into_iter()
+                    .map(StackView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
             capabilities,
         })
         .into_response(),
@@ -1137,7 +1245,13 @@ async fn get(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(Json(StackView::from(value)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            StackView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1240,7 +1354,14 @@ async fn releases(
     )?;
     Ok(no_store(
         Json(StackReleasesView {
-            releases: value.into_iter().map(StackReleaseView::from).collect(),
+            releases: api_result(
+                value
+                    .into_iter()
+                    .map(StackReleaseView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
         })
         .into_response(),
     ))

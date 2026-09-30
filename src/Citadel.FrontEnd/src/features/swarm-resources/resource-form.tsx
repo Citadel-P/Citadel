@@ -31,7 +31,6 @@ export const SwarmDataResourceForm = ({
         items: [
           defineField({
             key: 'name',
-            persistDraft: true,
             label: 'Name',
             description: `The Swarm ${kind} name.`,
             required: true,
@@ -49,6 +48,7 @@ export const SwarmDataResourceForm = ({
           }),
           defineField({
             key: 'data',
+            persistDraft: !isSecret,
             label: isSecret ? 'Secret value' : 'Config data',
             description: isSecret
               ? 'Sent directly to the Swarm manager. Citadel does not persist or return this value.'

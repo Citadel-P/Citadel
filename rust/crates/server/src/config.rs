@@ -127,6 +127,7 @@ pub struct IdentityConfig {
     pub service_account_last_used_interval: Duration,
     pub service_account_last_used_capacity: usize,
     pub mfa: MfaConfig,
+    pub password_policy: citadel_identity::PasswordPolicy,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -190,6 +191,7 @@ pub struct RealtimeConfig {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectiveConfig {
+    pub password_minimum_length: usize,
     pub service_account_limits: citadel_identity::ServiceAccountLimitsDetails,
     pub service_account_last_used_interval_seconds: u64,
     pub execution: serde_json::Value,
@@ -472,6 +474,7 @@ impl Config {
             jwt_key_configured: true,
             secret_encryption_key_configured: true,
             service_account_last_used_capacity: self.identity.service_account_last_used_capacity,
+            password_minimum_length: self.identity.password_policy.minimum_length(),
             mfa_policy: self.identity.mfa.policy,
             mfa_challenge_lifetime_minutes: self.identity.mfa.challenge_lifetime.as_secs() / 60,
             mfa_setup_lifetime_minutes: self.identity.mfa.setup_lifetime.as_secs() / 60,
@@ -784,6 +787,14 @@ fn identity_config_with_keys(
             message: "must be greater than zero".to_owned(),
         });
     }
+    let password_policy = citadel_identity::PasswordPolicy::new(parse_env(
+        "Passwords__MinimumLength",
+        citadel_identity::MINIMUM_PASSWORD_CHARACTERS,
+    )?)
+    .map_err(|error| ConfigError::Invalid {
+        name: "Passwords__MinimumLength",
+        message: error.to_string(),
+    })?;
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
         jwt_key_is_external: env::var("Jwt__Key").is_ok_and(|v| !v.trim().is_empty()),
@@ -816,6 +827,7 @@ fn identity_config_with_keys(
         ),
         service_account_last_used_capacity,
         mfa,
+        password_policy,
     })
 }
 
@@ -1205,9 +1217,33 @@ fn required_nonzero_seconds(name: &'static str) -> Result<u64, ConfigError> {
     Ok(value)
 }
 
-/// Keep structured container logs by default; opt into colored console output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
+impl std::str::FromStr for LogFormat {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "text" => Ok(Self::Text),
+            "json" => Ok(Self::Json),
+            _ => Err("must be text or json"),
+        }
+    }
+}
+
+pub fn log_format_from_env() -> Result<LogFormat, ConfigError> {
+    parse_env("LogFormat", LogFormat::default())
+}
+
+/// Color is independent of format and defaults to interactive terminals only.
 pub fn log_color_from_env() -> Result<bool, ConfigError> {
-    parse_env("EnableLogColor", false)
+    use std::io::IsTerminal;
+    parse_env("EnableLogColor", std::io::stdout().is_terminal())
 }
 
 #[cfg(test)]

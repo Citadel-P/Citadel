@@ -11,6 +11,8 @@ pub struct LoginOutcome {
 #[serde(rename_all = "camelCase")]
 pub struct SetupStatus {
     pub requires_setup: bool,
+    pub password_minimum_length: usize,
+    pub password_maximum_length: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

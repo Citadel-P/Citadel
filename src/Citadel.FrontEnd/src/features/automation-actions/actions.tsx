@@ -1,4 +1,4 @@
-import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -7,7 +7,10 @@ import { Pencil, Play, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
-export const invalidateAutomationActionQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
+export const invalidateAutomationActionQueries = async (
+  queryClient: ReturnType<typeof useQueryClient>,
+  id?: string,
+) => {
   await queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
   if (id) {
     await queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
@@ -18,7 +21,7 @@ export const invalidateAutomationActionQueries = async (queryClient: ReturnType<
   }
 };
 
-const singleSelection = (resources: AutomationActionView | AutomationActionView[]) => {
+const singleSelection = (resources: AuthorizedAction | AuthorizedAction[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
   const multiSelect = Array.isArray(resources) && resources.length > 1;
   return { selected, multiSelect };
@@ -33,7 +36,7 @@ const useAutomationRunTaskSheet = () => {
   return isFormRoute ? automationActionSheet : automationSheet;
 };
 
-const { dropdown, group, info } = createActionsBuilder<AutomationActionView>()
+const { dropdown, group, info } = createActionsBuilder<AuthorizedAction>()
   .addAction({
     key: 'edit',
     type: 'command',
@@ -92,7 +95,12 @@ const { dropdown, group, info } = createActionsBuilder<AutomationActionView>()
       const selected = Array.isArray(resources) ? resources : [resources];
       const queryClient = useQueryClient();
       const remove = useMutate('deleteAutomationAction');
-      const [, setSelectedResources] = useSelectedResources<AutomationActionView>('AutomationAction');
+      const [, setSelectedResources] = useSelectedResources<AuthorizedAction>('AutomationAction');
+      const location = useLocation();
+      const navigate = useNavigate();
+      const isCurrentResource = selected.some(
+        (action) => location.pathname.replace(/\/$/, '') === `/automation/edit/${action.id}`,
+      );
 
       return {
         canExecute: selected.length > 0,
@@ -102,7 +110,8 @@ const { dropdown, group, info } = createActionsBuilder<AutomationActionView>()
 
           try {
             await Promise.all(selected.map((action) => remove.mutateAsync({ id: action.id } as any)));
-            await invalidateAutomationActionQueries(queryClient);
+            if (isCurrentResource) navigate('/automation', { replace: true });
+            await queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'action' : 'actions'} deleted`);
           } catch (error) {

@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { RegistryStatus, RegistryView } from '@/api/generated/api.types';
+import { RegistryStatus, AuthorizedRegistryView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,12 +14,12 @@ import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TagChips } from '@/features/tags/components';
 
-const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
+const getNonDefaultRows = (rows: Row<AuthorizedRegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
-const areAllNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
+const areAllNonDefaultRowsSelected = (rows: Row<AuthorizedRegistryView>[]) =>
   getNonDefaultRows(rows).every((row) => row.getIsSelected());
 
-const areSomeNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
+const areSomeNonDefaultRowsSelected = (rows: Row<AuthorizedRegistryView>[]) =>
   getNonDefaultRows(rows).some((row) => row.getIsSelected());
 
 const providerIcons: Record<string, React.FC<{ className?: string }>> = {
@@ -28,7 +28,7 @@ const providerIcons: Record<string, React.FC<{ className?: string }>> = {
   GitHub: GitHubIcon,
 };
 
-const RenderProvider = ({ registry }: { registry: RegistryView }) => {
+const RenderProvider = ({ registry }: { registry: AuthorizedRegistryView }) => {
   const Icon = providerIcons[registry.type];
 
   return (
@@ -42,9 +42,9 @@ const RenderProvider = ({ registry }: { registry: RegistryView }) => {
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: RegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedRegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<RegistryView>[] => [
+): ColumnDef<AuthorizedRegistryView>[] => [
   {
     id: 'select',
     header: ({ table }) => {
@@ -125,20 +125,20 @@ export const RegistriesTable = ({
   actions,
   isLoading,
 }: {
-  items: RegistryView[];
+  items: AuthorizedRegistryView[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: RegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedRegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<RegistryView>('Registry');
+  const [_, setSelectedResources] = useSelectedResources<AuthorizedRegistryView>('Registry');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
-const RegistryNameRow = ({ registry }: { registry: RegistryView }) => {
+const RegistryNameRow = ({ registry }: { registry: AuthorizedRegistryView }) => {
   const isDefault = registry.isDefault;
   const status = isDefault ? RegistryStatus.Active : (registry.status ?? RegistryStatus.Disabled);
 

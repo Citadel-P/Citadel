@@ -519,8 +519,17 @@ rejected. Paths must be available in the
 Core container. `Backups__DefaultTimeoutSeconds` controls repository operations
 and restores; backup policies retain their individual execution timeouts.
 
-`EnableLogColor=false` keeps structured JSON logs; `true` enables colored console
-logs. `citadel-server print-effective-config` reports effective non-secret values
+Core logs use readable, single-line text by default (`LogFormat=text`). Set
+`LogFormat=json` for structured log collection. `EnableLogColor` controls only
+text color: when unset, color is enabled for an interactive terminal and disabled
+for redirected/container output. Explicit `true`/`false` overrides detection;
+JSON never includes ANSI colors. `RUST_LOG` defaults to `info`; use
+`RUST_LOG=info,citadel_server=debug` when investigating Core behavior such as
+realtime subscriptions. The full effective startup configuration is logged at DEBUG.
+Existing `.env.development` files retain their settings; change an old DEBUG
+filter to `RUST_LOG=info` to reduce routine chatter.
+
+`citadel-server print-effective-config` reports effective non-secret values
 without connecting to PostgreSQL. The Agent TLS integration test requires OpenSSL
 to create a temporary certificate; no test keys are committed.
 
@@ -639,7 +648,13 @@ The monitor only probes and emits confirmed transitions through bounded ingress.
 A separate lifecycle coordinator persists status, requests one metadata-first
 recovery plan, evaluates alerts and publishes committed realtime changes.
 It retains per-Platform retry progress, so an alert failure cannot repeatedly
-queue resource recovery. Direct Agent subscription ownership is woken on Online;
+queue resource recovery. While a confirmed Platform remains offline, the same
+coordinator re-evaluates its alert every 30 seconds so cooldown or quiet-hour
+suppression cannot permanently lose an outage. These checks reuse committed
+progress and do not repeat status writes, recovery plans or Platform broadcasts.
+Recovery or removal stops the offline checks. Alert responses include the latest
+responsible actor; automatic resolution is attributed to System.
+Direct Agent subscription ownership is woken on Online;
 existing streams remain responsible for reconnecting, and Edge sessions own their
 own bootstrap. Deployment observation crash catch-up runs separately every five
 minutes; stable health probes perform no Deployment reconciliation.
@@ -1236,16 +1251,44 @@ Regenerate the Rust OpenAPI before the frontend client:
 ```bash
 cd rust
 cargo run --locked -p xtask -- openapi
-cd ../src/Citadel.FrontEnd
-npm run api:generate
 ```
 
-The preference schema overlay in `scripts/sync-rust-preferences.ts` imports these
-DTOs and their enums from Rust while preserving the rest of the existing frontend
-compatibility contract. Do not edit generated preference types manually.
+Install frontend dependencies with `npm ci` in `src/Citadel.FrontEnd` first.
+The OpenAPI command exports both Rust documents, copies the full `schema/v1.json`
+to `src/Citadel.FrontEnd/src/api/schema/swagger.json`, and runs `npm run api:generate`
+to regenerate the TypeScript client and resource map from that same document.
+`public-v1.json` excludes internal authentication, setup, and administration routes
+and is intended for external clients. The frontend no longer reads the .NET schema
+or applies a preference overlay. Correct missing contracts in Rust's DTO descriptors
+(or the remaining dynamic JSON schemas), then regenerate; do not edit generated types.
+
+`cargo run --locked -p xtask -- openapi --check` checks the Rust schema artifacts
+without requiring Node.js. `npm run api:verify` verifies the generated frontend files.
 
 Shared UI uses runtime CSS variables in `main.css`. Use `AppContent` for page
 spacing, `PageHeader` for titles/actions, and `Surface`/`Card` for individual
 sections. Use semantic status colors for health; accent selection must never
 change the meaning of success, warning, or danger. UI fonts and density do not
 change Monaco or terminal monospace metrics.
+
+## Local password policy
+
+`Passwords__MinimumLength` controls new passwords in initial setup (including
+bootstrap), user creation, administrator password changes, and profile password
+changes. The default is 15; valid settings are 8–128 Unicode characters. The
+maximum stays 128. Existing passwords continue to work after raising the minimum.
+The browser reads the effective limits from `/api/v1/setup/status`.
+
+Set `Passwords__MinimumLength=8` in `rust/.env` (or `rust/.env.development`
+for the development stack), then recreate Core. Compose passes the setting through
+its existing `env_file`; Core defaults to 15 when it is absent.
+A lower minimum is best paired with `Mfa__Policy=RequiredForAllUsers`; optional MFA
+does not protect users who have not enrolled. NIST SP 800-63B-4 recommends at least
+15 characters for password-only authentication and permits 8 with MFA.
+
+Spaces, Unicode, password-manager autofill and paste are supported. There are no
+mandatory character classes or periodic expiration. Passwords remain Argon2id
+hashed. A bundled list of 1,000 common passwords (SecLists; attribution alongside
+the data), Citadel defaults, and account-name/email checks reject predictable
+choices. This is an offline common-password check, not a complete breached-password
+lookup; passwords are never sent to an external service.

@@ -28,6 +28,7 @@ pub(crate) struct RegistryConfigResponse {
     pub(crate) registry_host: String,
     pub(crate) status: crate::api::resources::registries::views::RegistryStatus,
     pub(crate) description: String,
+    #[schema(value_type = crate::openapi::compatibility::RegistryConfiguration)]
     pub(crate) configuration: Value,
     pub(crate) tags: Vec<crate::api::resources::tags::views::TagSummary>,
 }
@@ -66,9 +67,11 @@ pub struct RegistryView {
     pub created_by_actor_id: Uuid,
     pub name: String,
     pub status: RegistryStatus,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub registry_host: String,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::openapi::compatibility::RegistryType)]
     pub registry_type: String,
     #[serde(skip_serializing)]
     pub configuration: Value,

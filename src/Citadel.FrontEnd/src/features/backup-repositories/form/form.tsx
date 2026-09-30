@@ -13,7 +13,7 @@ import {
   S3BucketLookup,
   SecretDefinitionView,
   UpdateBackupRepositoryInput,
-  ValidateBackupRepositoryInput,
+  RepositoryLocationInput,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
 import {
@@ -150,7 +150,6 @@ export function BackupRepositoryForm({
                 ? [
                     defineField<BackupRepositoryFormInput, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Unique name for this repository.',
@@ -577,7 +576,7 @@ export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec 
   };
 }
 
-export function getRepositoryOperationContext(repository: BackupRepositoryView): ValidateBackupRepositoryInput {
+export function getRepositoryOperationContext(repository: BackupRepositoryView): RepositoryLocationInput {
   if (repository.spec.$type === 'FileSystem') {
     const fileSystem = repository.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
     const location = fileSystem.location ?? BackupExecutionLocation.Core;

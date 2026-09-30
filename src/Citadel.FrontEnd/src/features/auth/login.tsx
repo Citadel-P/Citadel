@@ -1,11 +1,10 @@
 import { useMemo, useState, FormEvent } from 'react';
-import LogoIcon from '@/assets/logo.svg?react';
+import { AuthShell } from './auth-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LoaderCircle, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useAuthContext } from './auth-context';
-import { Constants } from '@/lib/constants';
 import { useRead } from '@/lib/hooks';
 import { useApiClientContext } from '@/api/api-client-context';
 import { LoginNextStep } from '@/api/generated/api.types';
@@ -18,6 +17,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { data: oidcProvidersData, isLoading: isLoadingOidcProviders } = useRead('listOidcLoginProviders');
 
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ emailOrName: '', password: '' });
 
   const [errors, setErrors] = useState<{ emailOrName?: string; password?: string }>({});
@@ -37,19 +37,13 @@ const Login = () => {
     const newErrors: { emailOrName?: string; password?: string } = {};
     let isValid = true;
 
-    if (!formData.emailOrName) {
+    if (!formData.emailOrName.trim()) {
       newErrors.emailOrName = 'Email address or username is required';
-      isValid = false;
-    } else if (!new RegExp(Constants.validEmailOrName).test(formData.emailOrName)) {
-      newErrors.emailOrName = 'Please enter a valid email address or username';
       isValid = false;
     }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-      isValid = false;
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
       isValid = false;
     }
 
@@ -84,95 +78,105 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-card">
-      <div className="mx-auto flex flex-col items-center justify-center px-6 py-8 md:h-screen lg:py-0">
-        <div className="mb-6 flex items-center">
-          <span className="mr-3 flex size-12 shrink-0 items-center justify-center">
-            <LogoIcon className="size-12" />
-          </span>
-          <span className="text-2xl font-semibold">Citadel</span>
+    <AuthShell title="Sign in" description="Manage your containers and infrastructure.">
+      {validationErrors && (
+        <div role="alert">
+          <AlertMessage type="warning">{validationErrors}</AlertMessage>
         </div>
-
-        <div className="w-full rounded-lg bg-background shadow-sm sm:max-w-md md:mt-0 xl:p-0">
-          <div className="space-y-4 p-6 sm:p-8 md:space-y-6">
-            <h1 className="text-xl font-bold leading-tight tracking-tight md:text-2xl">Sign in to your account</h1>
-
-            {validationErrors && <AlertMessage type="warning">{validationErrors}</AlertMessage>}
-
-            <form onSubmit={handleSubmit} className="space-y-8" noValidate>
-              {/* emailOrName Field */}
-              <div className="space-y-2">
-                <label htmlFor="emailOrName" className="text-sm font-medium leading-none">
-                  Email address or username
-                </label>
-                <Input
-                  id="emailOrName"
-                  name="emailOrName"
-                  type="text"
-                  placeholder="Enter your email address or username"
-                  className={`rounded-sm focus-visible:ring-transparent ${errors.emailOrName ? 'border-destructive' : ''}`}
-                  value={formData.emailOrName}
-                  onChange={handleChange}
-                  disabled={isPending}
-                />
-                {errors.emailOrName && <p className="text-xs font-medium text-destructive">{errors.emailOrName}</p>}
-              </div>
-
-              {/* Password Field */}
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium leading-none">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  className={`rounded-sm focus-visible:ring-transparent ${errors.password ? 'border-destructive' : ''}`}
-                  value={formData.password}
-                  onChange={handleChange}
-                  disabled={isPending}
-                />
-                {errors.password && <p className="text-xs font-medium text-destructive">{errors.password}</p>}
-              </div>
-
+      )}
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={isPending}>
+        <div className="space-y-2">
+          <label htmlFor="emailOrName" className="text-sm font-medium">
+            Email address or username
+          </label>
+          <Input
+            id="emailOrName"
+            name="emailOrName"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+            placeholder="you@example.com"
+            className="h-10"
+            value={formData.emailOrName}
+            onChange={handleChange}
+            disabled={isPending}
+            aria-invalid={!!errors.emailOrName}
+            aria-describedby={errors.emailOrName ? 'login-identity-error' : undefined}
+          />
+          {errors.emailOrName && (
+            <p id="login-identity-error" role="alert" className="text-xs text-destructive">
+              {errors.emailOrName}
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              placeholder="Enter your password"
+              className="h-10 pr-11"
+              value={formData.password}
+              onChange={handleChange}
+              disabled={isPending}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'login-password-error' : undefined}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute inset-y-0 right-0 size-10 text-muted-foreground hover:bg-transparent hover:text-foreground"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              disabled={isPending}
+              onClick={() => setShowPassword((value) => !value)}>
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </Button>
+          </div>
+          {errors.password && (
+            <p id="login-password-error" role="alert" className="text-xs text-destructive">
+              {errors.password}
+            </p>
+          )}
+        </div>
+        <Button type="submit" disabled={isPending} className="h-10 w-full">
+          {isPending && <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" />}
+          {isPending ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+      {oidcProviders.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="space-y-2">
+            {oidcProviders.map((provider) => (
               <Button
-                type="submit"
-                disabled={isPending}
-                className="w-full rounded-lg bg-primary px-5 py-2.5 text-center text-sm font-medium text-background outline-hidden focus:ring-4 focus:ring-primary-300">
-                Sign in
-                {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+                key={provider.id}
+                type="button"
+                variant="outline"
+                className="min-h-10 w-full whitespace-normal"
+                disabled={isLoadingOidcProviders || isPending}
+                onClick={() => beginOidcLogin(provider.id)}>
+                <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
+                Continue with {provider.displayName}
               </Button>
-            </form>
-
-            {oidcProviders.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs font-medium text-muted-foreground">or</span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-
-                <div className="space-y-2">
-                  {oidcProviders.map((provider) => (
-                    <Button
-                      key={provider.id}
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      disabled={isLoadingOidcProviders}
-                      onClick={() => beginOidcLogin(provider.id)}>
-                      <ShieldCheck />
-                      Continue with {provider.displayName}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </AuthShell>
   );
 };
 

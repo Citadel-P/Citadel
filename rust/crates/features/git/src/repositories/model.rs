@@ -46,13 +46,7 @@ pub struct GitRepository {
     pub created_by_actor_id: Uuid,
     pub control_state: String,
     pub latest_activity: Option<Value>,
-    pub tags: Vec<GitRepositoryTag>,
-}
-#[derive(Debug, Clone, Deserialize)]
-pub struct GitRepositoryTag {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
+    pub tags: Vec<citadel_tags::TagSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

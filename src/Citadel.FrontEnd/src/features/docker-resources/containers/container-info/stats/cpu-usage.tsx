@@ -46,7 +46,7 @@ const CpuUsage = ({
   windowHours,
   controls,
 }: {
-  stats: ContainerStatView[];
+  stats: Omit<ContainerStatView, 'containerId'>[];
   container: ContainerStatsResource | undefined;
   isLoading: boolean;
   windowHours: number;

@@ -39,7 +39,7 @@ export const Sidebar = () => {
         </Link>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="sidebar-scroll-area">
         <SidebarMenu />
       </SidebarContent>
 

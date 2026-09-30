@@ -666,7 +666,36 @@ async fn list_images(
             .map_err(platform_error),
         &headers,
     )?;
+    let registries = if images.iter().any(|image| image.registry_id.is_some()) {
+        api_result(
+            state
+                .registries
+                .list_registries(principal.actor_id, principal.is_administrator())
+                .await
+                .map_err(ApiError::internal),
+            &headers,
+        )?
+    } else {
+        Vec::new()
+    };
+    let registries = registries
+        .into_iter()
+        .map(|registry| {
+            (
+                registry.id,
+                crate::api::resources::platforms::views::ImageRegistryView {
+                    id: registry.id,
+                    name: registry.name,
+                    registry_host: registry.registry_host,
+                    registry_type: registry.registry_type,
+                },
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
     for image in &mut images {
+        image.registry = image
+            .registry_id
+            .and_then(|id| registries.get(&id).cloned());
         image.capabilities = Some(capabilities);
     }
     Ok(no_store(
@@ -1212,6 +1241,7 @@ async fn list_volumes(
             .filter(|volume| volume_matches(&volume.resource, &filters))
             .map(|volume| map_node_volume(volume, capabilities)),
     );
+    attach_volume_coverage(&state, &principal, platform_id, &mut volumes, &headers).await?;
     Ok(no_store(
         Json(VolumesResponse {
             volumes,
@@ -1232,7 +1262,7 @@ async fn list_volumes(
     tag = "Volumes",
     summary = "Inspect a Platform Volume",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/DockerVolumeResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = VolumeView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("name" = String, Path), ("dockerNodeId" = Option<String>, Query)),
@@ -1288,6 +1318,14 @@ async fn get_volume(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     volume.docker_node_id = selector.docker_node_id;
+    attach_volume_coverage(
+        &state,
+        &principal,
+        platform_id,
+        std::slice::from_mut(&mut volume),
+        &headers,
+    )
+    .await?;
     Ok(no_store(Json(volume).into_response()))
 }
 
@@ -1299,7 +1337,7 @@ async fn get_volume(
     summary = "Create a Volume",
     request_body = CreateVolumeInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/DockerVolumeResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = VolumeView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -2320,6 +2358,7 @@ fn map_node_volume(
 
 fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView) -> VolumeView {
     VolumeView {
+        backup_coverage: None,
         id: volume.name.clone(),
         name: volume.name,
         in_use: volume.in_use,
@@ -2703,7 +2742,7 @@ fn required<T>(result: Result<Option<T>, ApiError>, headers: &HeaderMap) -> Http
         .ok_or_else(|| crate::api::error::HttpError::from_parts(ApiError::NotFound, headers))
 }
 
-fn parse_tag_filters(query: Option<&str>) -> Result<Vec<Uuid>, ApiError> {
+fn parse_tag_filters(query: Option<&str>) -> Result<Vec<String>, ApiError> {
     let mut tags = Vec::new();
     for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
         if !key.eq_ignore_ascii_case("tags") {
@@ -2714,10 +2753,13 @@ fn parse_tag_filters(query: Option<&str>) -> Result<Vec<Uuid>, ApiError> {
                 "At most 100 Platform tags may be filtered at once.".to_owned(),
             ));
         }
-        let tag = Uuid::parse_str(&value)
-            .map_err(|_| ApiError::Validation("A Platform tag ID is invalid.".to_owned()))?;
-        if !tags.contains(&tag) {
-            tags.push(tag);
+        let tag = value.trim();
+        if !tag.is_empty()
+            && !tags
+                .iter()
+                .any(|existing: &String| existing.eq_ignore_ascii_case(tag))
+        {
+            tags.push(tag.to_owned());
         }
     }
     Ok(tags)
@@ -7375,6 +7417,25 @@ async fn download(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn platform_tags_accept_names_repeated_keys_and_ids() {
+        let id = uuid::Uuid::now_v7();
+        assert_eq!(
+            super::parse_tag_filters(Some(&format!(
+                "TaGs=Prod%20%26%20Europe&tags=prod+%26+europe&tags=%20&tags={id}"
+            )))
+            .unwrap(),
+            vec!["Prod & Europe".to_owned(), id.to_string()]
+        );
+        assert!(super::parse_tag_filters(None).unwrap().is_empty());
+        let query = (0..100)
+            .map(|n| format!("tags=tag-{n}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        assert_eq!(super::parse_tag_filters(Some(&query)).unwrap().len(), 100);
+        assert!(super::parse_tag_filters(Some(&format!("{query}&tags=extra"))).is_err());
+    }
+
     use crate::api::routes::platforms::*;
 
     #[test]
@@ -7632,4 +7693,49 @@ mod image_pull_tests {
         assert_eq!(items[0]["status"], "Pulling");
         assert_eq!(items[1]["errorMessage"], "Image pull timed out.");
     }
+}
+
+async fn attach_volume_coverage(
+    state: &PlatformsHttpState,
+    principal: &ActorPrincipal,
+    platform_id: Uuid,
+    volumes: &mut [VolumeView],
+    headers: &HeaderMap,
+) -> HttpResult<()> {
+    let keys = volumes
+        .iter()
+        .map(|v| (v.name.clone(), v.docker_node_id.clone()))
+        .collect::<Vec<_>>();
+    let coverage = api_result(
+        citadel_adapters::persistence::postgres::backups::coverage::volume_coverage(
+            &state.pool,
+            principal.actor_id,
+            principal.is_administrator(),
+            platform_id,
+            &keys,
+        )
+        .await
+        .map_err(|error| ApiError::internal(error)),
+        headers,
+    )?;
+    let mut coverage = coverage
+        .into_iter()
+        .map(|c| ((c.volume_name.clone(), c.docker_node_id.clone()), c))
+        .collect::<std::collections::HashMap<_, _>>();
+    for volume in volumes {
+        if let Some(c) = coverage.remove(&(volume.name.clone(), volume.docker_node_id.clone())) {
+            volume.backup_coverage = Some(
+                crate::api::resources::platforms::views::BackupCoverageView {
+                    status: c.status,
+                    policy_count: c.policy_count,
+                    last_run_id: c.last_run_id,
+                    last_run_status: c.last_run_status,
+                    last_run_at: c.last_run_at,
+                    last_successful_run_at: c.last_successful_run_at,
+                    next_run_at: None,
+                },
+            );
+        }
+    }
+    Ok(())
 }

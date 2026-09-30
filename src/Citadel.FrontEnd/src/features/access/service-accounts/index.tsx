@@ -1,6 +1,6 @@
 import {
   LicenseCapability,
-  PagedResultViewOfServiceAccountView,
+  PagedResultServiceAccountView,
   ServiceAccountView,
 } from '@/api/generated/api.types';
 import { PagedDataTable } from '@/components/custom/common';
@@ -43,7 +43,9 @@ export const AddServiceAccountButton = () => {
   if (enabled) return button;
   return (
     <Tooltip>
-      <TooltipTrigger asChild><span>{button}</span></TooltipTrigger>
+      <TooltipTrigger asChild>
+        <span>{button}</span>
+      </TooltipTrigger>
       <TooltipContent className="w-72">
         <LicensedFeatureDescription
           requiredLicense="Team"
@@ -63,7 +65,7 @@ export const ServiceAccounts = ({
   actions,
   isLoading,
 }: {
-  items?: PagedResultViewOfServiceAccountView;
+  items?: PagedResultServiceAccountView;
   actions: Record<string, DropdownActionComponent>;
   isLoading: boolean;
 }) => {
@@ -124,10 +126,7 @@ const buildColumns = (
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
       <div className="flex items-center gap-1.5">
-        <StateIndicator
-          value={row.original.archivedAtUtc ? false : row.original.isEnabled}
-          enableLabel={false}
-        />
+        <StateIndicator value={row.original.archivedAtUtc ? false : row.original.isEnabled} enableLabel={false} />
         <Link to={`/access/service-accounts/edit/${row.original.id}`} className="font-medium hover:underline">
           {row.original.name}
         </Link>
@@ -151,7 +150,9 @@ const buildColumns = (
   {
     accessorKey: 'lastUsedAtUtc',
     header: 'Last used',
-    cell: ({ row }) => <span>{row.original.lastUsedAtUtc ? formatDateTime(row.original.lastUsedAtUtc) : 'Not used'}</span>,
+    cell: ({ row }) => (
+      <span>{row.original.lastUsedAtUtc ? formatDateTime(row.original.lastUsedAtUtc) : 'Not used'}</span>
+    ),
   },
   {
     id: 'actions',

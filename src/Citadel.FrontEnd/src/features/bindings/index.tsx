@@ -1,10 +1,10 @@
 import {
   ResourceBindingView,
-  CreateVaultKvV2SecretProviderInput,
-  ResourceCapabilities,
+  SecretProviderInput,
+  ResourceCapabilitiesView,
   SecretProviderView,
-  TestVaultKvV2SecretProviderConnectionInput,
-  UpdateVaultKvV2SecretProviderInput,
+  TestSecretProviderInput,
+  SecretProviderPatch,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -30,8 +30,8 @@ import { toast } from 'sonner';
 import { BindingDropdownActions, BindingGroupActions } from './actions';
 import { BindingsAddButton, BindingsTable } from './table';
 
-const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: false, canWrite: false, canExecute: false };
-const PROVIDER_INPUT: CreateVaultKvV2SecretProviderInput = {
+const EMPTY_CAPABILITIES: ResourceCapabilitiesView = { canRead: false, canWrite: false, canExecute: false };
+const PROVIDER_INPUT: SecretProviderInput = {
   name: '',
   address: '',
   mountPath: 'secret',
@@ -92,7 +92,7 @@ function SecretProvidersSection() {
   const canWrite = Boolean(configurationData?.data.capabilities?.canWrite);
   const [open, setOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<SecretProviderView | null>(null);
-  const [input, setInput] = useState<CreateVaultKvV2SecretProviderInput>(PROVIDER_INPUT);
+  const [input, setInput] = useState<SecretProviderInput>(PROVIDER_INPUT);
 
   const openAdd = () => {
     setEditingProvider(null);
@@ -116,7 +116,7 @@ function SecretProvidersSection() {
   const save = async () => {
     try {
       if (editingProvider) {
-        const updateInput: UpdateVaultKvV2SecretProviderInput = {
+        const updateInput: SecretProviderPatch = {
           name: input.name,
           address: input.address,
           mountPath: input.mountPath,
@@ -143,7 +143,7 @@ function SecretProvidersSection() {
   };
 
   const testConnection = async () => {
-    const payload: TestVaultKvV2SecretProviderConnectionInput = {
+    const payload: TestSecretProviderInput = {
       providerId: editingProvider?.id ?? null,
       name: input.name,
       address: input.address,

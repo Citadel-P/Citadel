@@ -269,7 +269,11 @@ impl ProfileService {
             return Err(current_password_incorrect());
         }
 
-        validate_password(&request.new_password, Some(user.name()), Some(user.email()))?;
+        self.identity.password_policy().validate(
+            &request.new_password,
+            Some(user.name()),
+            Some(user.email()),
+        )?;
         let new_hash = self.identity.hash_password(request.new_password).await?;
         let current_session_id = self
             .identity

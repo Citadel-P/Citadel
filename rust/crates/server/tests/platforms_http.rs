@@ -100,6 +100,8 @@ mod registry_browsing;
 mod search;
 #[path = "platforms_http/statistics.rs"]
 mod statistics;
+#[path = "platforms_http/tags.rs"]
+mod tags;
 #[path = "platforms_http/volume_content.rs"]
 mod volume_content;
 
@@ -170,6 +172,10 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     )
     .await;
     assert_eq!(authorized["platforms"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        authorized["platforms"][0]["tags"][0]["id"],
+        json!(fixture.tag_id)
+    );
     assert_eq!(authorized["platforms"][0]["capabilities"]["canRead"], true);
     assert_eq!(
         authorized["platforms"][0]["capabilities"]["canWrite"],

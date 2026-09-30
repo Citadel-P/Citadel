@@ -1,11 +1,11 @@
 import {
   BuildArgSpec,
   BuildWebhookConfig,
-  GitRepositoryBranchView,
+  GitRepositoryBranchResponse,
   GitRepositoryRefView,
   BuildProjectInput,
-  BuildProjectView,
-  BuildAgentPoolView,
+  AuthorizedProject,
+  AuthorizedPool,
   BuildProjectBuilderKind,
   BuildSecretSpec,
   LookupResourceType,
@@ -193,7 +193,7 @@ const BuildPoolField = ({
   onChange,
 }: {
   value?: string | null;
-  pools: BuildAgentPoolView[];
+  pools: AuthorizedPool[];
   isLoading?: boolean;
   disabled?: boolean;
   onChange: (poolId: string) => void;
@@ -418,7 +418,7 @@ export const BuildForm = ({
   metadataChanged,
 }: {
   mode: 'add' | 'edit';
-  resource?: BuildProjectView;
+  resource?: AuthorizedProject;
   disabled?: boolean;
   metadataChanged?: boolean;
 }) => {
@@ -537,7 +537,7 @@ export const BuildForm = ({
   const schema = useMemo(
     () => ({
       Source: defineSection<BuildInput>({
-        title: 'Source',
+        title: '',
         items: [
           ...(mode === 'add'
             ? [
@@ -547,7 +547,6 @@ export const BuildForm = ({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       description: 'Internal identifier for this workload.',
                       required: true,
@@ -559,7 +558,6 @@ export const BuildForm = ({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional description of this workload.',
                       render: (value, set) => (
@@ -984,7 +982,7 @@ function normalizeWebhook(webhook: BuildWebhookConfig | undefined | null): Build
 }
 
 function mapBranchOptions(
-  discoveredBranches: GitRepositoryBranchView[],
+  discoveredBranches: GitRepositoryBranchResponse[],
   syncedRefs: GitRepositoryRefView[],
 ): GitBranchOption[] {
   if (discoveredBranches.length > 0) {

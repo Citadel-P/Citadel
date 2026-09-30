@@ -1,4 +1,4 @@
-import { OidcProviderView, ResourceCapabilities } from '@/api/generated/api.types';
+import { OidcProviderView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
@@ -6,7 +6,7 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { OidcProviderDropdownActions, OidcProviderGroupActions } from './actions';
 import { OidcProvidersTable } from './table';
 
-const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: false };
+const EMPTY_CAPABILITIES: ResourceCapabilitiesView = { canRead: true, canWrite: true, canExecute: false };
 const EMPTY_OIDC_PROVIDERS: never[] = [];
 
 export const OidcProviderComponents: RequiredComponents<OidcProviderView> = {

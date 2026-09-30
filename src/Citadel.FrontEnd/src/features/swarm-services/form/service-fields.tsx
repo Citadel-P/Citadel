@@ -2,9 +2,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import {
   SwarmServiceConfigReference,
   SwarmServiceMount,
-  SwarmServiceMountKind,
+  MountKind,
   SwarmServicePort,
-  SwarmServicePortPublishMode,
+  PortPublishMode,
   SwarmServiceSecretReference,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
@@ -71,15 +71,15 @@ export const ServicePortsField = ({
             </SelectContent>
           </Select>
           <Select
-            value={port.publishMode ?? SwarmServicePortPublishMode.Ingress}
+            value={port.publishMode ?? PortPublishMode.Ingress}
             disabled={disabled}
-            onValueChange={(publishMode: SwarmServicePortPublishMode) => update(index, { publishMode })}>
+            onValueChange={(publishMode: PortPublishMode) => update(index, { publishMode })}>
             <SelectTrigger aria-label={`Publish mode ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background">
-              <SelectItem value={SwarmServicePortPublishMode.Ingress}>Ingress</SelectItem>
-              <SelectItem value={SwarmServicePortPublishMode.Host}>Host</SelectItem>
+              <SelectItem value={PortPublishMode.Ingress}>Ingress</SelectItem>
+              <SelectItem value={PortPublishMode.Host}>Host</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -101,7 +101,7 @@ export const ServicePortsField = ({
         onClick={() =>
           onChange([
             ...value,
-            { targetPort: 80, publishedPort: null, protocol: 'tcp', publishMode: SwarmServicePortPublishMode.Ingress },
+            { targetPort: 80, publishedPort: null, protocol: 'tcp', publishMode: PortPublishMode.Ingress },
           ])
         }>
         <Plus className="mr-2 h-4 w-4" />
@@ -149,13 +149,13 @@ export const ServiceMountsField = ({
           <Select
             value={mount.kind}
             disabled={disabled}
-            onValueChange={(kind: SwarmServiceMountKind) => update(index, { kind })}>
+            onValueChange={(kind: MountKind) => update(index, { kind })}>
             <SelectTrigger className="w-30" aria-label={`Mount type ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background">
-              <SelectItem value={SwarmServiceMountKind.Volume}>Volume</SelectItem>
-              <SelectItem value={SwarmServiceMountKind.Bind}>Bind</SelectItem>
+              <SelectItem value={MountKind.Volume}>Volume</SelectItem>
+              <SelectItem value={MountKind.Bind}>Bind</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -184,7 +184,7 @@ export const ServiceMountsField = ({
         size="sm"
         disabled={disabled}
         onClick={() =>
-          onChange([...value, { kind: SwarmServiceMountKind.Volume, source: '', target: '', readOnly: false }])
+          onChange([...value, { kind: MountKind.Volume, source: '', target: '', readOnly: false }])
         }>
         <Plus className="mr-2 h-4 w-4" />
         Add mount

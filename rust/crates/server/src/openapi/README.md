@@ -33,7 +33,12 @@ Use **Citadel: Verify OpenAPI spec** to check freshness without writing files.
 The tasks set the Rust workspace directory and `SQLX_OFFLINE=true` automatically.
 Generated files are `schema/v1.json`,
 `schema/public-v1.json`, and
-`rust/generated/frontend/foundation-api.ts`.
+`rust/generated/frontend/foundation-api.ts`. The exporter also copies the full
+`schema/v1.json` to the frontend `src/api/schema/swagger.json` and runs
+`npm run api:generate` there. Install frontend dependencies with `npm ci` first.
+The frontend needs the full document, including internal authentication and setup
+operations. Its generation script always copies the Rust document before producing
+the TypeScript client and resource map.
 The .NET reference documents in `src/schema/` remain separate. CI verifies
 freshness without regenerating first, so stale committed specs fail the check.
 
@@ -54,8 +59,8 @@ Serialization and HTTP tests cover request/response behavior.
 
 With `EnableSwagger=true`, the running API serves the same Utoipa documents at
 `/openapi/v1.json` and `/openapi/public/v1.json`. It no longer embeds potentially
-stale generated JSON files. The existing setting still defaults to disabled. The existing frontend client is kept
-unchanged; its separate generation command is not part of this migration.
+stale generated JSON files. The existing setting still defaults to disabled. The frontend uses this same full contract. `openapi --check` remains read-only and
+does not require Node.js; `npm run api:verify` checks generated frontend freshness.
 
 ## Compatibility boundary
 
@@ -73,6 +78,45 @@ DTOs, and remove its obsolete compatibility entries. Use distinct schema names
 for different DTOs that happen to share a Rust short name. Keep a compatibility
 schema when a handler still builds a response using arbitrary JSON; a bare
 `Value` cannot infer those fields.
+
+Alert channel/rule requests, configuration responses, event views and partial updates
+now use native server DTOs. Their enums, resource scopes and `AlertQuietHour` union
+are decoded by Serde and documented by Utoipa; they have no compatibility-schema
+overrides. Quiet hours use `$type` (`Daily` or `Weekly`) without a duplicate
+`scheduleType` field. PATCH preserves missing/null/value distinctions through the
+shared `MetadataPatch` wrapper and documents partial channel updates correctly.
+Alert event `info` remains extensible JSON emitted by Rust workers, rather than
+claiming the shape of the former .NET event-info union. Activity snapshots remain
+part of the separate activity-contract migration.
+
+Deployment responses, duplicate sources, update status and adoption issues now use
+native typed DTOs. Deployment, platform and control-state schemas are shared with
+other resource descriptors; their frozen copies have been removed. HTTP and
+realtime use the same fallible deployment conversion, preserving activity payload
+normalization and rejecting invalid stored vocabulary through the existing error
+path. `LatestActivityView` is a native shared envelope using feature-owned activity
+enums. Its nested `ActivityEventInfo` payload still uses the activity compatibility
+schema until the separate activity-payload migration; the envelope migration does
+not weaken that frontend contract to arbitrary JSON.
+
+Stacks use the same native status, platform, duplicate-source and activity-summary
+contracts. Release actors and binding snapshots use existing identity/binding
+vocabularies. Duplicate drafts serialize the typed create request, and duplicate
+sources must identify a Stack. Metadata PATCH preserves omitted/null/value
+semantics and runs authorization before decoding errors. Apply/rollback responses
+now derive the stream item schema from the actual serialized DTO, including
+`progressMessage` for normal output and `message` for failed commands. Batch
+state actions document their actual UUID arrays, without frozen wrapper schemas.
+The shared activity-event payload and other resources' metadata schemas remain
+for subsequent migrations.
+
+Managed Swarm Service statuses, operation state, update state and webhook enums
+now use native types. HTTP and realtime share the same checked conversion.
+Adoption/duplicate drafts and operation progress use derived DTO schemas instead
+of hand-built JSON or frozen responses. Swarm duplicate requests share
+`DuplicateSourceInput`; draft warnings are strings, matching the feature model
+and frontend display. Adoption drafts initialize `tagIds` to an empty array.
+Docker task payloads remain runtime JSON and are not claimed to be a closed DTO.
 
 ## HTTP extraction
 

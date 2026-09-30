@@ -40,6 +40,7 @@ pub struct PlatformStatSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct PlatformDetails {
     pub id: Uuid,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub name: String,
     pub description: Option<String>,
     pub address: String,

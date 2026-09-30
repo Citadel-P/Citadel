@@ -1,4 +1,8 @@
-import type { ActivityEventInfo, ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
+import type {
+  ActivityEventInfo,
+  ActivityView,
+  PagedActivityView,
+} from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
@@ -18,7 +22,7 @@ export const ActivitiesTable = ({
   displayTarget = false,
   displayPagging = false,
 }: {
-  pagedResult: PagedResultViewOfActivityView;
+  pagedResult: PagedActivityView;
   isLoading: boolean;
   displayTarget?: boolean;
   displayPagging?: boolean;

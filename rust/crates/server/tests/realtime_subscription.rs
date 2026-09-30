@@ -590,6 +590,7 @@ fn config() -> RealtimeConfig {
 
 fn platform(id: Uuid) -> PlatformView {
     PlatformView {
+        tags: Vec::new(),
         id,
         name: "fixture".to_owned(),
         description: None,

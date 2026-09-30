@@ -91,7 +91,7 @@ export const useTaskInfoGroup = (platformId: string, resourceId: string) => {
             name: getTaskName(task),
             platformId,
             capabilities:
-              task.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+              task.capabilities ?? (currentPlatform?.id === platformId ? (currentPlatform.capabilities ?? null) : null),
           }
         : undefined,
     [currentPlatform, platformId, task],

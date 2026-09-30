@@ -106,7 +106,7 @@ impl PlatformReader for PostgresPlatformReader {
         &'a self,
         actor_id: ActorId,
         is_administrator: bool,
-        tag_ids: &'a [Uuid],
+        tags: &'a [String],
     ) -> BoxFuture<'a, Result<Vec<PlatformDetails>, AuthorizedReadError>> {
         Box::pin(async move {
             let query = format!(
@@ -138,12 +138,17 @@ WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
       AND access.resourceid = p.id
       AND (access.permissionlevel & $3) <> 0
 ))
-AND (cardinality($5::uuid[]) = 0 OR EXISTS (
-    SELECT 1 FROM resourcetags tag
-    WHERE tag.resourcetype = 'Platform'
-      AND tag.resourceid = p.id
-      AND tag.tagid = ANY($5::uuid[])
-))
+AND NOT EXISTS (
+    SELECT 1 FROM unnest($5::text[]) requested(name)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM resourcetags link
+        JOIN tags tag ON tag.id = link.tagid
+        WHERE link.resourcetype = 'Platform'
+          AND link.resourceid = p.id
+          AND (lower(tag.name) = lower(requested.name)
+               OR tag.id::text = requested.name)
+    )
+)
 ORDER BY p.name, p.id
 "#
             );
@@ -152,7 +157,7 @@ ORDER BY p.name, p.id
                 .bind(PLATFORM_RESOURCE_TYPE)
                 .bind(READ_PERMISSION_MASK)
                 .bind(is_administrator)
-                .bind(tag_ids)
+                .bind(tags)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

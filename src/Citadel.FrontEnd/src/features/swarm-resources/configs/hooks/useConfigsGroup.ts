@@ -50,7 +50,8 @@ export const useConfigInfoGroup = (platformId: string, resourceId: string) => {
             description: null,
             status: config.inUse,
             capabilities:
-              config.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+              config.capabilities ??
+              (currentPlatform?.id === platformId ? (currentPlatform.capabilities ?? null) : null),
           }
         : undefined,
     [config, currentPlatform, platformId],

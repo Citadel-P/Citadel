@@ -66,7 +66,7 @@ WHERE policy.archivedat IS NULL
   ))
 ORDER BY policy.name,policy.id"#
             );
-            sqlx::query(AssertSqlSafe(query.as_str()))
+            let mut policies = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BackupPolicy as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
@@ -76,7 +76,9 @@ ORDER BY policy.name,policy.id"#
                 .map_err(storage)?
                 .into_iter()
                 .map(map_policy)
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?;
+            self.attach_policy_summaries(&mut policies).await?;
+            Ok(policies)
         })
     }
 }
@@ -87,13 +89,17 @@ impl PostgresBackupPersistence {
         id: Uuid,
     ) -> BoxFuture<'_, Result<BackupPolicy, BackupError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or(BackupError::NotFound)
-                .and_then(map_policy)
+            let mut policy =
+                sqlx::query("SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL")
+                    .bind(id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(BackupError::NotFound)
+                    .and_then(map_policy)?;
+            self.attach_policy_summaries(std::slice::from_mut(&mut policy))
+                .await?;
+            Ok(policy)
         })
     }
 }
@@ -262,5 +268,34 @@ impl PostgresBackupPersistence {
                 .map(map_policy)
                 .collect()
         })
+    }
+}
+
+impl PostgresBackupPersistence {
+    // Constant query count for the whole list. Latest runs are selected using the policy index.
+    async fn attach_policy_summaries(
+        &self,
+        policies: &mut [BackupPolicy],
+    ) -> Result<(), BackupError> {
+        if policies.is_empty() {
+            return Ok(());
+        }
+        let ids = policies.iter().map(|policy| policy.id).collect::<Vec<_>>();
+        let mut connection = self.pool.acquire().await.map_err(storage)?;
+        let mut tags = resource_tags::load(&mut connection, "BackupPolicy", &ids)
+            .await
+            .map_err(storage)?;
+        let rows = sqlx::query("SELECT latest.* FROM unnest($1::uuid[]) policy_id CROSS JOIN LATERAL (SELECT * FROM backupruns WHERE backuppolicyid=policy_id ORDER BY queuedat DESC,id DESC LIMIT 1) latest")
+            .bind(&ids).fetch_all(&mut *connection).await.map_err(storage)?;
+        let mut latest = HashMap::new();
+        for row in rows {
+            let run = map_run(row)?;
+            latest.insert(run.backup_policy_id, run);
+        }
+        for policy in policies {
+            policy.tags = tags.remove(&policy.id).unwrap_or_default();
+            policy.latest_run = latest.remove(&policy.id);
+        }
+        Ok(())
     }
 }

@@ -31,18 +31,21 @@ impl From<citadel_deployments::adoption::AdoptionSource> for AdoptionSource {
 pub struct AdoptionIssue {
     pub code: String,
     pub message: String,
-    pub severity: &'static str,
+    pub severity: AdoptionIssueSeverity,
+    #[schema(required = true)]
     pub field_path: Option<String>,
 }
 
-impl From<citadel_deployments::adoption::AdoptionIssue> for AdoptionIssue {
-    fn from(value: citadel_deployments::adoption::AdoptionIssue) -> Self {
-        Self {
+impl TryFrom<citadel_deployments::adoption::AdoptionIssue> for AdoptionIssue {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::adoption::AdoptionIssue) -> Result<Self, Self::Error> {
+        Ok(Self {
             code: value.code,
             message: value.message,
-            severity: value.severity,
+            severity: serde_json::from_value(value.severity.into())?,
             field_path: value.field_path,
-        }
+        })
     }
 }
 
@@ -51,6 +54,7 @@ impl From<citadel_deployments::adoption::AdoptionIssue> for AdoptionIssue {
 pub struct AdoptionDeploymentDraft {
     pub name: String,
     pub platform_id: Uuid,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub spec: DeploymentSpec,
     pub tag_ids: Vec<Uuid>,
@@ -78,14 +82,28 @@ pub struct ContainerAdoptionDraft {
     pub can_import_sensitive_environment_values: bool,
 }
 
-impl From<citadel_deployments::adoption::ContainerAdoptionDraft> for ContainerAdoptionDraft {
-    fn from(value: citadel_deployments::adoption::ContainerAdoptionDraft) -> Self {
-        Self {
+impl TryFrom<citadel_deployments::adoption::ContainerAdoptionDraft> for ContainerAdoptionDraft {
+    type Error = serde_json::Error;
+
+    fn try_from(
+        value: citadel_deployments::adoption::ContainerAdoptionDraft,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             source: value.source.into(),
             draft: value.draft.into(),
-            issues: value.issues.into_iter().map(Into::into).collect(),
+            issues: value
+                .issues
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
             preview_fingerprint: value.preview_fingerprint,
             can_import_sensitive_environment_values: value.can_import_sensitive_environment_values,
-        }
+        })
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
+pub enum AdoptionIssueSeverity {
+    Warning,
+    Blocker,
 }

@@ -57,10 +57,7 @@ export const ContainersTable = ({
   const { currentPlatform } = useAppContext();
   const [_, setSelectedResources] = useSelectedResources<ContainerActionResource>('Container');
   const lastSelectionKeyRef = useRef('');
-  const platformLimits = useMemo(
-    () => getPlatformResourceLimits(currentPlatform, items ?? []),
-    [currentPlatform, items],
-  );
+  const platformLimits = useMemo(() => getPlatformResourceLimits(currentPlatform), [currentPlatform]);
   const rows = useMemo(() => buildContainerRows(items ?? [], platformLimits), [items, platformLimits]);
   const cols = useMemo(() => columns(actions ?? {}, currentPlatform?.type), [actions, currentPlatform?.type]);
   const getSubRows = useCallback(
@@ -85,10 +82,14 @@ export const ContainersTable = ({
       columns={cols}
       data={rows}
       isLoading={isLoading}
-      emptyState={isFiltered ? {
-        title: 'No containers match the current filters.',
-        description: 'Select another overview card or adjust the search and filters.',
-      } : undefined}
+      emptyState={
+        isFiltered
+          ? {
+              title: 'No containers match the current filters.',
+              description: 'Select another overview card or adjust the search and filters.',
+            }
+          : undefined
+      }
       getSubRows={getSubRows}
       onSelectionChange={handleSelectionChange}
     />
@@ -119,123 +120,126 @@ const columns = (
   platformType?: PlatformType,
 ): ColumnDef<ContainerTableRow>[] => {
   const result: ColumnDef<ContainerTableRow>[] = [
-  {
-    id: 'select',
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'name',
-    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => (
-      <ContainerNameCell row={row.original} depth={row.depth} tableRow={row} platformType={platformType} />
-    ),
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return getDisplayName(rowB.original).localeCompare(getDisplayName(rowA.original));
-    },
-  },
-  {
-    accessorKey: 'image',
-    header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-    cell: ({ row }) => {
-      if (isContainerStackGroup(row.original)) {
-        return <span className="text-xs text-muted-foreground">{countDistinctImages(row.original)} images</span>;
-      }
-
-      return <ImageName image={row.original.imageView ?? undefined} />;
-    },
-  },
-  {
-    accessorKey: 'containerId',
-    header: ({ column }) => <SortableCell cellName="ID" column={column} />,
-    cell: ({ row }) =>
-      isContainerStackGroup(row.original) ? (
-        <span className="text-xs text-muted-foreground">Stack</span>
-      ) : (
-        <CopyToClipboard
-          textToCopy={row.original.containerId}
-          transform={() => row.original.containerId?.slice(0, 12)}
-          groupClassName="rowid"
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
         />
       ),
-  },
-  ...(platformType === PlatformType.DockerSwarm
-    ? [
-        {
-          accessorKey: 'nodeHostname',
-          header: ({ column }: any) => <SortableCell cellName="Node" column={column} />,
-          cell: ({ row }: any) => {
-            if (isContainerStackGroup(row.original))
-              return <span className="text-xs text-muted-foreground">Multiple nodes</span>;
-            const nodeId = row.original.dockerNodeId;
-            return nodeId ? (
-              <Link to={`../nodes/${nodeId}`} className="table-link truncate" title={row.original.nodeHostname ?? nodeId}>
-                {row.original.nodeHostname ?? formatId(nodeId)}
-              </Link>
-            ) : (
-              <span className="text-xs text-muted-foreground">Manager</span>
-            );
-          },
-        } as ColumnDef<ContainerTableRow>,
-      ]
-    : []),
-  {
-    accessorKey: 'CPU',
-    header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
-    cell: ({ row }) => (
-      <CPUCell
-        state={row.original.state}
-        stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
-      />
-    ),
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return toNumber(rowA.original.lastStats?.cpuUsage) < toNumber(rowB.original.lastStats?.cpuUsage) ? 1 : -1;
-    },
-  },
-  {
-    accessorKey: 'memory',
-    header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
-    cell: ({ row }) => (
-      <MemoryUsageCell
-        state={row.original.state}
-        stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
-      />
-    ),
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      const cA = rowA.original.lastStats as ContainerStatView;
-      const cB = rowB.original.lastStats as ContainerStatView;
-
-      return toNumber(cA?.memoryActive) < toNumber(cB?.memoryActive) ? 1 : -1;
-    },
-  },
-  {
-    accessorKey: 'ports',
-    header: () => <span>Ports</span>,
-    cell: ({ row }) =>
-      isContainerStackGroup(row.original) ? (
-        <span className="text-xs text-muted-foreground">{countPublishedPorts(row.original)} ports</span>
-      ) : (
-        <PortsDisplay ports={row.original.ports} compact maxVisible={1} />
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
       ),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
-  },
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <SortableCell cellName="Name" column={column} />,
+      cell: ({ row }) => (
+        <ContainerNameCell row={row.original} depth={row.depth} tableRow={row} platformType={platformType} />
+      ),
+      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+        return getDisplayName(rowB.original).localeCompare(getDisplayName(rowA.original));
+      },
+    },
+    {
+      accessorKey: 'image',
+      header: ({ column }) => <SortableCell cellName="Image" column={column} />,
+      cell: ({ row }) => {
+        if (isContainerStackGroup(row.original)) {
+          return <span className="text-xs text-muted-foreground">{countDistinctImages(row.original)} images</span>;
+        }
+
+        return <ImageName image={row.original.imageView ?? undefined} />;
+      },
+    },
+    {
+      accessorKey: 'containerId',
+      header: ({ column }) => <SortableCell cellName="ID" column={column} />,
+      cell: ({ row }) =>
+        isContainerStackGroup(row.original) ? (
+          <span className="text-xs text-muted-foreground">Stack</span>
+        ) : (
+          <CopyToClipboard
+            textToCopy={row.original.containerId}
+            transform={() => row.original.containerId?.slice(0, 12)}
+            groupClassName="rowid"
+          />
+        ),
+    },
+    ...(platformType === PlatformType.DockerSwarm
+      ? [
+          {
+            accessorKey: 'nodeHostname',
+            header: ({ column }: any) => <SortableCell cellName="Node" column={column} />,
+            cell: ({ row }: any) => {
+              if (isContainerStackGroup(row.original))
+                return <span className="text-xs text-muted-foreground">Multiple nodes</span>;
+              const nodeId = row.original.dockerNodeId;
+              return nodeId ? (
+                <Link
+                  to={`../nodes/${nodeId}`}
+                  className="table-link truncate"
+                  title={row.original.nodeHostname ?? nodeId}>
+                  {row.original.nodeHostname ?? formatId(nodeId)}
+                </Link>
+              ) : (
+                <span className="text-xs text-muted-foreground">Manager</span>
+              );
+            },
+          } as ColumnDef<ContainerTableRow>,
+        ]
+      : []),
+    {
+      accessorKey: 'CPU',
+      header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
+      cell: ({ row }) => (
+        <CPUCell
+          state={row.original.state}
+          stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
+        />
+      ),
+      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+        return toNumber(rowA.original.lastStats?.cpuUsage) < toNumber(rowB.original.lastStats?.cpuUsage) ? 1 : -1;
+      },
+    },
+    {
+      accessorKey: 'memory',
+      header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
+      cell: ({ row }) => (
+        <MemoryUsageCell
+          state={row.original.state}
+          stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
+        />
+      ),
+      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+        const cA = rowA.original.lastStats as ContainerStatView;
+        const cB = rowB.original.lastStats as ContainerStatView;
+
+        return toNumber(cA?.memoryActive) < toNumber(cB?.memoryActive) ? 1 : -1;
+      },
+    },
+    {
+      accessorKey: 'ports',
+      header: () => <span>Ports</span>,
+      cell: ({ row }) =>
+        isContainerStackGroup(row.original) ? (
+          <span className="text-xs text-muted-foreground">{countPublishedPorts(row.original)} ports</span>
+        ) : (
+          <PortsDisplay ports={row.original.ports} compact maxVisible={1} />
+        ),
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
+    },
   ];
 
   return result;
@@ -434,7 +438,10 @@ const getStackState = (containers: ContainerView[]) => {
   return containers[0]?.state ?? ContainerStateStatus.Unknown;
 };
 
-const aggregateStats = (containers: ContainerView[], platformLimits: PlatformResourceLimits): ContainerStatView => {
+const aggregateStats = (
+  containers: ContainerView[],
+  platformLimits: PlatformResourceLimits,
+): Omit<ContainerStatView, 'containerId' | 'created'> => {
   containers = containers.filter((container) => !container.projectionStaleSince);
   const memoryLimit = getAggregateMemoryLimit(containers, platformLimits.memoryTotal);
   const cpuLimit = platformLimits.cpuCount > 0 ? platformLimits.cpuCount * 100 : 0;
@@ -464,15 +471,10 @@ const getAggregateMemoryLimit = (containers: ContainerView[], platformMemoryTota
   return allLimitsMatch ? firstLimit : limits.reduce((sum, limit) => sum + limit, 0);
 };
 
-const getPlatformResourceLimits = (
-  currentPlatform: PlatformView | undefined,
-  containers: ContainerView[],
-): PlatformResourceLimits => {
-  const platformFromContainer = containers.find((container) => container.platform)?.platform;
-
+const getPlatformResourceLimits = (currentPlatform: PlatformView | undefined): PlatformResourceLimits => {
   return {
-    memoryTotal: toNumber(currentPlatform?.memTotal ?? platformFromContainer?.memTotal),
-    cpuCount: toNumber(currentPlatform?.cpuCount ?? platformFromContainer?.cpuCount),
+    memoryTotal: toNumber(currentPlatform?.memTotal),
+    cpuCount: toNumber(currentPlatform?.cpuCount),
   };
 };
 

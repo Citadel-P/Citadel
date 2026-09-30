@@ -1,4 +1,4 @@
-import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { fireEvent, screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
@@ -48,7 +48,7 @@ vi.mock('@/features/tags/components', () => ({
   ResourceTagSelector: () => null,
 }));
 
-const action: AutomationActionView = {
+const action: AuthorizedAction = {
   id: '019fb442-8b08-7fea-b21d-6ea46f42da21',
   name: 'Prune images',
   description: null,
@@ -96,7 +96,7 @@ describe('AutomationActionForm licensing', () => {
               mode="edit"
               resource={{
                 ...action,
-                capabilities: { canRead: true, canWrite: true, ...action.capabilities, canExecute: true },
+                capabilities: { ...action.capabilities, canRead: true, canWrite: true, canExecute: true },
               }}
             />
           }
@@ -138,7 +138,7 @@ describe('AutomationActionForm licensing', () => {
         resource={{
           ...action,
           ...changes,
-          capabilities: { canRead: true, canWrite: true, ...action.capabilities, canExecute: true },
+          capabilities: { ...action.capabilities, canRead: true, canWrite: true, canExecute: true },
         }}
       />,
     );

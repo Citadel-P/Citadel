@@ -71,14 +71,14 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
         : mode === 'edit'
           ? (input.address ?? platform?.address ?? '').trim()
           : null;
-      const platformInput: PlatformInput = {
+      const platformInput = {
         name: input.name.trim(),
         address,
         description: input.description ?? null,
         type: input.type ?? PlatformType.Docker,
         connectorType,
         pruneHistoricalSwarmTaskContainers: input.pruneHistoricalSwarmTaskContainers ?? true,
-      };
+      } satisfies PlatformInput;
 
       if (mode === 'edit') {
         if (!platformId) return;

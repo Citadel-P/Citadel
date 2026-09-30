@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
+import { ActivityView, PagedActivityView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useActivityQuery } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
@@ -25,7 +25,7 @@ export const useActivitiesGroup = (
 
   const [liveActivities, setLiveActivities] = useState<ActivityView[]>([]);
 
-  const pagedActivities = useMemo<PagedResultViewOfActivityView | undefined>(() => {
+  const pagedActivities = useMemo<PagedActivityView | undefined>(() => {
     const base = data?.data?.pagedResult;
     if (!base) return undefined;
 

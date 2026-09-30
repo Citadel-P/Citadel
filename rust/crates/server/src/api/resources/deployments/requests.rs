@@ -1,5 +1,5 @@
-//! HTTP decoding, including legacy null and PATCH semantics.
-use crate::api::resources::deployments::spec::{DeploymentSpec, DuplicateSourceInput};
+//! HTTP decoding, including null and PATCH semantics.
+use crate::api::resources::{common::DuplicateSourceInput, deployments::spec::DeploymentSpec};
 use citadel_deployments::FieldPatch;
 use serde::Deserialize;
 use serde_json::Value;

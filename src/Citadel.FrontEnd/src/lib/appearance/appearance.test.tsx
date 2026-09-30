@@ -64,7 +64,7 @@ describe('appearance tokens and cache', () => {
       font: UserUiFont.IbmPlexSans,
       radius: UserUiRadius.None,
       contentLayout: UserContentLayout.Full,
-      density: UserUiDensity.Comfortable,
+      density: UserUiDensity.Compact,
     };
     applyAppearanceToDocument(appearance, true);
     expect(document.documentElement).toHaveClass('dark');
@@ -73,7 +73,7 @@ describe('appearance tokens and cache', () => {
       font: 'ibm-plex-sans',
       radius: 'none',
       contentLayout: 'full',
-      density: 'comfortable',
+      density: 'compact',
     });
     applyAppearanceToDocument({ ...appearance, mode: UserTheme.Light }, true);
     expect(document.documentElement).not.toHaveClass('dark');
@@ -257,7 +257,7 @@ describe('appearance provider and customizer', () => {
         font: UserUiFont.Geist,
         radius: UserUiRadius.None,
         contentLayout: UserContentLayout.Full,
-        density: UserUiDensity.Comfortable,
+        density: UserUiDensity.Compact,
       }),
     );
   });

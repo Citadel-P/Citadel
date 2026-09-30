@@ -21,8 +21,7 @@ pub use repositories::{
 
 pub use repositories::{
     CreateGitRepository, GitRepository, GitRepositoryError, GitRepositoryMutationKind,
-    GitRepositoryPatch, GitRepositoryPersistence, GitRepositoryService, GitRepositoryTag,
-    RepoCommand,
+    GitRepositoryPatch, GitRepositoryPersistence, GitRepositoryService, RepoCommand,
 };
 
 pub mod permissions;

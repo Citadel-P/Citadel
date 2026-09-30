@@ -206,3 +206,9 @@ pub enum UserUiDensitySchema {
     Compact,
     Comfortable,
 }
+
+vocabulary_schema!(
+    ActivityStatusSchema,
+    "ActivityStatus",
+    citadel_activities::ActivityStatus::ALL
+);

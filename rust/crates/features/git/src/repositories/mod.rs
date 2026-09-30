@@ -43,7 +43,7 @@ pub mod webhooks;
 pub use commands::{
     CreateGitRepository, FieldPatch, GitRepositoryMutationKind, GitRepositoryPatch,
 };
-pub use model::{GitRepository, GitRepositoryTag, RepoCommand};
+pub use model::{GitRepository, RepoCommand};
 pub use repository::GitRepositoryPersistence;
 mod service;
 pub use error::GitRepositoryError;

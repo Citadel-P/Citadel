@@ -58,7 +58,9 @@ pub struct CurrentProfileAuthenticationView {
     pub label: String,
     pub can_change_password: bool,
     pub can_use_local_password_mfa: bool,
+    #[schema(required = true)]
     pub oidc_provider_id: Option<Uuid>,
+    #[schema(required = true)]
     pub oidc_provider_name: Option<String>,
 }
 
@@ -183,7 +185,9 @@ impl From<citadel_identity::CurrentProfileDetails> for CurrentProfileView {
 pub struct UserSessionSummaryView {
     pub id: Uuid,
     pub display_name: String,
+    #[schema(required = true)]
     pub user_agent: Option<String>,
+    #[schema(required = true)]
     pub ip_address: Option<String>,
     pub created_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,

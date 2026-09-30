@@ -1,7 +1,10 @@
 //! Executable lifecycle: initialization, supervised serving, and bounded shutdown.
 use crate::{cli, composition::ServerComponents, jobs, router as api, startup};
 use axum::Router;
-use citadel_server::{config::Config, transport};
+use citadel_server::{
+    config::{Config, LogFormat},
+    transport,
+};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
@@ -12,13 +15,14 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("citadel_server=info,citadel_adapters=info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let format = citadel_server::config::log_format_from_env()?;
     let color = citadel_server::config::log_color_from_env()?;
-    if color {
+    if format == LogFormat::Text {
         tracing_subscriber::fmt()
             .with_env_filter(filter)
-            .with_ansi(true)
+            .with_ansi(color)
+            .with_target(false)
             .init();
     } else {
         tracing_subscriber::fmt()
@@ -32,9 +36,11 @@ fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    tracing::info!(
-        effective_configuration = %serde_json::to_string(&config.effective()?)?,
-        "starting Rust foundation server"
+    let effective = config.effective()?;
+    tracing::info!("Starting Citadel Core");
+    tracing::debug!(
+        effective_configuration = %serde_json::to_string(&effective)?,
+        "Effective configuration"
     );
     if config.transport.mode == citadel_server::config::TransportMode::Disabled {
         tracing::warn!(
@@ -65,7 +71,7 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         address = %config.listen_address,
         mode = ?config.transport.mode,
-        "Rust foundation server listening"
+        "Citadel Core listening"
     );
 
     let server = run_server(

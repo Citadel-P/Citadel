@@ -1,4 +1,4 @@
-import type { ContainerAdoptionIssueView } from '@/api/generated/api.types';
+import type { AdoptionIssue } from '@/api/generated/api.types';
 
 const sensitiveEnvironmentIssueCode = 'SENSITIVE_ENVIRONMENT_VALUE_REQUIRED';
 const environmentFieldPrefix = 'spec.environmentVariables.';
@@ -6,7 +6,7 @@ const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export const getDeploymentConfigurationNames = (
   persistedNames: Iterable<string>,
-  adoptionIssues: readonly ContainerAdoptionIssueView[],
+  adoptionIssues: readonly AdoptionIssue[],
   includePendingAdoptionSecrets: boolean,
 ): string[] => {
   const names = new Set(persistedNames);

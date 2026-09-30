@@ -33,7 +33,7 @@ export type ContainerStackGroupResource = {
   controlState: ResourceControlState;
   stackId: string | null;
   stack: string | null;
-  lastStats: ContainerView['lastStats'];
+  lastStats: Omit<NonNullable<ContainerView['lastStats']>, 'containerId' | 'created'> | null;
   ports: ContainerView['ports'];
   deploymentId: null;
   isSystem: boolean;

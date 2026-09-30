@@ -1396,7 +1396,7 @@ export const MemoryUsageCell = ({
   stats,
 }: {
   state: ContainerStateStatus;
-  stats?: ContainerStatView | null;
+  stats?: Partial<ContainerStatView> | null;
 }) => {
   if (state !== ContainerStateStatus.Running) {
     return <div className="text-muted-foreground">0B / 0B</div>;
@@ -1408,7 +1408,13 @@ export const MemoryUsageCell = ({
   );
 };
 
-export const CPUCell = ({ state, stats }: { state: ContainerStateStatus; stats?: ContainerStatView | null }) => {
+export const CPUCell = ({
+  state,
+  stats,
+}: {
+  state: ContainerStateStatus;
+  stats?: Partial<ContainerStatView> | null;
+}) => {
   if (state !== ContainerStateStatus.Running) {
     return <div className="text-muted-foreground">0%</div>;
   }

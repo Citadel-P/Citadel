@@ -142,7 +142,7 @@ export const useServiceInfoGroup = (platformId: string, resourceId: string) => {
       ownershipDiagnostic: managed ? null : service.ownershipDiagnostic,
       platformId,
       capabilities:
-        service.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+        service.capabilities ?? (currentPlatform?.id === platformId ? (currentPlatform.capabilities ?? null) : null),
       tasks: taskGroup.items.filter((task) => task.serviceId === service.id),
       managedServiceId: managed?.id,
       canAdopt: managedGroup.capabilities?.canWrite === true,

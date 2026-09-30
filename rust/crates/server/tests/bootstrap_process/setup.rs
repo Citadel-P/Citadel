@@ -207,3 +207,82 @@ async fn deleting_initial_user_does_not_reopen_setup_after_restart() {
     pool.close().await;
     fixture.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL; starts isolated Core processes"]
+async fn configured_password_policy_applies_to_setup_users_changes_and_preserves_login() {
+    let fixture = Fixture::new().await;
+    let mut server = fixture.start_with_policy(false, false, true, 8);
+    let status = fixture.ready(&mut server).await;
+    assert_eq!(status["passwordMinimumLength"], 8);
+    assert_eq!(status["passwordMaximumLength"], 128);
+    for password in ["short", "12345678"] {
+        let response = fixture
+            .client
+            .post(format!("{}/api/v1/setup/initialize", server.url))
+            .json(&json!({"name":"owner","email":"owner@example.test","password":password}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400);
+    }
+    let response = fixture
+        .client
+        .post(format!("{}/api/v1/setup/initialize", server.url))
+        .json(&json!({"name":"owner","email":"owner@example.test","password":"river oak"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let login: Value = response.json().await.unwrap();
+    let token = login["accessToken"].as_str().unwrap();
+    let response = fixture
+        .client
+        .post(format!("{}/api/v1/users", server.url))
+        .bearer_auth(token)
+        .json(&json!({"name":"operator","email":"operator@example.test","password":"maple sky"}))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().await.unwrap()
+    );
+    let response = fixture
+        .client
+        .post(format!("{}/api/v1/profile/change-password", server.url))
+        .bearer_auth(token)
+        .json(&json!({"currentPassword":"river oak","newPassword":"birch sky"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 204);
+    server.stop().await;
+    let mut server = fixture.start_with_policy(false, false, true, 15);
+    assert_eq!(
+        fixture.ready(&mut server).await["passwordMinimumLength"],
+        15
+    );
+    // Raising the creation policy must not invalidate passwords already in use.
+    let response = fixture
+        .client
+        .post(format!("{}/api/v1/authentication/login", server.url))
+        .json(&json!({"emailOrName":"owner","password":"birch sky"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let login: Value = response.json().await.unwrap();
+    let response = fixture
+        .client
+        .post(format!("{}/api/v1/profile/change-password", server.url))
+        .bearer_auth(login["accessToken"].as_str().unwrap())
+        .json(&json!({"currentPassword":"birch sky","newPassword":"pine leaf"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    server.stop().await;
+    fixture.close().await;
+}

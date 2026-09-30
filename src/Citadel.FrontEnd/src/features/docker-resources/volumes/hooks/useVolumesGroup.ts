@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { VolumesView } from '@/api/generated/api.types';
+import { VolumesResponse } from '@/api/generated/api.types';
 import {
   useDockerDaemonGroup,
   VolumeEvent,
@@ -9,10 +9,10 @@ import { useRead } from '@/lib/hooks';
 
 export const useVolumesGroup = (platformId?: string) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('listVolumes', { platformId });
-  const [volumes, setVolumes] = useState<VolumesView | undefined>(data?.data);
+  const [volumes, setVolumes] = useState<VolumesResponse | undefined>(data?.data);
   const capabilities = data?.data.capabilities;
 
-  const lastDataRef = useRef<VolumesView | undefined>(data?.data);
+  const lastDataRef = useRef<VolumesResponse | undefined>(data?.data);
   const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
 
   useEffect(() => {

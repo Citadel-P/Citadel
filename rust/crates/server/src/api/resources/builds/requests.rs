@@ -20,12 +20,14 @@ pub struct BuildProjectInput {
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
+    #[schema(value_type = Option<crate::openapi::compatibility::BuildWebhookConfig>)]
     pub webhook: Option<Value>,
     pub timeout_seconds: Option<i32>,
     pub retention_run_count: Option<i32>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
     #[serde(default = "platform_builder")]
+    #[schema(value_type = crate::openapi::compatibility::BuildProjectBuilderKind)]
     pub builder_kind: String,
     pub build_agent_pool_id: Option<Uuid>,
 }
@@ -98,6 +100,7 @@ pub struct BuildAgentPoolInput {
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
+    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProviderSpec)]
     pub provider_spec: Value,
     pub max_active_builders: Option<i32>,
     pub queue_timeout_seconds: Option<i32>,

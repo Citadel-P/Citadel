@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { ContainersView, ContainerView, ContainerStatView } from '@/api/generated/api.types';
+import { ContainersResponse, ContainerView, ContainerStatView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
@@ -9,7 +9,7 @@ import type { ContainerStatePatch } from './container-order';
 
 export const useContainersGroup = (platformId?: string) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('listContainers', { id: platformId });
-  const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
+  const [containersInfo, setContainersInfo] = useState<ContainersResponse | undefined>();
   const capabilities = data?.data.capabilities;
 
   const lastSynchronizedDataRef = useRef<any>(null);
@@ -67,7 +67,7 @@ export const useContainersGroup = (platformId?: string) => {
 
   useDockerDaemonGroup(platformId, { onContainerEvent });
 
-  const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
+  const handleContainersInfoUpdated = useCallback((containers: ContainersResponse) => {
     setContainersInfo((currentInfo) => ({
       ...containers,
       containers: reconcileContainerOrder(currentInfo?.containers, containers.containers),

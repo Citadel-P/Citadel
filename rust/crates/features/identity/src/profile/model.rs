@@ -299,8 +299,8 @@ impl UserContentLayout {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UserUiDensity {
-    Compact,
     #[default]
+    Compact,
     Comfortable,
 }
 impl UserUiDensity {

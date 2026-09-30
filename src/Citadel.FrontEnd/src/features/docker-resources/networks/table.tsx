@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerNetworkResultView, PlatformType } from '@/api/generated/api.types';
+import { NetworkView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,13 +21,13 @@ export const NetworksTable = ({
   isLoading,
 }: {
   isLoading: boolean;
-  items: DockerNetworkResultView[];
+  items: NetworkView[];
   actions: Record<
     string,
-    React.FC<{ resource: DockerNetworkResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: NetworkView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<DockerNetworkResultView>('Network');
+  const [_, setSelectedResources] = useSelectedResources<NetworkView>('Network');
   const { currentPlatform } = useAppContext();
   const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
   const cols = useMemo(() => columns(actions ?? {}, showNode), [actions, showNode]);
@@ -38,10 +38,10 @@ export const NetworksTable = ({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: DockerNetworkResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: NetworkView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   showNode: boolean,
-): ColumnDef<DockerNetworkResultView>[] => [
+): ColumnDef<NetworkView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -67,7 +67,7 @@ const columns = (
     cell: ({ row }) => <NetworkNameRow network={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
-  ...(showNode ? [createNodeResourceColumn<DockerNetworkResultView>()] : []),
+  ...(showNode ? [createNodeResourceColumn<NetworkView>()] : []),
   {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
@@ -146,7 +146,7 @@ const columns = (
   },
 ];
 
-export const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
+export const NetworkNameRow = ({ network }: { network: NetworkView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {

@@ -25,7 +25,7 @@ export const ConfigInspect = ({ resource }: { resource: SwarmConfigInfoView }) =
 
 export const ConfigInfoComponents: RequiredSwarmInfoComponents<SwarmConfigInfoView> = {
   Header: {
-    Indicator: ({ resource }) => <StateIndicator value={resource.inUse} />,
+    Indicator: ({ resource }) => <StateIndicator variant="badge" value={resource.inUse} />,
     NameSuffix: StaleBadge,
     ActionButtons: ({ resource }) => (
       <GenericActionBarButtons resource={resource} actions={Object.values(ConfigInfoActions)} />

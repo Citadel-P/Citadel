@@ -132,5 +132,6 @@ const task = (overrides: Partial<SwarmTaskView> = {}): SwarmTaskView => ({
   updatedAt: null,
   observedAt: '2026-08-05T08:00:00Z',
   isStale: false,
+  capabilities: null,
   ...overrides,
 });

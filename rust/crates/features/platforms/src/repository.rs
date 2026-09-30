@@ -49,7 +49,7 @@ pub trait PlatformReader: Send + Sync {
         &'a self,
         actor_id: ActorId,
         is_administrator: bool,
-        tag_ids: &'a [Uuid],
+        tags: &'a [String],
     ) -> BoxFuture<'a, Result<Vec<PlatformDetails>, AuthorizedReadError>>;
 
     fn get_platform(

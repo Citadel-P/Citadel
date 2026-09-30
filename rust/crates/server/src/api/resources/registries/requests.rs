@@ -10,6 +10,7 @@ pub struct NewRegistry {
     #[serde(default)]
     pub registry_host: String,
     pub status: RegistryStatus,
+    #[schema(value_type = crate::openapi::compatibility::RegistryConfiguration)]
     pub configuration: Value,
     pub description: Option<String>,
     #[serde(default)]

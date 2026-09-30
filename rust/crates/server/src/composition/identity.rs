@@ -61,17 +61,20 @@ pub(super) fn build(
         Duration::from_secs(30),
         config.identity.service_account_last_used_interval,
     );
-    let identity = Arc::new(IdentityService::new(
-        identity_store.clone(),
-        password_hasher.clone(),
-        token_codec,
-        service_account_tokens.clone(),
-        entitlements.clone(),
-        clock.clone(),
-        Arc::new(last_used_tracker),
-        chrono::Duration::from_std(config.identity.access_token_lifetime)?,
-        chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
-    ));
+    let identity = Arc::new(
+        IdentityService::new(
+            identity_store.clone(),
+            password_hasher.clone(),
+            token_codec,
+            service_account_tokens.clone(),
+            entitlements.clone(),
+            clock.clone(),
+            Arc::new(last_used_tracker),
+            chrono::Duration::from_std(config.identity.access_token_lifetime)?,
+            chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
+        )
+        .with_password_policy(config.identity.password_policy),
+    );
     let secret_protector = Arc::new(AesGcmSecretProtector::new(
         config.identity.secret_encryption_key.expose(),
     )?);
@@ -116,12 +119,15 @@ pub(super) fn build(
     ));
     let user_store = Arc::new(PostgresUserRepository::new(pool.clone()));
     let users = Arc::new(UserReadService::new(user_store.clone()));
-    let user_mutations = Arc::new(citadel_identity::UserMutationService::new(
-        user_store,
-        password_hasher,
-        entitlements.clone(),
-        clock.clone(),
-    ));
+    let user_mutations = Arc::new(
+        citadel_identity::UserMutationService::new(
+            user_store,
+            password_hasher,
+            entitlements.clone(),
+            clock.clone(),
+        )
+        .with_password_policy(config.identity.password_policy),
+    );
     let team_store = Arc::new(PostgresTeamRepository::new(pool.clone()));
     let teams = Arc::new(TeamReadService::new(team_store.clone()));
     let team_mutations = Arc::new(TeamMutationService::new(

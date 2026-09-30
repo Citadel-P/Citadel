@@ -6,7 +6,7 @@ import { fromNow } from '@/lib/dayjs.helper';
 interface AlertMessageProps {
   title?: string;
   children?: string | ReactNode;
-  date?: Date | number;
+  date?: Date | number | string;
   type: 'success' | 'info' | 'warning' | 'error';
   dismissible?: boolean;
   onDismiss?: () => void;
@@ -105,7 +105,7 @@ export const AlertMessage = ({
         {date && (
           <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
             <Clock width={13} height={13} />
-            <span className='text-xs'>{fromNow(date)}</span>
+            <span className="text-xs">{fromNow(date)}</span>
           </div>
         )}
 

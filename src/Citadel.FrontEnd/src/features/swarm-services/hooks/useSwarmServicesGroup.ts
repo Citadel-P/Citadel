@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { ManagedSwarmServiceView, ResourceCapabilities } from '@/api/generated/api.types';
+import { ManagedSwarmServiceView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -24,7 +24,7 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
   }, [effectivePlatformId, effectiveTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listManagedSwarmServices', args);
   const [services, setServices] = useState<ManagedSwarmServiceView[]>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilities>();
+  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView>();
   const lastResult = useRef<ManagedSwarmServiceView[]>(undefined);
 
   useEffect(() => {

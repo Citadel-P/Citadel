@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import {
-  BuildProjectView,
+  AuthorizedProject,
   BuildRunView,
   BuildProjectBuilderKind,
   ResourceControlState,
@@ -49,7 +49,7 @@ describe('BuildRunsTab', () => {
       http.get(`http://localhost/api/v1/buildRuns/${runId}/logs`, () => HttpResponse.json({ logs: [] })),
     );
     const fake = new FakeRealtimeConnection();
-    renderCitadel(<BuildRunsTab resource={{ id: projectId } as BuildProjectView} />, {
+    renderCitadel(<BuildRunsTab resource={{ id: projectId } as AuthorizedProject} />, {
       route: `/builds/edit/${projectId}?runId=${runId}#runs`,
       groups: {
         connectionFactory: () => fake.asRealtimeConnection(),
@@ -65,6 +65,7 @@ describe('BuildRunsTab', () => {
 
 it('renders the build list when a queued run has no platform snapshot', async () => {
   const project = {
+    capabilities: { canRead: true, canWrite: true, canExecute: true },
     id: projectId,
     name: 'New build',
     normalizedName: 'new-build',
@@ -96,7 +97,7 @@ it('renders the build list when a queued run has no platform snapshot', async ()
     tagTemplates: ['latest'],
     tags: [],
     latestRun: { id: runId, status: 'Queued', queuedAt: '2026-09-22T10:00:00Z' } as BuildRunView,
-  } satisfies BuildProjectView;
+  } satisfies AuthorizedProject;
   renderCitadel(<BuildsTable items={[project]} actions={{}} isLoading={false} />);
   expect(await screen.findByText('platform-fallback')).toBeVisible();
 });

@@ -311,6 +311,31 @@ async fn list_policies(
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
+    let records = result(
+        s.backups
+            .store()
+            .list_policies(p.actor_id, p.is_administrator())
+            .await,
+        &h,
+    )?;
+    let ids = records.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = api_result(
+        s.identity
+            .permissions_for_resources(&p, ResourceType::BackupPolicy, &ids)
+            .await,
+        &h,
+    )?;
+    let items = records
+        .into_iter()
+        .map(|item| {
+            let id = item.id;
+            let mut view = BackupPolicyView::from(item);
+            view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+                permissions.get(&id).copied().flatten(),
+            ));
+            view
+        })
+        .collect();
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupPolicy)
@@ -319,16 +344,7 @@ async fn list_policies(
     )?;
     Ok(no_store(
         Json(Policies {
-            policies: result(
-                s.backups
-                    .store()
-                    .list_policies(p.actor_id, p.is_administrator())
-                    .await,
-                &h,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+            policies: items,
             capabilities: permission.into(),
         })
         .into_response(),
@@ -418,13 +434,17 @@ async fn get_policy(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(BackupPolicyView::from(result(
-            s.backups.store().get_policy(id).await,
-            &h,
-        )?))
-        .into_response(),
-    ))
+    let mut view = BackupPolicyView::from(result(s.backups.store().get_policy(id).await, &h)?);
+    let permission = api_result(
+        s.identity
+            .permission_for_resource(&p, ResourceType::BackupPolicy, id)
+            .await,
+        &h,
+    )?;
+    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+        permission,
+    ));
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(
@@ -740,6 +760,31 @@ async fn list_repositories(
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
+    let records = result(
+        s.backups
+            .store()
+            .list_repositories(p.actor_id, p.is_administrator())
+            .await,
+        &h,
+    )?;
+    let ids = records.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = api_result(
+        s.identity
+            .permissions_for_resources(&p, ResourceType::BackupRepository, &ids)
+            .await,
+        &h,
+    )?;
+    let items = records
+        .into_iter()
+        .map(|item| {
+            let id = item.id;
+            let mut view = BackupRepositoryView::from(item);
+            view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+                permissions.get(&id).copied().flatten(),
+            ));
+            view
+        })
+        .collect();
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupRepository)
@@ -748,16 +793,7 @@ async fn list_repositories(
     )?;
     Ok(no_store(
         Json(Repositories {
-            repositories: result(
-                s.backups
-                    .store()
-                    .list_repositories(p.actor_id, p.is_administrator())
-                    .await,
-                &h,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+            repositories: items,
             capabilities: permission.into(),
         })
         .into_response(),
@@ -836,13 +872,18 @@ async fn get_repository(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(BackupRepositoryView::from(result(
-            s.backups.store().get_repository(id).await,
-            &h,
-        )?))
-        .into_response(),
-    ))
+    let mut view =
+        BackupRepositoryView::from(result(s.backups.store().get_repository(id).await, &h)?);
+    let permission = api_result(
+        s.identity
+            .permission_for_resource(&p, ResourceType::BackupRepository, id)
+            .await,
+        &h,
+    )?;
+    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+        permission,
+    ));
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(

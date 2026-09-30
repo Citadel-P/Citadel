@@ -10,6 +10,7 @@ export type StateBadgeKind =
   | 'default'
   | 'container'
   | 'run'
+  | 'swarmNode'
   | 'swarmTask';
 
 const styles = {
@@ -94,6 +95,12 @@ const getStateStyle = (value: StateBadgeValue, kind: StateBadgeKind) => {
   if (kind === 'alertSeverity') return getAlertSeverityStyle(normalized);
   if (kind === 'run') return getRunStyle(normalized);
   if (kind === 'swarmTask') return getSwarmTaskStyle(normalized);
+  if (kind === 'swarmNode') {
+    if (['ready', 'ready:active'].includes(normalized)) return styles.success;
+    if (['down', 'disconnected'].includes(normalized)) return styles.danger;
+    if (normalized === 'ready:drain') return styles.muted;
+    return styles.warning;
+  }
   return getDefaultStyle(normalized);
 };
 

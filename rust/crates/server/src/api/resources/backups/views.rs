@@ -7,23 +7,35 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryView {
+    #[schema(required = true)]
+    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryType)]
     pub repository_type: String,
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositorySpec)]
     pub spec: Value,
     pub password_secret_id: Uuid,
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryStatus)]
     pub status: String,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
+    #[schema(required = true)]
     pub control_started_at: Option<i64>,
+    #[schema(required = true)]
     pub last_pruned_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub last_checked_at: Option<DateTime<Utc>>,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub archived_at: Option<DateTime<Utc>>,
     pub row_version: i64,
 }
@@ -31,6 +43,7 @@ pub struct BackupRepositoryView {
 impl From<citadel_backups::BackupRepository> for BackupRepositoryView {
     fn from(value: citadel_backups::BackupRepository) -> Self {
         Self {
+            capabilities: None,
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
@@ -56,27 +69,42 @@ impl From<citadel_backups::BackupRepository> for BackupRepositoryView {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPolicyView {
+    pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
+    #[schema(required = true)]
+    pub latest_run: Option<BackupRunView>,
+    #[schema(required = true)]
+    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
+    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
     pub source: Value,
     pub backup_repository_id: Uuid,
     pub enabled: bool,
+    #[schema(required = true)]
     pub cron: Option<String>,
+    #[schema(required = true)]
     pub time_zone: Option<String>,
+    #[schema(value_type = Option<crate::openapi::compatibility::BackupWebhookConfig>, required = true)]
     pub webhook: Option<Value>,
     pub keep_last_successful: i32,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
+    #[schema(required = true)]
     pub last_scheduled_run_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub first_successful_run_at: Option<DateTime<Utc>>,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub archived_at: Option<DateTime<Utc>>,
     pub row_version: i64,
 }
@@ -84,6 +112,9 @@ pub struct BackupPolicyView {
 impl From<citadel_backups::BackupPolicy> for BackupPolicyView {
     fn from(value: citadel_backups::BackupPolicy) -> Self {
         Self {
+            tags: value.tags.into_iter().map(Into::into).collect(),
+            latest_run: value.latest_run.map(Into::into),
+            capabilities: None,
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
@@ -118,22 +149,37 @@ pub struct BackupRunView {
     pub backup_policy_id: Uuid,
     pub policy_name_snapshot: String,
     pub backup_repository_id: Uuid,
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryType)]
     pub repository_type_snapshot: String,
+    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
     pub source_snapshot: Value,
+    #[schema(value_type = crate::openapi::compatibility::BackupRunTrigger)]
     pub trigger: String,
+    #[schema(value_type = crate::openapi::compatibility::BackupRunStatus)]
     pub status: String,
+    #[schema(value_type = crate::openapi::compatibility::BackupSnapshotAvailability)]
     pub snapshot_availability: String,
+    #[schema(required = true)]
     pub restic_snapshot_id: Option<String>,
+    #[schema(required = true)]
     pub parent_snapshot_id: Option<String>,
+    #[schema(required = true)]
     pub files_processed: Option<i64>,
+    #[schema(required = true)]
     pub bytes_processed: Option<i64>,
+    #[schema(required = true)]
     pub bytes_added: Option<i64>,
     pub warnings: Vec<String>,
     pub queued_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub completed_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub exit_code: Option<i32>,
+    #[schema(required = true)]
     pub error_code: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
     pub triggered_by_actor_id: Uuid,
     pub items: Vec<BackupRunItemView>,
@@ -176,18 +222,31 @@ pub struct BackupRunItemView {
     pub backup_run_id: Uuid,
     pub platform_id: Uuid,
     pub volume_name: String,
+    #[schema(required = true)]
     pub docker_node_id: Option<String>,
+    #[schema(required = true)]
     pub node_hostname: Option<String>,
+    #[schema(value_type = crate::openapi::compatibility::BackupRunItemStatus)]
     pub status: String,
+    #[schema(required = true)]
     pub restic_snapshot_id: Option<String>,
+    #[schema(required = true)]
     pub parent_snapshot_id: Option<String>,
+    #[schema(required = true)]
     pub files_processed: Option<i64>,
+    #[schema(required = true)]
     pub bytes_processed: Option<i64>,
+    #[schema(required = true)]
     pub bytes_added: Option<i64>,
+    #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub completed_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub exit_code: Option<i32>,
+    #[schema(required = true)]
     pub error_code: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
 }
 
@@ -221,17 +280,25 @@ pub struct BackupRestoreRunView {
     pub id: Uuid,
     pub backup_run_id: Uuid,
     pub backup_repository_id: Uuid,
+    #[schema(required = true)]
     pub source_backup_run_item_id: Option<Uuid>,
     pub target_platform_id: Uuid,
+    #[schema(required = true)]
     pub target_docker_node_id: Option<String>,
     pub target_volume_name: String,
     pub overwrite_existing: bool,
+    #[schema(value_type = crate::openapi::compatibility::BackupRestoreStatus)]
     pub status: String,
     pub queued_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub completed_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub exit_code: Option<i32>,
+    #[schema(required = true)]
     pub error_code: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
     pub triggered_by_actor_id: Uuid,
 }
@@ -264,11 +331,16 @@ impl From<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
 pub struct BackupRepositoryValidationView {
     pub id: Uuid,
     pub backup_repository_id: Uuid,
+    #[schema(value_type = crate::openapi::compatibility::BackupExecutionLocation)]
     pub location: String,
+    #[schema(required = true)]
     pub platform_id: Option<Uuid>,
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryValidationStatus)]
     pub status: String,
     pub last_validated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub last_error_code: Option<String>,
+    #[schema(required = true)]
     pub last_error_message: Option<String>,
 }
 

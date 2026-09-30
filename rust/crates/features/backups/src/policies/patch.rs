@@ -180,6 +180,8 @@ mod tests {
     fn policy() -> BackupPolicy {
         let now = chrono::Utc::now();
         BackupPolicy {
+            tags: Vec::new(),
+            latest_run: None,
             id: Uuid::now_v7(),
             name: "Backup".into(),
             normalized_name: "BACKUP".into(),

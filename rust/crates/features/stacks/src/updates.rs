@@ -231,7 +231,8 @@ fn split_tagged_image(image: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{StackDriftPolicy, StackSource, TagSummary};
+    use crate::{StackDriftPolicy, StackSource};
+    use citadel_tags::TagSummary;
 
     #[test]
     fn check_builder_allows_disabled_on_demand_and_excludes_pinned_and_build_images() {

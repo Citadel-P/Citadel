@@ -6,7 +6,7 @@ import {
   UserContentLayout,
   UserUiDensity,
   type UserPreferencesView,
-  type PatchUserPreferencesInput,
+  type PatchUserPreferencesRequest,
 } from '@/api/generated/api.types';
 import type { AppearancePreferences } from './appearance-types';
 
@@ -16,7 +16,7 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   font: UserUiFont.Geist,
   radius: UserUiRadius.None,
   contentLayout: UserContentLayout.Full,
-  density: UserUiDensity.Comfortable,
+  density: UserUiDensity.Compact,
 };
 export const MODE_OPTIONS = Object.values(UserTheme).map((value) => ({ value, label: value }));
 export const THEME_COLORS = [
@@ -60,7 +60,7 @@ export function normalizeAppearance(value: unknown): AppearancePreferences {
 export function appearanceFromProfile(value: UserPreferencesView): AppearancePreferences {
   return normalizeAppearance({ ...value, mode: value.theme, color: value.themeColor });
 }
-export function appearancePatch(value: Partial<AppearancePreferences>): PatchUserPreferencesInput {
+export function appearancePatch(value: Partial<AppearancePreferences>): PatchUserPreferencesRequest {
   const { mode, color, ...rest } = value;
   return {
     ...rest,

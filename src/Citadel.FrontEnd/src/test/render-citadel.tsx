@@ -23,6 +23,8 @@ const defaultAuth: AuthContextValue = {
 };
 
 const defaultSetup: SetupContextValue = {
+  passwordMinimumLength: 15,
+  passwordMaximumLength: 128,
   isSetupReady: true,
   requiresSetup: false,
   error: undefined,

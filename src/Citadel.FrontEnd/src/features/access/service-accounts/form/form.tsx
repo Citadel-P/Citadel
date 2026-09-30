@@ -1,14 +1,14 @@
 import {
-  CreateServiceAccountInput,
+  CreateServiceAccountRequest,
   LicenseCapability,
   ResourceInfo,
-  ResourceAccessView,
+  ServiceAccountResourceAccess,
   ResourceType,
   RoleType,
-  ServiceAccountResourceAccessInput,
+  AddServiceAccountResourceAccessRequest,
   ServiceAccountTokenView,
-  ServiceAccountView,
-  PatchServiceAccountInput,
+  ServiceAccountDetailResponse,
+  UpdateServiceAccountRequest,
 } from '@/api/generated/api.types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -52,13 +52,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { getTokenExpirationPresets, isValidTokenExpiration } from './token-expiration';
 
-type ServiceAccountInput = CreateServiceAccountInput;
+type ServiceAccountInput = CreateServiceAccountRequest;
 type ServiceAccountFormResource = Partial<ServiceAccountInput> &
-  Pick<ServiceAccountView, 'id' | 'name' | 'description' | 'isEnabled' | 'actorId'> & {
+  Pick<ServiceAccountDetailResponse, 'id' | 'name' | 'description' | 'isEnabled' | 'actorId'> & {
     teams?: ResourceInfo[] | null;
     roles?: ResourceInfo[] | null;
     archivedAtUtc?: string | null;
-    capabilities?: ServiceAccountView['capabilities'];
+    capabilities?: ServiceAccountDetailResponse['capabilities'];
   };
 
 const normalize = (resource?: ServiceAccountFormResource): ServiceAccountInput =>
@@ -69,7 +69,7 @@ const normalize = (resource?: ServiceAccountFormResource): ServiceAccountInput =
         isEnabled: resource.isEnabled,
         teamIds: extractIds(resource.teams),
         roleIds: extractIds(resource.roles),
-        resourceAccesses: (resource as ServiceAccountView).resourceAccesses as ServiceAccountResourceAccessInput[],
+        resourceAccesses: (resource as ServiceAccountDetailResponse).resourceAccesses as AddServiceAccountResourceAccessRequest[],
       } as ServiceAccountInput)
     : { name: '', isEnabled: true, description: null, teamIds: [], roleIds: [], resourceAccesses: [] };
 
@@ -170,11 +170,11 @@ export const ServiceAccountForm = ({
       try {
         if (payload.name !== resource.name) await renameAccount({ data: { id, name: payload.name } });
 
-        const patch: Partial<PatchServiceAccountInput> = {};
+        const patch: Partial<UpdateServiceAccountRequest> = {};
         if ((payload.description ?? null) !== (resource.description ?? null))
           patch.description = payload.description ?? null;
         if (payload.isEnabled !== resource.isEnabled) patch.isEnabled = payload.isEnabled;
-        if (Object.keys(patch).length > 0) await patchAccount({ id, data: patch as PatchServiceAccountInput });
+        if (Object.keys(patch).length > 0) await patchAccount({ id, data: patch as UpdateServiceAccountRequest });
 
         const currentTeamIds = extractIds(resource.teams);
         const nextTeamIds = extractIds(payload.teamIds as string[]);
@@ -190,9 +190,9 @@ export const ServiceAccountForm = ({
         for (const roleId of nextRoleIds.filter((roleId) => !currentRoleIds.includes(roleId)))
           await addRole({ id, data: { roleId } });
 
-        const currentAccesses = (resource.resourceAccesses ?? []) as ResourceAccessView[];
-        const nextAccesses = (payload.resourceAccesses ?? []) as ServiceAccountResourceAccessInput[];
-        const key = (access: ServiceAccountResourceAccessInput | ResourceAccessView) =>
+        const currentAccesses = (resource.resourceAccesses ?? []) as ServiceAccountResourceAccess[];
+        const nextAccesses = (payload.resourceAccesses ?? []) as AddServiceAccountResourceAccessRequest[];
+        const key = (access: AddServiceAccountResourceAccessRequest | ServiceAccountResourceAccess) =>
           JSON.stringify([
             access.resourceType,
             access.resourceId,
@@ -230,7 +230,7 @@ export const ServiceAccountForm = ({
     mode,
     basePath: 'access/service-accounts',
     entityName: 'Service Account',
-    onCreate: (payload) => create({ data: payload as CreateServiceAccountInput }),
+    onCreate: (payload) => create({ data: payload as CreateServiceAccountRequest }),
     onUpdate: updateAccount,
     onRefresh: refresh,
   });
@@ -248,7 +248,6 @@ export const ServiceAccountForm = ({
             items: [
               defineField<ServiceAccountInput, 'name'>({
                 key: 'name',
-                persistDraft: true,
                 label: 'Name',
                 required: true,
                 validate: (value) =>
@@ -259,7 +258,6 @@ export const ServiceAccountForm = ({
               }),
               defineField<ServiceAccountInput, 'description'>({
                 key: 'description',
-                persistDraft: true,
                 label: 'Description',
                 render: (value, set) => (
                   <Textarea
@@ -336,8 +334,15 @@ export const ServiceAccountForm = ({
             label: 'Resource overrides',
             render: (value, set) => (
               <ResourceOverridesField
-                value={(value as ServiceAccountResourceAccessInput[]) ?? []}
-                onChange={(resourceAccesses) => set({ resourceAccesses })}
+                value={(value as AddServiceAccountResourceAccessRequest[]) ?? []}
+                onChange={(resourceAccesses) =>
+                  set({
+                    resourceAccesses: resourceAccesses.map((access) => ({
+                      ...access,
+                      specificPermissions: access.specificPermissions ?? [],
+                    })),
+                  })
+                }
               />
             ),
           }),
@@ -408,7 +413,7 @@ export const ServiceAccountForm = ({
   );
 };
 
-export const ServiceAccountTokens = ({ resource }: { resource: ServiceAccountView }) => {
+export const ServiceAccountTokens = ({ resource }: { resource: ServiceAccountDetailResponse }) => {
   const { hasCapability } = useLicenseEntitlements();
   const serviceAccountsEnabled = hasCapability(LicenseCapability.CustomAccessControl);
   const hasAdmin = resource.roles?.some((role) => role.name.toLowerCase() === 'admin') ?? false;

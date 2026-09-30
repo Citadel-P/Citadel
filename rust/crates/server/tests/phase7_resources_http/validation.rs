@@ -33,6 +33,8 @@ pub(super) async fn verify_inputs(app: &Router, admin: &ActorPrincipal, reposito
 
 pub(super) async fn verify_policy(app: &Router, admin: &ActorPrincipal, policy: &Value) {
     let path = format!("/api/v1/backupPolicies/{}", policy["id"].as_str().unwrap());
+    let before =
+        response_json(request(app, Method::GET, &path, Some(admin.clone()), None).await).await;
     invalid(
         app,
         admin,
@@ -44,7 +46,7 @@ pub(super) async fn verify_policy(app: &Router, admin: &ActorPrincipal, policy: 
     .await;
     let after =
         response_json(request(app, Method::GET, &path, Some(admin.clone()), None).await).await;
-    assert_eq!(policy, &after, "invalid Backup policy must not persist");
+    assert_eq!(before, after, "invalid Backup policy must not persist");
 }
 
 async fn invalid(

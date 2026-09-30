@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { ActivityStatus, BuildRunStatus, ResourceControlState } from '@/api/generated/api.types';
+import { ActivityStatus, BuildRunStatus, StackReleaseStatus, ResourceControlState } from '@/api/generated/api.types';
 import { GitRepoFormComponents } from '@/features/git-repos/form';
 import { DeploymentFormComponents } from '@/features/deployments/form';
 import { StackFormComponents } from '@/features/stacks/form';
@@ -35,7 +35,7 @@ const resources = [
     endpoint: 'stacks',
     event: 'StackInfoUpdated',
     activity: 'StackApplied',
-    initial: createStack({ latestActivityView: null }),
+    initial: createStack({ latestActivityView: null, status: StackReleaseStatus.Failed }),
   },
 ];
 

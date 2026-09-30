@@ -1,11 +1,11 @@
-import { DockerNetworkResultView } from '@/api/generated/api.types';
+import { NetworkView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
 export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
-  createActionsBuilder<DockerNetworkResultView>()
+  createActionsBuilder<NetworkView>()
     .addAction({
       key: 'inspect',
       type: 'command',
@@ -24,9 +24,7 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
           isPending: false,
           run: () => {
             if (!canExecute || !selected) return;
-            const nodeQuery = selected.dockerNodeId
-              ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
-              : '';
+            const nodeQuery = selected.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}` : '';
             navigate(`/platforms/${currentPlatform?.id}/networks/${selected.id}/${nodeQuery}`);
           },
         };
@@ -38,7 +36,7 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
       icon: Trash,
       mutateKey: 'deleteNetworks',
       canExecute: (r) => {
-        const can = (x: DockerNetworkResultView) => !x.isSystem && x.inUse === false && !x.dockerNodeId;
+        const can = (x: NetworkView) => !x.isSystem && x.inUse === false && !x.dockerNodeId;
         return Array.isArray(r) ? r.every(can) : can(r);
       },
       separatorBefore: true,

@@ -26,7 +26,7 @@ import {
 } from '@/components/custom/common';
 
 type ContainerInfoRow = ContainerInfoView & {
-  containerStat: ContainerStatView;
+  containerStat: Partial<ContainerStatView>;
   state: ContainerStateStatus;
   id: string;
 };

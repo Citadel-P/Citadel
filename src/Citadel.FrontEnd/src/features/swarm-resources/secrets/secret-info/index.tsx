@@ -25,7 +25,7 @@ export const SecretInspect = ({ resource }: { resource: SwarmSecretInfoView }) =
 
 export const SecretInfoComponents: RequiredSwarmInfoComponents<SwarmSecretInfoView> = {
   Header: {
-    Indicator: ({ resource }) => <StateIndicator value={resource.inUse} />,
+    Indicator: ({ resource }) => <StateIndicator variant="badge" value={resource.inUse} />,
     NameSuffix: StaleBadge,
     ActionButtons: ({ resource }) => (
       <GenericActionBarButtons resource={resource} actions={Object.values(SecretInfoActions)} />

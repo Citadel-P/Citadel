@@ -2,7 +2,7 @@ import {
   ManagedSwarmServiceView,
   AutoUpdateStatus,
   PlatformStatus,
-  SwarmServiceSchedulingMode,
+  SchedulingMode,
   ResourceControlState,
   SwarmServiceHealth,
   SwarmServiceOwnership,
@@ -283,7 +283,7 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   spec: {
     image: { $type: 'External', registryId: 'registry-1', imageTag: 'nginx:latest' },
     updateBehavior: UpdateBehavior.Disabled,
-    schedulingMode: SwarmServiceSchedulingMode.Replicated,
+    schedulingMode: SchedulingMode.Replicated,
     replicas: 2,
     command: [],
     arguments: [],
@@ -298,7 +298,13 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   health: SwarmServiceHealth.Unknown,
   synchronizationState: SwarmServiceSynchronizationState.NeverApplied,
   controlState: ResourceControlState.Idle,
-  autoUpdateState: { lastCheckedAt: '0001-01-01T00:00:00Z', status: AutoUpdateStatus.Unknown },
+  autoUpdateState: {
+    lastCheckedAt: '0001-01-01T00:00:00Z',
+    status: AutoUpdateStatus.Unknown,
+    currentDigest: null,
+    remoteDigest: null,
+    lastError: null,
+  },
   appliedImageDigest: null,
   hasPendingDesiredChanges: true,
   hasRuntimeDrift: false,
@@ -312,7 +318,9 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): Manag
   updateState: null,
   updateMessage: null,
   currentOperation: null,
+  tasks: [],
   tags: [],
+  capabilities: null,
   ...overrides,
 });
 
@@ -333,12 +341,14 @@ const service = (overrides: Partial<SwarmServiceView> = {}): SwarmServiceView =>
   labels: {},
   ownership: SwarmServiceOwnership.Unmanaged,
   dockerStackNamespace: null,
+  swarmServiceId: null,
   stackId: null,
   ownershipDiagnostic: null,
   createdAt: '2026-08-04T11:00:00Z',
   updatedAt: '2026-08-04T12:00:00Z',
   observedAt: '2026-08-04T12:00:00Z',
   isStale: false,
+  capabilities: null,
   ...overrides,
 });
 
@@ -362,6 +372,7 @@ const task = (overrides: Partial<SwarmTaskView> = {}): SwarmTaskView => ({
   updatedAt: '2026-08-04T12:00:00Z',
   observedAt: '2026-08-04T12:00:00Z',
   isStale: false,
+  capabilities: null,
   ...overrides,
 });
 

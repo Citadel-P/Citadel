@@ -1,11 +1,12 @@
 //! Server-owned schema and wire representations of Deployment value objects.
+use crate::api::resources::common::{AutoUpdateStatus, DuplicateSourceInput};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = deployments::model::UpdateBehavior)]
+#[schema(as = UpdateBehavior)]
 pub enum UpdateBehavior {
     #[default]
     #[serde(alias = "disabled")]
@@ -156,22 +157,13 @@ pub struct DeploymentSpec {
 #[serde(rename_all = "camelCase")]
 pub struct AutoUpdateState {
     pub last_checked_at: DateTime<Utc>,
-    pub status: String,
+    pub status: AutoUpdateStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = deployments::model::TagSummary)]
-#[serde(rename_all = "camelCase")]
-pub struct TagSummary {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
@@ -181,14 +173,6 @@ pub struct DuplicateWarning {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_path: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DuplicateSourceInput {
-    pub resource_type: String,
-    pub resource_id: Uuid,
-    pub resource_name: String,
 }
 
 impl From<citadel_deployments::UpdateBehavior> for UpdateBehavior {
@@ -405,15 +389,17 @@ impl From<DeploymentSpec> for citadel_deployments::DeploymentSpec {
     }
 }
 
-impl From<citadel_deployments::AutoUpdateState> for AutoUpdateState {
-    fn from(value: citadel_deployments::AutoUpdateState) -> Self {
-        Self {
+impl TryFrom<citadel_deployments::AutoUpdateState> for AutoUpdateState {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::AutoUpdateState) -> Result<Self, Self::Error> {
+        Ok(Self {
             last_checked_at: value.last_checked_at,
-            status: value.status,
+            status: serde_json::from_value(value.status.into())?,
             current_digest: value.current_digest,
             remote_digest: value.remote_digest,
             last_error: value.last_error,
-        }
+        })
     }
 }
 
@@ -421,30 +407,10 @@ impl From<AutoUpdateState> for citadel_deployments::AutoUpdateState {
     fn from(value: AutoUpdateState) -> Self {
         Self {
             last_checked_at: value.last_checked_at,
-            status: value.status,
+            status: value.status.as_str().to_owned(),
             current_digest: value.current_digest,
             remote_digest: value.remote_digest,
             last_error: value.last_error,
-        }
-    }
-}
-
-impl From<citadel_deployments::TagSummary> for TagSummary {
-    fn from(value: citadel_deployments::TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
-        }
-    }
-}
-
-impl From<TagSummary> for citadel_deployments::TagSummary {
-    fn from(value: TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
         }
     }
 }
@@ -469,20 +435,22 @@ impl From<DuplicateWarning> for citadel_deployments::DuplicateWarning {
     }
 }
 
-impl From<citadel_deployments::DuplicateSource> for DuplicateSourceInput {
-    fn from(value: citadel_deployments::DuplicateSource) -> Self {
-        Self {
-            resource_type: value.resource_type,
+impl TryFrom<citadel_deployments::DuplicateSource> for DuplicateSourceInput {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::DuplicateSource) -> Result<Self, Self::Error> {
+        Ok(Self {
+            resource_type: serde_json::from_value(value.resource_type.into())?,
             resource_id: value.resource_id,
             resource_name: value.resource_name,
-        }
+        })
     }
 }
 
 impl From<DuplicateSourceInput> for citadel_deployments::DuplicateSource {
     fn from(value: DuplicateSourceInput) -> Self {
         Self {
-            resource_type: value.resource_type,
+            resource_type: value.resource_type.as_database_str().to_owned(),
             resource_id: value.resource_id,
             resource_name: value.resource_name,
         }
@@ -522,4 +490,16 @@ mod tests {
             assert_eq!(serde_json::to_value(roundtrip).unwrap()["image"], image);
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub enum DeploymentStatus {
+    Unknown,
+    Created,
+    Pending,
+    Applying,
+    Healthy,
+    Degraded,
+    Failed,
+    Stopped,
 }

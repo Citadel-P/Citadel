@@ -18,6 +18,7 @@ import {
 } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoaderCircle } from 'lucide-react';
+import { StateBadge, type StateBadgeKind } from './state-badge';
 
 type StateValue =
   | boolean
@@ -385,6 +386,7 @@ export const StateIndicator = memo(
     kind,
     tooltip,
     className,
+    variant = 'dot',
   }: {
     value: StateValue;
     isProcessing?: boolean;
@@ -392,8 +394,28 @@ export const StateIndicator = memo(
     kind?: StateIndicatorKind;
     tooltip?: ReactNode;
     className?: string;
+    variant?: 'dot' | 'badge';
   }) => {
     const { colorClass, tooltip: defaultTooltip } = getStatusStyle(value, enableLabel, kind);
+    if (variant === 'badge') {
+      const badgeKind: StateBadgeKind =
+        kind === 'container' || kind === 'swarmTask' || kind === 'swarmNode'
+          ? kind
+          : kind === 'buildRun' || kind === 'automationActionRun' || kind === 'backupRun' || kind === 'backupRestore'
+            ? 'run'
+            : 'default';
+      return (
+        <StateBadge
+          value={value}
+          kind={badgeKind}
+          label={defaultTooltip}
+          title={typeof tooltip === 'string' ? tooltip : undefined}
+          isProcessing={isProcessing}
+          className={className}
+          indicator={<span aria-hidden="true" className={cn(colorClass, 'size-2 shrink-0 rounded-full')} />}
+        />
+      );
+    }
     if (isProcessing) return <LoaderCircle className={cn('mr-1 h-3 w-3 animate-spin', className)} />;
     return (
       <TooltipProvider delayDuration={200}>

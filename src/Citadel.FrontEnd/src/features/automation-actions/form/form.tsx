@@ -1,13 +1,13 @@
 import {
   AutomationActionInput,
-  AutomationActionView,
-  AutomationWebhookConfig,
+  RunInput,
+  AuthorizedAction,
+  RepoWebhookConfig,
   LicenseCapability,
   LookupResourceType,
   ResourceControlState,
   UpdateAutomationActionInput,
 } from '@/api/generated/api.types';
-import type { AutomationActionTestDraftInput } from '@/api/automation-draft';
 import {
   defineField,
   defineGroupField,
@@ -35,7 +35,7 @@ import { useLicenseEntitlements } from '@/features/license/use-license-entitleme
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   id?: string;
   runAsActorId: string;
-  webhook: AutomationWebhookConfig | null;
+  webhook: RepoWebhookConfig | null;
   tagIds?: string[] | null;
 };
 
@@ -69,7 +69,7 @@ export function AutomationActionForm({
   disabled,
 }: {
   mode: 'add' | 'edit';
-  resource?: AutomationActionView;
+  resource?: AuthorizedAction;
   metadataChanged?: boolean;
   disabled?: boolean;
 }) {
@@ -113,7 +113,7 @@ export function AutomationActionForm({
   const handleTestDraft = useCallback(() => {
     if (mode !== 'edit' || !id || testDisabledReason) return;
 
-    const payload: AutomationActionTestDraftInput = {
+    const payload: RunInput = {
       argsJson: current.defaultArgsJson || '{}',
       ...(current.code !== original.code ? { code: current.code } : {}),
     };
@@ -142,7 +142,7 @@ export function AutomationActionForm({
   const schema = useMemo(
     () => ({
       Action: defineSection<AutomationActionFormValue>({
-        title: 'Action',
+        title: '',
         items: [
           defineGroupField<AutomationActionFormValue>({
             id: 'identity',
@@ -152,7 +152,6 @@ export function AutomationActionForm({
                 ? [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Stable name used in Citadel activity and run history.',
@@ -166,7 +165,6 @@ export function AutomationActionForm({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional note shown in the action header.',
                       render: (value, set) => (
@@ -399,7 +397,7 @@ export function AutomationActionForm({
                     value={value ?? { enabled: false }}
                     disabled={disabled}
                     enableDisabled={!automatedOperationsEnabled}
-                    onChange={(webhook) => set({ webhook: webhook as AutomationWebhookConfig })}
+                    onChange={(webhook) => set({ webhook: webhook as RepoWebhookConfig })}
                   />
                 ),
               }),
@@ -447,7 +445,7 @@ function TestDraftButton({ disabledReason, onClick }: { disabledReason?: string;
   );
 }
 
-function toFormValue(action?: AutomationActionView): AutomationActionFormValue {
+function toFormValue(action?: AuthorizedAction): AutomationActionFormValue {
   if (!action) return emptyAction();
 
   return {
@@ -512,7 +510,7 @@ function toUpdateInput(
   return input;
 }
 
-function normalizeWebhook(webhook: AutomationWebhookConfig | null | undefined): AutomationWebhookConfig | null {
+function normalizeWebhook(webhook: RepoWebhookConfig | null | undefined): RepoWebhookConfig | null {
   if (!webhook) return null;
 
   return {

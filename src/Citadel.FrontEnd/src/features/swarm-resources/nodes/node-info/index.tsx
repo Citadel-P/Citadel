@@ -19,7 +19,9 @@ const NodeActionButtons = ({ resource }: { resource: SwarmNodeInfoView }) => (
 
 export const NodeInfoComponents: RequiredSwarmInfoComponents<SwarmNodeInfoView> = {
   Header: {
-    Indicator: ({ resource }) => <StateIndicator value={getSwarmNodeIndicatorValue(resource)} kind="swarmNode" />,
+    Indicator: ({ resource }) => (
+      <StateIndicator variant="badge" value={getSwarmNodeIndicatorValue(resource)} kind="swarmNode" />
+    ),
     NameSuffix: StaleBadge,
     ActionButtons: NodeActionButtons,
   },

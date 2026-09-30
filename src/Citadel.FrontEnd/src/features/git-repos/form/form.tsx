@@ -1,10 +1,10 @@
 import {
   GitAccountView,
   GitTransport,
-  GitRepositoryConfigView,
-  CreateGitRepositoryInput,
-  PatchGitRepositoryInput,
-  GitRepositorySyncMode,
+  GitRepositoryConfigResponse,
+  NewGitRepository,
+  GitRepositoryPatch,
+  ResourcesCatalogGitRepositorySyncMode,
   RepoWebhookConfig,
 } from '@/api/generated/api.types';
 import {
@@ -70,7 +70,7 @@ const GitAccountSelector = ({
     </Select>
   );
 };
-type GitRepositoryInput = CreateGitRepositoryInput | PatchGitRepositoryInput;
+type GitRepositoryInput = NewGitRepository | GitRepositoryPatch;
 
 export const GitRepoForm = ({
   mode,
@@ -89,16 +89,16 @@ export const GitRepoForm = ({
   const { mutateAsync: updateGitRepository } = useMutate('updateGitRepository');
   const { data: gitRepoCfg } = useRead('getGitRepositoryConfig', { id });
 
-  const resource: GitRepositoryConfigView | undefined = gitRepoCfg?.data;
+  const resource: GitRepositoryConfigResponse | undefined = gitRepoCfg?.data;
 
   const original =
     resource ??
     ({
-      syncMode: GitRepositorySyncMode.PullInterval,
+      syncMode: ResourcesCatalogGitRepositorySyncMode.PullInterval,
       syncIntervalMinutes: 5,
       webhook: { enabled: false },
-    } as GitRepositoryConfigView);
-  const currentSyncMode = update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
+    } as GitRepositoryConfigResponse);
+  const currentSyncMode = update.syncMode ?? original.syncMode ?? ResourcesCatalogGitRepositorySyncMode.PullInterval;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
@@ -115,7 +115,7 @@ export const GitRepoForm = ({
     mode,
     basePath: 'git-repos',
     entityName: 'Repository',
-    onCreate: (payload) => createGitRepository({ data: payload as CreateGitRepositoryInput }),
+    onCreate: (payload) => createGitRepository({ data: payload as NewGitRepository }),
     onUpdate: (payload) => updateGitRepository({ id, data: payload }),
     onRefresh: refreshData,
   });
@@ -133,7 +133,6 @@ export const GitRepoForm = ({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'A unique name to identify this repository.',
@@ -144,7 +143,6 @@ export const GitRepoForm = ({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional notes about this repository.',
                       render: (val, set) => (
@@ -222,13 +220,13 @@ export const GitRepoForm = ({
                 label: 'Sync mode',
                 render: (val, set) => (
                   <Select
-                    value={val ?? GitRepositorySyncMode.PullInterval}
+                    value={val ?? ResourcesCatalogGitRepositorySyncMode.PullInterval}
                     onValueChange={(v) => {
-                      const syncMode = v as GitRepositorySyncMode;
+                      const syncMode = v as ResourcesCatalogGitRepositorySyncMode;
                       set({
                         syncMode,
                         syncIntervalMinutes:
-                          syncMode === GitRepositorySyncMode.PullInterval
+                          syncMode === ResourcesCatalogGitRepositorySyncMode.PullInterval
                             ? (update.syncIntervalMinutes ?? original.syncIntervalMinutes ?? 5)
                             : null,
                       });
@@ -237,13 +235,13 @@ export const GitRepoForm = ({
                       <SelectValue placeholder="Select sync mode" />
                     </SelectTrigger>
                     <SelectContent className="bg-background">
-                      <SelectItem value={GitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
-                      <SelectItem value={GitRepositorySyncMode.Manual}>Manual only</SelectItem>
+                      <SelectItem value={ResourcesCatalogGitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
+                      <SelectItem value={ResourcesCatalogGitRepositorySyncMode.Manual}>Manual only</SelectItem>
                     </SelectContent>
                   </Select>
                 ),
               }),
-              ...(currentSyncMode === GitRepositorySyncMode.PullInterval
+              ...(currentSyncMode === ResourcesCatalogGitRepositorySyncMode.PullInterval
                 ? [
                     defineField<GitRepositoryInput, 'syncIntervalMinutes'>({
                       key: 'syncIntervalMinutes',

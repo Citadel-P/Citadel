@@ -22,7 +22,6 @@ use crate::{
                 },
             },
             metadata_patch::MetadataPatch,
-            tags::views::TagSummary,
         },
     },
     openapi::router::OpenApiRouterExt,
@@ -629,15 +628,7 @@ async fn get_git_repository_config(
             webhook: repository.webhook,
             on_clone: repository.on_clone.map(|v| v.into()),
             on_pull: repository.on_pull.map(|v| v.into()),
-            tags: repository
-                .tags
-                .into_iter()
-                .map(|v| TagSummary {
-                    id: v.id,
-                    name: v.name,
-                    color: v.color,
-                })
-                .collect(),
+            tags: repository.tags.into_iter().map(Into::into).collect(),
         })
         .into_response(),
     ))

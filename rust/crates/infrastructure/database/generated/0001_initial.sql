@@ -1009,7 +1009,7 @@ CREATE TABLE userpreferences (
     font text NOT NULL DEFAULT 'Geist',
     radius text NOT NULL DEFAULT 'None',
     contentlayout text NOT NULL DEFAULT 'Full',
-    density text NOT NULL DEFAULT 'Comfortable',
+    density text NOT NULL DEFAULT 'Compact',
     datetimeformat text NOT NULL,
     theme text NOT NULL,
     timezone text NOT NULL,

@@ -1,4 +1,4 @@
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { createQueryClient } from '@/query-client-wrapper';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -11,7 +11,7 @@ vi.mock('./repository-browser', () => ({
     branch,
     commitSha,
   }: {
-    repository: GitRepositoryView;
+    repository: AuthorizedGitRepositoryView;
     branch?: string | null;
     commitSha?: string | null;
   }) => (
@@ -26,7 +26,7 @@ describe('GitRepositoryBrowseAction', () => {
     const repository = {
       id: '019f9b44-a8da-7000-8000-000000000001',
       name: 'infrastructure',
-    } as GitRepositoryView;
+    } as AuthorizedGitRepositoryView;
     const queryClient = createQueryClient();
     const treeKey = ['git-repository-browser', repository.id, 'commit'];
     const fileKey = ['getGitRepositoryFileContent', { id: repository.id, query: { path: 'compose.yaml' } }];
@@ -58,7 +58,7 @@ describe('GitRepositoryBrowseAction', () => {
     const repository = {
       id: '019f9b44-a8da-7000-8000-000000000001',
       name: 'infrastructure',
-    } as GitRepositoryView;
+    } as AuthorizedGitRepositoryView;
     const user = userEvent.setup();
 
     render(

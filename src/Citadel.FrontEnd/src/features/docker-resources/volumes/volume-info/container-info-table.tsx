@@ -1,4 +1,4 @@
-import { ContainerVolumeResult, DockerVolumeResultView, PlatformView } from '@/api/generated/api.types';
+import { ContainerVolumeResult, VolumeView, PlatformView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
@@ -48,7 +48,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
   },
 ];
 
-export const ContainerInfoTable = ({ volume }: { volume: DockerVolumeResultView | undefined }) => {
+export const ContainerInfoTable = ({ volume }: { volume: VolumeView | undefined }) => {
   const { currentPlatform } = useAppContext();
   if (!volume) return <></>;
   return (

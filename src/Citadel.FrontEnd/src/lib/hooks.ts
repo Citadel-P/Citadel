@@ -29,11 +29,10 @@ import { useParams, useNavigate } from 'react-router';
 import {
   ApplyDeploymentInput,
   ApplyStackInput,
-  QueueBackupRunInput,
-  RunAutomationActionInput,
-  TestAutomationActionInput,
+  ServerBackupsHttpQueueInput,
+  RunInput,
   PullImageInput,
-  RestoreVolumeInput,
+  RestoreInput,
   RollbackStackInput,
   ScaleSwarmServiceInput,
 } from '@/api/generated/api.types';
@@ -381,13 +380,12 @@ export const useWindowDimensions = () => {
 
 type PulledStreamProps =
   | PullImageInput
-  | RestoreVolumeInput
+  | RestoreInput
   | ApplyDeploymentInput
   | ApplyStackInput
   | RollbackStackInput
-  | RunAutomationActionInput
-  | QueueBackupRunInput
-  | TestAutomationActionInput
+  | ServerBackupsHttpQueueInput
+  | RunInput
   | ScaleSwarmServiceInput
   | Record<string, never>;
 

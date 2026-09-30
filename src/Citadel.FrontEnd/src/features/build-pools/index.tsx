@@ -1,4 +1,4 @@
-import { BuildAgentPoolView } from '@/api/generated/api.types';
+import { AuthorizedPool } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
@@ -6,7 +6,7 @@ import { BuildPoolDropdownActions, BuildPoolGroupActions } from './actions';
 import { BuildPoolsTable } from './table';
 import { useBuildPoolsGroup } from './useBuildPoolsGroup';
 
-export const BuildPoolComponents: RequiredComponents<BuildAgentPoolView> = {
+export const BuildPoolComponents: RequiredComponents<AuthorizedPool> = {
   Icon: CitadelIcons.BuildAgentPool,
   Content: ({ items, actions, isLoading }) => <BuildPoolsTable items={items} actions={actions} isLoading={isLoading} />,
   header: {
@@ -21,14 +21,14 @@ export const BuildPoolComponents: RequiredComponents<BuildAgentPoolView> = {
   GroupActions: ({ items }) => (
     <ActionBar type="BuildAgentPool" items={items} actions={Object.values(BuildPoolGroupActions)} />
   ),
-  useData(): ResourceDataHookResult<BuildAgentPoolView> {
+  useData(): ResourceDataHookResult<AuthorizedPool> {
     const { pools, isLoading, capabilities, error, refetch, isFetching } = useBuildPoolsGroup();
     return { error, refetch, isFetching, items: pools, isLoading, capabilities };
   },
   filterItems: filterBuildPools,
 };
 
-function filterBuildPools(items: BuildAgentPoolView[], search: string) {
+function filterBuildPools(items: AuthorizedPool[], search: string) {
   if (!search.trim()) return items;
 
   const value = search.toLowerCase();

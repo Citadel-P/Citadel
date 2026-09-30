@@ -252,7 +252,7 @@ async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_pre
             "Geist".into(),
             "None".into(),
             "Full".into(),
-            "Comfortable".into()
+            "Compact".into()
         )
     );
     let preserved: bool = sqlx::query_scalar(

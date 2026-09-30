@@ -189,6 +189,7 @@ pub fn router(
         },
     ))
     .merge(stacks_http::router(stacks_http::StacksHttpState {
+        platforms: Arc::clone(&platform_state.platforms),
         identity: Arc::clone(&identity),
         stacks,
     }))

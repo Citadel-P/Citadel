@@ -1,4 +1,10 @@
-import { ActorType, BuildProjectView, BuildRunLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
+import {
+  ActorType,
+  AuthorizedProject,
+  BuildLogEntry,
+  BuildRunStatus,
+  BuildRunView,
+} from '@/api/generated/api.types';
 import { LogViewer, type LogEntry } from '@/components/custom/common';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -36,7 +42,7 @@ import { formatBuildRunLogViewerEntries, mergeBuildRunLogEntries } from '../buil
 import { isActiveBuildRun, isTerminalBuildRunStatus, pickMostAdvancedBuildRun } from '../build-run-state';
 import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
 
-export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
+export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();
   const { runId: requestedRunId, clearRunId } = useBuildRunQuery();
   const queryClient = useQueryClient();
@@ -45,7 +51,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   const readArgs = useMemo(() => ({ query: { projectId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBuildRuns', readArgs);
   const [runs, setRuns] = useState<BuildRunView[] | undefined>();
-  const [liveLogState, setLiveLogState] = useState<{ runId?: string; entries: BuildRunLogEntry[] }>({ entries: [] });
+  const [liveLogState, setLiveLogState] = useState<{ runId?: string; entries: BuildLogEntry[] }>({ entries: [] });
   const lastFetchedRef = useRef<BuildRunView[]>([]);
   const consumedRunIdRef = useRef<string | undefined>(undefined);
   const selectedRunArgs = useMemo(() => ({ id: logRunId ?? '' }), [logRunId]);
@@ -83,10 +89,17 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
     () => pickMostAdvancedBuildRun(selectedRunFromList, selectedRunFromQuery),
     [selectedRunFromList, selectedRunFromQuery],
   );
-  const displayedRuns = useMemo(() => mergeSelectedRun(visibleRuns, selectedRun ?? undefined), [selectedRun, visibleRuns]);
-  const logs = useRead('getBuildRunLogs', { id: logRunId ?? '' }, {
-    enabled: Boolean(logRunId),
-  });
+  const displayedRuns = useMemo(
+    () => mergeSelectedRun(visibleRuns, selectedRun ?? undefined),
+    [selectedRun, visibleRuns],
+  );
+  const logs = useRead(
+    'getBuildRunLogs',
+    { id: logRunId ?? '' },
+    {
+      enabled: Boolean(logRunId),
+    },
+  );
   const logEntries = useMemo(() => {
     const liveLogs = liveLogState.runId === logRunId ? liveLogState.entries : [];
     return mergeBuildRunLogEntries(logs.data?.data.logs ?? [], liveLogs);
@@ -143,7 +156,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   );
 
   const handleBuildRunLogsAppended = useCallback(
-    (runId: string, entries: BuildRunLogEntry[]) => {
+    (runId: string, entries: BuildLogEntry[]) => {
       if (runId !== logRunId || entries.length === 0) return;
 
       setLiveLogState((prev) => ({
@@ -302,7 +315,12 @@ const runColumns = (
       const cancellable = isActiveBuildRun(row.original);
       return (
         <div className="flex justify-end gap-1">
-          <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(row.original.id)} title="View logs">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => onSelectLog(row.original.id)}
+            title="View logs">
             <FileText className="size-3.5" />
           </Button>
           {cancellable && (
@@ -344,13 +362,13 @@ function BuildRunLogsSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const active = run ? isActiveBuildRun(run) : false;
-  const actorQuery = useRead('getActor', { id: run?.triggeredByActorId ?? '' }, { enabled: Boolean(run?.triggeredByActorId) });
+  const actorQuery = useRead(
+    'getActor',
+    { id: run?.triggeredByActorId ?? '' },
+    { enabled: Boolean(run?.triggeredByActorId) },
+  );
   const actor = actorQuery.data?.data;
-  const description = run
-    ? `${run.trigger} run on ${run.branch}`
-    : isLoading
-      ? 'Loading build logs...'
-      : 'Build logs';
+  const description = run ? `${run.trigger} run on ${run.branch}` : isLoading ? 'Loading build logs...' : 'Build logs';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -407,11 +425,26 @@ function BuildRunLogsSheet({
                 <MetadataRow
                   icon={actor?.type === ActorType.System ? Settings : User}
                   label="Actor"
-                  value={actor ? `${actor.name} (${actor.type})` : actorQuery.isLoading ? 'Loading...' : shortId(run.triggeredByActorId)}
+                  value={
+                    actor
+                      ? `${actor.name} (${actor.type})`
+                      : actorQuery.isLoading
+                        ? 'Loading...'
+                        : shortId(run.triggeredByActorId)
+                  }
                   title={run.triggeredByActorId}
                 />
-                <MetadataRow icon={GitBranch} label="Repository" value={run.gitRepositoryNameSnapshot ?? shortId(run.gitRepositoryId)} />
-                <MetadataRow icon={GitCommitHorizontal} label="Commit" value={run.resolvedCommitSha?.slice(0, 12) ?? '-'} monospace />
+                <MetadataRow
+                  icon={GitBranch}
+                  label="Repository"
+                  value={run.gitRepositoryNameSnapshot ?? shortId(run.gitRepositoryId)}
+                />
+                <MetadataRow
+                  icon={GitCommitHorizontal}
+                  label="Commit"
+                  value={run.resolvedCommitSha?.slice(0, 12) ?? '-'}
+                  monospace
+                />
                 <MetadataRow icon={Package} label="Image" value={run.imageRepository} />
                 <MetadataRow icon={Server} label="Platform" value={run.platformSnapshot?.name ?? 'Not available'} />
                 <MetadataRow icon={FileCode2} label="Dockerfile" value={run.dockerfilePath} monospace />
@@ -453,7 +486,12 @@ function MetadataRow({
       <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
       <div className="min-w-0">
         <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd className={monospace ? 'mt-0.5 break-all font-mono text-xs text-foreground' : 'mt-0.5 break-words text-sm text-foreground'}>
+        <dd
+          className={
+            monospace
+              ? 'mt-0.5 break-all font-mono text-xs text-foreground'
+              : 'mt-0.5 break-words text-sm text-foreground'
+          }>
           {value}
         </dd>
       </div>

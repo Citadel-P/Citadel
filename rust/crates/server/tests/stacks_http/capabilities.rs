@@ -42,15 +42,27 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
         .execute(pool)
         .await
         .unwrap();
-    let permission_id = Uuid::now_v7();
-    sqlx::query("INSERT INTO permissions(id,roleid,resourcetype,permissionlevel,specificpermissions) VALUES($1,$2,$3,1,0)")
-        .bind(permission_id).bind(role_id).bind(citadel_primitives::ResourceType::Stack as i32)
-        .execute(pool).await.unwrap();
-    for (level, write, execute) in [(1, false, false), (2, true, false), (4, true, true)] {
-        sqlx::query("UPDATE permissions SET permissionlevel=$2 WHERE id=$1")
-            .bind(permission_id)
-            .bind(level)
-            .execute(pool)
+    use citadel_identity::{RolePermissionDetails, RoleRepository};
+    use citadel_primitives::PermissionLevel;
+    let roles = citadel_adapters::persistence::postgres::identity::roles::repository::PostgresRoleRepository::new(pool.clone());
+    for (level, write, execute) in [
+        (PermissionLevel::Read, false, false),
+        (PermissionLevel::Write, true, false),
+        (PermissionLevel::Execute, true, true),
+    ] {
+        // Exercise the real ACL mutation path so committed changes invalidate the authorization cache.
+        roles
+            .patch_permissions(
+                role_id,
+                Some(&[RolePermissionDetails {
+                    resource_type: citadel_primitives::ResourceType::Stack,
+                    permission_level: level,
+                    specific_permissions: Vec::new(),
+                }]),
+                admin.actor_id,
+                chrono::Utc::now(),
+                true,
+            )
             .await
             .unwrap();
         assert_capabilities(app, &reader, true, write, execute).await;
@@ -105,22 +117,6 @@ pub(super) async fn verify_releases(
         detail["capabilities"]["canViewReleases"], true,
         "administrators must be able to open Releases"
     );
-    let actor = Uuid::now_v7();
-    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
-    let reader = ActorPrincipal {
-        subject_id: actor,
-        actor_id: ActorId::new(actor),
-        name: "release-reader".into(),
-        principal_type: AuthenticatedPrincipalType::User,
-        credential_id: None,
-        roles: vec![],
-    };
-    let access = Uuid::now_v7();
-    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
     for (level, specific, allowed) in [
         (1, 0, false),
         (1, 32, false),
@@ -128,6 +124,24 @@ pub(super) async fn verify_releases(
         (2, 64, true),
         (4, 96, true),
     ] {
+        // Each case starts with a fresh actor before its first authorization read.
+        let actor = Uuid::now_v7();
+        sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
+        let reader = ActorPrincipal {
+            subject_id: actor,
+            actor_id: ActorId::new(actor),
+            name: "release-reader".into(),
+            principal_type: AuthenticatedPrincipalType::User,
+            credential_id: None,
+            roles: vec![],
+        };
+        let access = Uuid::now_v7();
+        sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
+
         sqlx::query(
             "UPDATE resourceaccesses SET specificpermissions=$2,permissionlevel=$3 WHERE id=$1",
         )
@@ -165,17 +179,17 @@ pub(super) async fn verify_releases(
                 StatusCode::FORBIDDEN
             }
         );
+        sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
+            .bind(access)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM actors WHERE id=$1")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
     }
-    sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
-        .bind(access)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM actors WHERE id=$1")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
 }
 
 pub(super) async fn verify_runtime(
@@ -202,24 +216,6 @@ pub(super) async fn verify_runtime(
             "administrator capability {flag}"
         );
     }
-    let actor = Uuid::now_v7();
-    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
-    let reader = ActorPrincipal {
-        subject_id: actor,
-        actor_id: ActorId::new(actor),
-        name: "runtime-reader".into(),
-        principal_type: AuthenticatedPrincipalType::User,
-        credential_id: None,
-        roles: vec![],
-    };
-    let access = Uuid::now_v7();
-    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
-    // Each permission independently enables its own feature. Higher permission
-    // levels inherit Read while still requiring the corresponding specific bit.
     for (level, specific, enabled) in [
         (1, 0, [false, false, false, false]),
         (1, 1, [true, false, false, false]),
@@ -230,6 +226,24 @@ pub(super) async fn verify_runtime(
         (2, 127, [true, true, true, true]),
         (4, 127, [true, true, true, true]),
     ] {
+        // Each case starts with a fresh actor before its first authorization read.
+        let actor = Uuid::now_v7();
+        sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
+        let reader = ActorPrincipal {
+            subject_id: actor,
+            actor_id: ActorId::new(actor),
+            name: "runtime-reader".into(),
+            principal_type: AuthenticatedPrincipalType::User,
+            credential_id: None,
+            roles: vec![],
+        };
+        let access = Uuid::now_v7();
+        sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
+
         sqlx::query(
             "UPDATE resourceaccesses SET specificpermissions=$2,permissionlevel=$3 WHERE id=$1",
         )
@@ -276,15 +290,15 @@ pub(super) async fn verify_runtime(
             .find(|stack| stack["id"] == id.to_string())
             .unwrap();
         assert_eq!(listed["capabilities"], detail["capabilities"]);
+        sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
+            .bind(access)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM actors WHERE id=$1")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
     }
-    sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
-        .bind(access)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM actors WHERE id=$1")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
 }

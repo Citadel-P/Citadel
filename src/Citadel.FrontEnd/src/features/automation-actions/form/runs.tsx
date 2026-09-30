@@ -1,4 +1,8 @@
-import { ActionRunStatus, AutomationActionRunView, AutomationActionView } from '@/api/generated/api.types';
+import {
+  ActionRunStatus,
+  AutomationActionRunView,
+  AuthorizedAction,
+} from '@/api/generated/api.types';
 import { LogViewer } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -13,7 +17,7 @@ import { Ban, FileText } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-export function AutomationActionRunsTab({ resource }: { resource: AutomationActionView }) {
+export function AutomationActionRunsTab({ resource }: { resource: AuthorizedAction }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();
   const queryClient = useQueryClient();
   const cancelRun = useMutate('cancelAutomationActionRun');
@@ -39,16 +43,19 @@ export function AutomationActionRunsTab({ resource }: { resource: AutomationActi
     { enabled: Boolean(logRunId) },
   );
 
-  const handleCancel = useCallback(async (run: AutomationActionRunView) => {
-    try {
-      await cancelRun.mutateAsync({ id: resource.id, runId: run.id } as any);
-      await queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id: resource.id }] });
-      await queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id: resource.id }] });
-      toast.success('Run cancellation requested');
-    } catch {
-      toast.error(cancelRun.validationErrors ?? 'Failed to cancel run');
-    }
-  }, [cancelRun, queryClient, resource.id]);
+  const handleCancel = useCallback(
+    async (run: AutomationActionRunView) => {
+      try {
+        await cancelRun.mutateAsync({ id: resource.id, runId: run.id } as any);
+        await queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id: resource.id }] });
+        await queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id: resource.id }] });
+        toast.success('Run cancellation requested');
+      } catch {
+        toast.error(cancelRun.validationErrors ?? 'Failed to cancel run');
+      }
+    },
+    [cancelRun, queryClient, resource.id],
+  );
 
   const columns = useMemo(
     () => runColumns(setLogRunId, handleCancel, cancelRun.isPending),
@@ -122,7 +129,12 @@ const runColumns = (
       const cancellable = isActiveRun(row.original);
       return (
         <div className="flex justify-end gap-1">
-          <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(row.original.id)} title="View logs">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => onSelectLog(row.original.id)}
+            title="View logs">
             <FileText className="size-3.5" />
           </Button>
           {cancellable && (

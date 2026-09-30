@@ -1,15 +1,13 @@
 import {
   AlertResourceType,
-  AlertRuleQuietHour,
-  AlertRuleQuietHourDailyQuietHour,
-  AlertRuleQuietHourWeeklyQuietHour,
+  AlertResourceScope,
+  AlertQuietHour,
   AlertType,
   AlertSeverity,
   DayOfWeek,
-  ScheduleType,
   DeploymentView,
   AlertRuleStatus,
-  CreateAlertRuleInput,
+  AlertRuleInput,
   PatchAlertRuleInput,
   LookupResourceType,
   LicenseCapability,
@@ -49,16 +47,11 @@ import { useLicenseEntitlements } from '@/features/license/use-license-entitleme
 import { AlertMessage } from '@/components/custom/alert-message';
 import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
 
-type LimitedToEntry = {
-  resourceType: AlertResourceType;
-  resourceId: string;
-};
-
-type AlertRuleFormResource = AlertRuleInput & {
+type AlertRuleFormResource = AlertRuleFormInput & {
   isSystem?: boolean;
 };
 
-type AlertRuleInput = CreateAlertRuleInput | PatchAlertRuleInput;
+type AlertRuleFormInput = AlertRuleInput | PatchAlertRuleInput;
 
 export const AlertRuleForm = ({
   mode,
@@ -71,7 +64,7 @@ export const AlertRuleForm = ({
 }) => {
   const id = useParams().id;
   const queryClient = useQueryClient();
-  const [update, setUpdate] = useState<Partial<AlertRuleInput>>({});
+  const [update, setUpdate] = useState<Partial<AlertRuleFormInput>>({});
   const { hasCapability } = useLicenseEntitlements();
   const hasAdvancedAlerting = hasCapability(LicenseCapability.AdvancedAlerting);
   const formDisabled = disabled || (mode === 'add' && !hasAdvancedAlerting);
@@ -81,11 +74,11 @@ export const AlertRuleForm = ({
   const { mutateAsync: createAlertRule } = useMutate('createAlertRule');
   const { mutateAsync: updateAlertRule } = useMutate('updateAlertRule');
 
-  const { save: handleSave, isPending } = useSaveResource<AlertRuleInput, any>({
+  const { save: handleSave, isPending } = useSaveResource<AlertRuleFormInput, any>({
     mode,
     basePath: 'alert-rules',
     entityName: 'Alert rule',
-    onCreate: (payload) => createAlertRule({ data: payload as CreateAlertRuleInput }),
+    onCreate: (payload) => createAlertRule({ data: payload as AlertRuleInput }),
     onUpdate: (payload) => updateAlertRule({ id: id!, data: payload as PatchAlertRuleInput }),
     onRefresh: () => {
       localStorage.removeItem(`AlertRule:${id ?? 'new'}`);
@@ -93,7 +86,7 @@ export const AlertRuleForm = ({
     },
   });
 
-  const original = useMemo(() => (resource ?? {}) as AlertRuleInput, [resource]);
+  const original = useMemo(() => (resource ?? {}) as AlertRuleFormInput, [resource]);
 
   const merged = useMemo(
     () => ({
@@ -140,10 +133,10 @@ export const AlertRuleForm = ({
 
   const schema = useMemo(
     () => ({
-      '': defineSection<AlertRuleInput>({
+      '': defineSection<AlertRuleFormInput>({
         title: '',
         items: [
-          defineGroupField<AlertRuleInput>({
+          defineGroupField<AlertRuleFormInput>({
             id: 'type',
             label: 'Alert Type',
             items: [
@@ -171,9 +164,8 @@ export const AlertRuleForm = ({
               }),
               ...(mode === 'add'
                 ? [
-                    defineField<AlertRuleInput, 'name'>({
+                    defineField<AlertRuleFormInput, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'A human-readable label for the alert rule.',
@@ -190,7 +182,6 @@ export const AlertRuleForm = ({
                 : []),
             ],
           }),
-
           defineField({
             label: 'Status',
             key: 'status',
@@ -204,8 +195,7 @@ export const AlertRuleForm = ({
               />
             ),
           }),
-
-          defineGroupField<AlertRuleInput>({
+          defineGroupField<AlertRuleFormInput>({
             id: 'details',
             label: 'Details',
             items: [
@@ -226,7 +216,7 @@ export const AlertRuleForm = ({
 
               ...(showCooldown
                 ? [
-                    defineField<AlertRuleInput, 'cooldownSeconds'>({
+                    defineField<AlertRuleFormInput, 'cooldownSeconds'>({
                       key: 'cooldownSeconds',
                       label: 'Cooldown (seconds)',
                       description: 'Minimum seconds between repeated alerts of this type.',
@@ -248,7 +238,7 @@ export const AlertRuleForm = ({
                 : []),
               ...(showThresholdFields
                 ? [
-                    defineField<AlertRuleInput, 'threshold'>({
+                    defineField<AlertRuleFormInput, 'threshold'>({
                       key: 'threshold',
                       label: 'Threshold',
                       required: true,
@@ -266,7 +256,7 @@ export const AlertRuleForm = ({
                         />
                       ),
                     }),
-                    defineField<AlertRuleInput, 'requiredMatches'>({
+                    defineField<AlertRuleFormInput, 'requiredMatches'>({
                       key: 'requiredMatches',
                       label: 'Required Matches',
                       required: true,
@@ -291,7 +281,7 @@ export const AlertRuleForm = ({
 
           ...(showScope
             ? [
-                defineGroupField<AlertRuleInput>({
+                defineGroupField<AlertRuleFormInput>({
                   id: 'scope',
                   label: 'Scope',
                   items: [
@@ -305,7 +295,7 @@ export const AlertRuleForm = ({
                           sourceType={LookupResourceType.Alert}
                           sourceResourceId={mode == 'add' ? undefined : id}
                           selected={
-                            (value as Array<string | LimitedToEntry> | undefined)?.map((item) =>
+                            (value as Array<string | AlertResourceScope> | undefined)?.map((item) =>
                               typeof item === 'string' ? item : item.resourceId,
                             ) ?? []
                           }
@@ -327,8 +317,7 @@ export const AlertRuleForm = ({
                 }),
               ]
             : []),
-
-          defineGroupField<AlertRuleInput>({
+          defineGroupField<AlertRuleFormInput>({
             id: 'channels',
             label: 'Channels',
             items: [
@@ -354,8 +343,7 @@ export const AlertRuleForm = ({
               }),
             ],
           }),
-
-          defineGroupField<AlertRuleInput>({
+          defineGroupField<AlertRuleFormInput>({
             id: 'quietHours',
             label: 'Quiet Hours',
             items: [
@@ -417,17 +405,13 @@ export const AlertRuleForm = ({
 };
 
 type QuietHoursFieldProps = {
-  quietHours: AlertRuleQuietHour[];
-  onChange: (value: AlertRuleQuietHour[]) => void;
+  quietHours: AlertQuietHour[];
+  onChange: (value: AlertQuietHour[]) => void;
 };
 
-type QuietHourDraft =
-  | (AlertRuleQuietHourDailyQuietHour & { $type: 'Daily' })
-  | (AlertRuleQuietHourWeeklyQuietHour & { $type: 'Weekly' });
-
 const SCHEDULE_TYPE_OPTIONS = [
-  { value: ScheduleType.Daily, label: 'Daily' },
-  { value: ScheduleType.Weekly, label: 'Weekly' },
+  { value: 'Daily', label: 'Daily' },
+  { value: 'Weekly', label: 'Weekly' },
 ];
 
 const DAY_OF_WEEK_OPTIONS = Object.values(DayOfWeek).map((day) => ({
@@ -441,9 +425,8 @@ const toMinutes = (time: string) => {
   return Number(match[1]) * 60 + Number(match[2]);
 };
 
-const createDailyDraft = (): QuietHourDraft => ({
+const createDailyDraft = (): AlertQuietHour => ({
   $type: 'Daily',
-  scheduleType: ScheduleType.Daily,
   name: '',
   startTime: '00:00',
   endTime: '01:00',
@@ -453,15 +436,14 @@ const createDailyDraft = (): QuietHourDraft => ({
 
 const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProps & { disabled?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formState, setFormState] = useState<QuietHourDraft>(createDailyDraft);
+  const [formState, setFormState] = useState<AlertQuietHour>(createDailyDraft);
   const [editIndex, setEditIndex] = useState<number | null>(null);
 
-  const changeScheduleType = useCallback((scheduleType: ScheduleType) => {
+  const changeScheduleType = useCallback((scheduleType: AlertQuietHour['$type']) => {
     setFormState((prev) =>
-      scheduleType === ScheduleType.Weekly
+      scheduleType === 'Weekly'
         ? {
             $type: 'Weekly',
-            scheduleType: ScheduleType.Weekly,
             dayOfWeek: prev.$type === 'Weekly' ? prev.dayOfWeek : DayOfWeek.Monday,
             name: prev.name,
             startTime: prev.startTime,
@@ -471,7 +453,6 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
           }
         : {
             $type: 'Daily',
-            scheduleType: ScheduleType.Daily,
             name: prev.name,
             startTime: prev.startTime,
             endTime: prev.endTime,
@@ -505,27 +486,25 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
     if (!trimmedName || !trimmedTimezone || startMinutes === null || endMinutes === null || startMinutes >= endMinutes)
       return;
 
-    const nextEntry: AlertRuleQuietHour =
+    const nextEntry: AlertQuietHour =
       formState.$type === 'Weekly'
-        ? ({
+        ? {
             $type: 'Weekly',
             name: trimmedName,
-            scheduleType: ScheduleType.Weekly,
             dayOfWeek: formState.dayOfWeek,
             startTime: formState.startTime,
             endTime: formState.endTime,
             timezone: trimmedTimezone,
             description: formState.description?.trim() || null,
-          } as AlertRuleQuietHour)
-        : ({
+          }
+        : {
             $type: 'Daily',
             name: trimmedName,
-            scheduleType: ScheduleType.Daily,
             startTime: formState.startTime,
             endTime: formState.endTime,
             timezone: trimmedTimezone,
             description: formState.description?.trim() || null,
-          } as AlertRuleQuietHour);
+          };
 
     if (editIndex === null) {
       onChange([...quietHours, nextEntry]);
@@ -549,13 +528,12 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
     onChange(next);
   };
 
-  const handleEdit = (entry: AlertRuleQuietHour, index: number) => {
+  const handleEdit = (entry: AlertQuietHour, index: number) => {
     const normalizeTime = (t: string) => t.substring(0, 5);
     setFormState(
       entry.$type === 'Weekly'
         ? {
             $type: 'Weekly',
-            scheduleType: ScheduleType.Weekly,
             dayOfWeek: entry.dayOfWeek,
             name: entry.name,
             startTime: normalizeTime(entry.startTime),
@@ -565,7 +543,6 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
           }
         : {
             $type: 'Daily',
-            scheduleType: ScheduleType.Daily,
             name: entry.name,
             startTime: normalizeTime(entry.startTime),
             endTime: normalizeTime(entry.endTime),
@@ -623,8 +600,8 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
             <div className="space-y-2">
               <Label>Schedule Type</Label>
               <SelectField
-                value={formState.$type === 'Weekly' ? ScheduleType.Weekly : ScheduleType.Daily}
-                onChange={(value) => changeScheduleType(value as ScheduleType)}
+                value={formState.$type === 'Weekly' ? 'Weekly' : 'Daily'}
+                onChange={(value) => changeScheduleType(value as AlertQuietHour['$type'])}
                 options={SCHEDULE_TYPE_OPTIONS}
                 placeholder="Schedule Type"
                 allLabel="Schedule Type"
@@ -701,7 +678,7 @@ const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProp
 type QuietHourRow = {
   id: string;
   index: number;
-  quietHour: AlertRuleQuietHour;
+  quietHour: AlertQuietHour;
 };
 
 const QuietHoursTable = ({
@@ -710,9 +687,9 @@ const QuietHoursTable = ({
   onEdit,
   onDelete,
 }: {
-  quietHours: AlertRuleQuietHour[];
+  quietHours: AlertQuietHour[];
   disabled?: boolean;
-  onEdit: (entry: AlertRuleQuietHour, index: number) => void;
+  onEdit: (entry: AlertQuietHour, index: number) => void;
   onDelete: (index: number) => void;
 }) => {
   const rows = useMemo<QuietHourRow[]>(
@@ -736,7 +713,7 @@ const QuietHoursTable = ({
         cell: ({ row }) => {
           const entry = row.original.quietHour;
           const scheduleLabel =
-            entry.scheduleType ?? (entry.$type === 'Weekly' ? ScheduleType.Weekly : ScheduleType.Daily);
+            entry.$type;
           return entry.$type === 'Weekly' && entry.dayOfWeek ? `${scheduleLabel} - ${entry.dayOfWeek}` : scheduleLabel;
         },
       },

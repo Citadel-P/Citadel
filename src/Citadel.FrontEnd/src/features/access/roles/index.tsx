@@ -4,8 +4,8 @@ import {
   ResourceType,
   PermissionLevel,
   SpecificPermission,
-  PermissionInput,
-  PermissionView,
+  RolePermissionInput,
+  RolePermissionView,
   PermissionMatrixViewItem,
   LicenseCapability,
 } from '@/api/generated/api.types';
@@ -125,7 +125,7 @@ export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = 
   [ResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
 };
 
-const buildPermissionsFromView = (permissions: PermissionView[]): SelectedPermissions => {
+const buildPermissionsFromView = (permissions: RolePermissionView[]): SelectedPermissions => {
   const result: SelectedPermissions = {};
   for (const perm of permissions) {
     result[perm.resourceType] = {
@@ -136,7 +136,7 @@ const buildPermissionsFromView = (permissions: PermissionView[]): SelectedPermis
   return result;
 };
 
-const buildPermissionInputs = (selected: SelectedPermissions): PermissionInput[] =>
+const buildPermissionInputs = (selected: SelectedPermissions): RolePermissionInput[] =>
   Object.entries(selected)
     .filter(([, state]) => state.permissionLevel)
     .map(([resourceType, state]) => ({
@@ -263,7 +263,7 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
       queryClient.invalidateQueries({ queryKey: ['listRoles'] });
     },
   });
-  const permissions = useMemo(() => (role.permissions ?? []) as PermissionView[], [role.permissions]);
+  const permissions = useMemo(() => (role.permissions ?? []) as RolePermissionView[], [role.permissions]);
   const selectedPermissions = useMemo(() => buildPermissionsFromView(permissions), [permissions]);
 
   const handleChange = (
@@ -422,33 +422,33 @@ const PermissionsMatrixTable = ({
 
   return (
     <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-48">Resource</TableHead>
-            <TableHead className="w-32">Level</TableHead>
-            <TableHead className="flex-1">Capabilities</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orderedResources.map((resource) => {
-            const matrixData = permissionMatrix[resource];
-            const Icon = RESOURCE_ICONS[resource];
-            const currentState = selectedPermissions[resource];
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-48">Resource</TableHead>
+          <TableHead className="w-32">Level</TableHead>
+          <TableHead className="flex-1">Capabilities</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {orderedResources.map((resource) => {
+          const matrixData = permissionMatrix[resource];
+          const Icon = RESOURCE_ICONS[resource];
+          const currentState = selectedPermissions[resource];
 
-            return (
-              <PermissionMatrixRow
-                key={resource}
-                resource={resource}
-                icon={Icon}
-                matrixData={matrixData}
-                currentState={currentState}
-                onPermissionChange={onPermissionChange}
-                disabled={disabled}
-                allowExpansion={allowExpansion}
-              />
-            );
-          })}
-        </TableBody>
+          return (
+            <PermissionMatrixRow
+              key={resource}
+              resource={resource}
+              icon={Icon}
+              matrixData={matrixData}
+              currentState={currentState}
+              onPermissionChange={onPermissionChange}
+              disabled={disabled}
+              allowExpansion={allowExpansion}
+            />
+          );
+        })}
+      </TableBody>
     </Table>
   );
 };

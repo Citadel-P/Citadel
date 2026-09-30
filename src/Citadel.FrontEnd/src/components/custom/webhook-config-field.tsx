@@ -1,8 +1,7 @@
 import {
-  AutomationWebhookConfig,
+  RepoWebhookConfig,
   BackupWebhookConfig,
   BuildWebhookConfig,
-  RepoWebhookConfig,
   StackWebhookConfig,
   SwarmServiceWebhookConfig,
   WebhookAuthScheme,
@@ -18,7 +17,6 @@ import { useState } from 'react';
 type WebhookConfigValue =
   | RepoWebhookConfig
   | StackWebhookConfig
-  | AutomationWebhookConfig
   | BackupWebhookConfig
   | BuildWebhookConfig
   | SwarmServiceWebhookConfig;

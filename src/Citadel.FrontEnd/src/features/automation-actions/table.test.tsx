@@ -1,14 +1,15 @@
 import {
   ActionRunStatus,
   ActionRunTrigger,
-  AutomationActionView,
+  AuthorizedAction,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { AutomationActionsTable } from './table';
 
-const createAction = (enabled: boolean): AutomationActionView => ({
+const createAction = (enabled: boolean): AuthorizedAction => ({
+  capabilities: { canRead: true, canWrite: true, canExecute: true },
   id: '019fbf2c-1c80-790f-a50a-11bbec0241d3',
   name: enabled ? 'Enabled action' : 'Disabled action',
   enabled,
@@ -25,8 +26,8 @@ const createAction = (enabled: boolean): AutomationActionView => ({
   currentRunId: null,
   rowVersion: 1,
   createdByActorId: 'actor-id',
-  createdAt: null,
-  updatedAt: null,
+  createdAt: '2026-09-29T00:00:00Z',
+  updatedAt: '2026-09-29T00:00:00Z',
   scheduleEnabled: false,
   controlState: ResourceControlState.Idle,
   latestRun: {

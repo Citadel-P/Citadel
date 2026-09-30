@@ -113,7 +113,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     assert_eq!(
         preferences.density,
-        citadel_identity::UserUiDensity::Comfortable
+        citadel_identity::UserUiDensity::Compact
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM userpreferences WHERE userid = $1")
@@ -153,7 +153,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     assert_eq!(
         preferences.density,
-        citadel_identity::UserUiDensity::Comfortable
+        citadel_identity::UserUiDensity::Compact
     );
     let stored = sqlx::query_as::<_, (String, String, String)>(
         "SELECT timezone, datetimeformat, theme FROM userpreferences WHERE userid = $1",
@@ -172,7 +172,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     // Appearance fields round-trip independently of the locale and mode.
     let appearance = profiles.patch_preferences(&owner, serde_json::from_value(serde_json::json!({
-        "themeColor": "Yellow", "font": "Inter", "radius": "Large", "contentLayout": "Full", "density": "Comfortable"
+        "themeColor": "Yellow", "font": "Inter", "radius": "Large", "contentLayout": "Full", "density": "Compact"
     })).unwrap()).await.unwrap();
     assert_eq!(
         appearance.theme_color,
@@ -186,7 +186,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     );
     assert_eq!(
         appearance.density,
-        citadel_identity::UserUiDensity::Comfortable
+        citadel_identity::UserUiDensity::Compact
     );
     assert_eq!(appearance.theme, UserTheme::Dark);
     let before: (chrono::DateTime<Utc>, i64) = sqlx::query_as("SELECT updatedat,(SELECT count(*) FROM activityevents) FROM userpreferences WHERE userid=$1").bind(owner.subject_id).fetch_one(&pool).await.unwrap();

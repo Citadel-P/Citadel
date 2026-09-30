@@ -58,12 +58,7 @@ RETURNING queue.id,queue.alerteventid,queue.alertchannelid,queue.attemptcount"#,
             let event_id: Uuid = claimed.try_get("alerteventid").map_err(storage)?;
             let channel_id: Uuid = claimed.try_get("alertchannelid").map_err(storage)?;
             let attempt_count: i32 = claimed.try_get("attemptcount").map_err(storage)?;
-            let event = sqlx::query("SELECT * FROM alertevents WHERE id=$1")
-                .bind(event_id)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(storage)
-                .and_then(map_event)?;
+            let event = self.get_event(event_id).await?;
             let channel = sqlx::query("SELECT * FROM alertchannels WHERE id=$1 AND isactive")
                 .bind(channel_id)
                 .fetch_one(&self.pool)

@@ -1,7 +1,7 @@
 import {
   BuildAgentPoolProvider,
   BuildAgentPoolValidationStatus,
-  BuildAgentPoolView,
+  AuthorizedPool,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -9,7 +9,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
 export const invalidateBuildPoolQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
@@ -21,13 +21,13 @@ export const invalidateBuildPoolQueries = async (queryClient: ReturnType<typeof 
   }
 };
 
-const singleSelection = (resources: BuildAgentPoolView | BuildAgentPoolView[]) => {
+const singleSelection = (resources: AuthorizedPool | AuthorizedPool[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
   const multiSelect = Array.isArray(resources) && resources.length > 1;
   return { selected, multiSelect };
 };
 
-const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
+const { dropdown, group, info } = createActionsBuilder<AuthorizedPool>()
   .addAction({
     key: 'edit',
     type: 'command',
@@ -58,10 +58,12 @@ const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
       const isProcessing = selected?.controlState === ResourceControlState.Processing;
 
       return {
-        canExecute: !!selected && !multiSelect && !isProcessing && selected.provider === BuildAgentPoolProvider.SelfManagedVm,
+        canExecute:
+          !!selected && !multiSelect && !isProcessing && selected.provider === BuildAgentPoolProvider.SelfManagedVm,
         isPending: testPool.isPending || isProcessing,
         run: async () => {
-          if (!selected || multiSelect || isProcessing || selected.provider !== BuildAgentPoolProvider.SelfManagedVm) return;
+          if (!selected || multiSelect || isProcessing || selected.provider !== BuildAgentPoolProvider.SelfManagedVm)
+            return;
 
           try {
             const result = await testPool.mutateAsync({ id: selected.id });
@@ -91,7 +93,12 @@ const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
       const selected = Array.isArray(resources) ? resources : [resources];
       const queryClient = useQueryClient();
       const archive = useMutate('archiveBuildAgentPool');
-      const [, setSelectedResources] = useSelectedResources<BuildAgentPoolView>('BuildAgentPool');
+      const [, setSelectedResources] = useSelectedResources<AuthorizedPool>('BuildAgentPool');
+      const location = useLocation();
+      const navigate = useNavigate();
+      const isCurrentResource = selected.some(
+        (pool) => location.pathname.replace(/\/$/, '') === `/build-pools/edit/${pool.id}`,
+      );
 
       return {
         canExecute: selected.length > 0,
@@ -101,7 +108,8 @@ const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
 
           try {
             await Promise.all(selected.map((pool) => archive.mutateAsync({ id: pool.id } as any)));
-            await invalidateBuildPoolQueries(queryClient);
+            if (isCurrentResource) navigate('/build-pools', { replace: true });
+            await queryClient.invalidateQueries({ queryKey: ['listBuildAgentPools'] });
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'build pool' : 'build pools'} archived`);
           } catch {

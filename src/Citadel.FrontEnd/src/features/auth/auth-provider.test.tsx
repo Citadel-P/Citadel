@@ -50,6 +50,8 @@ function AuthProbe() {
 }
 
 const completeSetup: SetupContextValue = {
+  passwordMinimumLength: 15,
+  passwordMaximumLength: 128,
   isSetupReady: true,
   requiresSetup: false,
   markSetupComplete: () => {},

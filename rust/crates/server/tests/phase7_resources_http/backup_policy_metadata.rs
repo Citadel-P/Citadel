@@ -93,7 +93,7 @@ pub(super) async fn verify(
         policy["rowVersion"].as_i64().map(|v| v + 2)
     );
     let activities: Vec<String> = sqlx::query_scalar(
-        "SELECT info FROM activityevents WHERE resourceid=$1 ORDER BY createdat",
+        "SELECT info FROM activityevents WHERE resourceid=$1 AND eventtype IN ('BackupPolicyRenamed','BackupPolicyUpdated') ORDER BY createdat",
     )
     .bind(uuid)
     .fetch_all(pool)
@@ -147,7 +147,7 @@ pub(super) async fn verify(
         .status(),
         StatusCode::CONFLICT
     );
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype IN ('BackupPolicyRenamed','BackupPolicyUpdated')")
         .bind(uuid)
         .fetch_one(pool)
         .await

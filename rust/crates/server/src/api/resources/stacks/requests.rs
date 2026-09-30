@@ -1,12 +1,12 @@
+use crate::api::resources::common::DuplicateSourceInput;
 use crate::api::resources::stacks::spec::{
-    StackBuildImageBinding, StackDriftMode, StackDriftPolicy, StackImportKind, StackSource,
-    StackSpec,
+    StackDriftMode, StackDriftPolicy, StackImportKind, StackSource, StackSpec,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateStackInput {
     pub name: String,
@@ -18,7 +18,7 @@ pub struct CreateStackInput {
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
     #[serde(default)]
-    pub duplicate_source: Option<Value>,
+    pub duplicate_source: Option<DuplicateSourceInput>,
 }
 
 impl From<citadel_stacks::CreateStack> for CreateStackInput {
@@ -31,7 +31,11 @@ impl From<citadel_stacks::CreateStack> for CreateStackInput {
             spec: value.spec.into(),
             drift_policy: value.drift_policy.map(|item| item.into()),
             tag_ids: value.tag_ids,
-            duplicate_source: value.duplicate_source.map(|source| serde_json::json!({"resourceType":"Stack", "resourceId":source.id, "resourceName":source.name})),
+            duplicate_source: value.duplicate_source.map(|source| DuplicateSourceInput {
+                resource_type: citadel_activities::ActivityResourceType::Stack,
+                resource_id: source.id,
+                resource_name: source.name,
+            }),
         }
     }
 }
@@ -42,25 +46,16 @@ impl TryFrom<CreateStackInput> for citadel_stacks::CreateStack {
         let duplicate_source = value
             .duplicate_source
             .map(|source| {
-                let id = source
-                    .get("resourceId")
-                    .or_else(|| source.get("ResourceId"))
-                    .and_then(Value::as_str)
-                    .and_then(|id| Uuid::parse_str(id).ok())
-                    .ok_or_else(|| {
-                        citadel_stacks::StackError::Validation(
-                            "Duplicate source is invalid.".into(),
-                        )
-                    })?;
-                let name = source
-                    .get("resourceName")
-                    .or_else(|| source.get("ResourceName"))
-                    .and_then(Value::as_str)
-                    .unwrap_or("Stack")
-                    .to_owned();
-                Ok::<_, citadel_stacks::StackError>(citadel_stacks::DuplicateStackSource {
-                    id,
-                    name,
+                if source.resource_type != citadel_activities::ActivityResourceType::Stack
+                    || source.resource_id.is_nil()
+                {
+                    return Err(citadel_stacks::StackError::Validation(
+                        "Duplicate source must identify a Stack.".into(),
+                    ));
+                }
+                Ok(citadel_stacks::DuplicateStackSource {
+                    id: source.resource_id,
+                    name: source.resource_name,
                 })
             })
             .transpose()?;
@@ -211,9 +206,11 @@ where
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwarmPreflightInput {
-    pub(crate) compose_files: Vec<String>,
-    #[serde(default)]
-    pub(crate) build_image_bindings: Vec<StackBuildImageBinding>,
+    pub(crate) name: String,
+    pub(crate) platform_id: Uuid,
+    pub(crate) stack_source: StackSource,
+    pub(crate) spec: StackSpec,
+    pub(crate) drift_policy: Option<StackDriftPolicy>,
 }
 
 #[derive(Default, Deserialize)]
@@ -276,4 +273,12 @@ impl From<StackDriftPolicyInput> for citadel_stacks::StackDriftPolicy {
         }
         .normalized()
     }
+}
+
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchStackMetadataInput {
+    #[serde(default, deserialize_with = "deserialize_present_nullable_string")]
+    #[schema(value_type = Option<String>, required = false)]
+    pub description: Option<Option<String>>,
 }

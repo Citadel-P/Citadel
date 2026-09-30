@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -11,8 +11,8 @@ export const useGitReposGroup = () => {
     'listGitRepositories',
     selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
-  const [gitRepos, setGitRepos] = useState<GitRepositoryView[] | undefined>();
-  const lastFetchedRef = useRef<GitRepositoryView[] | undefined>(data?.data?.gitRepositories);
+  const [gitRepos, setGitRepos] = useState<AuthorizedGitRepositoryView[] | undefined>();
+  const lastFetchedRef = useRef<AuthorizedGitRepositoryView[] | undefined>(data?.data?.gitRepositories);
   const capabilities = data?.data.capabilities;
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export const useGitReposGroup = () => {
     }
   }, [data?.data?.gitRepositories]);
 
-  const handleGitRepoInfoUpdated = useCallback((repo: GitRepositoryView, action: string) => {
+  const handleGitRepoInfoUpdated = useCallback((repo: AuthorizedGitRepositoryView, action: string) => {
     setGitRepos((prev) => {
       if (!prev) return prev;
 

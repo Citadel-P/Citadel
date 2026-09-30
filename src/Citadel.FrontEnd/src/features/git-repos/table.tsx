@@ -1,5 +1,9 @@
 import { DataTable } from '@/components/ui/data-table';
-import { GitRepositoryView, GitReposStatus, ResourceControlState } from '@/api/generated/api.types';
+import {
+  AuthorizedGitRepositoryView,
+  GitReposStatus,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,10 +21,10 @@ import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: GitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedGitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<GitRepositoryView>[] => [
+): ColumnDef<AuthorizedGitRepositoryView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -85,26 +89,29 @@ export const GitReposTable = ({
   actions,
   isLoading,
 }: {
-  items: GitRepositoryView[];
+  items: AuthorizedGitRepositoryView[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: GitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedGitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<GitRepositoryView>('GitRepository');
+  const [_, setSelectedResources] = useSelectedResources<AuthorizedGitRepositoryView>('GitRepository');
   const formatDateTime = useProfileDateTimeFormatter();
   const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
-const RepoNameRow = ({ repo }: { repo: GitRepositoryView }) => {
+const RepoNameRow = ({ repo }: { repo: AuthorizedGitRepositoryView }) => {
   const status = repo.status ?? GitReposStatus.Unknown;
 
   return (
     <div className="flex items-center gap-1">
-      <StateIndicator value={status} isProcessing={repo.controlState === ResourceControlState.Processing} />
+      <StateIndicator
+        value={status}
+        isProcessing={repo.controlState === ResourceControlState.Processing || status === GitReposStatus.Pending}
+      />
       <Link to={`../git-repos/edit/${repo.id}`} className="hover:underline">
         {repo.name}
       </Link>

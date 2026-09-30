@@ -284,7 +284,7 @@ async fn list(
     summary = "Create an Automation Action",
     request_body = AutomationActionInput,
     responses(
-        (status = 200, description = "Success", body = AutomationActionView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedAction, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -349,7 +349,7 @@ async fn create(
     tag = "AutomationActions",
     summary = "Get an Automation Action",
     responses(
-        (status = 200, description = "Success", body = AutomationActionView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedAction, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -379,7 +379,7 @@ async fn get_one(
     summary = "Rename an Automation Action",
     request_body = RenameInput,
     responses(
-        (status = 200, description = "Success", body = AutomationActionView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedAction, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -423,7 +423,7 @@ async fn rename(
         (UpdateAutomationActionInput = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = AutomationActionView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedAction, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -459,7 +459,7 @@ async fn update(
         (UpdateAutomationActionMetadata = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = AutomationActionView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedAction, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),

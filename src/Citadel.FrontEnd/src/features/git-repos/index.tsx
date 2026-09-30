@@ -12,7 +12,7 @@ import {
   GitAccountInput,
   GitAccountView,
   GitAuthConfiguration,
-  GitRepositoryView,
+  AuthorizedGitRepositoryView,
 } from '@/api/generated/api.types';
 import {
   Dialog,
@@ -466,7 +466,7 @@ export const GitRepoComponents: RequiredComponents = {
     showTagFilter: true,
     addButtonTitle: 'Add Repository',
   },
-  useData(): ResourceDataHookResult<GitRepositoryView> {
+  useData(): ResourceDataHookResult<AuthorizedGitRepositoryView> {
     const { gitRepos, capabilities, isLoading, error, refetch, isFetching } = useGitReposGroup();
     return { error, refetch, isFetching, items: gitRepos ?? EMPTY_GIT_REPOS, isLoading, capabilities };
   },

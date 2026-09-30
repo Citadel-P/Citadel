@@ -13,7 +13,7 @@ pub(super) async fn saved_rule(
     let id = Uuid::parse_str(actual["id"].as_str().unwrap()).unwrap();
     assert!(!id.is_nil());
     let mut expected = json!({
-        "id": id,
+        "id": id, "capabilities": null,
         "name": input["name"].as_str().unwrap_or(input["type"].as_str().unwrap()),
         "description": input["description"], "type": input["type"],
         "severity": input["severity"], "cooldownSeconds": input["cooldownSeconds"],
@@ -92,12 +92,16 @@ pub(super) async fn runtime_rule(
 ) {
     let id = Uuid::parse_str(expected["id"].as_str().unwrap()).unwrap();
     let current = serde_json::to_value(
-        citadel_server::api::resources::alerts::views::AlertRuleView::from(
+        citadel_server::api::resources::alerts::views::AlertRuleView::try_from(
             store.get_rule(id).await.unwrap(),
-        ),
+        )
+        .unwrap(),
     )
     .unwrap();
-    assert_eq!(&current, expected);
+    let mut persisted = expected.clone();
+    // Capabilities are evaluated for the requesting actor, not persisted with the rule.
+    persisted["capabilities"] = Value::Null;
+    assert_eq!(current, persisted);
     // This combined test owns a disposable database. Temporarily isolate this
     // Rule from built-in/other fixture Rules; never alter the Rule under test.
     let other_ids: Vec<Uuid> = sqlx::query_scalar(

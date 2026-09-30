@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { AlertEventStatus, AlertEventView, UnresolvedAlertsCountView } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertEventView, Count } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -57,7 +57,7 @@ export function useAlertEventsGroup() {
     [queryClient],
   );
 
-  const handleUnresolvedAlertCount = useCallback((unresolvedCounts: UnresolvedAlertsCountView) => {
+  const handleUnresolvedAlertCount = useCallback((unresolvedCounts: Count) => {
     setLiveUnresolvedAlertCount(Number(unresolvedCounts.count ?? 0));
   }, []);
 

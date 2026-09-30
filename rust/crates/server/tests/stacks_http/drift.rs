@@ -170,23 +170,24 @@ pub(super) async fn verify(
 }
 
 async fn bindings_permissions(app: &Router, pool: &sqlx::PgPool, id: Uuid) {
-    let actor = Uuid::now_v7();
-    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
-    let reader = ActorPrincipal {
-        subject_id: actor,
-        actor_id: ActorId::new(actor),
-        name: "bindings-reader".into(),
-        principal_type: AuthenticatedPrincipalType::User,
-        credential_id: None,
-        roles: vec![],
-    };
-    let access = Uuid::now_v7();
-    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
     for (specific, allowed) in [(0, false), (32, true)] {
+        let actor = Uuid::now_v7();
+        sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
+        let reader = ActorPrincipal {
+            subject_id: actor,
+            actor_id: ActorId::new(actor),
+            name: "bindings-reader".into(),
+            principal_type: AuthenticatedPrincipalType::User,
+            credential_id: None,
+            roles: vec![],
+        };
+        let access = Uuid::now_v7();
+        sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,2,0)").bind(access).bind(actor).bind(id).execute(pool).await.unwrap();
+
         sqlx::query("UPDATE resourceaccesses SET specificpermissions=$2 WHERE id=$1")
             .bind(access)
             .bind(specific)
@@ -205,15 +206,15 @@ async fn bindings_permissions(app: &Router, pool: &sqlx::PgPool, id: Uuid) {
         )
         .await;
         assert_eq!(detail["capabilities"]["canViewResourceBindings"], allowed);
+        sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
+            .bind(access)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM actors WHERE id=$1")
+            .bind(actor)
+            .execute(pool)
+            .await
+            .unwrap();
     }
-    sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
-        .bind(access)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM actors WHERE id=$1")
-        .bind(actor)
-        .execute(pool)
-        .await
-        .unwrap();
 }

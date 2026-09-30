@@ -50,6 +50,8 @@ pub(super) async fn verify(
         assert_eq!(created["AlertRule"]["Id"], saved["id"]);
         assert_eq!(created["AlertRule"]["Name"], saved["name"]);
         let path = format!("{endpoint}/{id}");
+        let mut saved = saved;
+        saved["capabilities"] = json!({"canRead":true,"canWrite":true,"canExecute":true});
         assert_eq!(
             response_json(request(app, Method::GET, &path, Some(admin.clone()), None).await).await,
             saved
@@ -151,8 +153,13 @@ pub(super) async fn verify(
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let saved = response_json(response).await;
-    alert_assertions::saved_rule(pool, admin, &input, &saved).await;
-    assert_eq!(saved["quietHours"], input["quietHours"]);
+    // Native DTOs serialize the optional description explicitly; timezone IDs stay unchanged.
+    let mut expected = input.clone();
+    expected["quietHours"][0]["description"] = Value::Null;
+    alert_assertions::saved_rule(pool, admin, &expected, &saved).await;
+    assert_eq!(saved["quietHours"], expected["quietHours"]);
+    let mut saved = saved;
+    saved["capabilities"] = json!({"canRead":true,"canWrite":true,"canExecute":true});
     let id = saved["id"].as_str().unwrap();
     let mut iana_hour = windows_hour.clone();
     iana_hour["timezone"] = json!("Europe/Paris");
@@ -214,10 +221,6 @@ pub(super) async fn verify(
             json!({"CooldownSeconds":["Cooldown must be between 10s and 24h."],"RequiredMatches":["'Required Matches' must not be empty."],"Threshold":["'Threshold' must not be empty."]}),
         ),
         (
-            json!({"type":"PlatformUnreachable","severity":"Warning","quietHours":[{"$type":"Weekly","dayOfWeek":"Someday","startTime":"22:00:00","endTime":"02:00:00","timezone":"Europe/Paris"}]}),
-            json!("Quiet hours require a valid schedule, timezone, time range and weekly day."),
-        ),
-        (
             json!({"type":"PlatformUnreachable","severity":"Warning","quietHours":[{"$type":"Weekly","dayOfWeek":"Sunday","startTime":"22:00:00","endTime":"02:00:00","timezone":"Europe/Paris"},{"$type":"Weekly","dayOfWeek":"Monday","startTime":"01:00:00","endTime":"03:00:00","timezone":"Europe/Paris"}]}),
             json!("Quiet hours overlap."),
         ),
@@ -243,6 +246,22 @@ pub(super) async fn verify(
         }
         assert_eq!(alert_assertions::rule_set(pool).await, before);
     }
+    // Invalid enum values are now rejected during typed JSON extraction, before persistence.
+    let before = alert_assertions::rule_set(pool).await;
+    let response = request(app, Method::POST, endpoint, Some(admin.clone()), Some(json!({
+        "type":"PlatformUnreachable", "severity":"Warning",
+        "quietHours":[{"$type":"Weekly","dayOfWeek":"Someday","startTime":"22:00:00","endTime":"02:00:00","timezone":"Europe/Paris"}]
+    }))).await;
+    let problem = validation::problem_json(response).await;
+    assert!(
+        problem["errors"].to_string().contains("Someday"),
+        "{problem}"
+    );
+    assert!(
+        problem["errors"].to_string().contains("quietHours"),
+        "{problem}"
+    );
+    assert_eq!(alert_assertions::rule_set(pool).await, before);
     // AlertRuleCreateTests.Create_AlertChannel_ReturnsSuccess and empty URL.
     let before_rules = alert_assertions::rule_set(pool).await;
     let response = request(app,Method::POST,"/api/v1/alertRules/channels",Some(admin.clone()),Some(json!({"alertDestination":"Slack","url":"https://hooks.slack.com/services/test","isActive":true}))).await;

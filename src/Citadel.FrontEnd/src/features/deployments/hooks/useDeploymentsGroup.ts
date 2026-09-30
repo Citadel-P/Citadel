@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { DeploymentView, ResourceCapabilities } from '@/api/generated/api.types';
+import { DeploymentView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -17,7 +17,7 @@ export const useDeploymentsGroup = () => {
   }, [selectedPlatformId, selectedTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listDeployments', readArgs);
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
-  const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
+  const [capabilities, setcapabilities] = useState<ResourceCapabilitiesView | undefined>();
   const lastFetchedRef = useRef<DeploymentView[]>([]);
 
   useEffect(() => {

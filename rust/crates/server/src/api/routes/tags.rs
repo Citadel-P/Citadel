@@ -337,7 +337,7 @@ resource_tag_handlers!(
     tag = "Platforms",
     summary = "Get Platform tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -353,7 +353,7 @@ resource_tag_handlers!(
     summary = "Replace Platform tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -373,7 +373,7 @@ resource_tag_handlers!(
     tag = "Registries",
     summary = "Get Registry tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -389,7 +389,7 @@ resource_tag_handlers!(
     summary = "Replace Registry tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -409,7 +409,7 @@ resource_tag_handlers!(
     tag = "GitRepositories",
     summary = "Get Git repository tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -425,7 +425,7 @@ resource_tag_handlers!(
     summary = "Replace Git repository tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -445,7 +445,7 @@ resource_tag_handlers!(
     tag = "AutomationActions",
     summary = "Get AutomationAction tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -461,7 +461,7 @@ resource_tag_handlers!(
     summary = "Replace AutomationAction tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -481,7 +481,7 @@ resource_tag_handlers!(
     tag = "BuildProjects",
     summary = "Get BuildProject tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -497,7 +497,7 @@ resource_tag_handlers!(
     summary = "Replace BuildProject tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -517,7 +517,7 @@ resource_tag_handlers!(
     tag = "BuildAgentPools",
     summary = "Get BuildAgentPool tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -533,7 +533,7 @@ resource_tag_handlers!(
     summary = "Replace BuildAgentPool tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -553,7 +553,7 @@ resource_tag_handlers!(
     tag = "BackupPolicies",
     summary = "Get BackupPolicy tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -569,7 +569,7 @@ resource_tag_handlers!(
     summary = "Replace BackupPolicy tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -589,7 +589,7 @@ resource_tag_handlers!(
     tag = "Deployments",
     summary = "Get Deployment tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -605,7 +605,7 @@ resource_tag_handlers!(
     summary = "Replace Deployment tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -625,7 +625,7 @@ resource_tag_handlers!(
     tag = "Stacks",
     summary = "Get Stack tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("stackId" = uuid::Uuid, Path)),
@@ -641,7 +641,7 @@ resource_tag_handlers!(
     summary = "Replace Stack tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("stackId" = uuid::Uuid, Path)),
@@ -661,7 +661,7 @@ resource_tag_handlers!(
     tag = "SwarmServices",
     summary = "Get SwarmService tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -677,7 +677,7 @@ resource_tag_handlers!(
     summary = "Replace SwarmService tags",
     request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ResourceTagsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),

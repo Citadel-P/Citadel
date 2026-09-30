@@ -65,7 +65,7 @@ impl PostgresAlertRepository {
                 .execute(&mut *transaction)
                 .await
                 .map_err(storage)?;
-            let resolved = sqlx::query("UPDATE alertevents SET resolvedat=$2,resolutionnote='Condition returned to normal.',updatedat=$2,openincidentkey=NULL WHERE openincidentkey=$1 AND resolvedat IS NULL")
+            let resolved = sqlx::query("UPDATE alertevents SET resolvedat=$2,resolvedbyactorid='00000000-0000-0000-0000-000000000001',resolutionnote='Condition returned to normal.',updatedat=$2,openincidentkey=NULL WHERE openincidentkey=$1 AND resolvedat IS NULL")
                 .bind(&deduplication_key)
                 .bind(observation.observed_at)
                 .execute(&mut *transaction)

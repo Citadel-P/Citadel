@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { NetworksView } from '@/api/generated/api.types';
+import { NetworksResponse } from '@/api/generated/api.types';
 import {
   useDockerDaemonGroup,
   NetworkEvent,
@@ -9,8 +9,8 @@ import { useRead } from '@/lib/hooks';
 
 export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('listNetworks', { platformId });
-  const [networks, setNetworks] = useState<NetworksView | undefined>(data?.data);
-  const lastDataRef = useRef<NetworksView | undefined>(data?.data);
+  const [networks, setNetworks] = useState<NetworksResponse | undefined>(data?.data);
+  const lastDataRef = useRef<NetworksResponse | undefined>(data?.data);
   const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
   const capabilities = data?.data.capabilities;
 

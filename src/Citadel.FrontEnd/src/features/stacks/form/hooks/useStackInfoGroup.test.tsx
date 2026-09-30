@@ -59,7 +59,7 @@ describe('useStackInfoGroup', () => {
       },
     );
 
-    expect(await screen.findByTestId('state')).toHaveTextContent(ContainerStateStatus.Running);
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running));
     await waitFor(() => {
       expect(fake.listenerCount('ContainerEventReceived')).toBe(1);
       expect(fake.listenerCount('ReceiveStackContainersInfo')).toBe(1);

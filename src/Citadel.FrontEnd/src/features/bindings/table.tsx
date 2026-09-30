@@ -1,12 +1,12 @@
 import {
-  CreateExternalSecretInput,
-  ResourceBindingInput,
+  ExternalSecretInput,
+  NewResourceBinding,
   ResourceBindingKind,
   ResourceBindingView,
   SecretDefinitionView,
   SecretProviderType,
-  UpdateExternalSecretInput,
-  UpdateResourceBindingInput,
+  ExternalSecretPatch,
+  ResourceBindingInput,
 } from '@/api/generated/api.types';
 import {
   ResourceBindingAddDropdown,
@@ -20,7 +20,14 @@ import {
   useSecretCreation,
 } from '@/components/custom/resource-bindings-tab';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,7 +49,7 @@ type EntryDialogMode = 'add-variable' | 'add-secret-key' | 'edit';
 
 const EMPTY_ENTRIES: ResourceBindingView[] = [];
 const EMPTY_SECRETS: SecretDefinitionView[] = [];
-const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
+const EXTERNAL_SECRET_INPUT: ExternalSecretInput = {
   name: '',
   providerId: '',
   externalPath: '',
@@ -96,15 +103,15 @@ export const BindingsTable = ({
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRETS, [secretsData?.data.secrets]);
   const [dialogMode, setDialogMode] = useState<EntryDialogMode>('add-variable');
   const [editingEntry, setEditingEntry] = useState<ResourceBindingView | null>(null);
-  const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
+  const [entryInput, setEntryInput] = useState<NewResourceBinding>(newVariableInput());
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
-  const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const [storedSecretInput, setStoredSecretInput] = useState<ExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
   const updateEntry = useCallback(
-    async (entryId: string, entry: ResourceBindingInput, successMessage?: string) => {
+    async (entryId: string, entry: NewResourceBinding, successMessage?: string) => {
       await update.mutateAsync({ data: toUpdateInput(entryId, entry) } as any);
       await invalidateBindingQueries(queryClient);
       if (successMessage) {
@@ -115,7 +122,7 @@ export const BindingsTable = ({
   );
 
   const createEntry = useCallback(
-    async (entry: ResourceBindingInput, successMessage?: string) => {
+    async (entry: NewResourceBinding, successMessage?: string) => {
       await create.mutateAsync({ data: entry } as any);
       await invalidateBindingQueries(queryClient);
       if (successMessage) {
@@ -184,7 +191,9 @@ export const BindingsTable = ({
     try {
       const next =
         dialogMode === 'edit' && editingEntry
-          ? originalInputs.map((entry, index) => (allEntries[index].id === editingEntry.id ? normalizeInput(entryInput) : entry))
+          ? originalInputs.map((entry, index) =>
+              allEntries[index].id === editingEntry.id ? normalizeInput(entryInput) : entry,
+            )
           : [...originalInputs, normalizeInput(entryInput)];
 
       if (hasDuplicateEntryName(next)) {
@@ -200,7 +209,9 @@ export const BindingsTable = ({
       setEntryDialogOpen(false);
       setEditingEntry(null);
     } catch {
-      toast.error((dialogMode === 'edit' ? update.validationErrors : create.validationErrors) ?? 'Failed to save entry');
+      toast.error(
+        (dialogMode === 'edit' ? update.validationErrors : create.validationErrors) ?? 'Failed to save entry',
+      );
     }
   };
 
@@ -217,7 +228,7 @@ export const BindingsTable = ({
   const saveStoredSecret = async () => {
     if (!editingStoredSecret) return;
 
-    const payload: UpdateExternalSecretInput = normalizeExternalSecretInput(storedSecretInput);
+    const payload: ExternalSecretPatch = normalizeExternalSecretInput(storedSecretInput);
     try {
       const result = await updateExternalSecret.mutateAsync({
         id: editingStoredSecret.id,
@@ -300,11 +311,11 @@ const EntryEditorDialog = ({
 }: {
   open: boolean;
   mode: EntryDialogMode;
-  input: ResourceBindingInput;
+  input: NewResourceBinding;
   secrets: SecretDefinitionView[];
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput)) => void;
+  onInputChange: (input: NewResourceBinding | ((prev: NewResourceBinding) => NewResourceBinding)) => void;
   onSave: () => void;
   onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
@@ -348,7 +359,7 @@ const EntryEditorDialog = ({
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
                   </SelectTrigger>
-                  <SelectContent className='bg-background'>
+                  <SelectContent className="bg-background">
                     {secrets.map((secret) => (
                       <SelectItem key={secret.id} value={secret.id}>
                         {secret.name}
@@ -401,13 +412,13 @@ const getInitialEntryInput = (
   mode: EntryDialogMode,
   secrets: SecretDefinitionView[],
   entry?: ResourceBindingView,
-): ResourceBindingInput => {
+): NewResourceBinding => {
   if (entry) return toInputFromView(entry);
   if (mode === 'add-secret-key') return newSecretBindingInput(secrets[0]);
   return newVariableInput();
 };
 
-const newVariableInput = (): ResourceBindingInput => ({
+const newVariableInput = (): NewResourceBinding => ({
   name: '',
   kind: ResourceBindingKind.Variable,
   value: '',
@@ -416,7 +427,7 @@ const newVariableInput = (): ResourceBindingInput => ({
   targetPath: null,
 });
 
-const newSecretBindingInput = (secret?: SecretDefinitionView): ResourceBindingInput => ({
+const newSecretBindingInput = (secret?: SecretDefinitionView): NewResourceBinding => ({
   name: secret?.name ?? '',
   kind: ResourceBindingKind.Secret,
   value: null,
@@ -425,21 +436,22 @@ const newSecretBindingInput = (secret?: SecretDefinitionView): ResourceBindingIn
   targetPath: null,
 });
 
-const normalizeInput = (entry: ResourceBindingInput): ResourceBindingInput => ({
+const normalizeInput = (entry: NewResourceBinding): NewResourceBinding => ({
   name: entry.name,
   kind: entry.kind,
   value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
   secretId: entry.kind === ResourceBindingKind.Secret ? entry.secretId : null,
-  secretDeliveryMode: entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
+  secretDeliveryMode:
+    entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
   targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const toUpdateInput = (id: string, entry: ResourceBindingInput): UpdateResourceBindingInput => ({
+const toUpdateInput = (id: string, entry: NewResourceBinding): ResourceBindingInput => ({
   id,
   ...normalizeInput(entry),
 });
 
-const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
+const hasDuplicateEntryName = (entries: NewResourceBinding[]): boolean => {
   const names = new Set<string>();
   for (const entry of entries) {
     const name = entry.name.trim().toLowerCase();
@@ -449,4 +461,3 @@ const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
 
   return false;
 };
-

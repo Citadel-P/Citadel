@@ -11,12 +11,13 @@ use citadel_deployments::{
     DeploymentBindingSnapshot, DeploymentDetails, DeploymentDraft, DeploymentDuplicateDraft,
     DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository, DeploymentSpec,
     DuplicateSource, DuplicateWarning, FieldPatch, RuntimeContainerState, RuntimeDeploymentResult,
-    TagSummary, UpdateDeploymentMetadata,
+    UpdateDeploymentMetadata,
 };
 use citadel_primitives::{
     ActorId, EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
     SpecificPermissions,
 };
+use citadel_tags::TagSummary;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::postgres::PgRow;

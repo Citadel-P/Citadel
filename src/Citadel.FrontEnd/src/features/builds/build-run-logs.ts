@@ -1,11 +1,11 @@
-import { BuildRunLogEntry } from '@/api/generated/api.types';
+import { BuildLogEntry } from '@/api/generated/api.types';
 import type { LogEntry, LogSeverity } from '@/components/custom/common';
 import { parseCitadelDate } from '@/lib/date-time';
 
-export function mergeBuildRunLogEntries(current: BuildRunLogEntry[], incoming: BuildRunLogEntry[]) {
+export function mergeBuildRunLogEntries(current: BuildLogEntry[], incoming: BuildLogEntry[]) {
   if (incoming.length === 0) return current;
 
-  const byId = new Map<string, BuildRunLogEntry>();
+  const byId = new Map<string, BuildLogEntry>();
   for (const entry of current) byId.set(entry.id, entry);
   for (const entry of incoming) byId.set(entry.id, entry);
 
@@ -14,11 +14,11 @@ export function mergeBuildRunLogEntries(current: BuildRunLogEntry[], incoming: B
   );
 }
 
-export function formatBuildRunLogEntry(entry: BuildRunLogEntry) {
+export function formatBuildRunLogEntry(entry: BuildLogEntry) {
   return `[${entry.stream}] ${entry.message}`;
 }
 
-export function formatBuildRunLogViewerEntries(entry: BuildRunLogEntry): LogEntry[] {
+export function formatBuildRunLogViewerEntries(entry: BuildLogEntry): LogEntry[] {
   return entry.message
     .split(/\r\n|\r|\n/)
     .filter((line) => line.trim().length > 0)

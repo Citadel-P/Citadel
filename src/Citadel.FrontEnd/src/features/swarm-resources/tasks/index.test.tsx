@@ -137,6 +137,7 @@ function createTask(overrides: Partial<SwarmTaskView> = {}): SwarmTaskView {
     updatedAt: '2026-08-04T12:00:00Z',
     observedAt: '2026-08-04T12:00:00Z',
     isStale: false,
+    capabilities: null,
     ...overrides,
   };
 }

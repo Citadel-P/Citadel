@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { ActivityEventType, ActivityResourceType, ActivityStatus } from '@/api/generated/api.types';
+import { ActivityEventType, ActivityResourceType, ActivityStatus, StackReleaseStatus } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -19,7 +19,12 @@ const info = { $type: 'StackDegraded', reason: 'Service is unavailable' };
 
 function Probe() {
   const { stack } = useStackGroup(initial.id);
-  return <output data-testid="activity">{JSON.stringify(stack?.latestActivityView ?? null)}</output>;
+  return (
+    <>
+      <output data-testid="status">{stack?.status ?? 'Loading'}</output>
+      <output data-testid="activity">{JSON.stringify(stack?.latestActivityView ?? null)}</output>
+    </>
+  );
 }
 
 describe('useStackGroup activity updates', () => {
@@ -37,6 +42,7 @@ describe('useStackGroup activity updates', () => {
       },
     });
     await waitFor(() => expect(fake.listenerCount('StackInfoUpdated')).toBe(1));
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent(initial.status));
     const event = {
       ...initial,
       latestActivityView: wireInfo ? { ...activity, info: structuredClone(wireInfo) } : null,
@@ -47,5 +53,41 @@ describe('useStackGroup activity updates', () => {
       expect(JSON.parse(screen.getByTestId('activity').textContent!)).toEqual(wireInfo ? { ...activity, info } : null),
     );
     expect(event).toEqual(originalEvent);
+  });
+});
+
+describe('useStackGroup recovery', () => {
+  it.each(['HTTP refresh', 'realtime update'])('clears stale failures after a successful %s', async (source) => {
+    let response = initial;
+    server.use(http.get('http://localhost/api/v1/stacks/:id', () => HttpResponse.json(response)));
+    const fake = new FakeRealtimeConnection();
+    const { queryClient } = renderCitadel(<Probe />, {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    await waitFor(() => expect(fake.listenerCount('StackInfoUpdated')).toBe(1));
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent(initial.status));
+    act(() =>
+      fake.emit('StackInfoUpdated', {
+        ...initial,
+        status: StackReleaseStatus.Degraded,
+        latestActivityView: { ...activity, info },
+      }),
+    );
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('Degraded'));
+    expect(screen.getByTestId('activity')).toHaveTextContent(info.reason);
+
+    response = { ...initial, status: StackReleaseStatus.Healthy, latestActivityView: null };
+    if (source === 'HTTP refresh') {
+      await act(async () => {
+        await queryClient.refetchQueries({ queryKey: ['getStack', { stackId: initial.id }] });
+      });
+    } else {
+      act(() => fake.emit('StackInfoUpdated', response));
+    }
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('Healthy'));
+    expect(screen.getByTestId('activity')).toHaveTextContent('null');
   });
 });

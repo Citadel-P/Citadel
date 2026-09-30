@@ -21,7 +21,7 @@ export const UserFormComponents: RequiredFormComponents = {
     Header: {
       canEditDescription: false,
       Indicator: ({ resource }: { resource: UserView }) => (
-        <StateIndicator value={resource.isEnabled as any} enableLabel={true} />
+        <StateIndicator variant="badge" value={resource.isEnabled as any} enableLabel={true} />
       ),
       ActionButtons: ({ resource }) => (
         <GenericActionBarButtons resource={resource} actions={Object.values(UserActions)} />

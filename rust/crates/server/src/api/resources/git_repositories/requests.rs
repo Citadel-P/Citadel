@@ -15,6 +15,7 @@ pub struct NewGitRepository {
     pub sync_mode: GitRepositorySyncMode,
     #[serde(default = "default_sync_interval")]
     pub sync_interval_minutes: Option<i32>,
+    #[schema(value_type = Option<crate::openapi::compatibility::RepoWebhookConfig>)]
     pub webhook: Option<Value>,
     pub on_clone: Option<RepoCommand>,
     pub on_pull: Option<RepoCommand>,

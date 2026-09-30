@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub struct BackupRepositoryInput {
     pub name: String,
     pub description: Option<String>,
+    #[schema(value_type = crate::openapi::compatibility::BackupRepositorySpec)]
     pub spec: Value,
     pub password_secret_id: Uuid,
 }
@@ -38,11 +39,13 @@ impl From<BackupRepositoryInput> for citadel_backups::BackupRepositoryConfigurat
 pub struct BackupPolicyInput {
     pub name: String,
     pub description: Option<String>,
+    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
     pub source: Value,
     pub backup_repository_id: Uuid,
     pub enabled: bool,
     pub cron: Option<String>,
     pub time_zone: Option<String>,
+    #[schema(value_type = Option<crate::openapi::compatibility::BackupWebhookConfig>)]
     pub webhook: Option<Value>,
     pub keep_last_successful: Option<i32>,
     pub timeout_seconds: Option<i32>,
@@ -123,6 +126,7 @@ impl From<RenameBackupPolicyInput>
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RepositoryLocationInput {
+    #[schema(value_type = crate::openapi::compatibility::BackupExecutionLocation)]
     pub(crate) location: String,
     pub(crate) platform_id: Option<Uuid>,
 }

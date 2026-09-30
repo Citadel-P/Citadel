@@ -1,10 +1,10 @@
-import { DockerVolumeResultView } from '@/api/generated/api.types';
+import { VolumeView } from '@/api/generated/api.types';
 import { DetailFacts } from '@/components/custom/resource-detail';
 import { byteTransform } from '@/lib/bytes.helper';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
-export const VolumeInfoTable = ({ volume }: { volume: DockerVolumeResultView | undefined }) => {
+export const VolumeInfoTable = ({ volume }: { volume: VolumeView | undefined }) => {
   const formatDateTime = useProfileDateTimeFormatter();
   if (!volume) return null;
   const size = volume.usageData?.size;

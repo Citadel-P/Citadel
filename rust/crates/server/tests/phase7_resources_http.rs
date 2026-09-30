@@ -80,6 +80,9 @@ mod stack_webhooks;
 #[path = "phase7_resources_http/validation.rs"]
 mod validation;
 
+#[path = "phase7_resources_http/backup_contract.rs"]
+mod backup_contract;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
 async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
@@ -755,6 +758,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let policy_id = policy["id"].as_str().unwrap();
     validation::verify_policy(&app, &principal, &policy).await;
     backup_policy_metadata::verify(&app, &pool, &principal, &policy).await;
+    backup_contract::verify(&pool, &principal, &policy).await;
     backup_summaries::verify(&app, &pool, &principal, &policy).await;
     backup_completion::verify_policy(&app, &pool, &principal, &policy).await;
     backup_completion::verify_previews(&pool, identity.clone(), &principal, &fixture).await;
@@ -878,6 +882,8 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .len(),
         0
     );
+    use citadel_identity::{UserRepository, UserResourceAccessInput};
+    let users = citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone());
     for (resource_type, resource_id) in [
         (ResourceType::Build, Uuid::parse_str(project_id).unwrap()),
         (
@@ -897,14 +903,33 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             Uuid::parse_str(rule["id"].as_str().unwrap()).unwrap(),
         ),
     ] {
-        sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
-            .bind(Uuid::now_v7())
-            .bind(reader.actor_id.value())
-            .bind(resource_id)
-            .bind(resource_type as i32)
-            .execute(&pool)
+        users
+            .add_resource_access(
+                reader.subject_id,
+                &UserResourceAccessInput {
+                    resource_type,
+                    resource_id,
+                    permission_level: citadel_primitives::PermissionLevel::Read,
+                    specific_permissions: Vec::new(),
+                },
+                principal.actor_id,
+                chrono::Utc::now(),
+                true,
+            )
             .await
             .unwrap();
+    }
+    for path in [
+        format!("/api/v1/backupRepositories/{repository_id}"),
+        format!("/api/v1/backupPolicies/{policy_id}"),
+        format!("/api/v1/alertRules/channels/{channel_id}"),
+        format!("/api/v1/alertRules/{}", rule["id"].as_str().unwrap()),
+    ] {
+        let response = request(&app, Method::GET, &path, Some(reader.clone()), None).await;
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let value = response_json(response).await;
+        assert_eq!(value["capabilities"]["canRead"], true, "{path}");
+        assert_eq!(value["capabilities"]["canWrite"], false, "{path}");
     }
     let visible_builds = response_json(
         request(
@@ -925,10 +950,34 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query("UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2 AND resourcetype=$4")
-        .bind(reader.actor_id.value()).bind(Uuid::parse_str(project_id).unwrap())
-        .bind(citadel_primitives::SpecificPermission::Apply as i32).bind(ResourceType::Build as i32)
-        .execute(&pool).await.unwrap();
+    let mut access = UserResourceAccessInput {
+        resource_type: ResourceType::Build,
+        resource_id: Uuid::parse_str(project_id).unwrap(),
+        permission_level: citadel_primitives::PermissionLevel::Read,
+        specific_permissions: Vec::new(),
+    };
+    users
+        .remove_resource_access(
+            reader.subject_id,
+            &access,
+            principal.actor_id,
+            chrono::Utc::now(),
+        )
+        .await
+        .unwrap();
+    access
+        .specific_permissions
+        .push(citadel_primitives::SpecificPermission::Apply);
+    users
+        .add_resource_access(
+            reader.subject_id,
+            &access,
+            principal.actor_id,
+            chrono::Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
     let queued = request(&app, Method::POST, &queue_path, Some(reader.clone()), None).await;
     assert_eq!(queued.status(), StatusCode::OK);
     let queued = response_json(queued).await;

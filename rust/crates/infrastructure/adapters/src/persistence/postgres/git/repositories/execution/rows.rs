@@ -184,6 +184,8 @@ pub(super) async fn finish_sync(
         true
     } else if let Some(result) = result {
         result.cloned
+            // Recovery is meaningful even when the remote commit did not change.
+            || claim.previous_error.is_some()
             || !claim
                 .previous_commit
                 .as_deref()

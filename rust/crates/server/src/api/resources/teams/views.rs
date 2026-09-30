@@ -23,9 +23,13 @@ pub struct TeamView {
     pub actor_id: ActorId,
     pub is_enabled: bool,
     pub total_members: i32,
+    #[schema(required = true)]
     pub users: Option<Vec<ResourceInfo>>,
+    #[schema(required = true)]
     pub roles: Option<Vec<ResourceInfo>>,
+    #[schema(required = true)]
     pub resource_accesses: Option<Vec<TeamResourceAccessView>>,
+    #[schema(required = true)]
     pub members: Option<Vec<TeamMemberView>>,
 }
 
@@ -141,11 +145,13 @@ pub struct TeamResourceAccessView {
     #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
     pub resource_type: ResourceType,
     pub resource_id: Uuid,
+    #[schema(required = true)]
     pub resource_name: Option<String>,
     #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
     pub permission_level: PermissionLevel,
-    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>)]
+    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>, required = true)]
     pub specific_permissions: Option<Vec<SpecificPermission>>,
+    #[schema(required = true)]
     pub id: Option<Uuid>,
 }
 

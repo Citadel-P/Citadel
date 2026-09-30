@@ -408,6 +408,8 @@ pub enum ActivityEventInfo {
         stack: StackActivitySnapshot,
         #[serde(rename = "ProjectName")]
         project_name: String,
+        #[serde(rename = "ServiceNames", default)]
+        service_names: Vec<String>,
     },
     SwarmServiceCreated {
         #[serde(rename = "Service")]

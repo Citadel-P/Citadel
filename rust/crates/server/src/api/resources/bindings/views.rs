@@ -36,10 +36,15 @@ pub struct ResourceBindingView {
     pub name: String,
     pub kind: ResourceBindingKind,
     pub scope: ResourceBindingScope,
+    #[schema(required = true)]
     pub resource_id: Option<Uuid>,
+    #[schema(required = true)]
     pub value: Option<String>,
+    #[schema(required = true)]
     pub secret_id: Option<Uuid>,
+    #[schema(required = true)]
     pub secret_delivery_mode: Option<SecretDeliveryMode>,
+    #[schema(required = true)]
     pub target_path: Option<String>,
     pub is_inherited: bool,
 }
@@ -117,9 +122,13 @@ pub struct SecretDefinitionView {
     pub id: Uuid,
     pub name: String,
     pub provider_type: SecretProviderType,
+    #[schema(required = true)]
     pub provider_id: Option<Uuid>,
+    #[schema(required = true)]
     pub external_path: Option<String>,
+    #[schema(required = true)]
     pub external_key: Option<String>,
+    #[schema(required = true)]
     pub external_version: Option<i32>,
     pub created_at: DateTime<Utc>,
 }

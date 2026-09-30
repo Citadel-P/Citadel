@@ -98,6 +98,7 @@ impl From<citadel_identity::ServiceAccountResourceAccess> for ServiceAccountReso
 pub struct ServiceAccountView {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     #[schema(value_type = crate::api::resources::vocabulary::ActorIdSchema)]
     pub actor_id: ActorId,
@@ -106,8 +107,10 @@ pub struct ServiceAccountView {
     #[schema(value_type = crate::api::resources::vocabulary::ActorIdSchema)]
     pub created_by_actor_id: ActorId,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub archived_at_utc: Option<DateTime<Utc>>,
     pub active_token_count: i64,
+    #[schema(required = true)]
     pub last_used_at_utc: Option<DateTime<Utc>>,
     pub teams: Vec<ResourceInfo>,
     pub roles: Vec<ResourceInfo>,
@@ -201,10 +204,13 @@ pub struct ServiceAccountTokenView {
     pub id: Uuid,
     pub name: String,
     pub hint: String,
+    #[schema(required = true)]
     pub expires_at_utc: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub last_used_at_utc: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub revoked_at_utc: Option<DateTime<Utc>>,
-    #[schema(value_type = Option<crate::api::resources::vocabulary::ActorIdSchema>)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::ActorIdSchema>, required = true)]
     pub revoked_by_actor_id: Option<ActorId>,
     #[schema(value_type = crate::api::resources::vocabulary::ActorIdSchema)]
     pub created_by_actor_id: ActorId,

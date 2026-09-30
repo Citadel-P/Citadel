@@ -6,6 +6,10 @@ pub(super) const READ_PERMISSION_MASK: i32 = 1 | 2 | 4;
 
 pub(super) const PLATFORM_SELECT: &str = r#"
 SELECT p.*,
+       (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', tag.id, 'name', tag.name, 'color', tag.color)
+                                 ORDER BY tag.name, tag.id), '[]'::jsonb)
+        FROM resourcetags link JOIN tags tag ON tag.id = link.tagid
+        WHERE link.resourcetype = 'Platform' AND link.resourceid = p.id) AS resource_tags,
        deployment_counts.total AS deployment_count,
        deployment_counts.healthy AS deployment_healthy,
        deployment_counts.degraded AS deployment_degraded,

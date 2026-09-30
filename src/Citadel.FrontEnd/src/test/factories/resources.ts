@@ -1,5 +1,5 @@
 import {
-  ResourceCapabilities,
+  ResourceCapabilitiesView,
   PlatformView,
   PlatformStatus,
   PlatformConnectorType,
@@ -17,7 +17,7 @@ import {
   StackView,
 } from '@/api/generated/api.types';
 
-export const createResourceCapabilities = (overrides: Partial<ResourceCapabilities> = {}): ResourceCapabilities => ({
+export const createResourceCapabilities = (overrides: Partial<ResourceCapabilitiesView> = {}): ResourceCapabilitiesView => ({
   canRead: true,
   canWrite: true,
   canExecute: true,
@@ -25,8 +25,17 @@ export const createResourceCapabilities = (overrides: Partial<ResourceCapabiliti
 });
 
 export const createStack = (overrides: Partial<StackView> = {}): StackView => ({
+  capabilities: null,
   id: '00000000-0000-0000-0000-000000000001',
   name: 'api',
+  latestActivityView: null,
+  platformName: null,
+  platformStatus: PlatformStatus.Online,
+  resourceBindings: null,
+  rowVersion: 1,
+  source: null,
+  spec: null,
+  version: null,
   description: null,
   stackSource: StackSource.WebEditor,
   stackUpdateState: {
@@ -53,6 +62,7 @@ export const createStack = (overrides: Partial<StackView> = {}): StackView => ({
 });
 
 export const createPlatform = (overrides: Partial<PlatformView> = {}): PlatformView => ({
+  capabilities: null,
   id: 'platform-1',
   name: 'Platform',
   description: null,
@@ -101,6 +111,7 @@ export const createPlatform = (overrides: Partial<PlatformView> = {}): PlatformV
 export const createManagedSwarmService = (
   overrides: Partial<ManagedSwarmServiceView> = {},
 ): ManagedSwarmServiceView => ({
+  capabilities: null,
   id: 'service-1',
   platformId: 'platform-1',
   name: 'web',
@@ -111,7 +122,13 @@ export const createManagedSwarmService = (
   health: SwarmServiceHealth.Unknown,
   synchronizationState: SwarmServiceSynchronizationState.NeverApplied,
   controlState: ResourceControlState.Idle,
-  autoUpdateState: { lastCheckedAt: '2026-09-28T00:00:00Z', status: AutoUpdateStatus.Unknown },
+  autoUpdateState: {
+    lastCheckedAt: '2026-09-28T00:00:00Z',
+    status: AutoUpdateStatus.Unknown,
+    currentDigest: null,
+    remoteDigest: null,
+    lastError: null,
+  },
   appliedImageDigest: null,
   hasPendingDesiredChanges: false,
   hasRuntimeDrift: false,
@@ -131,6 +148,7 @@ export const createManagedSwarmService = (
 });
 
 export const createSwarmTask = (overrides: Partial<SwarmTaskView> = {}): SwarmTaskView => ({
+  capabilities: null,
   id: 'task-1',
   versionIndex: 1,
   name: 'web.1',

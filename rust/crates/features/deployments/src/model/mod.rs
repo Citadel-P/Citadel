@@ -10,7 +10,7 @@ pub use operations::{
     ResolvedDeploymentBindings, ResolvedDeploymentBuild, RuntimeContainerState,
     RuntimeDeploymentCommand, RuntimeDeploymentResult,
 };
-pub use resource::{AutoUpdateState, Deployment, DeploymentError, TagSummary};
+pub use resource::{AutoUpdateState, Deployment, DeploymentError};
 pub use spec::{
     ContainerRestartPolicy, DeploymentImageInfo, DeploymentSpec, LifeCycleSpec, ResourceSpec,
     StopSignal, UpdateBehavior,

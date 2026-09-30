@@ -1,7 +1,13 @@
 use crate::api::resources::stacks::spec::*;
+use crate::api::resources::tags::views::TagSummary;
+use crate::api::resources::{
+    activities::views::LatestActivityView,
+    common::{DuplicateSourceInput, PlatformStatus, ResourceControlState},
+    platforms::requests::PlatformType,
+    stacks::requests::CreateStackInput,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
@@ -18,14 +24,17 @@ pub struct StackReleaseView {
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
     pub actor_name: String,
-    pub actor_type: String,
-    pub platform_status: String,
+    #[schema(value_type = crate::api::resources::vocabulary::ActorTypeSchema)]
+    pub actor_type: citadel_identity::ActorType,
+    pub platform_status: PlatformStatus,
     pub platform_name: Option<String>,
 }
 
-impl From<citadel_stacks::StackReleaseDetails> for StackReleaseView {
-    fn from(value: citadel_stacks::StackReleaseDetails) -> Self {
-        Self {
+impl TryFrom<citadel_stacks::StackReleaseDetails> for StackReleaseView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_stacks::StackReleaseDetails) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.release.id,
             stack_id: value.release.stack_id,
             platform_id: value.release.platform_id,
@@ -36,14 +45,20 @@ impl From<citadel_stacks::StackReleaseDetails> for StackReleaseView {
             resource_bindings: value
                 .release
                 .resource_bindings
-                .map(|item| item.into_iter().map(|item| item.into()).collect()),
+                .map(|items| {
+                    items
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .transpose()?,
             created_at: value.release.created_at,
             created_by_actor_id: value.release.created_by_actor_id,
             actor_name: value.actor_name,
-            actor_type: value.actor_type,
-            platform_status: value.platform_status,
+            actor_type: serde_json::from_value(value.actor_type.into())?,
+            platform_status: serde_json::from_value(value.platform_status.into())?,
             platform_name: value.platform_name,
-        }
+        })
     }
 }
 
@@ -83,6 +98,7 @@ pub struct ResourceCapabilities {
 pub struct StackView {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub stack_source: StackSource,
     pub stack_update_state: StackUpdateState,
@@ -90,25 +106,35 @@ pub struct StackView {
     pub status: StackReleaseStatus,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
-    pub control_state: String,
+    pub control_state: ResourceControlState,
     pub current_stack_release_id: Uuid,
-    pub platform_type: String,
+    pub platform_type: PlatformType,
+    #[schema(required = true)]
     pub platform_id: Option<Uuid>,
+    #[schema(required = true)]
     pub version: Option<String>,
+    #[schema(required = true)]
     pub spec: Option<StackSpec>,
+    #[schema(required = true)]
     pub source: Option<StackReleaseSource>,
+    #[schema(required = true)]
     pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
-    pub platform_status: String,
+    pub platform_status: PlatformStatus,
+    #[schema(required = true)]
     pub platform_name: Option<String>,
     pub tags: Vec<TagSummary>,
-    pub latest_activity_view: Option<Value>,
+    #[schema(required = true)]
+    pub latest_activity_view: Option<LatestActivityView>,
+    #[schema(required = true)]
     pub capabilities: Option<StackCapabilities>,
     pub row_version: i64,
 }
 
-impl From<citadel_stacks::StackDetails> for StackView {
-    fn from(value: citadel_stacks::StackDetails) -> Self {
-        Self {
+impl TryFrom<citadel_stacks::StackDetails> for StackView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_stacks::StackDetails) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.stack.id,
             name: value.stack.name,
             description: value.stack.description,
@@ -118,28 +144,34 @@ impl From<citadel_stacks::StackDetails> for StackView {
             status: value.status.into(),
             created_at: value.stack.created_at,
             created_by_actor_id: value.stack.created_by_actor_id,
-            control_state: value.stack.control_state,
+            control_state: serde_json::from_value(value.stack.control_state.into())?,
             current_stack_release_id: value.stack.current_stack_release_id,
-            platform_type: value.platform_type.to_string(),
+            platform_type: value.platform_type.into(),
             platform_id: value.platform_id,
             version: value.version,
             spec: value.spec.map(|item| item.into()),
             source: value.source.map(|item| item.into()),
             resource_bindings: value
                 .resource_bindings
-                .map(|item| item.into_iter().map(|item| item.into()).collect()),
-            platform_status: value.platform_status,
+                .map(|items| {
+                    items
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .transpose()?,
+            platform_status: serde_json::from_value(value.platform_status.into())?,
             platform_name: value.platform_name,
             tags: value.tags.into_iter().map(|item| item.into()).collect(),
-            latest_activity_view:
-                crate::api::resources::activities::presentation::public_latest_activity(
-                    value.latest_activity,
-                ),
+            latest_activity_view: value
+                .latest_activity
+                .map(LatestActivityView::from_stored)
+                .transpose()?,
             capabilities: Some(crate::api::resources::stacks::capabilities::capabilities(
                 value.effective_permission,
             )),
             row_version: value.stack.row_version,
-        }
+        })
     }
 }
 
@@ -156,7 +188,8 @@ pub struct StackConfigView {
     pub id: Uuid,
     pub name: String,
     pub platform_id: Uuid,
-    pub platform_type: String,
+    pub platform_type: PlatformType,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub stack_source: StackSource,
     pub spec: StackSpec,
@@ -171,7 +204,7 @@ impl From<citadel_stacks::StackConfig> for StackConfigView {
             id: value.id,
             name: value.name,
             platform_id: value.platform_id,
-            platform_type: value.platform_type.to_string(),
+            platform_type: value.platform_type.into(),
             description: value.description,
             stack_source: value.stack_source.into(),
             spec: value.spec.into(),
@@ -182,20 +215,34 @@ impl From<citadel_stacks::StackConfig> for StackConfigView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct StackStreamItem {
+    #[serde(rename = "type")]
     pub event_type: StackApplyEventType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stack_status: Option<StackReleaseStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
 }
 
 impl From<citadel_stacks::StackProgressItem> for StackStreamItem {
     fn from(value: citadel_stacks::StackProgressItem) -> Self {
+        let (message, progress_message) = if value.exit_code.is_some_and(|code| code != 0) {
+            (value.message, None)
+        } else {
+            (None, value.message)
+        };
         Self {
             event_type: value.event_type.into(),
-            message: value.message,
+            message,
+            progress_message,
             exit_code: value.exit_code,
             stack_status: value.stack_status.map(|item| item.into()),
             severity: value.severity,
@@ -203,7 +250,7 @@ impl From<citadel_stacks::StackProgressItem> for StackStreamItem {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub enum StackApplyEventType {
     Unknown,
     StdOut,
@@ -227,23 +274,27 @@ impl From<citadel_stacks::StackApplyEventType> for StackApplyEventType {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackDuplicateDraftView {
-    pub draft: Value,
+    pub draft: CreateStackInput,
     pub warnings: Vec<DuplicateDraftWarning>,
 }
 
 impl From<citadel_stacks::StackDuplicateDraft> for StackDuplicateDraftView {
     fn from(value: citadel_stacks::StackDuplicateDraft) -> Self {
         Self {
-            draft: serde_json::json!({
-                "name": value.draft.name,
-                "platformId": value.draft.platform_id,
-                "description": value.draft.description,
-                "stackSource": StackSource::from(value.draft.stack_source),
-                "spec": StackSpec::from(value.draft.spec),
-                "driftPolicy": StackDriftPolicy::from(value.draft.drift_policy),
-                "tagIds": value.draft.tag_ids,
-                "duplicateSource": { "resourceType": "Stack", "resourceId": value.draft.source_id, "resourceName": value.draft.source_name },
-            }),
+            draft: CreateStackInput {
+                name: value.draft.name,
+                platform_id: value.draft.platform_id,
+                description: value.draft.description,
+                stack_source: value.draft.stack_source.into(),
+                spec: value.draft.spec.into(),
+                drift_policy: Some(value.draft.drift_policy.into()),
+                tag_ids: value.draft.tag_ids,
+                duplicate_source: Some(DuplicateSourceInput {
+                    resource_type: citadel_activities::ActivityResourceType::Stack,
+                    resource_id: value.draft.source_id,
+                    resource_name: value.draft.source_name,
+                }),
+            },
             warnings: value.warnings.into_iter().map(|item| item.into()).collect(),
         }
     }
@@ -278,6 +329,7 @@ impl From<citadel_stacks::ComposeProjectImportSource> for ComposeProjectImportSo
 pub struct ComposeProjectStackDraftView {
     pub name: String,
     pub platform_id: Uuid,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub drift_policy: StackDriftPolicy,
     pub tag_ids: Vec<Uuid>,
@@ -314,35 +366,6 @@ impl From<citadel_stacks::ComposeProjectImportDraft> for ComposeProjectImportDra
             issues: value.issues.into_iter().map(|item| item.into()).collect(),
             runtime_fingerprint: value.runtime_fingerprint,
         }
-    }
-}
-
-impl Serialize for StackStreamItem {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeMap;
-
-        let mut item = serializer.serialize_map(None)?;
-        item.serialize_entry("type", &self.event_type)?;
-        if let Some(message) = &self.message {
-            // Docker also writes normal progress to stderr. The public `message`
-            // field is reserved for errors; use `progressMessage` otherwise.
-            let field = if self.exit_code.is_some_and(|code| code != 0) {
-                "message"
-            } else {
-                "progressMessage"
-            };
-            item.serialize_entry(field, message)?;
-        }
-        if let Some(code) = self.exit_code {
-            item.serialize_entry("exitCode", &code)?;
-        }
-        if let Some(status) = self.stack_status {
-            item.serialize_entry("stackStatus", &status)?;
-        }
-        if let Some(severity) = &self.severity {
-            item.serialize_entry("severity", severity)?;
-        }
-        item.end()
     }
 }
 

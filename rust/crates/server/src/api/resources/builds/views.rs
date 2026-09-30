@@ -11,34 +11,45 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectView {
     pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
+    #[schema(required = true)]
     pub latest_run: Option<BuildRunView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub enabled: bool,
     pub git_repository_id: Uuid,
     pub branch: String,
     pub context_path: String,
     pub dockerfile_path: String,
+    #[schema(required = true)]
     pub target: Option<String>,
     pub build_args: Vec<BuildArgSpec>,
     pub build_secrets: Vec<BuildSecretSpec>,
+    #[schema(value_type = crate::openapi::compatibility::BuildProjectBuilderKind)]
     pub builder_kind: String,
+    #[schema(required = true)]
     pub platform_id: Option<Uuid>,
+    #[schema(required = true)]
     pub build_agent_pool_id: Option<Uuid>,
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Vec<String>,
+    #[schema(value_type = Option<crate::openapi::compatibility::BuildWebhookConfig>, required = true)]
     pub webhook: Option<Value>,
     pub timeout_seconds: i32,
     pub retention_run_count: i32,
+    #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub control_started_at: Option<i64>,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub archived_at: Option<DateTime<Utc>>,
     pub row_version: i64,
 }
@@ -99,23 +110,33 @@ pub struct BuildRunView {
     pub git_repository_name_snapshot: String,
     pub platform_snapshot: BuildPlatformSnapshot,
     pub branch: String,
+    #[schema(required = true)]
     pub resolved_commit_sha: Option<String>,
     pub context_path: String,
     pub dockerfile_path: String,
+    #[schema(required = true)]
     pub target: Option<String>,
     pub registry_id: Uuid,
     pub registry_host: String,
     pub image_repository: String,
     pub image_references: Vec<String>,
+    #[schema(value_type = crate::openapi::compatibility::BuildRunTrigger)]
     pub trigger: String,
+    #[schema(value_type = crate::openapi::compatibility::BuildRunStatus)]
     pub status: String,
+    #[schema(required = true)]
     pub image_digest: Option<String>,
     pub timeout_seconds: i32,
     pub queued_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub completed_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub exit_code: Option<i32>,
+    #[schema(required = true)]
     pub error_code: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
     pub triggered_by_actor_id: Uuid,
 }
@@ -160,9 +181,12 @@ pub struct BuildAgentPoolView {
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub enabled: bool,
+    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProvider)]
     pub provider: String,
+    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProviderSpec)]
     pub provider_spec: Value,
     pub max_active_builders: i32,
     pub queue_timeout_seconds: i32,
@@ -172,15 +196,22 @@ pub struct BuildAgentPoolView {
     pub cleanup_timeout_seconds: i32,
     pub maximum_instance_lifetime_seconds: i32,
     pub failure_retention_minutes: i32,
+    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolValidationStatus)]
     pub last_validation_status: String,
+    #[schema(required = true)]
     pub last_validation_message: Option<String>,
+    #[schema(required = true)]
     pub last_validated_at: Option<DateTime<Utc>>,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub control_triggered_by: Option<Uuid>,
+    #[schema(required = true)]
     pub control_started_at: Option<i64>,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub archived_at: Option<DateTime<Utc>>,
     pub row_version: i64,
 }
@@ -303,10 +334,15 @@ pub(crate) struct AuthorizedProject {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildPlatformSnapshot {
+    #[schema(required = true)]
     pub id: Option<Uuid>,
+    #[schema(required = true)]
     pub name: Option<String>,
+    #[schema(required = true)]
     pub address: Option<String>,
+    #[schema(required = true)]
     pub builder_kind: Option<String>,
+    #[schema(required = true)]
     pub build_agent_pool_id: Option<Uuid>,
 }
 

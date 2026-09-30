@@ -1,4 +1,4 @@
-import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -18,14 +18,14 @@ export function AutomationActionsTable({
   actions,
   isLoading,
 }: {
-  items: AutomationActionView[];
+  items: AuthorizedAction[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: AutomationActionView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedAction; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) {
-  const [, setSelectedResources] = useSelectedResources<AutomationActionView>('AutomationAction');
+  const [, setSelectedResources] = useSelectedResources<AuthorizedAction>('AutomationAction');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
@@ -34,9 +34,9 @@ export function AutomationActionsTable({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: AutomationActionView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AuthorizedAction; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<AutomationActionView>[] => [
+): ColumnDef<AuthorizedAction>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -90,7 +90,7 @@ const columns = (
   },
 ];
 
-const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
+const ActionNameRow = ({ action }: { action: AuthorizedAction }) => {
   const status = action.enabled ? (action.latestRun?.status ?? true) : false;
 
   return (
@@ -108,7 +108,7 @@ const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
   );
 };
 
-const ScheduleCell = ({ action }: { action: AutomationActionView }) => {
+const ScheduleCell = ({ action }: { action: AuthorizedAction }) => {
   if (!action.scheduleEnabled) return <span className="text-sm text-muted-foreground">Off</span>;
 
   return (
@@ -121,7 +121,7 @@ const ScheduleCell = ({ action }: { action: AutomationActionView }) => {
   );
 };
 
-const LastRunCell = ({ action }: { action: AutomationActionView }) => {
+const LastRunCell = ({ action }: { action: AuthorizedAction }) => {
   const run = action.latestRun;
   if (!run) return <span className="text-sm text-muted-foreground">No runs</span>;
 

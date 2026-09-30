@@ -50,7 +50,8 @@ export const useSecretInfoGroup = (platformId: string, resourceId: string) => {
             description: null,
             status: secret.inUse,
             capabilities:
-              secret.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+              secret.capabilities ??
+              (currentPlatform?.id === platformId ? (currentPlatform.capabilities ?? null) : null),
           }
         : undefined,
     [currentPlatform, platformId, secret],

@@ -309,7 +309,7 @@ async fn list_pools(
     summary = "Create a Build Agent Pool",
     request_body = BuildAgentPoolInput,
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     security(("Bearer" = [])),
@@ -351,7 +351,7 @@ async fn create_pool(
     tag = "BuildAgentPools",
     summary = "Get a Build Agent Pool",
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -388,7 +388,7 @@ async fn get_pool(
     tag = "BuildAgentPools",
     summary = "Test a Build Agent Pool",
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -433,7 +433,7 @@ async fn test_pool(
         (ref("#/components/schemas/UpdateBuildAgentPoolInput") = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -461,7 +461,7 @@ async fn update_pool(
         (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -486,7 +486,7 @@ async fn update_pool_metadata(
     summary = "Rename a Build Agent Pool",
     request_body = RenamePool,
     responses(
-        (status = 200, description = "Success", body = BuildAgentPoolView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -920,7 +920,7 @@ async fn list_projects(
     summary = "Create a Build Project",
     request_body = BuildProjectInput,
     responses(
-        (status = 200, description = "Success", body = BuildProjectView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -1062,7 +1062,7 @@ async fn authorize_build_dependencies(
     tag = "BuildProjects",
     summary = "Get a Build Project",
     responses(
-        (status = 200, description = "Success", body = BuildProjectView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -1129,7 +1129,7 @@ async fn archive_project(
         (ref("#/components/schemas/UpdateBuildProjectInput") = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = BuildProjectView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -1157,7 +1157,7 @@ async fn update_project(
         (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
     )),
     responses(
-        (status = 200, description = "Success", body = BuildProjectView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -1182,7 +1182,7 @@ async fn update_project_metadata(
     summary = "Update Build Project",
     request_body = RenamePool,
     responses(
-        (status = 200, description = "Success", body = BuildProjectView, content_type = "application/json"),
+        (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),

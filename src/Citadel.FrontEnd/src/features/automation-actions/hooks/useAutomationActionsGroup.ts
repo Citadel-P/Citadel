@@ -1,4 +1,7 @@
-import { AutomationActionView, ResourceCapabilities } from '@/api/generated/api.types';
+import {
+  AuthorizedAction,
+  ResourceCapabilitiesView,
+} from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,9 +15,9 @@ export const useAutomationActionsGroup = () => {
     [selectedTagNames],
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listAutomationActions', readArgs);
-  const [actions, setActions] = useState<AutomationActionView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
-  const lastFetchedRef = useRef<AutomationActionView[]>([]);
+  const [actions, setActions] = useState<AuthorizedAction[] | undefined>();
+  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
+  const lastFetchedRef = useRef<AuthorizedAction[]>([]);
 
   useEffect(() => {
     if (!data) return;
@@ -28,7 +31,7 @@ export const useAutomationActionsGroup = () => {
   }, [data]);
 
   const matchesActiveFilters = useCallback(
-    (action: AutomationActionView) => {
+    (action: AuthorizedAction) => {
       if (selectedTagNames.length === 0) return true;
 
       const tagNames = new Set((action.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
@@ -38,7 +41,7 @@ export const useAutomationActionsGroup = () => {
   );
 
   const handleAutomationActionInfoUpdated = useCallback(
-    (action: AutomationActionView, actionName: string) => {
+    (action: AuthorizedAction, actionName: string) => {
       setActions((prev) => {
         if (!prev) return prev;
         if (actionName === 'create') {

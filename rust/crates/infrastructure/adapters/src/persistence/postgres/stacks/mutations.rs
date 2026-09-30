@@ -535,6 +535,7 @@ impl PostgresStackRepository {
                 ActivityEventInfo::StackImported {
                     stack: snapshot,
                     project_name: claim.project_name.clone(),
+                    service_names: claim.service_names.clone(),
                 },
                 ActivityStatus::Information,
             )

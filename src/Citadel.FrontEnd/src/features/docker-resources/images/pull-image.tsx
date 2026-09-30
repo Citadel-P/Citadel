@@ -4,7 +4,7 @@ import { useInlineSubHeader, useTaskSheet } from '@/lib/atoms';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { LookupResourceType, RegistryView } from '@/api/generated/api.types';
+import { LookupResourceType, AuthorizedRegistryView } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useAppContext } from '@/lib/context/app-context';
@@ -32,10 +32,10 @@ export default function PullImageForm() {
   const { open } = useInlineSubHeader('Image');
   const { currentPlatform } = useAppContext();
   const [image, setImage] = useState('');
-  const [registry, setRegistry] = useState<RegistryView | undefined>();
+  const [registry, setRegistry] = useState<AuthorizedRegistryView | undefined>();
   const canPull = hasCapabilities(currentPlatform, ['canRead', 'canPull']);
 
-  const handleRegistrySelect = (newRegistry: RegistryView | undefined) => {
+  const handleRegistrySelect = (newRegistry: AuthorizedRegistryView | undefined) => {
     setRegistry(newRegistry);
   };
 

@@ -199,7 +199,7 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
                 sqlx::query(
                     r#"INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lasterror,lastsyncedat)
 VALUES($1,$2,$3,NULL,'Pending',NULL,CURRENT_TIMESTAMP)
-ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NULL"#,
+ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NULL,synctrigger='Manual'"#,
                 )
                 .bind(Uuid::now_v7())
                 .bind(id)

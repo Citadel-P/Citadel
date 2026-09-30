@@ -1,5 +1,10 @@
 import { useApiClientContext } from '@/api/api-client-context';
-import { DockerVolumeResultView, PlatformStatus, ProblemDetails, VolumeFileEntryType } from '@/api/generated/api.types';
+import {
+  VolumeView,
+  PlatformStatus,
+  ProblemDetails,
+  VolumeFileEntryType,
+} from '@/api/generated/api.types';
 import { ActionButton } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
@@ -20,7 +25,7 @@ const ROOT_PATH = '/';
 type VolumeBrowserSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  volume?: DockerVolumeResultView | null;
+  volume?: VolumeView | null;
   platformId?: string;
 };
 
@@ -78,7 +83,7 @@ export function VolumeBrowserSheet({ open, onOpenChange, volume, platformId }: V
   );
 }
 
-export const VolumeBrowseDropdownAction: DropdownActionComponent<DockerVolumeResultView> = ({ resource, onAction }) => {
+export const VolumeBrowseDropdownAction: DropdownActionComponent<VolumeView> = ({ resource, onAction }) => {
   const canBrowse = hasCapability(resource, 'canBrowse');
 
   return (
@@ -92,9 +97,9 @@ export const VolumeBrowseDropdownAction: DropdownActionComponent<DockerVolumeRes
   );
 };
 
-export const VolumeBrowseGroupAction: ButtonGroupComponent<DockerVolumeResultView> = ({ resources }) => {
+export const VolumeBrowseGroupAction: ButtonGroupComponent<VolumeView> = ({ resources }) => {
   const { currentPlatform } = useAppContext();
-  const [volume, setVolume] = useState<DockerVolumeResultView | null>(null);
+  const [volume, setVolume] = useState<VolumeView | null>(null);
   const selected = resources[0];
   const canBrowse =
     resources.length === 1 &&
@@ -124,7 +129,7 @@ export const VolumeBrowseGroupAction: ButtonGroupComponent<DockerVolumeResultVie
   );
 };
 
-export const VolumeBrowseInfoAction: ButtonActionComponent<DockerVolumeResultView> = ({ resource }) => {
+export const VolumeBrowseInfoAction: ButtonActionComponent<VolumeView> = ({ resource }) => {
   const { currentPlatform } = useAppContext();
   const [open, setOpen] = useState(false);
   const canBrowse = hasCapability(resource, 'canBrowse') && currentPlatform?.status !== PlatformStatus.Offline;

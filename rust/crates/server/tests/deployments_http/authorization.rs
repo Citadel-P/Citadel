@@ -1,7 +1,13 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::{
+    actors::repository::PostgresActorRepository, users::repository::PostgresUserRepository,
+};
 use citadel_deployments::DeploymentRepository;
 use citadel_deployments::permissions::{ApplyDeployment, CreateDeployment, ReadDeployment};
-use citadel_identity::IdentityError;
+use citadel_identity::{
+    ActorRepository, IdentityError, UserPatchMutation, UserRepository, UserResourceAccessInput,
+};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 
 pub(super) async fn verify(
     app: &Router,
@@ -72,8 +78,7 @@ pub(super) async fn verify(
 
     // The only added right is Apply. Read remains 1, so this catches Execute drift
     // independently at the HTTP precheck and transactional claim boundary.
-    sqlx::query("UPDATE resourceaccesses SET permissionlevel=1,specificpermissions=4 WHERE actorid=$1 AND resourceid=$2")
-        .bind(reader.actor_id.value()).bind(deployment_id).execute(pool).await.unwrap();
+    set_read_access(pool, reader, &[deployment_id], true).await;
     assert!(
         identity
             .require_resource::<ApplyDeployment>(reader, deployment_id)
@@ -106,14 +111,7 @@ pub(super) async fn verify(
     assert!(applied.load(Ordering::Acquire));
 
     // Revocation after a successful precheck must still fail inside persistence.
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1 AND resourceid=$2",
-    )
-    .bind(reader.actor_id.value())
-    .bind(deployment_id)
-    .execute(pool)
-    .await
-    .unwrap();
+    set_read_access(pool, reader, &[deployment_id], false).await;
     let store = PostgresDeploymentRepository::new(pool.clone());
     assert!(matches!(
         store
@@ -131,9 +129,8 @@ pub(super) async fn verify(
             .await,
         Err(IdentityError::Forbidden)
     ));
-    sqlx::query("UPDATE actors SET isenabled=FALSE WHERE id=$1")
-        .bind(reader.actor_id.value())
-        .execute(pool)
+    PostgresActorRepository::new(pool.clone())
+        .set_enabled(reader.actor_id.value(), false)
         .await
         .unwrap();
     assert!(matches!(
@@ -146,9 +143,8 @@ pub(super) async fn verify(
         identity.require_scope::<CreateDeployment>(reader).await,
         Err(IdentityError::Forbidden)
     ));
-    sqlx::query("UPDATE actors SET isenabled=TRUE WHERE id=$1")
-        .bind(reader.actor_id.value())
-        .execute(pool)
+    PostgresActorRepository::new(pool.clone())
+        .set_enabled(reader.actor_id.value(), true)
         .await
         .unwrap();
 
@@ -172,13 +168,9 @@ pub(super) async fn verify(
                 .await
                 .unwrap();
         assert_eq!(extra_resources.len(), 2);
-        let mut extra_grants = Vec::new();
-        for id in extra_resources {
-            let grant = Uuid::now_v7();
-            sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,1,0)")
-                .bind(grant).bind(reader.actor_id.value()).bind(id).execute(pool).await.unwrap();
-            extra_grants.push(grant);
-        }
+        let mut grants = extra_resources;
+        grants.push(deployment_id);
+        set_read_access(pool, reader, &grants, false).await;
 
         for (principal, path, expected) in [
             (reader, "/api/v1/deployments".to_owned(), 3_i64),
@@ -207,15 +199,48 @@ pub(super) async fn verify(
                 principal.is_administrator()
             );
         }
-        sqlx::query("DELETE FROM resourceaccesses WHERE id=ANY($1)")
-            .bind(extra_grants)
-            .execute(pool)
-            .await
-            .unwrap();
+        set_read_access(pool, reader, &[deployment_id], false).await;
     }
 }
 
 async fn query_count(pool: &sqlx::PgPool) -> i64 {
     sqlx::query_scalar("SELECT COALESCE(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query NOT LIKE '%pg_stat_statements%'")
         .fetch_one(pool).await.unwrap()
+}
+
+// After an authorization read, fixture ACL writes must use the application
+// repository so the committed change invalidates cached grants and denials.
+pub(super) async fn set_read_access(
+    pool: &sqlx::PgPool,
+    reader: &ActorPrincipal,
+    ids: &[Uuid],
+    apply: bool,
+) {
+    let patch = UserPatchMutation {
+        resource_accesses: Some(
+            ids.iter()
+                .map(|id| UserResourceAccessInput {
+                    resource_type: ResourceType::Deployment,
+                    resource_id: *id,
+                    permission_level: PermissionLevel::Read,
+                    specific_permissions: if apply {
+                        vec![SpecificPermission::Apply]
+                    } else {
+                        vec![]
+                    },
+                })
+                .collect(),
+        ),
+        ..Default::default()
+    };
+    PostgresUserRepository::new(pool.clone())
+        .patch(
+            reader.subject_id,
+            &patch,
+            ActorId::new(SYSTEM_ACTOR_ID),
+            chrono::Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
 }

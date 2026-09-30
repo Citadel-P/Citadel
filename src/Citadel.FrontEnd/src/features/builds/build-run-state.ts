@@ -1,4 +1,9 @@
-import { BuildProjectView, BuildRunStatus, BuildRunView, ResourceControlState } from '@/api/generated/api.types';
+import {
+  AuthorizedProject,
+  BuildRunStatus,
+  BuildRunView,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import { parseCitadelDate } from '@/lib/date-time';
 
 export function isActiveBuildRun(run: Pick<BuildRunView, 'status'>) {
@@ -19,7 +24,7 @@ export function isTerminalBuildRunStatus(status: BuildRunStatus) {
   );
 }
 
-export function isBuildProjectActive(project: Pick<BuildProjectView, 'currentRunId' | 'controlState' | 'latestRun'>) {
+export function isBuildProjectActive(project: Pick<AuthorizedProject, 'currentRunId' | 'controlState' | 'latestRun'>) {
   const hasCurrentRun = Boolean(project.currentRunId);
   const isProcessing = project.controlState === ResourceControlState.Processing;
 
@@ -50,7 +55,7 @@ export function pickMostAdvancedBuildRun(
 }
 
 export function selectBuildProjectLatestRun(
-  project: Pick<BuildProjectView, 'currentRunId' | 'controlState' | 'latestRun'>,
+  project: Pick<AuthorizedProject, 'currentRunId' | 'controlState' | 'latestRun'>,
   previousRun: BuildRunView | null | undefined,
 ): BuildRunView | null {
   if (project.latestRun) return pickMostAdvancedBuildRun(previousRun, project.latestRun) ?? project.latestRun;
