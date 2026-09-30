@@ -1,19 +1,18 @@
 //! Bounded image checks. The persistent lease is separate from the last Docker
 //! operation, so cancellation/restart cannot turn a check into a deletion claim.
+use citadel_primitives::AuthorizedResource;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::Utc;
-use futures_util::future::BoxFuture;
-use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
-
-use crate::AutoUpdateState;
-use crate::SwarmServiceDetails;
 use crate::SwarmServiceError;
 use crate::SwarmServiceImageInfo;
 use crate::SwarmServiceService;
+use chrono::Utc;
 use citadel_primitives::ActorId;
+use citadel_primitives::{AutoUpdateState, AutoUpdateStatus};
+use futures_util::future::BoxFuture;
+use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 pub trait ServiceAutomationEntitlements: Send + Sync {
     fn enabled(
@@ -30,7 +29,7 @@ pub enum ServiceUpdateOutcome {
 
 pub struct ServiceUpdateCheck {
     pub lease_id: Uuid,
-    pub service: SwarmServiceDetails,
+    pub service: crate::SwarmService,
 }
 
 pub trait ServiceImageDigestPort: Send + Sync {
@@ -58,8 +57,8 @@ pub trait ServiceImageDigestPort: Send + Sync {
 
 /// Only the configured external tag may be checked. A saved desired image is
 /// not an applied baseline, and a digest-pinned image cannot have tag updates.
-pub fn checkable_image(service: &SwarmServiceDetails) -> Result<(Uuid, &str), SwarmServiceError> {
-    if service.control_state == "Processing" {
+pub fn checkable_image(service: &crate::SwarmService) -> Result<(Uuid, &str), SwarmServiceError> {
+    if service.control_state == citadel_primitives::ResourceControlState::Processing {
         return Err(SwarmServiceError::Conflict(
             "The Service is currently processing another operation.".into(),
         ));
@@ -91,26 +90,6 @@ pub fn checkable_image(service: &SwarmServiceDetails) -> Result<(Uuid, &str), Sw
     Ok((*registry_id, image_tag))
 }
 
-pub fn evaluate_digest(current: &str, remote: &str) -> AutoUpdateState {
-    // Docker can return repository@digest for an applied image but only digest
-    // from distribution inspection. Compare content, not these display forms.
-    let digest = |reference: &str| reference.rsplit('@').next().unwrap_or(reference).to_owned();
-    let current = digest(current);
-    let remote = digest(remote);
-    AutoUpdateState {
-        last_checked_at: Utc::now(),
-        status: if current.eq_ignore_ascii_case(&remote) {
-            "UpToDate"
-        } else {
-            "UpdateAvailable"
-        }
-        .into(),
-        current_digest: Some(current),
-        remote_digest: Some(remote),
-        last_error: None,
-    }
-}
-
 impl SwarmServiceService {
     pub fn with_entitlements(
         mut self,
@@ -124,7 +103,7 @@ impl SwarmServiceService {
     /// snapshot must be the configuration used to authorize the trigger.
     pub async fn check_automated_updates(
         &self,
-        snapshot: SwarmServiceDetails,
+        snapshot: AuthorizedResource<crate::SwarmService>,
         cancellation: &CancellationToken,
     ) -> Result<ServiceUpdateOutcome, SwarmServiceError> {
         self.check_automated_updates_mode(snapshot, false, cancellation)
@@ -132,7 +111,7 @@ impl SwarmServiceService {
     }
     pub(crate) async fn check_automated_updates_mode(
         &self,
-        snapshot: SwarmServiceDetails,
+        snapshot: AuthorizedResource<crate::SwarmService>,
         scheduled: bool,
         cancellation: &CancellationToken,
     ) -> Result<ServiceUpdateOutcome, SwarmServiceError> {
@@ -189,7 +168,7 @@ impl SwarmServiceService {
                 "The Service configuration changed during the update check.".into(),
             ));
         }
-        if checked.auto_update_state.status != "UpdateAvailable" {
+        if checked.auto_update_state.status != AutoUpdateStatus::UpdateAvailable {
             return Ok(ServiceUpdateOutcome::Noop("Service image is up to date."));
         }
         if checked.spec.update_behavior == UpdateBehavior::Notify {
@@ -251,7 +230,7 @@ impl SwarmServiceService {
         administrator: bool,
         id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
         self.check_updates_snapshot(actor, administrator, snapshot, None, cancellation)
             .await
@@ -261,10 +240,10 @@ impl SwarmServiceService {
         &self,
         actor: ActorId,
         administrator: bool,
-        snapshot: SwarmServiceDetails,
+        snapshot: AuthorizedResource<crate::SwarmService>,
         cached_digest: Option<String>,
         cancellation: &CancellationToken,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         let id = snapshot.id;
         let digests = self.image_digests.as_ref().ok_or_else(|| {
             SwarmServiceError::Runtime("Image update checking is unavailable.".into())
@@ -298,9 +277,9 @@ impl SwarmServiceService {
                 }
             };
             let update = match &scan {
-                Ok(remote) => Some(evaluate_digest(snapshot.applied_image_digest.as_deref().unwrap(), remote)),
+                Ok(remote) => Some(AutoUpdateState::checked(snapshot.applied_image_digest.as_deref().unwrap(), remote, Utc::now())),
                 Err(SwarmServiceError::Runtime(_)) => Some(AutoUpdateState {
-                    last_checked_at: Utc::now(), status: "Failed".into(), current_digest: snapshot.applied_image_digest.clone(),
+                    last_checked_at: Utc::now(), status: AutoUpdateStatus::Failed, current_digest: snapshot.applied_image_digest.clone(),
                     remote_digest: snapshot.auto_update_state.remote_digest.clone(),
                     last_error: Some("Registry update check failed. Verify registry connectivity and credentials.".into()),
                 }),
@@ -328,20 +307,5 @@ impl SwarmServiceService {
         }).ok_or(SwarmServiceError::Cancelled)?;
         task.await
             .map_err(|_| SwarmServiceError::Runtime("Image update check was interrupted.".into()))?
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn digest_evaluation_matches_content_and_does_not_replace_the_applied_baseline() {
-        let equal = evaluate_digest("registry/app@sha256:ABC", "sha256:abc");
-        assert_eq!(equal.status, "UpToDate");
-        let changed = evaluate_digest("sha256:old", "sha256:new");
-        assert_eq!(changed.status, "UpdateAvailable");
-        assert_eq!(changed.current_digest.as_deref(), Some("sha256:old"));
-        assert_eq!(changed.remote_digest.as_deref(), Some("sha256:new"));
     }
 }

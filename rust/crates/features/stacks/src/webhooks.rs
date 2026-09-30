@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
-use citadel_primitives::ActorId;
-use futures_util::future::BoxFuture;
-use sha2::{Digest, Sha256};
-use uuid::Uuid;
-
-use crate::StackDetails;
 use crate::StackError;
 use crate::StackService;
 use crate::StackSpec;
 use crate::StackUpdateBehavior;
+use citadel_primitives::ActorId;
+use futures_util::future::BoxFuture;
+use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 pub trait StackEntitlements: Send + Sync {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, StackError>>;
@@ -45,7 +43,7 @@ pub fn stack_webhook_fingerprint(spec: &StackSpec) -> Result<String, StackError>
 
 pub fn can_queue_stack_webhook(spec: &StackSpec) -> bool {
     matches!(spec, StackSpec::Git { commit_sha, update_behavior: StackUpdateBehavior::StackAutoDeploy,
-        webhook: Some(webhook), .. } if commit_sha.as_deref().is_none_or(|sha|sha.trim().is_empty()) && webhook.enabled)
+        webhook: Some(webhook), .. } if commit_sha.as_deref().is_none_or(|sha|sha.trim().is_empty()) && webhook.config.enabled)
 }
 
 pub fn stack_git_path_matches(
@@ -142,7 +140,7 @@ impl StackService {
 
     pub async fn queue_webhook(
         &self,
-        expected: &StackDetails,
+        expected: &crate::Stack,
         commit: Option<&str>,
     ) -> Result<(), StackError> {
         if !self.automated_operations_enabled().await? {
@@ -228,7 +226,7 @@ mod tests {
         } = &mut spec
         {
             *update_behavior = StackUpdateBehavior::StackAutoDeploy;
-            webhook.as_mut().unwrap().enabled = false;
+            webhook.as_mut().unwrap().config.enabled = false;
         }
         assert!(!can_queue_stack_webhook(&spec));
     }

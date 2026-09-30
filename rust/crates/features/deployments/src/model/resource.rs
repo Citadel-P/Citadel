@@ -1,35 +1,31 @@
 use super::*;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use citadel_primitives::AutoUpdateState;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutoUpdateState {
-    pub last_checked_at: DateTime<Utc>,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_digest: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub remote_digest: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
-}
-
-/// Durable Deployment state, independent of HTTP and authorization presentation.
+/// Deployment state and related data, independent of HTTP and caller permissions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Deployment {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
     pub platform_id: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub created_by_actor_id: Uuid,
-    pub status: String,
-    pub control_state: String,
+    pub status: crate::DeploymentStatus,
+    pub control_state: citadel_primitives::ResourceControlState,
     pub row_version: i64,
     pub auto_update_state: Option<AutoUpdateState>,
     pub spec: DeploymentSpec,
+    pub audit: citadel_primitives::AuditMetadata,
+
+    // Related data populated by full resource reads.
+    pub platform_status: citadel_primitives::PlatformStatus,
+    pub platform_name: Option<String>,
+    pub image_name: Option<String>,
+    pub image_id: Option<Uuid>,
+    pub container_id: Option<Uuid>,
+    pub docker_container_id: Option<String>,
+    pub docker_image_id: Option<String>,
+    pub tags: Vec<citadel_tags::TagSummary>,
+    pub latest_activity: Option<citadel_activities::ActivitySummary>,
 }
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DeploymentError {

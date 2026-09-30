@@ -10,7 +10,7 @@ import {
   AutoUpdateStatus,
   DeploymentStatus,
   DeploymentView,
-  ContainerDataView,
+  ContainerRuntimeView,
   ResourceBindingScope,
   LatestActivityView,
   PlatformStatus,
@@ -285,7 +285,7 @@ const RuntimeView = ({
   deployment,
   disabled,
 }: {
-  containerInfo?: ContainerDataView | undefined;
+  containerInfo?: ContainerRuntimeView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
   deployment: DeploymentView;
@@ -320,7 +320,7 @@ const RuntimeTabs = ({
   deployment,
   disabled,
 }: {
-  containerInfo?: ContainerDataView | undefined;
+  containerInfo?: ContainerRuntimeView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
   deployment: DeploymentView;

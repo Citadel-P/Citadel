@@ -1,6 +1,6 @@
 import {
   BuildArgSpec,
-  BuildWebhookConfig,
+  WebhookConfig,
   GitRepositoryBranchResponse,
   GitRepositoryRefView,
   BuildProjectInput,
@@ -809,7 +809,7 @@ export const BuildForm = ({
                     defaultBranch={(update.branch ?? original.branch) as string | null | undefined}
                     disabled={disabled}
                     enableDisabled={!automatedOperationsEnabled}
-                    onChange={(webhook) => set({ webhook: webhook as BuildWebhookConfig })}
+                    onChange={(webhook) => set({ webhook: webhook as WebhookConfig })}
                   />
                 ),
               }),
@@ -971,7 +971,7 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
   return normalized;
 }
 
-function normalizeWebhook(webhook: BuildWebhookConfig | undefined | null): BuildWebhookConfig {
+function normalizeWebhook(webhook: WebhookConfig | undefined | null): WebhookConfig {
   if (!webhook || webhook.enabled !== true) return { enabled: false };
 
   return {

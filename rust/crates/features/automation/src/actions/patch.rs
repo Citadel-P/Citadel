@@ -1,62 +1,42 @@
 //! Typed partial updates: missing preserves a field; null only clears nullable fields.
 use super::{AutomationAction, AutomationActionConfiguration};
-use citadel_git::repositories::webhooks::RepoWebhookConfig;
+use citadel_primitives::WebhookPatch;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default)]
-pub enum Change<T> {
-    #[default]
-    Missing,
-    Value(T),
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for Change<T> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        T::deserialize(deserializer).map(Self::Value)
-    }
-}
-
-impl<T> Change<T> {
-    fn apply(self, current: T) -> T {
-        match self {
-            Self::Missing => current,
-            Self::Value(value) => value,
-        }
-    }
-}
+use citadel_primitives::FieldUpdate;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(remote = "Self", rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateAutomationActionInput {
     #[serde(default)]
-    pub description: Change<Option<String>>,
+    pub description: FieldUpdate<Option<String>>,
     #[serde(default)]
-    pub code: Change<String>,
+    pub code: FieldUpdate<String>,
     #[serde(default)]
-    pub default_args_json: Change<Option<String>>,
+    pub default_args_json: FieldUpdate<Option<String>>,
     #[serde(default)]
-    pub enabled: Change<bool>,
+    pub enabled: FieldUpdate<bool>,
     #[serde(default)]
-    pub schedule_enabled: Change<bool>,
+    pub schedule_enabled: FieldUpdate<bool>,
     #[serde(default)]
-    pub schedule_cron: Change<Option<String>>,
+    pub schedule_cron: FieldUpdate<Option<String>>,
     #[serde(default)]
-    pub schedule_time_zone: Change<Option<String>>,
+    pub schedule_time_zone: FieldUpdate<Option<String>>,
     #[serde(default)]
-    pub webhook: Change<Option<RepoWebhookConfig>>,
+    pub webhook: FieldUpdate<Option<WebhookPatch>>,
     #[serde(default)]
-    pub timeout_seconds: Change<Option<i32>>,
+    pub timeout_seconds: FieldUpdate<Option<i32>>,
     #[serde(default)]
-    pub alert_on_failure: Change<bool>,
+    pub alert_on_failure: FieldUpdate<bool>,
     #[serde(default)]
-    pub run_as_actor_id: Change<Option<uuid::Uuid>>,
+    pub run_as_actor_id: FieldUpdate<Option<uuid::Uuid>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(remote = "Self", rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateAutomationActionMetadata {
     #[serde(default)]
-    pub description: Change<Option<String>>,
+    pub description: FieldUpdate<Option<String>>,
 }
 
 // Serde's default struct visitor also accepts arrays. PATCH requires a JSON
@@ -128,7 +108,13 @@ impl UpdateAutomationActionInput {
             schedule_time_zone: self
                 .schedule_time_zone
                 .apply(Some(current.schedule_time_zone)),
-            webhook: self.webhook.apply(current.webhook),
+            webhook: match self.webhook {
+                FieldUpdate::Missing => current.webhook,
+                FieldUpdate::Value(None) => None,
+                FieldUpdate::Value(Some(patch)) => {
+                    Some(patch.apply(current.webhook.unwrap_or_default()))
+                }
+            },
             timeout_seconds: self.timeout_seconds.apply(Some(current.timeout_seconds)),
             alert_on_failure: self.alert_on_failure.apply(current.alert_on_failure),
             run_as_actor_id: self.run_as_actor_id.apply(Some(current.run_as_actor_id)),
@@ -157,15 +143,18 @@ mod tests {
             timeout_seconds: 300,
             alert_on_failure: true,
             run_as_actor_id: uuid::Uuid::now_v7(),
-            control_state: "Idle".into(),
+            control_state: citadel_primitives::ResourceControlState::Idle,
             current_run_id: None,
             row_version: 1,
-            created_by_actor_id: uuid::Uuid::now_v7(),
-            created_at: chrono::Utc::now(),
+
             updated_at: chrono::Utc::now(),
             last_scheduled_run_at: None,
             tags: Vec::new(),
             latest_run: None,
+            audit: citadel_primitives::AuditMetadata {
+                created_at: chrono::Utc::now(),
+                created_by_actor_id: citadel_primitives::ActorId::new(uuid::Uuid::now_v7()),
+            },
         }
     }
 
@@ -185,6 +174,44 @@ mod tests {
         assert_eq!(after.timeout_seconds, Some(before.timeout_seconds));
         assert_eq!(after.run_as_actor_id, Some(before.run_as_actor_id));
         assert_eq!(after.webhook, before.webhook);
+    }
+
+    #[test]
+    fn nested_webhook_patch_preserves_enabled_and_authentication() {
+        let mut before = current();
+        before.webhook = Some(
+            serde_json::from_value(json!({
+                "enabled": true, "provider": "Generic", "authScheme": "BearerToken",
+                "secret": "original", "branchFilter": "main"
+            }))
+            .unwrap(),
+        );
+        let patch: UpdateAutomationActionInput = serde_json::from_value(json!({
+            "webhook": {"secret": "rotated"}
+        }))
+        .unwrap();
+        let after = patch.apply(before.clone()).webhook.unwrap();
+        let mut expected = before.webhook.unwrap();
+        expected.secret = Some("rotated".into());
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn invalid_schedule_is_rejected_when_saving_configuration() {
+        for (cron, zone) in [
+            ("0,99 * * * *", "UTC"),
+            ("0,bad * * * *", "UTC"),
+            ("0 * * * *", "invalid-zone"),
+        ] {
+            let mut config = UpdateAutomationActionInput::default().apply(current());
+            config.schedule_cron = Some(cron.into());
+            config.schedule_time_zone = Some(zone.into());
+            assert!(
+                config
+                    .validate(citadel_primitives::ActorId::new(uuid::Uuid::now_v7()))
+                    .is_err()
+            );
+        }
     }
 
     #[test]

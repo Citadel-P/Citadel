@@ -214,7 +214,7 @@ impl PostgresAutomationRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let action = lock_action(&mut tx, id).await?;
-            if action.control_state != "Idle" {
+            if action.control_state != citadel_primitives::ResourceControlState::Idle {
                 return Err(AutomationError::Conflict(
                     "Automation Action has an active run.".to_owned(),
                 ));

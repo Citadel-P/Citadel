@@ -27,11 +27,8 @@ impl BuildAgentPoolConfiguration {
                 "Build Agent Pool name must contain between 1 and 128 characters.".to_owned(),
             ));
         }
-        self.description = self
-            .description
-            .take()
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty());
+        self.description =
+            citadel_primitives::normalization::optional_text(self.description.take());
         if self
             .description
             .as_ref()

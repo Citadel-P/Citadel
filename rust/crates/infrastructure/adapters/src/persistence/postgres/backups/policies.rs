@@ -9,7 +9,7 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,description,source,backuprepositoryid,enabled,cron,timezone,webhook,keeplastsuccessful,timeoutseconds,alertonfailure,runasactorid,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(&input.source).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(&input.webhook).bind(input.keep_last_successful.unwrap_or(14)).bind(input.timeout_seconds.unwrap_or(14400)).bind(input.alert_on_failure).bind(input.run_as_actor_id.unwrap_or(actor.value())).bind(actor.value()).execute(&mut *transaction).await.map_err(storage)?;
+            sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,description,source,backuprepositoryid,enabled,cron,timezone,webhook,keeplastsuccessful,timeoutseconds,alertonfailure,runasactorid,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(sqlx::types::Json(&input.source)).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.keep_last_successful.unwrap_or(14)).bind(input.timeout_seconds.unwrap_or(14400)).bind(input.alert_on_failure).bind(input.run_as_actor_id.unwrap_or(actor.value())).bind(actor.value()).execute(&mut *transaction).await.map_err(storage)?;
             resource_tags::insert(
                 &mut transaction,
                 "BackupPolicy",
@@ -30,7 +30,7 @@ impl PostgresBackupPersistence {
                 policy.name.clone(),
                 actor,
                 citadel_activities::ActivityEventInfo::BackupPolicyCreated {
-                    policy: policy_metadata::activity_snapshot(&policy)?,
+                    policy: policy_metadata::activity_snapshot(&policy),
                 },
                 Utc::now(),
             )
@@ -42,7 +42,10 @@ impl PostgresBackupPersistence {
             .await
             .map_err(storage)?;
             transaction.commit().await.map_err(storage)?;
-            Ok(policy)
+            self.attach_policy_summaries(vec![policy])
+                .await?
+                .pop()
+                .ok_or(BackupError::NotFound)
         })
     }
 }
@@ -66,7 +69,7 @@ WHERE policy.archivedat IS NULL
   ))
 ORDER BY policy.name,policy.id"#
             );
-            let mut policies = sqlx::query(AssertSqlSafe(query.as_str()))
+            let policies = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::BackupPolicy as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
@@ -77,8 +80,7 @@ ORDER BY policy.name,policy.id"#
                 .into_iter()
                 .map(map_policy)
                 .collect::<Result<Vec<_>, _>>()?;
-            self.attach_policy_summaries(&mut policies).await?;
-            Ok(policies)
+            self.attach_policy_summaries(policies).await
         })
     }
 }
@@ -89,17 +91,11 @@ impl PostgresBackupPersistence {
         id: Uuid,
     ) -> BoxFuture<'_, Result<BackupPolicy, BackupError>> {
         Box::pin(async move {
-            let mut policy =
-                sqlx::query("SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL")
-                    .bind(id)
-                    .fetch_optional(&self.pool)
-                    .await
-                    .map_err(storage)?
-                    .ok_or(BackupError::NotFound)
-                    .and_then(map_policy)?;
-            self.attach_policy_summaries(std::slice::from_mut(&mut policy))
-                .await?;
-            Ok(policy)
+            let policy = self.get_policy_for_execution(id).await?;
+            self.attach_policy_summaries(vec![policy])
+                .await?
+                .pop()
+                .ok_or(BackupError::NotFound)
         })
     }
 }
@@ -144,7 +140,10 @@ impl PostgresBackupPersistence {
                 .await
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(policy)
+            self.attach_policy_summaries(vec![policy])
+                .await?
+                .pop()
+                .ok_or(BackupError::NotFound)
         })
     }
 }
@@ -175,7 +174,7 @@ impl PostgresBackupPersistence {
             }
             citadel_backups::policies::patch::guard(&old, input)?;
             let row = sqlx::query("UPDATE backuppolicies SET description=$2,source=$3,backuprepositoryid=$4,enabled=$5,cron=$6,timezone=$7,webhook=$8,keeplastsuccessful=$9,timeoutseconds=$10,alertonfailure=$11,runasactorid=$12,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
-                .bind(id).bind(&input.description).bind(&input.source).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(&input.webhook).bind(input.keep_last_successful).bind(input.timeout_seconds).bind(input.alert_on_failure).bind(input.run_as_actor_id)
+                .bind(id).bind(&input.description).bind(sqlx::types::Json(&input.source)).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.keep_last_successful).bind(input.timeout_seconds).bind(input.alert_on_failure).bind(input.run_as_actor_id)
                 .fetch_one(&mut *tx).await.map_err(storage)?;
             let policy = map_policy(row)?;
             let activity = citadel_activities::ActivityEvent::new_backup_policy_event(
@@ -183,8 +182,8 @@ impl PostgresBackupPersistence {
                 policy.name.clone(),
                 actor,
                 citadel_activities::ActivityEventInfo::BackupPolicyUpdated {
-                    old_policy: policy_metadata::activity_snapshot(&old)?,
-                    new_policy: policy_metadata::activity_snapshot(&policy)?,
+                    old_policy: policy_metadata::activity_snapshot(&old),
+                    new_policy: policy_metadata::activity_snapshot(&policy),
                 },
                 Utc::now(),
             )
@@ -193,7 +192,10 @@ impl PostgresBackupPersistence {
                 .await
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(policy)
+            self.attach_policy_summaries(vec![policy])
+                .await?
+                .pop()
+                .ok_or(BackupError::NotFound)
         })
     }
 }
@@ -216,7 +218,7 @@ impl PostgresBackupPersistence {
             .map_err(storage)?
             .ok_or(BackupError::NotFound)
             .and_then(map_policy)?;
-            let old_policy = policy_metadata::activity_snapshot(&old)?;
+            let old_policy = policy_metadata::activity_snapshot(&old);
             let row = sqlx::query("UPDATE backuppolicies SET description=$2,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
                 .bind(id).bind(description).fetch_one(&mut *tx).await.map_err(storage)?;
             let policy = map_policy(row)?;
@@ -226,7 +228,7 @@ impl PostgresBackupPersistence {
                 actor,
                 citadel_activities::ActivityEventInfo::BackupPolicyUpdated {
                     old_policy,
-                    new_policy: policy_metadata::activity_snapshot(&policy)?,
+                    new_policy: policy_metadata::activity_snapshot(&policy),
                 },
                 Utc::now(),
             )
@@ -235,7 +237,10 @@ impl PostgresBackupPersistence {
                 .await
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(policy)
+            self.attach_policy_summaries(vec![policy])
+                .await?
+                .pop()
+                .ok_or(BackupError::NotFound)
         })
     }
 }
@@ -275,10 +280,10 @@ impl PostgresBackupPersistence {
     // Constant query count for the whole list. Latest runs are selected using the policy index.
     async fn attach_policy_summaries(
         &self,
-        policies: &mut [BackupPolicy],
-    ) -> Result<(), BackupError> {
+        policies: Vec<BackupPolicy>,
+    ) -> Result<Vec<BackupPolicy>, BackupError> {
         if policies.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let ids = policies.iter().map(|policy| policy.id).collect::<Vec<_>>();
         let mut connection = self.pool.acquire().await.map_err(storage)?;
@@ -292,10 +297,29 @@ impl PostgresBackupPersistence {
             let run = map_run(row)?;
             latest.insert(run.backup_policy_id, run);
         }
-        for policy in policies {
-            policy.tags = tags.remove(&policy.id).unwrap_or_default();
-            policy.latest_run = latest.remove(&policy.id);
-        }
-        Ok(())
+        Ok(policies
+            .into_iter()
+            .map(|policy| BackupPolicy {
+                tags: tags.remove(&policy.id).unwrap_or_default(),
+                latest_run: latest.remove(&policy.id),
+                ..policy
+            })
+            .collect())
+    }
+}
+
+impl PostgresBackupPersistence {
+    pub(super) async fn get_policy_for_execution(
+        &self,
+        id: Uuid,
+    ) -> Result<BackupPolicy, BackupError> {
+        let policy = sqlx::query("SELECT * FROM backuppolicies WHERE id=$1 AND archivedat IS NULL")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_policy)?;
+        Ok(policy)
     }
 }

@@ -225,6 +225,8 @@ async fn image_inspect_authorizes_and_uses_the_exact_node_with_existing_ui_shape
         0,
     )
     .await;
+    // Refresh the permission cache after the fixture grants access directly in SQL.
+    super::realtime_groups::replace_specific_permissions(&f, &principal, vec![]).await;
     let registry = &f.lookup_state.platforms.edge;
     let (session, mut commands) = registry
         .register(

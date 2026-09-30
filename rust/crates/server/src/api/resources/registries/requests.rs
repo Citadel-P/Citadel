@@ -1,5 +1,8 @@
-use crate::api::resources::{metadata_patch::MetadataPatch, registries::views::RegistryStatus};
+use super::{patch::RegistryConfigurationPatch, spec::RegistrySpec};
+use crate::api::resources::registries::views::RegistryStatus;
+use citadel_primitives::PatchField;
 use serde::Deserialize;
+#[cfg(test)]
 use serde_json::Value;
 use uuid::Uuid;
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
@@ -9,9 +12,9 @@ pub struct NewRegistry {
     /// Required for custom registry addresses; inferred for Docker Hub and GitHub.
     #[serde(default)]
     pub registry_host: String,
+    #[schema(value_type = crate::api::resources::schema_models::registries::RegistryStatusSchema)]
     pub status: RegistryStatus,
-    #[schema(value_type = crate::openapi::compatibility::RegistryConfiguration)]
-    pub configuration: Value,
+    pub configuration: RegistrySpec,
     pub description: Option<String>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
@@ -22,21 +25,9 @@ impl From<NewRegistry> for citadel_registries::NewRegistry {
         Self {
             name: value.name,
             registry_host: value.registry_host,
-            status: value.status.into(),
-            configuration: value.configuration,
-            description: value.description,
-            tag_ids: value.tag_ids,
-        }
-    }
-}
-
-impl From<citadel_registries::NewRegistry> for NewRegistry {
-    fn from(value: citadel_registries::NewRegistry) -> Self {
-        Self {
-            name: value.name,
-            registry_host: value.registry_host,
-            status: value.status.into(),
-            configuration: value.configuration,
+            status: value.status,
+            configuration: serde_json::to_value(value.configuration)
+                .expect("registry settings serialize"),
             description: value.description,
             tag_ids: value.tag_ids,
         }
@@ -48,13 +39,14 @@ impl From<citadel_registries::NewRegistry> for NewRegistry {
 pub struct RegistryPatch {
     pub name: Option<String>,
     pub registry_host: Option<String>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::registries::RegistryStatusSchema>)]
     pub status: Option<RegistryStatus>,
     #[serde(default)]
-    #[schema(value_type = Option<Value>, required = false)]
-    pub configuration: MetadataPatch<Value>,
+    #[schema(value_type = Option<RegistryConfigurationPatch>, required = false)]
+    pub configuration: PatchField<RegistryConfigurationPatch>,
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    pub description: MetadataPatch<String>,
+    pub description: PatchField<String>,
     pub tag_ids: Option<Vec<Uuid>>,
 }
 
@@ -63,22 +55,15 @@ impl From<RegistryPatch> for citadel_registries::RegistryPatch {
         Self {
             name: value.name,
             registry_host: value.registry_host,
-            status: value.status.map(|item| item.into()),
-            configuration: value.configuration.into(),
-            description: value.description.into(),
-            tag_ids: value.tag_ids,
-        }
-    }
-}
-
-impl From<citadel_registries::RegistryPatch> for RegistryPatch {
-    fn from(value: citadel_registries::RegistryPatch) -> Self {
-        Self {
-            name: value.name,
-            registry_host: value.registry_host,
-            status: value.status.map(|item| item.into()),
-            configuration: value.configuration.into(),
-            description: value.description.into(),
+            status: value.status,
+            configuration: match value.configuration {
+                PatchField::Missing => citadel_primitives::PatchField::Missing,
+                PatchField::Null => citadel_primitives::PatchField::Null,
+                PatchField::Value(value) => citadel_primitives::PatchField::Value(
+                    serde_json::to_value(value).expect("registry patch serializes"),
+                ),
+            },
+            description: value.description,
             tag_ids: value.tag_ids,
         }
     }

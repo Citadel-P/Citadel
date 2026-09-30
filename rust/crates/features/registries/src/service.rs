@@ -23,7 +23,7 @@ pub async fn update_registry(
     kind: crate::RegistryMutationKind,
 ) -> Result<RegistryDetails, RegistryError> {
     if kind == crate::RegistryMutationKind::Update
-        && !matches!(patch.configuration, crate::MetadataPatch::Missing)
+        && !matches!(patch.configuration, crate::PatchField::Missing)
     {
         let current = repository.get_registry(id).await?;
         let mut updated = patch.apply_to(&current);

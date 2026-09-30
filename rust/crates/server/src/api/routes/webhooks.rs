@@ -22,7 +22,7 @@ use citadel_builds::BuildError;
 use citadel_git::{
     GitRepositoryExecutionError, GitRepositoryExecutionService, GitWebhookOutcome,
     repositories::webhooks::{
-        WebhookConfiguration, WebhookError, repository_matches, webhook_branch,
+        WebhookError, active_webhook, evaluate_webhook, repository_matches, webhook_branch,
     },
 };
 
@@ -328,13 +328,11 @@ async fn dispatch(
             .webhook
             .as_ref()
             .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
-        let webhook = config
-            .configuration()
+        let webhook = active_webhook(Some(config))
             .map_err(webhook_auth_error)?
             .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
-        if let Some(reason) = webhook
-            .evaluate(auth_type, headers, body)
-            .map_err(webhook_auth_error)?
+        if let Some(reason) =
+            evaluate_webhook(&webhook, auth_type, headers, body).map_err(webhook_auth_error)?
         {
             return Ok(WebhookDispatch::noop(reason));
         }
@@ -361,12 +359,11 @@ async fn dispatch(
             .as_ref()
             .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
         let policy = backups.store().get_policy(id).await.map_err(backup_error)?;
-        let webhook = WebhookConfiguration::from_value(policy.webhook.as_ref())
+        let webhook = active_webhook(policy.webhook.as_ref())
             .map_err(webhook_auth_error)?
             .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
-        if let Some(reason) = webhook
-            .evaluate(auth_type, headers, body)
-            .map_err(webhook_auth_error)?
+        if let Some(reason) =
+            evaluate_webhook(&webhook, auth_type, headers, body).map_err(webhook_auth_error)?
         {
             return Ok(WebhookDispatch::noop(reason));
         }
@@ -594,7 +591,7 @@ async fn receive_build_webhook(
         .as_ref()
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
     let project = builds.store().get(id).await.map_err(build_error)?;
-    let mut webhook = WebhookConfiguration::from_value(project.webhook.as_ref())
+    let mut webhook = active_webhook(project.webhook.as_ref())
         .map_err(webhook_auth_error)?
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
     if webhook
@@ -604,16 +601,15 @@ async fn receive_build_webhook(
     {
         webhook.branch_filter = Some(project.branch.clone());
     }
-    if let Some(reason) = webhook
-        .evaluate(auth_type, headers, body)
-        .map_err(webhook_auth_error)?
+    if let Some(reason) =
+        evaluate_webhook(&webhook, auth_type, headers, body).map_err(webhook_auth_error)?
     {
         return Ok(WebhookDispatch::noop(reason));
     }
     if !project.enabled {
         return Ok(WebhookDispatch::noop("Build Project is disabled."));
     }
-    if project.control_state != "Idle" {
+    if project.control_state != citadel_primitives::ResourceControlState::Idle {
         return Ok(WebhookDispatch::noop(
             "Build Project already has an active run.",
         ));
@@ -643,9 +639,12 @@ async fn receive_build_webhook(
     if !repository_matches(&source.url, &payload) {
         return Ok(WebhookDispatch::noop("Repository identity mismatch"));
     }
-    let (_, payload_branch) =
-        citadel_git::repositories::webhooks::webhook_branch(&webhook.provider, headers, body)
-            .map_err(webhook_auth_error)?;
+    let (_, payload_branch) = citadel_git::repositories::webhooks::webhook_branch(
+        webhook.provider.as_str(),
+        headers,
+        body,
+    )
+    .map_err(webhook_auth_error)?;
     let branch = payload_branch
         .as_deref()
         .or(webhook.branch_filter.as_deref())
@@ -674,7 +673,7 @@ async fn receive_build_webhook(
             return Ok(WebhookDispatch::noop("No relevant path changes"));
         }
     } else if let Some(previous) = &project.latest_run
-        && previous.status == "Succeeded"
+        && previous.status == citadel_builds::BuildRunStatus::Succeeded
         && let Some(base) = previous.resolved_commit_sha.as_deref()
     {
         let cancellation = CancellationToken::new();
@@ -774,20 +773,13 @@ async fn receive_service_webhook(
         .webhook
         .as_ref()
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
-    let value = serde_json::to_value(config).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Webhook configuration is invalid.",
-        )
-    })?;
-    let mut webhook = WebhookConfiguration::from_value(Some(&value))
+    let mut webhook = active_webhook(Some(config))
         .map_err(webhook_auth_error)?
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
     // A Service follows an image tag, not a Git branch.
     webhook.branch_filter = None;
-    if let Some(reason) = webhook
-        .evaluate(auth_type, headers, body)
-        .map_err(webhook_auth_error)?
+    if let Some(reason) =
+        evaluate_webhook(&webhook, auth_type, headers, body).map_err(webhook_auth_error)?
     {
         return Ok(WebhookDispatch::noop(reason));
     }
@@ -852,13 +844,7 @@ async fn receive_stack_webhook(
     else {
         return Err((StatusCode::NOT_FOUND, "Webhook not found."));
     };
-    let value = serde_json::to_value(config).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Webhook configuration is invalid.",
-        )
-    })?;
-    let mut webhook = WebhookConfiguration::from_value(Some(&value))
+    let mut webhook = active_webhook(Some(&config.config))
         .map_err(webhook_auth_error)?
         .ok_or((StatusCode::NOT_FOUND, "Webhook not found."))?;
     if webhook
@@ -868,9 +854,8 @@ async fn receive_stack_webhook(
     {
         webhook.branch_filter = Some(branch.clone());
     }
-    if let Some(reason) = webhook
-        .evaluate(auth_type, headers, body)
-        .map_err(webhook_auth_error)?
+    if let Some(reason) =
+        evaluate_webhook(&webhook, auth_type, headers, body).map_err(webhook_auth_error)?
     {
         return Ok(WebhookDispatch::noop(reason));
     }
@@ -894,7 +879,7 @@ async fn receive_stack_webhook(
         return Ok(WebhookDispatch::noop("Repository identity mismatch"));
     }
     let (_, payload_branch) =
-        webhook_branch(&webhook.provider, headers, body).map_err(webhook_auth_error)?;
+        webhook_branch(webhook.provider.as_str(), headers, body).map_err(webhook_auth_error)?;
     if payload_branch
         .as_deref()
         .or(webhook.branch_filter.as_deref())

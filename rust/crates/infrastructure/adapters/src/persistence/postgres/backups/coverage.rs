@@ -76,10 +76,19 @@ pub async fn volume_coverage(
                 platform_id: r.try_get("platformid").map_err(storage)?,
                 volume_name: r.try_get("volume").map_err(storage)?,
                 docker_node_id: r.try_get("node").map_err(storage)?,
-                status: r.try_get("status").map_err(storage)?,
+                status: r
+                    .try_get::<String, _>("status")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
                 policy_count: r.try_get("count").map_err(storage)?,
                 last_run_id: r.try_get("lastrunid").map_err(storage)?,
-                last_run_status: r.try_get("lastrunstatus").map_err(storage)?,
+                last_run_status: r
+                    .try_get::<Option<String>, _>("lastrunstatus")
+                    .map_err(storage)?
+                    .map(|value| value.parse())
+                    .transpose()
+                    .map_err(storage)?,
                 last_run_at: r.try_get("lastrunat").map_err(storage)?,
                 last_successful_run_at: r.try_get("lastsuccessfulrunat").map_err(storage)?,
             })

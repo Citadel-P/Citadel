@@ -1,6 +1,6 @@
 import {
   ManagedSwarmServiceView,
-  PlatformCapabilities,
+  PlatformCapabilitiesView,
   ResourceControlState,
   SwarmServiceCapabilities,
   SwarmServiceOwnership,
@@ -31,7 +31,7 @@ export type SwarmServiceListView = Pick<
   | 'stackId'
   | 'isStale'
 > & {
-  capabilities?: null | PlatformCapabilities | SwarmServiceCapabilities;
+  capabilities?: null | PlatformCapabilitiesView | SwarmServiceCapabilities;
   tasks: SwarmTaskView[];
   managedServiceId?: string;
   managedControlState?: ResourceControlState;
@@ -41,7 +41,7 @@ export type SwarmServiceListView = Pick<
 
 export type SwarmServiceInfoView = SwarmServiceView & {
   platformId: string;
-  capabilities?: PlatformCapabilities | null;
+  capabilities?: PlatformCapabilitiesView | null;
   tasks: SwarmTaskView[];
   managedServiceId?: string;
   canAdopt?: boolean;

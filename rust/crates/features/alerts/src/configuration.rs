@@ -6,6 +6,6 @@ pub(crate) fn optional_name<'de, D: serde::Deserializer<'de>>(
     Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
-pub(crate) fn enabled_status() -> String {
-    "Enabled".into()
+pub(crate) fn enabled_status() -> crate::AlertRuleStatus {
+    crate::AlertRuleStatus::Enabled
 }

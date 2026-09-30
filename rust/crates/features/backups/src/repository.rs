@@ -21,6 +21,7 @@ pub trait BackupPersistence: Send + Sync {
     fn record_repository_operation<'a>(
         &'a self,
         id: Uuid,
+        operation_id: Uuid,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
@@ -84,7 +85,7 @@ pub trait BackupPersistence: Send + Sync {
     fn enqueue_webhook<'a>(
         &'a self,
         policy_id: Uuid,
-        expected_webhook: &'a Value,
+        expected_webhook: &'a citadel_primitives::WebhookConfig,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>>;
     fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>>;
     fn enqueue_scheduled_backup(

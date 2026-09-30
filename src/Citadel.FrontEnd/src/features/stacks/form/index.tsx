@@ -6,7 +6,7 @@ import { StackActions } from './actions';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useStackGroup } from './hooks/useStackGroup';
 import {
-  ContainerDataView,
+  ContainerRuntimeView,
   StackView,
   ResourceControlState,
   LatestActivityView,
@@ -275,9 +275,6 @@ const StackLatestActivity = ({
       </AlertMessage>
     );
   }
-  if (latestActivity?.info.$type === 'StackGitUpdateAvailable') {
-    return null;
-  }
   if (
     stack.status === StackReleaseStatus.Healthy &&
     latestActivity.status === ActivityStatus.Failure &&
@@ -473,7 +470,7 @@ const StackContainersRuntime = ({
   error,
 }: {
   stack: StackView;
-  containersInfo: ContainerDataView[];
+  containersInfo: ContainerRuntimeView[];
   isLoading: boolean;
   error: ReturnType<typeof useStackInfoGroup>['error'];
 }) => {
@@ -819,7 +816,7 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   );
 };
 
-const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers: ContainerDataView[] }) => {
+const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers: ContainerRuntimeView[] }) => {
   const canViewLogs = hasCapability(stack, 'canViewLogs');
   const canInspect = hasCapability(stack, 'canInspect');
   const canOpenTerminal = hasCapability(stack, 'canOpenTerminal');
@@ -900,8 +897,8 @@ const StackContainerInspect = ({
   onSelectContainer,
 }: {
   stackId: string;
-  containers: ContainerDataView[];
-  selectedContainer?: ContainerDataView;
+  containers: ContainerRuntimeView[];
+  selectedContainer?: ContainerRuntimeView;
   onSelectContainer: (containerId: string) => void;
 }) => {
   if (!selectedContainer) {
@@ -932,8 +929,8 @@ const StackContainerTerminal = ({
   disabled,
 }: {
   stackId: string;
-  containers: ContainerDataView[];
-  selectedContainer?: ContainerDataView;
+  containers: ContainerRuntimeView[];
+  selectedContainer?: ContainerRuntimeView;
   onSelectContainer: (containerId: string) => void;
   disabled?: boolean;
 }) => {
@@ -970,8 +967,8 @@ const StackTerminalContainerSelect = ({
   selectedContainer,
   onSelectContainer,
 }: {
-  containers: ContainerDataView[];
-  selectedContainer: ContainerDataView;
+  containers: ContainerRuntimeView[];
+  selectedContainer: ContainerRuntimeView;
   onSelectContainer: (containerId: string) => void;
 }) => {
   return (
@@ -1070,11 +1067,11 @@ const formatStackDrift = (drift: StackDrift) => {
   }
 };
 
-const getSelectedStackContainer = (containers: ContainerDataView[], selectedContainerId?: string) => {
+const getSelectedStackContainer = (containers: ContainerRuntimeView[], selectedContainerId?: string) => {
   return containers.find((container) => container.id === selectedContainerId) ?? containers[0];
 };
 
-const getStackContainerLabel = (container: ContainerDataView) => {
+const getStackContainerLabel = (container: ContainerRuntimeView) => {
   const name = container.name?.replace(/^\//, '');
   if (name) return name;
 
@@ -1086,7 +1083,7 @@ const StackContainersTable = ({
   isLoading,
   platformId,
 }: {
-  containers: ContainerDataView[];
+  containers: ContainerRuntimeView[];
   isLoading: boolean;
   platformId?: string;
 }) => {
@@ -1095,7 +1092,7 @@ const StackContainersTable = ({
   return <DataTable columns={columns} data={containers} isLoading={isLoading} />;
 };
 
-const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerDataView>[] => [
+const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerRuntimeView>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

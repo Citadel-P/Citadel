@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl SwarmServiceService {
     pub async fn adoption_draft(
         &self,
@@ -22,7 +23,7 @@ impl SwarmServiceService {
         id: &str,
         mut input: crate::adoption::AdoptSwarmService,
         cancel: &CancellationToken,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
         if input.preview_fingerprint.len() != 64 || input.tag_ids.len() > 100 {

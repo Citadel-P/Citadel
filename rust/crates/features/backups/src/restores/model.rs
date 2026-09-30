@@ -10,7 +10,7 @@ pub struct BackupRestoreRun {
     pub target_docker_node_id: Option<String>,
     pub target_volume_name: String,
     pub overwrite_existing: bool,
-    pub status: String,
+    pub status: BackupRestoreStatus,
     pub queued_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -30,7 +30,7 @@ pub struct RestoreClaim {
 
 #[derive(Debug, Clone)]
 pub struct RestoreExecutionResult {
-    pub status: &'static str,
+    pub status: BackupRestoreStatus,
     pub exit_code: Option<i32>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,

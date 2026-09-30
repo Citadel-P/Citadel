@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import {
   AuthorizedGitRepositoryView,
-  GitReposStatus,
+  GitRepositoryStatus,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -104,13 +104,13 @@ export const GitReposTable = ({
 };
 
 const RepoNameRow = ({ repo }: { repo: AuthorizedGitRepositoryView }) => {
-  const status = repo.status ?? GitReposStatus.Unknown;
+  const status = repo.status ?? GitRepositoryStatus.Unknown;
 
   return (
     <div className="flex items-center gap-1">
       <StateIndicator
         value={status}
-        isProcessing={repo.controlState === ResourceControlState.Processing || status === GitReposStatus.Pending}
+        isProcessing={repo.controlState === ResourceControlState.Processing || status === GitRepositoryStatus.Pending}
       />
       <Link to={`../git-repos/edit/${repo.id}`} className="hover:underline">
         {repo.name}

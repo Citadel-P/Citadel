@@ -1,7 +1,7 @@
-import { DockerNetworkDetailsView } from '@/api/generated/api.types';
+import { NetworkView } from '@/api/generated/api.types';
 import { DetailFacts } from '@/components/custom/resource-detail';
 
-export const NetworkInfoTable = ({ network }: { network: DockerNetworkDetailsView | undefined }) => {
+export const NetworkInfoTable = ({ network }: { network: NetworkView | undefined }) => {
   if (!network) return null;
   return (
     <DetailFacts

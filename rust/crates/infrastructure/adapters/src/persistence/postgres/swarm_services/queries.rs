@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
 pub(super) const AUTHORIZED_CTES: &str = r#"
 WITH actor_scope AS (
@@ -100,17 +101,18 @@ impl PostgresSwarmServiceRepository {
     ) -> BoxFuture<'_, Result<citadel_swarm_services::SwarmServiceDuplicateDraft, SwarmServiceError>>
     {
         Box::pin(async move {
-            let source = get_authorized(&self.pool, actor, administrator, id).await?;
+            let source = get_authorized(&self.pool, actor, administrator, id)
+                .await?
+                .resource;
             let name =
-                available_service_name(&self.pool, source.platform_id, &source.service.name, true)
-                    .await?;
-            let mut spec = source.service.spec.for_create();
+                available_service_name(&self.pool, source.platform_id, &source.name, true).await?;
+            let mut spec = source.spec.for_create();
             spec.webhook = None;
             Ok(citadel_swarm_services::SwarmServiceDuplicateDraft {
                 name,
-                source_name: source.service.name,
-                platform_id: source.service.platform_id,
-                description: source.service.description,
+                source_name: source.name,
+                platform_id: source.platform_id,
+                description: source.description,
                 spec,
                 tag_ids: source.tags.into_iter().map(|t| t.id).collect(),
                 warnings: Vec::new(),
@@ -124,7 +126,10 @@ impl PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         filter: &'a SwarmServiceFilter,
-    ) -> BoxFuture<'a, Result<Vec<SwarmServiceDetails>, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<AuthorizedResource<citadel_swarm_services::SwarmService>>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTES}{PROJECTION}
@@ -156,7 +161,10 @@ impl PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        '_,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move { get_authorized(&self.pool, actor_id, administrator, id).await })
     }
 }
@@ -166,7 +174,7 @@ pub(super) async fn get_authorized(
     actor_id: ActorId,
     administrator: bool,
     id: Uuid,
-) -> Result<SwarmServiceDetails, SwarmServiceError> {
+) -> Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError> {
     let query = format!(
         "{AUTHORIZED_CTES}{PROJECTION} WHERE s.id=$3 AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) >= 1) LIMIT 1"
     );

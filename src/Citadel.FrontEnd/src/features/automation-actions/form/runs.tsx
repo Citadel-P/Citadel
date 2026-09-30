@@ -1,6 +1,6 @@
 import {
-  ActionRunStatus,
-  AutomationActionRunView,
+  AutomationRunStatus,
+  AutomationRunView,
   AuthorizedAction,
 } from '@/api/generated/api.types';
 import { LogViewer } from '@/components/custom/common';
@@ -44,7 +44,7 @@ export function AutomationActionRunsTab({ resource }: { resource: AuthorizedActi
   );
 
   const handleCancel = useCallback(
-    async (run: AutomationActionRunView) => {
+    async (run: AutomationRunView) => {
       try {
         await cancelRun.mutateAsync({ id: resource.id, runId: run.id } as any);
         await queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id: resource.id }] });
@@ -81,9 +81,9 @@ export function AutomationActionRunsTab({ resource }: { resource: AuthorizedActi
 
 const runColumns = (
   onSelectLog: (id: string) => void,
-  onCancel: (run: AutomationActionRunView) => void,
+  onCancel: (run: AutomationRunView) => void,
   cancelPending: boolean,
-): ColumnDef<AutomationActionRunView>[] => [
+): ColumnDef<AutomationRunView>[] => [
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
@@ -154,7 +154,7 @@ const runColumns = (
   },
 ];
 
-function formatDuration(value: AutomationActionRunView['durationMs']) {
+function formatDuration(value: AutomationRunView['durationMs']) {
   if (value === null || value === undefined) return '-';
 
   const ms = Number(value);
@@ -164,8 +164,8 @@ function formatDuration(value: AutomationActionRunView['durationMs']) {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-function isActiveRun(run: Pick<AutomationActionRunView, 'status'>) {
-  return run.status === ActionRunStatus.Queued || run.status === ActionRunStatus.Running;
+function isActiveRun(run: Pick<AutomationRunView, 'status'>) {
+  return run.status === AutomationRunStatus.Queued || run.status === AutomationRunStatus.Running;
 }
 
 function AutomationRunLogsSheet({
@@ -176,7 +176,7 @@ function AutomationRunLogsSheet({
   onOpenChange,
 }: {
   open: boolean;
-  run?: AutomationActionRunView;
+  run?: AutomationRunView;
   logs: string;
   isLoading: boolean;
   onOpenChange: (open: boolean) => void;

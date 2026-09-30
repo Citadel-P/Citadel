@@ -1,6 +1,7 @@
 //! PATCH preserves omitted fields; explicit null is passed to the domain's validation.
 use super::spec::*;
-use crate::api::resources::metadata_patch::MetadataPatch;
+use citadel_alerts::{AlertRuleStatus, AlertSeverity, AlertType};
+use citadel_primitives::PatchField;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
@@ -9,32 +10,32 @@ use uuid::Uuid;
 #[serde(remote = "Self", rename_all = "camelCase")]
 pub struct PatchAlertRuleInput {
     #[serde(default, rename = "type")]
-    #[schema(value_type = AlertType, required = false)]
-    alert_type: MetadataPatch<AlertType>,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertTypeSchema, required = false)]
+    alert_type: PatchField<AlertType>,
     #[serde(default)]
-    #[schema(value_type = AlertSeverity, required = false)]
-    severity: MetadataPatch<AlertSeverity>,
-    #[serde(default)]
-    #[schema(value_type = Option<i32>, required = false)]
-    cooldown_seconds: MetadataPatch<i32>,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertSeveritySchema, required = false)]
+    severity: PatchField<AlertSeverity>,
     #[serde(default)]
     #[schema(value_type = Option<i32>, required = false)]
-    required_matches: MetadataPatch<i32>,
+    cooldown_seconds: PatchField<i32>,
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, required = false)]
+    required_matches: PatchField<i32>,
     #[serde(default)]
     #[schema(value_type = Option<f64>, required = false)]
-    threshold: MetadataPatch<f64>,
+    threshold: PatchField<f64>,
     #[serde(default)]
-    #[schema(value_type = AlertRuleStatus, required = false)]
-    status: MetadataPatch<AlertRuleStatus>,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertRuleStatusSchema, required = false)]
+    status: PatchField<AlertRuleStatus>,
     #[serde(default)]
     #[schema(value_type = Option<Vec<Uuid>>, required = false)]
-    channel_ids: MetadataPatch<Vec<Uuid>>,
+    channel_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
     #[schema(value_type = Option<Vec<AlertResourceScope>>, required = false)]
-    limited_to: MetadataPatch<Vec<AlertResourceScope>>,
+    limited_to: PatchField<Vec<AlertResourceScope>>,
     #[serde(default)]
     #[schema(value_type = Option<Vec<AlertQuietHour>>, required = false)]
-    quiet_hours: MetadataPatch<Vec<AlertQuietHour>>,
+    quiet_hours: PatchField<Vec<AlertQuietHour>>,
 }
 impl PatchAlertRuleInput {
     pub(crate) fn into_value(self) -> Value {
@@ -57,16 +58,16 @@ impl PatchAlertRuleInput {
 pub struct PatchAlertChannelInput {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    name: MetadataPatch<String>,
+    name: PatchField<String>,
     #[serde(default)]
     #[schema(value_type = AlertDestination, required = false)]
-    alert_destination: MetadataPatch<AlertDestination>,
+    alert_destination: PatchField<AlertDestination>,
     #[serde(default)]
     #[schema(value_type = String, required = false)]
-    url: MetadataPatch<String>,
+    url: PatchField<String>,
     #[serde(default)]
     #[schema(value_type = bool, required = false)]
-    is_active: MetadataPatch<bool>,
+    is_active: PatchField<bool>,
 }
 impl PatchAlertChannelInput {
     pub(crate) fn into_value(self) -> Value {
@@ -84,7 +85,7 @@ impl PatchAlertChannelInput {
 pub struct PatchAlertRuleMetadata {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    description: MetadataPatch<String>,
+    description: PatchField<String>,
 }
 impl PatchAlertRuleMetadata {
     pub(crate) fn into_value(self) -> Value {
@@ -94,13 +95,13 @@ impl PatchAlertRuleMetadata {
     }
 }
 
-fn insert<T: Serialize>(fields: &mut Map<String, Value>, name: &str, patch: MetadataPatch<T>) {
+fn insert<T: Serialize>(fields: &mut Map<String, Value>, name: &str, patch: PatchField<T>) {
     match patch {
-        MetadataPatch::Missing => {}
-        MetadataPatch::Null => {
+        PatchField::Missing => {}
+        PatchField::Null => {
             fields.insert(name.to_owned(), Value::Null);
         }
-        MetadataPatch::Value(value) => {
+        PatchField::Value(value) => {
             fields.insert(name.to_owned(), serde_json::json!(value));
         }
     }

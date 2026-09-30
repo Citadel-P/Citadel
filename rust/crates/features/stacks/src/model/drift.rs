@@ -61,7 +61,7 @@ pub enum StackDrift {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub enum StackReconciliationStatus {
     NoDrift,
     Reconciled,
@@ -71,7 +71,7 @@ pub enum StackReconciliationStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub enum StackReconciliationActionType {
     StartContainer,
     ResumeContainer,

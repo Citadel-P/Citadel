@@ -6,16 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum UpdateBehavior {
-    #[default]
-    #[serde(alias = "disabled")]
-    Disabled,
-    #[serde(alias = "notify")]
-    Notify,
-    #[serde(alias = "autoDeploy", alias = "autodeploy")]
-    AutoDeploy,
-}
+pub use citadel_primitives::UpdateBehavior;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StopSignal {

@@ -1,9 +1,6 @@
 import {
-  RepoWebhookConfig,
-  BackupWebhookConfig,
-  BuildWebhookConfig,
+  WebhookConfig,
   StackWebhookConfig,
-  SwarmServiceWebhookConfig,
   WebhookAuthScheme,
   WebhookProvider,
 } from '@/api/generated/api.types';
@@ -14,13 +11,8 @@ import { cn } from '@/lib/utils';
 import { CheckCheck, Clipboard, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
-type WebhookConfigValue =
-  | RepoWebhookConfig
-  | StackWebhookConfig
-  | BackupWebhookConfig
-  | BuildWebhookConfig
-  | SwarmServiceWebhookConfig;
-type WebhookCommonConfig = Pick<RepoWebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
+type WebhookConfigValue = WebhookConfig | StackWebhookConfig;
+type WebhookCommonConfig = Pick<WebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
 type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'provider' | 'authScheme'>> &
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
 

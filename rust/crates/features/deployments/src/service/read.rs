@@ -1,11 +1,12 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl DeploymentService {
     pub async fn list(
         &self,
         actor_id: ActorId,
         administrator: bool,
         filter: &DeploymentFilter,
-    ) -> Result<Vec<DeploymentDetails>, DeploymentError> {
+    ) -> Result<Vec<AuthorizedResource<crate::Deployment>>, DeploymentError> {
         self.store
             .list_authorized(actor_id, administrator, filter)
             .await
@@ -16,7 +17,7 @@ impl DeploymentService {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         self.store.get_authorized(actor_id, administrator, id).await
     }
 
@@ -28,7 +29,7 @@ impl DeploymentService {
     ) -> Result<DeploymentConfig, DeploymentError> {
         self.get(actor_id, administrator, id)
             .await
-            .map(|value| DeploymentConfig::from(&value))
+            .map(|value| DeploymentConfig::from(&value.resource))
     }
 
     pub async fn duplicate_draft(

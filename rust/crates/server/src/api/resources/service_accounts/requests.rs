@@ -2,7 +2,7 @@ use crate::api::resources::{
     common::enabled_by_default, service_accounts::views::ServiceAccountResourceAccess,
 };
 use chrono::{DateTime, Utc};
-use citadel_identity::PatchField;
+use citadel_primitives::PatchField;
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use serde::Deserialize;
 use uuid::Uuid;

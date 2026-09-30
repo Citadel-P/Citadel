@@ -1,57 +1,46 @@
 //! Typed partial updates: missing preserves a field; null only clears nullable fields.
-use crate::api::resources::git_repositories::webhook::RepoWebhookConfig;
 use citadel_automation::{AutomationAction, AutomationActionConfiguration};
+use citadel_primitives::WebhookPatch;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default)]
-enum Change<T> {
-    #[default]
-    Missing,
-    Value(T),
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for Change<T> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        T::deserialize(deserializer).map(Self::Value)
-    }
-}
+use citadel_primitives::FieldUpdate;
 
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(remote = "Self", rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateAutomationActionInput {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    description: Change<Option<String>>,
+    description: FieldUpdate<Option<String>>,
     #[serde(default)]
     #[schema(value_type = String, required = false)]
-    code: Change<String>,
+    code: FieldUpdate<String>,
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    default_args_json: Change<Option<String>>,
+    default_args_json: FieldUpdate<Option<String>>,
     #[serde(default)]
     #[schema(value_type = bool, required = false)]
-    enabled: Change<bool>,
+    enabled: FieldUpdate<bool>,
     #[serde(default)]
     #[schema(value_type = bool, required = false)]
-    schedule_enabled: Change<bool>,
+    schedule_enabled: FieldUpdate<bool>,
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    schedule_cron: Change<Option<String>>,
+    schedule_cron: FieldUpdate<Option<String>>,
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    schedule_time_zone: Change<Option<String>>,
+    schedule_time_zone: FieldUpdate<Option<String>>,
     #[serde(default)]
-    #[schema(value_type = Option<RepoWebhookConfig>, required = false)]
-    webhook: Change<Option<RepoWebhookConfig>>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookPatchSchema>, required = false)]
+    webhook: FieldUpdate<Option<WebhookPatch>>,
     #[serde(default)]
     #[schema(value_type = Option<i32>, required = false)]
-    timeout_seconds: Change<Option<i32>>,
+    timeout_seconds: FieldUpdate<Option<i32>>,
     #[serde(default)]
     #[schema(value_type = bool, required = false)]
-    alert_on_failure: Change<bool>,
+    alert_on_failure: FieldUpdate<bool>,
     #[serde(default)]
     #[schema(value_type = Option<uuid::Uuid>, required = false)]
-    run_as_actor_id: Change<Option<uuid::Uuid>>,
+    run_as_actor_id: FieldUpdate<Option<uuid::Uuid>>,
 }
 
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
@@ -59,7 +48,7 @@ pub struct UpdateAutomationActionInput {
 pub struct UpdateAutomationActionMetadata {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    description: Change<Option<String>>,
+    description: FieldUpdate<Option<String>>,
 }
 
 // Serde's default struct visitor also accepts arrays. PATCH requires a JSON
@@ -119,52 +108,17 @@ impl From<UpdateAutomationActionMetadata> for UpdateAutomationActionInput {
 impl UpdateAutomationActionInput {
     pub fn apply(self, current: AutomationAction) -> AutomationActionConfiguration {
         citadel_automation::UpdateAutomationActionInput {
-            description: match self.description {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            code: match self.code {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            default_args_json: match self.default_args_json {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            enabled: match self.enabled {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            schedule_enabled: match self.schedule_enabled {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            schedule_cron: match self.schedule_cron {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            schedule_time_zone: match self.schedule_time_zone {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            webhook: match self.webhook {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => {
-                    citadel_automation::actions::patch::Change::Value(v.map(Into::into))
-                }
-            },
-            timeout_seconds: match self.timeout_seconds {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            alert_on_failure: match self.alert_on_failure {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
-            run_as_actor_id: match self.run_as_actor_id {
-                Change::Missing => citadel_automation::actions::patch::Change::Missing,
-                Change::Value(v) => citadel_automation::actions::patch::Change::Value(v),
-            },
+            description: self.description,
+            code: self.code,
+            default_args_json: self.default_args_json,
+            enabled: self.enabled,
+            schedule_enabled: self.schedule_enabled,
+            schedule_cron: self.schedule_cron,
+            schedule_time_zone: self.schedule_time_zone,
+            webhook: self.webhook,
+            timeout_seconds: self.timeout_seconds,
+            alert_on_failure: self.alert_on_failure,
+            run_as_actor_id: self.run_as_actor_id,
         }
         .apply(current)
     }

@@ -27,30 +27,38 @@ pub(super) async fn add_run_activity(
     let trigger = run.trigger.clone();
     let duration_ms = run.duration_ms;
     let exit_code = run.exit_code;
-    let info = match run.status.as_str() {
-        "Queued" => ActivityEventInfo::ActionRunQueued { run_id, trigger },
-        "Running" => ActivityEventInfo::ActionRunStarted { run_id, trigger },
-        "Succeeded" => ActivityEventInfo::ActionRunSucceeded {
-            run_id,
-            trigger,
-            exit_code,
-            duration_ms,
-        },
-        "Failed" => ActivityEventInfo::ActionRunFailed {
+    let info = match run.status {
+        citadel_automation::AutomationRunStatus::Queued => {
+            ActivityEventInfo::ActionRunQueued { run_id, trigger }
+        }
+        citadel_automation::AutomationRunStatus::Running => {
+            ActivityEventInfo::ActionRunStarted { run_id, trigger }
+        }
+        citadel_automation::AutomationRunStatus::Succeeded => {
+            ActivityEventInfo::ActionRunSucceeded {
+                run_id,
+                trigger,
+                exit_code,
+                duration_ms,
+            }
+        }
+        citadel_automation::AutomationRunStatus::Failed => ActivityEventInfo::ActionRunFailed {
             run_id,
             trigger,
             exit_code,
             duration_ms,
             error_message: run.error_message.clone(),
         },
-        "TimedOut" => ActivityEventInfo::ActionRunTimedOut {
+        citadel_automation::AutomationRunStatus::TimedOut => ActivityEventInfo::ActionRunTimedOut {
             run_id,
             trigger,
             duration_ms,
             error_message: run.error_message.clone(),
         },
-        "Cancelled" => ActivityEventInfo::ActionRunCancelled { run_id, trigger },
-        "Rejected" => ActivityEventInfo::ActionRunRejected {
+        citadel_automation::AutomationRunStatus::Cancelled => {
+            ActivityEventInfo::ActionRunCancelled { run_id, trigger }
+        }
+        citadel_automation::AutomationRunStatus::Rejected => ActivityEventInfo::ActionRunRejected {
             run_id,
             trigger,
             reason: run
@@ -58,11 +66,6 @@ pub(super) async fn add_run_activity(
                 .clone()
                 .unwrap_or_else(|| "Run rejected.".into()),
         },
-        _ => {
-            return Err(AutomationError::Storage(
-                "Unknown Automation run status.".into(),
-            ));
-        }
     };
     let event = ActivityEvent::new_automation_event(
         run.action_id,

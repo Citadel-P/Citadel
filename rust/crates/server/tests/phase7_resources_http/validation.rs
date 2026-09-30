@@ -44,6 +44,29 @@ pub(super) async fn verify_policy(app: &Router, admin: &ActorPrincipal, policy: 
         "timeoutSeconds",
     )
     .await;
+    for patch in [
+        json!({"source":{"$type":"Unknown"}}),
+        json!({"webhook":{"provider":"Unknown"}}),
+    ] {
+        assert_eq!(
+            request(
+                app,
+                Method::PATCH,
+                &path,
+                Some(admin.clone()),
+                Some(patch.clone())
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            request(app, Method::PATCH, &path, None, Some(patch))
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
     let after =
         response_json(request(app, Method::GET, &path, Some(admin.clone()), None).await).await;
     assert_eq!(before, after, "invalid Backup policy must not persist");

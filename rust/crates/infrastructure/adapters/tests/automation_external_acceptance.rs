@@ -154,11 +154,11 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         name: format!("failure-{actor:?}"),
         description: None,
         alert_type: "AutomationActionRunFailed".into(),
-        severity: "Warning".into(),
+        severity: citadel_alerts::AlertSeverity::Warning,
         cooldown_seconds: Some(0),
         required_matches: None,
         threshold: None,
-        status: "Enabled".into(),
+        status: citadel_alerts::AlertRuleStatus::Enabled,
         channel_ids: vec![channel.id],
         limited_to: vec![],
         quiet_hours: vec![],
@@ -226,7 +226,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
             .unwrap();
         assert!(service.process_one(&shutdown).await.unwrap());
         let run = store.get_run(action.id, queued.id).await.unwrap();
-        assert_eq!(run.status, expected, "{:?}", run.error_message);
+        assert_eq!(run.status.as_str(), expected, "{:?}", run.error_message);
         let events: Vec<(String, String, serde_json::Value)> = sqlx::query_as(
             "SELECT eventtype,status,info::jsonb FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
         ).bind(action.id).fetch_all(&db).await.unwrap();
@@ -304,7 +304,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
             );
             assert_eq!(
                 store.get_run(action.id, test_run.id).await.unwrap().status,
-                "Failed"
+                citadel_automation::AutomationRunStatus::Failed
             );
             let events = alerts
                 .list_events(
@@ -372,9 +372,12 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     );
     assert_eq!(
         store.get_run(action.id, run.id).await.unwrap().status,
-        "Cancelled"
+        citadel_automation::AutomationRunStatus::Cancelled
     );
-    assert_eq!(store.get(action.id).await.unwrap().control_state, "Idle");
+    assert_eq!(
+        store.get(action.id).await.unwrap().control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     let cancelled: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='ActionRunCancelled' AND status='Warning'")
         .bind(action.id).fetch_one(&db).await.unwrap();
     assert_eq!(cancelled, 1);

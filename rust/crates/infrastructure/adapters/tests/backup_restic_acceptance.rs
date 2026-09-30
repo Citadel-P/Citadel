@@ -218,19 +218,22 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupPersistence::new(pool.clone());
         let mut input = BackupRepositoryConfiguration { name: format!("repo-{suffix}"), description: None, password_secret_id: secret,
-            spec: json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume}) };
+            spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume})).unwrap() };
         if let Some(endpoint) = &s3_endpoint {
-            input.spec = json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,
-                "prefix":suffix,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID});
+            input.spec = serde_json::from_value(json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,
+                "prefix":suffix,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap();
         }
         input.validate().unwrap();
         let repository = store.create_repository(actor, &input).await.unwrap();
         let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
         executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
-        store.record_repository_operation(repository.id, "Initialize", "Platform", Some(platform), true, None).await.unwrap();
+        let operation_id=Uuid::now_v7();
+        assert!(store.acquire_repository_operation(repository.id, operation_id, "Initialize", Utc::now()+chrono::Duration::minutes(5)).await.unwrap());
+        store.record_repository_operation(repository.id, operation_id, "Initialize", "Platform", Some(platform), true, None).await.unwrap();
+        store.release_repository_operation(repository.id, operation_id).await.unwrap();
         let mut policy = BackupPolicyConfiguration { name: format!("policy-{suffix}"), description: None,
-            source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":source}),
+            source: serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"volumeName":source})).unwrap(),
             backup_repository_id: repository.id, enabled: true, cron: None, time_zone: None, webhook: None,
             keep_last_successful: Some(2), timeout_seconds: Some(120), alert_on_failure: false,
             run_as_actor_id: None, tag_ids: vec![] };
@@ -243,9 +246,9 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         store.prepare_backup_items(&claim, &plan).await.unwrap();
         let completed = executor.backup(&claim, &plan, &cancellation).await;
         store.finish_backup(&claim, &completed).await.unwrap();
-        assert_eq!(completed.status, "Succeeded", "{:?}; {:?}", completed.error_message, completed.logs);
+        assert_eq!(completed.status, citadel_backups::BackupRunStatus::Succeeded, "{:?}; {:?}", completed.error_message, completed.logs);
         let persisted = PostgresBackupPersistence::new(pool.clone()).get_run(run.id).await.unwrap();
-        assert_eq!(persisted.status, "Succeeded");
+        assert_eq!(persisted.status, citadel_backups::BackupRunStatus::Succeeded);
         assert_eq!(persisted.items[0].restic_snapshot_id, completed.items[0].restic_snapshot_id);
         assert!(persisted.bytes_processed.unwrap() >= PAYLOAD.len() as i64);
         let queued = store.enqueue_restore(BackupRestoreRequest { actor, backup_run_id: run.id, target_platform_id: platform,
@@ -254,14 +257,14 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         assert_eq!(restore.run.id, queued.id);
         let restored = executor.restore(&restore, &cancellation).await;
         store.finish_restore(&restore, &restored).await.unwrap();
-        assert_eq!(restored.status, "Succeeded", "{:?}", restored.error_message);
-        assert_eq!(store.get_restore(queued.id).await.unwrap().status, "Succeeded");
+        assert_eq!(restored.status, citadel_backups::BackupRestoreStatus::Succeeded, "{:?}", restored.error_message);
+        assert_eq!(store.get_restore(queued.id).await.unwrap().status, citadel_backups::BackupRestoreStatus::Succeeded);
         let bytes = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "cat", &fixture_image, "/fixture/payload.txt"], None).await;
         assert_eq!(bytes, PAYLOAD);
         let metadata = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "sh", &fixture_image, "-ec", "stat -c '%u:%g:%a' /fixture/payload.txt /fixture/private /fixture/private/nested /fixture/private/nested/item /fixture/link; readlink /fixture/link; cmp /fixture/payload.txt /fixture/private/nested/item"], None).await;
         assert_eq!(String::from_utf8(metadata).unwrap(), "1000:1001:640\n1000:1001:750\n1000:1001:750\n1000:1001:640\n1000:1001:777\npayload.txt\n", "Restores must preserve ownership, permissions and symlinks");
         // A second restore cannot overwrite an existing volume without consent.
-        assert_eq!(executor.restore(&restore, &cancellation).await.status, "Failed");
+        assert_eq!(executor.restore(&restore, &cancellation).await.status, citadel_backups::BackupRestoreStatus::Failed);
     }).catch_unwind().await;
     if use_agent {
         if result.is_err()

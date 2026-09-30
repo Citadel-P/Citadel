@@ -1,49 +1,9 @@
 //! Transport-neutral read results and supporting filters.
 //! Repository implementations populate these types; server adapters map them to HTTP views.
-
-use serde_json::Value;
+use citadel_primitives::AuthorizedResource;
 
 use crate::*;
 use uuid::Uuid;
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StackReleaseDetails {
-    pub release: StackRelease,
-    pub actor_name: String,
-    pub actor_type: String,
-    pub platform_status: String,
-    pub platform_name: Option<String>,
-}
-
-impl std::ops::Deref for StackReleaseDetails {
-    type Target = StackRelease;
-    fn deref(&self) -> &Self::Target {
-        &self.release
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct StackDetails {
-    pub stack: Stack,
-    pub status: StackReleaseStatus,
-    pub platform_type: citadel_platforms::PlatformKind,
-    pub platform_id: Option<Uuid>,
-    pub version: Option<String>,
-    pub spec: Option<StackSpec>,
-    pub source: Option<StackReleaseSource>,
-    pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
-    pub platform_status: String,
-    pub platform_name: Option<String>,
-    pub tags: Vec<citadel_tags::TagSummary>,
-    pub latest_activity: Option<Value>,
-    pub effective_permission: citadel_primitives::EffectivePermission,
-}
-
-impl std::ops::Deref for StackDetails {
-    type Target = Stack;
-    fn deref(&self) -> &Self::Target {
-        &self.stack
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct StackConfig {
@@ -59,21 +19,22 @@ pub struct StackConfig {
     pub row_version: i64,
 }
 
-impl From<StackDetails> for StackConfig {
-    fn from(value: StackDetails) -> Self {
+impl From<AuthorizedResource<crate::Stack>> for StackConfig {
+    fn from(value: AuthorizedResource<crate::Stack>) -> Self {
+        let value = value.resource;
         Self {
-            id: value.stack.id,
-            name: value.stack.name,
+            id: value.id,
+            name: value.name,
             platform_id: value.platform_id.unwrap_or_default(),
             platform_type: value.platform_type,
-            description: value.stack.description,
-            stack_source: value.stack.stack_source,
+            description: value.description,
+            stack_source: value.stack_source,
             spec: value
                 .spec
                 .expect("Stack persistence always includes a current release"),
-            stack_update_state: value.stack.stack_update_state,
-            drift_policy: value.stack.drift_policy,
-            row_version: value.stack.row_version,
+            stack_update_state: value.stack_update_state,
+            drift_policy: value.drift_policy,
+            row_version: value.row_version,
         }
     }
 }

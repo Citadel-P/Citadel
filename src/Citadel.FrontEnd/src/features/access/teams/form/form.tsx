@@ -1,5 +1,5 @@
 import {
-  UserResourceAccessInput,
+  ResourceAccessInput,
   ResourceInfo,
   CreateTeamRequest,
   PatchTeamRequest,
@@ -226,7 +226,7 @@ export const TeamForm = ({
             description: 'Grant this team direct access to specific resources outside of its role assignments.',
             render: (value, set) => (
               <ResourceOverridesField
-                value={(value as UserResourceAccessInput[] | null) ?? []}
+                value={(value as ResourceAccessInput[] | null) ?? []}
                 onChange={(next) =>
                   set({
                     resourceAccesses: next.map((entry) => ({

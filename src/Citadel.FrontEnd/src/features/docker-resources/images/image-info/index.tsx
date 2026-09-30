@@ -1,6 +1,6 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
-import { ImageView, InspectImageView } from '@/api/generated/api.types';
+import { ImageView, ImageInspectionView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { StateBadge } from '@/components/custom/state-badge';
 import { RequiredDockerInfoComponents } from '@/pages/types';
@@ -13,7 +13,7 @@ import { ImageInfoActions } from './actions';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useSearchParams } from 'react-router';
 
-export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView> = {
+export const ImageInfoComponents: RequiredDockerInfoComponents<ImageInspectionView> = {
   Header: {
     Icon: Layers,
     Status: ({ resource }) => (
@@ -45,8 +45,8 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   Tabs: [
     {
       label: 'Inspect',
-      disabled: (resource: InspectImageView) => !hasCapability(resource, 'canRead'),
-      Content: ({ resource }: { resource: InspectImageView }) => <InspectImageWrapper resource={resource} />,
+      disabled: (resource: ImageInspectionView) => !hasCapability(resource, 'canRead'),
+      Content: ({ resource }: { resource: ImageInspectionView }) => <InspectImageWrapper resource={resource} />,
     },
   ],
 
@@ -62,7 +62,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   },
 };
 
-const InspectImageWrapper = ({ resource }: { resource: InspectImageView }) => {
+const InspectImageWrapper = ({ resource }: { resource: ImageInspectionView }) => {
   return (
     <div className="flex flex-col gap-(--section-gap)">
       <DetailSection title="Image details" description="Build platform, origin, and image size." icon={Info}>

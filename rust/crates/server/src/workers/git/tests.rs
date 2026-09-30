@@ -3,6 +3,7 @@ use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRe
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_git::*;
 use citadel_primitives::ActorId;
+use citadel_primitives::WebhookConfig;
 use futures_util::future::BoxFuture;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use uuid::Uuid;
@@ -20,7 +21,7 @@ impl GitRepositoryExecutionPersistence for SlowStore {
         _: citadel_primitives::ActorId,
         _: Uuid,
         _: &'a str,
-        _: &'a GitRepositoryWebhook,
+        _: &'a WebhookConfig,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         unreachable!()
     }
@@ -92,7 +93,7 @@ impl GitRepositoryExecutionPersistence for SlowStore {
     fn get_webhook(
         &self,
         _: Uuid,
-    ) -> BoxFuture<'_, Result<Option<GitRepositoryWebhook>, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'_, Result<Option<WebhookConfig>, GitRepositoryExecutionError>> {
         unreachable!()
     }
 }

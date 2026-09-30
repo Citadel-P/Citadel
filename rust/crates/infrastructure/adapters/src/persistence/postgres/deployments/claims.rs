@@ -66,7 +66,11 @@ impl PostgresDeploymentRepository {
                         name: row.try_get("name").map_err(storage)?,
                         docker_container_ids: row.try_get("dockercontainerids").map_err(storage)?,
                         row_version: row.try_get::<i64, _>("rowversion").map_err(storage)? + 1,
-                        previous_status: row.try_get("status").map_err(storage)?,
+                        previous_status: row
+                            .try_get::<&str, _>("status")
+                            .map_err(storage)?
+                            .parse()
+                            .map_err(storage)?,
                         description: row.try_get("description").map_err(storage)?,
                         spec: DeploymentSpec::from_storage_value(spec)?,
                     })
@@ -191,7 +195,7 @@ impl PostgresDeploymentRepository {
                 )
                 .bind(claim.id)
                 .bind(claim.row_version)
-                .bind(&claim.previous_status)
+                .bind(claim.previous_status.as_str())
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?

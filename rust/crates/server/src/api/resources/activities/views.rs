@@ -5,26 +5,34 @@ use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ActivityView {
     pub(crate) id: Uuid,
+    #[schema(required = true)]
     pub(crate) platform_id: Option<Uuid>,
+    #[schema(required = true)]
     pub(crate) resource_id: Option<Uuid>,
     pub(crate) platform_name: String,
     pub(crate) resource_name: String,
-    pub(crate) platform_status: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
+    pub(crate) platform_status: citadel_primitives::PlatformStatus,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityResourceTypeSchema)]
     pub(crate) resource_type: ActivityResourceType,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityEventTypeSchema)]
     pub(crate) event_type: ActivityEventType,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityStatusSchema)]
     pub(crate) status: ActivityStatus,
     pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+    #[schema(value_type = crate::api::resources::activities::schema::PublicActivityEventInfo)]
     pub(crate) info: Value,
     pub(crate) actor_id: Uuid,
     pub(crate) actor_name: String,
+    #[schema(value_type = crate::api::resources::vocabulary::ActorTypeSchema)]
     pub(crate) actor_type: ActorType,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PagedActivityView {
     pub(crate) items: Vec<ActivityView>,
@@ -33,7 +41,7 @@ pub(crate) struct PagedActivityView {
     pub(crate) page_size: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ActivitiesView {
     pub(crate) paged_result: PagedActivityView,
@@ -75,17 +83,20 @@ pub struct LatestActivityView {
     pub event_type: ActivityEventType,
     #[schema(value_type = crate::api::resources::vocabulary::ActivityStatusSchema)]
     pub status: ActivityStatus,
-    // Event payloads are migrated separately from this shared envelope.
-    #[schema(value_type = crate::openapi::compatibility::ActivityEventInfo)]
+    #[schema(value_type = crate::api::resources::activities::schema::PublicActivityEventInfo)]
     pub info: Value,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl LatestActivityView {
-    pub fn from_stored(value: Value) -> Result<Self, serde_json::Error> {
-        let mut view: Self = serde_json::from_value(value)?;
-        view.info =
-            crate::api::resources::activities::presentation::public_activity_info(view.info);
-        Ok(view)
+impl From<citadel_activities::ActivitySummary> for LatestActivityView {
+    fn from(value: citadel_activities::ActivitySummary) -> Self {
+        Self {
+            id: value.id,
+            resource_type: value.resource_type,
+            event_type: value.event_type,
+            status: value.status,
+            info: crate::api::resources::activities::presentation::public_activity_info(value.info),
+            created_at: value.created_at,
+        }
     }
 }

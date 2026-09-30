@@ -4,8 +4,8 @@ import {
   GitRepositoryConfigResponse,
   NewGitRepository,
   GitRepositoryPatch,
-  ResourcesCatalogGitRepositorySyncMode,
-  RepoWebhookConfig,
+  GitRepositorySyncMode,
+  WebhookConfig,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -94,11 +94,11 @@ export const GitRepoForm = ({
   const original =
     resource ??
     ({
-      syncMode: ResourcesCatalogGitRepositorySyncMode.PullInterval,
+      syncMode: GitRepositorySyncMode.PullInterval,
       syncIntervalMinutes: 5,
       webhook: { enabled: false },
     } as GitRepositoryConfigResponse);
-  const currentSyncMode = update.syncMode ?? original.syncMode ?? ResourcesCatalogGitRepositorySyncMode.PullInterval;
+  const currentSyncMode = update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
@@ -220,13 +220,13 @@ export const GitRepoForm = ({
                 label: 'Sync mode',
                 render: (val, set) => (
                   <Select
-                    value={val ?? ResourcesCatalogGitRepositorySyncMode.PullInterval}
+                    value={val ?? GitRepositorySyncMode.PullInterval}
                     onValueChange={(v) => {
-                      const syncMode = v as ResourcesCatalogGitRepositorySyncMode;
+                      const syncMode = v as GitRepositorySyncMode;
                       set({
                         syncMode,
                         syncIntervalMinutes:
-                          syncMode === ResourcesCatalogGitRepositorySyncMode.PullInterval
+                          syncMode === GitRepositorySyncMode.PullInterval
                             ? (update.syncIntervalMinutes ?? original.syncIntervalMinutes ?? 5)
                             : null,
                       });
@@ -235,13 +235,13 @@ export const GitRepoForm = ({
                       <SelectValue placeholder="Select sync mode" />
                     </SelectTrigger>
                     <SelectContent className="bg-background">
-                      <SelectItem value={ResourcesCatalogGitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
-                      <SelectItem value={ResourcesCatalogGitRepositorySyncMode.Manual}>Manual only</SelectItem>
+                      <SelectItem value={GitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
+                      <SelectItem value={GitRepositorySyncMode.Manual}>Manual only</SelectItem>
                     </SelectContent>
                   </Select>
                 ),
               }),
-              ...(currentSyncMode === ResourcesCatalogGitRepositorySyncMode.PullInterval
+              ...(currentSyncMode === GitRepositorySyncMode.PullInterval
                 ? [
                     defineField<GitRepositoryInput, 'syncIntervalMinutes'>({
                       key: 'syncIntervalMinutes',
@@ -376,7 +376,7 @@ export const GitRepoForm = ({
                     resourceType="repo"
                     resourceId={id}
                     execution="pull"
-                    value={(value as RepoWebhookConfig | null) ?? null}
+                    value={(value as WebhookConfig | null) ?? null}
                     defaultBranch={original.defaultBranch}
                     showBranchFilter={false}
                     disabled={disabled}

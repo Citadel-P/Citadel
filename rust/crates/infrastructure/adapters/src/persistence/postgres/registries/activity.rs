@@ -21,7 +21,7 @@ pub(super) fn registry_snapshot(
         name: value.name.clone(),
         description: value.description.clone().unwrap_or_default(),
         registry_host: value.registry_host.clone(),
-        status: value.status.as_database_str().to_owned(),
+        status: value.status.as_str().to_owned(),
         configuration: masked_registry_configuration(&value.configuration)?,
     })
 }

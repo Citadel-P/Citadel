@@ -65,9 +65,11 @@ impl PostgresStackRepository {
                         .clone()
                         .unwrap_or_else(|| normalize_project_name(&name, *id)),
                     platform_type,
-                    previous_status: StackReleaseStatus::parse(
-                        &row.try_get::<String, _>("status").map_err(storage)?,
-                    )?,
+                    previous_status: row
+                        .try_get::<&str, _>("status")
+                        .map_err(storage)?
+                        .parse::<StackReleaseStatus>()
+                        .map_err(storage)?,
                     actor_id: actor.value(),
                 });
             }

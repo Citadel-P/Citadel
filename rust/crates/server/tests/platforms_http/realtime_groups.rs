@@ -7,8 +7,8 @@ use citadel_adapters::persistence::postgres::{
     stacks::PostgresStackRepository, swarm_services::PostgresSwarmServiceRepository,
 };
 use citadel_identity::{
-    AccessTokenClaims, SessionTokenCodec, UserPatchMutation, UserReader, UserRepository,
-    UserResourceAccessInput,
+    AccessTokenClaims, ResourceAccessInput, SessionTokenCodec, UserPatchMutation, UserReader,
+    UserRepository,
 };
 use citadel_primitives::ResourceType;
 use citadel_server::{
@@ -1464,7 +1464,7 @@ async fn grant(f: &Fixture, actor: Uuid, kind: ResourceType, id: Uuid, specific:
         .fetch_one(&f.pool)
         .await
         .unwrap();
-    let access = UserResourceAccessInput {
+    let access = ResourceAccessInput {
         resource_type: kind,
         resource_id: id,
         permission_level: citadel_primitives::PermissionLevel::Read,
@@ -1485,7 +1485,7 @@ async fn grant(f: &Fixture, actor: Uuid, kind: ResourceType, id: Uuid, specific:
         .unwrap();
 }
 
-async fn replace_specific_permissions(
+pub(super) async fn replace_specific_permissions(
     f: &Fixture,
     p: &ActorPrincipal,
     specifics: Vec<citadel_primitives::SpecificPermission>,
@@ -1499,7 +1499,7 @@ async fn replace_specific_permissions(
         .resource_accesses
         .unwrap_or_default()
         .into_iter()
-        .map(|a| UserResourceAccessInput {
+        .map(|a| ResourceAccessInput {
             resource_type: a.resource_type,
             resource_id: a.resource_id,
             permission_level: a.permission_level,
@@ -1522,7 +1522,7 @@ async fn replace_specific_permissions(
 }
 
 async fn remove_platform_access(f: &Fixture, p: &ActorPrincipal) {
-    let access = UserResourceAccessInput {
+    let access = ResourceAccessInput {
         resource_type: ResourceType::Platform,
         resource_id: f.platform_id,
         permission_level: citadel_primitives::PermissionLevel::Read,

@@ -100,8 +100,8 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)"#,
             .bind(&account.domain)
             .bind(account.transport.as_database_str())
             .bind(account.auth_type.as_database_str())
-            .bind(account.created_at)
-            .bind(account.created_by_actor_id)
+            .bind(account.audit.created_at)
+            .bind(account.audit.created_by_actor_id.value())
             .bind(&account.protected_configuration)
             .execute(&self.pool)
             .await
@@ -166,12 +166,16 @@ WHERE id=$1"#,
 fn map_account(row: sqlx::postgres::PgRow) -> Result<StoredGitAccount, GitAccountError> {
     Ok(StoredGitAccount {
         id: row.try_get("id").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
+        audit: citadel_primitives::AuditMetadata {
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+            created_at: row.try_get("createdat").map_err(storage)?,
+        },
         name: row.try_get("name").map_err(storage)?,
         domain: row.try_get("domain").map_err(storage)?,
         transport: parse_transport(row.try_get("transport").map_err(storage)?)?,
         auth_type: parse_auth_type(row.try_get("authtype").map_err(storage)?)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
         protected_configuration: row.try_get("configuration").map_err(storage)?,
     })
 }

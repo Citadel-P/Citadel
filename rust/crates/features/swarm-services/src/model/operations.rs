@@ -81,6 +81,7 @@ pub struct RuntimeServiceResult {
     pub warnings: Vec<String>,
 }
 
+/// Operations accepted by the apply pipeline; deletion uses its own claim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceOperationKind {
     Apply,
@@ -91,9 +92,9 @@ pub enum ServiceOperationKind {
 impl ServiceOperationKind {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Apply => "Apply",
-            Self::Scale => "Scale",
-            Self::ForceUpdate => "ForceUpdate",
+            Self::Apply => SwarmServiceOperationKind::Apply.as_str(),
+            Self::Scale => SwarmServiceOperationKind::Scale.as_str(),
+            Self::ForceUpdate => SwarmServiceOperationKind::ForceUpdate.as_str(),
         }
     }
 }

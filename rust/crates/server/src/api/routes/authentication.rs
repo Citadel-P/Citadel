@@ -90,7 +90,7 @@ pub async fn authentication_middleware(
     tag = "Setup",
     summary = "Get setup status",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SetupStatusView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::authentication::views::SetupStatusView, content_type = "application/json"),
         crate::openapi::errors::ReadinessErrors
     ),
     security(),

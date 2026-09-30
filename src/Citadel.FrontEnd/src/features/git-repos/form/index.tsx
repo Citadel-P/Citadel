@@ -5,7 +5,7 @@ import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields 
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import {
   ActivityStatus,
-  GitReposStatus,
+  GitRepositoryStatus,
   AuthorizedGitRepositoryView,
   LatestActivityView,
   ResourceControlState,
@@ -39,7 +39,7 @@ export const GitRepoFormComponents: RequiredFormComponents = {
             value={(resource as AuthorizedGitRepositoryView).status}
             isProcessing={
               (resource as AuthorizedGitRepositoryView).controlState === ResourceControlState.Processing ||
-              (resource as AuthorizedGitRepositoryView).status === GitReposStatus.Pending
+              (resource as AuthorizedGitRepositoryView).status === GitRepositoryStatus.Pending
             }
           />
         );
@@ -97,12 +97,12 @@ function GitRepoSubHeader({
   status,
 }: {
   latestActivity: LatestActivityView | null;
-  status: GitReposStatus;
+  status: GitRepositoryStatus;
 }) {
   const info = latestActivity?.info;
   if (!info || (info.$type !== 'GitRepoCloned' && info.$type !== 'GitRepoPulled')) return null;
   // Activity history can retain an earlier failure after the repository recovers.
-  if (status === GitReposStatus.Healthy && latestActivity.status === ActivityStatus.Failure) return null;
+  if (status === GitRepositoryStatus.Healthy && latestActivity.status === ActivityStatus.Failure) return null;
 
   if (latestActivity.status === ActivityStatus.Success) {
     const commitSha = info.result?.commitSha;

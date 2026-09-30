@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-activities = { path = "../activities" }
 citadel-primitives = { path = "../primitives" }
 citadel-tags = { path = "../tags" }
 chrono.workspace = true

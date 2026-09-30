@@ -6,10 +6,10 @@ mod execution;
 
 pub(crate) mod source;
 
-use crate::jobs::schedule::cron_is_due;
 use crate::runs::logs::*;
 use crate::runs::progress;
 use crate::service::source::automation_source;
+use citadel_primitives::schedule::schedule_is_due;
 
 use std::collections::HashMap;
 
@@ -33,7 +33,7 @@ use citadel_execution::{
     OutputLimitPolicy, ProcessError, ProcessLimits, ProcessRequest, ProcessRunner,
 };
 
-use citadel_git::repositories::webhooks::RepoWebhookConfig;
+use citadel_primitives::WebhookConfig;
 
 use serde_json::Value;
 

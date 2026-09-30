@@ -7,8 +7,12 @@ pub(super) fn map_channel(row: sqlx::postgres::PgRow) -> Result<AlertChannel, Al
         alert_destination: row.try_get("alertdestination").map_err(storage)?,
         url: row.try_get("url").map_err(storage)?,
         is_active: row.try_get("isactive").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
+        audit: citadel_primitives::AuditMetadata {
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+            created_at: row.try_get("createdat").map_err(storage)?,
+        },
     })
 }
 
@@ -20,16 +24,28 @@ pub(super) fn map_rule(row: sqlx::postgres::PgRow) -> Result<AlertRule, AlertErr
         name: row.try_get("name").map_err(storage)?,
         description: row.try_get("description").map_err(storage)?,
         alert_type: row.try_get("type").map_err(storage)?,
-        severity: row.try_get("severity").map_err(storage)?,
+        severity: row
+            .try_get::<String, _>("severity")
+            .map_err(storage)?
+            .parse()
+            .map_err(AlertError::Storage)?,
         cooldown_seconds: row.try_get("cooldownseconds").map_err(storage)?,
         required_matches: row.try_get("requiredmatches").map_err(storage)?,
         threshold: row.try_get("threshold").map_err(storage)?,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(AlertError::Storage)?,
         channel_ids: row.try_get("channelids").map_err(storage)?,
         limited_to: limited.as_array().cloned().unwrap_or_default(),
         quiet_hours: quiet.as_array().cloned().unwrap_or_default(),
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
+        audit: citadel_primitives::AuditMetadata {
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+            created_at: row.try_get("createdat").map_err(storage)?,
+        },
     })
 }
 
@@ -47,15 +63,15 @@ pub(super) fn map_event(row: sqlx::postgres::PgRow) -> Result<AlertEvent, AlertE
         id: row.try_get("id").map_err(storage)?,
         alert_rule_id: row.try_get("alertruleid").map_err(storage)?,
         alert_type: row.try_get("type").map_err(storage)?,
-        severity: row.try_get("severity").map_err(storage)?,
-        status: if resolved_at.is_some() {
-            "Resolved"
-        } else if acknowledged_at.is_some() {
-            "Acknowledged"
-        } else {
-            "Active"
-        }
-        .into(),
+        severity: row
+            .try_get::<String, _>("severity")
+            .map_err(storage)?
+            .parse()
+            .map_err(AlertError::Storage)?,
+        status: citadel_alerts::AlertEventStatus::from_lifecycle(
+            acknowledged_at.is_some(),
+            resolved_at.is_some(),
+        ),
         message,
         info,
         resource_id: row.try_get("resourceid").map_err(storage)?,

@@ -35,7 +35,8 @@ use citadel_identity::{ActorPrincipal, IdentityService};
 
 use citadel_primitives::{PermissionLevel, ResourceType};
 
-use citadel_registries::{MetadataPatch, RegistryMutationKind};
+use citadel_primitives::PatchField;
+use citadel_registries::RegistryMutationKind;
 
 use std::sync::Arc;
 
@@ -140,7 +141,10 @@ async fn list_registries(
         );
         registries.push(AuthorizedRegistryView {
             is_default: registry.id == Uuid::from_u128(0x100),
-            registry: registry.into(),
+            registry: api_result(
+                RegistryView::try_from(registry).map_err(ApiError::internal),
+                &headers,
+            )?,
             capabilities: row_capabilities,
         });
     }
@@ -242,7 +246,10 @@ async fn get_registry_config(
             registry_host: value.registry_host,
             status: value.status,
             description: value.description.unwrap_or_default(),
-            configuration: value.configuration,
+            configuration: api_result(
+                serde_json::from_value(value.configuration).map_err(ApiError::internal),
+                &headers,
+            )?,
             tags: value.tags,
         })
         .into_response(),
@@ -300,8 +307,11 @@ async fn create_registry(
     )?;
     publish_resource_change(&state.realtime, "Registry", "registryChanged");
     Ok(no_store(
-        Json(crate::api::resources::registries::views::RegistryView::from(registry))
-            .into_response(),
+        Json(api_result(
+            RegistryView::try_from(registry).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -348,7 +358,7 @@ async fn update_registry(
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let mut input: citadel_registries::RegistryPatch = input.into();
     input.name = None;
-    input.description = MetadataPatch::Missing;
+    input.description = PatchField::Missing;
     input.tag_ids = None;
     mutate_registry(
         state,
@@ -396,8 +406,11 @@ async fn mutate_registry(
     )?;
     publish_resource_change(&state.realtime, "Registry", "registryChanged");
     Ok(no_store(
-        Json(crate::api::resources::registries::views::RegistryView::from(registry))
-            .into_response(),
+        Json(api_result(
+            RegistryView::try_from(registry).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -433,7 +446,7 @@ async fn update_registry_metadata(
         path,
         headers,
         citadel_registries::RegistryPatch {
-            description: input.description.into(),
+            description: input.description,
             ..citadel_registries::RegistryPatch::default()
         },
         RegistryMutationKind::Metadata,
@@ -540,8 +553,8 @@ async fn load_registry(
             .registries
             .get_registry(id)
             .await
-            .map(RegistryView::from)
-            .map_err(metadata_error),
+            .map_err(metadata_error)
+            .and_then(|value| RegistryView::try_from(value).map_err(ApiError::internal)),
         headers,
     )
 }

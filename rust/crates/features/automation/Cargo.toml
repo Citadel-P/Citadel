@@ -13,7 +13,6 @@ chrono.workspace = true
 chrono-tz.workspace = true
 citadel-alerts = { path = "../alerts" }
 citadel-execution = { path = "../execution" }
-citadel-git = { path = "../git" }
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true

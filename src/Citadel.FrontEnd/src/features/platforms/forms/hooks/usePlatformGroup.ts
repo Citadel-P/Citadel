@@ -2,7 +2,7 @@ import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { normalizePlatform } from '../../hooks/usePlatformsGroup';
-import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
+import { PlatformView } from '@/api/generated/api.types';
 import { PlatformStatsBatchView } from '@/api/types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 
@@ -43,9 +43,9 @@ export const usePlatformGroup = (id: string) => {
         next.imageCount = stats.imageCount;
         next.memTotal = stats.memTotal;
 
-        if (next.type === 'Docker') {
+        if (next.platformDescriptor?.$type === 'Docker') {
           const descriptor = {
-            ...(next.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
+            ...next.platformDescriptor,
             $type: 'Docker' as const,
           };
 

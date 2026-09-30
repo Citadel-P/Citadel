@@ -1,15 +1,5 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResourceAccessInput {
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    pub specific_permissions: Vec<SpecificPermission>,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUser {
@@ -23,7 +13,7 @@ pub struct CreateUser {
     #[serde(default)]
     pub role_ids: Vec<Uuid>,
     #[serde(default)]
-    pub resource_accesses: Vec<UserResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -40,7 +30,7 @@ pub struct PatchUser {
     #[serde(default)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
-    pub resource_accesses: PatchField<Vec<UserResourceAccessInput>>,
+    pub resource_accesses: PatchField<Vec<ResourceAccessInput>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,16 +44,6 @@ pub struct RenameUser {
 #[serde(rename_all = "camelCase")]
 pub struct AddUserRole {
     pub role_id: Uuid,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResourceAccess {
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    pub specific_permissions: Vec<SpecificPermission>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -84,7 +64,7 @@ pub struct NewUserMutation {
     pub created_at: DateTime<Utc>,
     pub team_ids: Vec<Uuid>,
     pub role_ids: Vec<Uuid>,
-    pub resource_accesses: Vec<UserResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,5 +74,5 @@ pub struct UserPatchMutation {
     pub is_enabled: Option<bool>,
     pub team_ids: Option<Vec<Uuid>>,
     pub role_ids: Option<Vec<Uuid>>,
-    pub resource_accesses: Option<Vec<UserResourceAccessInput>>,
+    pub resource_accesses: Option<Vec<ResourceAccessInput>>,
 }

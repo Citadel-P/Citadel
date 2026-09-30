@@ -21,7 +21,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
     let f = fixture_for_cluster(cluster.clone()).await;
     let id = f.platform_id;
     f.docker_server.abort();
-    let (docker, server, socket) = docker_fixture_for_cluster(100, cluster.clone()).await;
+    let (docker, server, socket) = docker_fixture_for_cluster(Some(100), cluster.clone()).await;
     let mut state = f.lookup_state.platforms.clone();
     state.docker = docker;
     let app = platforms_http::router(state).layer(axum::Extension(EdgeHttpContext {

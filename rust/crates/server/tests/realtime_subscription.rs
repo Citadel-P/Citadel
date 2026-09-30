@@ -603,15 +603,15 @@ fn platform(id: Uuid) -> PlatformView {
         agent_version: None,
         server_version: None,
         platform_type: "Docker".to_owned(),
-        status: "Healthy".to_owned(),
-        connector_type: "Local".to_owned(),
+        status: citadel_primitives::PlatformStatus::Online,
+        connector_type: citadel_server::api::resources::platforms::descriptor_views::PlatformConnectorType::Local,
         deployment_count: 0,
         stack_count: 0,
         deployment_status_counts: WorkloadStatusCounts::default(),
         stack_status_counts: WorkloadStatusCounts::default(),
         swarm_service_status_counts: WorkloadStatusCounts::default(),
         stats: None,
-        platform_descriptor: json!({"$type":"Docker"}),
+        platform_descriptor: None,
         cluster_id: None,
         prune_historical_swarm_task_containers: true,
         capabilities: Some(PlatformCapabilitiesView::default()),
@@ -648,7 +648,9 @@ impl RealtimeReadPort for PersistedReader {
             self.store
                 .get_platform(platform_id)
                 .await
-                .map(|platform| platform.map(PlatformView::from))
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
+                .map(PlatformView::try_from)
+                .transpose()
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })
@@ -712,7 +714,7 @@ impl RealtimeReadPort for FakeReader {
                 docker_image_id: "sha256:fixture".to_owned(),
                 created: 1,
                 state: "running".to_owned(),
-                control_state: "Idle".to_owned(),
+                control_state: citadel_primitives::ResourceControlState::Idle,
                 updated: 1,
                 stack: None,
                 is_system: false,

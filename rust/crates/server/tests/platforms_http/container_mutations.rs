@@ -1,7 +1,7 @@
 use super::*;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
-use citadel_identity::{UserRepository, UserResourceAccessInput};
+use citadel_identity::{ResourceAccessInput, UserRepository};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
 use citadel_primitives::{PermissionLevel, ResourceType};
 
@@ -14,7 +14,7 @@ async fn grant_access(
     level: PermissionLevel,
 ) {
     let users = PostgresUserRepository::new(f.pool.clone());
-    let mut access = UserResourceAccessInput {
+    let mut access = ResourceAccessInput {
         resource_type: kind,
         resource_id: resource,
         permission_level: level,

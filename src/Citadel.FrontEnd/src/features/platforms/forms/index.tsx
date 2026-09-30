@@ -12,7 +12,7 @@ import { PlatformForm } from './form';
 import { usePlatformGroup } from './hooks/usePlatformGroup';
 import { PlatformResourceSummary, PlatformStatsTab } from './platform-stats';
 import { SwarmPlatformSummary } from '@/features/swarm/platform-summary';
-import { SwarmNodeAgentCoverage } from './swarm-node-agent-coverage';
+import { SwarmNodeAgentCoveragePanel } from './swarm-node-agent-coverage';
 
 type PlatformFormResource = PlatformView & RequiredFormFields;
 
@@ -37,7 +37,7 @@ const PlatformSubHeader = ({ resource }: { resource: PlatformFormResource }) => 
             isBackupSummaryLoading={isLoading}
             isBackupSummaryError={isError}
           />
-          <SwarmNodeAgentCoverage platformId={resource.id} platformName={resource.name} />
+          <SwarmNodeAgentCoveragePanel platformId={resource.id} platformName={resource.name} />
         </div>
       )}
       <PlatformResourceSummary

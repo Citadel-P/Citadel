@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import {
-  ContainerDataView,
+  ContainerRuntimeView,
   ContainerStateStatus,
   ContainerView,
   ResourceControlState,
@@ -109,7 +109,7 @@ describe('useStackInfoGroup', () => {
   });
 });
 
-const createContainer = (state: ContainerStateStatus): ContainerDataView =>
+const createContainer = (state: ContainerStateStatus): ContainerRuntimeView =>
   ({
     name: '/beszel-copy-beszel-1',
     image: 'example/beszel:latest',
@@ -123,4 +123,4 @@ const createContainer = (state: ContainerStateStatus): ContainerDataView =>
     ports: {},
     deploymentId: null,
     stackId,
-  }) as ContainerDataView;
+  }) as ContainerRuntimeView;

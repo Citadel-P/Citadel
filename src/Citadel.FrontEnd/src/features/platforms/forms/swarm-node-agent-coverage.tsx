@@ -1,4 +1,4 @@
-import { SwarmNodeAgentCoverageView } from '@/api/generated/api.types';
+import { SwarmNodeAgentCoverage } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
@@ -13,16 +13,20 @@ import { useCallback, useMemo } from 'react';
 
 type NodeAgentAction = 'install' | 'repair' | 'upgrade' | 'remove';
 
-export const SwarmNodeAgentCoverage = ({ platformId, platformName }: { platformId: string; platformName: string }) => {
+export const SwarmNodeAgentCoveragePanel = ({
+  platformId,
+  platformName,
+}: {
+  platformId: string;
+  platformName: string;
+}) => {
   const args = useMemo(() => ({ id: platformId }), [platformId]);
   const query = useRead('getSwarmNodeAgentCoverage', args);
   const queryClient = useQueryClient();
   const taskSheet = useTaskSheet('Platform');
   const coverage = query.data?.data;
   const operationRunning = coverage?.operation?.state === 'Running';
-  const requiresSatellites = coverage?.nodes.some(
-    (node) => node.dataSource === 'Satellite' && node.eligible,
-  );
+  const requiresSatellites = coverage?.nodes.some((node) => node.dataSource === 'Satellite' && node.eligible);
   const installed = coverage?.isInstalled === true;
 
   const refreshCoverage = useCallback(() => {
@@ -61,7 +65,9 @@ export const SwarmNodeAgentCoverage = ({ platformId, platformName }: { platformI
             {coverage.coveredNodes}/{coverage.eligibleNodes} eligible nodes have a usable local data source.
           </p>
           {coverage.agentImageReference && (
-            <p className="mt-1 max-w-2xl truncate text-xs text-muted-foreground" title={coverage.agentImageDigest ?? undefined}>
+            <p
+              className="mt-1 max-w-2xl truncate text-xs text-muted-foreground"
+              title={coverage.agentImageDigest ?? undefined}>
               Agent image: {coverage.agentImageReference}
             </p>
           )}
@@ -142,12 +148,18 @@ export const SwarmNodeAgentCoverage = ({ platformId, platformName }: { platformI
 
       <div className="divide-y">
         {coverage.nodes.map((node) => (
-          <div key={node.dockerNodeId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-xs">
+          <div
+            key={node.dockerNodeId}
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-xs">
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className={cn(
                   'size-2 shrink-0 rounded-full',
-                  node.dockerReachable && !node.projectionStale ? 'bg-emerald-500' : node.eligible ? 'bg-amber-500' : 'bg-muted-foreground/40',
+                  node.dockerReachable && !node.projectionStale
+                    ? 'bg-emerald-500'
+                    : node.eligible
+                      ? 'bg-amber-500'
+                      : 'bg-muted-foreground/40',
                 )}
                 aria-hidden="true"
               />
@@ -166,7 +178,7 @@ export const SwarmNodeAgentCoverage = ({ platformId, platformName }: { platformI
   );
 };
 
-const CoverageState = ({ value }: { value: SwarmNodeAgentCoverageView['state'] }) => (
+const CoverageState = ({ value }: { value: SwarmNodeAgentCoverage['state'] }) => (
   <span
     className={cn(
       'rounded-sm px-1.5 py-0.5 text-[11px] font-medium',
@@ -174,9 +186,9 @@ const CoverageState = ({ value }: { value: SwarmNodeAgentCoverageView['state'] }
         ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
         : value === 'Failed'
           ? 'bg-destructive/10 text-destructive'
-        : value === 'NotInstalled'
-          ? 'bg-muted text-muted-foreground'
-          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+          : value === 'NotInstalled'
+            ? 'bg-muted text-muted-foreground'
+            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
     )}>
     {value.replace(/([a-z])([A-Z])/g, '$1 $2')}
   </span>

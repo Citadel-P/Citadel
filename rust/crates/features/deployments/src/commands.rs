@@ -1,5 +1,6 @@
 use crate::DeploymentSpec;
 use crate::DuplicateSource;
+use citadel_primitives::PatchField;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -14,13 +15,5 @@ pub struct CreateDeployment {
 
 #[derive(Debug, Clone, Default)]
 pub struct UpdateDeploymentMetadata {
-    pub description: FieldPatch<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub enum FieldPatch<T> {
-    #[default]
-    Unchanged,
-    Set(T),
-    Clear,
+    pub description: PatchField<String>,
 }

@@ -1,4 +1,4 @@
-import { ContainerDataView, ContainerStateStatus, ContainerStatView, SwarmTaskView } from '@/api/generated/api.types';
+import { ContainerRuntimeView, ContainerStateStatus, ContainerStatView, SwarmTaskView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateBadge } from '@/components/custom/state-badge';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -52,7 +52,7 @@ export const ServicesTable = ({
   selectable?: boolean;
   showActions?: boolean;
   emptyState?: { title: string; description: string };
-  taskContainers?: ContainerDataView[];
+  taskContainers?: ContainerRuntimeView[];
 }) => {
   const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
   const platformId = platformIdProp ?? routePlatformId;
@@ -224,8 +224,8 @@ export const ServicesTable = ({
   );
 };
 
-const mapTaskContainers = (services: SwarmServiceListView[], containers?: ContainerDataView[]) => {
-  const result = new Map<string, ContainerDataView>();
+const mapTaskContainers = (services: SwarmServiceListView[], containers?: ContainerRuntimeView[]) => {
+  const result = new Map<string, ContainerRuntimeView>();
   if (!containers?.length) return result;
 
   const taskIds = new Set(services.flatMap((service) => service.tasks.map((task) => task.id)));
@@ -237,7 +237,7 @@ const mapTaskContainers = (services: SwarmServiceListView[], containers?: Contai
   return result;
 };
 
-const mapServiceStats = (services: SwarmServiceListView[], containers: Map<string, ContainerDataView>) => {
+const mapServiceStats = (services: SwarmServiceListView[], containers: Map<string, ContainerRuntimeView>) => {
   const result = new Map<string, Omit<ContainerStatView, 'containerId'>>();
   for (const service of services) {
     const stats = aggregateTaskStats(service, containers);
@@ -249,11 +249,11 @@ const mapServiceStats = (services: SwarmServiceListView[], containers: Map<strin
 
 const aggregateTaskStats = (
   service: SwarmServiceListView,
-  containers: Map<string, ContainerDataView>,
+  containers: Map<string, ContainerRuntimeView>,
 ): Omit<ContainerStatView, 'containerId'> | undefined => {
   const stats = service.tasks
     .map((task) => containers.get(task.id))
-    .filter((container): container is ContainerDataView => container?.state === ContainerStateStatus.Running)
+    .filter((container): container is ContainerRuntimeView => container?.state === ContainerStateStatus.Running)
     .map((container) => container.containerStat)
     .filter((stat): stat is ContainerStatView => stat !== null && stat !== undefined);
   if (stats.length === 0) return undefined;

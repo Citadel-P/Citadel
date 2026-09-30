@@ -2,7 +2,7 @@ use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepo
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     CreateDeployment, DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository,
-    DeploymentSpec, DuplicateSource, FieldPatch, UpdateBehavior, UpdateDeploymentMetadata,
+    DeploymentSpec, DuplicateSource, PatchField, UpdateBehavior, UpdateDeploymentMetadata,
 };
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
@@ -112,7 +112,10 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         )
         .await
         .unwrap();
-    assert_eq!(created.status, "Created");
+    assert_eq!(
+        created.status,
+        citadel_deployments::DeploymentStatus::Created
+    );
     assert_eq!(created.tags.len(), 1);
     for tag_filter in [created.tags[0].name.clone(), tag_id.to_string()] {
         let tagged = store
@@ -330,7 +333,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
             true,
             duplicate.id,
             &UpdateDeploymentMetadata {
-                description: FieldPatch::Clear,
+                description: PatchField::Null,
             },
         )
         .await
@@ -443,7 +446,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                 true,
                 duplicate.id,
                 &UpdateDeploymentMetadata {
-                    description: FieldPatch::Set("blocked".to_owned()),
+                    description: PatchField::Value("blocked".to_owned()),
                 },
             )
             .await,

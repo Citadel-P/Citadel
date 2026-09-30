@@ -1,18 +1,19 @@
 //! Image checks keep their own lease; they cannot be mistaken for a failed Apply.
 use super::*;
-use crate::AutoUpdateState;
 use crate::UpdateBehavior;
 use chrono::Utc;
+use citadel_primitives::AuthorizedResource;
+use citadel_primitives::{AutoUpdateState, AutoUpdateStatus};
 
 pub struct DeploymentUpdateCheck {
     pub lease_id: Uuid,
-    pub deployment: DeploymentDetails,
+    pub deployment: crate::Deployment,
 }
 
 pub fn checkable_deployment_image(
-    deployment: &DeploymentDetails,
+    deployment: &crate::Deployment,
 ) -> Result<(Uuid, &str, &str), DeploymentError> {
-    if deployment.control_state != "Idle" {
+    if deployment.control_state != citadel_primitives::ResourceControlState::Idle {
         return Err(DeploymentError::Conflict(
             "The Deployment is processing another operation.".into(),
         ));
@@ -43,23 +44,6 @@ pub fn checkable_deployment_image(
     Ok((*registry_id, image_tag, current))
 }
 
-pub fn evaluate_deployment_digest(current: &str, remote: &str) -> AutoUpdateState {
-    let current = current.rsplit('@').next().unwrap_or(current);
-    let remote = remote.rsplit('@').next().unwrap_or(remote);
-    AutoUpdateState {
-        last_checked_at: Utc::now(),
-        status: if current.eq_ignore_ascii_case(remote) {
-            "UpToDate"
-        } else {
-            "UpdateAvailable"
-        }
-        .into(),
-        current_digest: Some(current.into()),
-        remote_digest: Some(remote.into()),
-        last_error: None,
-    }
-}
-
 impl DeploymentService {
     pub async fn check_updates(
         &self,
@@ -67,7 +51,7 @@ impl DeploymentService {
         administrator: bool,
         id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         let snapshot = self.store.get_authorized(actor, administrator, id).await?;
         self.check_update_snapshot(actor, administrator, snapshot, None, cancellation)
             .await
@@ -77,10 +61,10 @@ impl DeploymentService {
         &self,
         actor: ActorId,
         administrator: bool,
-        snapshot: DeploymentDetails,
+        snapshot: AuthorizedResource<crate::Deployment>,
         cached_digest: Option<String>,
         cancellation: &CancellationToken,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         let (registry, reference, current) = checkable_deployment_image(&snapshot)?;
         let reference = reference.to_owned();
         let current = current.to_owned();
@@ -103,10 +87,10 @@ impl DeploymentService {
                     result.unwrap_or_else(|_| Err(DeploymentError::Runtime("Registry update check timed out.".into()))),
             } };
             let update = match &scan {
-                Ok(remote) => Some(evaluate_deployment_digest(&current, remote)),
+                Ok(remote) => Some(AutoUpdateState::checked(&current, remote, Utc::now())),
                 Err(DeploymentError::Cancelled) => None,
                 Err(_) => Some(AutoUpdateState {
-                    last_checked_at: Utc::now(), status: "Failed".into(), current_digest: Some(current),
+                    last_checked_at: Utc::now(), status: AutoUpdateStatus::Failed, current_digest: Some(current),
                     remote_digest: snapshot.auto_update_state.as_ref().and_then(|state| state.remote_digest.clone()),
                     last_error: Some("Registry update check failed. Verify connectivity and credentials.".into()),
                 }),
@@ -176,7 +160,7 @@ impl DeploymentService {
                     if !checked
                         .auto_update_state
                         .as_ref()
-                        .is_some_and(|state| state.status == "UpdateAvailable")
+                        .is_some_and(|state| state.status == AutoUpdateStatus::UpdateAvailable)
                     {
                         return Ok(());
                     }
@@ -205,11 +189,10 @@ impl DeploymentService {
                         }
                         let after = self.store.get_authorized(actor, true, id).await?;
                         Ok::<_, DeploymentError>(
-                            after.status == "Healthy"
-                                && after
-                                    .auto_update_state
-                                    .as_ref()
-                                    .is_some_and(|state| state.status == "UpToDate"),
+                            after.status == crate::DeploymentStatus::Healthy
+                                && after.auto_update_state.as_ref().is_some_and(|state| {
+                                    state.status == AutoUpdateStatus::UpToDate
+                                }),
                         )
                     }
                     .await;
@@ -234,7 +217,7 @@ impl DeploymentService {
         Ok(())
     }
 
-    async fn report_image_update(&self, deployment: &DeploymentDetails, kind: &str) {
+    async fn report_image_update(&self, deployment: &crate::Deployment, kind: &str) {
         let Some(alerts) = &self.alerts else {
             return;
         };
@@ -258,19 +241,5 @@ impl DeploymentService {
         if let Err(error) = alerts.observe(&observation).await {
             tracing::warn!(%error,deployment_id=%deployment.id,"Deployment update Alert evaluation failed");
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn digest_evaluation_compares_content_and_preserves_the_applied_baseline() {
-        let equal = evaluate_deployment_digest("registry/app@sha256:ABC", "sha256:abc");
-        assert_eq!(equal.status, "UpToDate");
-        let changed = evaluate_deployment_digest("sha256:old", "sha256:new");
-        assert_eq!(changed.status, "UpdateAvailable");
-        assert_eq!(changed.current_digest.as_deref(), Some("sha256:old"));
-        assert_eq!(changed.remote_digest.as_deref(), Some("sha256:new"));
     }
 }

@@ -1,4 +1,4 @@
-import { PlatformCapabilities } from '@/api/generated/api.types';
+import { PlatformCapabilitiesView } from '@/api/generated/api.types';
 import { SwarmInventoryUpdate, useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router';
 
 type QueryState<T> = { data?: { data?: T } };
 type CachedResponse<T> = { data: T };
-type LiveSwarmResource = { id: string; capabilities?: PlatformCapabilities | null };
-type SwarmCollection<T> = { items: T[]; capabilities?: PlatformCapabilities | null };
+type LiveSwarmResource = { id: string; capabilities?: PlatformCapabilitiesView | null };
+type SwarmCollection<T> = { items: T[]; capabilities?: PlatformCapabilitiesView | null };
 
 export const useLiveSwarmItems = <T extends LiveSwarmResource>(
   platformId: string,

@@ -10,6 +10,9 @@ mod repository;
 pub mod rules;
 mod runtime;
 mod service;
+mod status;
+pub use status::{AlertEventStatus, AlertRuleStatus};
+mod vocabulary;
 mod windows_time_zones;
 pub use channels::{AlertChannel, AlertChannelConfiguration};
 pub use error::AlertError;
@@ -23,5 +26,6 @@ pub use runtime::{
     AlertDelivery, AlertDeliveryClaim, AlertEntitlements, AlertEventSink, AlertObservation,
 };
 pub use service::AlertDeliveryService;
+pub use vocabulary::{AlertSeverity, AlertType};
 #[cfg(test)]
 mod tests;

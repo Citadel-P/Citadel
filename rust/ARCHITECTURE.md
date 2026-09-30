@@ -83,7 +83,7 @@ crates/
   agent/                          # Agent executable and transport composition root
   features/
     deployments/, git/, stacks/, ...
-    primitives/                   # shared actor/permission/redaction vocabulary
+    primitives/                   # shared actor, permission, audit, patch and scheduling vocabulary
     execution/                    # process requests/results and ProcessRunner port
   infrastructure/
     adapters/                     # existing concrete integration crate
@@ -330,7 +330,7 @@ crates/features/deployments/src/
   repository.rs                  # DeploymentRepository, atomic durable operations
   service/{mod,read,mutations,apply,delete,updates,adoption,bindings}.rs
   commands.rs                    # transport-neutral mutation inputs
-  read_models.rs                 # DeploymentDetails, Config, Draft, filters
+  read_models.rs                 # Config, Draft, filters
   permissions.rs                 # named operation requirements
   runtime.rs                     # DeploymentRuntime and consumed runtime ports
   tasks.rs                       # DeploymentTaskSpawner, consumer-owned port
@@ -362,15 +362,82 @@ crates/server/src/
   realtime/notifiers.rs          # resource notifier port implementations
 ```
 
-`Deployment` contains resource state, specification and row version. `DeploymentDetails`
-wraps that entity with platform/image/container/tag/activity enrichment and a typed
-`EffectivePermission`. These are query data, not presentation capabilities. The SQL
-projection performs ACL filtering and enrichment in one query; the adapter decodes
-persisted permission values and never constructs an HTTP View. Only server maps raw
-activity snapshots, capabilities, null omission and wire field names.
+Shared domain contracts live with their natural owner:
+
+- Identity shares `ResourceAccessInput` and `ResourceAccessDetails` across users and
+  teams, including assignment validation. Server exposes one matching request/view
+  pair, and Postgres shares access projection and permission-mask helpers. Mutation
+  transactions and authorization-cache invalidation stay with each resource owner.
+- `citadel-primitives::AuditMetadata` groups creation time and typed `ActorId` for
+  managed resources. `ResourceControlState` represents Idle/Queued/Processing; SQL
+  adapters validate stored strings before constructing a domain model.
+- `citadel-primitives::AutoUpdateState`, `AutoUpdateStatus`, and `UpdateBehavior` are shared by
+  Deployments and Swarm Services, including their HTTP schemas. Stored status
+  strings are validated at the SQL boundary. Digest comparison ignores repository
+  prefixes and digest casing, and is also used by Stack image checks. Stack
+  per-service image state and Git commit state remain Stack-owned.
+- Git repository/reference, Build run/pool validation, Automation run, and Backup
+  repository/run/item/restore/coverage statuses are feature-owned enums reused by
+  the HTTP API. `status_enum!` shares exact text parsing and formatting, not a
+  universal status enum. SQL readers reject unknown states; executor results and
+  lifecycle decisions use variants. Audit snapshots retain their historical text
+  payloads to avoid dependencies from Activities back into execution features.
+- Deployments own `DeploymentStatus`, reused by container summaries through a
+  narrow Platforms → Deployments vocabulary dependency. Stack release status
+  uses the same fallible text parser; reconciliation status/action enums are reused
+  directly by HTTP views. Swarm owns health, synchronization and persisted operation
+  kind/state enums. Its apply-operation kind deliberately excludes deletion, which
+  has a separate claim. Event reconciliation and batch completion derive typed
+  Deployment/Stack states before persistence. Docker progress and runtime strings
+  remain external observations, not managed-resource lifecycle enums.
+- `PatchField<T>` handles missing/null/value metadata updates. `FieldUpdate<T>`
+  makes nullability explicit in `T` for configuration patches. `merge_json` owns
+  recursive JSON merge semantics. Nested webhook patches preserve omitted values.
+- `citadel-primitives::schedule::CronSchedule` validates and evaluates the same
+  five-field syntax for backups and automation, including time zones.
+- `citadel-primitives::WebhookConfig` and `WebhookPatch` define common webhook
+  fields, provider/authentication enums, validation and audit redaction. Git,
+  Builds, Backups, Automation and Swarm Services use them directly; Stacks flatten
+  the shared configuration beside `forceDeploy`. JSON is decoded at persistence
+  and merge-patch boundaries, not repeatedly during webhook dispatch. Authentication
+  and event filtering remain in the shared Git webhook engine.
+- Backups carry `BackupRepositorySpec` and `BackupSourceSpec` through configuration,
+  domain records, immutable run snapshots, authorization, source planning and Restic
+  execution. JSON conversion stays at persistence and merge-patch boundaries;
+  source permission targets and lease/audit keys come from the same typed spec.
+- `citadel-activities::ActivitySummary` owns the typed latest-activity envelope.
+  Event payload projection still belongs to the server.
+- Deployment, Stack and Swarm specifications are reused by API contracts where
+  their fields and visibility match. API-specific projections remain separate.
+- `citadel-primitives::normalization` shares optional-text trimming and stable ID
+  deduplication. Resource-specific length limits, allowed characters, sorting and
+  nil-ID validation remain with each feature.
+- `citadel-primitives::json_keys` shares first-letter property casing for Stack and
+  Swarm storage and server activity presentation. Callers explicitly identify opaque
+  dictionary objects; their keys and contents are never rewritten. Record arrays
+  are still traversed. Deployment keeps its typed storage representation.
+- Server `api/resources/capabilities::ResourceCapabilitiesView` is the common
+  read/write/execute DTO for collections and profile capabilities. Collection grant
+  projection is shared; resource-specific capabilities and permission policies
+  retain their feature semantics. OpenAPI annotations remain server-owned.
+
+These are composed values, not a generic entity base class or marker hierarchy.
+Tags remain owned by `citadel-tags`; permissions remain owned by primitives.
+Repository lease completion must check the operation token under the same resource
+row lock used by acquisition before updating repository readiness or validation.
+
+`Deployment` contains its state, specification, tags, latest activity and related
+platform/image/container summaries. ACL-aware repository queries return
+`AuthorizedResource<Deployment>`: a resource plus the requesting actor's effective
+permission. Permission metadata stays outside the domain model and is mapped to
+HTTP capabilities by the server. Authorization and enrichment remain in the same
+SQL query.
 
 Requests become business commands; repository and service methods return business
-models or semantic projections. The feature has no Utoipa or HTTP dependency. Explicit
+models or semantic projections. Feature crates own domain serialization but do not
+depend on OpenAPI. Server-owned DTOs and schema descriptions in
+`api/resources/schema_models` own `ToSchema` and schema attributes.
+Feature crates remain independent of HTTP handlers and response envelopes. Explicit
 conversions preserve wire defaults and build-image provenance while feature-owned
 storage conversion preserves the existing PascalCase persisted specification. No
 schema migration is required. HTTP and realtime use the same server View conversion.
@@ -576,10 +643,17 @@ work. Keep diagnostics and raw measurement output outside the source changes.
 Stacks and Swarm Services now follow the Deployment reference. Each feature owns
 `model/`, `commands.rs`, `read_models.rs`, `repository.rs`, `runtime.rs`, `permissions.rs`,
 `tasks.rs`, and operation-specific modules under `service/`. Crate façades export
-specific contracts. `Stack` and `StackRelease` are durable business resources;
-`StackDetails` and `StackReleaseDetails` add query enrichment. `SwarmServiceDetails`
-wraps `SwarmService` and includes the semantic `SwarmServiceOperation` projection.
-Immutable dereferencing supports read access; mutation names the owned resource.
+specific contracts. Each resource has one domain model: `Deployment`, `Stack`,
+`StackRelease`, `SwarmService`, `GitRepository`, `BuildProject` and `BackupPolicy`.
+Tags, latest activity/run summaries and related-resource fields live on those models,
+not separate per-resource `Details` wrappers. ACL-aware queries carry the caller's
+permission separately in `AuthorizedResource<T>`; business helpers accept `&T`.
+
+Full resource reads populate related fields with joined or batched queries. Execution
+and scheduling reads may omit UI enrichment; their results must not be used as full
+API responses or to replace tag links. Backup claims use `get_policy_for_execution`
+and skip tag/run summary queries. Backup policy mutations return populated summaries,
+including after metadata changes. HTTP schemas remain server-owned.
 
 `adapters/src/persistence/postgres/{stacks,swarm_services}/` owns repositories, SQL projections,
 row decoding, transactional authorization, bindings and durable claim transitions.
@@ -724,12 +798,28 @@ has semantic enum ownership in the feature, with server-side OpenAPI descriptors
 preserving the existing schema names and enum values. Serde on patch/configuration
 values preserves null/missing-field and persisted JSON behavior.
 
+Platform connectivity uses the shared `primitives::PlatformStatus` in platform and
+workload read models; Docker container, node and task observations retain their
+external state vocabulary. Alerts owns `AlertRuleStatus`, `AlertEventStatus`, `AlertSeverity`, and the known
+`AlertType` vocabulary. Internal observation names remain strings to support
+custom observations and transient channel verification; HTTP input uses the known
+alert kinds. Historical activity snapshots retain their original labels.
+Adapters parse stored status text at the persistence boundary, while server-only
+schema descriptors document these native enums without adding OpenAPI dependencies
+to feature crates.
+
 Read projections use Reader ports; durable resource mutations use Repository ports.
 Sample/projection stores and transient MFA/OIDC security state retain Store where
 that describes their actual responsibility. Registries, tags, bindings and secret
 metadata have explicit owners described below; repository source configuration and
 webhook configuration belong to Git. Encryption remains behind secret-protection ports;
 HTTP mappings preserve credential redaction and never decrypt to construct a View.
+
+Creation attribution in managed domain models uses `AuditMetadata`, including
+alert rules, alert channels, Git accounts, and registries. It contains only creation
+time and creator identity. Git account and registry updates preserve that attribution. Modification
+times, execution actors, historical events and flattened read projections retain
+their own semantics; HTTP views expose the existing flat creation fields.
 
 ### Explicit ownership of shared resource management
 
@@ -915,9 +1005,14 @@ headers and cache headers. Identity errors are one input to this boundary, rathe
 than a presentation dependency for unrelated features. Internal typed errors retain
 their source for logging and remain sanitized in public responses.
 
-Features have no Utoipa dependency. `api/resources/vocabulary.rs` describes feature-owned
-vocabulary for OpenAPI, deriving enum values from their existing Serde vocabulary;
-DTO fields retain the feature types. Persisted models keep their Serde contracts.
+OpenAPI dependencies and attributes belong only to Server. Feature-owned value
+objects retain their Serde contracts and business behavior. Server schema descriptions
+in `api/resources/schema_models` use native field types with schema overrides and
+exhaustive typed conversions; enum descriptions derive wire values from native
+serialization and exhaustively match variants. Existing descriptors in
+`api/resources/vocabulary.rs` cover additional vocabulary. This keeps documentation
+concerns out of features without adding serialization conversions to hot paths.
+The resource structure tests enforce the dependency boundary across every feature.
 The execution crate's process contracts now live in `execution/src/process.rs`;
 its `lib.rs` is an explicit façade. Server worker/realtime child modules use normal
 module paths, including their unit tests.
@@ -949,9 +1044,10 @@ Existing awaited host-disk sampling and key rotation remain bounded-purpose bloc
 boundaries. Realtime writers and worker child tasks retain their connection/worker
 owners; CLI signal handling now aborts and joins its local task.
 
-The final dependency audit used `cargo tree --locked -e features`, duplicate-version
-inspection and the unused-crate-dependency lint. It removed Utoipa from Activities,
-Licensing and Primitives, Reqwest from Alerts, and Subtle from Server. Server's SHA-2,
+Dependency audits use `cargo tree --locked -e features`, duplicate-version inspection
+and the unused-crate-dependency lint. Schema derives live with reusable native value
+contracts; HTTP services remain in Server. Primitives, Git, Deployments, Stacks and
+Swarm Services use Utoipa for their shared value contracts. Server's SHA-2,
 Bindings' Serde JSON and Runtime's futures utility dependencies are now test-only.
 Generated Docker dependencies remain aligned with workspace pins. Axum/Tower HTTP
 transport features, Reqwest TLS/JSON/stream/query, Tokio runtime/process/I/O,

@@ -21,7 +21,7 @@ mod repository;
 mod service;
 pub use error::ActivityError;
 pub use read_models::{
-    ActivityAccess, ActivityFilter, ActivityRecord, DEFAULT_ACTIVITY_PAGE_SIZE,
+    ActivityAccess, ActivityFilter, ActivityRecord, ActivitySummary, DEFAULT_ACTIVITY_PAGE_SIZE,
     MAXIMUM_ACTIVITY_PAGE_SIZE, PagedActivityRecords, ValidatedActivityFilter,
 };
 pub use repository::{ActivityQueryStore, WebhookActivitySink};

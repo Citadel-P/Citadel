@@ -4,7 +4,7 @@ import {
   ActivityStatus,
   LatestActivityView,
   ContainerStateStatus,
-  ContainerDataView,
+  ContainerRuntimeView,
   PlatformType,
   ResourceControlState,
   StackDriftMode,
@@ -29,7 +29,7 @@ const { useReadMock, useServicesGroupMock, useStackInfoGroupMock } = vi.hoisted(
     isLoading: false,
   })),
   useStackInfoGroupMock: vi.fn(() => ({
-    containersInfo: [] as Array<Pick<ContainerDataView, 'id' | 'name'> & Partial<ContainerDataView>>,
+    containersInfo: [] as Array<Pick<ContainerRuntimeView, 'id' | 'name'> & Partial<ContainerRuntimeView>>,
     isLoading: false,
     error: undefined,
   })),
@@ -199,7 +199,7 @@ describe('Stack tabs', () => {
   beforeEach(() => {
     useServicesGroupMock.mockReturnValue({ items: [], isLoading: false });
     useStackInfoGroupMock.mockReturnValue({
-      containersInfo: [] as Array<Pick<ContainerDataView, 'id' | 'name'> & Partial<ContainerDataView>>,
+      containersInfo: [] as Array<Pick<ContainerRuntimeView, 'id' | 'name'> & Partial<ContainerRuntimeView>>,
       isLoading: false,
       error: undefined,
     });

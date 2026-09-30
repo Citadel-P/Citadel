@@ -1,31 +1,31 @@
 //! Platforms HTTP routes, authorization and local request handling.
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
+use crate::api::resources::platforms::container_views::{
+    ContainerRuntimeListView, ContainerRuntimeView, ContainerSummaryView,
+};
+use crate::api::resources::platforms::inventory_views::CreatedNetworkView;
 use crate::api::resources::platforms::runtime_mapping;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
-        resources::{
-            metadata_patch::MetadataPatch,
-            platforms::{
-                requests::{
-                    ContentQuery, CreateNetworkInput, CreatePlatformInput, CreateRuntimeNetwork,
-                    CreateRuntimeVolume, CreateVolumeInput, DeleteImagesInput, DeleteInput,
-                    DeleteNetworksInput, DeletePlatformsInput, DeleteSwarmResourcesInput,
-                    DeleteVolumesInput, DockerNodeSelector, Hours, NetworkFilters,
-                    PatchPlatformMetadataInput, PrunePlatformInput, PullImageInput,
-                    RenamePlatformInput, SwarmTaskFilters, Tail, UpdateSwarmNodeInput,
-                    UpdateSwarmNodesAvailabilityInput, UpdateSwarmResourceLabelsInput,
-                    VolumeFilters,
-                },
-                swarm_views,
-                views::{
-                    ContainerHistory, ContainerView, ContainersResponse, History,
-                    ImageCapabilitiesView, ImagesResponse, NetworkCapabilitiesView, NetworkView,
-                    NetworksResponse, PlatformCapabilitiesView, PlatformView, PlatformsResponse,
-                    ResourceCapabilitiesView, StackHistory, SwarmConfigView, SwarmItemsResponse,
-                    SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView,
-                    SwarmTaskView, TaskHistory, TaskTerminalView, VolumeCapabilitiesView,
-                    VolumeView, VolumesResponse,
-                },
+        resources::platforms::{
+            requests::{
+                ContentQuery, CreateNetworkInput, CreatePlatformInput, CreateRuntimeNetwork,
+                CreateRuntimeVolume, CreateVolumeInput, DeleteImagesInput, DeleteInput,
+                DeleteNetworksInput, DeletePlatformsInput, DeleteSwarmResourcesInput,
+                DeleteVolumesInput, DockerNodeSelector, Hours, NetworkFilters,
+                PatchPlatformMetadataInput, PrunePlatformInput, PullImageInput,
+                RenamePlatformInput, SwarmTaskFilters, Tail, UpdateSwarmNodeInput,
+                UpdateSwarmNodesAvailabilityInput, UpdateSwarmResourceLabelsInput, VolumeFilters,
+            },
+            swarm_views,
+            views::{
+                ContainerHistory, ContainerView, ContainersResponse, History,
+                ImageCapabilitiesView, ImagesResponse, NetworkCapabilitiesView, NetworkView,
+                NetworksResponse, PlatformCapabilitiesView, PlatformView, PlatformsResponse,
+                StackHistory, SwarmConfigView, SwarmItemsResponse, SwarmNetworkView, SwarmNodeView,
+                SwarmSecretView, SwarmServiceView, SwarmTaskView, TaskHistory, TaskTerminalView,
+                VolumeCapabilitiesView, VolumeView, VolumesResponse,
             },
         },
     },
@@ -34,6 +34,7 @@ use crate::{
     request_validation::{invalid_json, invalid_path, invalid_query},
 };
 use citadel_platforms::PlatformInfoPort;
+use citadel_primitives::PatchField;
 
 use axum::{
     Json, Router,
@@ -89,7 +90,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 
 use futures_util::StreamExt;
 
-use serde_json::{Value, json};
+use serde_json::json;
 
 use sqlx::{PgPool, Row};
 
@@ -307,13 +308,14 @@ async fn list_platforms(
             .platforms
             .list_authorized(principal.actor_id, principal.is_administrator(), &tags)
             .await
-            .map(|value| {
+            .map_err(platform_error)
+            .and_then(|value| {
                 value
                     .into_iter()
-                    .map(crate::api::resources::platforms::views::PlatformView::from)
-                    .collect::<Vec<_>>()
-            })
-            .map_err(platform_error),
+                    .map(PlatformView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     let ids = platforms
@@ -399,8 +401,13 @@ async fn create_platform(
             .platforms
             .get_platform(id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     platform.capabilities = Some(capabilities);
@@ -436,8 +443,13 @@ async fn get_platform(
             .platforms
             .get_platform(id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     platform.capabilities = Some(capabilities);
@@ -475,9 +487,9 @@ async fn update_platform_metadata(
     authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
 
     let description = match input.description {
-        MetadataPatch::Missing => None,
-        MetadataPatch::Null => Some(None),
-        MetadataPatch::Value(value) => {
+        PatchField::Missing => None,
+        PatchField::Null => Some(None),
+        PatchField::Value(value) => {
             if value.chars().count() > 600 {
                 return api_result(
                     Err(ApiError::Validation(
@@ -505,8 +517,13 @@ async fn update_platform_metadata(
             .platforms
             .get_platform(id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     platform.capabilities = Some(capabilities);
@@ -678,20 +695,24 @@ async fn list_images(
     } else {
         Vec::new()
     };
-    let registries = registries
-        .into_iter()
-        .map(|registry| {
-            (
-                registry.id,
-                crate::api::resources::platforms::views::ImageRegistryView {
-                    id: registry.id,
-                    name: registry.name,
-                    registry_host: registry.registry_host,
-                    registry_type: registry.registry_type,
-                },
-            )
-        })
-        .collect::<std::collections::HashMap<_, _>>();
+    let registries = api_result(
+        registries
+            .into_iter()
+            .map(|registry| {
+                Ok((
+                    registry.id,
+                    crate::api::resources::platforms::views::ImageRegistryView {
+                        id: registry.id,
+                        name: registry.name,
+                        registry_host: registry.registry_host,
+                        registry_type: serde_json::from_value(registry.registry_type.into())?,
+                    },
+                ))
+            })
+            .collect::<Result<std::collections::HashMap<_, _>, serde_json::Error>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?;
     for image in &mut images {
         image.registry = image
             .registry_id
@@ -762,11 +783,15 @@ async fn list_networks(
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let mut networks: Vec<_> = values
-        .into_iter()
-        .filter(|network| network_matches(network, &filters))
-        .map(|network| map_network(network, capabilities))
-        .collect();
+    let mut networks: Vec<_> = api_result(
+        values
+            .into_iter()
+            .filter(|network| network_matches(network, &filters))
+            .map(|network| map_network(network, capabilities))
+            .collect::<Result<_, _>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?;
     let node_networks = api_result(
         state
             .platforms
@@ -775,12 +800,15 @@ async fn list_networks(
             .map_err(platform_error),
         &headers,
     )?;
-    networks.extend(
+    networks.extend(api_result(
         node_networks
             .into_iter()
             .filter(|network| network_matches(&network.resource, &filters))
-            .map(|network| map_node_network(network, capabilities)),
-    );
+            .map(|network| map_node_network(network, capabilities))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?);
     Ok(no_store(
         Json(NetworksResponse {
             networks,
@@ -866,7 +894,7 @@ pub(crate) async fn lookup_platform_resources(
     tag = "Networks",
     summary = "Inspect a Platform Network",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/DockerNetworkDetailsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = NetworkView, content_type = "application/json"),
         crate::openapi::errors::CreateErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("networkId" = String, Path), ("dockerNodeId" = Option<String>, Query)),
@@ -923,7 +951,10 @@ async fn get_network(
         }
     };
     let mut network = match value {
-        Ok(network) => map_network(network, capabilities),
+        Ok(network) => api_result(
+            map_network(network, capabilities).map_err(ApiError::internal),
+            &headers,
+        )?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     network.docker_node_id = selector.docker_node_id;
@@ -938,7 +969,7 @@ async fn get_network(
     summary = "Create a Network",
     request_body = CreateNetworkInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/CreateNetworkView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = CreatedNetworkView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -1004,7 +1035,9 @@ async fn create_network(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     publish_runtime_change(&state, input.platform_id, "network", "create", &created.id);
-    Ok(no_store(Json(created).into_response()))
+    Ok(no_store(
+        Json(CreatedNetworkView { id: created.id }).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1222,11 +1255,15 @@ async fn list_volumes(
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let mut volumes: Vec<_> = values
-        .into_iter()
-        .filter(|volume| volume_matches(volume, &filters))
-        .map(|volume| map_volume(volume, capabilities))
-        .collect();
+    let mut volumes: Vec<_> = api_result(
+        values
+            .into_iter()
+            .filter(|volume| volume_matches(volume, &filters))
+            .map(|volume| map_volume(volume, capabilities))
+            .collect::<Result<_, _>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?;
     let node_volumes = api_result(
         state
             .platforms
@@ -1235,12 +1272,15 @@ async fn list_volumes(
             .map_err(platform_error),
         &headers,
     )?;
-    volumes.extend(
+    volumes.extend(api_result(
         node_volumes
             .into_iter()
             .filter(|volume| volume_matches(&volume.resource, &filters))
-            .map(|volume| map_node_volume(volume, capabilities)),
-    );
+            .map(|volume| map_node_volume(volume, capabilities))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?);
     attach_volume_coverage(&state, &principal, platform_id, &mut volumes, &headers).await?;
     Ok(no_store(
         Json(VolumesResponse {
@@ -1314,7 +1354,10 @@ async fn get_volume(
         }
     };
     let mut volume = match value {
-        Ok(volume) => map_volume(volume, capabilities),
+        Ok(volume) => api_result(
+            map_volume(volume, capabilities).map_err(ApiError::internal),
+            &headers,
+        )?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     volume.docker_node_id = selector.docker_node_id;
@@ -1402,7 +1445,11 @@ async fn create_volume(
     };
     publish_runtime_change(&state, input.platform_id, "volume", "create", &volume.name);
     Ok(no_store(
-        Json(map_volume(volume, capabilities)).into_response(),
+        Json(api_result(
+            map_volume(volume, capabilities).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -1575,7 +1622,7 @@ swarm_list_handler!(
     tag = "Platforms",
     summary = "List Swarm Nodes",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodesView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmNodeView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -1615,7 +1662,7 @@ swarm_list_handler!(
     tag = "Platforms",
     summary = "List Swarm Services",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServicesView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmServiceView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -1654,7 +1701,7 @@ swarm_get_handler!(
     tag = "Platforms",
     summary = "List Swarm Tasks",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTasksView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmTaskView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("limit" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(50)))), ("serviceId" = Option<String>, Query)),
@@ -1727,7 +1774,7 @@ swarm_list_handler!(
     tag = "Platforms",
     summary = "List Swarm Networks",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNetworksView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmNetworkView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -1767,7 +1814,7 @@ swarm_list_handler!(
     tag = "Platforms",
     summary = "List Swarm Configs",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmConfigView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -1807,7 +1854,7 @@ swarm_list_handler!(
     tag = "Platforms",
     summary = "List Swarm Secrets",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmSecretsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmItemsResponse<SwarmSecretView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path)),
@@ -2122,7 +2169,8 @@ pub(crate) async fn realtime_daemon_snapshot(
             .iter()
             .cloned()
             .map(|volume| map_volume(volume, volume_cap))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(serialize)?;
         all_volumes.extend(
             state
                 .platforms
@@ -2130,7 +2178,9 @@ pub(crate) async fn realtime_daemon_snapshot(
                 .await
                 .map_err(failure)?
                 .into_iter()
-                .map(|volume| map_node_volume(volume, volume_cap)),
+                .map(|volume| map_node_volume(volume, volume_cap))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(serialize)?,
         );
         let node_networks: Vec<_> = state
             .platforms
@@ -2139,7 +2189,8 @@ pub(crate) async fn realtime_daemon_snapshot(
             .map_err(failure)?
             .into_iter()
             .map(|network| map_node_network(network, network_capabilities(platform)))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(serialize)?;
         events.push(crate::realtime_groups::ClientEvent::new("SwarmNodeLocalResourcesUpdated", vec![serde_json::json!({
             "platformId": id, "images": images, "volumes": all_volumes, "networks": node_networks,
         })]));
@@ -2152,7 +2203,10 @@ pub(crate) async fn realtime_daemon_snapshot(
                 style: RowStyle::Daemon,
                 rows: networks
                     .into_iter()
-                    .map(|n| serde_json::to_value(map_network(n, network_capabilities(platform))))
+                    .map(|n| {
+                        map_network(n, network_capabilities(platform))
+                            .and_then(serde_json::to_value)
+                    })
                     .collect::<Result<_, _>>()
                     .map_err(serialize)?,
             },
@@ -2161,7 +2215,7 @@ pub(crate) async fn realtime_daemon_snapshot(
                 style: RowStyle::Daemon,
                 rows: volumes
                     .into_iter()
-                    .map(|v| serde_json::to_value(map_volume(v, volume_cap)))
+                    .map(|v| map_volume(v, volume_cap).and_then(serde_json::to_value))
                     .collect::<Result<_, _>>()
                     .map_err(serialize)?,
             },
@@ -2290,9 +2344,9 @@ async fn runtime_for(
 fn map_network(
     network: RuntimeNetworkSummary,
     capabilities: NetworkCapabilitiesView,
-) -> NetworkView {
+) -> Result<NetworkView, serde_json::Error> {
     let is_system = runtime_mapping::system_network(&network.name, network.ingress);
-    NetworkView {
+    Ok(NetworkView {
         name: network.name,
         id: network.id,
         created: network.created,
@@ -2306,58 +2360,65 @@ fn map_network(
         config_only: network.config_only,
         in_use: network.container_count > 0,
         config_from: network.config_from,
-        ipam: network.ipam.map(runtime_mapping::ipam),
+        ipam: network
+            .ipam
+            .map(runtime_mapping::ipam)
+            .transpose()?
+            .flatten(),
         options: network.options,
         labels: network.labels,
         containers: network
             .containers
             .into_iter()
-            .map(|(id, c)| (id, runtime_mapping::network_container(c)))
-            .collect(),
+            .map(|(id, c)| runtime_mapping::network_container(c).map(|c| (id, c)))
+            .collect::<Result<_, _>>()?,
         peers: network
             .peers
             .into_iter()
             .map(runtime_mapping::peer)
-            .collect(),
+            .collect::<Result<_, _>>()?,
         is_system,
         docker_node_id: None,
         node_hostname: None,
         is_stale: false,
         stale_reason: None,
         capabilities: Some(capabilities),
-    }
+    })
 }
 
 fn map_node_network(
     node: citadel_platforms::NodeResourceProjection<RuntimeNetworkSummary>,
     capabilities: NetworkCapabilitiesView,
-) -> NetworkView {
-    let mut view = map_network(node.resource, capabilities);
+) -> Result<NetworkView, serde_json::Error> {
+    let mut view = map_network(node.resource, capabilities)?;
     view.docker_node_id = Some(node.docker_node_id);
     view.node_hostname = node.node_hostname;
     view.is_stale = node.is_stale;
     view.stale_reason = node
         .is_stale
         .then(|| "Node Agent is disconnected or unavailable.".into());
-    view
+    Ok(view)
 }
 
 fn map_node_volume(
     node: citadel_platforms::NodeResourceProjection<RuntimeVolumeSummary>,
     capabilities: VolumeCapabilitiesView,
-) -> VolumeView {
-    let mut view = map_volume(node.resource, capabilities);
+) -> Result<VolumeView, serde_json::Error> {
+    let mut view = map_volume(node.resource, capabilities)?;
     view.docker_node_id = Some(node.docker_node_id);
     view.node_hostname = node.node_hostname;
     view.is_stale = node.is_stale;
     view.stale_reason = node
         .is_stale
         .then(|| "Node Agent is disconnected or unavailable.".into());
-    view
+    Ok(view)
 }
 
-fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView) -> VolumeView {
-    VolumeView {
+fn map_volume(
+    volume: RuntimeVolumeSummary,
+    capabilities: VolumeCapabilitiesView,
+) -> Result<VolumeView, serde_json::Error> {
+    Ok(VolumeView {
         backup_coverage: None,
         id: volume.name.clone(),
         name: volume.name,
@@ -2370,7 +2431,11 @@ fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView
         usage_data: volume
             .usage_data
             .and_then(|usage| serde_json::from_value(usage).ok()),
-        containers: volume.containers,
+        containers: volume
+            .containers
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<_, _>>()?,
         status: volume
             .status
             .into_iter()
@@ -2392,7 +2457,7 @@ fn map_volume(volume: RuntimeVolumeSummary, capabilities: VolumeCapabilitiesView
         is_stale: false,
         stale_reason: None,
         capabilities: Some(capabilities),
-    }
+    })
 }
 
 fn network_matches(network: &RuntimeNetworkSummary, filters: &NetworkFilters) -> bool {
@@ -2803,7 +2868,7 @@ fn platform_metadata_error(error: citadel_platforms::PlatformMetadataError) -> A
     tag = "SwarmServices",
     summary = "Inspect the deployed managed Service",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::ServiceInspectionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -2885,7 +2950,7 @@ async fn inspect_managed_service(
     tag = "Stacks",
     summary = "Get Stack runtime containers",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainersDataView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ContainerRuntimeListView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("stackId" = uuid::Uuid, Path)),
@@ -2930,8 +2995,16 @@ async fn stack_data(
         &headers,
     )?;
     Ok(no_store(
-        Json(serde_json::json!({"containers":containers.iter()
-        .map(ContainerView::runtime_data).collect::<Vec<_>>() }))
+        Json(ContainerRuntimeListView {
+            containers: api_result(
+                containers
+                    .iter()
+                    .map(ContainerView::runtime_data)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
+        })
         .into_response(),
     ))
 }
@@ -2965,7 +3038,7 @@ container_reader!(
     tag = "Containers",
     summary = "Inspect a Container with sensitive environment values redacted",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::descriptor_views::ContainerInspectionView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = String, Path)),
@@ -2984,7 +3057,7 @@ container_reader!(
     tag = "Containers",
     summary = "getContainerInfo",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ContainerSummaryView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = String, Path)),
@@ -3003,7 +3076,7 @@ container_reader!(
     tag = "Containers",
     summary = "getContainerData",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerDataView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ContainerRuntimeView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = String, Path)),
@@ -3054,9 +3127,12 @@ async fn read_container(
         ));
     }
     if matches!(kind, ReadKind::Data) {
-        let mut data = container.runtime_data();
-        data["capabilities"] = serde_json::json!(capabilities);
-        data["containerStat"] = serde_json::Value::Null;
+        let mut data = api_result(
+            container.runtime_data().map_err(ApiError::internal),
+            &headers,
+        )?;
+        data.capabilities = Some(capabilities);
+        data.container_stat = None;
         return Ok(no_store(Json(data).into_response()));
     }
     inspect_target(&state, container, &headers, kind, Some(capabilities)).await
@@ -3084,7 +3160,7 @@ deployment_reader!(
     tag = "Deployments",
     summary = "inspectDeployment",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::descriptor_views::ContainerInspectionView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -3103,7 +3179,7 @@ deployment_reader!(
     tag = "Deployments",
     summary = "getDeploymentContainerInfo",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInfoView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = ContainerSummaryView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -3177,7 +3253,7 @@ async fn read_deployment(
     tag = "Stacks",
     summary = "Inspect a Stack Container with sensitive environment values redacted",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::descriptor_views::ContainerInspectionView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("stackId" = uuid::Uuid, Path), ("containerId" = String, Path)),
@@ -3255,11 +3331,16 @@ async fn inspect_target(
             .platforms
             .get_platform(container.platform_id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         headers,
     )?;
-    if platform.status != "Online" {
+    if platform.status != citadel_primitives::PlatformStatus::Online {
         return Ok(conflict_response(
             "Platform is disconnected or unavailable.".into(),
             headers,
@@ -3294,54 +3375,33 @@ async fn inspect_target(
     });
     match result {
         Ok(inspection) => {
-            let value = if matches!(kind, ReadKind::Info) {
-                summary(&container, &platform, inspection, capabilities)
+            if matches!(kind, ReadKind::Info) {
+                Ok(no_store(
+                    Json(api_result(
+                        ContainerSummaryView::from_inspection(
+                            &container,
+                            &platform.name,
+                            &inspection,
+                            capabilities,
+                        )
+                        .map_err(ApiError::internal),
+                        headers,
+                    )?)
+                    .into_response(),
+                ))
             } else {
-                inspection
-            };
-            Ok(no_store(Json(value).into_response()))
+                let inspection = api_result(
+                    serde_json::from_value::<
+                        crate::api::resources::platforms::descriptor_views::ContainerInspectionView,
+                    >(inspection)
+                    .map_err(ApiError::internal),
+                    headers,
+                )?;
+                Ok(no_store(Json(inspection).into_response()))
+            }
         }
         Err(error) => Ok(runtime_error_response(error, headers)),
     }
-}
-
-fn summary(
-    container: &ContainerView,
-    platform: &PlatformView,
-    inspection: serde_json::Value,
-    capabilities: Option<PlatformCapabilitiesView>,
-) -> serde_json::Value {
-    use serde_json::{Value, json};
-    let volumes: Vec<_> = inspection["mounts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|mount| mount["name"].as_str())
-        .collect();
-    let networks: serde_json::Map<String, Value> = inspection
-        .pointer("/networkSettings/networks")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flatten()
-        .map(|(name, settings)| {
-            let id = settings["networkID"]
-                .as_str()
-                .filter(|id| !id.is_empty())
-                .unwrap_or(name);
-            (name.clone(), Value::String(id.into()))
-        })
-        .collect();
-    json!({
-        "name":inspection["name"].as_str().unwrap_or_default(),
-        "containerId":container.container_id,"platformId":container.platform_id,
-        "platformName":if capabilities.is_some() { platform.name.as_str() } else { "" },
-        "startedAt":inspection.pointer("/state/startedAt").and_then(Value::as_str).unwrap_or_default(),
-        "finishedAt":inspection.pointer("/state/finishedAt").and_then(Value::as_str).unwrap_or_default(),
-        "volumes":volumes,"networks":networks,
-        "ports":inspection.pointer("/hostConfig/portBindings").filter(|v|v.is_object()).cloned().unwrap_or_else(||json!({})),
-        "state":inspection.pointer("/state/status").and_then(Value::as_str).unwrap_or("Unknown"),
-        "imageView":container.image_view,"deploymentView":container.deployment_view,"capabilities":capabilities,
-    })
 }
 
 macro_rules! action_handler {
@@ -3367,7 +3427,7 @@ action_handler!(
     operation_id = "startContainers",
     tag = "Containers",
     summary = "Start Containers",
-    request_body = ref("#/components/schemas/ContainerIdsInput"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ExternalResourceErrors
@@ -3386,7 +3446,7 @@ action_handler!(
     operation_id = "stopContainers",
     tag = "Containers",
     summary = "Stop Containers",
-    request_body = ref("#/components/schemas/ContainerIdsInput"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ExternalResourceErrors
@@ -3405,7 +3465,7 @@ action_handler!(
     operation_id = "restartContainers",
     tag = "Containers",
     summary = "Restart Containers",
-    request_body = ref("#/components/schemas/ContainerIdsInput"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ExternalResourceErrors
@@ -3424,7 +3484,7 @@ action_handler!(
     operation_id = "pauseContainers",
     tag = "Containers",
     summary = "Pause Containers",
-    request_body = ref("#/components/schemas/ContainerIdsInput"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ExternalResourceErrors
@@ -3443,7 +3503,7 @@ action_handler!(
     operation_id = "unpauseContainers",
     tag = "Containers",
     summary = "Unpause Containers",
-    request_body = ref("#/components/schemas/ContainerIdsInput"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ExternalResourceErrors
@@ -3490,7 +3550,7 @@ deployment_action_handler!(
     operation_id = "startDeployments",
     tag = "Deployments",
     summary = "Start Deployments",
-    request_body = ref("#/components/schemas/DeploymentIds"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::UnavailableResourceErrors
@@ -3509,7 +3569,7 @@ deployment_action_handler!(
     operation_id = "stopDeployments",
     tag = "Deployments",
     summary = "Stop Deployments",
-    request_body = ref("#/components/schemas/DeploymentIds"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::UnavailableResourceErrors
@@ -3528,7 +3588,7 @@ deployment_action_handler!(
     operation_id = "restartDeployments",
     tag = "Deployments",
     summary = "Restart Deployments",
-    request_body = ref("#/components/schemas/DeploymentIds"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::UnavailableResourceErrors
@@ -3547,7 +3607,7 @@ deployment_action_handler!(
     operation_id = "pauseDeployments",
     tag = "Deployments",
     summary = "Pause Deployments",
-    request_body = ref("#/components/schemas/DeploymentIds"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::UnavailableResourceErrors
@@ -3566,7 +3626,7 @@ deployment_action_handler!(
     operation_id = "resumeDeployments",
     tag = "Deployments",
     summary = "Resume Deployments",
-    request_body = ref("#/components/schemas/DeploymentIds"),
+    request_body = Vec<uuid::Uuid>,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::UnavailableResourceErrors
@@ -3741,7 +3801,7 @@ setup_handler!(
     tag = "Platforms",
     summary = "Install Docker Swarm node agents",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::NodeAgentProgressSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -3760,7 +3820,7 @@ setup_handler!(
     tag = "Platforms",
     summary = "Repair Docker Swarm node-agent coverage",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::NodeAgentProgressSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -3779,7 +3839,7 @@ setup_handler!(
     tag = "Platforms",
     summary = "Upgrade Docker Swarm node agents",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::NodeAgentProgressSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -3797,7 +3857,7 @@ setup_handler!(
     tag = "Platforms",
     summary = "Remove Docker Swarm node agents",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/NodeAgentProgressList"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::NodeAgentProgressSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -4000,7 +4060,7 @@ async fn initialize_swarm(
     tag = "Platforms",
     summary = "Get Docker Swarm node-agent coverage",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeAgentCoverageView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::SwarmNodeAgentCoverageSchema, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -4082,7 +4142,7 @@ async fn node_coverage(
     tag = "Platforms",
     summary = "Create an Edge Agent enrollment token",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::EdgeEnrollmentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -4114,7 +4174,7 @@ async fn enroll(
     tag = "Platforms",
     summary = "Get Edge Agent connection status",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::EdgeStatusView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -4137,7 +4197,10 @@ async fn status(
             .map_err(error),
         &headers,
     )?;
-    Ok(no_store(Json(status).into_response()))
+    Ok(no_store(
+        Json(crate::api::resources::platforms::operation_views::EdgeStatusView::from(status))
+            .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -4235,7 +4298,27 @@ impl EdgeHttpContext {
         );
         lines.push(format!("  {}", shell_quote(&self.agent_image)));
         let command = lines.join(" \\\n");
-        Ok(no_store(Json(serde_json::json!({"enrollmentId":enrollment,"platformId":target.platform_id,"token":token,"expiresAtUtc":expires,"instructions":{"coreUrl":self.core_url,"environment":environment,"agentImage":self.agent_image,"dockerRunCommand":command}})).into_response()))
+        Ok(no_store(
+            Json(
+                crate::api::resources::platforms::operation_views::EdgeEnrollmentView {
+                    enrollment_id: enrollment,
+                    platform_id: target.platform_id,
+                    token,
+                    expires_at_utc: expires,
+                    instructions:
+                        crate::api::resources::platforms::operation_views::EdgeInstructionsView {
+                            core_url: self.core_url.clone(),
+                            environment: environment
+                                .into_iter()
+                                .map(|(key, value)| (key.to_owned(), value))
+                                .collect(),
+                            agent_image: self.agent_image.clone(),
+                            docker_run_command: command,
+                        },
+                },
+            )
+            .into_response(),
+        ))
     }
     pub(crate) fn error(error: EdgeStoreError) -> ApiError {
         match error {
@@ -4257,7 +4340,7 @@ static PULL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4)
     summary = "Pull a Docker image with progress",
     request_body = PullImageInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/pullImageResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::PullImageStreamItemSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     security(("Bearer" = [])),
@@ -4437,7 +4520,7 @@ static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::cons
     summary = "Delete Images",
     request_body = DeleteImagesInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/DeleteImageResult"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::DeleteImagesView, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     security(("Bearer" = [])),
@@ -4549,7 +4632,21 @@ async fn delete_images(
     });
     let result = api_result(completion.await.map_err(ApiError::internal), &headers)?;
     match result {
-        Ok(items) => Ok(no_store(Json(serde_json::json!({"items":items.into_iter().map(|result| serde_json::json!({"result":result})).collect::<Vec<_>>()})).into_response())),
+        Ok(items) => Ok(no_store(
+            Json(
+                crate::api::resources::platforms::operation_views::DeleteImagesView {
+                    items: items
+                        .into_iter()
+                        .map(|result| {
+                            crate::api::resources::platforms::operation_views::DeleteImageView {
+                                result,
+                            }
+                        })
+                        .collect(),
+                },
+            )
+            .into_response(),
+        )),
         Err(error) => Ok(runtime_error_response(error, &headers)),
     }
 }
@@ -4561,7 +4658,7 @@ async fn delete_images(
     tag = "Images",
     summary = "Read exposed ports using the Citadel Image ID",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ExposedPortsResult"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::ExposedPortsView, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("imageId" = uuid::Uuid, Path)),
@@ -4621,7 +4718,8 @@ async fn exposed_ports(
     };
     match result {
         Ok(ports) => Ok(no_store(
-            Json(serde_json::json!({"ports":ports})).into_response(),
+            Json(crate::api::resources::platforms::operation_views::ExposedPortsView { ports })
+                .into_response(),
         )),
         Err(error) => Ok(runtime_error_response(error, &headers)),
     }
@@ -4634,7 +4732,7 @@ async fn exposed_ports(
     tag = "Images",
     summary = "Inspect an Image on its owning Docker node",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/InspectImageView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::views::ImageInspectionView, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("imageId" = String, Path), ("dockerNodeId" = Option<String>, Query)),
@@ -4663,15 +4761,22 @@ async fn inspect_image(
                 .platforms
                 .get_platform(platform_id)
                 .await
-                .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-                .map_err(platform_error),
+                .map_err(platform_error)
+                .and_then(|value| {
+                    value
+                        .map(PlatformView::try_from)
+                        .transpose()
+                        .map_err(ApiError::internal)
+                }),
             &headers,
         )?;
         if platform.platform_type == "DockerSwarm" {
             selector.docker_node_id = platform
                 .platform_descriptor
-                .get("nodeID")
-                .and_then(serde_json::Value::as_str)
+                .as_ref()
+                .and_then(
+                    crate::api::resources::platforms::descriptor_views::PlatformDescriptor::node_id,
+                )
                 .filter(|id| !id.is_empty())
                 .map(str::to_owned);
             if selector.docker_node_id.is_none() {
@@ -4816,8 +4921,13 @@ async fn swarm_platform(
             .platforms
             .get_platform(platform_id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         headers,
     )?;
     if platform.platform_type != "DockerSwarm" {
@@ -4828,7 +4938,7 @@ async fn swarm_platform(
             headers,
         );
     }
-    if platform.status != "Online" {
+    if platform.status != citadel_primitives::PlatformStatus::Online {
         return api_result(
             Err(ApiError::Conflict(
                 "Platform is disconnected or unavailable.".into(),
@@ -4846,7 +4956,7 @@ async fn swarm_platform(
     tag = "Platforms",
     summary = "Read bounded Service logs",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::LogSnapshotSchema, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
@@ -4910,7 +5020,7 @@ async fn read_service_logs(
     tag = "SwarmServices",
     summary = "Read managed Service logs",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::LogSnapshotSchema, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("id" = uuid::Uuid, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
@@ -4969,7 +5079,7 @@ async fn managed_service(
     tag = "Platforms",
     summary = "Read current Task logs on its owning node",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmLogsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::LogSnapshotSchema, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("tail" = Option<i32>, Query, minimum = 1, maximum = 200, extensions(("x-citadel-default" = json!(100))))),
@@ -5230,8 +5340,8 @@ async fn rename(
     tag = "Platforms",
     summary = "Update a Platform",
     request_body(content(
-        (ref("#/components/schemas/PlatformInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PlatformInput") = "application/json")
+        (crate::api::resources::platforms::patch::PlatformPatch = "application/merge-patch+json"),
+        (crate::api::resources::platforms::patch::PlatformPatch = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = crate::api::resources::platforms::views::PlatformView, content_type = "application/json"),
@@ -5276,6 +5386,16 @@ async fn update(
             .get_platform(id)
             .await
             .map_err(platform_error),
+        &headers,
+    )?;
+    // Decode partial fields only after scoped authorization, preserving PATCH omission/null semantics.
+    let patch: crate::api::resources::platforms::patch::PlatformPatch = api_result(
+        serde_json::from_value(input)
+            .map_err(|error| ApiError::Validation(format!("Invalid Platform patch: {error}"))),
+        &headers,
+    )?;
+    let input = api_result(
+        serde_json::to_value(patch).map_err(ApiError::internal),
         &headers,
     )?;
     let input = api_result(
@@ -5359,7 +5479,10 @@ async fn update(
             .map_err(platform_error),
         &headers,
     )?;
-    let mut updated = PlatformView::from(updated);
+    let mut updated = api_result(
+        PlatformView::try_from(updated).map_err(ApiError::internal),
+        &headers,
+    )?;
     updated.capabilities = Some(capabilities);
     publish_runtime_change(&state, id, "platform", "update", &id.to_string());
     Ok(no_store(Json(updated).into_response()))
@@ -5429,7 +5552,7 @@ browse_one!(
     tag = "Images",
     summary = "List Registry repositories",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/getExternalRepositoriesResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::registries::ExternalRepositorySchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("registryName" = String, Path)),
@@ -5448,7 +5571,7 @@ browse_one!(
     tag = "Images",
     summary = "List Docker Hub repositories",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoriesResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::registries::DockerHubRepositoryInfoSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("registryName" = String, Path)),
@@ -5467,7 +5590,7 @@ browse_two!(
     tag = "Images",
     summary = "List Docker Hub repository tags",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/getDockerHubRepositoryTagsResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::registries::DockerHubTagSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("registryName" = String, Path), ("repositoryName" = String, Path)),
@@ -5486,7 +5609,7 @@ browse_two!(
     tag = "Images",
     summary = "List GitHub package versions",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/getGhcrPackageVersionsResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::registries::GithubPackageVersionSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("registryName" = String, Path), ("packageName" = String, Path)),
@@ -5607,7 +5730,7 @@ fn storage(error: RuntimeCapabilityError) -> ApiError {
         (status = 200, description = "Success", body = TaskHistory, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
-    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5629,8 +5752,13 @@ async fn task_statistics(
             .platforms
             .get_platform(platform_id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     if platform.platform_type != "DockerSwarm" {
@@ -5641,7 +5769,7 @@ async fn task_statistics(
             &headers,
         );
     }
-    if platform.status != "Online" {
+    if platform.status != citadel_primitives::PlatformStatus::Online {
         return api_result(
             Err(ApiError::Conflict(
                 "Platform is disconnected or unavailable.".into(),
@@ -5712,10 +5840,10 @@ async fn task_statistics(
     tag = "Platforms",
     summary = "Get Service statistics and node coverage",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceStatsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::ServiceStatisticsSchema, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
-    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5736,8 +5864,13 @@ async fn service_statistics(
             .platforms
             .get_platform(platform_id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     if platform.platform_type != "DockerSwarm" {
@@ -5795,10 +5928,10 @@ async fn service_statistics(
     tag = "Containers",
     summary = "Get Container statistics",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::ContainerStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
-    params(("id" = String, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("id" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5847,10 +5980,10 @@ async fn container(
     tag = "Platforms",
     summary = "Get Platform statistics",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/PlatformStatsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::PlatformStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5870,8 +6003,13 @@ async fn platform(
             .platforms
             .get_platform(id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
-            .map_err(platform_error),
+            .map_err(platform_error)
+            .and_then(|value| {
+                value
+                    .map(PlatformView::try_from)
+                    .transpose()
+                    .map_err(ApiError::internal)
+            }),
         &headers,
     )?;
     let store = PostgresStatisticsReader::new(state.pool.clone());
@@ -5892,10 +6030,10 @@ async fn platform(
     tag = "Deployments",
     summary = "Get Deployment statistics",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerStatsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::ContainerStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5924,10 +6062,10 @@ async fn deployment(
     tag = "Stacks",
     summary = "Get Stack Container statistics",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/StackStatsView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = StackHistory, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("stackId" = uuid::Uuid, Path), ("hours" = Option<crate::openapi::compatibility::StatsHours>, Query)),
+    params(("stackId" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -6465,7 +6603,7 @@ material_create!(
     operation_id = "createSwarmSecret",
     tag = "Platforms",
     summary = "createSwarmSecret",
-    request_body = ref("#/components/schemas/CreateSwarmSecretInput"),
+    request_body = crate::api::resources::schema_models::platforms::CreateSwarmMaterialInputSchema,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -6485,7 +6623,7 @@ material_create!(
     operation_id = "createSwarmConfig",
     tag = "Platforms",
     summary = "createSwarmConfig",
-    request_body = ref("#/components/schemas/CreateSwarmConfigInput"),
+    request_body = crate::api::resources::schema_models::platforms::CreateSwarmMaterialInputSchema,
     responses(
         (status = 204, description = "Success"),
         crate::openapi::errors::ResourceMutationErrors
@@ -6854,8 +6992,31 @@ async fn delete_swarm_resources(
     response
 }
 
-pub(crate) fn inspect_service_view(value: SwarmServiceMessage) -> Value {
-    json!({"id":value.id,"versionIndex":value.version_index,"name":value.name,"mode":value.mode,"image":value.image,"runningTaskCount":value.running_task_count,"desiredTaskCount":value.desired_task_count,"updateState":value.update_state,"updateMessage":(!value.update_message.is_empty()).then_some(value.update_message),"ports":value.ports,"networkIds":value.network_ids,"secretIds":value.secret_ids,"configIds":value.config_ids,"labels":value.labels,"createdAt":value.created_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32)),"updatedAt":value.updated_at.and_then(|t|chrono::DateTime::from_timestamp(t.seconds,t.nanos as u32))})
+pub(crate) fn inspect_service_view(
+    value: SwarmServiceMessage,
+) -> crate::api::resources::platforms::operation_views::ServiceInspectionView {
+    crate::api::resources::platforms::operation_views::ServiceInspectionView {
+        id: value.id,
+        version_index: value.version_index,
+        name: value.name,
+        mode: value.mode,
+        image: value.image,
+        running_task_count: value.running_task_count,
+        desired_task_count: value.desired_task_count,
+        update_state: value.update_state,
+        update_message: (!value.update_message.is_empty()).then_some(value.update_message),
+        ports: value.ports,
+        network_ids: value.network_ids,
+        secret_ids: value.secret_ids,
+        config_ids: value.config_ids,
+        labels: value.labels.into_iter().collect(),
+        created_at: value
+            .created_at
+            .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)),
+        updated_at: value
+            .updated_at
+            .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)),
+    }
 }
 
 macro_rules! reader {
@@ -6880,7 +7041,7 @@ reader!(
     tag = "Platforms",
     summary = "inspectSwarmNode",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmNodeInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::NodeInspectionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("nodeId" = String, Path)),
@@ -6899,7 +7060,7 @@ reader!(
     tag = "Platforms",
     summary = "inspectSwarmService",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::ServiceInspectionView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -6918,7 +7079,7 @@ reader!(
     tag = "Platforms",
     summary = "getSwarmConfigData",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmConfigDataView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::ConfigContentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -6996,11 +7157,63 @@ async fn read_swarm_resource(
     )?;
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
-    let result=bounded(async {let client=client(&runtime);if kind == "config" { manager_identity(&runtime, &platform, &cancel).await?; } match kind {
-        "service"=>{let service=client.inspect_service(&id,&cancel).await?;if service.id!=id {return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Remote,"Docker returned a different Service.",false));}Ok(inspect_service_view(service))},
-        "node"=>{let (node,running,desired)=client.inspect_node(&id,&cancel).await?;if node.id!=id {return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Remote,"Docker returned a different Node.",false));}Ok(json!({"id":node.id,"versionIndex":node.version_index,"hostname":node.hostname,"role":node.role,"isLeader":node.is_leader,"reachability":node.reachability,"status":node.status,"statusMessage":node.status_message,"availability":node.availability,"engineVersion":node.engine_version,"operatingSystem":node.operating_system,"architecture":node.architecture,"address":node.address,"labels":node.labels,"runningTaskCount":running,"desiredTaskCount":desired,"createdAt":node.created_at,"updatedAt":node.updated_at}))},
-        _=>Ok(json!({"content":client.config_data(&id,&cancel).await?}))
-    }}).await;
+    let result = bounded(async {
+        let client = client(&runtime);
+        if kind == "config" {
+            manager_identity(&runtime, &platform, &cancel).await?;
+        }
+        match kind {
+            "service" => {
+                let service = client.inspect_service(&id, &cancel).await?;
+                if service.id != id {
+                    return Err(RuntimeCapabilityError::new(
+                        RuntimeErrorKind::Remote,
+                        "Docker returned a different Service.",
+                        false,
+                    ));
+                }
+                Ok(json!(inspect_service_view(service)))
+            }
+            "node" => {
+                let (node, running, desired) = client.inspect_node(&id, &cancel).await?;
+                if node.id != id {
+                    return Err(RuntimeCapabilityError::new(
+                        RuntimeErrorKind::Remote,
+                        "Docker returned a different Node.",
+                        false,
+                    ));
+                }
+                Ok(json!(
+                    crate::api::resources::platforms::operation_views::NodeInspectionView {
+                        id: node.id,
+                        version_index: node.version_index,
+                        hostname: node.hostname,
+                        role: node.role,
+                        is_leader: node.is_leader,
+                        reachability: node.reachability,
+                        status: node.status,
+                        status_message: node.status_message,
+                        availability: node.availability,
+                        engine_version: node.engine_version,
+                        operating_system: node.operating_system,
+                        architecture: node.architecture,
+                        address: node.address,
+                        labels: node.labels,
+                        running_task_count: running,
+                        desired_task_count: desired,
+                        created_at: node.created_at,
+                        updated_at: node.updated_at
+                    }
+                ))
+            }
+            _ => Ok(json!(
+                crate::api::resources::platforms::operation_views::ConfigContentView {
+                    content: client.config_data(&id, &cancel).await?
+                }
+            )),
+        }
+    })
+    .await;
     match result {
         Ok(value) => Ok(no_store(Json(value).into_response())),
         Err(error) => Ok(runtime_error_response(error, &headers)),
@@ -7060,7 +7273,7 @@ async fn get(
             .map_err(platform_error),
         &headers,
     )?;
-    if summary.node_count == 0 && platform.status == "Online" {
+    if summary.node_count == 0 && platform.status == citadel_primitives::PlatformStatus::Online {
         match initialize_swarm(&state, &platform).await {
             Ok(true) => publish_runtime_change(&state, id, "platform", "update", &id.to_string()),
             Ok(false) => {}
@@ -7097,7 +7310,7 @@ async fn get(
         Json(crate::api::routes::platforms::swarm_views::overview(
             summary,
             id,
-            platform.status == "Online",
+            platform.status == citadel_primitives::PlatformStatus::Online,
             control,
             error,
             capabilities,
@@ -7135,7 +7348,7 @@ task_reader!(
     tag = "Platforms",
     summary = "Inspect the current Task container",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ContainerInspectView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::descriptor_views::ContainerInspectionView, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -7154,7 +7367,7 @@ task_reader!(
     tag = "Platforms",
     summary = "Resolve the current Task terminal target",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmTaskTerminalView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = TaskTerminalView, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -7227,6 +7440,16 @@ async fn read_task_runtime(
             RuntimeRef::Agent(r) => r.inspection(docker_id, &cancel).await,
             RuntimeRef::Edge(r) => r.inspection(docker_id, &cancel).await,
         }?;
+        let inspection = serde_json::from_value::<
+            crate::api::resources::platforms::descriptor_views::ContainerInspectionView,
+        >(inspection)
+        .map_err(|_| {
+            RuntimeCapabilityError::new(
+                RuntimeErrorKind::Conflict,
+                "Invalid Container inspection response.",
+                false,
+            )
+        })?;
         Ok(Json(inspection).into_response())
     })
     .await
@@ -7276,7 +7499,7 @@ async fn authorize(
     tag = "Platforms",
     summary = "Browse a Volume directory",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/VolumeDirectoryView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::VolumeDirectorySchema, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("name" = String, Path), ("path" = Option<String>, Query), ("dockerNodeId" = Option<String>, Query)),
@@ -7450,7 +7673,8 @@ mod tests {
                     ..Default::default()
                 },
                 VolumeCapabilitiesView::default(),
-            );
+            )
+            .unwrap();
             let json = serde_json::to_value(view).unwrap();
             assert_eq!(
                 json["usageData"],
@@ -7460,7 +7684,8 @@ mod tests {
         let view = map_volume(
             RuntimeVolumeSummary::default(),
             VolumeCapabilitiesView::default(),
-        );
+        )
+        .unwrap();
         assert!(view.usage_data.is_none());
     }
 
@@ -7471,7 +7696,9 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            map_volume(volume, VolumeCapabilitiesView::default()).status["missing"],
+            map_volume(volume, VolumeCapabilitiesView::default())
+                .unwrap()
+                .status["missing"],
             ""
         );
     }

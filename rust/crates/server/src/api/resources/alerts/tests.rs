@@ -1,4 +1,5 @@
-use super::{patch::*, requests::*, spec::*, views::*};
+use super::{patch::*, requests::*, views::*};
+use citadel_alerts::AlertRuleStatus;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -134,8 +135,8 @@ fn event_view_preserves_runtime_details_and_native_actor_type() {
         id: Uuid::now_v7(),
         alert_rule_id: Uuid::now_v7(),
         alert_type: "PlatformUnreachable".into(),
-        severity: "Warning".into(),
-        status: "Resolved".into(),
+        severity: citadel_alerts::AlertSeverity::Warning,
+        status: citadel_alerts::AlertEventStatus::Resolved,
         message: "Platform disconnected".into(),
         info: info.clone(),
         resource_id: Some(Uuid::now_v7()),
@@ -197,22 +198,26 @@ fn alert_openapi_is_derived_from_native_dtos() {
             "#/components/schemas/PatchAlertChannelInput"
         );
     }
-    let compatibility = crate::openapi::compatibility::schemas();
-    for name in [
-        "AlertDestination",
-        "AlertType",
-        "AlertSeverity",
-        "AlertRuleStatus",
-        "AlertEventStatus",
-        "AlertResourceType",
-        "AlertRuleQuietHour",
-        "AlertEventInfo",
-        "PatchAlertRuleInput",
-        "AlertRuleConfigView",
-    ] {
-        assert!(
-            !compatibility.contains_key(name),
-            "{name} still has a frozen schema"
-        );
-    }
+}
+
+#[test]
+fn channel_creation_attribution_remains_flat_on_the_wire() {
+    let actor = Uuid::now_v7();
+    let created_at = chrono::Utc::now();
+    let view = AlertChannelView::try_from(citadel_alerts::AlertChannel {
+        id: Uuid::now_v7(),
+        name: "ops".into(),
+        alert_destination: "Generic".into(),
+        url: "https://alerts.example.test/hook".into(),
+        is_active: true,
+        audit: citadel_primitives::AuditMetadata {
+            created_by_actor_id: citadel_primitives::ActorId::new(actor),
+            created_at,
+        },
+    })
+    .unwrap();
+    let wire = serde_json::to_value(view).unwrap();
+    assert_eq!(wire["createdByActorId"], json!(actor));
+    assert_eq!(wire["createdAt"], json!(created_at));
+    assert!(wire.get("audit").is_none());
 }

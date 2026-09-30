@@ -30,8 +30,8 @@ pub use model::{
     StackReconciliationResult, StackReconciliationStatus, StackRelease, StackReleaseSource,
     StackReleaseStatus, StackRuntimeContainer, StackRuntimeResult, StackRuntimeService,
     StackRuntimeSnapshot, StackSource, StackSourceFile, StackSpec, StackSpecCommon,
-    StackStateClaim, StackUpdateBehavior, StackUpdateState, StackWebhookConfig, WebhookAuthScheme,
-    WebhookProvider, normalize_project_name,
+    StackStateClaim, StackUpdateBehavior, StackUpdateState, StackWebhookConfig,
+    normalize_project_name,
 };
 
 pub use commands::{
@@ -41,8 +41,7 @@ pub use commands::{
 
 pub use read_models::{
     ComposeProjectImportDraft, ComposeProjectImportSource, ComposeProjectStackDraft,
-    DuplicateDraftWarning, StackConfig, StackDetails, StackDraft, StackDuplicateDraft, StackFilter,
-    StackReleaseDetails,
+    DuplicateDraftWarning, StackConfig, StackDraft, StackDuplicateDraft, StackFilter,
 };
 
 pub use compose::{

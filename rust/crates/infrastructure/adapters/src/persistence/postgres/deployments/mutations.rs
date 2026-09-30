@@ -1,11 +1,13 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl PostgresDeploymentRepository {
     pub(super) fn create_impl<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateDeployment,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_platform(&mut tx, actor_id, administrator, input.platform_id).await?;
@@ -114,7 +116,8 @@ impl PostgresDeploymentRepository {
         id: Uuid,
         expected_row_version: i64,
         spec: &'a DeploymentSpec,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -176,7 +179,8 @@ impl PostgresDeploymentRepository {
         administrator: bool,
         id: Uuid,
         input: &'a UpdateDeploymentMetadata,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -198,9 +202,9 @@ impl PostgresDeploymentRepository {
             ensure_idle(&row)?;
             let old_description: Option<String> = row.try_get("description").map_err(storage)?;
             let next_description = match &input.description {
-                FieldPatch::Unchanged => old_description.clone(),
-                FieldPatch::Set(value) => Some(value.clone()),
-                FieldPatch::Clear => None,
+                PatchField::Missing => old_description.clone(),
+                PatchField::Value(value) => Some(value.clone()),
+                PatchField::Null => None,
             };
             sqlx::query(
                 "UPDATE deployments SET description=$2,rowversion=rowversion+1 WHERE id=$1",
@@ -237,7 +241,8 @@ impl PostgresDeploymentRepository {
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(

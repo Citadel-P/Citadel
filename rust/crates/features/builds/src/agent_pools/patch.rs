@@ -56,7 +56,7 @@ impl BuildAgentPool {
             cleanup_timeout_seconds: self.cleanup_timeout_seconds,
             maximum_instance_lifetime_seconds: self.maximum_instance_lifetime_seconds,
             failure_retention_minutes: self.failure_retention_minutes,
-            last_validation_status: self.last_validation_status.clone(),
+            last_validation_status: self.last_validation_status.to_string(),
             last_validation_message: self.last_validation_message.clone(),
             last_validated_at: self.last_validated_at,
         }

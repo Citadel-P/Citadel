@@ -1,22 +1,21 @@
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::swarm_services::spec::*;
 use crate::api::resources::tags::views::TagSummary;
 use crate::api::resources::{
-    common::{DuplicateSourceInput, PlatformStatus, ResourceControlState},
-    swarm_services::requests::CreateSwarmServiceInput,
+    common::DuplicateSourceInput, swarm_services::requests::CreateSwarmServiceInput,
 };
 use chrono::{DateTime, Utc};
+use citadel_primitives::AuthorizedResource;
+use citadel_primitives::AutoUpdateState;
+use citadel_primitives::PlatformStatus;
+use citadel_primitives::ResourceControlState;
+pub use citadel_swarm_services::{
+    SwarmServiceHealth, SwarmServiceOperationKind, SwarmServiceOperationState,
+    SwarmServiceSynchronizationState,
+};
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
-#[schema(as = swarm_services::model::ResourceCapabilities)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceCapabilities {
-    pub can_read: bool,
-    pub can_write: bool,
-    pub can_execute: bool,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +33,9 @@ pub struct SwarmServiceCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct SwarmServiceOperationView {
     pub id: Uuid,
+    #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceOperationKindSchema)]
     pub kind: SwarmServiceOperationKind,
+    #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceOperationStateSchema)]
     pub state: SwarmServiceOperationState,
     pub prepared_at: DateTime<Utc>,
     #[schema(required = true)]
@@ -54,8 +55,8 @@ impl TryFrom<citadel_swarm_services::SwarmServiceOperation> for SwarmServiceOper
     fn try_from(value: citadel_swarm_services::SwarmServiceOperation) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
-            kind: serde_json::from_value(value.kind.into())?,
-            state: serde_json::from_value(value.state.into())?,
+            kind: value.kind,
+            state: value.state,
             prepared_at: value.prepared_at,
             attempted_at: value.attempted_at,
             completed_at: value.completed_at,
@@ -78,9 +79,13 @@ pub struct ManagedSwarmServiceView {
     #[schema(required = true)]
     pub docker_service_id: Option<String>,
     pub spec: SwarmServiceSpec,
+    #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceHealthSchema)]
     pub health: SwarmServiceHealth,
+    #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceSynchronizationStateSchema)]
     pub synchronization_state: SwarmServiceSynchronizationState,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
     pub control_state: ResourceControlState,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::AutoUpdateStateSchema)]
     pub auto_update_state: AutoUpdateState,
     #[schema(required = true)]
     pub applied_image_digest: Option<String>,
@@ -91,6 +96,7 @@ pub struct ManagedSwarmServiceView {
     pub updated_at: DateTime<Utc>,
     #[schema(required = true)]
     pub platform_name: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
     pub platform_status: PlatformStatus,
     #[schema(required = true)]
     pub running_task_count: Option<i32>,
@@ -109,32 +115,34 @@ pub struct ManagedSwarmServiceView {
     pub capabilities: Option<SwarmServiceCapabilities>,
 }
 
-impl TryFrom<citadel_swarm_services::SwarmServiceDetails> for ManagedSwarmServiceView {
+impl TryFrom<AuthorizedResource<citadel_swarm_services::SwarmService>> for ManagedSwarmServiceView {
     type Error = serde_json::Error;
 
-    fn try_from(value: citadel_swarm_services::SwarmServiceDetails) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: AuthorizedResource<citadel_swarm_services::SwarmService>,
+    ) -> Result<Self, Self::Error> {
+        let permission = value.effective_permission;
+        let value = value.resource;
         Ok(Self {
-            id: value.service.id,
-            platform_id: value.service.platform_id,
-            name: value.service.name,
-            description: value.service.description,
-            docker_name: value.service.docker_name,
-            docker_service_id: value.service.docker_service_id,
-            spec: value.service.spec.try_into()?,
-            health: serde_json::from_value(value.service.health.into())?,
-            synchronization_state: serde_json::from_value(
-                value.service.synchronization_state.into(),
-            )?,
-            control_state: serde_json::from_value(value.service.control_state.into())?,
-            auto_update_state: value.service.auto_update_state.try_into()?,
-            applied_image_digest: value.service.applied_image_digest,
-            has_pending_desired_changes: value.service.has_pending_desired_changes,
-            has_runtime_drift: value.service.has_runtime_drift,
-            row_version: value.service.row_version,
-            created_at: value.service.created_at,
-            updated_at: value.service.updated_at,
+            id: value.id,
+            platform_id: value.platform_id,
+            name: value.name,
+            description: value.description,
+            docker_name: value.docker_name,
+            docker_service_id: value.docker_service_id,
+            spec: value.spec.try_into()?,
+            health: value.health,
+            synchronization_state: value.synchronization_state,
+            control_state: value.control_state,
+            auto_update_state: value.auto_update_state,
+            applied_image_digest: value.applied_image_digest,
+            has_pending_desired_changes: value.has_pending_desired_changes,
+            has_runtime_drift: value.has_runtime_drift,
+            row_version: value.row_version,
+            created_at: value.audit.created_at,
+            updated_at: value.updated_at,
             platform_name: value.platform_name,
-            platform_status: serde_json::from_value(value.platform_status.into())?,
+            platform_status: value.platform_status,
             running_task_count: value.running_task_count,
             desired_task_count: value.desired_task_count,
             update_state: value.update_state,
@@ -143,9 +151,7 @@ impl TryFrom<citadel_swarm_services::SwarmServiceDetails> for ManagedSwarmServic
             tags: value.tags.into_iter().map(|item| item.into()).collect(),
             tasks: value.tasks,
             capabilities: Some(
-                crate::api::resources::swarm_services::capabilities::capabilities(
-                    value.effective_permission,
-                ),
+                crate::api::resources::swarm_services::capabilities::capabilities(permission),
             ),
         })
     }
@@ -155,7 +161,7 @@ impl TryFrom<citadel_swarm_services::SwarmServiceDetails> for ManagedSwarmServic
 #[serde(rename_all = "camelCase")]
 pub struct ManagedSwarmServicesView {
     pub swarm_services: Vec<ManagedSwarmServiceView>,
-    pub capabilities: ResourceCapabilities,
+    pub capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
@@ -288,47 +294,4 @@ impl SwarmServiceDuplicateDraftView {
             warnings: value.warnings,
         })
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
-pub enum SwarmServiceHealth {
-    Unknown,
-    Healthy,
-    Progressing,
-    Degraded,
-    Failed,
-    Created,
-    Stopped,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
-pub enum SwarmServiceSynchronizationState {
-    NeverApplied,
-    DesiredChangesPending,
-    InSync,
-    Drifted,
-    RuntimeMissing,
-    OutcomeUnknown,
-    OwnershipConflict,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
-pub enum SwarmServiceOperationKind {
-    Apply,
-    Scale,
-    ForceUpdate,
-    Delete,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, utoipa::ToSchema)]
-pub enum SwarmServiceOperationState {
-    Prepared,
-    Canceled,
-    PendingAcceptance,
-    Accepted,
-    Rejected,
-    NotAccepted,
-    OutcomeUnknown,
-    Completed,
-    OwnershipConflict,
 }

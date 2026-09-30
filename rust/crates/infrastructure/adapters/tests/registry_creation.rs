@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
 };
 use citadel_adapters::connectors::registries::browser::RegistryBrowser;
-use citadel_primitives::ActorId;
+use citadel_primitives::{ActorId, PatchField};
 use citadel_registries::*;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
@@ -36,14 +36,16 @@ impl RegistryRepository for Repository {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(RegistryDetails {
                 id: Uuid::now_v7(),
-                created_by_actor_id: Uuid::now_v7(),
+                audit: citadel_primitives::AuditMetadata {
+                    created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+                    created_at: chrono::Utc::now(),
+                },
                 name: input.name.clone(),
                 status: input.status,
                 description: None,
                 registry_host: input.registry_host.clone(),
                 registry_type: registry_type(&input.configuration)?,
                 configuration: input.configuration.clone(),
-                created_at: chrono::Utc::now(),
                 tags: vec![],
             })
         })
@@ -159,7 +161,7 @@ async fn creation_checks_credentials_before_persistence() {
         for (token, accepted) in [("rejected-token", false), ("accepted-token", true)] {
             let repository = Repository(AtomicUsize::new(0), Some(current.clone()));
             let patch = RegistryPatch {
-                configuration: MetadataPatch::Value(json!({"pat":token})),
+                configuration: PatchField::Value(json!({"pat":token})),
                 ..Default::default()
             };
             let result = update_registry(

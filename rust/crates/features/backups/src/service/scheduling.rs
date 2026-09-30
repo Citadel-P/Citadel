@@ -1,10 +1,11 @@
 use super::*;
+use chrono::Timelike;
 
 impl BackupService {
     pub async fn queue_webhook(
         &self,
         id: Uuid,
-        expected_webhook: &Value,
+        expected_webhook: &citadel_primitives::WebhookConfig,
     ) -> Result<(), BackupError> {
         self.ensure_automated_operations().await?;
         self.store.enqueue_webhook(id, expected_webhook).await?;

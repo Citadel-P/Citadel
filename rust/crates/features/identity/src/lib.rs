@@ -68,18 +68,15 @@ pub mod teams;
 pub use teams::{
     AddTeamMember, AddTeamRole, CreateTeam, DeleteTeams, NewTeamMutation, PatchTeam, RenameTeam,
     Team, TeamDetails, TeamMemberDetails, TeamMutationService, TeamPatchMutation, TeamReadService,
-    TeamReader, TeamRepository, TeamResourceAccessDetails, TeamResourceAccessInput,
-    TeamSearchItemDetails,
+    TeamReader, TeamRepository, TeamSearchItemDetails,
 };
 pub mod users;
+use citadel_primitives::PatchField;
 pub use users::{
     AddUserRole, CreateUser, DeleteUsers, NewUserMutation, PatchUser, RenameUser, User,
     UserDetails, UserMutationService, UserPasswordContext, UserPatchMutation, UserReadService,
-    UserReader, UserRepository, UserResourceAccess, UserResourceAccessDetails,
-    UserResourceAccessInput, UserSearchItemDetails,
+    UserReader, UserRepository, UserSearchItemDetails,
 };
-pub mod patch;
-pub use patch::PatchField;
 pub mod read_models;
 pub use read_models::{PagedResult, ResourceInfo, StoredPage};
 pub use service_accounts::{
@@ -97,3 +94,6 @@ mod tests;
 
 pub mod error;
 pub use error::IdentityError;
+
+pub mod resource_access;
+pub use resource_access::{ResourceAccessDetails, ResourceAccessInput};

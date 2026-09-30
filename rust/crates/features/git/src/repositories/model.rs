@@ -38,15 +38,16 @@ pub struct GitRepository {
     pub git_account_id: Option<Uuid>,
     pub sync_mode: GitRepositorySyncMode,
     pub sync_interval_minutes: Option<i32>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub on_clone: Option<RepoCommand>,
     pub on_pull: Option<RepoCommand>,
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub created_by_actor_id: Uuid,
-    pub control_state: String,
-    pub latest_activity: Option<Value>,
+    pub status: crate::GitRepositoryStatus,
+    pub control_state: citadel_primitives::ResourceControlState,
+    pub audit: citadel_primitives::AuditMetadata,
+
+    // Related data populated by full resource reads.
     pub tags: Vec<citadel_tags::TagSummary>,
+    pub latest_activity: Option<citadel_activities::ActivitySummary>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

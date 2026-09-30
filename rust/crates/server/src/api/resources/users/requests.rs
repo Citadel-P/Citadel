@@ -1,10 +1,11 @@
 use crate::api::resources::common::enabled_by_default;
+use crate::api::resources::resource_access::ResourceAccessInput;
 use citadel_identity::{
-    PatchField, UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity,
-    UserUiFont, UserUiRadius,
+    UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity, UserUiFont,
+    UserUiRadius,
 };
-use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
-use serde::{Deserialize, Serialize};
+use citadel_primitives::PatchField;
+use serde::Deserialize;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -100,41 +101,6 @@ impl From<citadel_identity::PatchUserPreferences> for PatchUserPreferencesReques
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResourceAccessInput {
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    #[schema(value_type = Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>)]
-    pub specific_permissions: Vec<SpecificPermission>,
-}
-
-impl From<UserResourceAccessInput> for citadel_identity::UserResourceAccessInput {
-    fn from(value: UserResourceAccessInput) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
-    }
-}
-
-impl From<citadel_identity::UserResourceAccessInput> for UserResourceAccessInput {
-    fn from(value: citadel_identity::UserResourceAccessInput) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {
@@ -148,7 +114,7 @@ pub struct CreateUserRequest {
     #[serde(default)]
     pub role_ids: Vec<Uuid>,
     #[serde(default)]
-    pub resource_accesses: Vec<UserResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 impl From<CreateUserRequest> for citadel_identity::CreateUser {
@@ -206,8 +172,8 @@ pub struct PatchUserRequest {
     #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
-    #[schema(value_type = Option<Vec<UserResourceAccessInput>>, required = false)]
-    pub resource_accesses: PatchField<Vec<UserResourceAccessInput>>,
+    #[schema(value_type = Option<Vec<ResourceAccessInput>>, required = false)]
+    pub resource_accesses: PatchField<Vec<ResourceAccessInput>>,
 }
 
 impl From<PatchUserRequest> for citadel_identity::PatchUser {
@@ -283,41 +249,6 @@ impl From<citadel_identity::AddUserRole> for AddUserRoleRequest {
     fn from(value: citadel_identity::AddUserRole) -> Self {
         Self {
             role_id: value.role_id,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResourceAccessRequest {
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    #[schema(value_type = Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>)]
-    pub specific_permissions: Vec<SpecificPermission>,
-}
-
-impl From<UserResourceAccessRequest> for citadel_identity::UserResourceAccess {
-    fn from(value: UserResourceAccessRequest) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
-    }
-}
-
-impl From<citadel_identity::UserResourceAccess> for UserResourceAccessRequest {
-    fn from(value: citadel_identity::UserResourceAccess) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
         }
     }
 }

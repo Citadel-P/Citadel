@@ -1,4 +1,5 @@
 //! Stacks HTTP routes, authorization and local request handling.
+use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -313,35 +314,6 @@ async fn authorize<P: PermissionPolicy>(
         .map_err(|error| crate::api::error::HttpError::from_parts(error, headers))
 }
 
-async fn collection_capabilities(
-    identity: &IdentityService,
-    principal: &ActorPrincipal,
-    headers: &HeaderMap,
-) -> HttpResult<ResourceCapabilities> {
-    if principal.is_administrator() {
-        return Ok(ResourceCapabilities {
-            can_read: true,
-            can_write: true,
-            can_execute: true,
-        });
-    }
-    let p = identity
-        .global_permission(principal, ResourceType::Stack)
-        .await
-        .map_err(|error| crate::api::error::HttpError::from_parts(error, headers))?;
-    Ok(ResourceCapabilities {
-        can_read: p
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Read)),
-        can_write: p
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Write)),
-        can_execute: p
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Execute)),
-    })
-}
-
 fn stack_error(error: StackError) -> ApiError {
     match error {
         StackError::Validation(message) => crate::request_validation::validation_error(message),
@@ -432,9 +404,9 @@ async fn preflight(
             .preflight_swarm_source(
                 input.platform_id,
                 &input.name,
-                input.stack_source.into(),
-                &input.spec.into(),
-                input.drift_policy.map(Into::into).as_ref(),
+                input.stack_source,
+                &input.spec,
+                input.drift_policy.as_ref(),
             )
             .await
             .map_err(stack_error),
@@ -443,7 +415,7 @@ async fn preflight(
     let descriptor = &platform.platform_descriptor;
     for (invalid, code, message) in [
         (
-            platform.status != "Online",
+            platform.status != citadel_primitives::PlatformStatus::Online,
             "platform.offline",
             "The selected Swarm platform is offline.",
         ),
@@ -540,7 +512,7 @@ async fn import_draft(
     summary = "Validate a source for an unmanaged Compose project",
     request_body = ValidateImportRequest,
     responses(
-        (status = 200, description = "Success", body = ComposeProjectImportValidation, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::stacks::ComposeProjectImportValidationSchema, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("projectName" = String, Path)),
@@ -572,17 +544,15 @@ async fn validate_import_draft(
                 platform_id,
                 &project_name,
                 &input.name,
-                input.stack_source.into(),
-                &input.spec.into(),
+                input.stack_source,
+                &input.spec,
                 input.import_kind.map(Into::into),
             )
             .await
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(
-        Json(ComposeProjectImportValidation::from(value)).into_response(),
-    ))
+    Ok(no_store(Json(value).into_response()))
 }
 
 #[utoipa::path(
@@ -618,9 +588,7 @@ async fn import(
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     authorize_git_source(&state, &principal, &input.spec, &headers).await?;
-    if citadel_stacks::StackSource::from(input.stack_source)
-        != citadel_stacks::StackSpec::from(input.spec.clone()).source()
-    {
+    if input.stack_source != input.spec.clone().source() {
         return Err(crate::api::error::HttpError::from_parts(
             ApiError::Validation("Stack source and specification type must match.".to_owned()),
             &headers,
@@ -654,7 +622,7 @@ async fn import(
         platform_id,
         project_name,
         description: input.description,
-        spec: input.spec.into(),
+        spec: input.spec,
         tag_ids: input.tag_ids,
         import_kind,
         preview_fingerprint: input.preview_fingerprint,
@@ -1190,7 +1158,8 @@ async fn list(
         tags: filter.tags,
         platform_id: filter.platform_id,
     };
-    let capabilities = collection_capabilities(&state.identity, &principal, &headers).await?;
+    let capabilities =
+        collection_capabilities(&state.identity, &principal, ResourceType::Stack, &headers).await?;
     let value = api_result(
         state
             .stacks

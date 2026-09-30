@@ -1,9 +1,9 @@
-import { IpAddressManagementConfig, IpamSubnetConfiguration } from '@/api/generated/api.types';
+import { NetworkIpamView, RuntimeIpamConfig } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 
-const columns: ColumnDef<IdentifiableIpamSubnetConfiguration>[] = [
+const columns: ColumnDef<IpamSubnetRow>[] = [
   {
     accessorKey: 'subnet',
     header: () => <span>Subnet</span>,
@@ -21,8 +21,8 @@ const columns: ColumnDef<IdentifiableIpamSubnetConfiguration>[] = [
   },
 ];
 
-export const IPAMInfoTable = ({ ipam }: { ipam: IpAddressManagementConfig | undefined }) => {
-  const config: IdentifiableIpamSubnetConfiguration[] | undefined = useMemo(
+export const IPAMInfoTable = ({ ipam }: { ipam: NetworkIpamView | null | undefined }) => {
+  const config: IpamSubnetRow[] | undefined = useMemo(
     () =>
       ipam?.config.map((config, id) => ({
         id: `${id}-${ipam.driver}`,
@@ -38,4 +38,4 @@ export const IPAMInfoTable = ({ ipam }: { ipam: IpAddressManagementConfig | unde
     </div>
   );
 };
-type IdentifiableIpamSubnetConfiguration = IpamSubnetConfiguration & { id: string };
+type IpamSubnetRow = RuntimeIpamConfig & { id: string };

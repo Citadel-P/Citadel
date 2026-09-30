@@ -1,3 +1,4 @@
+use crate::api::resources::resource_access::ResourceAccessInput;
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
@@ -6,8 +7,8 @@ use crate::{
             teams::{
                 requests::{
                     AddTeamMemberRequest, AddTeamRoleRequest, CreateTeamRequest,
-                    DeleteTeamsRequest, PatchTeamRequest, RenameTeamRequest,
-                    TeamResourceAccessInput, TeamSearchFilter, TeamsFilter,
+                    DeleteTeamsRequest, PatchTeamRequest, RenameTeamRequest, TeamSearchFilter,
+                    TeamsFilter,
                 },
                 views::TeamsResponse,
             },
@@ -126,7 +127,7 @@ async fn list(
     tag = "Teams",
     summary = "Search Teams for assignment",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/TeamSearchItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::teams::views::TeamSearchItemView>, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("Query" = Option<String>, Query), ("Limit" = Option<i32>, Query, minimum = 1, maximum = 50, extensions(("x-citadel-default" = json!(20))))),
@@ -457,7 +458,7 @@ async fn remove_member(
     operation_id = "addTeamResourceAccess",
     tag = "Teams",
     summary = "Add a resource override to a Team",
-    request_body = TeamResourceAccessInput,
+    request_body = ResourceAccessInput,
     responses(
         (status = 200, description = "Success", body = crate::api::resources::teams::views::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -471,9 +472,9 @@ async fn add_resource_access(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
+    ValidatedJson(request): ValidatedJson<ResourceAccessInput>,
 ) -> HttpResult {
-    let request: citadel_identity::TeamResourceAccessInput = request.into();
+    let request: citadel_identity::ResourceAccessInput = request.into();
     let principal = api_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
@@ -496,7 +497,7 @@ async fn add_resource_access(
     operation_id = "removeTeamResourceAccess",
     tag = "Teams",
     summary = "Remove a resource override from a Team",
-    request_body = TeamResourceAccessInput,
+    request_body = ResourceAccessInput,
     responses(
         (status = 200, description = "Success", body = crate::api::resources::teams::views::TeamView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -510,9 +511,9 @@ async fn remove_resource_access(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(request): ValidatedJson<TeamResourceAccessInput>,
+    ValidatedJson(request): ValidatedJson<ResourceAccessInput>,
 ) -> HttpResult {
-    let request: citadel_identity::TeamResourceAccessInput = request.into();
+    let request: citadel_identity::ResourceAccessInput = request.into();
     let principal = api_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,

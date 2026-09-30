@@ -1,6 +1,7 @@
 use crate::*;
 use citadel_activities::ActivityEventInfo;
 use citadel_primitives::ActorId;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 
@@ -18,7 +19,7 @@ pub trait StackRepository: Send + Sync {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a StackDetails,
+        expected: &'a crate::Stack,
         state: &'a crate::StackUpdateState,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         let _ = (actor, administrator, expected, state);
@@ -48,7 +49,7 @@ pub trait StackRepository: Send + Sync {
     }
     fn enqueue_webhook<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a crate::Stack,
         commit: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), StackError>>;
     fn ready_webhooks(
@@ -58,7 +59,7 @@ pub trait StackRepository: Send + Sync {
     fn discard_webhook(&self, id: Uuid) -> BoxFuture<'_, Result<(), StackError>>;
     fn record_drift<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a crate::Stack,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>>;
@@ -66,25 +67,25 @@ pub trait StackRepository: Send + Sync {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<StackDetails>, StackError>>;
+    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<crate::Stack>>, StackError>>;
     fn list_authorized<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         filter: &'a StackFilter,
-    ) -> BoxFuture<'a, Result<Vec<StackDetails>, StackError>>;
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<crate::Stack>>, StackError>>;
     fn get_authorized(
         &self,
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'_, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn create<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         input: &'a CreateStack,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn update<'a>(
         &'a self,
         actor: ActorId,
@@ -93,27 +94,27 @@ pub trait StackRepository: Send + Sync {
         expected_row_version: i64,
         input: &'a UpdateStack,
         spec: &'a StackSpec,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn update_metadata<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn rename<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn releases(
         &self,
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<StackReleaseDetails>, StackError>>;
+    ) -> BoxFuture<'_, Result<Vec<StackRelease>, StackError>>;
     fn claim_apply(
         &self,
         actor: ActorId,
@@ -192,7 +193,7 @@ pub trait StackRepository: Send + Sync {
         administrator: bool,
         input: &'a ImportComposeProject,
         claim: &'a StackImportClaim,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Stack>, StackError>>;
     fn find_import_owner(
         &self,
         platform_id: Uuid,

@@ -106,7 +106,7 @@ pub async fn verify(
     assert_eq!(response_json(denied).await["status"], "noop");
     assert_eq!(
         backups.store().get_policy(id).await.unwrap().control_state,
-        "Idle"
+        citadel_primitives::ResourceControlState::Idle
     );
 
     entitlement.0.store(true, Ordering::Relaxed);
@@ -141,7 +141,7 @@ pub async fn verify(
             .unwrap()
     );
     let failed = backups.store().get_run(run_id).await.unwrap();
-    assert_eq!(failed.status, "Failed");
+    assert_eq!(failed.status, citadel_backups::BackupRunStatus::Failed);
     assert!(failed.error_message.as_deref().unwrap().contains("license"));
 
     entitlement.0.store(true, Ordering::Relaxed);
@@ -163,14 +163,21 @@ pub async fn verify(
             .unwrap()
     );
     let completed = backups.store().get_run(run_id).await.unwrap();
-    assert_eq!(completed.status, "Succeeded", "{completed:?}");
+    assert_eq!(
+        completed.status,
+        citadel_backups::BackupRunStatus::Succeeded,
+        "{completed:?}"
+    );
     sqlx::query("UPDATE backuppolicies SET webhook=NULL WHERE id=$1")
         .bind(id)
         .execute(pool)
         .await
         .unwrap();
     assert!(matches!(
-        backups.store().enqueue_webhook(id, &config).await,
+        backups
+            .store()
+            .enqueue_webhook(id, &serde_json::from_value(config.clone()).unwrap())
+            .await,
         Err(BackupError::Conflict(_))
     ));
     assert_eq!(

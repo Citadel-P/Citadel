@@ -65,10 +65,10 @@ fn desired_hash_ignores_resolved_digest_and_webhook() {
     {
         *resolved_digest = Some("sha256:new".to_owned());
     }
-    changed.webhook = Some(citadel_swarm_services::SwarmServiceWebhookConfig {
+    changed.webhook = Some(citadel_primitives::WebhookConfig {
         enabled: true,
-        provider: "Generic".to_owned(),
-        auth_scheme: "BearerToken".to_owned(),
+        provider: citadel_primitives::WebhookProvider::Generic,
+        auth_scheme: citadel_primitives::WebhookAuthScheme::BearerToken,
         secret: Some("secret".to_owned()),
         branch_filter: None,
     });
@@ -129,4 +129,19 @@ fn scheduling_mode_and_replica_count_are_consistent() {
     assert!(global.validate().is_err());
     global.replicas = None;
     assert!(global.validate().is_ok());
+}
+
+#[test]
+fn webhook_configuration_rejects_incompatible_authentication_before_persistence() {
+    let mut service = spec();
+    service.webhook = Some(citadel_primitives::WebhookConfig {
+        enabled: true,
+        provider: citadel_primitives::WebhookProvider::GitHub,
+        auth_scheme: citadel_primitives::WebhookAuthScheme::BearerToken,
+        secret: Some("key".into()),
+        branch_filter: None,
+    });
+    assert!(service.validate().is_err());
+    service.webhook.as_mut().unwrap().provider = citadel_primitives::WebhookProvider::Generic;
+    service.validate().unwrap();
 }

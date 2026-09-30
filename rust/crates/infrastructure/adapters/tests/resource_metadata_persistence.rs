@@ -74,6 +74,7 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         .await
         .unwrap();
     assert_eq!(registry.tags.len(), 1);
+    assert_eq!(registry.audit.created_by_actor_id, actor);
     let (activity_status, activity_info): (String, String) = sqlx::query_as(
         "SELECT status, info FROM activityevents WHERE resourceid=$1 AND eventtype='RegistryCreated'",
     )
@@ -106,6 +107,34 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
     let unchanged = registry_store.get_registry(registry.id).await.unwrap();
     assert_eq!(unchanged.name, registry.name);
     assert_eq!(unchanged.tags[0].id, tag.id);
+    assert_eq!(unchanged.audit, registry.audit);
+    let editor = ActorId::new(Uuid::now_v7());
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
+        .bind(editor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let updated = registry_store
+        .update_registry(
+            editor,
+            registry.id,
+            &RegistryPatch {
+                description: citadel_primitives::PatchField::Value("Updated description".into()),
+                ..RegistryPatch::default()
+            },
+            RegistryMutationKind::Update,
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.audit, registry.audit);
+    assert_eq!(
+        registry_store
+            .get_registry(registry.id)
+            .await
+            .unwrap()
+            .audit,
+        registry.audit
+    );
 
     let service = SecretService::new(
         store.clone(),

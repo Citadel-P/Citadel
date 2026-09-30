@@ -76,6 +76,9 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     };
     input.validate().unwrap();
     let project = store.create(actor, &input).await.unwrap();
+    assert_eq!(project.tags.len(), 1);
+    assert_eq!(project.tags[0].id, tag);
+    assert!(project.latest_run.is_none());
     let persisted_tags: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM resourcetags WHERE resourcetype='Build' AND resourceid=$1 AND tagid=$2",
     )
@@ -105,6 +108,11 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .unwrap()
         .unwrap();
     assert_eq!(claim.run.id, queued.id);
+    let details = store.get(project.id).await.unwrap();
+    assert_eq!(details.latest_run.as_ref().unwrap().id, queued.id);
+    assert_eq!(details.tags[0].id, tag);
+    assert_eq!(details.id, claim.project.id);
+    assert_eq!(details.audit, claim.project.audit);
     assert!(
         store
             .claim_next(Utc::now() - Duration::minutes(5))
@@ -125,7 +133,10 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .await
         .unwrap();
     assert!(store.finish(&claim, &success_result('a')).await.is_err());
-    assert_eq!(store.get_run(queued.id).await.unwrap().status, "Preparing");
+    assert_eq!(
+        store.get_run(queued.id).await.unwrap().status,
+        citadel_builds::BuildRunStatus::Preparing
+    );
     assert_eq!(
         store.get(project.id).await.unwrap().current_run_id,
         Some(queued.id)
@@ -140,7 +151,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .finish(
             &claim,
             &BuildExecutionResult {
-                status: "Succeeded",
+                status: citadel_builds::BuildRunStatus::Succeeded,
                 exit_code: Some(0),
                 image_digest: Some(format!("sha256:{}", "a".repeat(64))),
                 resolved_commit_sha: Some("b".repeat(40)),
@@ -152,7 +163,10 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         )
         .await
         .unwrap();
-    assert_eq!(store.get_run(queued.id).await.unwrap().status, "Succeeded");
+    assert_eq!(
+        store.get_run(queued.id).await.unwrap().status,
+        citadel_builds::BuildRunStatus::Succeeded
+    );
     // Verify queued/started/terminal Activities. Late completion
     // must neither alter the result nor duplicate the terminal Activity.
     assert!(!store.finish(&claim, &success_result('a')).await.unwrap());
@@ -196,7 +210,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     assert!(store.cancel_queued(cancelled.id).await.unwrap());
     assert_eq!(
         store.get_run(cancelled.id).await.unwrap().status,
-        "Cancelled"
+        citadel_builds::BuildRunStatus::Cancelled
     );
     let interrupted = store.enqueue(actor, project.id, "Manual").await.unwrap();
     let _ = store
@@ -218,7 +232,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     );
     assert_eq!(
         store.get_run(interrupted.id).await.unwrap().status,
-        "Interrupted"
+        citadel_builds::BuildRunStatus::Interrupted
     );
     let interrupted_activity: serde_json::Value = sqlx::query_scalar(
         "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='BuildRunFailed'",
@@ -362,7 +376,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             &CancellationToken::new(),
         )
         .await;
-    assert_eq!(rejected.status, "Failed");
+    assert_eq!(rejected.status, citadel_builds::BuildRunStatus::Failed);
     assert!(
         rejected
             .error_message
@@ -419,7 +433,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
 
 fn success_result(marker: char) -> BuildExecutionResult {
     BuildExecutionResult {
-        status: "Succeeded",
+        status: citadel_builds::BuildRunStatus::Succeeded,
         exit_code: Some(0),
         image_digest: Some(format!("sha256:{}", marker.to_string().repeat(64))),
         resolved_commit_sha: Some(marker.to_string().repeat(40)),

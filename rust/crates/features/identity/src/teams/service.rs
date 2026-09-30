@@ -238,7 +238,7 @@ impl TeamMutationService {
     pub async fn add_resource_access(
         &self,
         id: Uuid,
-        access: TeamResourceAccessInput,
+        access: ResourceAccessInput,
         actor_id: ActorId,
     ) -> Result<TeamDetails, IdentityError> {
         validate_id(id, "Team ID")?;
@@ -259,7 +259,7 @@ impl TeamMutationService {
     pub async fn remove_resource_access(
         &self,
         id: Uuid,
-        access: TeamResourceAccessInput,
+        access: ResourceAccessInput,
         actor_id: ActorId,
     ) -> Result<TeamDetails, IdentityError> {
         validate_id(id, "Team ID")?;
@@ -312,29 +312,9 @@ pub(super) fn validate_id(id: Uuid, field: &str) -> Result<(), IdentityError> {
 }
 
 pub(super) fn validate_resource_accesses(
-    accesses: Vec<TeamResourceAccessInput>,
-) -> Result<Vec<TeamResourceAccessInput>, IdentityError> {
-    let matrix = permission_matrix();
-    let mut unique = BTreeSet::new();
-    for access in &accesses {
-        validate_id(access.resource_id, "Resource ID")?;
-        let capability = &matrix[&access.resource_type];
-        let specifics_are_allowed = access.specific_permissions.iter().all(|permission| {
-            capability.specifics.iter().any(|(allowed, minimum)| {
-                allowed == permission && access.permission_level.grants(*minimum)
-            })
-        });
-        if access.permission_level == PermissionLevel::None
-            || !capability.maximum_level.grants(access.permission_level)
-            || !specifics_are_allowed
-            || !unique.insert((access.resource_type, access.resource_id))
-        {
-            return Err(IdentityError::Validation(
-                "Invalid or duplicate Team resource access permission.".to_owned(),
-            ));
-        }
-    }
-    Ok(accesses)
+    accesses: Vec<ResourceAccessInput>,
+) -> Result<Vec<ResourceAccessInput>, IdentityError> {
+    crate::resource_access::validate_resource_accesses("Team", accesses)
 }
 
 #[cfg(test)]
@@ -397,7 +377,7 @@ mod tests {
         let id = Uuid::now_v7();
         assert_eq!(deduplicate_ids(vec![id, id]).unwrap(), vec![id]);
         assert!(deduplicate_ids(vec![Uuid::nil()]).is_err());
-        let access = TeamResourceAccessInput {
+        let access = ResourceAccessInput {
             resource_type: ResourceType::Deployment,
             resource_id: id,
             permission_level: PermissionLevel::Read,

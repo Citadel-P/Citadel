@@ -7,10 +7,10 @@ pub struct BackupRun {
     pub policy_name_snapshot: String,
     pub backup_repository_id: Uuid,
     pub repository_type_snapshot: String,
-    pub source_snapshot: Value,
+    pub source_snapshot: crate::spec::BackupSourceSpec,
     pub trigger: String,
-    pub status: String,
-    pub snapshot_availability: String,
+    pub status: BackupRunStatus,
+    pub snapshot_availability: BackupSnapshotAvailability,
     pub restic_snapshot_id: Option<String>,
     pub parent_snapshot_id: Option<String>,
     pub files_processed: Option<i64>,
@@ -35,7 +35,7 @@ pub struct BackupRunItem {
     pub volume_name: String,
     pub docker_node_id: Option<String>,
     pub node_hostname: Option<String>,
-    pub status: String,
+    pub status: BackupRunItemStatus,
     pub restic_snapshot_id: Option<String>,
     pub parent_snapshot_id: Option<String>,
     pub files_processed: Option<i64>,
@@ -64,7 +64,7 @@ pub struct BackupClaim {
 #[derive(Debug, Clone)]
 pub struct BackupRunItemResult {
     pub id: Uuid,
-    pub status: &'static str,
+    pub status: BackupRunItemStatus,
     pub restic_snapshot_id: Option<String>,
     pub parent_snapshot_id: Option<String>,
     pub files_processed: Option<i64>,
@@ -77,8 +77,8 @@ pub struct BackupRunItemResult {
 
 #[derive(Debug, Clone)]
 pub struct BackupExecutionResult {
-    pub status: &'static str,
-    pub snapshot_availability: &'static str,
+    pub status: BackupRunStatus,
+    pub snapshot_availability: BackupSnapshotAvailability,
     pub restic_snapshot_id: Option<String>,
     pub parent_snapshot_id: Option<String>,
     pub files_processed: Option<i64>,

@@ -11,7 +11,7 @@ pub struct AutomationActionActivitySnapshot {
     pub schedule_enabled: bool,
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: String,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,

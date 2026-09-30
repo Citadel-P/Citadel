@@ -85,7 +85,7 @@ pub struct GitRepositoryRef {
     pub git_repository_id: Uuid,
     pub branch: String,
     pub resolved_commit_sha: Option<String>,
-    pub status: String,
+    pub status: crate::GitRepositoryRefStatus,
     pub last_error: Option<String>,
     pub last_synced_at: DateTime<Utc>,
 }

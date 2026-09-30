@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import {
   AlertRuleStatus,
-  ActionRunStatus,
+  AutomationRunStatus,
   BackupRunItemStatus,
   BackupRestoreStatus,
   BackupRunStatus,
@@ -11,7 +11,7 @@ import {
   BackupRepositoryStatus,
   ContainerStateStatus,
   DeploymentStatus,
-  GitReposStatus,
+  GitRepositoryStatus,
   PlatformStatus,
   RegistryStatus,
   StackReleaseStatus,
@@ -35,8 +35,8 @@ type StateValue =
   | BuildRunStatus
   | BackupRunItemStatus
   | BackupRestoreStatus
-  | GitReposStatus
-  | ActionRunStatus;
+  | GitRepositoryStatus
+  | AutomationRunStatus;
 
 type StateIndicatorKind =
   | 'automationActionRun'
@@ -56,17 +56,17 @@ type StatusStyle = {
 
 const getAutomationActionRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
   switch (value) {
-    case ActionRunStatus.Queued:
+    case AutomationRunStatus.Queued:
       return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
-    case ActionRunStatus.Running:
+    case AutomationRunStatus.Running:
       return { colorClass: 'bg-blue-500', tooltip: 'Running' };
-    case ActionRunStatus.Succeeded:
+    case AutomationRunStatus.Succeeded:
       return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
-    case ActionRunStatus.Failed:
-    case ActionRunStatus.TimedOut:
+    case AutomationRunStatus.Failed:
+    case AutomationRunStatus.TimedOut:
       return { colorClass: 'bg-red-500', tooltip: String(value) };
-    case ActionRunStatus.Cancelled:
-    case ActionRunStatus.Rejected:
+    case AutomationRunStatus.Cancelled:
+    case AutomationRunStatus.Rejected:
       return { colorClass: 'bg-gray-500', tooltip: String(value) };
     default:
       return undefined;
@@ -339,6 +339,8 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     case AlertRuleStatus.Disabled:
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     // Backup repositories
+    case BackupRepositoryStatus.Unavailable:
+      return { colorClass: 'bg-red-500', tooltip: 'Unavailable' };
     case BackupRepositoryStatus.Ready:
       return { colorClass: 'bg-green-500', tooltip: 'Ready' };
     case BackupRepositoryStatus.Uninitialized:
@@ -346,13 +348,13 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     case BackupRepositoryStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Automation action runs
-    case ActionRunStatus.Queued:
-    case ActionRunStatus.Running:
-    case ActionRunStatus.Succeeded:
-    case ActionRunStatus.Failed:
-    case ActionRunStatus.TimedOut:
-    case ActionRunStatus.Cancelled:
-    case ActionRunStatus.Rejected:
+    case AutomationRunStatus.Queued:
+    case AutomationRunStatus.Running:
+    case AutomationRunStatus.Succeeded:
+    case AutomationRunStatus.Failed:
+    case AutomationRunStatus.TimedOut:
+    case AutomationRunStatus.Cancelled:
+    case AutomationRunStatus.Rejected:
       return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     case BuildRunStatus.Queued:
     case BuildRunStatus.Preparing:
@@ -364,7 +366,7 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     case BuildRunStatus.Interrupted:
       return getBuildRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     // Git Repos
-    case GitReposStatus.Unknown:
+    case GitRepositoryStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Containers
     case ContainerStateStatus.Created:

@@ -1,8 +1,7 @@
 use super::*;
 use citadel_licensing::LicenseCapability;
 use citadel_swarm_services::{
-    ServiceAutomationEntitlements, ServiceImageDigestPort, SwarmServiceWebhookConfig,
-    UpdateBehavior, UpdateSwarmService,
+    ServiceAutomationEntitlements, ServiceImageDigestPort, UpdateBehavior, UpdateSwarmService,
 };
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -85,11 +84,11 @@ pub(super) async fn verify(
         ),
     );
     let mut current = services.get(admin.actor_id, true, id).await.unwrap();
-    current.service.spec.update_behavior = UpdateBehavior::Notify;
-    current.service.spec.webhook = Some(SwarmServiceWebhookConfig {
+    current.resource.spec.update_behavior = UpdateBehavior::Notify;
+    current.resource.spec.webhook = Some(citadel_primitives::WebhookConfig {
         enabled: true,
-        provider: "Generic".into(),
-        auth_scheme: "BearerToken".into(),
+        provider: citadel_primitives::WebhookProvider::Generic,
+        auth_scheme: citadel_primitives::WebhookAuthScheme::BearerToken,
         secret: Some("disposable-service-webhook".into()),
         branch_filter: None,
     });
@@ -99,8 +98,8 @@ pub(super) async fn verify(
             true,
             id,
             UpdateSwarmService {
-                spec: current.service.spec,
-                row_version: current.service.row_version,
+                spec: current.resource.spec,
+                row_version: current.resource.row_version,
             },
         )
         .await
@@ -109,6 +108,7 @@ pub(super) async fn verify(
         .get(admin.actor_id, true, id)
         .await
         .unwrap()
+        .resource
         .current_operation
         .unwrap()
         .id;
@@ -129,13 +129,16 @@ pub(super) async fn verify(
     let (_, body) = send(&app, id, "disposable-service-webhook").await;
     assert_eq!(body["status"], "queued");
     let current = services.get(admin.actor_id, true, id).await.unwrap();
-    assert_eq!(current.auto_update_state.status, "UpdateAvailable");
     assert_eq!(
-        current.current_operation.as_ref().unwrap().id,
+        current.auto_update_state.status,
+        citadel_primitives::AutoUpdateStatus::UpdateAvailable
+    );
+    assert_eq!(
+        current.resource.current_operation.as_ref().unwrap().id,
         operation,
         "Notify never applies"
     );
-    let mut spec = current.service.spec;
+    let mut spec = current.resource.spec;
     spec.update_behavior = UpdateBehavior::AutoDeploy;
     services
         .update(
@@ -144,7 +147,7 @@ pub(super) async fn verify(
             id,
             UpdateSwarmService {
                 spec,
-                row_version: current.service.row_version,
+                row_version: current.resource.row_version,
             },
         )
         .await
@@ -157,6 +160,7 @@ pub(super) async fn verify(
             .get(admin.actor_id, true, id)
             .await
             .unwrap()
+            .resource
             .current_operation
             .unwrap()
             .id,
@@ -168,9 +172,15 @@ pub(super) async fn verify(
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let current = services.get(admin.actor_id, true, id).await.unwrap();
-            if current.control_state == "Idle" {
-                assert_ne!(current.current_operation.as_ref().unwrap().id, operation);
-                assert_eq!(current.current_operation.unwrap().state, "Completed");
+            if current.control_state == citadel_primitives::ResourceControlState::Idle {
+                assert_ne!(
+                    current.resource.current_operation.as_ref().unwrap().id,
+                    operation
+                );
+                assert_eq!(
+                    current.resource.current_operation.unwrap().state,
+                    citadel_swarm_services::SwarmServiceOperationState::Completed
+                );
                 break;
             }
             tokio::task::yield_now().await;
@@ -235,7 +245,7 @@ pub(super) async fn verify(
     assert!(!format!("{events:?}").contains("disposable-service-webhook"));
 
     let current = services.get(admin.actor_id, true, id).await.unwrap();
-    let mut spec = current.service.spec;
+    let mut spec = current.resource.spec;
     spec.update_behavior = UpdateBehavior::Notify;
     services
         .update(
@@ -244,7 +254,7 @@ pub(super) async fn verify(
             id,
             UpdateSwarmService {
                 spec,
-                row_version: current.service.row_version,
+                row_version: current.resource.row_version,
             },
         )
         .await
@@ -284,7 +294,7 @@ pub(super) async fn verify(
     );
     assert_eq!(body["status"], "queued");
     let current = services.get(admin.actor_id, true, id).await.unwrap();
-    let mut spec = current.service.spec;
+    let mut spec = current.resource.spec;
     spec.update_behavior = UpdateBehavior::Disabled;
     services
         .update(
@@ -293,7 +303,7 @@ pub(super) async fn verify(
             id,
             UpdateSwarmService {
                 spec,
-                row_version: current.service.row_version,
+                row_version: current.resource.row_version,
             },
         )
         .await

@@ -62,7 +62,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) 
         .await
         .unwrap();
     assert_eq!(applied.status, StackReleaseStatus::Healthy);
-    assert_eq!(applied.control_state, "Idle");
+    assert_eq!(
+        applied.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     assert_eq!(runtime.apply_calls.lock().unwrap().len(), 1);
     let attempts: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT last_value FROM {sequence}"
@@ -102,7 +105,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) 
             .get_authorized(actor, true, stack.id)
             .await
             .unwrap();
-        assert_eq!(rejected.control_state, "Idle");
+        assert_eq!(
+            rejected.control_state,
+            citadel_primitives::ResourceControlState::Idle
+        );
     }
     assert_eq!(runtime.apply_calls.lock().unwrap().len(), 1);
     verify_failed_completion(pool, actor, stack.id, repository.clone()).await;
@@ -145,7 +151,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) 
         .get_authorized(actor, true, stack.id)
         .await
         .unwrap();
-    assert_eq!(unknown.control_state, "Processing");
+    assert_eq!(
+        unknown.control_state,
+        citadel_primitives::ResourceControlState::Processing
+    );
     assert_eq!(unknown.status, StackReleaseStatus::Applying);
     assert!(
         service
@@ -160,7 +169,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid) 
             .await
             .unwrap()
             .control_state,
-        "Idle"
+        citadel_primitives::ResourceControlState::Idle
     );
     service.delete(actor, true, &[stack.id]).await.unwrap();
 }
@@ -218,7 +227,10 @@ async fn verify_failed_completion(
     assert!(last.message.unwrap().contains("saving its result failed"));
     assert_eq!(runtime.apply_calls.lock().unwrap().len(), 1);
     let pending = repository.get_authorized(actor, true, id).await.unwrap();
-    assert_eq!(pending.control_state, "Processing");
+    assert_eq!(
+        pending.control_state,
+        citadel_primitives::ResourceControlState::Processing
+    );
     assert_eq!(pending.status, StackReleaseStatus::Applying);
     let failures: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM activityevents WHERE resourceid=$1 AND status='Failure'",
@@ -244,7 +256,7 @@ async fn verify_failed_completion(
             .await
             .unwrap()
             .control_state,
-        "Idle"
+        citadel_primitives::ResourceControlState::Idle
     );
     assert_eq!(runtime.apply_calls.lock().unwrap().len(), 1);
 }

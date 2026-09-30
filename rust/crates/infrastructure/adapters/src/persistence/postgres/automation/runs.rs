@@ -26,7 +26,7 @@ impl PostgresAutomationRepository {
             let enabled: bool = action.try_get("enabled").map_err(storage)?;
             if let EnqueueMode::Webhook(expected) = mode {
                 let current = action
-                    .try_get::<Option<sqlx::types::Json<Option<RepoWebhookConfig>>>, _>("webhook")
+                    .try_get::<Option<sqlx::types::Json<Option<WebhookConfig>>>, _>("webhook")
                     .map_err(storage)?
                     .and_then(|sqlx::types::Json(value)| value);
                 if current.as_ref() != Some(expected) {
@@ -138,7 +138,7 @@ impl PostgresAutomationRepository {
     pub(super) fn enqueue_webhook_impl<'a>(
         &'a self,
         id: Uuid,
-        expected_webhook: &'a RepoWebhookConfig,
+        expected_webhook: &'a WebhookConfig,
         args: &'a serde_json::Value,
     ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>> {
         self.enqueue_run(
@@ -184,7 +184,7 @@ impl PostgresAutomationRepository {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let finished = Utc::now();
             let affected = sqlx::query("UPDATE actionruns SET status=$2,finishedat=$3,durationms=GREATEST(0,(EXTRACT(EPOCH FROM ($3-startedat))*1000)::bigint),exitcode=$4,logs=$5,errormessage=$6 WHERE id=$1 AND status='Running'")
-                .bind(claim.run.id).bind(result.status).bind(finished).bind(result.exit_code).bind(&result.logs).bind(result.error.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+                .bind(claim.run.id).bind(result.status.as_str()).bind(finished).bind(result.exit_code).bind(&result.logs).bind(result.error.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
                 sqlx::query("UPDATE actions SET controlstate='Idle',controlstartedat=NULL,currentrunid=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(claim.run.action_id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
                 let run = get_run_tx(&mut tx, claim.run.id).await?;

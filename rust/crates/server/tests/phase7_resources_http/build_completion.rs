@@ -334,7 +334,7 @@ async fn verify_queued_snapshot(pool: &sqlx::PgPool, builds: &BuildService, proj
         .finish(
             &claim,
             &citadel_builds::BuildExecutionResult {
-                status: "Failed",
+                status: citadel_builds::BuildRunStatus::Failed,
                 exit_code: None,
                 image_digest: None,
                 resolved_commit_sha: None,
@@ -357,7 +357,7 @@ async fn finish_next(builds: &BuildService, project: Uuid) -> Uuid {
     assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
     assert_eq!(
         builds.store().get_run(run.id).await.unwrap().status,
-        "Succeeded"
+        citadel_builds::BuildRunStatus::Succeeded
     );
     run.id
 }

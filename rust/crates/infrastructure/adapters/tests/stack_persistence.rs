@@ -1,3 +1,4 @@
+use citadel_primitives::AuthorizedResource;
 use serde_json::json;
 use std::time::Duration;
 
@@ -296,7 +297,10 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     .unwrap();
     let pending = store.get_authorized(actor, true, created.id).await.unwrap();
     assert_eq!(pending.status, StackReleaseStatus::Pending);
-    assert_eq!(pending.control_state, "Processing");
+    assert_eq!(
+        pending.control_state,
+        citadel_primitives::ResourceControlState::Processing
+    );
     store
         .complete_state(
             actor,
@@ -308,7 +312,10 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         .unwrap();
     let stopped = store.get_authorized(actor, true, created.id).await.unwrap();
     assert_eq!(stopped.status, StackReleaseStatus::Stopped);
-    assert_eq!(stopped.control_state, "Idle");
+    assert_eq!(
+        stopped.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     assert!(
         store
             .drift_monitor_candidates(None, 25)
@@ -695,7 +702,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     let citadel_stacks::StackUpdateState::Git {
         recreate_stack_on_new_commit_state,
         ..
-    } = applied_git_stack.stack.stack_update_state
+    } = applied_git_stack.resource.stack_update_state
     else {
         panic!("Git Stack must retain Git update state");
     };
@@ -808,7 +815,7 @@ async fn concurrency_fixture() -> (
     sqlx::PgPool,
     PostgresStackRepository,
     ActorId,
-    citadel_stacks::StackDetails,
+    AuthorizedResource<citadel_stacks::Stack>,
 ) {
     let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
@@ -885,7 +892,10 @@ async fn stack_completion_allows_inventory_and_is_idempotent() {
     assert_eq!(count, 1);
     let current = store.get_authorized(actor, true, stack.id).await.unwrap();
     assert_eq!(current.status, StackReleaseStatus::Healthy);
-    assert_eq!(current.control_state, "Idle");
+    assert_eq!(
+        current.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     let next = store
         .claim_apply(actor, true, stack.id, None, None)
         .await

@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::WebhookConfig;
 
 pub trait GitRepositoryExecutionPersistence: Send + Sync {
     fn get_source<'a>(
@@ -24,7 +25,7 @@ pub trait GitRepositoryExecutionPersistence: Send + Sync {
         actor_id: ActorId,
         id: Uuid,
         branch: &'a str,
-        expected: &'a GitRepositoryWebhook,
+        expected: &'a WebhookConfig,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>>;
     fn enqueue_due<'a>(
         &'a self,
@@ -61,7 +62,7 @@ pub trait GitRepositoryExecutionPersistence: Send + Sync {
     fn get_webhook<'a>(
         &'a self,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<Option<GitRepositoryWebhook>, GitRepositoryExecutionError>>;
+    ) -> BoxFuture<'a, Result<Option<WebhookConfig>, GitRepositoryExecutionError>>;
 }
 
 pub trait GitRepositoryPersistence: Send + Sync {

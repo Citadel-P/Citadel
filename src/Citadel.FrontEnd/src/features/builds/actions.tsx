@@ -1,4 +1,7 @@
-import { AuthorizedProject, BuildRunTrigger } from '@/api/generated/api.types';
+import {
+  AuthorizedProject,
+  QueueBuildTrigger,
+} from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -70,7 +73,7 @@ const { dropdown, group, info } = createActionsBuilder<AuthorizedProject>()
             startPendingRef.current = true;
             const queuedRun = await queueRun.mutateAsync({
               id: selected.id,
-              data: { trigger: BuildRunTrigger.Manual },
+              data: { trigger: QueueBuildTrigger.Manual },
             } as any);
             await invalidateBuildQueries(queryClient, selected.id);
             navigate(`/builds/edit/${selected.id}?runId=${queuedRun.data.id}#runs`);

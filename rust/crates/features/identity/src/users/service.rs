@@ -241,10 +241,10 @@ impl UserMutationService {
     pub async fn add_resource_access(
         &self,
         id: Uuid,
-        request: UserResourceAccess,
+        request: ResourceAccessInput,
         actor_id: ActorId,
     ) -> Result<UserDetails, IdentityError> {
-        let access = validate_user_resource_accesses(vec![request.into()])?
+        let access = validate_user_resource_accesses(vec![request])?
             .pop()
             .expect("one validated access remains");
         self.store
@@ -261,10 +261,10 @@ impl UserMutationService {
     pub async fn remove_resource_access(
         &self,
         id: Uuid,
-        request: UserResourceAccess,
+        request: ResourceAccessInput,
         actor_id: ActorId,
     ) -> Result<UserDetails, IdentityError> {
-        let access = validate_user_resource_accesses(vec![request.into()])?
+        let access = validate_user_resource_accesses(vec![request])?
             .pop()
             .expect("one validated access remains");
         self.store
@@ -281,17 +281,6 @@ impl UserMutationService {
             ));
         }
         self.store.delete(&ids, actor_id, self.clock.now()).await
-    }
-}
-
-impl From<UserResourceAccess> for UserResourceAccessInput {
-    fn from(value: UserResourceAccess) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
     }
 }
 
@@ -328,29 +317,9 @@ pub(super) fn validate_id(id: Uuid, field: &str) -> Result<(), IdentityError> {
 }
 
 pub(super) fn validate_user_resource_accesses(
-    accesses: Vec<UserResourceAccessInput>,
-) -> Result<Vec<UserResourceAccessInput>, IdentityError> {
-    let matrix = permission_matrix();
-    let mut unique = std::collections::BTreeSet::new();
-    for access in &accesses {
-        validate_id(access.resource_id, "Resource ID")?;
-        let capability = &matrix[&access.resource_type];
-        let specifics_are_allowed = access.specific_permissions.iter().all(|permission| {
-            capability.specifics.iter().any(|(allowed, minimum)| {
-                allowed == permission && access.permission_level.grants(*minimum)
-            })
-        });
-        if access.permission_level == PermissionLevel::None
-            || !capability.maximum_level.grants(access.permission_level)
-            || !specifics_are_allowed
-            || !unique.insert((access.resource_type, access.resource_id))
-        {
-            return Err(IdentityError::Validation(
-                "Invalid or duplicate User resource access permission.".to_owned(),
-            ));
-        }
-    }
-    Ok(accesses)
+    accesses: Vec<ResourceAccessInput>,
+) -> Result<Vec<ResourceAccessInput>, IdentityError> {
+    crate::resource_access::validate_resource_accesses("User", accesses)
 }
 
 #[cfg(test)]
@@ -490,7 +459,7 @@ mod tests {
     #[test]
     fn mutation_resource_access_validation_rejects_duplicates_and_invalid_specifics() {
         let resource_id = Uuid::now_v7();
-        let valid = UserResourceAccessInput {
+        let valid = ResourceAccessInput {
             resource_type: ResourceType::Deployment,
             resource_id,
             permission_level: PermissionLevel::Read,
@@ -502,7 +471,7 @@ mod tests {
             Err(IdentityError::Validation(_))
         ));
         assert!(matches!(
-            validate_user_resource_accesses(vec![UserResourceAccessInput {
+            validate_user_resource_accesses(vec![ResourceAccessInput {
                 resource_type: ResourceType::User,
                 resource_id,
                 permission_level: PermissionLevel::Read,

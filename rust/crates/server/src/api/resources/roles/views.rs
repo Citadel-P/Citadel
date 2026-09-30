@@ -1,4 +1,4 @@
-use crate::api::resources::capabilities::ResourceCapabilities;
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use citadel_identity::RoleType;
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use serde::{Deserialize, Serialize};
@@ -9,13 +9,15 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RolesResponse {
     pub(crate) roles: Vec<RoleView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PermissionMatrixViewItem {
+    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
     pub(crate) maximum_level: PermissionLevel,
+    #[schema(value_type = BTreeMap<String, crate::api::resources::vocabulary::PermissionLevelSchema>)]
     pub(crate) specific_permissions: BTreeMap<String, PermissionLevel>,
     pub(crate) label: String,
     pub(crate) specific_permission_labels: BTreeMap<String, String>,

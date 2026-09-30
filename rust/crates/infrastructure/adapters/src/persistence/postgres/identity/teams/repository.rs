@@ -1,14 +1,17 @@
 use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
+use crate::persistence::postgres::identity::resource_access::{
+    expands_resource_access, map_accesses, specific_mask,
+};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, TeamActivitySnapshot,
 };
 use citadel_identity::ActorType;
 use citadel_identity::{
-    IdentityError, NewTeamMutation, ResourceInfo, StoredPage, TeamDetails, TeamMemberDetails,
-    TeamPatchMutation, TeamReader, TeamRepository, TeamResourceAccessDetails,
-    TeamResourceAccessInput, TeamSearchItemDetails,
+    IdentityError, NewTeamMutation, ResourceAccessDetails, ResourceAccessInput, ResourceInfo,
+    StoredPage, TeamDetails, TeamMemberDetails, TeamPatchMutation, TeamReader, TeamRepository,
+    TeamSearchItemDetails,
 };
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;
@@ -619,7 +622,7 @@ impl TeamRepository for PostgresTeamRepository {
     fn add_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a TeamResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
@@ -671,7 +674,7 @@ impl TeamRepository for PostgresTeamRepository {
     fn remove_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a TeamResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<TeamDetails, IdentityError>> {
@@ -949,7 +952,7 @@ async fn replace_roles(
 async fn replace_resource_accesses(
     transaction: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
-    accesses: &[TeamResourceAccessInput],
+    accesses: &[ResourceAccessInput],
 ) -> Result<(), IdentityError> {
     sqlx::query("DELETE FROM resourceaccesses WHERE actorid = $1")
         .bind(actor_id.value())
@@ -965,7 +968,7 @@ async fn replace_resource_accesses(
 async fn insert_access(
     transaction: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
-    access: &TeamResourceAccessInput,
+    access: &ResourceAccessInput,
     ignore_conflict: bool,
 ) -> Result<bool, IdentityError> {
     let query = if ignore_conflict {
@@ -1073,7 +1076,7 @@ async fn load_snapshot_accesses(
         }).collect()
 }
 
-fn snapshot_accesses(accesses: &[TeamResourceAccessInput]) -> Vec<IdentityResourceAccessSnapshot> {
+fn snapshot_accesses(accesses: &[ResourceAccessInput]) -> Vec<IdentityResourceAccessSnapshot> {
     let mut values = accesses
         .iter()
         .map(|access| IdentityResourceAccessSnapshot {
@@ -1157,20 +1160,10 @@ struct PersistedMember {
     name: String,
     principal_type: ActorType,
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PersistedAccess {
-    id: Uuid,
-    resource_type: i32,
-    resource_id: Uuid,
-    resource_name: Option<String>,
-    permission_level: i32,
-    specific_permissions: i32,
-}
 
 fn map_team(
     row: PgRow,
-    accesses: Option<Vec<TeamResourceAccessDetails>>,
+    accesses: Option<Vec<ResourceAccessDetails>>,
 ) -> Result<TeamDetails, IdentityError> {
     Ok(TeamDetails {
         id: row.try_get("id").map_err(storage)?,
@@ -1216,60 +1209,6 @@ fn map_members(value: serde_json::Value) -> Result<Vec<TeamMemberDetails>, Ident
         })
 }
 
-fn map_accesses(value: serde_json::Value) -> Result<Vec<TeamResourceAccessDetails>, IdentityError> {
-    serde_json::from_value::<Vec<PersistedAccess>>(value)
-        .map_err(|error| IdentityError::Storage(error.to_string()))?
-        .into_iter()
-        .map(|access| {
-            let resource_type = ResourceType::from_i32(access.resource_type).ok_or_else(|| {
-                IdentityError::Storage(format!(
-                    "unknown persisted ResourceType value {}",
-                    access.resource_type
-                ))
-            })?;
-            let permission_level =
-                PermissionLevel::from_i32(access.permission_level).ok_or_else(|| {
-                    IdentityError::Storage(format!(
-                        "unknown persisted PermissionLevel value {}",
-                        access.permission_level
-                    ))
-                })?;
-            Ok(TeamResourceAccessDetails {
-                resource_type,
-                resource_id: access.resource_id,
-                resource_name: access.resource_name,
-                permission_level,
-                specific_permissions: Some(
-                    SpecificPermission::ALL
-                        .into_iter()
-                        .filter(|permission| access.specific_permissions & *permission as i32 != 0)
-                        .collect(),
-                ),
-                id: Some(access.id),
-            })
-        })
-        .collect()
-}
-
-fn expands_resource_access(
-    current: &[IdentityResourceAccessSnapshot],
-    proposed: &[TeamResourceAccessInput],
-) -> bool {
-    proposed.iter().any(|access| {
-        !current.iter().any(|existing| {
-            existing.resource_type == access.resource_type
-                && existing.resource_id == access.resource_id
-                && existing.permission_level == access.permission_level
-                && existing.specific_permissions == specific_mask(&access.specific_permissions)
-        })
-    })
-}
-
-fn specific_mask(permissions: &[SpecificPermission]) -> i32 {
-    permissions
-        .iter()
-        .fold(0, |mask, permission| mask | *permission as i32)
-}
 fn missing_persisted_team() -> IdentityError {
     IdentityError::Storage("a Team mutation did not leave a readable Team projection".to_owned())
 }

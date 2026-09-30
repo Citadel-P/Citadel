@@ -399,6 +399,8 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
             StatusCode::FORBIDDEN
         );
         super::lookup::grant(&f, reader.actor_id.value(), kind, id, 0).await;
+        // Apply the ACL change through the repository so cached permissions are invalidated.
+        super::realtime_groups::replace_specific_permissions(&f, &reader, vec![]).await;
         let response = send(&f, &path, Some(reader.clone())).await;
         if resource == "deployments" {
             assert_eq!(response.status(), StatusCode::NOT_FOUND);

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReplaceResourceTagsInput {
     #[serde(default)]

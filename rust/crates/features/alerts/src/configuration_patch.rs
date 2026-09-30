@@ -71,7 +71,7 @@ fn apply_fields(current: &mut Value, patch: &Value, fields: &[&str]) -> Result<(
 /// Free installations may disable a custom Rule or remove Channels. Built-in
 /// Rules may also be enabled and have Channels assigned without an upgrade.
 pub fn requires_advanced_alerting(current: &AlertRule, next: &AlertRuleConfiguration) -> bool {
-    let custom = current.created_by_actor_id != uuid::Uuid::from_u128(1);
+    let custom = current.audit.created_by_actor_id.value() != uuid::Uuid::from_u128(1);
     current.alert_type != next.alert_type
         || current.severity != next.severity
         || current.cooldown_seconds != next.cooldown_seconds
@@ -84,7 +84,9 @@ pub fn requires_advanced_alerting(current: &AlertRule, next: &AlertRuleConfigura
                 .channel_ids
                 .iter()
                 .any(|id| !current.channel_ids.contains(id)))
-        || (custom && current.status != next.status && next.status == "Enabled")
+        || (custom
+            && current.status != next.status
+            && next.status == crate::AlertRuleStatus::Enabled)
 }
 
 #[cfg(test)]
@@ -99,16 +101,18 @@ mod tests {
             name: "rule".into(),
             description: Some("description".into()),
             alert_type: "PlatformCpuHigh".into(),
-            severity: "Warning".into(),
+            severity: crate::AlertSeverity::Warning,
             cooldown_seconds: Some(60),
             required_matches: Some(3),
             threshold: Some(80.0),
-            status: "Enabled".into(),
+            status: crate::AlertRuleStatus::Enabled,
             channel_ids: vec![Uuid::now_v7()],
             limited_to: vec![],
             quiet_hours: vec![],
-            created_by_actor_id: Uuid::now_v7(),
-            created_at: chrono::Utc::now(),
+            audit: citadel_primitives::AuditMetadata {
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+                created_at: chrono::Utc::now(),
+            },
         }
     }
 
@@ -176,12 +180,12 @@ mod tests {
                 &apply_rule(&current, &patch).unwrap()
             ));
         }
-        current.status = "Disabled".into();
+        current.status = crate::AlertRuleStatus::Disabled;
         assert!(requires_advanced_alerting(
             &current,
             &apply_rule(&current, &serde_json::json!({"status":"Enabled"})).unwrap()
         ));
-        current.created_by_actor_id = Uuid::from_u128(1);
+        current.audit.created_by_actor_id = citadel_primitives::ActorId::new(Uuid::from_u128(1));
         for patch in [
             serde_json::json!({"status":"Enabled"}),
             serde_json::json!({"channelIds":[Uuid::now_v7()]}),
@@ -201,8 +205,10 @@ mod tests {
             alert_destination: "Generic".into(),
             url: "https://alerts.example.test/hook".into(),
             is_active: true,
-            created_by_actor_id: Uuid::now_v7(),
-            created_at: chrono::Utc::now(),
+            audit: citadel_primitives::AuditMetadata {
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+                created_at: chrono::Utc::now(),
+            },
         };
         let updated = apply_channel(&current, &json!({"isActive":false})).unwrap();
         assert!(!updated.is_active);

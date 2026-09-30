@@ -1,6 +1,6 @@
 import {
-  GitRepositoryEntryType,
-  GitRepositoryFileContentView,
+  GitEntryTypeView,
+  GitFileContent,
   GitRepositoryRefView,
   AuthorizedGitRepositoryView,
 } from '@/api/generated/api.types';
@@ -191,7 +191,7 @@ function RepositoryFilePreview({
   );
 }
 
-function FileContent({ file }: { file: GitRepositoryFileContentView }) {
+function FileContent({ file }: { file: GitFileContent }) {
   if (file.previewUnavailableReason || file.content == null) {
     return <PreviewState>{file.previewUnavailableReason ?? 'File preview is unavailable.'}</PreviewState>;
   }
@@ -222,7 +222,7 @@ function PreviewState({ children }: { children: React.ReactNode }) {
 function mapRepositoryEntry(entry: {
   name: string;
   path: string;
-  type: GitRepositoryEntryType;
+  type: GitEntryTypeView;
   size?: number | string | null;
   targetCommitSha?: string | null;
 }): BrowserEntry {
@@ -235,13 +235,13 @@ function mapRepositoryEntry(entry: {
   };
 }
 
-function mapRepositoryEntryType(type: GitRepositoryEntryType): BrowserEntry['type'] {
+function mapRepositoryEntryType(type: GitEntryTypeView): BrowserEntry['type'] {
   switch (type) {
-    case GitRepositoryEntryType.Directory:
+    case GitEntryTypeView.Directory:
       return 'directory';
-    case GitRepositoryEntryType.Symlink:
+    case GitEntryTypeView.Symlink:
       return 'symlink';
-    case GitRepositoryEntryType.Submodule:
+    case GitEntryTypeView.Submodule:
       return 'submodule';
     default:
       return 'file';

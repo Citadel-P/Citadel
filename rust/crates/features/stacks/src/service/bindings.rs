@@ -89,7 +89,7 @@ pub(super) fn orchestration(
     }
 }
 
-pub(super) fn project_name(stack: &StackDetails) -> Result<String, StackError> {
+pub(super) fn project_name(stack: &crate::Stack) -> Result<String, StackError> {
     if let Some(project) = stack
         .spec
         .as_ref()

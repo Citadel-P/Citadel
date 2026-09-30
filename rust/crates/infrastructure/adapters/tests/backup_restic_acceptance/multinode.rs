@@ -314,11 +314,11 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let secret=Uuid::now_v7();
         for id in [secret,ACCESS_KEY_ID,SECRET_KEY_ID] {sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')").bind(id).bind(format!("secret-{id}")).execute(&pool).await.unwrap();}
         let actor=ActorId::new(SYSTEM_ACTOR_ID);let store=PostgresBackupPersistence::new(pool.clone());
-        let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),description:None,password_secret_id:secret,spec:json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})}).await.unwrap();
+        let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),description:None,password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
         let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent)).with_edge(registry.clone());
         let cancel=CancellationToken::new();
         executor.repository(&repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();
-        let mut input=BackupPolicyConfiguration {name:format!("policy-{platform}"),description:None,source:json!({"$type":"DockerVolume","platformId":platform,"dockerNodeId":nodes[1],"volumeName":source}),backup_repository_id:repository.id,enabled:true,cron:None,time_zone:None,webhook:None,keep_last_successful:Some(2),timeout_seconds:Some(120),alert_on_failure:false,run_as_actor_id:None,tag_ids:vec![]};input.validate(actor).unwrap();
+        let mut input=BackupPolicyConfiguration {name:format!("policy-{platform}"),description:None,source:serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"dockerNodeId":nodes[1],"volumeName":source})).unwrap(),backup_repository_id:repository.id,enabled:true,cron:None,time_zone:None,webhook:None,keep_last_successful:Some(2),timeout_seconds:Some(120),alert_on_failure:false,run_as_actor_id:None,tag_ids:vec![]};input.validate(actor).unwrap();
         let policy=store.create_policy(actor,&input).await.unwrap();let run=store.enqueue_backup(actor,policy.id,"Manual").await.unwrap();
         let claim=store.claim_backup(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(run.id,claim.run.id);
@@ -326,13 +326,13 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         assert_eq!(plan.items[0].docker_node_id.as_deref(),Some(nodes[1].as_str()));
         store.prepare_backup_items(&claim,&plan).await.unwrap();
         let completed=executor.backup(&claim,&plan,&cancel).await;store.finish_backup(&claim,&completed).await.unwrap();
-        assert_eq!(completed.status,"Succeeded","error={:?}; warnings={:?}",completed.error_message,completed.warnings);
+        assert_eq!(completed.status,citadel_backups::BackupRunStatus::Succeeded,"error={:?}; warnings={:?}",completed.error_message,completed.warnings);
         let persisted=store.get_run(run.id).await.unwrap();assert_eq!(persisted.items[0].docker_node_id.as_deref(),Some(nodes[1].as_str()));
         let queued=store.enqueue_restore(BackupRestoreRequest {actor,backup_run_id:run.id,target_platform_id:platform,target_volume_name:target.into(),overwrite_existing:false,target_docker_node_id:Some(nodes[2].clone()),source_backup_run_item_id:Some(persisted.items[0].id)}).await.unwrap();
         let restore=store.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();assert_eq!(restore.run.id,queued.id);
-        let restored=executor.restore(&restore,&cancel).await;store.finish_restore(&restore,&restored).await.unwrap();assert_eq!(restored.status,"Succeeded","{:?}",restored.error_message);
+        let restored=executor.restore(&restore,&cancel).await;store.finish_restore(&restore,&restored).await.unwrap();assert_eq!(restored.status,citadel_backups::BackupRestoreStatus::Succeeded,"{:?}",restored.error_message);
         assert_eq!(cluster.node(2,&["run","--rm","--volume",&format!("{target}:/fixture:ro"),"--entrypoint","cat",IMAGE,"/fixture/payload.txt"],None).await,PAYLOAD);
-        assert_eq!(store.get_restore(queued.id).await.unwrap().status,"Succeeded");
+        assert_eq!(store.get_restore(queued.id).await.unwrap().status,citadel_backups::BackupRestoreStatus::Succeeded);
         for i in 0..3 {
             let helpers=cluster.node(i,&["ps","--all","--filter","label=com.citadel.system-role=backup-helper","--quiet"],None).await;
             assert!(helpers.is_empty(),"Backup helper leaked on node {i}");
@@ -341,7 +341,7 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         // must fail, not back up that other volume with the same name.
         registry.get(&EdgeTarget::node(platform,nodes[1].clone())).unwrap().close();
         let failed=executor.backup(&claim,&plan,&cancel).await;
-        assert_ne!(failed.status,"Succeeded");
+        assert_ne!(failed.status,citadel_backups::BackupRunStatus::Succeeded);
     }).catch_unwind().await;
     cluster.cleanup().await;
     pool.close().await;

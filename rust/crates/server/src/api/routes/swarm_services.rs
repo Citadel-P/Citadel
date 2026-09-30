@@ -1,4 +1,5 @@
 //! Swarm services HTTP routes, authorization and local request handling.
+use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -94,35 +95,6 @@ async fn authorize<P: PermissionPolicy>(
         .require_resource::<P>(principal, id)
         .await
         .map_err(|error| crate::api::error::HttpError::from_parts(error, headers))
-}
-
-async fn collection_capabilities(
-    identity: &IdentityService,
-    principal: &ActorPrincipal,
-    headers: &HeaderMap,
-) -> HttpResult<ResourceCapabilities> {
-    if principal.is_administrator() {
-        return Ok(ResourceCapabilities {
-            can_read: true,
-            can_write: true,
-            can_execute: true,
-        });
-    }
-    let permission = identity
-        .global_permission(principal, ResourceType::SwarmService)
-        .await
-        .map_err(|error| crate::api::error::HttpError::from_parts(error, headers))?;
-    Ok(ResourceCapabilities {
-        can_read: permission
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Read)),
-        can_write: permission
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Write)),
-        can_execute: permission
-            .as_ref()
-            .is_some_and(|value| value.level.grants(PermissionLevel::Execute)),
-    })
 }
 
 pub(crate) fn service_error(error: SwarmServiceError) -> ApiError {
@@ -713,7 +685,13 @@ async fn list(
         tags: filter.tags,
         platform_id: filter.platform_id,
     };
-    let capabilities = collection_capabilities(&state.identity, &principal, &headers).await?;
+    let capabilities = collection_capabilities(
+        &state.identity,
+        &principal,
+        ResourceType::SwarmService,
+        &headers,
+    )
+    .await?;
     let value = api_result(
         state
             .services

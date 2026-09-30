@@ -22,8 +22,8 @@ pub struct BackupService {
 
 fn rejected_backup(message: String) -> BackupExecutionResult {
     BackupExecutionResult {
-        status: "Failed",
-        snapshot_availability: "NotCreated",
+        status: crate::BackupRunStatus::Failed,
+        snapshot_availability: crate::BackupSnapshotAvailability::NotCreated,
         restic_snapshot_id: None,
         parent_snapshot_id: None,
         files_processed: None,
@@ -40,8 +40,8 @@ fn rejected_backup(message: String) -> BackupExecutionResult {
 
 fn failed_before_execution(code: &str, message: String) -> BackupExecutionResult {
     BackupExecutionResult {
-        status: "Failed",
-        snapshot_availability: "NotCreated",
+        status: crate::BackupRunStatus::Failed,
+        snapshot_availability: crate::BackupSnapshotAvailability::NotCreated,
         restic_snapshot_id: None,
         parent_snapshot_id: None,
         files_processed: None,
@@ -58,7 +58,7 @@ fn failed_before_execution(code: &str, message: String) -> BackupExecutionResult
 
 fn rejected_restore(message: String) -> RestoreExecutionResult {
     RestoreExecutionResult {
-        status: "Failed",
+        status: crate::BackupRestoreStatus::Failed,
         exit_code: None,
         error_code: Some("AuthorizationRevoked".to_owned()),
         error_message: Some(message),

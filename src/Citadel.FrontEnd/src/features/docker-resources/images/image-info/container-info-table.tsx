@@ -1,11 +1,11 @@
-import { ContainerImageResult, InspectImageView, PlatformView } from '@/api/generated/api.types';
+import { ImageContainer, ImageInspectionView, PlatformView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { ColumnDef } from '@tanstack/react-table';
 import { DockerContainerCell, DockerNetworksCell, DockerVolumesCell } from '@/components/custom/common';
 
-const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ContainerImageResult>[] => [
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ImageContainer>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,
@@ -35,7 +35,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
   },
 ];
 
-export const ContainerInfoTable = ({ image }: { image: InspectImageView | undefined }) => {
+export const ContainerInfoTable = ({ image }: { image: ImageInspectionView | undefined }) => {
   const { currentPlatform } = useAppContext();
   if (!image) return <></>;
   return (

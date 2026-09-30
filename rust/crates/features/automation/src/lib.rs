@@ -1,8 +1,7 @@
 #![forbid(unsafe_code)]
 pub mod actions;
 mod error;
-pub mod jobs;
-mod options;
+pub mod options;
 pub mod permissions;
 mod repository;
 pub mod runs;
@@ -25,3 +24,6 @@ pub use service::AutomationService;
 pub use tasks::AutomationTaskSpawner;
 #[cfg(test)]
 mod tests;
+
+mod status;
+pub use status::AutomationRunStatus;

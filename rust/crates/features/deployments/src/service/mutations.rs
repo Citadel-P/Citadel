@@ -1,11 +1,12 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl DeploymentService {
     pub async fn create(
         &self,
         actor_id: ActorId,
         administrator: bool,
         mut input: CreateDeployment,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
         if input.platform_id.is_nil() {
@@ -42,7 +43,7 @@ impl DeploymentService {
         id: Uuid,
         platform_id: Option<Uuid>,
         spec: Option<Value>,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         let current = self
             .store
             .get_authorized(actor_id, administrator, id)
@@ -74,11 +75,11 @@ impl DeploymentService {
         administrator: bool,
         id: Uuid,
         mut input: UpdateDeploymentMetadata,
-    ) -> Result<DeploymentDetails, DeploymentError> {
-        if let FieldPatch::Set(description) = &mut input.description {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
+        if let PatchField::Value(description) = &mut input.description {
             let mut value = Some(std::mem::take(description));
             normalize_description(&mut value)?;
-            input.description = value.map_or(FieldPatch::Clear, FieldPatch::Set);
+            input.description = value.map_or(PatchField::Null, PatchField::Value);
         }
         let updated = self
             .store
@@ -94,7 +95,7 @@ impl DeploymentService {
         administrator: bool,
         id: Uuid,
         mut name: String,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         normalize_name(&mut name)?;
         let renamed = self
             .store
@@ -179,32 +180,13 @@ pub(super) fn merge_spec(
     let mut merged = serde_json::to_value(current).map_err(|error| {
         DeploymentError::Storage(format!("failed to serialize Deployment spec: {error}"))
     })?;
-    merge_json(&mut merged, patch);
+    merge_json(&mut merged, &patch);
     serde_json::from_value(merged).map_err(|error| {
         DeploymentError::Validation(format!("Deployment spec patch is invalid: {error}"))
     })
 }
 
-pub(super) fn merge_json(target: &mut Value, patch: Value) {
-    match patch {
-        Value::Object(patch) => {
-            if !target.is_object() {
-                *target = Value::Object(serde_json::Map::new());
-            }
-            let target = target
-                .as_object_mut()
-                .expect("target was replaced by an object");
-            for (key, value) in patch {
-                if value.is_null() {
-                    target.remove(&key);
-                } else {
-                    merge_json(target.entry(key).or_insert(Value::Null), value);
-                }
-            }
-        }
-        value => *target = value,
-    }
-}
+use citadel_primitives::merge_json;
 
 pub(super) fn normalize_name(name: &mut String) -> Result<(), DeploymentError> {
     *name = name.trim().to_owned();
@@ -227,19 +209,11 @@ pub(super) fn normalize_name(name: &mut String) -> Result<(), DeploymentError> {
 pub(super) fn normalize_description(
     description: &mut Option<String>,
 ) -> Result<(), DeploymentError> {
-    *description = description
-        .take()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    *description = citadel_primitives::normalization::optional_text(description.take());
     if description.as_ref().is_some_and(|value| value.len() > 600) {
         return Err(DeploymentError::Validation(
             "Deployment description cannot exceed 600 characters.".to_owned(),
         ));
     }
     Ok(())
-}
-
-pub(super) fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
-    let mut seen = HashSet::with_capacity(ids.len());
-    ids.iter().copied().filter(|id| seen.insert(*id)).collect()
 }

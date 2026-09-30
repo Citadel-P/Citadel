@@ -6,7 +6,6 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-citadel-git = { path = "../git" }
 citadel-tags = { path = "../tags" }
 citadel-primitives = { path = "../primitives" }
 citadel-licensing = { path = "../licensing" }

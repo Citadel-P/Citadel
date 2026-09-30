@@ -54,11 +54,14 @@ fn build_paths_reject_absolute_paths_and_repository_metadata() {
 #[test]
 fn build_webhook_uses_the_shared_authentication_validation() {
     let mut value = input();
-    value.webhook =
-        Some(serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"None"}));
-    assert!(value.validate().is_err());
+    assert!(
+        serde_json::from_value::<citadel_primitives::WebhookConfig>(
+            serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"None"})
+        )
+        .is_err()
+    );
     value.webhook = Some(
-        serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"test-shared-secret"}),
+        serde_json::from_value(serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"test-shared-secret"})).unwrap(),
     );
     value.validate().unwrap();
 }

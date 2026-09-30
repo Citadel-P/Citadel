@@ -133,7 +133,10 @@ pub(super) async fn runtime_rule(
     if let Some(event) = event {
         assert_eq!(event.alert_rule_id, id);
         assert_eq!(event.alert_type, expected["type"].as_str().unwrap());
-        assert_eq!(event.severity, expected["severity"].as_str().unwrap());
+        assert_eq!(
+            event.severity.as_str(),
+            expected["severity"].as_str().unwrap()
+        );
         let delivered: Vec<Uuid> = sqlx::query_scalar("SELECT alertchannelid FROM alertdeliveryoutbox WHERE alerteventid=$1 ORDER BY alertchannelid")
             .bind(event.id).fetch_all(pool).await.unwrap();
         let ids: Vec<Uuid> = serde_json::from_value(expected["channelIds"].clone()).unwrap();
@@ -155,7 +158,10 @@ pub(super) async fn runtime_rule(
         recovered.value = expected["threshold"].as_f64().map(|value| value - 1.0);
         recovered.observed_at += Duration::seconds(1);
         assert!(store.process_event(&recovered).await.unwrap().is_none());
-        assert_eq!(store.get_event(event.id).await.unwrap().status, "Resolved");
+        assert_eq!(
+            store.get_event(event.id).await.unwrap().status,
+            citadel_alerts::AlertEventStatus::Resolved
+        );
         let mut retrigger = observation.clone();
         retrigger.observed_at += Duration::seconds(2);
         if expected["cooldownSeconds"]

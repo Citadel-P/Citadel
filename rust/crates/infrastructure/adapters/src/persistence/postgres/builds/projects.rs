@@ -39,7 +39,7 @@ impl PostgresBuildRepository {
                 .bind(serde_json::to_value(input.build_secrets.as_deref().unwrap_or(&[])).map_err(storage)?)
                 .bind(&input.builder_kind).bind(input.platform_id).bind(input.build_agent_pool_id).bind(input.registry_id)
                 .bind(&input.image_repository).bind(serde_json::to_value(input.tag_templates.as_deref().unwrap_or(&[])).map_err(storage)?)
-                .bind(input.webhook.as_ref()).bind(input.timeout_seconds.unwrap_or(1800)).bind(input.retention_run_count.unwrap_or(20)).bind(actor.value())
+                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds.unwrap_or(1800)).bind(input.retention_run_count.unwrap_or(20)).bind(actor.value())
                 .execute(&mut *transaction).await.map_err(database)?;
             resource_tags::insert(&mut transaction, "Build", id, &input.tag_ids, actor.value())
                 .await
@@ -84,7 +84,7 @@ WHERE project.archivedat IS NULL
   ))
 ORDER BY project.name,project.id"#
             );
-            let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
+            let values = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Build as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
@@ -95,12 +95,7 @@ ORDER BY project.name,project.id"#
                 .into_iter()
                 .map(map_project)
                 .collect::<Result<Vec<_>, _>>()?;
-            enrich_projects(
-                &mut *self.pool.acquire().await.map_err(storage)?,
-                &mut values,
-            )
-            .await?;
-            Ok(values)
+            enrich_projects(&mut *self.pool.acquire().await.map_err(storage)?, values).await
         })
     }
 }
@@ -111,7 +106,7 @@ impl PostgresBuildRepository {
         id: Uuid,
     ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
         Box::pin(async move {
-            let mut value =
+            let value =
                 sqlx::query("SELECT * FROM buildprojects WHERE id=$1 AND archivedat IS NULL")
                     .bind(id)
                     .fetch_optional(&self.pool)
@@ -121,10 +116,11 @@ impl PostgresBuildRepository {
                     .and_then(map_project)?;
             enrich_projects(
                 &mut *self.pool.acquire().await.map_err(storage)?,
-                std::slice::from_mut(&mut value),
+                vec![value],
             )
-            .await?;
-            Ok(value)
+            .await?
+            .pop()
+            .ok_or(BuildError::NotFound)
         })
     }
 }
@@ -146,7 +142,7 @@ impl PostgresBuildRepository {
                 .bind(serde_json::to_value(input.build_secrets.as_deref().unwrap_or(&[])).map_err(storage)?)
                 .bind(&input.builder_kind).bind(input.platform_id).bind(input.build_agent_pool_id).bind(input.registry_id).bind(&input.image_repository)
                 .bind(serde_json::to_value(input.tag_templates.as_deref().unwrap_or(&[])).map_err(storage)?)
-                .bind(&input.webhook).bind(input.timeout_seconds).bind(input.retention_run_count)
+                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds).bind(input.retention_run_count)
                 .fetch_optional(&mut *tx).await.map_err(database)?.ok_or_else(|| BuildError::Conflict("Build was changed, archived or is processing. Reload before saving.".into()))?;
             let project = map_project(row)?;
             if !metadata_only {
@@ -186,7 +182,7 @@ impl PostgresBuildRepository {
             .map_err(storage)?
             .ok_or(BuildError::NotFound)
             .and_then(map_project)?;
-            if current.control_state != "Idle" {
+            if current.control_state != citadel_primitives::ResourceControlState::Idle {
                 return Err(BuildError::Conflict("Build has an active Run.".into()));
             }
             sqlx::query("UPDATE buildprojects SET enabled=false,archivedat=now(),updatedat=now(),rowversion=rowversion+1 WHERE id=$1").bind(id).execute(&mut *tx).await.map_err(storage)?;

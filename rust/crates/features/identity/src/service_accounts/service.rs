@@ -328,10 +328,7 @@ pub(super) const fn enabled_by_default() -> bool {
 pub(super) fn normalize_description(
     description: Option<String>,
 ) -> Result<Option<String>, IdentityError> {
-    let description = description.and_then(|value| {
-        let value = value.trim().to_owned();
-        (!value.is_empty()).then_some(value)
-    });
+    let description = citadel_primitives::normalization::optional_text(description);
     if description
         .as_ref()
         .is_some_and(|value| value.chars().count() > MAXIMUM_SERVICE_ACCOUNT_DESCRIPTION_CHARS)

@@ -2,13 +2,12 @@ import {
   BuildAgentPoolInput,
   BuildAgentPoolConnectionMode,
   BuildAgentPoolProvider,
-  BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
-  BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
+  BuildAgentPoolProviderSpec,
   BuildAgentPoolValidationStatus,
   AuthorizedPool,
   CpuArchitecture,
-  EdgeAgentEnrollmentView,
-  EdgeAgentStatusView,
+  EdgeEnrollmentView,
+  EdgeStatusView,
   ResourceControlState,
   UpdateBuildAgentPoolInput,
 } from '@/api/generated/api.types';
@@ -45,15 +44,12 @@ import { BuildPoolInfoActions, invalidateBuildPoolQueries } from './actions';
 
 type BuildPoolInput = BuildAgentPoolInput | UpdateBuildAgentPoolInput;
 type BuildPoolFormResource = AuthorizedPool & RequiredFormFields;
-type AwsEc2ProviderSpec = BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec & { $type: 'AwsEc2' };
-type SelfManagedVmProviderSpec = BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec & {
-  $type: 'SelfManagedVm';
-};
-type BuildPoolProviderSpec = AwsEc2ProviderSpec | SelfManagedVmProviderSpec;
+type AwsEc2ProviderSpec = Extract<BuildAgentPoolProviderSpec, { $type: 'AwsEc2' }>;
+type SelfManagedVmProviderSpec = Extract<BuildAgentPoolProviderSpec, { $type: 'SelfManagedVm' }>;
+type BuildPoolProviderSpec = BuildAgentPoolProviderSpec;
 
 const defaultAwsSpec: AwsEc2ProviderSpec = {
   $type: 'AwsEc2',
-  provider: BuildAgentPoolProvider.AwsEc2,
   region: '',
   instanceType: 'c5.2xlarge',
   architecture: CpuArchitecture.Amd64,
@@ -71,7 +67,6 @@ const defaultAwsSpec: AwsEc2ProviderSpec = {
 
 const defaultSelfManagedVmSpec: SelfManagedVmProviderSpec = {
   $type: 'SelfManagedVm',
-  provider: BuildAgentPoolProvider.SelfManagedVm,
   endpoint: '',
   architecture: CpuArchitecture.Amd64,
   maxWorkers: 1,
@@ -197,7 +192,7 @@ function BuildPoolForm({
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildPoolInput>>({});
-  const [enrollment, setEnrollment] = useState<EdgeAgentEnrollmentView | undefined>();
+  const [enrollment, setEnrollment] = useState<EdgeEnrollmentView | undefined>();
   const createPool = useMutate('createBuildAgentPool');
   const updatePool = useMutate('updateBuildAgentPool');
   const createEdgeEnrollment = useMutate('createBuildAgentPoolEdgeEnrollment');
@@ -598,7 +593,7 @@ function awsEc2Fields(
         description: 'Comma-separated security group IDs attached to builder instances.',
         render: () => (
           <FieldInput
-            value={awsSpec.securityGroupIds.join(', ')}
+            value={(awsSpec.securityGroupIds ?? []).join(', ')}
             disabled={disabled}
             onChange={(value) => setAwsSpec({ securityGroupIds: splitCsv(value) })}
             placeholder="sg-123, sg-456"
@@ -648,7 +643,7 @@ function awsEc2Fields(
         render: () => (
           <FieldSwitch
             id="build-pool-public-ip"
-            checked={awsSpec.assignPublicIp}
+            checked={awsSpec.assignPublicIp ?? false}
             onChange={(assignPublicIp) => setAwsSpec({ assignPublicIp })}
           />
         ),
@@ -676,8 +671,8 @@ function selfManagedVmFields(
   setVmSpec: (patch: Partial<SelfManagedVmProviderSpec>) => void,
   mode: 'add' | 'edit',
   poolId?: string,
-  enrollment?: EdgeAgentEnrollmentView,
-  edgeStatus?: EdgeAgentStatusView,
+  enrollment?: EdgeEnrollmentView,
+  edgeStatus?: EdgeStatusView,
   isEdgeStatusLoading?: boolean,
   isEnrollmentPending?: boolean,
   onRegenerateEnrollment?: () => void,
@@ -851,8 +846,8 @@ function EdgeBuildPoolEnrollmentPanel({
   mode,
 }: {
   poolId?: string;
-  enrollment?: EdgeAgentEnrollmentView;
-  edgeStatus?: EdgeAgentStatusView;
+  enrollment?: EdgeEnrollmentView;
+  edgeStatus?: EdgeStatusView;
   isEdgeStatusLoading?: boolean;
   isPending?: boolean;
   onRegenerate?: () => void;
@@ -987,11 +982,10 @@ function normalizeProviderSpec(value: unknown): BuildPoolProviderSpec {
 }
 
 function normalizeAwsSpec(value: unknown): AwsEc2ProviderSpec {
-  const spec = { ...defaultAwsSpec, ...(value as Partial<BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec>) };
+  const spec = { ...defaultAwsSpec, ...(value as Partial<AwsEc2ProviderSpec>) };
   return {
     ...spec,
     $type: 'AwsEc2',
-    provider: BuildAgentPoolProvider.AwsEc2,
     rootVolumeSizeGb: Number(spec.rootVolumeSizeGb ?? 50),
     securityGroupIds: Array.isArray(spec.securityGroupIds) ? spec.securityGroupIds : [],
     instanceProfileName: spec.instanceProfileName || null,
@@ -1005,12 +999,11 @@ function normalizeAwsSpec(value: unknown): AwsEc2ProviderSpec {
 function normalizeSelfManagedVmSpec(value: unknown): SelfManagedVmProviderSpec {
   const spec = {
     ...defaultSelfManagedVmSpec,
-    ...(value as Partial<BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec>),
+    ...(value as Partial<SelfManagedVmProviderSpec>),
   };
   return {
     ...spec,
     $type: 'SelfManagedVm',
-    provider: BuildAgentPoolProvider.SelfManagedVm,
     endpoint: spec.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? null : (spec.endpoint ?? ''),
     maxWorkers: Number(spec.maxWorkers ?? 1),
     registrationSecretId: spec.registrationSecretId || null,
@@ -1020,8 +1013,8 @@ function normalizeSelfManagedVmSpec(value: unknown): SelfManagedVmProviderSpec {
 }
 
 function getProvider(value: unknown): BuildAgentPoolProvider {
-  const spec = value as { provider?: BuildAgentPoolProvider; $type?: string } | null | undefined;
-  if (spec?.provider === BuildAgentPoolProvider.SelfManagedVm || spec?.$type === 'SelfManagedVm') {
+  const spec = value as { $type?: string } | null | undefined;
+  if (spec?.$type === 'SelfManagedVm') {
     return BuildAgentPoolProvider.SelfManagedVm;
   }
   return BuildAgentPoolProvider.AwsEc2;

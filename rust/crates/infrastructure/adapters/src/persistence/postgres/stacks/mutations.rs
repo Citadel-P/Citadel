@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl PostgresStackRepository {
     pub(super) fn update_check_candidates_impl(
         &self,
@@ -14,7 +15,7 @@ impl PostgresStackRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         state: &'a StackUpdateState,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(update_checks::save(
@@ -29,7 +30,7 @@ impl PostgresStackRepository {
 impl PostgresStackRepository {
     pub(super) fn enqueue_webhook_impl<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         commit: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(self.enqueue_stack_webhook(expected, commit))
@@ -58,7 +59,7 @@ impl PostgresStackRepository {
 impl PostgresStackRepository {
     pub(super) fn record_drift_impl<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>> {
@@ -70,7 +71,7 @@ impl PostgresStackRepository {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<StackDetails>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         Box::pin(async move {
             let sql = format!(
                 r#"{AUTHORIZED_CTES}{PROJECTION}
@@ -101,7 +102,7 @@ impl PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         input: &'a CreateStack,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
@@ -166,7 +167,7 @@ impl PostgresStackRepository {
         expected_row_version: i64,
         input: &'a UpdateStack,
         spec: &'a StackSpec,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -187,8 +188,11 @@ impl PostgresStackRepository {
             }
             let old_platform: Uuid = row.try_get("platformid").map_err(storage)?;
             let new_platform = input.platform_id.unwrap_or(old_platform);
-            let old_status =
-                StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?;
+            let old_status = row
+                .try_get::<&str, _>("release_status")
+                .map_err(storage)?
+                .parse::<StackReleaseStatus>()
+                .map_err(storage)?;
             if new_platform != old_platform
                 && !matches!(
                     old_status,
@@ -288,7 +292,7 @@ impl PostgresStackRepository {
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -362,7 +366,7 @@ impl PostgresStackRepository {
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -417,7 +421,7 @@ impl PostgresStackRepository {
         administrator: bool,
         input: &'a ImportComposeProject,
         claim: &'a StackImportClaim,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR SHARE")

@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) async fn record(
     pool: &PgPool,
-    expected: &StackDetails,
+    expected: &citadel_stacks::Stack,
     status: StackReleaseStatus,
     info: ActivityEventInfo,
 ) -> Result<bool, StackError> {

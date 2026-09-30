@@ -65,6 +65,7 @@ impl BackupPersistence for PostgresBackupPersistence {
     fn record_repository_operation<'a>(
         &'a self,
         id: Uuid,
+        operation_id: Uuid,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
@@ -73,6 +74,7 @@ impl BackupPersistence for PostgresBackupPersistence {
     ) -> BoxFuture<'a, Result<(BackupRepository, BackupRepositoryValidation), BackupError>> {
         self.record_repository_operation_impl(
             id,
+            operation_id,
             operation,
             location,
             platform_id,
@@ -171,7 +173,7 @@ impl BackupPersistence for PostgresBackupPersistence {
     fn enqueue_webhook<'a>(
         &'a self,
         policy_id: Uuid,
-        expected_webhook: &'a Value,
+        expected_webhook: &'a citadel_primitives::WebhookConfig,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         self.enqueue_webhook_impl(policy_id, expected_webhook)
     }

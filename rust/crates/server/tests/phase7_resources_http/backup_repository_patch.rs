@@ -38,6 +38,8 @@ pub(super) async fn before_ready(
     for patch in [
         json!([]),
         json!({"description":true}),
+        json!({"spec":{"$type":"FileSystem","location":"Unknown","path":"/tmp/backups"}}),
+        json!({"spec":{"$type":"S3Compatible","bucketLookup":"Unknown"}}),
         json!({"spec":{"$type":"FileSystem","path":""}}),
     ] {
         assert_eq!(
@@ -128,7 +130,7 @@ pub(super) async fn before_ready(
         assert!(String::from_utf8_lossy(&body).contains("AllowedCorePaths"));
         assert_eq!(
             store.get_repository(repo_id).await.unwrap().control_state,
-            "Idle"
+            citadel_primitives::ResourceControlState::Idle
         );
     }
     // Readiness checks still return their recorded validation result.

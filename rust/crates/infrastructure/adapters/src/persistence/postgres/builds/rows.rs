@@ -34,10 +34,10 @@ pub(super) async fn enrich_pools(
 
 pub(super) async fn enrich_projects(
     connection: &mut sqlx::PgConnection,
-    projects: &mut [BuildProject],
-) -> Result<(), BuildError> {
+    projects: Vec<BuildProject>,
+) -> Result<Vec<BuildProject>, BuildError> {
     if projects.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let ids: Vec<_> = projects.iter().map(|project| project.id).collect();
     let mut tags = resource_tags::load(&mut *connection, "Build", &ids)
@@ -49,11 +49,14 @@ pub(super) async fn enrich_projects(
         let run = map_run(row)?;
         runs.insert(run.build_project_id, run);
     }
-    for project in projects {
-        project.tags = tags.remove(&project.id).unwrap_or_default();
-        project.latest_run = runs.remove(&project.id);
-    }
-    Ok(())
+    Ok(projects
+        .into_iter()
+        .map(|project| BuildProject {
+            tags: tags.remove(&project.id).unwrap_or_default(),
+            latest_run: runs.remove(&project.id),
+            ..project
+        })
+        .collect())
 }
 
 pub(super) fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProject, BuildError> {
@@ -81,17 +84,32 @@ pub(super) fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProject, Bu
         image_repository: row.try_get("imagerepository").map_err(storage)?,
         tag_templates: serde_json::from_value(row.try_get("tagtemplates").map_err(storage)?)
             .map_err(storage)?,
-        webhook: row.try_get("webhook").map_err(storage)?,
+        webhook: row
+            .try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>(
+                "webhook",
+            )
+            .map_err(storage)?
+            .and_then(|v| v.0),
         timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,
         retention_run_count: row.try_get("retentionruncount").map_err(storage)?,
         current_run_id: row.try_get("currentrunid").map_err(storage)?,
-        control_state: row.try_get("controlstate").map_err(storage)?,
+        control_state: row
+            .try_get::<String, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         control_started_at: row.try_get("controlstartedat").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
+
         updated_at: row.try_get("updatedat").map_err(storage)?,
         archived_at: row.try_get("archivedat").map_err(storage)?,
         row_version: row.try_get("rowversion").map_err(storage)?,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: row.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
     })
 }
 
@@ -115,17 +133,31 @@ pub(super) fn map_pool(row: sqlx::postgres::PgRow) -> Result<BuildAgentPool, Bui
             .try_get("maximuminstancelifetimeseconds")
             .map_err(storage)?,
         failure_retention_minutes: row.try_get("failureretentionminutes").map_err(storage)?,
-        last_validation_status: row.try_get("lastvalidationstatus").map_err(storage)?,
+        last_validation_status: row
+            .try_get::<String, _>("lastvalidationstatus")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         last_validation_message: row.try_get("lastvalidationmessage").map_err(storage)?,
         last_validated_at: row.try_get("lastvalidatedat").map_err(storage)?,
-        control_state: row.try_get("controlstate").map_err(storage)?,
+        control_state: row
+            .try_get::<String, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         control_triggered_by: row.try_get("controltriggeredby").map_err(storage)?,
         control_started_at: row.try_get("controlstartedat").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
+
         updated_at: row.try_get("updatedat").map_err(storage)?,
         archived_at: row.try_get("archivedat").map_err(storage)?,
         row_version: row.try_get("rowversion").map_err(storage)?,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: row.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
     })
 }
 
@@ -163,7 +195,11 @@ pub(super) fn map_run(row: sqlx::postgres::PgRow) -> Result<BuildRun, BuildError
         image_references: serde_json::from_value(row.try_get("imagereferences").map_err(storage)?)
             .map_err(storage)?,
         trigger: row.try_get("trigger").map_err(storage)?,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         image_digest: row.try_get("imagedigest").map_err(storage)?,
         timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,
         queued_at: row.try_get("queuedat").map_err(storage)?,

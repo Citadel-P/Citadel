@@ -2,7 +2,7 @@ import {
   AutomationActionInput,
   RunInput,
   AuthorizedAction,
-  RepoWebhookConfig,
+  WebhookConfig,
   LicenseCapability,
   LookupResourceType,
   ResourceControlState,
@@ -35,7 +35,7 @@ import { useLicenseEntitlements } from '@/features/license/use-license-entitleme
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   id?: string;
   runAsActorId: string;
-  webhook: RepoWebhookConfig | null;
+  webhook: WebhookConfig | null;
   tagIds?: string[] | null;
 };
 
@@ -397,7 +397,7 @@ export function AutomationActionForm({
                     value={value ?? { enabled: false }}
                     disabled={disabled}
                     enableDisabled={!automatedOperationsEnabled}
-                    onChange={(webhook) => set({ webhook: webhook as RepoWebhookConfig })}
+                    onChange={(webhook) => set({ webhook: webhook as WebhookConfig })}
                   />
                 ),
               }),
@@ -510,7 +510,7 @@ function toUpdateInput(
   return input;
 }
 
-function normalizeWebhook(webhook: RepoWebhookConfig | null | undefined): RepoWebhookConfig | null {
+function normalizeWebhook(webhook: WebhookConfig | null | undefined): WebhookConfig | null {
   if (!webhook) return null;
 
   return {

@@ -16,12 +16,12 @@ pub fn apply(
     } else {
         current.description.clone()
     };
-    let mut spec = object
-        .get("spec")
-        .filter(|v| !v.is_null())
-        .unwrap_or(&current.spec)
-        .clone();
-    normalize_spec(&mut spec);
+    let mut spec = match object.get("spec").filter(|value| !value.is_null()) {
+        Some(value) => serde_json::from_value(value.clone())
+            .map_err(|e| BackupError::Validation(format!("Invalid Backup Repository spec: {e}")))?,
+        None => current.spec.clone(),
+    };
+    spec.normalize();
     let mut input = BackupRepositoryConfiguration {
         name: current.name.clone(),
         description,
@@ -30,45 +30,13 @@ pub fn apply(
     };
     input.validate()?;
     let mut previous = current.spec.clone();
-    normalize_spec(&mut previous);
-    if current.status == "Ready" && input.spec != previous {
+    previous.normalize();
+    if current.status == crate::BackupRepositoryStatus::Ready && input.spec != previous {
         return Err(BackupError::Validation(
             "Ready backup repository location cannot be changed.".into(),
         ));
     }
     Ok(input)
-}
-
-fn normalize_spec(spec: &mut Value) {
-    let kind = spec
-        .get("$type")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    if let Some(fields) = spec.as_object_mut() {
-        for key in match kind.as_str() {
-            "FileSystem" => &["path"][..],
-            "S3Compatible" => &["endpoint", "bucket", "prefix", "region"][..],
-            _ => &[],
-        } {
-            if let Some(Value::String(value)) = fields.get_mut(*key) {
-                *value = value.trim().to_owned();
-                if *key == "prefix" {
-                    *value = value.trim_matches('/').to_owned();
-                }
-            }
-        }
-        if kind == "S3Compatible" {
-            for key in ["region", "prefix"] {
-                if fields
-                    .get(key)
-                    .is_none_or(|v| v.as_str().is_some_and(str::is_empty))
-                {
-                    fields.insert(key.into(), Value::Null);
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -85,19 +53,22 @@ mod tests {
             normalized_name: "REPO".into(),
             description: Some("old".into()),
             repository_type: spec["$type"].as_str().unwrap().into(),
-            spec,
+            spec: serde_json::from_value(spec).unwrap(),
             password_secret_id: Uuid::now_v7(),
-            status: "Unknown".into(),
-            control_state: "Idle".into(),
+            status: crate::BackupRepositoryStatus::Unknown,
+            control_state: citadel_primitives::ResourceControlState::Idle,
             current_run_id: None,
             control_started_at: None,
             last_pruned_at: None,
             last_checked_at: None,
-            created_by_actor_id: Uuid::now_v7(),
-            created_at: Utc::now(),
+
             updated_at: Utc::now(),
             archived_at: None,
             row_version: 0,
+            audit: citadel_primitives::AuditMetadata {
+                created_at: Utc::now(),
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+            },
         }
     }
 
@@ -106,7 +77,7 @@ mod tests {
         let mut current = repository(
             json!({"$type":"FileSystem","location":"Core","path":"/backups","platformId":null}),
         );
-        current.status = "Ready".into();
+        current.status = crate::BackupRepositoryStatus::Ready;
         assert!(apply(&current, &json!({"spec":{"$type":"FileSystem","location":"Core","path":"/other","platformId":null}})).is_err());
         let same = apply(&current, &json!({"spec":{"$type":"FileSystem","location":"Core","path":" /backups ","platformId":null}})).unwrap();
         assert_eq!(same.spec, current.spec);
@@ -128,11 +99,45 @@ mod tests {
             }}),
         )
         .unwrap();
-        assert_eq!(changed.spec["endpoint"], "https://s3.example.test");
-        assert_eq!(changed.spec["bucket"], "citadel");
-        assert_eq!(changed.spec["prefix"], "prod/backups");
-        assert_eq!(changed.spec["region"], "eu-west-1");
+        assert_eq!(
+            serde_json::to_value(&changed.spec).unwrap()["endpoint"],
+            "https://s3.example.test"
+        );
+        assert_eq!(
+            serde_json::to_value(&changed.spec).unwrap()["bucket"],
+            "citadel"
+        );
+        assert_eq!(
+            serde_json::to_value(&changed.spec).unwrap()["prefix"],
+            "prod/backups"
+        );
+        assert_eq!(
+            serde_json::to_value(&changed.spec).unwrap()["region"],
+            "eu-west-1"
+        );
         assert_eq!(changed.description.as_deref(), Some("backups"));
         assert_eq!(changed.password_secret_id, current.password_secret_id);
+    }
+    #[test]
+    fn ready_location_comparison_uses_configuration_fields_and_defaults() {
+        let mut current = repository(
+            json!({"$type":"FileSystem","location":"Core","path":"/backups","type":"FileSystem"}),
+        );
+        current.status = crate::BackupRepositoryStatus::Ready;
+        assert!(apply(&current, &json!({"spec":{"$type":"FileSystem","location":"Core","platformId":null,"path":"/backups"}})).is_ok());
+        assert!(
+            apply(
+                &current,
+                &json!({"spec":{"$type":"FileSystem","location":"Core","path":"/other"}})
+            )
+            .is_err()
+        );
+        let key = Uuid::now_v7();
+        current.spec = serde_json::from_value(json!({"$type":"S3Compatible","endpoint":"https://s3.example.test","bucket":"backups","accessKeySecretId":key,"secretKeySecretId":key})).unwrap();
+        let spec = current.spec.clone();
+        let mut spec = serde_json::to_value(spec).unwrap();
+        assert!(apply(&current, &json!({"spec":spec})).is_ok());
+        spec["bucket"] = "another-bucket".into();
+        assert!(apply(&current, &json!({"spec":spec})).is_err());
     }
 }

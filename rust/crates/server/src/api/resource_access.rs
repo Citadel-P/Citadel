@@ -1,7 +1,7 @@
 use crate::{
     api::{
         error::{ApiError, HttpError, HttpResult, api_result},
-        resources::platforms::views::ResourceCapabilitiesView,
+        resources::capabilities::ResourceCapabilitiesView,
     },
     realtime::RealtimeHub,
 };
@@ -183,6 +183,23 @@ pub(crate) async fn authorize_resource(
     )?;
     Ok(())
 }
+/// Workload collections expose all actions to administrators without a grant lookup.
+pub(crate) async fn collection_capabilities(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    resource_type: ResourceType,
+    headers: &HeaderMap,
+) -> HttpResult<ResourceCapabilitiesView> {
+    if principal.is_administrator() {
+        return Ok(ResourceCapabilitiesView {
+            can_read: true,
+            can_write: true,
+            can_execute: true,
+        });
+    }
+    capabilities(identity, principal, resource_type, None, headers).await
+}
+
 pub(crate) async fn capabilities(
     identity: &IdentityService,
     principal: &ActorPrincipal,
@@ -204,13 +221,7 @@ pub(crate) async fn capabilities(
 pub(crate) fn capabilities_from_permission(
     permission: Option<citadel_identity::PermissionGrant>,
 ) -> ResourceCapabilitiesView {
-    permission.map_or_else(ResourceCapabilitiesView::default, |permission| {
-        ResourceCapabilitiesView {
-            can_read: permission.level.grants(PermissionLevel::Read),
-            can_write: permission.level.grants(PermissionLevel::Write),
-            can_execute: permission.level.grants(PermissionLevel::Execute),
-        }
-    })
+    permission.into()
 }
 
 pub(crate) fn publish_resource_change(

@@ -1,4 +1,7 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+use citadel_identity::{ResourceAccessInput, UserPatchMutation, UserRepository};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 
 // Ports SwarmEndpointTests: node availability and labels, metadata-only Secrets,
 // immutable Config content, inspect permissions, whole-batch preflight, stale
@@ -559,8 +562,25 @@ async fn native_swarm_preflights_entire_batches_permissions_usage_and_versions()
     )
     .await;
     assert!(runtime.lock().await.mutations.is_empty());
-    sqlx::query("UPDATE resourceaccesses SET permissionlevel=2,specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3")
-        .bind(citadel_primitives::SpecificPermission::Inspect as i32).bind(reader.actor_id.value()).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    // Use the application mutation path to invalidate the reader's cached denial.
+    PostgresUserRepository::new(f.pool.clone())
+        .patch(
+            reader.subject_id,
+            &UserPatchMutation {
+                resource_accesses: Some(vec![ResourceAccessInput {
+                    resource_type: ResourceType::Platform,
+                    resource_id: f.platform_id,
+                    permission_level: PermissionLevel::Write,
+                    specific_permissions: vec![SpecificPermission::Inspect],
+                }]),
+                ..Default::default()
+            },
+            f.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
     assert_status(
         send_json(
             &f,

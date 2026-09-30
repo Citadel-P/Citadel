@@ -1,4 +1,3 @@
-pub use self::webhooks::WebhookConfiguration as GitRepositoryWebhook;
 use self::webhooks::{WebhookError, repository_matches, webhook_branch};
 use crate::GitAccountService;
 use crate::GitAuthConfiguration;
@@ -14,9 +13,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
+pub use citadel_primitives::PatchField;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -40,9 +39,7 @@ pub use error::GitRepositoryExecutionError;
 
 mod commands;
 pub mod webhooks;
-pub use commands::{
-    CreateGitRepository, FieldPatch, GitRepositoryMutationKind, GitRepositoryPatch,
-};
+pub use commands::{CreateGitRepository, GitRepositoryMutationKind, GitRepositoryPatch};
 pub use model::{GitRepository, RepoCommand};
 pub use repository::GitRepositoryPersistence;
 mod service;

@@ -4,7 +4,6 @@ use citadel_backups::{BackupClaim, BackupError, BackupRunAuthorizer, RestoreClai
 use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -39,26 +38,10 @@ impl IdentityBackupRunAuthorizer {
     async fn authorize_source(
         &self,
         principal: &ActorPrincipal,
-        source: &Value,
+        source: &citadel_backups::spec::BackupSourceSpec,
     ) -> Result<(), BackupError> {
-        let resource = match source.get("$type").and_then(Value::as_str) {
-            Some("DockerVolume") => {
-                json_uuid(source, "platformId").map(|id| (ResourceType::Platform, id))
-            }
-            Some("Stack") => json_uuid(source, "stackId").map(|id| (ResourceType::Stack, id)),
-            Some("Deployment") => {
-                json_uuid(source, "deploymentId").map(|id| (ResourceType::Deployment, id))
-            }
-            Some("SwarmService") => {
-                json_uuid(source, "swarmServiceId").map(|id| (ResourceType::SwarmService, id))
-            }
-            Some("CitadelSystem") => None,
-            _ => {
-                return Err(BackupError::Validation(
-                    "The Backup source is invalid.".to_owned(),
-                ));
-            }
-        };
+        source.validate()?;
+        let resource = source.resource();
         if let Some((resource_type, resource_id)) = resource {
             self.authorize_resource(
                 principal,
@@ -141,11 +124,4 @@ impl BackupRunAuthorizer for IdentityBackupRunAuthorizer {
             .await
         })
     }
-}
-
-fn json_uuid(value: &Value, key: &str) -> Option<Uuid> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok())
 }

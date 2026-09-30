@@ -1,13 +1,16 @@
 use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
+use crate::persistence::postgres::identity::resource_access::{
+    expands_resource_access, map_accesses, specific_mask,
+};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, IdentityResourceAccessSnapshot, UserActivitySnapshot,
 };
 use citadel_identity::{
-    IdentityError, NewUserMutation, ResourceInfo, StoredPage, UserDetails, UserPasswordContext,
-    UserPatchMutation, UserReader, UserRepository, UserResourceAccessDetails,
-    UserResourceAccessInput, UserSearchItemDetails,
+    IdentityError, NewUserMutation, ResourceAccessDetails, ResourceAccessInput, ResourceInfo,
+    StoredPage, UserDetails, UserPasswordContext, UserPatchMutation, UserReader, UserRepository,
+    UserSearchItemDetails,
 };
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use sqlx::postgres::PgRow;
@@ -583,7 +586,7 @@ WHERE id = $1
     fn add_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a UserResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
         custom_access_control_enabled: bool,
@@ -653,7 +656,7 @@ ON CONFLICT (resourcetype, resourceid, actorid) DO NOTHING
     fn remove_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a UserResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<UserDetails, IdentityError>> {
@@ -971,7 +974,7 @@ async fn replace_roles(
 async fn replace_resource_accesses(
     transaction: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
-    accesses: &[UserResourceAccessInput],
+    accesses: &[ResourceAccessInput],
 ) -> Result<(), IdentityError> {
     sqlx::query("DELETE FROM resourceaccesses WHERE actorid = $1")
         .bind(actor_id.value())
@@ -1159,26 +1162,6 @@ async fn fetch_user_view(
         .transpose()
 }
 
-fn expands_resource_access(
-    current: &[IdentityResourceAccessSnapshot],
-    proposed: &[UserResourceAccessInput],
-) -> bool {
-    proposed.iter().any(|access| {
-        !current.iter().any(|existing| {
-            existing.resource_type == access.resource_type
-                && existing.resource_id == access.resource_id
-                && existing.permission_level == access.permission_level
-                && existing.specific_permissions == specific_mask(&access.specific_permissions)
-        })
-    })
-}
-
-fn specific_mask(permissions: &[SpecificPermission]) -> i32 {
-    permissions
-        .iter()
-        .fold(0, |mask, permission| mask | *permission as i32)
-}
-
 fn missing_persisted_user() -> IdentityError {
     IdentityError::Storage("a User mutation did not leave a readable User projection".to_owned())
 }
@@ -1189,20 +1172,9 @@ struct PersistedResourceInfo {
     name: String,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PersistedAccess {
-    id: Uuid,
-    resource_type: i32,
-    resource_id: Uuid,
-    resource_name: Option<String>,
-    permission_level: i32,
-    specific_permissions: i32,
-}
-
 fn map_user(
     row: PgRow,
-    resource_accesses: Option<Vec<UserResourceAccessDetails>>,
+    resource_accesses: Option<Vec<ResourceAccessDetails>>,
 ) -> Result<UserDetails, IdentityError> {
     Ok(UserDetails {
         id: row.try_get("id").map_err(storage)?,
@@ -1235,41 +1207,6 @@ fn map_resource_info(value: serde_json::Value) -> Result<Vec<ResourceInfo>, Iden
                 })
                 .collect()
         })
-}
-
-fn map_accesses(value: serde_json::Value) -> Result<Vec<UserResourceAccessDetails>, IdentityError> {
-    serde_json::from_value::<Vec<PersistedAccess>>(value)
-        .map_err(|error| IdentityError::Storage(error.to_string()))?
-        .into_iter()
-        .map(|access| {
-            let resource_type = ResourceType::from_i32(access.resource_type).ok_or_else(|| {
-                IdentityError::Storage(format!(
-                    "unknown persisted ResourceType value {}",
-                    access.resource_type
-                ))
-            })?;
-            let permission_level =
-                PermissionLevel::from_i32(access.permission_level).ok_or_else(|| {
-                    IdentityError::Storage(format!(
-                        "unknown persisted PermissionLevel value {}",
-                        access.permission_level
-                    ))
-                })?;
-            Ok(UserResourceAccessDetails {
-                resource_type,
-                resource_id: access.resource_id,
-                resource_name: access.resource_name,
-                permission_level,
-                specific_permissions: Some(
-                    SpecificPermission::ALL
-                        .into_iter()
-                        .filter(|permission| access.specific_permissions & *permission as i32 != 0)
-                        .collect(),
-                ),
-                id: Some(access.id),
-            })
-        })
-        .collect()
 }
 
 fn storage(error: sqlx::Error) -> IdentityError {

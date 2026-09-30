@@ -6,7 +6,12 @@ A resource's `documented_routes()` factory registers these handlers with
 `utoipa_axum::routes!`. Both the live Axum router and the offline exporter use
 that factory. Documentation generation needs no database or Docker connection.
 
-Request and response DTOs derive `utoipa::ToSchema` in their owning crate.
+Request and response DTOs derive `utoipa::ToSchema` only in Server. Feature crates
+must not depend on Utoipa or carry schema attributes. For directly serialized feature
+values, `api/resources/schema_models` provides server-owned descriptions referenced
+with `#[schema(value_type = ...)]` or route body annotations. Their native field
+types and exhaustive conversions detect structural drift; enum values come from
+native serialization. Runtime handlers continue using the feature values directly.
 Serde field names, optional fields, defaults, skipped fields and tagged enums
 are reflected in the document. Use explicit `#[schema(...)]` attributes for
 custom serializers/deserializers. In particular, PATCH wrappers describe an
@@ -62,84 +67,31 @@ With `EnableSwagger=true`, the running API serves the same Utoipa documents at
 stale generated JSON files. The existing setting still defaults to disabled. The frontend uses this same full contract. `openapi --check` remains read-only and
 does not require Node.js; `npm run api:verify` checks generated frontend freshness.
 
-## Compatibility boundary
+## Native contracts
 
-`compatibility.json` preserves wire schemas for endpoints that have not yet
-switched their response annotations to Rust DTOs, including dynamically
-assembled JSON and Docker payloads. It is a migration snapshot, not a second
-catalog to extend for new endpoints. Utoipa-derived components take precedence,
-and the exporter removes components not reachable from the document's paths.
-An empty schema is represented by an equivalent union of JSON types, and
-`const` discriminators by single-value enums, for Utoipa deserialization.
+Every endpoint references its native Rust request and response types. There is no
+frozen schema snapshot or fallback schema registry. The exporter rejects unresolved
+references and removes components unreachable from documented operations. When adding
+an endpoint, derive `ToSchema` on its server DTO and nested server descriptions; use distinct schema
+names when different Rust modules contain unrelated types with the same short name.
 
-When converting an existing endpoint, reference its actual DTO in `request_body`
-or `responses(... body = ...)`, derive `ToSchema` on that type and its nested
-DTOs, and remove its obsolete compatibility entries. Use distinct schema names
-for different DTOs that happen to share a Rust short name. Keep a compatibility
-schema when a handler still builds a response using arbitrary JSON; a bare
-`Value` cannot infer those fields.
+HTTP and realtime projections share resource DTOs and checked vocabulary conversions.
+PATCH DTOs preserve missing/null/value semantics with `MetadataPatch`; existing feature
+validation and authorization remain authoritative. Collection responses document their
+actual arrays and envelopes. Incremental JSON progress streams document their serialized
+item arrays, and raw webhook bodies remain bytes for signature verification. Deliberately
+extensible Docker and worker payloads are JSON, not fictional closed .NET contracts.
 
-Alert channel/rule requests, configuration responses, event views and partial updates
-now use native server DTOs. Their enums, resource scopes and `AlertQuietHour` union
-are decoded by Serde and documented by Utoipa; they have no compatibility-schema
-overrides. Quiet hours use `$type` (`Daily` or `Weekly`) without a duplicate
-`scheduleType` field. PATCH preserves missing/null/value distinctions through the
-shared `MetadataPatch` wrapper and documents partial channel updates correctly.
-Alert event `info` remains extensible JSON emitted by Rust workers, rather than
-claiming the shape of the former .NET event-info union. Activity snapshots remain
-part of the separate activity-contract migration.
+Activity schemas derive from the feature's closed `ActivityEventInfo` enum and its
+snapshot types. The public schema applies the same property-casing projection as the
+HTTP/realtime presentation layer; persisted activity records keep their storage format.
+Discriminators and user dictionary keys are preserved. Statistics query values come from
+`StatsWindow::HOURS`, the same list used by runtime validation.
 
-Deployment responses, duplicate sources, update status and adoption issues now use
-native typed DTOs. Deployment, platform and control-state schemas are shared with
-other resource descriptors; their frozen copies have been removed. HTTP and
-realtime use the same fallible deployment conversion, preserving activity payload
-normalization and rejecting invalid stored vocabulary through the existing error
-path. `LatestActivityView` is a native shared envelope using feature-owned activity
-enums. Its nested `ActivityEventInfo` payload still uses the activity compatibility
-schema until the separate activity-payload migration; the envelope migration does
-not weaken that frontend contract to arbitrary JSON.
-
-Stacks use the same native status, platform, duplicate-source and activity-summary
-contracts. Release actors and binding snapshots use existing identity/binding
-vocabularies. Duplicate drafts serialize the typed create request, and duplicate
-sources must identify a Stack. Metadata PATCH preserves omitted/null/value
-semantics and runs authorization before decoding errors. Apply/rollback responses
-now derive the stream item schema from the actual serialized DTO, including
-`progressMessage` for normal output and `message` for failed commands. Batch
-state actions document their actual UUID arrays, without frozen wrapper schemas.
-The shared activity-event payload and other resources' metadata schemas remain
-for subsequent migrations.
-
-Managed Swarm Service statuses, operation state, update state and webhook enums
-now use native types. HTTP and realtime share the same checked conversion.
-Adoption/duplicate drafts and operation progress use derived DTO schemas instead
-of hand-built JSON or frozen responses. Swarm duplicate requests share
-`DuplicateSourceInput`; draft warnings are strings, matching the feature model
-and frontend display. Adoption drafts initialize `tagIds` to an empty array.
-Docker task payloads remain runtime JSON and are not claimed to be a closed DTO.
-
-## HTTP extraction
-
-Use typed request/response DTOs. `ValidatedJson`, `ApiPath` and
-`ApiQuery` in `request_validation` delegate deserialization to Axum and
-convert rejections into Citadel Problem Details with request IDs and error
-details. Use `Result<Json<T>, JsonRejection>` (or the corresponding path/query
-extractor) when authorization must run before a validation error is returned;
-map the captured rejection through the shared validation functions afterwards.
-Do not move a deferred rejection ahead of authorization as a cleanup.
-
-`WorkloadQuery` centralizes Deployment/Stack/Service collection filters. Its
-parser preserves repeated tags, case-insensitive keys and duplicate rules;
-ordinary `Query<T>` does not implement all of those compatibility semantics.
-Other tag catalogs have different rules and keep their existing parsers.
-Raw signed webhook bodies and incremental JSON progress streams remain explicit.
-
-Automation webhook configuration uses the shared `citadel_resources::RepoWebhookConfig`
-DTO and its provider/authentication enums in create, PATCH, persisted views and
-dispatch. Its schema is derived and registered through those DTOs, including
-nullable PATCH fields; it has no frozen compatibility entry or custom schema
-builder. PostgreSQL uses SQLx's typed JSON codec. The unrelated webhook event
-payload remains raw bytes for signature verification.
+Platform query parsing intentionally preserves repeated tags, case-insensitive keys,
+and duplicate rules; ordinary `Query<T>` does not implement those semantics. Shared
+webhook configuration uses `citadel_resources::RepoWebhookConfig`; signature verification
+continues to consume the unmodified request body.
 
 ## .NET OpenAPI transformer parity
 

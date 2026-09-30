@@ -74,8 +74,11 @@ impl PostgresStackRepository {
             let mut platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
             let has_snapshot: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM stackreleases snapshot JOIN stackreleases current ON current.id=$1 WHERE snapshot.stackid=current.stackid AND snapshot.id<>current.id AND snapshot.version=current.version AND snapshot.status='Healthy')")
                 .bind(current_release).fetch_one(&mut *tx).await.map_err(storage)?;
-            let status =
-                StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?;
+            let status = row
+                .try_get::<&str, _>("release_status")
+                .map_err(storage)?
+                .parse::<StackReleaseStatus>()
+                .map_err(storage)?;
             let create_next = has_snapshot
                 && !matches!(
                     status,

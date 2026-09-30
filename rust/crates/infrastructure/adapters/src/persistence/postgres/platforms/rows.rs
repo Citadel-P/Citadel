@@ -38,7 +38,11 @@ pub(super) fn map_platform(row: PgRow) -> Result<PlatformDetails, AuthorizedRead
         agent_version: row.try_get("agentversion").map_err(storage)?,
         server_version: row.try_get("serverversion").map_err(storage)?,
         platform_type,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         connector_type: row.try_get("connectortype").map_err(storage)?,
         deployment_count: row.try_get("deployment_count").map_err(storage)?,
         stack_count: row.try_get("stack_count").map_err(storage)?,
@@ -96,7 +100,7 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
                 created_at: row.try_get("image_createdat").map_err(storage)?,
                 updated_at: row.try_get("image_updatedat").map_err(storage)?,
                 registry_id: row.try_get("image_registryid").map_err(storage)?,
-                control_state: "Idle".into(),
+                control_state: citadel_primitives::ResourceControlState::Idle,
                 repo_digests: None,
                 content_identity: None,
                 docker_node_id: None,
@@ -118,14 +122,18 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
                 id: row.try_get("deploymentid").map_err(storage)?,
                 name,
                 platform_id,
-                status: row.try_get("deployment_status").map_err(storage)?,
+                status: row
+                    .try_get::<&str, _>("deployment_status")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
                 created_at: minimum,
                 created_by_actor_id: Uuid::nil(),
-                control_state: "Idle".into(),
-                platform_status: "Offline".into(),
+                control_state: citadel_primitives::ResourceControlState::Idle,
+                platform_status: citadel_primitives::PlatformStatus::Offline,
                 auto_update_state: ContainerDeploymentUpdateState {
                     last_checked_at: minimum,
-                    status: "Unknown".into(),
+                    status: citadel_primitives::AutoUpdateStatus::Unknown,
                 },
             })
         })
@@ -154,7 +162,11 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
         docker_image_id: row.try_get("dockerimageid").map_err(storage)?,
         created: row.try_get("created").map_err(storage)?,
         state: row.try_get("state").map_err(storage)?,
-        control_state: row.try_get("controlstate").map_err(storage)?,
+        control_state: row
+            .try_get::<&str, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         updated: row.try_get("updated").map_err(storage)?,
         stack: row.try_get("stack").map_err(storage)?,
         is_system: row.try_get("issystem").map_err(storage)?,
@@ -201,7 +213,9 @@ pub(super) fn map_image(row: PgRow) -> Result<ImageDetails, AuthorizedReadError>
         control_state: row
             .try_get::<Option<String>, _>("controlstate")
             .map_err(storage)?
-            .unwrap_or_else(|| "Idle".to_owned()),
+            .unwrap_or_else(|| "Idle".to_owned())
+            .parse()
+            .map_err(storage)?,
         updated_at: row.try_get("updatedat").map_err(storage)?,
         registry_id: row.try_get("registryid").map_err(storage)?,
         repo_digests: row

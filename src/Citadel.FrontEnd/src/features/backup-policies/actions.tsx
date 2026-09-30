@@ -1,4 +1,4 @@
-import { BackupPolicyView, BackupRunTrigger, ResourceControlState } from '@/api/generated/api.types';
+import { BackupPolicyView, BackupQueueTrigger, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -65,7 +65,7 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
             payload: {
               id: selected.id,
               name: selected.name,
-              trigger: BackupRunTrigger.Manual,
+              trigger: BackupQueueTrigger.Manual,
             },
           });
         },

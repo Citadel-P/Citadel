@@ -13,7 +13,10 @@ impl PostgresBackupPersistence {
                 ));
             }
             let source = self.get_run(request.backup_run_id).await?;
-            if source.status != "Succeeded" || source.snapshot_availability != "Available" {
+            if source.status != citadel_backups::BackupRunStatus::Succeeded
+                || source.snapshot_availability
+                    != citadel_backups::BackupSnapshotAvailability::Available
+            {
                 return Err(BackupError::Conflict(
                     "Backup snapshot is not available for restore.".into(),
                 ));
@@ -34,9 +37,10 @@ impl PostgresBackupPersistence {
                     ));
                 }
             };
-            if selected_item
-                .is_some_and(|item| item.status != "Succeeded" || item.restic_snapshot_id.is_none())
-            {
+            if selected_item.is_some_and(|item| {
+                item.status != citadel_backups::BackupRunItemStatus::Succeeded
+                    || item.restic_snapshot_id.is_none()
+            }) {
                 return Err(BackupError::Conflict(
                     "The selected Backup Run Item has no available snapshot.".into(),
                 ));
@@ -129,7 +133,7 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let finished = sqlx::query("UPDATE backuprestoreruns SET status=$2,exitcode=$3,errorcode=$4,errormessage=$5,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let finished = sqlx::query("UPDATE backuprestoreruns SET status=$2,exitcode=$3,errorcode=$4,errormessage=$5,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if finished == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(());

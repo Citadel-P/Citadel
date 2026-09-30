@@ -1,4 +1,4 @@
-use crate::api::resources::common::ResourceCapabilities;
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
@@ -98,9 +98,9 @@ impl From<citadel_identity::CurrentProfileAuthenticationDetails>
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileAuthorizationView {
     pub is_administrator: bool,
-    pub alert_rules: ResourceCapabilities,
-    pub bindings: ResourceCapabilities,
-    pub tags: ResourceCapabilities,
+    pub alert_rules: ResourceCapabilitiesView,
+    pub bindings: ResourceCapabilitiesView,
+    pub tags: ResourceCapabilitiesView,
 }
 
 impl From<CurrentProfileAuthorizationView>

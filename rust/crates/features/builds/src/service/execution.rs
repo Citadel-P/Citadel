@@ -20,7 +20,7 @@ impl BuildService {
                 .await
             {
                 return BuildExecutionResult {
-                    status: "Failed",
+                    status: crate::BuildRunStatus::Failed,
                     exit_code: None,
                     image_digest: None,
                     resolved_commit_sha: None,
@@ -41,7 +41,7 @@ impl BuildService {
                 // claim is persisted as terminal. This prevents detached Docker/Git work.
                 let _ = execution.await;
                 BuildExecutionResult {
-                    status: "TimedOut",
+                    status: crate::BuildRunStatus::TimedOut,
                     exit_code: None,
                     image_digest: None,
                     resolved_commit_sha: None,
@@ -62,8 +62,10 @@ impl BuildService {
             return Ok(true);
         }
         self.changed();
-        if matches!(result.status, "Failed" | "TimedOut")
-            && let Some(alerts) = &self.alerts
+        if matches!(
+            result.status,
+            crate::BuildRunStatus::Failed | crate::BuildRunStatus::TimedOut
+        ) && let Some(alerts) = &self.alerts
         {
             let message = result
                 .error_message

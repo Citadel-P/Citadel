@@ -17,7 +17,7 @@ impl AutomationService {
         if let Some(sender) = progress {
             progress::send(
                 sender,
-                AutomationProgress::state(&claim.run, "Running"),
+                AutomationProgress::state(&claim.run, crate::AutomationRunStatus::Running),
                 &run_cancellation,
             )
             .await;
@@ -52,7 +52,7 @@ impl AutomationService {
             .cloned();
         if let Some(token) = token {
             let run = self.store.get_run(action_id, run_id).await?;
-            if run.status != "Running" {
+            if run.status != crate::AutomationRunStatus::Running {
                 return Err(AutomationError::Conflict(
                     "Automation run is not active.".to_owned(),
                 ));
@@ -254,7 +254,12 @@ impl AutomationService {
         claim: &AutomationRunClaim,
         result: &AutomationRunResult,
     ) {
-        if claim.run.trigger == "Test" || !matches!(result.status, "Failed" | "TimedOut") {
+        if claim.run.trigger == "Test"
+            || !matches!(
+                result.status,
+                crate::AutomationRunStatus::Failed | crate::AutomationRunStatus::TimedOut
+            )
+        {
             return;
         }
         let Some(alerts) = &self.alerts else {

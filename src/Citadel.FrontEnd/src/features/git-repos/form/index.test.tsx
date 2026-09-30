@@ -3,7 +3,7 @@ import {
   ActivityResourceType,
   ActivityStatus,
   AuthorizedGitRepositoryView,
-  GitReposStatus,
+  GitRepositoryStatus,
   ResourceControlState,
   LatestActivityView,
 } from '@/api/generated/api.types';
@@ -19,7 +19,7 @@ vi.mock('@/lib/monaco', () => ({
 it('shows repository processing from enqueue through execution, then the final status', () => {
   const Indicator = GitRepoFormComponents.EditForm!.Header.Indicator;
   const repository = {
-    status: GitReposStatus.Pending,
+    status: GitRepositoryStatus.Pending,
     // Rust queues synchronization before a worker claims it.
     controlState: 'Queued',
   } as unknown as AuthorizedGitRepositoryView;
@@ -31,14 +31,14 @@ it('shows repository processing from enqueue through execution, then the final s
   expect(screen.getByText('Processing')).toBeVisible();
 
   rerender(
-    <Indicator resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitReposStatus.Healthy }} />,
+    <Indicator resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitRepositoryStatus.Healthy }} />,
   );
   expect(screen.getByText('Healthy')).toBeVisible();
   expect(screen.queryByText('Processing')).not.toBeInTheDocument();
 
   rerender(
     <Indicator
-      resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitReposStatus.Degraded }}
+      resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitRepositoryStatus.Degraded }}
     />,
   );
   expect(screen.getByText('Degraded')).toBeVisible();
@@ -71,11 +71,11 @@ describe('Git repository subheader', () => {
         result: { commitSha: null, message: 'Repository credentials were rejected.' },
       } as LatestActivityView['info'],
     });
-    const resource = { latestActivityView, status: GitReposStatus.Degraded } as AuthorizedGitRepositoryView;
+    const resource = { latestActivityView, status: GitRepositoryStatus.Degraded } as AuthorizedGitRepositoryView;
     const { rerender } = render(<SubHeader resource={resource} />);
     expect(screen.getByText('Repository credentials were rejected.')).toBeVisible();
 
-    rerender(<SubHeader resource={{ ...resource, status: GitReposStatus.Healthy }} />);
+    rerender(<SubHeader resource={{ ...resource, status: GitRepositoryStatus.Healthy }} />);
     expect(screen.queryByText('Sync Error')).not.toBeInTheDocument();
     expect(screen.queryByText('Repository credentials were rejected.')).not.toBeInTheDocument();
 
@@ -92,7 +92,7 @@ describe('Git repository subheader', () => {
         result: { commitSha: null, message: 'Post-sync command reported a warning.' },
       } as LatestActivityView['info'],
     });
-    render(<SubHeader resource={{ latestActivityView, status: GitReposStatus.Healthy } as AuthorizedGitRepositoryView} />);
+    render(<SubHeader resource={{ latestActivityView, status: GitRepositoryStatus.Healthy } as AuthorizedGitRepositoryView} />);
     expect(screen.getByText('Post-sync command reported a warning.')).toBeVisible();
   });
 

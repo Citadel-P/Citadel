@@ -167,7 +167,7 @@ impl From<citadel_identity::OidcLoginProvidersDetails> for OidcLoginProvidersVie
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcDiscoveryView {
     pub issuer: String,

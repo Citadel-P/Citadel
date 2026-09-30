@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl StackService {
     pub(super) async fn operational_guardrails_enabled(&self) -> Result<bool, StackError> {
         match &self.entitlements {
@@ -109,7 +110,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         policy: crate::StackDriftPolicy,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         let current = self.store.get_authorized(actor, administrator, id).await?;
         let spec = current.spec.clone().ok_or(StackError::NotFound)?;
         let input = UpdateStack {
@@ -136,7 +137,7 @@ impl StackService {
         id: Uuid,
     ) -> Result<crate::StackReconciliationResult, StackError> {
         let stack = self.store.get_authorized(actor, administrator, id).await?;
-        if stack.control_state == "Processing"
+        if stack.control_state == citadel_primitives::ResourceControlState::Processing
             || matches!(
                 stack.status,
                 StackReleaseStatus::Applying | StackReleaseStatus::Pending
@@ -252,7 +253,7 @@ pub(super) fn stable_runtime_status(snapshot: &StackRuntimeSnapshot) -> Option<S
 }
 
 pub(super) fn stack_drift_observation(
-    stack: &StackDetails,
+    stack: &crate::Stack,
     report: &StackDriftReport,
     alert_type: &str,
 ) -> AlertObservation {
@@ -280,9 +281,9 @@ pub(super) fn stack_drift_observation(
     }
 }
 
-pub(super) fn event_drift_eligible(stack: &StackDetails) -> bool {
+pub(super) fn event_drift_eligible(stack: &crate::Stack) -> bool {
     stack.drift_policy.mode == crate::StackDriftMode::AutoFix
-        && stack.control_state == "Idle"
+        && stack.control_state == citadel_primitives::ResourceControlState::Idle
         && matches!(
             stack.status,
             StackReleaseStatus::Healthy | StackReleaseStatus::Degraded
@@ -290,11 +291,11 @@ pub(super) fn event_drift_eligible(stack: &StackDetails) -> bool {
 }
 
 pub(super) fn drift_status_update(
-    stack: &StackDetails,
+    stack: &crate::Stack,
     report: &StackDriftReport,
 ) -> Option<(StackReleaseStatus, ActivityEventInfo)> {
-    if stack.control_state != "Idle"
-        || stack.platform_status != "Online"
+    if stack.control_state != citadel_primitives::ResourceControlState::Idle
+        || stack.platform_status != citadel_primitives::PlatformStatus::Online
         || stack.drift_policy.mode == crate::StackDriftMode::Disabled
         || !matches!(
             stack.status,
@@ -306,7 +307,7 @@ pub(super) fn drift_status_update(
     let info = stack
         .latest_activity
         .as_ref()
-        .and_then(|activity| activity.get("info"));
+        .map(|activity| &activity.info);
     let previous = info
         .filter(|info| {
             info.get("$type").and_then(serde_json::Value::as_str) == Some("StackDriftDetected")
@@ -348,7 +349,7 @@ pub(super) fn drift_status_update(
 }
 
 pub fn calculate_drift(
-    stack: &StackDetails,
+    stack: &crate::Stack,
     runtime: &StackRuntimeSnapshot,
 ) -> Result<StackDriftReport, StackError> {
     if stack.drift_policy.mode == crate::StackDriftMode::Disabled

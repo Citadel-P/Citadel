@@ -8,7 +8,7 @@ use crate::AutomationRunResult;
 #[derive(Debug, Default)]
 pub struct AutomationProgress {
     pub run_id: Option<Uuid>,
-    pub status: Option<String>,
+    pub status: Option<crate::AutomationRunStatus>,
     pub stream: Option<String>,
     pub progress_message: Option<String>,
     pub error_message: Option<String>,
@@ -22,14 +22,14 @@ pub struct AutomationProgressError {
 }
 
 impl AutomationProgress {
-    pub fn state(run: &AutomationRun, status: &str) -> Self {
+    pub fn state(run: &AutomationRun, status: crate::AutomationRunStatus) -> Self {
         Self {
             run_id: Some(run.id),
-            status: Some(status.into()),
+            status: Some(status),
             progress_message: Some(format!(
                 "Action \"{}\" {}.",
                 run.action_name,
-                status.to_lowercase()
+                status.as_str().to_lowercase()
             )),
             ..Self::default()
         }
@@ -41,8 +41,8 @@ impl AutomationProgress {
             item.error_message = Some(message.clone());
             item.error = Some(AutomationProgressError {
                 code: match result.status {
-                    "TimedOut" => 408,
-                    "Cancelled" => 499,
+                    crate::AutomationRunStatus::TimedOut => 408,
+                    crate::AutomationRunStatus::Cancelled => 499,
                     _ => 500,
                 },
                 message: message.clone(),

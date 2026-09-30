@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::WebhookConfig;
 
 impl PostgresGitRepositoryExecutionPersistence {
     pub(super) fn enqueue_sync_impl<'a>(
@@ -17,7 +18,7 @@ impl PostgresGitRepositoryExecutionPersistence {
         actor_id: ActorId,
         id: Uuid,
         branch: &'a str,
-        expected: &'a GitRepositoryWebhook,
+        expected: &'a WebhookConfig,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         self.enqueue(actor_id, id, Some(branch), Some(expected), "Webhook")
     }

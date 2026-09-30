@@ -1,4 +1,5 @@
 use super::spec::*;
+use citadel_alerts::{AlertRuleStatus, AlertSeverity, AlertType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -46,12 +47,15 @@ pub struct AlertRuleInput {
     pub name: String,
     pub description: Option<String>,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertTypeSchema)]
     pub alert_type: AlertType,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertSeveritySchema)]
     pub severity: AlertSeverity,
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
     pub threshold: Option<f64>,
     #[serde(default = "enabled_status")]
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertRuleStatusSchema)]
     pub status: AlertRuleStatus,
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
@@ -67,11 +71,11 @@ impl From<AlertRuleInput> for citadel_alerts::AlertRuleConfiguration {
             name: value.name,
             description: value.description,
             alert_type: value.alert_type.as_str().to_owned(),
-            severity: value.severity.as_str().to_owned(),
+            severity: value.severity,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: value.status.as_str().to_owned(),
+            status: value.status,
             channel_ids: value.channel_ids,
             limited_to: value
                 .limited_to
@@ -95,11 +99,11 @@ impl TryFrom<citadel_alerts::AlertRuleConfiguration> for AlertRuleInput {
             name: value.name,
             description: value.description,
             alert_type: decode(value.alert_type.into())?,
-            severity: decode(value.severity.into())?,
+            severity: value.severity,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: decode(value.status.into())?,
+            status: value.status,
             channel_ids: value.channel_ids,
             limited_to: decode(Value::Array(value.limited_to))?,
             quiet_hours: decode(Value::Array(value.quiet_hours))?,

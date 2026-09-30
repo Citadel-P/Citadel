@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { ContainerDataView, PlatformStatus, ProblemDetails } from '@/api/generated/api.types';
+import { ContainerRuntimeView, PlatformStatus, ProblemDetails } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useAppContext } from '@/lib/context/app-context';
@@ -12,11 +12,11 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
   const { currentPlatform } = useAppContext();
 
   const containerData = useMemo(() => data?.data?.containers ?? [], [data?.data?.containers]);
-  const [liveContainers, setLiveContainers] = useState<Record<string, Partial<ContainerDataView>>>({});
+  const [liveContainers, setLiveContainers] = useState<Record<string, Partial<ContainerRuntimeView>>>({});
   const [removedContainerIds, setRemovedContainerIds] = useState<Set<string>>(() => new Set());
 
   const containersInfo = useMemo(() => {
-    const merged = new Map<string, ContainerDataView>();
+    const merged = new Map<string, ContainerRuntimeView>();
 
     containerData.forEach((container) => {
       const id = normalizeDockerId(container.id);
@@ -31,7 +31,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
 
     Object.entries(liveContainers).forEach(([id, container]) => {
       if (!merged.has(id) && container.id) {
-        merged.set(id, container as ContainerDataView);
+        merged.set(id, container as ContainerRuntimeView);
       }
     });
 
@@ -52,7 +52,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
     return undefined;
   }, [currentPlatform?.status]);
 
-  const mergeContainers = useCallback((containers: Partial<ContainerDataView>[]) => {
+  const mergeContainers = useCallback((containers: Partial<ContainerRuntimeView>[]) => {
     setLiveContainers((current) => {
       const next = { ...current };
 
@@ -79,7 +79,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
     });
   }, []);
 
-  const mergeContainerStats = useCallback((containers: ContainerDataView[]) => {
+  const mergeContainerStats = useCallback((containers: ContainerRuntimeView[]) => {
     setLiveContainers((current) => {
       const next = { ...current };
 
@@ -142,7 +142,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
   useDockerDaemonGroup(platformId, { onContainerEvent });
 
   const handleStackContainersInfoUpdated = useCallback(
-    (payload: ContainerDataView[] | { containers?: ContainerDataView[] }) => {
+    (payload: ContainerRuntimeView[] | { containers?: ContainerRuntimeView[] }) => {
       const containers = Array.isArray(payload) ? payload : (payload.containers ?? []);
       mergeContainerStats(containers);
     },

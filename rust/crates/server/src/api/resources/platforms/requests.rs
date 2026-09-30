@@ -1,4 +1,4 @@
-use crate::api::resources::metadata_patch::MetadataPatch;
+use citadel_primitives::PatchField;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub(crate) struct PatchPlatformMetadataInput {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    pub(crate) description: MetadataPatch<String>,
+    pub(crate) description: PatchField<String>,
     #[serde(default, rename = "tags")]
     pub(crate) _tags: Option<Vec<String>>,
 }
@@ -569,7 +569,7 @@ impl From<citadel_platforms::CreateRuntimeNetwork> for CreateRuntimeNetwork {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeIpam {
     pub driver: String,
@@ -599,7 +599,7 @@ impl From<citadel_platforms::RuntimeIpam> for RuntimeIpam {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeIpamConfig {
     pub subnet: Option<String>,

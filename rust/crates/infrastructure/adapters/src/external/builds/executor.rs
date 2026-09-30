@@ -422,7 +422,7 @@ impl AgentDockerBuildExecutor {
         )
         .await?;
         Ok(BuildExecutionResult {
-            status: "Succeeded",
+            status: citadel_builds::BuildRunStatus::Succeeded,
             exit_code: Some(0),
             image_digest: find_digest(&output),
             resolved_commit_sha: Some(commit),
@@ -581,7 +581,7 @@ impl LocalDockerBuildExecutor {
                 digest = digest.or(session.push(reference, progress, cancellation).await?);
             }
             Ok(BuildExecutionResult {
-                status: "Succeeded",
+                status: citadel_builds::BuildRunStatus::Succeeded,
                 exit_code: Some(0),
                 image_digest: digest,
                 resolved_commit_sha: Some(commit),
@@ -701,9 +701,13 @@ fn failed(error: BuildFailure) -> BuildExecutionResult {
     let message = redact(&error.to_string());
     BuildExecutionResult {
         status: match error {
-            BuildFailure::Process(ProcessError::Cancelled) => "Cancelled",
-            BuildFailure::Process(ProcessError::Timeout(_)) => "TimedOut",
-            _ => "Failed",
+            BuildFailure::Process(ProcessError::Cancelled) => {
+                citadel_builds::BuildRunStatus::Cancelled
+            }
+            BuildFailure::Process(ProcessError::Timeout(_)) => {
+                citadel_builds::BuildRunStatus::TimedOut
+            }
+            _ => citadel_builds::BuildRunStatus::Failed,
         },
         exit_code: None,
         image_digest: None,

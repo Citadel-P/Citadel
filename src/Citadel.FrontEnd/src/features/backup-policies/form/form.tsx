@@ -1,27 +1,19 @@
 import {
+  BackupSourceSpec,
+  BackupRepositorySpec,
   BackupExecutionLocation,
   BackupPolicyInput,
   BackupPolicyView,
-  BackupRepositorySpecFileSystemBackupRepositorySpec,
   BackupRepositoryType,
   BackupRepositoryView,
-  BackupSourceSpec,
-  BackupSourceSpecDeploymentBackupSource,
-  BackupSourceSpecDockerVolumeBackupSource,
-  BackupSourceSpecStackBackupSource,
-  BackupSourceSpecSwarmServiceBackupSource,
-  BackupWebhookConfig,
-  BackupSourceType,
+  WebhookConfig,
   LicenseCapability,
-  DeploymentBackupSourcePreviewView,
+  BackupSourcePreview,
   VolumeView,
   LookupResourceType,
   PlatformConnectorType,
   PlatformType,
   PlatformView,
-  StackBackupSourcePreviewView,
-  SwarmServiceBackupSourcePreviewView,
-  StackVolumeKind,
   UpdateBackupPolicyInput,
   VolumeBackupConsistency,
 } from '@/api/generated/api.types';
@@ -52,7 +44,7 @@ type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
   runAsActorId?: string | null;
   scheduleEnabled: boolean;
-  webhook: BackupWebhookConfig | null;
+  webhook: WebhookConfig | null;
   tagIds?: string[] | null;
 };
 
@@ -130,39 +122,39 @@ export function BackupPolicyForm({
 
   const original = useMemo(() => toFormValue(resource), [resource]);
   const currentSource = useMemo(() => mergeSource(original.source, update.source), [original.source, update.source]);
-  const currentSourceType = currentSource.$type ?? BackupSourceType.CitadelSystem;
+  const currentSourceType = currentSource.$type ?? 'CitadelSystem';
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
   const currentPlatformId =
-    currentSource.$type === BackupSourceType.DockerVolume
-      ? String((currentSource as BackupSourceSpecDockerVolumeBackupSource).platformId ?? '')
+    currentSource.$type === 'DockerVolume'
+      ? String((currentSource as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).platformId ?? '')
       : '';
   const currentStackId =
-    currentSource.$type === BackupSourceType.Stack
-      ? String((currentSource as BackupSourceSpecStackBackupSource).stackId ?? '')
+    currentSource.$type === 'Stack'
+      ? String((currentSource as Extract<BackupSourceSpec, { $type: 'Stack' }>).stackId ?? '')
       : '';
   const currentDeploymentId =
-    currentSource.$type === BackupSourceType.Deployment
-      ? String((currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId ?? '')
+    currentSource.$type === 'Deployment'
+      ? String((currentSource as Extract<BackupSourceSpec, { $type: 'Deployment' }>).deploymentId ?? '')
       : '';
   const currentSwarmServiceId =
-    currentSource.$type === BackupSourceType.SwarmService
-      ? String((currentSource as BackupSourceSpecSwarmServiceBackupSource).swarmServiceId ?? '')
+    currentSource.$type === 'SwarmService'
+      ? String((currentSource as Extract<BackupSourceSpec, { $type: 'SwarmService' }>).swarmServiceId ?? '')
       : '';
   const volumeListArgs = useMemo(() => ({ platformId: currentPlatformId, query: {} }), [currentPlatformId]);
   const volumeList = useRead('listVolumes', volumeListArgs, {
-    enabled: currentSourceType === BackupSourceType.DockerVolume && Boolean(currentPlatformId),
+    enabled: currentSourceType === 'DockerVolume' && Boolean(currentPlatformId),
   });
   const stackPreviewArgs = useMemo(() => ({ stackId: currentStackId }), [currentStackId]);
   const stackPreview = useRead('getStackBackupSourcePreview', stackPreviewArgs, {
-    enabled: currentSourceType === BackupSourceType.Stack && Boolean(currentStackId),
+    enabled: currentSourceType === 'Stack' && Boolean(currentStackId),
   });
   const deploymentPreviewArgs = useMemo(() => ({ deploymentId: currentDeploymentId }), [currentDeploymentId]);
   const deploymentPreview = useRead('getDeploymentBackupSourcePreview', deploymentPreviewArgs, {
-    enabled: currentSourceType === BackupSourceType.Deployment && Boolean(currentDeploymentId),
+    enabled: currentSourceType === 'Deployment' && Boolean(currentDeploymentId),
   });
   const swarmServicePreviewArgs = useMemo(() => ({ id: currentSwarmServiceId }), [currentSwarmServiceId]);
   const swarmServicePreview = useRead('getSwarmServiceBackupSourcePreview', swarmServicePreviewArgs, {
-    enabled: currentSourceType === BackupSourceType.SwarmService && Boolean(currentSwarmServiceId),
+    enabled: currentSourceType === 'SwarmService' && Boolean(currentSwarmServiceId),
   });
   const backupRepositories = useRead('listBackupRepositories');
   const currentBackupRepositoryId = update.backupRepositoryId ?? original.backupRepositoryId;
@@ -172,13 +164,13 @@ export function BackupPolicyForm({
     [repositories, currentBackupRepositoryId],
   );
   const currentSourcePlatformId =
-    currentSourceType === BackupSourceType.DockerVolume
+    currentSourceType === 'DockerVolume'
       ? currentPlatformId
-      : currentSourceType === BackupSourceType.Stack
+      : currentSourceType === 'Stack'
         ? stackPreview.data?.data.platformId
-        : currentSourceType === BackupSourceType.Deployment
+        : currentSourceType === 'Deployment'
           ? deploymentPreview.data?.data.platformId
-          : currentSourceType === BackupSourceType.SwarmService
+          : currentSourceType === 'SwarmService'
             ? swarmServicePreview.data?.data.platformId
             : undefined;
   const sourcePlatformArgs = useMemo(() => ({ id: currentSourcePlatformId ?? '' }), [currentSourcePlatformId]);
@@ -284,25 +276,25 @@ export function BackupPolicyForm({
                 render: (value, set) => (
                   <div className="flex max-w-150 flex-col gap-2">
                     <ItemSelector
-                      value={value ?? BackupSourceType.CitadelSystem}
+                      value={value ?? 'CitadelSystem'}
                       collection={sourceTypes}
                       disabled={disabled || isSourceLocked(resource)}
-                      onChange={(nextType: BackupSourceType) =>
+                      onChange={(nextType: BackupSourceSpec['$type']) =>
                         set({
                           source:
-                            nextType === BackupSourceType.DockerVolume
+                            nextType === 'DockerVolume'
                               ? createDockerVolumeSource()
-                              : nextType === BackupSourceType.Stack
+                              : nextType === 'Stack'
                                 ? createStackSource()
-                                : nextType === BackupSourceType.Deployment
+                                : nextType === 'Deployment'
                                   ? createDeploymentSource()
-                                  : nextType === BackupSourceType.SwarmService
+                                  : nextType === 'SwarmService'
                                     ? createSwarmServiceSource()
                                     : createCitadelSystemSource(),
                         })
                       }
                     />
-                    {currentSourceType === BackupSourceType.CitadelSystem && (
+                    {currentSourceType === 'CitadelSystem' && (
                       <div className="flex items-start gap-2 rounded-sm border bg-muted/50 p-3">
                         <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
@@ -318,7 +310,7 @@ export function BackupPolicyForm({
                   </div>
                 ),
               }),
-              ...(currentSourceType === BackupSourceType.DockerVolume
+              ...(currentSourceType === 'DockerVolume'
                 ? [
                     defineField<BackupPolicyFormValue, 'source.platformId'>({
                       key: 'source.platformId',
@@ -334,11 +326,11 @@ export function BackupPolicyForm({
                           onSelect={(platform: PlatformView | undefined) =>
                             set((prev) => ({
                               source: {
-                                ...(mergeSource(
-                                  original.source,
-                                  prev.source,
-                                ) as BackupSourceSpecDockerVolumeBackupSource),
-                                $type: BackupSourceType.DockerVolume,
+                                ...(mergeSource(original.source, prev.source) as Extract<
+                                  BackupSourceSpec,
+                                  { $type: 'DockerVolume' }
+                                >),
+                                $type: 'DockerVolume',
                                 platformId: platform?.id ?? '',
                                 volumeName: '',
                                 dockerNodeId: null,
@@ -356,14 +348,14 @@ export function BackupPolicyForm({
                       disabled: isSourceLocked(resource),
                       description: 'Docker volume name to back up.',
                       validate: (value) =>
-                        currentSourceType === BackupSourceType.DockerVolume && !String(value ?? '').trim()
+                        currentSourceType === 'DockerVolume' && !String(value ?? '').trim()
                           ? 'Volume name is required'
                           : null,
                       render: (value, set) => (
                         <VolumeSelector
                           value={value ?? ''}
                           dockerNodeId={
-                            (currentSource as BackupSourceSpecDockerVolumeBackupSource).dockerNodeId ?? null
+                            (currentSource as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).dockerNodeId ?? null
                           }
                           volumes={volumeList.data?.data.volumes ?? []}
                           isLoading={volumeList.isLoading || volumeList.isFetching}
@@ -404,7 +396,7 @@ export function BackupPolicyForm({
                       : []),
                   ]
                 : []),
-              ...(currentSourceType === BackupSourceType.Stack
+              ...(currentSourceType === 'Stack'
                 ? [
                     defineField<BackupPolicyFormValue, 'source.stackId'>({
                       key: 'source.stackId',
@@ -413,9 +405,7 @@ export function BackupPolicyForm({
                       disabled: isSourceLocked(resource),
                       description: 'Stack whose Docker named volumes will be backed up together.',
                       validate: (value) =>
-                        currentSourceType === BackupSourceType.Stack && !String(value ?? '').trim()
-                          ? 'Stack is required'
-                          : null,
+                        currentSourceType === 'Stack' && !String(value ?? '').trim() ? 'Stack is required' : null,
                       render: (value, set) => (
                         <div className="flex max-w-150 flex-col gap-4">
                           <ResourceSelectorField
@@ -425,8 +415,11 @@ export function BackupPolicyForm({
                             onSelect={(stack: { id: string } | undefined) =>
                               set((prev) => ({
                                 source: {
-                                  ...(mergeSource(original.source, prev.source) as BackupSourceSpecStackBackupSource),
-                                  $type: BackupSourceType.Stack,
+                                  ...(mergeSource(original.source, prev.source) as Extract<
+                                    BackupSourceSpec,
+                                    { $type: 'Stack' }
+                                  >),
+                                  $type: 'Stack',
                                   stackId: stack?.id ?? '',
                                 },
                               }))
@@ -443,7 +436,7 @@ export function BackupPolicyForm({
                     }),
                   ]
                 : []),
-              ...(currentSourceType === BackupSourceType.Deployment
+              ...(currentSourceType === 'Deployment'
                 ? [
                     defineField<BackupPolicyFormValue, 'source.deploymentId'>({
                       key: 'source.deploymentId',
@@ -452,7 +445,7 @@ export function BackupPolicyForm({
                       disabled: isSourceLocked(resource),
                       description: 'Deployment whose Docker named volumes will be backed up together.',
                       validate: (value) =>
-                        currentSourceType === BackupSourceType.Deployment && !String(value ?? '').trim()
+                        currentSourceType === 'Deployment' && !String(value ?? '').trim()
                           ? 'Deployment is required'
                           : null,
                       render: (value, set) => (
@@ -464,11 +457,11 @@ export function BackupPolicyForm({
                             onSelect={(deployment: { id: string } | undefined) =>
                               set((prev) => ({
                                 source: {
-                                  ...(mergeSource(
-                                    original.source,
-                                    prev.source,
-                                  ) as BackupSourceSpecDeploymentBackupSource),
-                                  $type: BackupSourceType.Deployment,
+                                  ...(mergeSource(original.source, prev.source) as Extract<
+                                    BackupSourceSpec,
+                                    { $type: 'Deployment' }
+                                  >),
+                                  $type: 'Deployment',
                                   deploymentId: deployment?.id ?? '',
                                 },
                               }))
@@ -485,7 +478,7 @@ export function BackupPolicyForm({
                     }),
                   ]
                 : []),
-              ...(currentSourceType === BackupSourceType.SwarmService
+              ...(currentSourceType === 'SwarmService'
                 ? [
                     defineField<BackupPolicyFormValue, 'source.swarmServiceId'>({
                       key: 'source.swarmServiceId',
@@ -494,7 +487,7 @@ export function BackupPolicyForm({
                       disabled: isSourceLocked(resource),
                       description: 'Managed Swarm Service whose current task Volumes will be backed up.',
                       validate: (value) =>
-                        currentSourceType === BackupSourceType.SwarmService && !String(value ?? '').trim()
+                        currentSourceType === 'SwarmService' && !String(value ?? '').trim()
                           ? 'Swarm Service is required'
                           : null,
                       render: (value, set) => (
@@ -506,11 +499,11 @@ export function BackupPolicyForm({
                             onSelect={(service: { id: string } | undefined) =>
                               set((prev) => ({
                                 source: {
-                                  ...(mergeSource(
-                                    original.source,
-                                    prev.source,
-                                  ) as BackupSourceSpecSwarmServiceBackupSource),
-                                  $type: BackupSourceType.SwarmService,
+                                  ...(mergeSource(original.source, prev.source) as Extract<
+                                    BackupSourceSpec,
+                                    { $type: 'SwarmService' }
+                                  >),
+                                  $type: 'SwarmService',
                                   swarmServiceId: service?.id ?? '',
                                 },
                               }))
@@ -724,7 +717,7 @@ export function BackupPolicyForm({
                     value={value ?? { enabled: false }}
                     disabled={disabled}
                     enableDisabled={!automatedOperationsEnabled}
-                    onChange={(webhook) => set({ webhook: webhook as BackupWebhookConfig })}
+                    onChange={(webhook) => set({ webhook: webhook as WebhookConfig })}
                   />
                 ),
               }),
@@ -906,7 +899,7 @@ function StackSourcePreview({
   isLoading,
   hasSelection,
 }: {
-  preview?: StackBackupSourcePreviewView;
+  preview?: BackupSourcePreview;
   isLoading: boolean;
   hasSelection: boolean;
 }) {
@@ -930,7 +923,7 @@ function StackSourcePreview({
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <Layers className="size-3.5 text-muted-foreground" />
-          <span className="font-medium">{preview.stackName}</span>
+          <span className="font-medium">{'stackName' in preview ? preview.stackName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
@@ -990,7 +983,7 @@ function DeploymentSourcePreview({
   isLoading,
   hasSelection,
 }: {
-  preview?: DeploymentBackupSourcePreviewView;
+  preview?: BackupSourcePreview;
   isLoading: boolean;
   hasSelection: boolean;
 }) {
@@ -1014,7 +1007,7 @@ function DeploymentSourcePreview({
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <Box className="size-3.5 text-muted-foreground" />
-          <span className="font-medium">{preview.deploymentName}</span>
+          <span className="font-medium">{'deploymentName' in preview ? preview.deploymentName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
@@ -1071,7 +1064,7 @@ function SwarmServiceSourcePreview({
   isLoading,
   hasSelection,
 }: {
-  preview?: SwarmServiceBackupSourcePreviewView;
+  preview?: BackupSourcePreview;
   isLoading: boolean;
   hasSelection: boolean;
 }) {
@@ -1095,7 +1088,7 @@ function SwarmServiceSourcePreview({
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <Layers className="size-3.5 text-muted-foreground" />
-          <span className="font-medium">{preview.swarmServiceName}</span>
+          <span className="font-medium">{'swarmServiceName' in preview ? preview.swarmServiceName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
@@ -1147,13 +1140,13 @@ function SwarmServiceSourcePreview({
   );
 }
 
-function volumeKindLabel(kind: StackVolumeKind) {
+function volumeKindLabel(kind: string) {
   switch (kind) {
-    case StackVolumeKind.DeclaredNamed:
+    case 'DeclaredNamed':
       return 'Declared';
-    case StackVolumeKind.ExternalNamed:
+    case 'ExternalNamed':
       return 'External';
-    case StackVolumeKind.AnonymousNamed:
+    case 'AnonymousNamed':
       return 'Runtime';
     default:
       return kind;
@@ -1162,42 +1155,37 @@ function volumeKindLabel(kind: StackVolumeKind) {
 
 function createCitadelSystemSource(): Extract<BackupSourceSpec, { $type: 'CitadelSystem' }> {
   return {
-    $type: BackupSourceType.CitadelSystem,
-    stableKey: null,
+    $type: 'CitadelSystem',
   };
 }
 
 function createDockerVolumeSource(): Extract<BackupSourceSpec, { $type: 'DockerVolume' }> {
   return {
-    $type: BackupSourceType.DockerVolume,
+    $type: 'DockerVolume',
     platformId: '',
     volumeName: '',
     consistency: VolumeBackupConsistency.Live,
-    stableKey: null,
   };
 }
 
 function createStackSource(): Extract<BackupSourceSpec, { $type: 'Stack' }> {
   return {
-    $type: BackupSourceType.Stack,
+    $type: 'Stack',
     stackId: '',
-    stableKey: null,
   };
 }
 
 function createDeploymentSource(): Extract<BackupSourceSpec, { $type: 'Deployment' }> {
   return {
-    $type: BackupSourceType.Deployment,
+    $type: 'Deployment',
     deploymentId: '',
-    stableKey: null,
   };
 }
 
 function createSwarmServiceSource(): Extract<BackupSourceSpec, { $type: 'SwarmService' }> {
   return {
-    $type: BackupSourceType.SwarmService,
+    $type: 'SwarmService',
     swarmServiceId: '',
-    stableKey: null,
   };
 }
 
@@ -1213,8 +1201,8 @@ function getRepositoryCompatibilityMessage(
 ) {
   if (!repository || repository.type !== BackupRepositoryType.FileSystem) return null;
 
-  const spec = repository.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
-  if (sourceType === BackupSourceType.CitadelSystem) {
+  const spec = repository.spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
+  if (sourceType === 'CitadelSystem') {
     return spec.location === BackupExecutionLocation.Core
       ? null
       : 'Citadel backups can only use a Core filesystem repository or an S3-compatible repository.';
@@ -1307,7 +1295,7 @@ function toUpdateInput(
   return next;
 }
 
-function normalizeWebhook(webhook: BackupWebhookConfig | null | undefined): BackupWebhookConfig | null {
+function normalizeWebhook(webhook: WebhookConfig | null | undefined): WebhookConfig | null {
   if (!webhook) return null;
 
   return {
@@ -1318,42 +1306,38 @@ function normalizeWebhook(webhook: BackupWebhookConfig | null | undefined): Back
 }
 
 function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {
-  if (source.$type === BackupSourceType.DockerVolume) {
-    const dockerSource = source as BackupSourceSpecDockerVolumeBackupSource;
+  if (source.$type === 'DockerVolume') {
+    const dockerSource = source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>;
     return {
-      $type: BackupSourceType.DockerVolume,
+      $type: 'DockerVolume',
       platformId: dockerSource.platformId,
       volumeName: dockerSource.volumeName,
       consistency: dockerSource.consistency ?? VolumeBackupConsistency.Live,
       dockerNodeId: dockerSource.dockerNodeId ?? null,
-      stableKey: dockerSource.stableKey ?? null,
     };
   }
 
-  if (source.$type === BackupSourceType.Stack) {
-    const stackSource = source as BackupSourceSpecStackBackupSource;
+  if (source.$type === 'Stack') {
+    const stackSource = source as Extract<BackupSourceSpec, { $type: 'Stack' }>;
     return {
-      $type: BackupSourceType.Stack,
+      $type: 'Stack',
       stackId: stackSource.stackId,
-      stableKey: stackSource.stableKey ?? null,
     };
   }
 
-  if (source.$type === BackupSourceType.Deployment) {
-    const deploymentSource = source as BackupSourceSpecDeploymentBackupSource;
+  if (source.$type === 'Deployment') {
+    const deploymentSource = source as Extract<BackupSourceSpec, { $type: 'Deployment' }>;
     return {
-      $type: BackupSourceType.Deployment,
+      $type: 'Deployment',
       deploymentId: deploymentSource.deploymentId,
-      stableKey: deploymentSource.stableKey ?? null,
     };
   }
 
-  if (source.$type === BackupSourceType.SwarmService) {
-    const serviceSource = source as BackupSourceSpecSwarmServiceBackupSource;
+  if (source.$type === 'SwarmService') {
+    const serviceSource = source as Extract<BackupSourceSpec, { $type: 'SwarmService' }>;
     return {
-      $type: BackupSourceType.SwarmService,
+      $type: 'SwarmService',
       swarmServiceId: serviceSource.swarmServiceId,
-      stableKey: serviceSource.stableKey ?? null,
     };
   }
 

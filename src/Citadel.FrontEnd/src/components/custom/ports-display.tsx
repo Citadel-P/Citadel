@@ -5,7 +5,7 @@ import { EthernetPort, Link } from 'lucide-react';
 import { OverflowCountBadge } from './common';
 
 interface Props {
-  ports?: Record<string, HostPortBinding[]> | null;
+  ports?: Record<string, HostPortBinding[] | null> | null;
   compact?: boolean;
   maxVisible?: number;
   className?: string;
@@ -75,7 +75,7 @@ export function PortsDisplay({
   );
 }
 
-const getPublishedPorts = (ports?: Record<string, HostPortBinding[]> | null): PublishedPortView[] => {
+const getPublishedPorts = (ports?: Record<string, HostPortBinding[] | null> | null): PublishedPortView[] => {
   if (!ports) return [];
 
   return Object.entries(ports).flatMap(([containerPort, bindings]) => {

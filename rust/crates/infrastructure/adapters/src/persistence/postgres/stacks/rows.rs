@@ -1,11 +1,14 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
-pub(super) fn map_stack(row: PgRow) -> Result<StackDetails, StackError> {
+pub(super) fn map_stack(
+    row: PgRow,
+) -> Result<AuthorizedResource<citadel_stacks::Stack>, StackError> {
     let descriptor: Value = row.try_get("platformdescriptor").map_err(storage)?;
     let level: i32 = row.try_get("permission_level").map_err(storage)?;
     let specific: i32 = row.try_get("permission_specific").map_err(storage)?;
-    Ok(StackDetails {
-        stack: citadel_stacks::Stack {
+    Ok(AuthorizedResource {
+        resource: citadel_stacks::Stack {
             id: row.try_get("id").map_err(storage)?,
             name: row.try_get("name").map_err(storage)?,
             description: row.try_get("description").map_err(storage)?,
@@ -16,57 +19,40 @@ pub(super) fn map_stack(row: PgRow) -> Result<StackDetails, StackError> {
             drift_policy: StackDriftPolicy::from_storage_value(
                 row.try_get("driftpolicy").map_err(storage)?,
             )?,
-            created_at: row.try_get("createdat").map_err(storage)?,
-            created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-            control_state: row.try_get("controlstate").map_err(storage)?,
+
+            control_state: row
+                .try_get::<&str, _>("controlstate")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
             current_stack_release_id: row.try_get("currentstackreleaseid").map_err(storage)?,
             row_version: row.try_get("rowversion").map_err(storage)?,
-        },
-        status: StackReleaseStatus::parse(row.try_get("release_status").map_err(storage)?)?,
-        platform_type: crate::persistence::postgres::platforms::classification::platform_kind(
-            descriptor
-                .get("$type")
-                .or_else(|| descriptor.get("type"))
-                .and_then(Value::as_str)
-                .unwrap_or("Docker"),
-        )
-        .map_err(storage)?,
-        platform_id: Some(row.try_get("platformid").map_err(storage)?),
-        version: Some(row.try_get("version").map_err(storage)?),
-        spec: Some(StackSpec::from_storage_value(
-            row.try_get("spec").map_err(storage)?,
-        )?),
-        source: row
-            .try_get::<Option<Value>, _>("source")
-            .map_err(storage)?
-            .map(StackReleaseSource::from_storage_value)
-            .transpose()?,
-        resource_bindings: row
-            .try_get::<Option<Value>, _>("resourcebindings")
-            .map_err(storage)?
-            .map(ResourceBindingSnapshot::list_from_storage_value)
-            .transpose()?,
-        platform_status: row.try_get("platform_status").map_err(storage)?,
-        platform_name: Some(row.try_get("platform_name").map_err(storage)?),
-        tags: decode_tags(row.try_get("tags").map_err(storage)?)?,
-        latest_activity: row.try_get("latest_activity").map_err(storage)?,
-        effective_permission: decode_permission(
-            row.try_get("permission_administrator").map_err(storage)?,
-            level,
-            specific,
-        )?,
-    })
-}
 
-pub(super) fn map_release(row: PgRow) -> Result<StackReleaseDetails, StackError> {
-    Ok(StackReleaseDetails {
-        release: citadel_stacks::StackRelease {
-            id: row.try_get("id").map_err(storage)?,
-            stack_id: row.try_get("stackid").map_err(storage)?,
-            platform_id: row.try_get("platformid").map_err(storage)?,
-            status: StackReleaseStatus::parse(row.try_get("status").map_err(storage)?)?,
-            version: row.try_get("version").map_err(storage)?,
-            spec: StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?,
+            audit: citadel_primitives::AuditMetadata {
+                created_at: row.try_get("createdat").map_err(storage)?,
+                created_by_actor_id: citadel_primitives::ActorId::new(
+                    row.try_get("createdbyactorid").map_err(storage)?,
+                ),
+            },
+
+            status: row
+                .try_get::<&str, _>("release_status")
+                .map_err(storage)?
+                .parse::<StackReleaseStatus>()
+                .map_err(storage)?,
+            platform_type: crate::persistence::postgres::platforms::classification::platform_kind(
+                descriptor
+                    .get("$type")
+                    .or_else(|| descriptor.get("type"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("Docker"),
+            )
+            .map_err(storage)?,
+            platform_id: Some(row.try_get("platformid").map_err(storage)?),
+            version: Some(row.try_get("version").map_err(storage)?),
+            spec: Some(StackSpec::from_storage_value(
+                row.try_get("spec").map_err(storage)?,
+            )?),
             source: row
                 .try_get::<Option<Value>, _>("source")
                 .map_err(storage)?
@@ -77,12 +63,60 @@ pub(super) fn map_release(row: PgRow) -> Result<StackReleaseDetails, StackError>
                 .map_err(storage)?
                 .map(ResourceBindingSnapshot::list_from_storage_value)
                 .transpose()?,
-            created_at: row.try_get("createdat").map_err(storage)?,
-            created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
+            platform_status: row
+                .try_get::<String, _>("platform_status")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
+            platform_name: Some(row.try_get("platform_name").map_err(storage)?),
+            tags: decode_tags(row.try_get("tags").map_err(storage)?)?,
+            latest_activity: row
+                .try_get::<Option<Value>, _>("latest_activity")
+                .map_err(storage)?
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(storage)?,
         },
+        effective_permission: decode_permission(
+            row.try_get("permission_administrator").map_err(storage)?,
+            level,
+            specific,
+        )?,
+    })
+}
+
+pub(super) fn map_release(row: PgRow) -> Result<StackRelease, StackError> {
+    Ok(citadel_stacks::StackRelease {
+        id: row.try_get("id").map_err(storage)?,
+        stack_id: row.try_get("stackid").map_err(storage)?,
+        platform_id: row.try_get("platformid").map_err(storage)?,
+        status: row
+            .try_get::<&str, _>("status")
+            .map_err(storage)?
+            .parse::<StackReleaseStatus>()
+            .map_err(storage)?,
+        version: row.try_get("version").map_err(storage)?,
+        spec: StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?,
+        source: row
+            .try_get::<Option<Value>, _>("source")
+            .map_err(storage)?
+            .map(StackReleaseSource::from_storage_value)
+            .transpose()?,
+        resource_bindings: row
+            .try_get::<Option<Value>, _>("resourcebindings")
+            .map_err(storage)?
+            .map(ResourceBindingSnapshot::list_from_storage_value)
+            .transpose()?,
+        created_at: row.try_get("createdat").map_err(storage)?,
+        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
+
         actor_name: row.try_get("actor_name").map_err(storage)?,
         actor_type: row.try_get("actor_type").map_err(storage)?,
-        platform_status: row.try_get("platform_status").map_err(storage)?,
+        platform_status: row
+            .try_get::<String, _>("platform_status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         platform_name: Some(row.try_get("platform_name").map_err(storage)?),
     })
 }

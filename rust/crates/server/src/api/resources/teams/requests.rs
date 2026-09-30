@@ -1,6 +1,6 @@
-use citadel_identity::PatchField;
-use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
-use serde::{Deserialize, Serialize};
+use crate::api::resources::resource_access::ResourceAccessInput;
+use citadel_primitives::PatchField;
+use serde::Deserialize;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -37,41 +37,6 @@ const fn default_search_limit() -> i64 {
     20
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamResourceAccessInput {
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    #[schema(value_type = Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>)]
-    pub specific_permissions: Vec<SpecificPermission>,
-}
-
-impl From<TeamResourceAccessInput> for citadel_identity::TeamResourceAccessInput {
-    fn from(value: TeamResourceAccessInput) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
-    }
-}
-
-impl From<citadel_identity::TeamResourceAccessInput> for TeamResourceAccessInput {
-    fn from(value: citadel_identity::TeamResourceAccessInput) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeamRequest {
@@ -81,7 +46,7 @@ pub struct CreateTeamRequest {
     #[serde(default)]
     pub role_ids: Vec<Uuid>,
     #[serde(default)]
-    pub resource_accesses: Vec<TeamResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 impl From<CreateTeamRequest> for citadel_identity::CreateTeam {
@@ -127,8 +92,8 @@ pub struct PatchTeamRequest {
     #[schema(value_type = Option<Vec<Uuid>>, required = false)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
-    #[schema(value_type = Option<Vec<TeamResourceAccessInput>>, required = false)]
-    pub resource_accesses: PatchField<Vec<TeamResourceAccessInput>>,
+    #[schema(value_type = Option<Vec<ResourceAccessInput>>, required = false)]
+    pub resource_accesses: PatchField<Vec<ResourceAccessInput>>,
 }
 
 impl From<PatchTeamRequest> for citadel_identity::PatchTeam {

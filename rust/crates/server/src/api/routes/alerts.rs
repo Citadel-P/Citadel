@@ -432,8 +432,10 @@ async fn verify_channel(
         alert_destination: i.alert_destination,
         url: i.url,
         is_active: true,
-        created_by_actor_id: p.actor_id.value(),
-        created_at: chrono::Utc::now(),
+        audit: citadel_primitives::AuditMetadata {
+            created_by_actor_id: p.actor_id,
+            created_at: chrono::Utc::now(),
+        },
     };
     let event = test_event();
     result(
@@ -451,8 +453,8 @@ fn test_event() -> citadel_alerts::AlertEvent {
         id: Uuid::nil(),
         alert_rule_id: Uuid::nil(),
         alert_type: "Verification".into(),
-        severity: "Information".into(),
-        status: "Active".into(),
+        severity: citadel_alerts::AlertSeverity::Info,
+        status: citadel_alerts::AlertEventStatus::Active,
         message: "Citadel Alert Channel verification succeeded.".into(),
         info: json!({"humanMessage":"Citadel Alert Channel verification succeeded."}),
         resource_id: None,

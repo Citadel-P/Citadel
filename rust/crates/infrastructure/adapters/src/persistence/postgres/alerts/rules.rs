@@ -23,7 +23,12 @@ impl PostgresAlertRepository {
                 .fetch_optional(&mut *transaction)
                 .await
                 .map_err(storage)?;
-        if enabled.as_deref() != Some("Enabled") {
+        let enabled = enabled
+            .as_deref()
+            .map(str::parse::<citadel_alerts::AlertRuleStatus>)
+            .transpose()
+            .map_err(AlertError::Storage)?;
+        if enabled != Some(citadel_alerts::AlertRuleStatus::Enabled) {
             return Ok(None);
         }
         let lock_key = format!("{}:{}", rule.id, observation.resource_id);
@@ -60,7 +65,7 @@ impl PostgresAlertRepository {
             sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat) VALUES($1,$2,0,$3,$4) ON CONFLICT(alertruleid,resourceid) DO UPDATE SET consecutivematches=0")
                 .bind(rule.id)
                 .bind(observation.resource_id)
-                .bind(rule.created_by_actor_id)
+                .bind(rule.audit.created_by_actor_id.value())
                 .bind(last_triggered)
                 .execute(&mut *transaction)
                 .await
@@ -82,7 +87,7 @@ impl PostgresAlertRepository {
             .bind(rule.id)
             .bind(observation.resource_id)
             .bind(next_consecutive)
-            .bind(rule.created_by_actor_id)
+            .bind(rule.audit.created_by_actor_id.value())
             .bind(last_triggered)
             .execute(&mut *transaction)
             .await
@@ -104,7 +109,7 @@ impl PostgresAlertRepository {
             .bind(id)
             .bind(rule.id)
             .bind(&observation.alert_type)
-            .bind(&rule.severity)
+            .bind(rule.severity.as_str())
             .bind(&observation.info)
             .bind(observation.resource_id)
             .bind(&observation.resource_name)
@@ -396,10 +401,10 @@ pub(super) async fn write_rule(
     let quiet = Value::Array(input.quiet_hours.clone());
     if insert {
         sqlx::query("INSERT INTO alertrules(id,name,description,type,severity,cooldownseconds,requiredmatches,threshold,status,limitedto,quiethours,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
-            .bind(id).bind(&input.name).bind(&input.description).bind(&input.alert_type).bind(&input.severity).bind(input.cooldown_seconds).bind(input.required_matches).bind(input.threshold).bind(&input.status).bind(limited).bind(quiet).bind(actor).execute(&mut **tx).await.map_err(storage)?;
+            .bind(id).bind(&input.name).bind(&input.description).bind(&input.alert_type).bind(input.severity.as_str()).bind(input.cooldown_seconds).bind(input.required_matches).bind(input.threshold).bind(input.status.as_str()).bind(limited).bind(quiet).bind(actor).execute(&mut **tx).await.map_err(storage)?;
     } else {
         sqlx::query("UPDATE alertrules SET name=$2,description=$3,type=$4,severity=$5,cooldownseconds=$6,requiredmatches=$7,threshold=$8,status=$9,limitedto=$10,quiethours=$11 WHERE id=$1")
-            .bind(id).bind(&input.name).bind(&input.description).bind(&input.alert_type).bind(&input.severity).bind(input.cooldown_seconds).bind(input.required_matches).bind(input.threshold).bind(&input.status).bind(limited).bind(quiet).execute(&mut **tx).await.map_err(storage)?;
+            .bind(id).bind(&input.name).bind(&input.description).bind(&input.alert_type).bind(input.severity.as_str()).bind(input.cooldown_seconds).bind(input.required_matches).bind(input.threshold).bind(input.status.as_str()).bind(limited).bind(quiet).execute(&mut **tx).await.map_err(storage)?;
         sqlx::query("DELETE FROM alertrulechannels WHERE alertruleid=$1")
             .bind(id)
             .execute(&mut **tx)

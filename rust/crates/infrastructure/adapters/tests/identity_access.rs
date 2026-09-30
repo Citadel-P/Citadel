@@ -18,11 +18,12 @@ use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal, SYSTEM_ACTOR_ID};
 use citadel_identity::{
     AddServiceAccountResourceAccess, ArchiveServiceAccounts, ChangeCurrentPassword,
     CreateServiceAccount, CreateServiceAccountToken, IdentityError, IdentityService, IdentityStore,
-    InitializeCitadel, NewSession, NoopServiceAccountLastUsedTracker, PatchField,
-    PatchUserPreferences, ProfileRepository, ProfileService, ServiceAccountResourceAccess,
-    ServiceAccountService, SessionMetadata, SystemClock, UpdateCurrentProfile, UserReadService,
+    InitializeCitadel, NewSession, NoopServiceAccountLastUsedTracker, PatchUserPreferences,
+    ProfileRepository, ProfileService, ServiceAccountResourceAccess, ServiceAccountService,
+    SessionMetadata, SystemClock, UpdateCurrentProfile, UserReadService,
 };
 use citadel_identity::{AuthenticatedPrincipalType, UserDateTimeFormat, UserTheme};
+use citadel_primitives::PatchField;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -184,10 +185,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         appearance.content_layout,
         citadel_identity::UserContentLayout::Full
     );
-    assert_eq!(
-        appearance.density,
-        citadel_identity::UserUiDensity::Compact
-    );
+    assert_eq!(appearance.density, citadel_identity::UserUiDensity::Compact);
     assert_eq!(appearance.theme, UserTheme::Dark);
     let before: (chrono::DateTime<Utc>, i64) = sqlx::query_as("SELECT updatedat,(SELECT count(*) FROM activityevents) FROM userpreferences WHERE userid=$1").bind(owner.subject_id).fetch_one(&pool).await.unwrap();
     profiles

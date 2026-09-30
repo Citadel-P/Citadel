@@ -1,4 +1,4 @@
-use crate::api::resources::platforms::views::ResourceCapabilitiesView;
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

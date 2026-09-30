@@ -160,7 +160,7 @@ async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initial
     fixture.docker_server.abort();
     // Metadata and Swarm-only initialization: version/info, five manager
     // resources and networks. No Container/Image/Volume enumeration.
-    let (docker, server, socket) = docker_fixture_for_cluster(8, cluster.clone()).await;
+    let (docker, server, socket) = docker_fixture_for_cluster(Some(8), cluster.clone()).await;
     // Replace the router's transport with the fixture using the same persisted
     // identity/permission services as the other Platform HTTP scenarios.
     let mut state = fixture.lookup_state.platforms.clone();

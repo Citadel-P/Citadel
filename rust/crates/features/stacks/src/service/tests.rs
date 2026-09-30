@@ -49,24 +49,27 @@ fn runtime_output_is_redacted_before_progress_and_failure_persistence() {
     }
 }
 
-fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> StackDetails {
+fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> crate::Stack {
     let id = Uuid::now_v7();
-    StackDetails {
-        stack: crate::Stack {
-            id,
-            name: "demo".to_owned(),
-            description: None,
-            stack_source: StackSource::WebEditor,
-            stack_update_state: StackUpdateState::WebEditor {
-                recreate_stack_on_new_image_state: RecreateStackOnNewImageState::default(),
-            },
-            drift_policy: policy,
-            created_at: Utc::now(),
-            created_by_actor_id: Uuid::now_v7(),
-            control_state: "Idle".to_owned(),
-            current_stack_release_id: Uuid::now_v7(),
-            row_version: 0,
+    crate::Stack {
+        id,
+        name: "demo".to_owned(),
+        description: None,
+        stack_source: StackSource::WebEditor,
+        stack_update_state: StackUpdateState::WebEditor {
+            recreate_stack_on_new_image_state: RecreateStackOnNewImageState::default(),
         },
+        drift_policy: policy,
+
+        control_state: citadel_primitives::ResourceControlState::Idle,
+        current_stack_release_id: Uuid::now_v7(),
+        row_version: 0,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: Utc::now(),
+            created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+        },
+
         status,
         platform_type: citadel_platforms::PlatformKind::Docker,
         platform_id: Some(Uuid::now_v7()),
@@ -78,11 +81,10 @@ fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> StackDetails {
         }),
         source: None,
         resource_bindings: None,
-        platform_status: "Online".to_owned(),
+        platform_status: citadel_primitives::PlatformStatus::Online,
         platform_name: Some("local".to_owned()),
         tags: Vec::new(),
         latest_activity: None,
-        effective_permission: citadel_primitives::EffectivePermission::Administrator,
     }
 }
 
@@ -157,7 +159,7 @@ fn daemon_drift_repair_only_targets_idle_healthy_or_degraded_auto_fix_stacks() {
     for status in [StackReleaseStatus::Healthy, StackReleaseStatus::Degraded] {
         let mut value = stack(status, policy.clone());
         assert!(event_drift_eligible(&value));
-        value.stack.control_state = "Processing".into();
+        value.control_state = citadel_primitives::ResourceControlState::Processing;
         assert!(!event_drift_eligible(&value));
     }
     for status in [
@@ -189,7 +191,14 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
     let (status, info) = drift_status_update(&stack, &report).unwrap();
     assert_eq!(status, StackReleaseStatus::Degraded);
     stack.status = status;
-    stack.latest_activity = Some(serde_json::json!({"info": info}));
+    stack.latest_activity = Some(citadel_activities::ActivitySummary {
+        id: uuid::Uuid::now_v7(),
+        resource_type: citadel_activities::ActivityResourceType::Stack,
+        event_type: citadel_activities::ActivityEventType::StackDriftDetected,
+        status: citadel_activities::ActivityStatus::Warning,
+        created_at: chrono::Utc::now(),
+        info: serde_json::to_value(info).unwrap(),
+    });
     assert!(drift_status_update(&stack, &report).is_none());
     report.has_drift = false;
     report.drifts.clear();
@@ -207,7 +216,7 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
     );
     report.has_drift = true;
     stack.status = StackReleaseStatus::Healthy;
-    stack.stack.drift_policy.mark_degraded = false;
+    stack.drift_policy.mark_degraded = false;
     assert_eq!(
         drift_status_update(&stack, &report).unwrap().0,
         StackReleaseStatus::Healthy
@@ -221,7 +230,7 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
         assert!(drift_status_update(&stack, &report).is_none());
     }
     stack.status = StackReleaseStatus::Healthy;
-    stack.stack.control_state = "Processing".into();
+    stack.control_state = citadel_primitives::ResourceControlState::Processing;
     assert!(drift_status_update(&stack, &report).is_none());
 }
 

@@ -1,4 +1,5 @@
 import {
+  BackupSourceSpec,
   BackupRunItemView,
   BackupPolicyView,
   BackupRestoreRunView,
@@ -7,7 +8,6 @@ import {
   BackupRunStatus,
   BackupRunView,
   BackupSnapshotAvailability,
-  BackupSourceSpecDockerVolumeBackupSource,
   LookupResourceType,
   PlatformType,
   PlatformView,
@@ -402,7 +402,7 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
     [run.items],
   );
   const directSource =
-    source.$type === 'DockerVolume' ? (source as BackupSourceSpecDockerVolumeBackupSource) : undefined;
+    source.$type === 'DockerVolume' ? (source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>) : undefined;
   const initialSourceItem = !directSource && successfulItems.length === 1 ? successfulItems[0] : undefined;
   const [sourceBackupRunItemId, setSourceBackupRunItemId] = useState(initialSourceItem?.id ?? '');
   const [targetPlatformId, setTargetPlatformId] = useState(

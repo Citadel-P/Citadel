@@ -467,7 +467,7 @@ async fn delete_provider(
     tag = "OidcProviders",
     summary = "Test OIDC provider discovery",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/OidcDiscoveryResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::oidc::views::OidcDiscoveryView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -504,7 +504,7 @@ async fn test_provider_discovery(
     summary = "Test OIDC discovery",
     request_body = TestOidcDiscoveryRequest,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/OidcDiscoveryResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::oidc::views::OidcDiscoveryView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),

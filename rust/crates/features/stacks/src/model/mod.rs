@@ -5,8 +5,7 @@ pub use spec::{
     ResourceBindingSnapshot, StackAction, StackAdoptionIssue, StackBuildImageBinding, StackCommand,
     StackDriftMode, StackDriftPolicy, StackError, StackImportKind, StackOrchestrationMode,
     StackReleaseSource, StackReleaseStatus, StackSource, StackSpec, StackSpecCommon,
-    StackUpdateBehavior, StackUpdateState, StackWebhookConfig, WebhookAuthScheme, WebhookProvider,
-    normalize_project_name,
+    StackUpdateBehavior, StackUpdateState, StackWebhookConfig, normalize_project_name,
 };
 mod operations;
 pub use operations::{

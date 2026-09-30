@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl PostgresSwarmServiceRepository {
     pub(super) fn update_check_candidates_impl(
         &self,
@@ -16,7 +17,7 @@ impl PostgresSwarmServiceRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a SwarmServiceDetails,
+        expected: &'a citadel_swarm_services::SwarmService,
     ) -> BoxFuture<'a, Result<citadel_swarm_services::ServiceUpdateCheck, SwarmServiceError>> {
         Box::pin(self.claim_image_check(actor, administrator, expected))
     }
@@ -45,7 +46,10 @@ impl PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_platform(&mut tx, actor_id, administrator, input.platform_id, false).await?;
@@ -147,7 +151,10 @@ impl PostgresSwarmServiceRepository {
         administrator: bool,
         id: Uuid,
         input: &'a UpdateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -211,7 +218,10 @@ impl PostgresSwarmServiceRepository {
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -259,7 +269,10 @@ impl PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         input: &'a RenameSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(

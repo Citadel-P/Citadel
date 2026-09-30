@@ -169,14 +169,17 @@ pub(crate) async fn authorized_actions(
     store: &dyn citadel_automation::AutomationRepository,
     principal: &ActorPrincipal,
     actions: Vec<citadel_automation::AutomationAction>,
-) -> Result<Vec<AuthorizedAction>, AutomationError> {
+) -> Result<Vec<AuthorizedAction>, ApiError> {
     let ids: Vec<_> = actions.iter().map(|action| action.id).collect();
     let permissions = if principal.is_administrator() {
         Default::default()
     } else {
-        store.permissions(principal.actor_id, &ids).await?
+        store
+            .permissions(principal.actor_id, &ids)
+            .await
+            .map_err(map_error)?
     };
-    Ok(actions
+    actions
         .into_iter()
         .map(|action| {
             let level = if principal.is_administrator() {
@@ -189,12 +192,12 @@ pub(crate) async fn authorized_actions(
                         .unwrap_or(PermissionLevel::None),
                 )
             };
-            AuthorizedAction {
-                action: action.into(),
+            Ok(AuthorizedAction {
+                action: AutomationActionView::try_from(action).map_err(ApiError::internal)?,
                 capabilities: capabilities(level),
-            }
+            })
         })
-        .collect())
+        .collect()
 }
 
 async fn action_response(
@@ -204,9 +207,7 @@ async fn action_response(
     headers: &HeaderMap,
 ) -> HttpResult {
     let mut actions = api_result(
-        authorized_actions(state.automation.store().as_ref(), principal, vec![action])
-            .await
-            .map_err(map_error),
+        authorized_actions(state.automation.store().as_ref(), principal, vec![action]).await,
         headers,
     )?;
     Ok(no_store(Json(actions.remove(0)).into_response()))
@@ -248,9 +249,7 @@ async fn list(
     )?;
     actions.retain(|action| crate::api::routes::tags::matches_filters(&action.tags, &tags));
     let actions = api_result(
-        authorized_actions(state.automation.store().as_ref(), &principal, actions)
-            .await
-            .map_err(map_error),
+        authorized_actions(state.automation.store().as_ref(), &principal, actions).await,
         &headers,
     )?;
     let level = if principal.is_administrator() {
@@ -588,7 +587,7 @@ async fn remove(
     summary = "Queue an Automation Action run",
     request_body = Option<RunInput>,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/runAutomationActionResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<AutomationProgress>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -613,7 +612,7 @@ async fn run_action(
     summary = "Queue a test Automation Action run",
     request_body = Option<RunInput>,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/testAutomationActionResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<AutomationProgress>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -699,13 +698,14 @@ async fn enqueue(
         }
     };
     let stream = async_stream::stream! {
-        yield Ok::<_, std::convert::Infallible>(bytes::Bytes::from_static(b"["));
+        yield Ok::<_, serde_json::Error>(bytes::Bytes::from_static(b"["));
         let mut first = true;
         while let Some(item) = receiver.recv().await {
             if !first { yield Ok(bytes::Bytes::from_static(b",")); }
             first = false;
-            // These DTOs contain only strings, integers and UUIDs.
-            yield Ok(bytes::Bytes::from(serde_json::to_vec(&AutomationProgress::from(item)).expect("Automation progress serializes")));
+            yield AutomationProgress::try_from(item)
+                .and_then(|item| serde_json::to_vec(&item))
+                .map(bytes::Bytes::from);
         }
         yield Ok(bytes::Bytes::from_static(b"]"));
     };
@@ -751,7 +751,13 @@ async fn list_runs(
     )?;
     Ok(no_store(
         Json(RunList {
-            runs: runs.into_iter().map(Into::into).collect(),
+            runs: api_result(
+                runs.into_iter()
+                    .map(AutomationRunView::try_from)
+                    .collect::<Result<_, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
         })
         .into_response(),
     ))
@@ -764,7 +770,7 @@ async fn list_runs(
     tag = "AutomationActions",
     summary = "Get an Automation Action run",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/AutomationActionRunView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = AutomationRunView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)),
@@ -788,7 +794,13 @@ async fn get_run(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(AutomationRunView::from(run)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            AutomationRunView::try_from(run).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(

@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
 pub(super) const AUTHORIZED_CTES: &str = r#"
 WITH actor_scope AS (
@@ -55,7 +56,7 @@ impl PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         filter: &'a StackFilter,
-    ) -> BoxFuture<'a, Result<Vec<StackDetails>, StackError>> {
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         Box::pin(async move {
             let sql = format!(
                 r#"{AUTHORIZED_CTES}{PROJECTION}
@@ -87,7 +88,7 @@ impl PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'_, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move { get_authorized(&self.pool, actor, administrator, id).await })
     }
 }
@@ -97,7 +98,7 @@ impl PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<StackReleaseDetails>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<StackRelease>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             ensure_access(
@@ -121,7 +122,7 @@ pub(super) async fn get_authorized(
     actor: ActorId,
     administrator: bool,
     id: Uuid,
-) -> Result<StackDetails, StackError> {
+) -> Result<AuthorizedResource<citadel_stacks::Stack>, StackError> {
     let sql = format!(
         r#"{AUTHORIZED_CTES}{PROJECTION} WHERE s.id=$3 AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= {READ})"#
     );

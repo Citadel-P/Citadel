@@ -1,7 +1,7 @@
 import {
   AgentSetupView,
-  EdgeAgentEnrollmentView,
-  EdgeAgentStatusView,
+  EdgeEnrollmentView,
+  EdgeStatusView,
   PlatformConnectorType,
   PlatformType,
   PlatformView,
@@ -438,8 +438,8 @@ const EnrollmentTokenField = ({
   isPending,
   onRegenerate,
 }: {
-  enrollment?: EdgeAgentEnrollmentView;
-  edgeStatus?: EdgeAgentStatusView;
+  enrollment?: EdgeEnrollmentView;
+  edgeStatus?: EdgeStatusView;
   isEdgeStatusLoading?: boolean;
   isEnrolled: boolean;
   isPending?: boolean;
@@ -575,8 +575,8 @@ const getEnrollmentDescription = (isEnrolled: boolean) =>
     : 'Generate a one-time token and run the generated Docker command on the target host.';
 
 const getEnrollmentStatusDetail = (
-  enrollment: EdgeAgentEnrollmentView | undefined,
-  edgeStatus: EdgeAgentStatusView | undefined,
+  enrollment: EdgeEnrollmentView | undefined,
+  edgeStatus: EdgeStatusView | undefined,
   isEnrolled: boolean,
 ) => {
   if (enrollment) {

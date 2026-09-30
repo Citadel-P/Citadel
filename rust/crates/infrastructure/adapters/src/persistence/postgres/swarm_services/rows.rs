@@ -1,7 +1,10 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 use citadel_tags::TagSummary;
 
-pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServiceError> {
+pub(super) fn map_service(
+    row: PgRow,
+) -> Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError> {
     let spec = SwarmServiceSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
     let desired: String = row.try_get("desiredspechash").map_err(storage)?;
     let applied: Option<String> = row.try_get("lastapplieddesiredspechash").map_err(storage)?;
@@ -14,8 +17,16 @@ pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServic
         .map(|id| {
             Ok(SwarmServiceOperation {
                 id,
-                kind: row.try_get("operationkind").map_err(storage)?,
-                state: row.try_get("operationstate").map_err(storage)?,
+                kind: row
+                    .try_get::<&str, _>("operationkind")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
+                state: row
+                    .try_get::<&str, _>("operationstate")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
                 prepared_at: row.try_get("preparedat").map_err(storage)?,
                 attempted_at: row.try_get("attemptedat").map_err(storage)?,
                 completed_at: row.try_get("completedat").map_err(storage)?,
@@ -34,8 +45,8 @@ pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServic
         Ok(Some(value)) => value,
         _ => dotnet_min_datetime(),
     };
-    Ok(SwarmServiceDetails {
-        service: citadel_swarm_services::SwarmService {
+    Ok(AuthorizedResource {
+        resource: citadel_swarm_services::SwarmService {
             id: row.try_get("id").map_err(storage)?,
             platform_id: row.try_get("platformid").map_err(storage)?,
             name: row.try_get("name").map_err(storage)?,
@@ -43,14 +54,28 @@ pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServic
             docker_name: row.try_get("dockername").map_err(storage)?,
             docker_service_id: row.try_get("dockerserviceid").map_err(storage)?,
             spec,
-            health: row.try_get("effective_health").map_err(storage)?,
-            synchronization_state: row
-                .try_get("effective_synchronization_state")
+            health: row
+                .try_get::<&str, _>("effective_health")
+                .map_err(storage)?
+                .parse()
                 .map_err(storage)?,
-            control_state: row.try_get("controlstate").map_err(storage)?,
+            synchronization_state: row
+                .try_get::<&str, _>("effective_synchronization_state")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
+            control_state: row
+                .try_get::<&str, _>("controlstate")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
             auto_update_state: AutoUpdateState {
                 last_checked_at: last_checked,
-                status: row.try_get("autoupdatestate_status").map_err(storage)?,
+                status: row
+                    .try_get::<&str, _>("autoupdatestate_status")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
                 current_digest: row
                     .try_get("autoupdatestate_currentdigest")
                     .map_err(storage)?,
@@ -63,18 +88,28 @@ pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServic
             has_pending_desired_changes: applied.as_deref() != Some(desired.as_str()),
             has_runtime_drift: matches!((&applied_runtime,&live),(Some(a),Some(b)) if a!=b),
             row_version: row.try_get("rowversion").map_err(storage)?,
-            created_at: row.try_get("createdat").map_err(storage)?,
+            audit: citadel_primitives::AuditMetadata {
+                created_at: row.try_get("createdat").map_err(storage)?,
+                created_by_actor_id: ActorId::new(
+                    row.try_get("createdbyactorid").map_err(storage)?,
+                ),
+            },
             updated_at: row.try_get("updatedat").map_err(storage)?,
+
+            platform_name: row.try_get("platform_name").map_err(storage)?,
+            platform_status: row
+                .try_get::<String, _>("platform_status")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
+            running_task_count: row.try_get("runningtaskcount").map_err(storage)?,
+            desired_task_count: row.try_get("desiredtaskcount").map_err(storage)?,
+            update_state: row.try_get("projection_update_state").map_err(storage)?,
+            update_message: row.try_get("updatemessage").map_err(storage)?,
+            current_operation,
+            tags: decode_tags(row.try_get("tags").map_err(storage)?)?,
+            tasks: Some(json(row.try_get("tasks").map_err(storage)?)?),
         },
-        platform_name: row.try_get("platform_name").map_err(storage)?,
-        platform_status: row.try_get("platform_status").map_err(storage)?,
-        running_task_count: row.try_get("runningtaskcount").map_err(storage)?,
-        desired_task_count: row.try_get("desiredtaskcount").map_err(storage)?,
-        update_state: row.try_get("projection_update_state").map_err(storage)?,
-        update_message: row.try_get("updatemessage").map_err(storage)?,
-        current_operation,
-        tags: decode_tags(row.try_get("tags").map_err(storage)?)?,
-        tasks: Some(json(row.try_get("tasks").map_err(storage)?)?),
         effective_permission: decode_permission(
             row.try_get("permission_administrator").map_err(storage)?,
             level,

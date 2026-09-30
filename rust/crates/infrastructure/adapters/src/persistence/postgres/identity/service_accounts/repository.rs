@@ -5,10 +5,10 @@ use citadel_activities::{
     ServiceAccountResourceAccessSnapshot,
 };
 use citadel_identity::{
-    IdentityError, NewServiceAccount, NewServiceAccountToken, PatchField, ResourceInfo,
-    ServiceAccountDetails, ServiceAccountRepository, ServiceAccountResourceAccess,
-    ServiceAccountTokenDetails, StoredPage,
+    IdentityError, NewServiceAccount, NewServiceAccountToken, ResourceInfo, ServiceAccountDetails,
+    ServiceAccountRepository, ServiceAccountResourceAccess, ServiceAccountTokenDetails, StoredPage,
 };
+use citadel_primitives::PatchField;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use futures_util::future::BoxFuture;
 use serde::Deserialize;

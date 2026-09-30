@@ -1,10 +1,10 @@
-import { HistoryImageResult, InspectImageView } from '@/api/generated/api.types';
+import { ImageLayer, ImageInspectionView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { truncate } from '@/lib/truncate';
 import { ColumnDef } from '@tanstack/react-table';
 
-const columns: ColumnDef<HistoryImageResult & { rowId: string }>[] = [
+const columns: ColumnDef<ImageLayer & { rowId: string }>[] = [
   {
     accessorKey: 'stage',
     header: () => <span>Stage</span>,
@@ -17,7 +17,7 @@ const columns: ColumnDef<HistoryImageResult & { rowId: string }>[] = [
   },
 ];
 
-export const ImageLayerTable = ({ image }: { image: InspectImageView | undefined }) => {
+export const ImageLayerTable = ({ image }: { image: ImageInspectionView | undefined }) => {
   if (!image) return <></>;
   const layersWithId = (image.layers ?? []).map((layer, index) => ({
     ...layer,

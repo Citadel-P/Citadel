@@ -1,4 +1,4 @@
-import { ContainerDataView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
+import { ContainerRuntimeView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { NETWORK_CHART_COLORS, type ThemedChartColor } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import { getContainerSeriesColor } from '@/components/custom/container-series-colors';
@@ -28,7 +28,7 @@ type StatField = keyof Pick<
 
 type StackStatsProps = {
   stackId: string;
-  containers: ContainerDataView[];
+  containers: ContainerRuntimeView[];
 };
 
 type ContainerSeries = {
@@ -420,7 +420,7 @@ const StackMetricControls = ({
 
 const buildContainerSeries = (
   historicalContainers: { containerId: string; containerName: string; stats: ContainerStatView[] }[],
-  liveContainers: ContainerDataView[],
+  liveContainers: ContainerRuntimeView[],
   liveStats: Record<string, ContainerStatView[]>,
 ) => {
   const byId = new Map<string, ContainerSeries>();

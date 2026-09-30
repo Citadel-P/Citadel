@@ -1,7 +1,9 @@
 //! Shared container event and reconciliation rules.
 use citadel_activities::{ActivityEvent, ActivityEventInfo, ActivityStatus};
+use citadel_deployments::DeploymentStatus;
 use citadel_platforms::jobs::{ProjectionChange, ProjectionKind, ProjectionWrite};
 use citadel_primitives::ActorId;
+use citadel_stacks::StackReleaseStatus;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
@@ -290,7 +292,12 @@ async fn container_effects(
 
 pub async fn platform_online(pool: &PgPool, platform: Uuid) -> Result<()> {
     let mut tx = pool.begin().await?;
-    platform_status(&mut tx, platform, "Online").await?;
+    platform_status(
+        &mut tx,
+        platform,
+        citadel_primitives::PlatformStatus::Online,
+    )
+    .await?;
     tx.commit().await?;
     reconcile_deployments(pool, platform, None, false)
         .await
@@ -311,7 +318,7 @@ pub(crate) async fn platform_offline_in(
     tx: &mut Transaction<'_, Postgres>,
     platform: Uuid,
 ) -> Result<()> {
-    platform_status(tx, platform, "Offline").await?;
+    platform_status(tx, platform, citadel_primitives::PlatformStatus::Offline).await?;
     sqlx::query("UPDATE containers SET state='Offline',rowversion=rowversion+1 WHERE platformid=$1 AND dockernodeid IS NULL AND state<>'Offline'")
         .bind(platform).execute(&mut **tx).await?;
     reconcile(tx, platform, None, &RemovedBindings::default(), false).await?;
@@ -391,8 +398,11 @@ async fn reconcile_deployment(
     };
     let row = sqlx::query(query).bind(id).fetch_optional(&mut *tx).await?;
     let Some(row) = row else { return Ok(false) };
-    let old: String = row.try_get("status")?;
-    if row.try_get::<String, _>("controlstate")? != "Idle" || old == "Applying" {
+    let old = row
+        .try_get::<&str, _>("status")?
+        .parse::<DeploymentStatus>()
+        .map_err(sqlx::Error::Protocol)?;
+    if row.try_get::<String, _>("controlstate")? != "Idle" || old == DeploymentStatus::Applying {
         return Ok(false);
     }
     // A separate statement after acquiring the resource lock avoids using
@@ -403,32 +413,46 @@ async fn reconcile_deployment(
     // or its delayed deletion event arrives. Prefer the surviving runtime.
     let next = if let Some((state, _)) = &container {
         deployment_status(state)
-    } else if !activities && old == "Created" {
+    } else if !activities && old == DeploymentStatus::Created {
         return Ok(false);
     } else {
-        "Degraded"
+        DeploymentStatus::Degraded
     };
     if next == old {
         return Ok(false);
     }
     sqlx::query("UPDATE deployments SET status=$2,rowversion=rowversion+1 WHERE id=$1")
         .bind(id)
-        .bind(next)
+        .bind(next.as_str())
         .execute(&mut *tx)
         .await?;
     if activities {
         let ids = container.into_iter().map(|(_, id)| id).collect();
         let info = match next {
-            "Healthy" => Some(ActivityEventInfo::DeploymentStarted { container_ids: ids }),
-            "Stopped" => Some(ActivityEventInfo::DeploymentStopped { container_ids: ids }),
-            "Pending" => Some(ActivityEventInfo::DeploymentPaused { container_ids: ids }),
-            "Degraded" => Some(ActivityEventInfo::DeploymentDegraded {
+            DeploymentStatus::Healthy => {
+                Some(ActivityEventInfo::DeploymentStarted { container_ids: ids })
+            }
+            DeploymentStatus::Stopped => {
+                Some(ActivityEventInfo::DeploymentStopped { container_ids: ids })
+            }
+            DeploymentStatus::Pending => {
+                Some(ActivityEventInfo::DeploymentPaused { container_ids: ids })
+            }
+            DeploymentStatus::Degraded => Some(ActivityEventInfo::DeploymentDegraded {
                 reason: "The associated container is missing or unavailable.".into(),
             }),
             _ => None,
         };
         if let Some(info) = info {
-            activity(&mut tx, &row, platform, info, next == "Degraded", false).await?;
+            activity(
+                &mut tx,
+                &row,
+                platform,
+                info,
+                next == DeploymentStatus::Degraded,
+                false,
+            )
+            .await?;
         }
     }
     tx.commit().await?;
@@ -451,7 +475,10 @@ async fn reconcile_stacks(
     for row in stacks {
         let _parent =
             citadel_runtime::runtime_metrics::RuntimeWork::ContainerParentReconcileStack.start();
-        let old: String = row.try_get("status")?;
+        let old = row
+            .try_get::<&str, _>("status")?
+            .parse::<StackReleaseStatus>()
+            .map_err(sqlx::Error::Protocol)?;
         // An owned apply/state/delete operation completes its own claim. Neither
         // Docker events nor inventory may mistake it for abandoned Processing state.
         let owned = row.try_get::<String, _>("controlstate")? == "Processing"
@@ -459,14 +486,20 @@ async fn reconcile_stacks(
                 .try_get::<Option<Uuid>, _>("controltriggeredby")?
                 .is_some();
         if owned
-            || matches!(old.as_str(), "Applying" | "Pending")
-            || (!activities && old == "Created")
+            || matches!(
+                old,
+                StackReleaseStatus::Applying | StackReleaseStatus::Pending
+            )
+            || (!activities && old == StackReleaseStatus::Created)
         {
             continue;
         }
         let id: Uuid = row.try_get("id")?;
         if !activities && row.try_get::<String, _>("controlstate")? == "Processing" {
-            if !matches!(old.as_str(), "Applying" | "Pending") {
+            if !matches!(
+                old,
+                StackReleaseStatus::Applying | StackReleaseStatus::Pending
+            ) {
                 changed = true;
                 sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1 WHERE id=$1")
                     .bind(id).execute(&mut **tx).await?;
@@ -478,7 +511,7 @@ async fn reconcile_stacks(
         let next = if row.try_get::<String, _>("platformstatus")? == "Offline"
             || removed.stacks.contains(&id)
         {
-            "Degraded"
+            StackReleaseStatus::Degraded
         } else {
             stack_status(
                 &containers
@@ -490,15 +523,16 @@ async fn reconcile_stacks(
         if old == next
             || (activities
                 && row.try_get::<String, _>("controlstate")? == "Processing"
-                && (next == "Pending"
-                    || (next == "Degraded" && !removed.allow_degraded_while_processing)))
+                && (next == StackReleaseStatus::Pending
+                    || (next == StackReleaseStatus::Degraded
+                        && !removed.allow_degraded_while_processing)))
         {
             continue;
         }
         changed = true;
         sqlx::query("UPDATE stackreleases SET status=$2 WHERE id=$1")
             .bind(row.try_get::<Uuid, _>("releaseid")?)
-            .bind(next)
+            .bind(next.as_str())
             .execute(&mut **tx)
             .await?;
         sqlx::query("UPDATE stacks SET rowversion=rowversion+1,controlstate=CASE WHEN $2 THEN 'Idle' ELSE controlstate END,controlstartedat=CASE WHEN $2 THEN NULL ELSE controlstartedat END,controltriggeredby=CASE WHEN $2 THEN NULL ELSE controltriggeredby END WHERE id=$1")
@@ -508,10 +542,16 @@ async fn reconcile_stacks(
         if activities {
             let ids = containers.into_iter().map(|(id, _)| id).collect();
             let info = match next {
-                "Healthy" => Some(ActivityEventInfo::StackStarted { container_ids: ids }),
-                "Stopped" => Some(ActivityEventInfo::StackStopped { container_ids: ids }),
-                "Paused" => Some(ActivityEventInfo::StackPaused { container_ids: ids }),
-                "Degraded" => Some(ActivityEventInfo::StackDegraded {
+                StackReleaseStatus::Healthy => {
+                    Some(ActivityEventInfo::StackStarted { container_ids: ids })
+                }
+                StackReleaseStatus::Stopped => {
+                    Some(ActivityEventInfo::StackStopped { container_ids: ids })
+                }
+                StackReleaseStatus::Paused => {
+                    Some(ActivityEventInfo::StackPaused { container_ids: ids })
+                }
+                StackReleaseStatus::Degraded => Some(ActivityEventInfo::StackDegraded {
                     reason:
                         "One or more associated containers are missing or not running normally."
                             .into(),
@@ -519,7 +559,15 @@ async fn reconcile_stacks(
                 _ => None,
             };
             if let Some(info) = info {
-                activity(tx, &row, platform, info, next == "Degraded", true).await?;
+                activity(
+                    tx,
+                    &row,
+                    platform,
+                    info,
+                    next == StackReleaseStatus::Degraded,
+                    true,
+                )
+                .await?;
             }
         }
     }
@@ -559,36 +607,36 @@ pub(super) async fn activity(
         .await
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))
 }
-pub(super) fn deployment_status(state: &str) -> &'static str {
+pub(super) fn deployment_status(state: &str) -> DeploymentStatus {
     match state.to_ascii_lowercase().as_str() {
-        "running" => "Healthy",
-        "exited" => "Stopped",
-        "paused" | "restarting" => "Pending",
-        "created" => "Created",
-        "dead" | "offline" => "Degraded",
-        _ => "Failed",
+        "running" => DeploymentStatus::Healthy,
+        "exited" => DeploymentStatus::Stopped,
+        "paused" | "restarting" => DeploymentStatus::Pending,
+        "created" => DeploymentStatus::Created,
+        "dead" | "offline" => DeploymentStatus::Degraded,
+        _ => DeploymentStatus::Failed,
     }
 }
-pub(super) fn stack_status(states: &[&str]) -> &'static str {
+pub(super) fn stack_status(states: &[&str]) -> StackReleaseStatus {
     if states.is_empty() || states.contains(&"offline") {
-        "Degraded"
+        StackReleaseStatus::Degraded
     } else if states.iter().all(|s| *s == "running") {
-        "Healthy"
+        StackReleaseStatus::Healthy
     } else if states.iter().all(|s| *s == "paused") {
-        "Paused"
+        StackReleaseStatus::Paused
     } else if states.iter().all(|s| matches!(*s, "exited" | "offline")) {
-        "Stopped"
+        StackReleaseStatus::Stopped
     } else if states
         .iter()
         .any(|s| matches!(*s, "created" | "restarting" | "removing"))
     {
-        "Pending"
+        StackReleaseStatus::Pending
     } else if states.iter().all(|s| *s == "dead") {
-        "Failed"
+        StackReleaseStatus::Failed
     } else if states.iter().all(|s| *s == "unknown") {
-        "Unknown"
+        StackReleaseStatus::Unknown
     } else {
-        "Degraded"
+        StackReleaseStatus::Degraded
     }
 }
 
@@ -596,7 +644,7 @@ pub(super) fn stack_status(states: &[&str]) -> &'static str {
 pub(crate) async fn platform_status(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
-    status: &str,
+    status: citadel_primitives::PlatformStatus,
 ) -> Result<bool> {
     use citadel_activities::PlatformActivitySnapshot;
     let row = sqlx::query("SELECT id,name,address,description,status,connectortype,networkcount,volumecount,imagecount::bigint imagecount,cpucount::bigint cpucount,memtotal,serverversion,agentversion,platformdescriptor FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
@@ -605,12 +653,12 @@ pub(crate) async fn platform_status(
         return Ok(false);
     };
     let previous_status: String = row.try_get("status")?;
-    if previous_status == status {
+    if previous_status == status.as_str() {
         return Ok(false);
     }
     sqlx::query("UPDATE platforms SET status=$2 WHERE id=$1")
         .bind(id)
-        .bind(status)
+        .bind(status.as_str())
         .execute(&mut **tx)
         .await?;
     let platform = PlatformActivitySnapshot {
@@ -618,7 +666,7 @@ pub(crate) async fn platform_status(
         name: row.try_get("name")?,
         address: row.try_get("address")?,
         description: row.try_get("description")?,
-        status: status.into(),
+        status: status.to_string(),
         connector_type: row.try_get("connectortype")?,
         network_count: row.try_get("networkcount")?,
         volume_count: row.try_get("volumecount")?,
@@ -630,7 +678,7 @@ pub(crate) async fn platform_status(
         platform_descriptor: row.try_get("platformdescriptor")?,
     };
     let name = platform.name.clone();
-    let info = if status == "Online" {
+    let info = if status == citadel_primitives::PlatformStatus::Online {
         ActivityEventInfo::PlatformConnected {
             platform,
             previous_status,
@@ -738,6 +786,22 @@ pub(crate) async fn container_observation_in(
 mod tests {
     use super::*;
     #[test]
+    fn deployment_states_map_runtime_observations_without_changing_precedence() {
+        for (state, expected) in [
+            ("running", DeploymentStatus::Healthy),
+            ("RUNNING", DeploymentStatus::Healthy),
+            ("exited", DeploymentStatus::Stopped),
+            ("paused", DeploymentStatus::Pending),
+            ("restarting", DeploymentStatus::Pending),
+            ("created", DeploymentStatus::Created),
+            ("dead", DeploymentStatus::Degraded),
+            ("offline", DeploymentStatus::Degraded),
+            ("unexpected", DeploymentStatus::Failed),
+        ] {
+            assert_eq!(deployment_status(state), expected);
+        }
+    }
+    #[test]
     fn stack_states_follow_dotnet_precedence() {
         for (states, expected) in [
             (vec![], "Degraded"),
@@ -753,7 +817,7 @@ mod tests {
             (vec!["unknown"], "Unknown"),
             (vec!["running", "exited"], "Degraded"),
         ] {
-            assert_eq!(stack_status(&states), expected);
+            assert_eq!(stack_status(&states).as_str(), expected);
         }
     }
     #[test]

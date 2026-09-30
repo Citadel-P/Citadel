@@ -812,7 +812,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "name":format!("registry-{suffix}"),
             "registryHost":"registry.example.test",
             "status":"Active",
-            "configuration":{"$type":"Custom","Username":"user","Password":"password"},
+            "configuration":{"$type":"Custom","userName":"user","password":"password"},
             "tagIds":[tag_id]
         })),
     )

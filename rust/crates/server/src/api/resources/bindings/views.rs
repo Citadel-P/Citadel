@@ -2,7 +2,7 @@ use crate::api::resources::{
     bindings::spec::{
         ResourceBindingKind, ResourceBindingScope, SecretDeliveryMode, SecretProviderType,
     },
-    platforms::views::ResourceCapabilitiesView,
+    capabilities::ResourceCapabilitiesView,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;

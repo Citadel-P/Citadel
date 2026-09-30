@@ -313,7 +313,7 @@ async fn role_permission(
     tag = "Roles",
     summary = "Get permission matrix",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/PermissionMatrixResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = std::collections::BTreeMap<String, crate::api::resources::roles::views::PermissionMatrixViewItem>, content_type = "application/json"),
         crate::openapi::errors::RequestErrors
     ),
     security(),

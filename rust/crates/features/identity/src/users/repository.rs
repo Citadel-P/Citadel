@@ -66,7 +66,7 @@ pub trait UserRepository: Send + Sync {
     fn add_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a UserResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
         custom_access_control_enabled: bool,
@@ -75,7 +75,7 @@ pub trait UserRepository: Send + Sync {
     fn remove_resource_access<'a>(
         &'a self,
         id: Uuid,
-        access: &'a UserResourceAccessInput,
+        access: &'a ResourceAccessInput,
         changed_by_actor_id: ActorId,
         changed_at: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<UserDetails, IdentityError>>;

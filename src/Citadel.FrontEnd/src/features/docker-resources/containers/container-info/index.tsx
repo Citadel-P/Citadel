@@ -8,7 +8,7 @@ import { ContainerInspect } from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions, getContainerManagementAction } from './actions';
 import { ContainerOverview } from './container-info-table';
-import { ContainerStateStatus, ContainerDataView, ImageView, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, ContainerRuntimeView, ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
@@ -64,19 +64,19 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
   Tabs: [
     {
       label: 'Logs',
-      disabled: (resource: ContainerDataView) => !hasCapability(resource, 'canViewLogs'),
+      disabled: (resource: ContainerRuntimeView) => !hasCapability(resource, 'canViewLogs'),
       Content: ({ resource }) => (
         <ContainerLogs containerId={(resource as ContainerDetailsView | undefined)?.resourceId ?? resource?.id} />
       ),
     },
     {
       label: 'Inspect',
-      disabled: (resource: ContainerDataView) => !hasCapability(resource, 'canInspect'),
+      disabled: (resource: ContainerRuntimeView) => !hasCapability(resource, 'canInspect'),
       Content: ({ resource }) => <ContainerInspect containerId={resource?.id} />,
     },
     {
       label: 'Terminal',
-      disabled: (resource: ContainerDataView) =>
+      disabled: (resource: ContainerRuntimeView) =>
         resource.state !== ContainerStateStatus.Running || !hasCapability(resource, 'canOpenTerminal'),
       Content: ({ resource }) => (
         <ContainerExec

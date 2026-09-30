@@ -5,8 +5,6 @@ use utoipa::openapi::{
     security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
-pub(crate) mod compatibility;
-
 pub(crate) mod errors;
 
 pub(crate) mod router;
@@ -33,15 +31,20 @@ pub fn document(public_only: bool) -> OpenApi {
             .description(Some("Use a Citadel User JWT or Service Account bearer token in the Authorization header."))
             .build()),
     );
+    // IntoResponses references this shared DTO but does not register it with utoipa-axum.
+    api.components.as_mut().unwrap().schemas.insert(
+        "ProblemDetails".into(),
+        <crate::api::error::ProblemDetails as utoipa::PartialSchema>::schema(),
+    );
+    api.components.as_mut().unwrap().schemas.insert(
+        "StatsHours".into(),
+        <crate::api::resources::platforms::operation_views::StatsHours as utoipa::PartialSchema>::schema(),
+    );
+    api.components.as_mut().unwrap().schemas.insert(
+        "LookupResourceType".into(),
+        <crate::api::resources::vocabulary::LookupResourceTypeSchema as utoipa::PartialSchema>::schema(),
+    );
     crate::api::endpoint_catalog::visit_documents(|document| api.merge(document));
-    for (name, schema) in compatibility::schemas() {
-        api.components
-            .as_mut()
-            .unwrap()
-            .schemas
-            .entry(name)
-            .or_insert(schema);
-    }
     if public_only {
         for item in api.paths.paths.values_mut() {
             item.get = item.get.take().filter(is_public);
@@ -225,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_schemas_override_compatibility_and_preserve_patch_semantics() {
+    fn native_schemas_preserve_patch_semantics() {
         let doc = serde_json::to_value(document(false)).unwrap();
         let schema = &doc["components"]["schemas"]["PatchDeploymentInput"];
         assert!(schema["properties"].get("name").is_some());
@@ -267,32 +270,38 @@ mod tests {
         assert_eq!(page["schema"]["minimum"].as_f64(), Some(1.0));
     }
     #[test]
-    fn automation_webhook_schema_is_derived_from_the_runtime_dto() {
+    fn automation_webhook_schema_uses_the_server_description() {
         use utoipa::PartialSchema;
         // Utoipa may wrap an inline enum in allOf when adding its default.
-        fn enum_values(schema: &Value) -> Option<&Value> {
+        fn enum_values<'a>(schema: &'a Value, schemas: &'a Value) -> Option<&'a Value> {
+            if let Some(name) = schema["$ref"]
+                .as_str()
+                .and_then(|reference| reference.strip_prefix("#/components/schemas/"))
+            {
+                return enum_values(&schemas[name], schemas);
+            }
             schema.get("enum").or_else(|| {
                 ["allOf", "oneOf", "anyOf"]
                     .iter()
                     .filter_map(|key| schema[*key].as_array())
                     .flatten()
-                    .find_map(enum_values)
+                    .find_map(|value| enum_values(value, schemas))
             })
         }
         let native = serde_json::to_value(
-            crate::api::resources::git_repositories::webhook::RepoWebhookConfig::schema(),
+            crate::api::resources::schema_models::primitives::WebhookConfigSchema::schema(),
         )
         .unwrap();
         for public in [false, true] {
             let doc = serde_json::to_value(document(public)).unwrap();
             let schemas = &doc["components"]["schemas"];
-            assert_eq!(schemas["RepoWebhookConfig"], native);
+            assert_eq!(schemas["WebhookConfig"], native);
             assert_eq!(
-                enum_values(&native["properties"]["provider"]),
+                enum_values(&native["properties"]["provider"], schemas),
                 Some(&json!(["GitHub", "GitLab", "Generic"]))
             );
             assert_eq!(
-                enum_values(&native["properties"]["authScheme"]),
+                enum_values(&native["properties"]["authScheme"], schemas),
                 Some(&json!([
                     "GitHubHmacSha256",
                     "GitLabSignedToken",
@@ -300,16 +309,16 @@ mod tests {
                     "BearerToken"
                 ]))
             );
-            for owner in [
-                "AutomationActionInput",
-                "UpdateAutomationActionInput",
-                "AutomationActionView",
+            for (owner, contract) in [
+                ("AutomationActionInput", "WebhookConfig"),
+                ("UpdateAutomationActionInput", "WebhookPatch"),
+                ("AutomationActionView", "WebhookConfig"),
             ] {
                 let webhook = &schemas[owner]["properties"]["webhook"];
                 let alternatives = webhook["oneOf"].as_array().unwrap();
                 assert!(
                     alternatives
-                        .contains(&json!({"$ref":"#/components/schemas/RepoWebhookConfig"})),
+                        .contains(&json!({"$ref":format!("#/components/schemas/{contract}")})),
                     "{owner}: {webhook}"
                 );
                 assert!(

@@ -261,10 +261,7 @@ pub(crate) fn validate(
             "Name must contain 3 to 64 letters, numbers, hyphens, or underscores.".to_owned(),
         ));
     }
-    input.description = input
-        .description
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    input.description = citadel_primitives::normalization::optional_text(input.description);
     if input
         .description
         .as_ref()

@@ -1,8 +1,6 @@
 import { StateBadge } from '@/components/custom/state-badge';
 import {
   PlatformConnectorType,
-  PlatformDescriptorDockerPlatformDescriptor,
-  PlatformDescriptorDockerSwarmPlatformDescriptor,
   PlatformStatus,
   PlatformType,
   PlatformView,
@@ -61,19 +59,20 @@ const LiveSwarmPlatform = ({
   >;
 }) => {
   const { overview } = useSwarmOverview(platform.id);
-  const descriptor = platform.platformDescriptor as PlatformDescriptorDockerSwarmPlatformDescriptor;
-  const livePlatform = overview
-    ? {
-        ...platform,
-        platformDescriptor: {
-          ...descriptor,
-          $type: 'DockerSwarm' as const,
-          nodes: overview.nodeCount,
-          managers: overview.managerCount,
-          runningTaskCount: overview.runningTaskCount,
-        },
-      }
-    : platform;
+  const descriptor = platform.platformDescriptor?.$type === 'DockerSwarm' ? platform.platformDescriptor : undefined;
+  const livePlatform =
+    overview && descriptor
+      ? {
+          ...platform,
+          platformDescriptor: {
+            ...descriptor,
+            $type: 'DockerSwarm' as const,
+            nodes: overview.nodeCount,
+            managers: overview.managerCount,
+            runningTaskCount: overview.runningTaskCount,
+          },
+        }
+      : platform;
 
   return <DockerPlatformCard platform={livePlatform} actions={actions} swarmOverview={overview} />;
 };
@@ -90,11 +89,10 @@ const DockerPlatformCard = ({
   >;
   swarmOverview?: SwarmOverviewView;
 }) => {
-  const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
+  const descriptor = platform.platformDescriptor?.$type !== 'Kubernetes' ? platform.platformDescriptor : null;
   const isSwarm = platform.type === PlatformType.DockerSwarm;
-  const swarmDescriptor = isSwarm
-    ? (platform.platformDescriptor as PlatformDescriptorDockerSwarmPlatformDescriptor)
-    : undefined;
+  const swarmDescriptor =
+    platform.platformDescriptor?.$type === 'DockerSwarm' ? platform.platformDescriptor : undefined;
   const isOnline = platform.status === PlatformStatus.Online;
   const lastSnapshot = platform.stats?.at(0)?.created
     ? new Date(Number(platform.stats[0].created) * 1000).getTime()
@@ -172,7 +170,7 @@ const DockerPlatformCard = ({
 
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <span className="min-w-0 truncate text-xs text-muted-foreground">
-                {descriptor.operatingSystem} v{platform.serverVersion}
+                {descriptor?.operatingSystem} v{platform.serverVersion}
               </span>
               <span className="hidden h-3 w-px bg-border sm:block" />
               <span className="inline-flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
@@ -210,7 +208,7 @@ const DockerPlatformCard = ({
               ) : (
                 <>
                   <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
-                    {descriptor.containerCount ?? '-'} containers
+                    {descriptor?.containerCount ?? '-'} containers
                   </Link>
                   <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
                     {platform.imageCount ?? '-'} images
@@ -263,13 +261,13 @@ const DockerPlatformCard = ({
               <WorkloadMetric
                 icon={Box}
                 label="Containers"
-                total={descriptor.containerCount}
+                total={descriptor?.containerCount}
                 to={`/platforms/${platform.id}/containers`}
                 iconClassName={PLATFORM_WORKLOAD_ICON_CLASS_NAMES.containers}
                 states={getContainerStates({
-                  running: descriptor.containersRunning,
-                  stopped: descriptor.containersStopped,
-                  paused: descriptor.containersPaused,
+                  running: descriptor?.containersRunning,
+                  stopped: descriptor?.containersStopped,
+                  paused: descriptor?.containersPaused,
                 })}
               />
             )}

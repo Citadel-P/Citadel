@@ -1,7 +1,7 @@
-use crate::SwarmServiceDetails;
 use crate::SwarmServiceError;
 use crate::SwarmServiceSpec;
 use citadel_primitives::ActorId;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 
 use tokio_util::sync::CancellationToken;
@@ -53,5 +53,5 @@ pub trait SwarmServiceAdoptionPort: Send + Sync {
         id: &'a str,
         input: &'a AdoptSwarmService,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
 }

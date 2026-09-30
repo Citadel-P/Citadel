@@ -2,13 +2,12 @@ use crate::*;
 use serde_json::json;
 #[test]
 fn repository_requires_polymorphic_type() {
-    let mut input = BackupRepositoryConfiguration {
-        name: "repo".into(),
-        description: None,
-        spec: json!({}),
-        password_secret_id: Uuid::now_v7(),
-    };
-    assert!(matches!(input.validate(), Err(BackupError::Validation(_))))
+    assert!(
+        serde_json::from_value::<BackupRepositoryConfiguration>(json!({
+            "name":"repo", "spec":{}, "passwordSecretId":Uuid::now_v7()
+        }))
+        .is_err()
+    );
 }
 #[test]
 fn policy_normalizes_defaults() {
@@ -16,7 +15,7 @@ fn policy_normalizes_defaults() {
     let mut input = BackupPolicyConfiguration {
         name: " policy ".into(),
         description: None,
-        source: json!({"$type":"CitadelSystem"}),
+        source: serde_json::from_value(json!({"$type":"CitadelSystem"})).unwrap(),
         backup_repository_id: Uuid::now_v7(),
         enabled: true,
         cron: None,
@@ -40,13 +39,13 @@ fn schedule_validation_and_time_zone_matching_follow_five_field_cron() {
         .with_timezone(&Utc);
     assert!(schedule_is_due(Some("30 10 * * 2"), "Europe/Paris", now));
     assert!(!schedule_is_due(Some("31 10 * * 2"), "Europe/Paris", now));
-    assert!(!valid_cron("* * *"));
+    assert!(CronSchedule::parse("* * *", "UTC").is_err());
 
     let actor = ActorId::new(Uuid::now_v7());
     let mut input = BackupPolicyConfiguration {
         name: "invalid schedule".into(),
         description: None,
-        source: json!({"$type":"CitadelSystem"}),
+        source: serde_json::from_value(json!({"$type":"CitadelSystem"})).unwrap(),
         backup_repository_id: Uuid::now_v7(),
         enabled: true,
         cron: Some("not cron".into()),

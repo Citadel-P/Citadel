@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use citadel_activities::{
     ActivityEvent, ActivityEventInfo, ActivityStatus, SwarmServiceActivitySnapshot,
 };
+use citadel_primitives::AutoUpdateState;
 use citadel_primitives::{ActorId, ResourceType};
 use citadel_primitives::{
     EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
@@ -9,10 +10,9 @@ use citadel_primitives::{
 };
 use citadel_swarm_services::permissions as policy;
 use citadel_swarm_services::{
-    AutoUpdateState, CreateSwarmService, RenameSwarmService, RuntimeServiceResult,
-    ServiceDeletionClaim, ServiceOperationClaim, ServiceOperationKind, SwarmServiceDetails,
-    SwarmServiceError, SwarmServiceFilter, SwarmServiceOperation, SwarmServiceRepository,
-    SwarmServiceSpec, UpdateSwarmService,
+    CreateSwarmService, RenameSwarmService, RuntimeServiceResult, ServiceDeletionClaim,
+    ServiceOperationClaim, ServiceOperationKind, SwarmServiceError, SwarmServiceFilter,
+    SwarmServiceOperation, SwarmServiceRepository, SwarmServiceSpec, UpdateSwarmService,
 };
 use futures_util::future::BoxFuture;
 use serde_json::Value;

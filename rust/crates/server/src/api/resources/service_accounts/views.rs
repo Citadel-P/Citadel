@@ -1,5 +1,5 @@
 use crate::api::resources::{
-    capabilities::ResourceCapabilities,
+    capabilities::ResourceCapabilitiesView,
     common::{PagedResult, ResourceInfo},
 };
 use chrono::{DateTime, Utc};
@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceAccountsResponse {
     pub(crate) paged_result: PagedResult<ServiceAccountView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -167,11 +167,12 @@ impl From<citadel_identity::ServiceAccountDetails> for ServiceAccountView {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RunAsActorUsageView {
     pub id: Uuid,
     pub name: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceTypeSchema)]
     pub resource_type: ResourceType,
     pub is_active: bool,
 }

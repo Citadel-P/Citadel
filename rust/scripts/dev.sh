@@ -112,10 +112,13 @@ configure_compose() {
   target_dir="$(cd "$repo_root/rust" && cargo metadata --locked --offline --no-deps --format-version 1 | \
     node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).target_directory))')"
   case "${CITADEL_COMPOSE_PROFILE:-release}" in
-    release) export CITADEL_DEV_BINARY="$target_dir/release/citadel-server" ;;
-    dev) export CITADEL_DEV_BINARY="$target_dir/debug/citadel-server" ;;
+    release) CITADEL_DEV_BUILD_BINARY="$target_dir/release/citadel-server" ;;
+    dev) CITADEL_DEV_BUILD_BINARY="$target_dir/debug/citadel-server" ;;
     *) echo 'CITADEL_COMPOSE_PROFILE must be release or dev.' >&2; exit 2 ;;
   esac
+  # Docker may restart Core after `cargo clean`. Keep its executable outside the
+  # disposable target directory so a missing bind source cannot become a directory.
+  export CITADEL_DEV_BINARY="$CITADEL_DATA_ROOT/dev-bin/citadel-server"
 }
 
 compose_up() {
@@ -125,9 +128,12 @@ compose_up() {
   local build_args=()
   if [[ "${CITADEL_COMPOSE_PROFILE:-release}" == release ]]; then build_args+=(--release); fi
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false bash "$repo_root/rust/scripts/build.sh" "${build_args[@]}"
+  mkdir -p -m 700 -- "$(dirname -- "$CITADEL_DEV_BINARY")"
+  install -m 755 -- "$CITADEL_DEV_BUILD_BINARY" "$CITADEL_DEV_BINARY.new"
+  mv -f -- "$CITADEL_DEV_BINARY.new" "$CITADEL_DEV_BINARY"
   development_compose build core
   development_compose up -d --wait --wait-timeout 90 postgres
-  # Cargo replaces the binary inode. Recreate Core to remount the new executable,
+  # Recreate Core to remount the newly installed executable,
   # without restarting PostgreSQL or discarding either service's data.
   development_compose up -d --no-deps --force-recreate --wait --wait-timeout 90 core
   echo 'Core and PostgreSQL are running in Docker Compose project citadel-wsl.'

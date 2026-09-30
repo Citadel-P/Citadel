@@ -1,8 +1,8 @@
 import {
   CreatePlatformInput,
-  EdgeAgentEnrollmentView,
+  EdgeEnrollmentView,
   PlatformConnectorType,
-  PlatformInput,
+  PlatformPatch,
   PlatformType,
   PlatformView,
 } from '@/api/generated/api.types';
@@ -48,7 +48,7 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
   const updatePlatform = useMutate('updatePlatform');
   const createEnrollment = useMutate('createEdgeAgentEnrollment');
   const [createdPlatform, setCreatedPlatform] = useState<PlatformView>();
-  const [enrollment, setEnrollment] = useState<EdgeAgentEnrollmentView>();
+  const [enrollment, setEnrollment] = useState<EdgeEnrollmentView>();
   const platformId = platform?.id;
   const enrollmentPlatformId = createdPlatform?.id ?? platformId;
 
@@ -78,7 +78,7 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
         type: input.type ?? PlatformType.Docker,
         connectorType,
         pruneHistoricalSwarmTaskContainers: input.pruneHistoricalSwarmTaskContainers ?? true,
-      } satisfies PlatformInput;
+      } satisfies PlatformPatch;
 
       if (mode === 'edit') {
         if (!platformId) return;

@@ -46,21 +46,17 @@ impl BuildProject {
             .map_err(|error| BuildError::Storage(error.to_string()))?;
         let object = value.as_object_mut().expect("Project serializes as object");
         for (key, value) in patch {
-            object.insert(key, value);
+            if key == "webhook" && value.is_object() {
+                citadel_primitives::merge_json(object.entry(key).or_insert(Value::Null), &value);
+            } else {
+                object.insert(key, value);
+            }
         }
         serde_json::from_value(value)
             .map_err(|error| BuildError::Validation(format!("Invalid Build update: {error}")))
     }
 
     pub fn snapshot(&self) -> citadel_activities::BuildProjectActivitySnapshot {
-        let mut webhook = self.webhook.clone();
-        if let Some(Value::Object(fields)) = &mut webhook {
-            for (name, value) in fields {
-                if name.eq_ignore_ascii_case("secret") && !value.is_null() {
-                    *value = Value::String("********".into());
-                }
-            }
-        }
         citadel_activities::BuildProjectActivitySnapshot {
             id: self.id,
             name: self.name.clone(),
@@ -77,7 +73,10 @@ impl BuildProject {
             registry_id: self.registry_id,
             image_repository: self.image_repository.clone(),
             tag_templates: self.tag_templates.clone(),
-            webhook,
+            webhook: self
+                .webhook
+                .as_ref()
+                .map(citadel_primitives::WebhookConfig::redacted),
             timeout_seconds: self.timeout_seconds,
             retention_run_count: self.retention_run_count,
             build_secrets: self

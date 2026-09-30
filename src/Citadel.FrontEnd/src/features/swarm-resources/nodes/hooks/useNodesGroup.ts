@@ -1,4 +1,4 @@
-import { PlatformCapabilities, SwarmNodeView, SwarmTaskView } from '@/api/generated/api.types';
+import { PlatformCapabilitiesView, SwarmNodeView, SwarmTaskView } from '@/api/generated/api.types';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
@@ -11,7 +11,7 @@ export type SwarmNodeListView = SwarmNodeView & { name: string; tasks: SwarmTask
 export type SwarmNodeInfoView = SwarmNodeView & {
   name: string;
   platformId: string;
-  capabilities?: PlatformCapabilities | null;
+  capabilities?: PlatformCapabilitiesView | null;
   tasks: SwarmTaskView[];
 };
 

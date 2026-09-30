@@ -1,7 +1,7 @@
 import { Eye, FolderInput, PackagePlus, Trash } from 'lucide-react';
 import {
   type ContainerView,
-  type ContainerDataView,
+  type ContainerRuntimeView,
   ContainerStateStatus,
   PlatformType,
   StackImportKind,
@@ -50,7 +50,7 @@ export type ContainerStackGroupResource = {
 export type ContainerActionResource = ContainerView | ContainerStackGroupResource;
 
 export const isContainerStackGroup = (
-  resource: ContainerActionResource | ContainerDataView,
+  resource: ContainerActionResource | ContainerRuntimeView,
 ): resource is ContainerStackGroupResource => 'isStackGroup' in resource && resource.isStackGroup;
 
 type ContainerActionKey = 'start' | 'stop' | 'pause' | 'unpause' | 'restart';
@@ -179,15 +179,15 @@ const getContainers = (resources: ContainerActionResource | ContainerActionResou
   return selected.flatMap((resource) => (isContainerStackGroup(resource) ? resource.containers : [resource]));
 };
 
-export const isAdoptableContainer = (resource: ContainerActionResource | ContainerDataView) =>
+export const isAdoptableContainer = (resource: ContainerActionResource | ContainerRuntimeView) =>
   !isContainerStackGroup(resource) && !resource.stack && isUnmanagedContainer(resource);
 
 export const isContainerAdoptionAvailable = (
-  resource: ContainerActionResource | ContainerDataView,
+  resource: ContainerActionResource | ContainerRuntimeView,
   platformType?: PlatformType,
 ) => platformType === PlatformType.Docker && isAdoptableContainer(resource);
 
-export const isImportableStack = (resource: ContainerActionResource | ContainerDataView) => {
+export const isImportableStack = (resource: ContainerActionResource | ContainerRuntimeView) => {
   const containers = isContainerStackGroup(resource) ? resource.containers : [resource];
   return (
     !!resource.stack &&
@@ -207,7 +207,7 @@ export const isImportableStackSelection = (resources: ContainerActionResource[])
   );
 };
 
-export const isSwarmStackGroup = (resource: ContainerActionResource | ContainerDataView) =>
+export const isSwarmStackGroup = (resource: ContainerActionResource | ContainerRuntimeView) =>
   isContainerStackGroup(resource) &&
   resource.containers.length > 0 &&
   resource.containers.every((container) => container.isSwarmTask);

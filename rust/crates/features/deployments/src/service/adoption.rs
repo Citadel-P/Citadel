@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
 impl DeploymentService {
     pub async fn adoption_draft(
@@ -22,7 +23,7 @@ impl DeploymentService {
         id: Uuid,
         mut input: crate::adoption::AdoptContainer,
         cancel: &CancellationToken,
-    ) -> Result<DeploymentDetails, DeploymentError> {
+    ) -> Result<AuthorizedResource<crate::Deployment>, DeploymentError> {
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
         if input.tag_ids.len() > 100 || input.preview_fingerprint.len() != 64 {

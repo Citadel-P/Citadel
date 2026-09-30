@@ -1,4 +1,7 @@
 use super::*;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+use citadel_identity::{ResourceAccessInput, UserRepository};
+use citadel_primitives::PermissionLevel;
 
 pub(super) async fn verify(
     app: &Router,
@@ -83,13 +86,38 @@ pub(super) async fn verify(
     assert!(!saved.enabled);
 
     // A resource-specific Execute grant allows tests; omission still uses saved code.
-    sqlx::query("UPDATE resourceaccesses SET permissionlevel=4 WHERE actorid=$1 AND resourceid=$2")
-        .bind(writer.actor_id.value())
-        .bind(id)
-        .execute(db)
+    // Use the mutation path so the previously cached Write grant is invalidated.
+    let users = PostgresUserRepository::new(db.clone());
+    let mut access = ResourceAccessInput {
+        resource_type: citadel_primitives::ResourceType::AutomationAction,
+        resource_id: id,
+        permission_level: PermissionLevel::Write,
+        specific_permissions: vec![],
+    };
+    users
+        .remove_resource_access(
+            writer.subject_id,
+            &access,
+            admin.actor_id,
+            chrono::Utc::now(),
+        )
         .await
         .unwrap();
-    let tested = body(request(app, Method::POST, &path, Some(writer), None).await).await;
+    access.permission_level = PermissionLevel::Execute;
+    users
+        .add_resource_access(
+            writer.subject_id,
+            &access,
+            admin.actor_id,
+            chrono::Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
+    let response = request(app, Method::POST, &path, Some(writer), None).await;
+    let status = response.status();
+    let tested = body(response).await;
+    assert_eq!(status, StatusCode::OK, "{tested}");
     assert_eq!(
         tested.as_array().unwrap().last().unwrap()["status"],
         "Succeeded"

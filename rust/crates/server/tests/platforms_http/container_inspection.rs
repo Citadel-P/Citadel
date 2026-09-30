@@ -1,11 +1,46 @@
 use super::*;
 use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_contracts::citadel::{
     containers::v1::InspectContainerRequest,
     edge::v1::{EdgeCommandKind, core_envelope},
     shared_models::v1::{ContainerConfig, InspectContainerResponse},
 };
-use citadel_primitives::{ResourceType, SpecificPermission};
+use citadel_identity::{ResourceAccessInput, UserPatchMutation, UserRepository};
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+
+async fn set_inspect_access(
+    f: &Fixture,
+    reader: &ActorPrincipal,
+    kind: ResourceType,
+    id: Uuid,
+    inspect: bool,
+) {
+    // ACL changes must pass through the repository to invalidate cached permissions.
+    PostgresUserRepository::new(f.pool.clone())
+        .patch(
+            reader.subject_id,
+            &UserPatchMutation {
+                resource_accesses: Some(vec![ResourceAccessInput {
+                    resource_type: kind,
+                    resource_id: id,
+                    permission_level: PermissionLevel::Read,
+                    specific_permissions: if inspect {
+                        vec![SpecificPermission::Inspect]
+                    } else {
+                        vec![]
+                    },
+                }]),
+                ..Default::default()
+            },
+            f.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
+}
+use citadel_server::realtime_groups::{Group, GroupReadPort};
 use prost::Message;
 
 #[tokio::test]
@@ -23,7 +58,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
     let document = Arc::new(tokio::sync::RwLock::new(
         json!({"Id":docker_id, "Created":"2026-01-01", "Name":"/inspected", "Config":{"Image":"busybox:latest", "Env":["API_TOKEN=not-for-browser","LOG_LEVEL=info"]},"State":{"Status":"running","StartedAt":"2026-01-01T12:00:00Z"},
             "Mounts":[{"Name":"data","Destination":"/data"},{"Source":"/host","Destination":"/bind"}],
-            "HostConfig":{"PortBindings":{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}]}},
+            "HostConfig":{"PortBindings":{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}],"53/udp":null}},
             "NetworkSettings":{"Networks":{"bridge":{"NetworkID":"network-id"},"fallback":{"NetworkID":""}}}}),
     ));
     let inspected = document.clone();
@@ -85,15 +120,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::FORBIDDEN
     );
     assert!(requests.lock().await.is_empty());
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2",
-    )
-    .bind(reader.actor_id.value())
-    .bind(f.platform_id)
-    .bind(SpecificPermission::Inspect as i32)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, true).await;
     for reference in [&docker_id, &docker_id[..12].to_string(), &id.to_string()] {
         let response = send(
             &f,
@@ -144,6 +171,8 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
             json!({"bridge":"network-id","fallback":"fallback"})
         );
         assert_eq!(info["ports"]["80/tcp"][0]["hostPort"], "8080");
+        assert!(info["ports"].as_object().unwrap().contains_key("53/udp"));
+        assert!(info["ports"]["53/udp"].is_null());
         assert_eq!(info["startedAt"], "2026-01-01T12:00:00Z");
         assert_eq!(info["capabilities"]["canRead"], true);
         assert!(!info.to_string().contains("not-for-browser"));
@@ -199,15 +228,14 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
             .status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2",
+    set_inspect_access(
+        &f,
+        &deployment_reader,
+        ResourceType::Deployment,
+        deployment,
+        true,
     )
-    .bind(deployment_reader.actor_id.value())
-    .bind(deployment)
-    .bind(SpecificPermission::Inspect as i32)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    .await;
     let inspected = send(&f, &deployment_inspect, Some(deployment_reader.clone())).await;
     assert_eq!(inspected.status(), StatusCode::OK);
     assert!(
@@ -255,8 +283,23 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::NOT_FOUND
     );
     let stack = Uuid::now_v7();
-    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$2,$3,'WebEditor','{}','{}')")
-        .bind(stack).bind(format!("inspection-{stack}")).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let spec: citadel_stacks::StackSpec =
+        serde_json::from_value(json!({"$type":"WebEditor","composeFile":"services: {}"})).unwrap();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$2,$3,'WebEditor',$4,$5)")
+        .bind(stack).bind(format!("inspection-{stack}")).bind(SYSTEM_ACTOR_ID)
+        .bind(citadel_stacks::StackDriftPolicy::default().to_storage_value().unwrap())
+        .bind(citadel_stacks::StackUpdateState::new(&spec).to_storage_value().unwrap())
+        .execute(&f.pool).await.unwrap();
+    let release = Uuid::now_v7();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,$5,'Healthy','1')")
+        .bind(release).bind(stack).bind(f.platform_id).bind(SYSTEM_ACTOR_ID)
+        .bind(spec.to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&f.pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE containers SET stackid=$2 WHERE id=$1")
         .bind(id)
         .bind(stack)
@@ -298,6 +341,34 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
     assert_eq!(data["containers"].as_array().unwrap().len(), 1);
     assert_eq!(data["containers"][0]["id"], docker_id);
     assert_eq!(data["containers"][0]["stackId"], stack.to_string());
+    let realtime = super::realtime_groups::reader(&f);
+    let stack_snapshot = realtime
+        .read(
+            &scoped_reader,
+            &Group::parse(&format!("stack-info:{stack}")).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        stack_snapshot.events[0].target,
+        "ReceiveStackContainersInfo"
+    );
+    assert_eq!(stack_snapshot.events[0].arguments[0], data["containers"]);
+    let container_snapshot = realtime
+        .read(
+            &scoped_reader,
+            &Group::parse(&format!("container-info:{id}")).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(container_snapshot.events[0].target, "ReceiveContainerInfo");
+    assert_eq!(
+        container_snapshot.events[0].arguments[0],
+        data["containers"][0]
+    );
+
     assert_eq!(
         send(&f, &scoped_url, Some(scoped_reader.clone()))
             .await
@@ -305,15 +376,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::FORBIDDEN
     );
     assert_eq!(requests.lock().await.len(), before);
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2",
-    )
-    .bind(scoped_reader.actor_id.value())
-    .bind(stack)
-    .bind(SpecificPermission::Inspect as i32)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    set_inspect_access(&f, &scoped_reader, ResourceType::Stack, stack, true).await;
     // This route requires Stack Read + Inspect, without Platform ACL.
     let scoped = json_body(send(&f, &scoped_url, Some(scoped_reader.clone())).await).await;
     assert_eq!(
@@ -406,28 +469,13 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=0 WHERE actorid=$1 AND resourceid=$2",
-    )
-    .bind(reader.actor_id.value())
-    .bind(f.platform_id)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, false).await;
     assert_eq!(
         send(&f, &url, Some(reader.clone())).await.status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(requests.lock().await.len(), calls_before);
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$3 WHERE actorid=$1 AND resourceid=$2",
-    )
-    .bind(reader.actor_id.value())
-    .bind(f.platform_id)
-    .bind(SpecificPermission::Inspect as i32)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, true).await;
 
     // Worker inspection must use its node session, never the connected manager.
     sqlx::query("UPDATE containers SET dockernodeid='node-1' WHERE id=$1")

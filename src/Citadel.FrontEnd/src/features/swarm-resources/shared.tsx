@@ -1,5 +1,5 @@
 import {
-  PlatformCapabilities,
+  PlatformCapabilitiesView,
   PlatformStatus,
   ProblemDetails,
   StackReleaseStatus,
@@ -51,7 +51,7 @@ export const SwarmLogs = ({
   platformId: string;
   resourceId: string;
   resource: 'service' | 'task';
-  capabilities?: PlatformCapabilities | null;
+  capabilities?: PlatformCapabilitiesView | null;
 }) => {
   const appContext = useContext(AppContext);
   const currentPlatform = appContext?.currentPlatform;
@@ -97,7 +97,7 @@ export const SwarmLogs = ({
 export const displayList = (values: string[]) => (values.length ? values.join(', ') : '-');
 
 export const swarmOwnershipLabel = (value: SwarmServiceOwnership) => {
-  if (value === SwarmServiceOwnership.CitadelDeployment) return 'Citadel Deployment';
+  if (value === SwarmServiceOwnership.System) return 'System';
   if (value === SwarmServiceOwnership.CitadelStack) return 'Citadel Stack';
   if (value === SwarmServiceOwnership.DockerStackExternal) return 'External Docker Stack';
   if (value === SwarmServiceOwnership.CitadelService) return 'Citadel Service';

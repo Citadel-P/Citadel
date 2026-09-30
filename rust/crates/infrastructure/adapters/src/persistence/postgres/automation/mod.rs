@@ -21,7 +21,7 @@ use citadel_automation::{
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_primitives::{ActorId, ResourceType};
 
-use citadel_git::repositories::webhooks::RepoWebhookConfig;
+use citadel_primitives::WebhookConfig;
 
 use futures_util::future::BoxFuture;
 
@@ -32,5 +32,5 @@ use uuid::Uuid;
 enum EnqueueMode<'a> {
     Queue,
     Execute(Option<&'a str>),
-    Webhook(&'a RepoWebhookConfig),
+    Webhook(&'a WebhookConfig),
 }

@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  ContainerDataView,
+  ContainerRuntimeView,
   ContainerStateStatus,
   ContainerSystemRole,
   ContainerView,
@@ -26,8 +26,12 @@ beforeEach(() => {
 });
 
 describe('mergeContainerRuntimeUpdate', () => {
-  const runtimeUpdate: ContainerDataView = {
+  const runtimeUpdate: ContainerRuntimeView = {
     id: 'ea5f935b4706',
+    platformId: 'platform-1',
+    created: 0,
+    stack: null,
+    ports: {},
     name: '/nginx',
     image: 'nginx:latest',
     imageId: 'sha256:nginx',

@@ -1,5 +1,6 @@
 use super::spec::*;
 use chrono::{DateTime, Utc};
+use citadel_alerts::{AlertRuleStatus, AlertSeverity, AlertType};
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -8,7 +9,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct AlertChannelView {
     #[schema(required = true)]
-    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
+    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub alert_destination: AlertDestination,
@@ -29,8 +30,8 @@ impl TryFrom<citadel_alerts::AlertChannel> for AlertChannelView {
             alert_destination: decode(value.alert_destination.into())?,
             url: value.url,
             is_active: value.is_active,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
         })
     }
 }
@@ -39,13 +40,15 @@ impl TryFrom<citadel_alerts::AlertChannel> for AlertChannelView {
 #[serde(rename_all = "camelCase")]
 pub struct AlertRuleView {
     #[schema(required = true)]
-    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
+    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     #[schema(required = true)]
     pub description: Option<String>,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertTypeSchema)]
     pub alert_type: AlertType,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertSeveritySchema)]
     pub severity: AlertSeverity,
     #[schema(required = true)]
     pub cooldown_seconds: Option<i32>,
@@ -53,6 +56,7 @@ pub struct AlertRuleView {
     pub required_matches: Option<i32>,
     #[schema(required = true)]
     pub threshold: Option<f64>,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertRuleStatusSchema)]
     pub status: AlertRuleStatus,
     pub channel_ids: Vec<Uuid>,
     pub limited_to: Vec<AlertResourceScope>,
@@ -71,16 +75,16 @@ impl TryFrom<citadel_alerts::AlertRule> for AlertRuleView {
             name: value.name,
             description: value.description,
             alert_type: decode(value.alert_type.into())?,
-            severity: decode(value.severity.into())?,
+            severity: value.severity,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: decode(value.status.into())?,
+            status: value.status,
             channel_ids: value.channel_ids,
             limited_to: decode(Value::Array(value.limited_to))?,
             quiet_hours: decode(Value::Array(value.quiet_hours))?,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
         })
     }
 }
@@ -113,9 +117,12 @@ pub struct AlertEventView {
     pub id: Uuid,
     pub alert_rule_id: Uuid,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertTypeSchema)]
     pub alert_type: AlertType,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertSeveritySchema)]
     pub severity: AlertSeverity,
-    pub status: AlertEventStatus,
+    #[schema(value_type = crate::api::resources::schema_models::alerts::AlertEventStatusSchema)]
+    pub status: citadel_alerts::AlertEventStatus,
     pub message: String,
     /// Event-specific details supplied by the alert emitter.
     pub info: Value,
@@ -153,8 +160,8 @@ impl TryFrom<citadel_alerts::AlertEvent> for AlertEventView {
             id: value.id,
             alert_rule_id: value.alert_rule_id,
             alert_type: decode(value.alert_type.into())?,
-            severity: decode(value.severity.into())?,
-            status: decode(value.status.into())?,
+            severity: value.severity,
+            status: value.status,
             message: value.message,
             info: value.info,
             resource_id: value.resource_id,
@@ -204,14 +211,14 @@ impl TryFrom<citadel_alerts::AlertEventPage> for AlertEventPage {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Channels {
-    pub(crate) capabilities: crate::api::resources::platforms::views::ResourceCapabilitiesView,
+    pub(crate) capabilities: crate::api::resources::capabilities::ResourceCapabilitiesView,
     pub(crate) channels: Vec<AlertChannelView>,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rules {
-    pub(crate) capabilities: crate::api::resources::platforms::views::ResourceCapabilitiesView,
+    pub(crate) capabilities: crate::api::resources::capabilities::ResourceCapabilitiesView,
     pub(crate) alert_rules: Vec<AlertRuleListItem>,
 }
 
@@ -258,7 +265,7 @@ impl TryFrom<citadel_alerts::AlertRule> for AlertRuleConfig {
     fn try_from(rule: citadel_alerts::AlertRule) -> Result<Self, Self::Error> {
         Ok(Self {
             id: rule.id,
-            is_system: rule.created_by_actor_id == Uuid::from_u128(1),
+            is_system: rule.audit.created_by_actor_id.value() == Uuid::from_u128(1),
             configuration: citadel_alerts::AlertRuleConfiguration::from(&rule).try_into()?,
         })
     }

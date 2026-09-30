@@ -1,6 +1,6 @@
 //! HTTP decoding, including null and PATCH semantics.
 use crate::api::resources::{common::DuplicateSourceInput, deployments::spec::DeploymentSpec};
-use citadel_deployments::FieldPatch;
+use citadel_primitives::PatchField;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -11,6 +11,7 @@ pub struct CreateDeploymentInput {
     pub name: String,
     pub platform_id: Uuid,
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     #[schema(nullable)]
@@ -36,9 +37,9 @@ pub struct PatchDeploymentInput {
 #[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchDeploymentMetadataInput {
-    #[serde(default, deserialize_with = "deserialize_field_patch")]
+    #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    pub description: FieldPatch<String>,
+    pub description: PatchField<String>,
     #[serde(default, rename = "tags")]
     pub _tags: Option<Vec<String>>,
 }
@@ -72,7 +73,7 @@ impl From<CreateDeploymentInput> for citadel_deployments::CreateDeployment {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec,
             tag_ids: value.tag_ids,
             duplicate_source: value.duplicate_source.map(Into::into),
         }
@@ -92,7 +93,7 @@ impl From<AdoptContainerInput> for citadel_deployments::adoption::AdoptContainer
         Self {
             name: value.name,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec,
             preview_fingerprint: value.preview_fingerprint,
             tag_ids: value.tag_ids,
             import_sensitive_environment_as_secrets: value.import_sensitive_environment_as_secrets,
@@ -157,22 +158,12 @@ mod tests {
     }
 }
 
-fn deserialize_field_patch<'de, D, T>(deserializer: D) -> Result<FieldPatch<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(|value| match value {
-        Some(value) => FieldPatch::Set(value),
-        None => FieldPatch::Clear,
-    })
-}
-
 #[derive(Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdoptContainerInput {
     pub name: String,
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
     pub preview_fingerprint: String,
     #[serde(default)]

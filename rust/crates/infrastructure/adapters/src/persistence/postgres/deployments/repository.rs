@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 #[derive(Clone)]
 pub struct PostgresDeploymentRepository {
     pub(super) pool: PgPool,
@@ -16,7 +17,7 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a DeploymentDetails,
+        expected: &'a citadel_deployments::Deployment,
     ) -> BoxFuture<'a, Result<citadel_deployments::DeploymentUpdateCheck, DeploymentError>> {
         self.begin_update_check_impl(actor, administrator, expected)
     }
@@ -46,7 +47,10 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         actor_id: ActorId,
         administrator: bool,
         filter: &'a DeploymentFilter,
-    ) -> BoxFuture<'a, Result<Vec<DeploymentDetails>, DeploymentError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<AuthorizedResource<citadel_deployments::Deployment>>, DeploymentError>,
+    > {
         self.list_authorized_impl(actor_id, administrator, filter)
     }
     fn get_authorized<'a>(
@@ -54,7 +58,8 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         self.get_authorized_impl(actor_id, administrator, id)
     }
     fn create<'a>(
@@ -62,7 +67,8 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateDeployment,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         self.create_impl(actor_id, administrator, input)
     }
     fn update_config<'a>(
@@ -72,7 +78,8 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         id: Uuid,
         expected_row_version: i64,
         spec: &'a DeploymentSpec,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         self.update_config_impl(actor_id, administrator, id, expected_row_version, spec)
     }
     fn update_metadata<'a>(
@@ -81,7 +88,8 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         administrator: bool,
         id: Uuid,
         input: &'a UpdateDeploymentMetadata,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         self.update_metadata_impl(actor_id, administrator, id, input)
     }
     fn rename<'a>(
@@ -90,7 +98,8 @@ impl DeploymentRepository for PostgresDeploymentRepository {
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         self.rename_impl(actor_id, administrator, id, name)
     }
     fn duplicate_draft<'a>(

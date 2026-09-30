@@ -51,12 +51,14 @@ impl GitAccountService {
         input.validate()?;
         let account = StoredGitAccount {
             id: Uuid::now_v7(),
-            created_by_actor_id: actor_id.value(),
+            audit: citadel_primitives::AuditMetadata {
+                created_by_actor_id: actor_id,
+                created_at: Utc::now(),
+            },
             name: input.name,
             domain: input.domain,
             transport: input.transport,
             auth_type: input.auth_type,
-            created_at: Utc::now(),
             protected_configuration: self.protect(&input.configuration)?,
         };
         self.store
@@ -82,12 +84,11 @@ impl GitAccountService {
         input.validate()?;
         let account = StoredGitAccount {
             id,
-            created_by_actor_id: current.created_by_actor_id,
+            audit: current.audit,
             name: input.name,
             domain: input.domain,
             transport: input.transport,
             auth_type: input.auth_type,
-            created_at: current.created_at,
             protected_configuration: self.protect(&input.configuration)?,
         };
         self.store
@@ -262,6 +263,8 @@ mod tests {
             .await
             .unwrap();
 
+        assert_eq!(created.audit.created_by_actor_id, actor_id);
+        assert_eq!(updated.audit, created.audit);
         assert_eq!(updated.name, "renamed-account");
         assert_eq!(updated.domain, "git.example.test");
         assert_eq!(updated.transport, GitTransport::Https);

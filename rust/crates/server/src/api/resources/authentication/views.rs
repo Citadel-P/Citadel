@@ -59,7 +59,7 @@ impl From<citadel_identity::LoginOutcome> for LoginResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetupStatusView {
     pub requires_setup: bool,

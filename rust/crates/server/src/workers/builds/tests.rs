@@ -20,7 +20,7 @@ impl BuildExecutor for BlockingExecutor {
             self.0.fetch_add(1, Ordering::SeqCst);
             token.cancelled().await;
             BuildExecutionResult {
-                status: "Cancelled",
+                status: citadel_builds::BuildRunStatus::Cancelled,
                 exit_code: None,
                 image_digest: None,
                 resolved_commit_sha: None,
@@ -75,7 +75,10 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
         .unwrap()
         .unwrap();
     for id in runs {
-        assert_eq!(store.get_run(id).await.unwrap().status, "Cancelled");
+        assert_eq!(
+            store.get_run(id).await.unwrap().status,
+            citadel_builds::BuildRunStatus::Cancelled
+        );
     }
     pool.close().await;
 }
@@ -163,7 +166,7 @@ async fn retention_obeys_configuration_and_preserves_referenced_builds() {
             .finish(
                 &claim,
                 &BuildExecutionResult {
-                    status: "Failed",
+                    status: citadel_builds::BuildRunStatus::Failed,
                     exit_code: Some(1),
                     image_digest: None,
                     resolved_commit_sha: None,
@@ -224,7 +227,7 @@ impl BuildExecutor for FailedExecutor {
     ) -> futures_util::future::BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async {
             BuildExecutionResult {
-                status: "Failed",
+                status: citadel_builds::BuildRunStatus::Failed,
                 exit_code: Some(1),
                 image_digest: None,
                 resolved_commit_sha: None,
@@ -262,7 +265,10 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
     for index in 0..6 {
         let run = store.enqueue(actor, project.id, "Manual").await.unwrap();
         assert!(service.process_one(&token).await.unwrap());
-        assert_eq!(store.get_run(run.id).await.unwrap().status, "Failed");
+        assert_eq!(
+            store.get_run(run.id).await.unwrap().status,
+            citadel_builds::BuildRunStatus::Failed
+        );
         runs.push(run.id);
         if index < 2 {
             let spec = if index == 0 {

@@ -1,36 +1,4 @@
 use super::*;
-use webhooks::validate_webhook;
-#[derive(Debug, Clone, Default)]
-pub enum FieldPatch<T> {
-    #[default]
-    Missing,
-    Null,
-    Value(T),
-}
-
-impl<'de, T> Deserialize<'de> for FieldPatch<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Option::<T>::deserialize(deserializer).map(|value| value.map_or(Self::Null, Self::Value))
-    }
-}
-
-impl<T: Clone> FieldPatch<T> {
-    #[must_use]
-    pub fn merge_optional(&self, current: Option<&T>) -> Option<T> {
-        match self {
-            Self::Missing => current.cloned(),
-            Self::Null => None,
-            Self::Value(value) => Some(value.clone()),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateGitRepository {
@@ -43,7 +11,7 @@ pub struct CreateGitRepository {
     pub sync_mode: GitRepositorySyncMode,
     #[serde(default = "default_sync_interval")]
     pub sync_interval_minutes: Option<i32>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub on_clone: Option<RepoCommand>,
     pub on_pull: Option<RepoCommand>,
     #[serde(default)]
@@ -78,8 +46,11 @@ impl CreateGitRepository {
         };
         validate_repo_command(self.on_clone.as_ref())?;
         validate_repo_command(self.on_pull.as_ref())?;
-        validate_webhook(self.webhook.as_ref())
-            .map_err(|error| GitRepositoryError::Validation(error.to_string()))?;
+        if let Some(webhook) = &self.webhook {
+            webhook
+                .validate()
+                .map_err(|error| GitRepositoryError::Validation(error.into()))?;
+        }
         self.name = self.name.trim().to_owned();
         self.url = normalize_git_url(&self.url);
         self.default_branch = self.default_branch.trim().to_owned();
@@ -106,20 +77,20 @@ pub fn validate_name_identifier(name: &str, resource: &str) -> Result<(), GitRep
 pub struct GitRepositoryPatch {
     pub name: Option<String>,
     #[serde(default)]
-    pub description: FieldPatch<String>,
+    pub description: PatchField<String>,
     pub url: Option<String>,
     pub default_branch: Option<String>,
     #[serde(default)]
-    pub git_account_id: FieldPatch<Uuid>,
+    pub git_account_id: PatchField<Uuid>,
     pub sync_mode: Option<GitRepositorySyncMode>,
     #[serde(default)]
-    pub sync_interval_minutes: FieldPatch<i32>,
+    pub sync_interval_minutes: PatchField<i32>,
     #[serde(default)]
-    pub webhook: FieldPatch<Value>,
+    pub webhook: PatchField<citadel_primitives::WebhookPatch>,
     #[serde(default)]
-    pub on_clone: FieldPatch<RepoCommand>,
+    pub on_clone: PatchField<RepoCommand>,
     #[serde(default)]
-    pub on_pull: FieldPatch<RepoCommand>,
+    pub on_pull: PatchField<RepoCommand>,
     pub tag_ids: Option<Vec<Uuid>>,
 }
 

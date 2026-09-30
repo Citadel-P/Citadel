@@ -12,8 +12,11 @@ pub struct CreateStackInput {
     pub name: String,
     pub platform_id: Uuid,
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub spec: StackSpec,
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackDriftPolicySchema>)]
     pub drift_policy: Option<StackDriftPolicy>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
@@ -27,9 +30,9 @@ impl From<citadel_stacks::CreateStack> for CreateStackInput {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            stack_source: value.stack_source.into(),
-            spec: value.spec.into(),
-            drift_policy: value.drift_policy.map(|item| item.into()),
+            stack_source: value.stack_source,
+            spec: value.spec,
+            drift_policy: value.drift_policy,
             tag_ids: value.tag_ids,
             duplicate_source: value.duplicate_source.map(|source| DuplicateSourceInput {
                 resource_type: citadel_activities::ActivityResourceType::Stack,
@@ -63,9 +66,9 @@ impl TryFrom<CreateStackInput> for citadel_stacks::CreateStack {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            stack_source: value.stack_source.into(),
-            spec: value.spec.into(),
-            drift_policy: value.drift_policy.map(Into::into),
+            stack_source: value.stack_source,
+            spec: value.spec,
+            drift_policy: value.drift_policy,
             tag_ids: value.tag_ids,
             duplicate_source,
         })
@@ -82,10 +85,12 @@ pub struct PatchStackInput {
     #[serde(default, deserialize_with = "deserialize_present_nullable_string")]
     pub description: Option<Option<String>>,
     #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackSourceSchema>)]
     pub stack_source: Option<StackSource>,
     #[serde(default)]
     pub spec: Option<Value>,
     #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackDriftPolicySchema>)]
     pub drift_policy: Option<StackDriftPolicy>,
     pub row_version: Option<i64>,
 }
@@ -96,9 +101,9 @@ impl From<citadel_stacks::UpdateStack> for PatchStackInput {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            stack_source: value.stack_source.map(|item| item.into()),
+            stack_source: value.stack_source,
             spec: value.spec,
-            drift_policy: value.drift_policy.map(|item| item.into()),
+            drift_policy: value.drift_policy,
             row_version: value.row_version,
         }
     }
@@ -110,9 +115,9 @@ impl From<PatchStackInput> for citadel_stacks::UpdateStack {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            stack_source: value.stack_source.map(|item| item.into()),
+            stack_source: value.stack_source,
             spec: value.spec,
-            drift_policy: value.drift_policy.map(|item| item.into()),
+            drift_policy: value.drift_policy,
             row_version: value.row_version,
         }
     }
@@ -208,8 +213,11 @@ where
 pub(crate) struct SwarmPreflightInput {
     pub(crate) name: String,
     pub(crate) platform_id: Uuid,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub(crate) stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub(crate) spec: StackSpec,
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackDriftPolicySchema>)]
     pub(crate) drift_policy: Option<StackDriftPolicy>,
 }
 
@@ -223,7 +231,9 @@ pub(crate) struct ImportDraftQuery {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ValidateImportRequest {
     pub(crate) name: String,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub(crate) stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub(crate) spec: StackSpec,
     pub(crate) import_kind: Option<StackImportKind>,
 }
@@ -233,7 +243,9 @@ pub(crate) struct ValidateImportRequest {
 pub(crate) struct ImportRequest {
     pub(crate) name: String,
     pub(crate) description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub(crate) stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub(crate) spec: StackSpec,
     pub(crate) preview_fingerprint: String,
     #[serde(default)]
@@ -246,6 +258,7 @@ pub(crate) struct ImportRequest {
 #[derive(Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct StackDriftPolicyInput {
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackDriftModeSchema>)]
     pub(crate) mode: Option<StackDriftMode>,
     pub(crate) alert_on_drift: Option<bool>,
     pub(crate) mark_degraded: Option<bool>,
@@ -258,7 +271,7 @@ impl From<StackDriftPolicyInput> for citadel_stacks::StackDriftPolicy {
     fn from(value: StackDriftPolicyInput) -> Self {
         let defaults = Self::default();
         Self {
-            mode: value.mode.map(Into::into).unwrap_or(defaults.mode),
+            mode: value.mode.unwrap_or(defaults.mode),
             alert_on_drift: value.alert_on_drift.unwrap_or(defaults.alert_on_drift),
             mark_degraded: value.mark_degraded.unwrap_or(defaults.mark_degraded),
             auto_start_stopped_containers: value

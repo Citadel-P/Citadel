@@ -17,7 +17,7 @@ const SEARCH_TYPES: &[(ResourceType, &str, usize)] = &[
     (ResourceType::BuildAgentPool, "BuildAgentPool", 7),
     (ResourceType::SwarmService, "SwarmService", 8),
 ];
-const CATEGORIES: [&str; 9] = [
+pub const CATEGORIES: [&str; 9] = [
     "Platforms",
     "Stacks",
     "Deployments",
@@ -28,6 +28,11 @@ const CATEGORIES: [&str; 9] = [
     "Builds",
     "SwarmServices",
 ];
+
+/// The same supported types drive validation, default searches, and the API schema.
+pub fn supported_resource_types() -> impl Iterator<Item = ResourceType> {
+    SEARCH_TYPES.iter().map(|(kind, _, _)| *kind)
+}
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -83,7 +88,7 @@ impl GlobalSearchQuery {
                 ));
             }
         } else {
-            resource_types.extend(SEARCH_TYPES.iter().map(|(kind, _, _)| *kind));
+            resource_types.extend(supported_resource_types());
         }
         Ok(ValidatedSearch {
             query,

@@ -45,7 +45,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<LookupHt
     tag = "Lookup",
     summary = "Look up accessible resources",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/lookupResponse"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::discovery::LookupResourceInfoSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("TargetResourceType" = crate::api::resources::vocabulary::LookupResourceTypeSchema, Query), ("SourceResourceType" = Option<crate::api::resources::vocabulary::LookupResourceTypeSchema>, Query), ("SourceResourceId" = Option<uuid::Uuid>, Query), ("PlatformId" = Option<uuid::Uuid>, Query)),

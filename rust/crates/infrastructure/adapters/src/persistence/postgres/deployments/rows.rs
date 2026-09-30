@@ -1,5 +1,8 @@
 use super::*;
-pub(super) fn map_deployment(row: PgRow) -> Result<DeploymentDetails, DeploymentError> {
+use citadel_primitives::AuthorizedResource;
+pub(super) fn map_deployment(
+    row: PgRow,
+) -> Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError> {
     let spec = DeploymentSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
     let tags = serde_json::from_value::<Vec<TagSummary>>(row.try_get("tags").map_err(storage)?)
         .map_err(|error| DeploymentError::Storage(format!("invalid Deployment Tags: {error}")))?;
@@ -8,7 +11,12 @@ pub(super) fn map_deployment(row: PgRow) -> Result<DeploymentDetails, Deployment
         row.try_get("permission_level").map_err(storage)?,
         row.try_get("permission_specific").map_err(storage)?,
     )?;
-    let auto_status: Option<String> = row.try_get("autoupdatestate_status").map_err(storage)?;
+    let auto_status = row
+        .try_get::<Option<String>, _>("autoupdatestate_status")
+        .map_err(storage)?
+        .map(|status| status.parse::<citadel_primitives::AutoUpdateStatus>())
+        .transpose()
+        .map_err(storage)?;
     let auto_last_checked: Option<DateTime<Utc>> = row
         .try_get("autoupdatestate_lastcheckedat")
         .map_err(storage)?;
@@ -20,16 +28,23 @@ pub(super) fn map_deployment(row: PgRow) -> Result<DeploymentDetails, Deployment
         .map_err(storage)?;
     let auto_last_error: Option<String> =
         row.try_get("autoupdatestate_lasterror").map_err(storage)?;
-    Ok(DeploymentDetails {
-        deployment: Deployment {
+    Ok(AuthorizedResource {
+        resource: Deployment {
             id: row.try_get("id").map_err(storage)?,
             name: row.try_get("name").map_err(storage)?,
             description: row.try_get("description").map_err(storage)?,
             platform_id: row.try_get("platformid").map_err(storage)?,
-            created_at: row.try_get("createdat").map_err(storage)?,
-            created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-            status: row.try_get("status").map_err(storage)?,
-            control_state: row.try_get("controlstate").map_err(storage)?,
+
+            status: row
+                .try_get::<&str, _>("status")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
+            control_state: row
+                .try_get::<&str, _>("controlstate")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
             row_version: row.try_get("rowversion").map_err(storage)?,
             auto_update_state: auto_status.map(|status| AutoUpdateState {
                 last_checked_at: auto_last_checked.unwrap_or_else(dotnet_min_datetime),
@@ -39,16 +54,33 @@ pub(super) fn map_deployment(row: PgRow) -> Result<DeploymentDetails, Deployment
                 last_error: auto_last_error,
             }),
             spec,
+
+            audit: citadel_primitives::AuditMetadata {
+                created_at: row.try_get("createdat").map_err(storage)?,
+                created_by_actor_id: citadel_primitives::ActorId::new(
+                    row.try_get("createdbyactorid").map_err(storage)?,
+                ),
+            },
+
+            platform_status: row
+                .try_get::<String, _>("platform_status")
+                .map_err(storage)?
+                .parse()
+                .map_err(storage)?,
+            platform_name: row.try_get("platform_name").map_err(storage)?,
+            image_name: row.try_get("image_name").map_err(storage)?,
+            image_id: row.try_get("image_id").map_err(storage)?,
+            container_id: row.try_get("container_id").map_err(storage)?,
+            docker_container_id: row.try_get("dockercontainerid").map_err(storage)?,
+            docker_image_id: row.try_get("dockerimageid").map_err(storage)?,
+            tags,
+            latest_activity: row
+                .try_get::<Option<Value>, _>("latest_activity")
+                .map_err(storage)?
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(storage)?,
         },
-        platform_status: row.try_get("platform_status").map_err(storage)?,
-        platform_name: row.try_get("platform_name").map_err(storage)?,
-        image_name: row.try_get("image_name").map_err(storage)?,
-        image_id: row.try_get("image_id").map_err(storage)?,
-        container_id: row.try_get("container_id").map_err(storage)?,
-        docker_container_id: row.try_get("dockercontainerid").map_err(storage)?,
-        docker_image_id: row.try_get("dockerimageid").map_err(storage)?,
-        tags,
-        latest_activity: row.try_get("latest_activity").map_err(storage)?,
         effective_permission: permission,
     })
 }

@@ -1,7 +1,5 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
-
 use serde::{Deserialize, Serialize};
 
 use serde_json::Value;
@@ -10,13 +8,7 @@ use sha2::{Digest, Sha256};
 
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum UpdateBehavior {
-    #[default]
-    Disabled,
-    Notify,
-    AutoDeploy,
-}
+pub use citadel_primitives::UpdateBehavior;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SchedulingMode {
@@ -212,27 +204,6 @@ const fn one() -> i32 {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SwarmServiceWebhookConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "github_provider")]
-    pub provider: String,
-    #[serde(default = "github_hmac_sha256")]
-    pub auth_scheme: String,
-    pub secret: Option<String>,
-    pub branch_filter: Option<String>,
-}
-
-pub(crate) fn github_provider() -> String {
-    "GitHub".to_owned()
-}
-
-pub(crate) fn github_hmac_sha256() -> String {
-    "GitHubHmacSha256".to_owned()
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SwarmServiceSpec {
     pub image: SwarmServiceImageInfo,
     #[serde(default)]
@@ -268,7 +239,7 @@ pub struct SwarmServiceSpec {
     pub placement_constraints: Vec<String>,
     pub restart_policy: Option<SwarmServiceRestartPolicy>,
     pub update_policy: Option<SwarmServiceUpdatePolicy>,
-    pub webhook: Option<SwarmServiceWebhookConfig>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
 }
 
 const fn one_option() -> Option<i32> {
@@ -283,6 +254,9 @@ impl SwarmServiceSpec {
     }
 
     pub fn validate(&self) -> Result<(), SwarmServiceError> {
+        if let Some(webhook) = &self.webhook {
+            webhook.validate().map_err(validation)?;
+        }
         match &self.image {
             SwarmServiceImageInfo::External {
                 registry_id,
@@ -500,16 +474,6 @@ impl SwarmServiceSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutoUpdateState {
-    pub last_checked_at: DateTime<Utc>,
-    pub status: String,
-    pub current_digest: Option<String>,
-    pub remote_digest: Option<String>,
-    pub last_error: Option<String>,
-}
-
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum SwarmServiceError {
     #[error("{0}")]
@@ -582,36 +546,13 @@ pub(crate) fn camelize(value: Value) -> Value {
 }
 
 pub(crate) fn rename_keys(value: Value, pascal: bool) -> Value {
-    match value {
-        Value::Object(map) => Value::Object(
-            map.into_iter()
-                .map(|(key, value)| {
-                    let mut chars = key.chars();
-                    let key = chars.next().map_or(key.clone(), |first| {
-                        let head = if pascal {
-                            first.to_ascii_uppercase()
-                        } else {
-                            first.to_ascii_lowercase()
-                        };
-                        format!("{head}{}", chars.as_str())
-                    });
-                    let value = if key.eq_ignore_ascii_case("Labels") {
-                        value
-                    } else {
-                        rename_keys(value, pascal)
-                    };
-                    (key, value)
-                })
-                .collect(),
-        ),
-        Value::Array(values) => Value::Array(
-            values
-                .into_iter()
-                .map(|value| rename_keys(value, pascal))
-                .collect(),
-        ),
-        other => other,
-    }
+    use citadel_primitives::json_keys::{PropertyCase, map_property_keys};
+    let case = if pascal {
+        PropertyCase::Pascal
+    } else {
+        PropertyCase::Camel
+    };
+    map_property_keys(value, case, &["labels"])
 }
 
 pub(crate) fn canonicalize(value: Value) -> Value {

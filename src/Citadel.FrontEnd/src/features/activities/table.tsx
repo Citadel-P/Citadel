@@ -1,8 +1,4 @@
-import type {
-  ActivityEventInfo,
-  ActivityView,
-  PagedActivityView,
-} from '@/api/generated/api.types';
+import type { PublicActivityEventInfo, ActivityView, PagedActivityView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
@@ -117,7 +113,7 @@ function EventTypeCell({ activity }: { activity: ActivityView }) {
   );
 }
 
-function getActivitySummary(info: ActivityEventInfo | null | undefined): string | null {
+function getActivitySummary(info: PublicActivityEventInfo | null | undefined): string | null {
   if (!info?.$type) return null;
 
   switch (info.$type) {
@@ -142,12 +138,6 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
         .join(' - ');
     case 'SwarmServiceWebhookReceived':
       return [info.status, formatWebhookReason(info.reason)].filter(Boolean).join(' - ');
-    case 'StackGitUpdateAvailable':
-      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)}`;
-    case 'StackGitAutoUpdated':
-      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.previousCommitSha)} -> ${shortCommit(info.updatedCommitSha)}`;
-    case 'StackGitAutoDeployFailed':
-      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)} - ${info.reason}`;
     case 'GitRepoPulled':
     case 'GitRepoCloned':
       return [info.result?.commitSha ? shortCommit(info.result.commitSha) : null, info.result?.message]

@@ -45,7 +45,7 @@ pub struct ExternalSecretPatch {
     pub external_path: Option<String>,
     pub external_key: Option<String>,
     #[serde(default)]
-    pub external_version: MetadataPatch<i32>,
+    pub external_version: PatchField<i32>,
 }
 
 #[derive(Debug, Clone)]

@@ -53,41 +53,43 @@ pub(super) async fn record_run_activity(
         .started_at
         .zip(run.completed_at)
         .map(|(start, end)| (end - start).num_milliseconds().max(0));
-    let info = match run.status.as_str() {
-        "Queued" => Info::BuildRunQueued {
+    let info = match run.status {
+        citadel_builds::BuildRunStatus::Queued => Info::BuildRunQueued {
             run_id: id,
             trigger: run.trigger,
         },
-        "Preparing" => Info::BuildRunStarted {
+        citadel_builds::BuildRunStatus::Preparing => Info::BuildRunStarted {
             run_id: id,
             trigger: run.trigger,
         },
-        "Succeeded" => Info::BuildRunSucceeded {
+        citadel_builds::BuildRunStatus::Succeeded => Info::BuildRunSucceeded {
             run_id: id,
             trigger: run.trigger,
             exit_code: run.exit_code,
             duration_ms,
             image_digest: run.image_digest,
         },
-        "TimedOut" => Info::BuildRunTimedOut {
+        citadel_builds::BuildRunStatus::TimedOut => Info::BuildRunTimedOut {
             run_id: id,
             trigger: run.trigger,
             duration_ms,
             error_message: run.error_message,
         },
-        "Cancelled" => Info::BuildRunCancelled {
+        citadel_builds::BuildRunStatus::Cancelled => Info::BuildRunCancelled {
             run_id: id,
             trigger: run.trigger,
         },
-        "Failed" | "Interrupted" => Info::BuildRunFailed {
-            run_id: id,
-            trigger: run.trigger,
-            status: run.status,
-            exit_code: run.exit_code,
-            duration_ms,
-            error_message: run.error_message,
-        },
-        _ => {
+        citadel_builds::BuildRunStatus::Failed | citadel_builds::BuildRunStatus::Interrupted => {
+            Info::BuildRunFailed {
+                run_id: id,
+                trigger: run.trigger,
+                status: run.status.to_string(),
+                exit_code: run.exit_code,
+                duration_ms,
+                error_message: run.error_message,
+            }
+        }
+        citadel_builds::BuildRunStatus::Running | citadel_builds::BuildRunStatus::Rejected => {
             return Err(BuildError::Storage(
                 "Invalid Build Activity transition.".into(),
             ));

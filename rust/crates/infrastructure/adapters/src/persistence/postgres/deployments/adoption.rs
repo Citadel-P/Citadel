@@ -5,6 +5,7 @@ use crate::connectors::routing::containers::Runtime;
 use citadel_deployments::adoption::*;
 use citadel_identity::SecretProtector;
 use citadel_platforms::{PlatformReader, containers::ContainerTarget};
+use citadel_primitives::AuthorizedResource;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::sync::Arc;
@@ -268,7 +269,8 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
         id: Uuid,
         mut input: AdoptContainer,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move {
             let mut context = self.load(actor, administrator, id, cancel).await?;
             let fingerprint = self.fingerprint(&context)?;

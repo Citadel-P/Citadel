@@ -1,4 +1,4 @@
-import { PlatformBackupSummaryView } from '@/api/generated/api.types';
+import { PlatformBackupSummary } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useMemo } from 'react';
 import { WorkloadState } from './platform-workload-status';
@@ -23,7 +23,7 @@ export const usePlatformBackupSummaries = (platformIds: string[]) => {
   return { summaries, isLoading: query.isLoading, isError: query.isError };
 };
 
-export const getBackupSourceStates = (summary?: PlatformBackupSummaryView): WorkloadState[] => [
+export const getBackupSourceStates = (summary?: PlatformBackupSummary): WorkloadState[] => [
   {
     label: 'Volume policies',
     value: summary?.dockerVolumePolicyCount,
@@ -41,11 +41,7 @@ export const getBackupSourceStates = (summary?: PlatformBackupSummaryView): Work
   },
 ];
 
-export const getBackupMetric = (
-  summary: PlatformBackupSummaryView | undefined,
-  isLoading: boolean,
-  isError = false,
-) => {
+export const getBackupMetric = (summary: PlatformBackupSummary | undefined, isLoading: boolean, isError = false) => {
   if (isLoading) {
     return { value: '-', detail: 'Loading', detailTitle: 'Loading backup policies' };
   }

@@ -16,14 +16,14 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
         .unwrap();
     let data = visible.iter().find(|v| v.docker_node_id.is_none()).unwrap();
     assert!(data.policy_count > 0);
-    assert_eq!(data.status, "Warning"); // No successful backup yet.
+    assert_eq!(data.status, citadel_backups::BackupCoverageStatus::Warning); // No successful backup yet.
     assert_eq!(
         visible
             .iter()
             .find(|v| v.docker_node_id.is_some())
             .unwrap()
             .status,
-        "Unprotected"
+        citadel_backups::BackupCoverageStatus::Unprotected
     );
     assert!(
         volume_coverage(pool, reader.actor_id, false, platform, &volumes)
@@ -48,11 +48,36 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
     let listed = list.iter().find(|v| v.id == id).unwrap();
     assert_eq!(listed.latest_run.as_ref().unwrap().id, run);
     assert!(listed.tags.iter().any(|v| v.id == tag));
+    let updated = store
+        .update_policy_description(admin.actor_id, id, Some("Updated metadata"))
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.tags.iter().map(|v| v.id).collect::<Vec<_>>(),
+        detail.tags.iter().map(|v| v.id).collect::<Vec<_>>()
+    );
+    assert_eq!(updated.latest_run.as_ref().unwrap().id, run);
+    assert_eq!(updated.audit, detail.audit);
+    let renamed = store
+        .rename_policy(
+            admin.actor_id,
+            &citadel_backups::policies::metadata::RenameBackupPolicyInput {
+                id,
+                name: detail.name.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(renamed.latest_run.as_ref().unwrap().id, run);
+    assert!(renamed.tags.iter().any(|v| v.id == tag));
     let covered = volume_coverage(pool, admin.actor_id, true, platform, &volumes)
         .await
         .unwrap();
     let covered = covered.iter().find(|v| v.docker_node_id.is_none()).unwrap();
-    assert_eq!(covered.status, "Protected");
+    assert_eq!(
+        covered.status,
+        citadel_backups::BackupCoverageStatus::Protected
+    );
     assert_eq!(covered.last_run_id, Some(run));
     sqlx::query("UPDATE backupruns SET status='Failed' WHERE id=$1")
         .bind(run)
@@ -67,7 +92,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
             .find(|v| v.docker_node_id.is_none())
             .unwrap()
             .status,
-        "Failed"
+        citadel_backups::BackupCoverageStatus::Failed
     );
     sqlx::query("DELETE FROM backupruns WHERE id=$1")
         .bind(run)

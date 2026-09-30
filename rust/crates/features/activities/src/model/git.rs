@@ -18,7 +18,7 @@ pub struct GitRepositoryActivitySnapshot {
     #[serde(rename = "SyncIntervalMinutes")]
     pub sync_interval_minutes: Option<i32>,
     #[serde(rename = "Webhook")]
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     #[serde(rename = "OnClone")]
     pub on_clone: Option<Value>,
     #[serde(rename = "OnPull")]
