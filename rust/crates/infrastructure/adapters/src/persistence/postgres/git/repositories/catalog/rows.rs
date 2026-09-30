@@ -10,17 +10,40 @@ pub(super) fn map_git_repository(row: PgRow) -> Result<GitRepository, GitReposit
         git_account_id: row.try_get("gitaccountid").map_err(storage)?,
         sync_mode: parse_git_sync_mode(&row.try_get::<String, _>("syncmode").map_err(storage)?)?,
         sync_interval_minutes: row.try_get("syncintervalminutes").map_err(storage)?,
-        webhook: row.try_get("webhook").map_err(storage)?,
+        webhook: row
+            .try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>(
+                "webhook",
+            )
+            .map_err(storage)?
+            .and_then(|v| v.0),
         on_clone: deserialize_optional(row.try_get("onclone").map_err(storage)?)?,
         on_pull: deserialize_optional(row.try_get("onpull").map_err(storage)?)?,
-        status: row.try_get("status").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
+
         control_state: row
             .try_get::<Option<String>, _>("controlstate")
             .map_err(storage)?
-            .unwrap_or_else(|| "Idle".to_owned()),
-        latest_activity: row.try_get("latest_activity").map_err(storage)?,
+            .unwrap_or_else(|| "Idle".to_owned())
+            .parse()
+            .map_err(storage)?,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: row.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
+
+        latest_activity: row
+            .try_get::<Option<Value>, _>("latest_activity")
+            .map_err(storage)?
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(storage)?,
         tags: serde_json::from_value(row.try_get("tags").map_err(storage)?).map_err(storage)?,
     })
 }
@@ -91,7 +114,10 @@ pub(super) fn git_snapshot(
         git_account_id: value.git_account_id,
         sync_mode: value.sync_mode.as_database_str().to_owned(),
         sync_interval_minutes: value.sync_interval_minutes,
-        webhook: value.webhook.as_ref().map(mask_webhook),
+        webhook: value
+            .webhook
+            .as_ref()
+            .map(citadel_primitives::WebhookConfig::redacted),
         on_clone: serialize_activity_value(value.on_clone.as_ref())?,
         on_pull: serialize_activity_value(value.on_pull.as_ref())?,
         resolved_commit_sha: None,

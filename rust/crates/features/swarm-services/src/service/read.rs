@@ -1,11 +1,12 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl SwarmServiceService {
     pub async fn list(
         &self,
         actor_id: ActorId,
         administrator: bool,
         filter: &SwarmServiceFilter,
-    ) -> Result<Vec<SwarmServiceDetails>, SwarmServiceError> {
+    ) -> Result<Vec<AuthorizedResource<crate::SwarmService>>, SwarmServiceError> {
         self.store
             .list_authorized(actor_id, administrator, filter)
             .await
@@ -16,7 +17,7 @@ impl SwarmServiceService {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         self.store.get_authorized(actor_id, administrator, id).await
     }
     pub async fn duplicate_draft(

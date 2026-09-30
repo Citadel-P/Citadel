@@ -121,8 +121,7 @@ impl GitRepositoryExecutionService {
         {
             webhook.branch_filter = Some(source.default_branch.clone());
         }
-        if webhook
-            .evaluate(auth_type, headers, body)
+        if crate::repositories::webhooks::evaluate_webhook(&webhook, auth_type, headers, body)
             .map_err(map_webhook_error)?
             .is_some()
         {
@@ -133,7 +132,7 @@ impl GitRepositoryExecutionService {
             return Ok(GitWebhookOutcome::Ignored);
         }
         let (_, payload_branch) =
-            webhook_branch(&webhook.provider, headers, body).map_err(map_webhook_error)?;
+            webhook_branch(webhook.provider.as_str(), headers, body).map_err(map_webhook_error)?;
         let branch = payload_branch
             .as_deref()
             .or(webhook.branch_filter.as_deref());

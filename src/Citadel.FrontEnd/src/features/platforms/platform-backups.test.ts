@@ -1,4 +1,4 @@
-import { PlatformBackupSummaryView } from '@/api/generated/api.types';
+import { PlatformBackupSummary } from '@/api/generated/api.types';
 import { getBackupMetric, getBackupSourceStates } from './platform-backups';
 
 describe('platform backup summary', () => {
@@ -36,7 +36,7 @@ describe('platform backup summary', () => {
   });
 });
 
-const createSummary = (overrides: Partial<PlatformBackupSummaryView> = {}): PlatformBackupSummaryView => ({
+const createSummary = (overrides: Partial<PlatformBackupSummary> = {}): PlatformBackupSummary => ({
   platformId: 'platform-1',
   policyCount: 0,
   enabledPolicyCount: 0,

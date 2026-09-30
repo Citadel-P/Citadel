@@ -57,23 +57,21 @@ pub enum GitAuthConfiguration {
 #[derive(Debug, Clone)]
 pub struct GitAccount {
     pub id: Uuid,
-    pub created_by_actor_id: Uuid,
+    pub audit: citadel_primitives::AuditMetadata,
     pub name: String,
     pub domain: String,
     pub transport: GitTransport,
     pub auth_type: GitAuthType,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
 pub struct StoredGitAccount {
     pub id: Uuid,
-    pub created_by_actor_id: Uuid,
+    pub audit: citadel_primitives::AuditMetadata,
     pub name: String,
     pub domain: String,
     pub transport: GitTransport,
     pub auth_type: GitAuthType,
-    pub created_at: DateTime<Utc>,
     pub protected_configuration: Value,
 }
 
@@ -81,12 +79,11 @@ impl From<&StoredGitAccount> for GitAccount {
     fn from(value: &StoredGitAccount) -> Self {
         Self {
             id: value.id,
-            created_by_actor_id: value.created_by_actor_id,
+            audit: value.audit,
             name: value.name.clone(),
             domain: value.domain.clone(),
             transport: value.transport,
             auth_type: value.auth_type,
-            created_at: value.created_at,
         }
     }
 }

@@ -16,7 +16,7 @@ impl DeploymentsRealtimeNotifier {
 }
 
 impl DeploymentChangeNotifier for DeploymentsRealtimeNotifier {
-    fn adopted(&self, deployment: &citadel_deployments::DeploymentDetails) {
+    fn adopted(&self, deployment: &citadel_deployments::Deployment) {
         self.changed(deployment.id, "created");
         if let Some(realtime) = &self.realtime {
             if let Some(container) = &deployment.docker_container_id {

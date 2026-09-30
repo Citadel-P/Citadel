@@ -7,8 +7,9 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StatsWindow(u16);
 impl StatsWindow {
+    pub const HOURS: [u16; 3] = [24, 48, 72];
     pub fn new(hours: u16) -> Option<Self> {
-        matches!(hours, 24 | 48 | 72).then_some(Self(hours))
+        Self::HOURS.contains(&hours).then_some(Self(hours))
     }
     pub fn since(self, now: i64) -> i64 {
         now.saturating_sub(i64::from(self.0) * 3600)

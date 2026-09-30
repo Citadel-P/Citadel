@@ -1,12 +1,13 @@
+use crate::api::resources::resource_access::ResourceAccessView;
 use crate::api::resources::{
-    capabilities::ResourceCapabilities,
+    capabilities::ResourceCapabilitiesView,
     common::{PagedResult, ResourceInfo},
 };
 use citadel_identity::{
     UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity, UserUiFont,
     UserUiRadius,
 };
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::ActorId;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -14,7 +15,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UsersResponse {
     pub(crate) paged_result: PagedResult<UserView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
@@ -88,7 +89,7 @@ pub struct UserView {
     #[schema(required = true)]
     pub roles: Option<Vec<ResourceInfo>>,
     #[schema(required = true)]
-    pub resource_accesses: Option<Vec<UserResourceAccessView>>,
+    pub resource_accesses: Option<Vec<ResourceAccessView>>,
 }
 
 impl From<UserView> for citadel_identity::UserDetails {
@@ -133,7 +134,7 @@ impl From<citadel_identity::UserDetails> for UserView {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSearchItemView {
     pub id: Uuid,
@@ -157,48 +158,6 @@ impl From<citadel_identity::UserSearchItemDetails> for UserSearchItemView {
             id: value.id,
             name: value.name,
             email: value.email,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResourceAccessView {
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    #[schema(required = true)]
-    pub resource_name: Option<String>,
-    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
-    pub permission_level: PermissionLevel,
-    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>, required = true)]
-    pub specific_permissions: Option<Vec<SpecificPermission>>,
-    #[schema(required = true)]
-    pub id: Option<Uuid>,
-}
-
-impl From<UserResourceAccessView> for citadel_identity::UserResourceAccessDetails {
-    fn from(value: UserResourceAccessView) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            resource_name: value.resource_name,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-            id: value.id,
-        }
-    }
-}
-
-impl From<citadel_identity::UserResourceAccessDetails> for UserResourceAccessView {
-    fn from(value: citadel_identity::UserResourceAccessDetails) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            resource_name: value.resource_name,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-            id: value.id,
         }
     }
 }

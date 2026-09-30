@@ -31,8 +31,11 @@ pub struct PlatformStatSnapshot {
     pub rx_bytes: f64,
     pub cpu_usage: f64,
     pub memory_usage: f64,
+
     pub disk_used_bytes: Option<i64>,
+
     pub disk_total_bytes: Option<i64>,
+
     pub disk_usage: Option<f64>,
 }
 
@@ -53,7 +56,7 @@ pub struct PlatformDetails {
     pub server_version: Option<String>,
     #[serde(rename = "type")]
     pub platform_type: String,
-    pub status: String,
+    pub status: citadel_primitives::PlatformStatus,
     pub connector_type: String,
     pub deployment_count: i64,
     pub stack_count: i64,
@@ -89,7 +92,7 @@ pub struct ContainerDetails {
     pub docker_image_id: String,
     pub created: i64,
     pub state: String,
-    pub control_state: String,
+    pub control_state: citadel_primitives::ResourceControlState,
     pub updated: i64,
     pub stack: Option<String>,
     pub is_system: bool,
@@ -119,11 +122,11 @@ pub struct ContainerDeploymentSummary {
     pub id: Uuid,
     pub name: String,
     pub platform_id: Uuid,
-    pub status: String,
+    pub status: citadel_deployments::DeploymentStatus,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
-    pub control_state: String,
-    pub platform_status: String,
+    pub control_state: citadel_primitives::ResourceControlState,
+    pub platform_status: citadel_primitives::PlatformStatus,
     pub auto_update_state: ContainerDeploymentUpdateState,
 }
 
@@ -131,7 +134,7 @@ pub struct ContainerDeploymentSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDeploymentUpdateState {
     pub last_checked_at: DateTime<Utc>,
-    pub status: String,
+    pub status: citadel_primitives::AutoUpdateStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -145,7 +148,7 @@ pub struct ImageDetails {
     pub is_in_use: bool,
     pub platform_id: Uuid,
     pub created_at: DateTime<Utc>,
-    pub control_state: String,
+    pub control_state: citadel_primitives::ResourceControlState,
     pub updated_at: Option<DateTime<Utc>>,
     pub registry_id: Option<Uuid>,
     pub repo_digests: Option<Vec<String>>,

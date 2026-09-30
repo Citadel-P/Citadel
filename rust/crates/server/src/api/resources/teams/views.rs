@@ -1,9 +1,10 @@
+use crate::api::resources::resource_access::ResourceAccessView;
 use crate::api::resources::{
-    capabilities::ResourceCapabilities,
+    capabilities::ResourceCapabilitiesView,
     common::{PagedResult, ResourceInfo},
 };
 use citadel_identity::ActorType;
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::ActorId;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -11,7 +12,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TeamsResponse {
     pub(crate) paged_result: PagedResult<TeamView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -28,7 +29,7 @@ pub struct TeamView {
     #[schema(required = true)]
     pub roles: Option<Vec<ResourceInfo>>,
     #[schema(required = true)]
-    pub resource_accesses: Option<Vec<TeamResourceAccessView>>,
+    pub resource_accesses: Option<Vec<ResourceAccessView>>,
     #[schema(required = true)]
     pub members: Option<Vec<TeamMemberView>>,
 }
@@ -114,7 +115,7 @@ impl From<citadel_identity::TeamMemberDetails> for TeamMemberView {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamSearchItemView {
     pub id: Uuid,
@@ -135,48 +136,6 @@ impl From<citadel_identity::TeamSearchItemDetails> for TeamSearchItemView {
         Self {
             id: value.id,
             name: value.name,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamResourceAccessView {
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    #[schema(required = true)]
-    pub resource_name: Option<String>,
-    #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
-    pub permission_level: PermissionLevel,
-    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>, required = true)]
-    pub specific_permissions: Option<Vec<SpecificPermission>>,
-    #[schema(required = true)]
-    pub id: Option<Uuid>,
-}
-
-impl From<TeamResourceAccessView> for citadel_identity::TeamResourceAccessDetails {
-    fn from(value: TeamResourceAccessView) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            resource_name: value.resource_name,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-            id: value.id,
-        }
-    }
-}
-
-impl From<citadel_identity::TeamResourceAccessDetails> for TeamResourceAccessView {
-    fn from(value: citadel_identity::TeamResourceAccessDetails) -> Self {
-        Self {
-            resource_type: value.resource_type,
-            resource_id: value.resource_id,
-            resource_name: value.resource_name,
-            permission_level: value.permission_level,
-            specific_permissions: value.specific_permissions,
-            id: value.id,
         }
     }
 }

@@ -66,7 +66,7 @@ WHERE n.platformid=$1 ORDER BY n.dockernodeid LIMIT 10001
         let manager_source = manager == Some(node_id.as_str());
         let binding: Option<Uuid> = row.try_get("bindingid")?;
         let connected = if manager_source {
-            platform.status == "Online"
+            platform.status == citadel_primitives::PlatformStatus::Online
         } else {
             binding.is_some()
                 && sessions

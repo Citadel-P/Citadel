@@ -62,10 +62,10 @@ pub(super) async fn verify(
         .unwrap();
     assert_eq!(degraded.status, StackReleaseStatus::Degraded);
     assert_eq!(
-        degraded.latest_activity.as_ref().unwrap()["info"]["$type"],
+        degraded.latest_activity.as_ref().unwrap().info["$type"],
         "StackDriftDetected"
     );
-    assert!(degraded.latest_activity.as_ref().unwrap()["info"]["Reason"].is_string());
+    assert!(degraded.latest_activity.as_ref().unwrap().info["Reason"].is_string());
     stacks.monitor_drift(None, 100).await.unwrap();
     let repeated = store
         .get_authorized(admin.actor_id, true, id)
@@ -104,7 +104,7 @@ pub(super) async fn verify(
         .unwrap();
     assert_eq!(recovered.status, StackReleaseStatus::Healthy);
     assert_eq!(
-        recovered.latest_activity.as_ref().unwrap()["info"]["$type"],
+        recovered.latest_activity.as_ref().unwrap().info["$type"],
         "StackDriftResolved"
     );
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype IN ('StackDriftDetected','StackDriftResolved')").bind(id).fetch_one(pool).await.unwrap();
@@ -154,7 +154,7 @@ pub(super) async fn verify(
     sqlx::query("UPDATE stackreleases SET status='Healthy' WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
         .bind(id).execute(pool).await.unwrap();
     stacks
-        .update_drift_policy(admin.actor_id, true, id, recovered.stack.drift_policy)
+        .update_drift_policy(admin.actor_id, true, id, recovered.resource.drift_policy)
         .await
         .unwrap();
     let exhausted = stacks

@@ -43,7 +43,7 @@ fn container(node: Option<&str>) -> ContainerView {
         docker_image_id: "image".into(),
         created: 1,
         state: "Running".into(),
-        control_state: "Idle".into(),
+        control_state: citadel_primitives::ResourceControlState::Idle,
         updated: 1,
         stack: None,
         is_system: false,
@@ -56,7 +56,7 @@ fn container(node: Option<&str>) -> ContainerView {
         projection_stale_since: None,
         projection_stale_reason: None,
         last_stats: None,
-        ports: json!([]),
+        ports: json!({}),
         deployment_id: None,
         stack_id: None,
         capabilities: None,
@@ -76,7 +76,7 @@ fn statistics_match_both_node_and_docker_identity() {
         resource_revision: 1,
         reads: Default::default(),
         containers: Default::default(),
-        payload: json!({"dockerNodeId":"worker","stats":[{"dockerContainerId":"same-docker-id","cpuUsage":42}]}),
+        payload: json!({"dockerNodeId":"worker","stats":[{"dockerContainerId":"same-docker-id","cpuUsage":42,"memoryActive":0,"memoryCache":0,"memoryLimit":0,"rxBytes":0,"txBytes":0,"created":1}]}),
     };
     let values = map_stats(
         &event,
@@ -85,11 +85,25 @@ fn statistics_match_both_node_and_docker_identity() {
     assert_eq!(values.len(), 1);
     assert_eq!(values[0]["containerId"], json!(worker.id));
     assert_eq!(
-        container_data(worker, Some(&event))["containerStat"]["cpuUsage"],
-        42
+        container_data(worker, Some(&event))
+            .unwrap()
+            .container_stat
+            .unwrap()
+            .cpu_usage,
+        42.0
     );
-    assert!(container_data(manager, Some(&event))["containerStat"].is_null());
-    assert!(container_data(other, Some(&event))["containerStat"].is_null());
+    assert!(
+        container_data(manager, Some(&event))
+            .unwrap()
+            .container_stat
+            .is_none()
+    );
+    assert!(
+        container_data(other, Some(&event))
+            .unwrap()
+            .container_stat
+            .is_none()
+    );
 }
 
 #[test]
@@ -109,7 +123,12 @@ fn ordinary_manager_statistics_do_not_update_worker_rows() {
     let values = map_stats(&event, &[identity(&worker), identity(&manager)]);
     assert_eq!(values.len(), 1);
     assert_eq!(values[0]["containerId"], json!(manager.id));
-    assert!(container_data(worker, Some(&event))["containerStat"].is_null());
+    assert!(
+        container_data(worker, Some(&event))
+            .unwrap()
+            .container_stat
+            .is_none()
+    );
 }
 
 #[test]

@@ -94,46 +94,17 @@ macro_rules! vocabulary_schema {
     };
 }
 
-vocabulary_schema!(
-    ActivityResourceTypeSchema,
-    "ActivityResourceType",
-    citadel_activities::ActivityResourceType::ALL
-);
+pub use super::schema_models::activities::ActivityResourceTypeSchema;
 
-vocabulary_schema!(
-    ActivityEventTypeSchema,
-    "ActivityEventType",
-    citadel_activities::ActivityEventType::ALL
-);
+pub use super::schema_models::activities::ActivityEventTypeSchema;
 
-vocabulary_schema!(
-    LicenseCapabilitySchema,
-    "LicenseCapability",
-    citadel_licensing::LicenseCapability::ALL
-);
+pub use super::schema_models::licensing::LicenseCapabilitySchema;
 
-vocabulary_schema!(
-    LicenseStatusSchema,
-    "LicenseStatus",
-    citadel_licensing::LicenseStatus::ALL
-);
+pub use super::schema_models::licensing::LicenseStatusSchema;
 
-vocabulary_schema!(
-    ResourceTypeSchema,
-    "ResourceType",
-    citadel_primitives::ResourceType::ALL
-);
+pub use super::schema_models::primitives::ResourceTypeSchema;
 
-vocabulary_schema!(
-    PermissionLevelSchema,
-    "PermissionLevel",
-    [
-        citadel_primitives::PermissionLevel::None,
-        citadel_primitives::PermissionLevel::Read,
-        citadel_primitives::PermissionLevel::Write,
-        citadel_primitives::PermissionLevel::Execute
-    ]
-);
+pub use super::schema_models::primitives::PermissionLevelSchema;
 
 vocabulary_schema!(
     SpecificPermissionSchema,
@@ -207,8 +178,4 @@ pub enum UserUiDensitySchema {
     Comfortable,
 }
 
-vocabulary_schema!(
-    ActivityStatusSchema,
-    "ActivityStatus",
-    citadel_activities::ActivityStatus::ALL
-);
+pub use super::schema_models::activities::ActivityStatusSchema;

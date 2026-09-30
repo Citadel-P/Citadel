@@ -5,17 +5,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-mod config;
-pub use config::{RepoWebhookConfig, WebhookAuthScheme, WebhookProvider};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WebhookConfiguration {
-    pub enabled: bool,
-    pub provider: String,
-    pub auth_scheme: String,
-    pub secret: Option<String>,
-    pub branch_filter: Option<String>,
-}
+use citadel_primitives::{WebhookAuthScheme, WebhookConfig};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebhookError {
@@ -25,99 +15,77 @@ pub enum WebhookError {
     Validation(String),
 }
 
-impl WebhookConfiguration {
-    pub fn from_value(value: Option<&serde_json::Value>) -> Result<Option<Self>, WebhookError> {
-        let Some(value) = value else { return Ok(None) };
-        validate_webhook(Some(value))
-            .map_err(|error| WebhookError::Validation(error.to_string()))?;
-        let field = |name: &str| {
-            value.as_object().and_then(|fields| {
-                fields
-                    .iter()
-                    .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
-            })
-        };
-        let enabled = field("enabled")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-        if !enabled {
-            return Ok(None);
-        }
-        Ok(Some(Self {
-            enabled,
-            provider: field("provider")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("GitHub")
-                .into(),
-            auth_scheme: field("authScheme")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("GitHubHmacSha256")
-                .into(),
-            secret: field("secret")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned),
-            branch_filter: field("branchFilter")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned),
-        }))
-    }
-
-    /// Authenticate before parsing or dispatching. A route names the provider,
-    /// but never selects a weaker scheme than the resource's saved configuration.
-    pub fn evaluate(
-        &self,
-        auth_type: &str,
-        headers: &[(String, String)],
-        body: &[u8],
-    ) -> Result<Option<&'static str>, WebhookError> {
-        if body.len() > 1024 * 1024 {
-            return Err(WebhookError::Validation(
-                "Webhook payload exceeds the 1 MiB limit.".into(),
-            ));
-        }
-        if !self.provider.eq_ignore_ascii_case(auth_type) {
-            return Err(WebhookError::Validation(
-                "Webhook auth type does not match the configured provider.".into(),
-            ));
-        }
-        authenticate_webhook(self, headers, body)?;
-        let (supported, branch) = webhook_branch(&self.provider, headers, body)?;
-        if !supported {
-            return Ok(Some("Unsupported event type"));
-        }
-        if let Some(filter) = self
-            .branch_filter
-            .as_deref()
-            .map(str::trim)
-            .filter(|filter| !filter.is_empty())
-            && branch.as_deref() != Some(filter)
-            && (branch.is_some() || !self.provider.eq_ignore_ascii_case("Generic"))
-        {
-            return Ok(Some("Branch filter did not match"));
-        }
-        Ok(None)
-    }
+pub fn active_webhook(
+    value: Option<&WebhookConfig>,
+) -> Result<Option<WebhookConfig>, WebhookError> {
+    let Some(value) = value else { return Ok(None) };
+    value
+        .validate()
+        .map_err(|error| WebhookError::Validation(error.into()))?;
+    Ok(value.enabled.then(|| value.clone()))
 }
 
+/// Authenticate before parsing or dispatching. A route names the provider,
+/// but never selects a weaker scheme than the resource's saved configuration.
+pub fn evaluate_webhook(
+    webhook: &WebhookConfig,
+    auth_type: &str,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Result<Option<&'static str>, WebhookError> {
+    webhook
+        .validate()
+        .map_err(|error| WebhookError::Validation(error.into()))?;
+    if body.len() > 1024 * 1024 {
+        return Err(WebhookError::Validation(
+            "Webhook payload exceeds the 1 MiB limit.".into(),
+        ));
+    }
+    if !webhook.provider.as_str().eq_ignore_ascii_case(auth_type) {
+        return Err(WebhookError::Validation(
+            "Webhook auth type does not match the configured provider.".into(),
+        ));
+    }
+    authenticate_webhook(webhook, headers, body)?;
+    let (supported, branch) = webhook_branch(webhook.provider.as_str(), headers, body)?;
+    if !supported {
+        return Ok(Some("Unsupported event type"));
+    }
+    if let Some(filter) = webhook
+        .branch_filter
+        .as_deref()
+        .map(str::trim)
+        .filter(|filter| !filter.is_empty())
+        && branch.as_deref() != Some(filter)
+        && (branch.is_some() || !webhook.provider.as_str().eq_ignore_ascii_case("Generic"))
+    {
+        return Ok(Some("Branch filter did not match"));
+    }
+    Ok(None)
+}
 pub fn authenticate_webhook(
-    webhook: &WebhookConfiguration,
+    webhook: &WebhookConfig,
     headers: &[(String, String)],
     body: &[u8],
 ) -> Result<(), WebhookError> {
     let secret = webhook.secret.as_deref().unwrap_or_default();
-    let authenticated = match webhook.auth_scheme.as_str() {
-        "BearerToken" if !secret.trim().is_empty() => header(headers, "authorization")
-            .and_then(|value| {
-                value.split_once(' ').and_then(|(scheme, token)| {
-                    scheme.eq_ignore_ascii_case("Bearer").then_some(token)
+    let authenticated = match webhook.auth_scheme {
+        WebhookAuthScheme::BearerToken if !secret.trim().is_empty() => {
+            header(headers, "authorization")
+                .and_then(|value| {
+                    value.split_once(' ').and_then(|(scheme, token)| {
+                        scheme.eq_ignore_ascii_case("Bearer").then_some(token)
+                    })
                 })
-            })
-            .is_some_and(|value| fixed_time(value.trim().as_bytes(), secret.as_bytes())),
-        "GitLabLegacyToken" if !secret.is_empty() => header(headers, "x-gitlab-token")
-            .is_some_and(|value| fixed_time(value.as_bytes(), secret.as_bytes())),
-        "GitLabSignedToken" => validate_gitlab_signed(headers, body, secret),
-        "GitHubHmacSha256" if secret.is_empty() => true,
-        "GitHubHmacSha256" => {
+                .is_some_and(|value| fixed_time(value.trim().as_bytes(), secret.as_bytes()))
+        }
+        WebhookAuthScheme::GitLabLegacyToken if !secret.is_empty() => {
+            header(headers, "x-gitlab-token")
+                .is_some_and(|value| fixed_time(value.as_bytes(), secret.as_bytes()))
+        }
+        WebhookAuthScheme::GitLabSignedToken => validate_gitlab_signed(headers, body, secret),
+        WebhookAuthScheme::GitHubHmacSha256 if secret.is_empty() => true,
+        WebhookAuthScheme::GitHubHmacSha256 => {
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
                 .map_err(|_| WebhookError::Authentication)?;
             mac.update(body);
@@ -292,60 +260,14 @@ fn hex_lower(bytes: &[u8]) -> String {
     output
 }
 
-use serde_json::Value;
-fn configuration_value<'a>(configuration: &'a Value, name: &str) -> Option<&'a Value> {
-    configuration
-        .as_object()?
-        .iter()
-        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
-}
-pub fn validate_webhook(webhook: Option<&Value>) -> Result<(), WebhookError> {
-    let Some(webhook) = webhook else {
-        return Ok(());
-    };
-    let enabled = configuration_value(webhook, "enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let provider = configuration_value(webhook, "provider")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHub");
-    let scheme = configuration_value(webhook, "authScheme")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHubHmacSha256");
-    let secret = configuration_value(webhook, "secret").and_then(Value::as_str);
-    let branch = configuration_value(webhook, "branchFilter").and_then(Value::as_str);
-    if secret.is_some_and(|value| value.len() > 256)
-        || branch.is_some_and(|value| value.len() > 256)
-    {
-        return Err(WebhookError::Validation(
-            "Webhook Secret and branch filter cannot exceed 256 characters.".to_owned(),
-        ));
-    }
-    let valid_authentication = !enabled
-        || matches!(
-            (provider, scheme),
-            ("GitHub", "GitHubHmacSha256") | ("GitLab", "GitLabSignedToken" | "GitLabLegacyToken")
-        )
-        || (provider == "Generic"
-            && scheme == "BearerToken"
-            && secret.is_some_and(|value| !value.trim().is_empty()));
-    if valid_authentication {
-        Ok(())
-    } else {
-        Err(WebhookError::Validation(
-            "Webhook provider and authentication scheme are not compatible.".to_owned(),
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn webhook(provider: &str, scheme: &str, secret: &str) -> WebhookConfiguration {
-        WebhookConfiguration {
+    fn webhook(provider: &str, scheme: &str, secret: &str) -> WebhookConfig {
+        WebhookConfig {
             enabled: true,
-            provider: provider.to_owned(),
-            auth_scheme: scheme.to_owned(),
+            provider: serde_json::from_value(serde_json::json!(provider)).unwrap(),
+            auth_scheme: serde_json::from_value(serde_json::json!(scheme)).unwrap(),
             secret: Some(secret.to_owned()),
             branch_filter: Some("main".to_owned()),
         }
@@ -410,33 +332,29 @@ mod tests {
     fn generic_branch_filter_authenticates_even_ignored_events() {
         let config = webhook("Generic", "BearerToken", "key");
         let headers = [("Authorization".into(), "bEaReR key".into())];
-        assert_eq!(config.evaluate("generic", &headers, b"{}").unwrap(), None);
         assert_eq!(
-            config
-                .evaluate("generic", &headers, br#"{"branch":"main"}"#)
-                .unwrap(),
+            evaluate_webhook(&config, "generic", &headers, b"{}").unwrap(),
+            None
+        );
+        assert_eq!(
+            evaluate_webhook(&config, "generic", &headers, br#"{"branch":"main"}"#).unwrap(),
             None
         );
         assert!(
-            config
-                .evaluate("generic", &headers, br#"{"branch":"other"}"#)
+            evaluate_webhook(&config, "generic", &headers, br#"{"branch":"other"}"#)
                 .unwrap()
                 .is_some()
         );
+        assert!(evaluate_webhook(&config, "generic", &[], br#"{"branch":"other"}"#).is_err());
+        assert!(evaluate_webhook(&config, "github", &headers, b"{}").is_err());
         assert!(
-            config
-                .evaluate("generic", &[], br#"{"branch":"other"}"#)
-                .is_err()
-        );
-        assert!(config.evaluate("github", &headers, b"{}").is_err());
-        assert!(
-            webhook("Generic", "BearerToken", "")
-                .evaluate(
-                    "generic",
-                    &[("authorization".into(), "Bearer ".into())],
-                    b"{}"
-                )
-                .is_err()
+            evaluate_webhook(
+                &webhook("Generic", "BearerToken", ""),
+                "generic",
+                &[("authorization".into(), "Bearer ".into())],
+                b"{}"
+            )
+            .is_err()
         );
     }
 
@@ -448,21 +366,25 @@ mod tests {
             br#"{"ref":"refs/tags/main"}"#,
             b"{}",
         ] {
-            assert!(config.evaluate("github", &[], body).unwrap().is_some());
+            assert!(
+                evaluate_webhook(&config, "github", &[], body)
+                    .unwrap()
+                    .is_some()
+            );
         }
         let config = webhook("GitLab", "GitLabLegacyToken", "key");
         assert!(
-            config
-                .evaluate(
-                    "gitlab",
-                    &[
-                        ("x-gitlab-token".into(), "key".into()),
-                        ("x-gitlab-event".into(), "Merge Request Hook".into())
-                    ],
-                    br#"{"ref":"refs/heads/main"}"#
-                )
-                .unwrap()
-                .is_some()
+            evaluate_webhook(
+                &config,
+                "gitlab",
+                &[
+                    ("x-gitlab-token".into(), "key".into()),
+                    ("x-gitlab-event".into(), "Merge Request Hook".into())
+                ],
+                br#"{"ref":"refs/heads/main"}"#
+            )
+            .unwrap()
+            .is_some()
         );
     }
 

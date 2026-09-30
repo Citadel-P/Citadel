@@ -1,11 +1,12 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl SwarmServiceService {
     pub async fn create(
         &self,
         actor_id: ActorId,
         administrator: bool,
         mut input: CreateSwarmService,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         if input.duplicate_source.as_ref().is_some_and(|source| {
             source.resource_type != "SwarmService" || source.resource_id.is_nil()
         }) {
@@ -36,7 +37,7 @@ impl SwarmServiceService {
         administrator: bool,
         id: Uuid,
         input: UpdateSwarmService,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         input.spec.validate()?;
         let current = self
             .store
@@ -63,7 +64,7 @@ impl SwarmServiceService {
         administrator: bool,
         id: Uuid,
         description: Option<&str>,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         if id.is_nil() || description.is_some_and(|v| v.chars().count() > 600) {
             return Err(SwarmServiceError::Validation(
                 "A valid Service id and a description of at most 600 characters are required."
@@ -83,7 +84,7 @@ impl SwarmServiceService {
         actor_id: ActorId,
         administrator: bool,
         mut input: RenameSwarmService,
-    ) -> Result<SwarmServiceDetails, SwarmServiceError> {
+    ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
         normalize_name(&mut input.name)?;
         let updated = self.store.rename(actor_id, administrator, &input).await?;
         self.notifier.changed(input.id, "renamed");

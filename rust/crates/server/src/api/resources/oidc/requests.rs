@@ -1,4 +1,4 @@
-use citadel_identity::PatchField;
+use citadel_primitives::PatchField;
 use serde::Deserialize;
 use uuid::Uuid;
 

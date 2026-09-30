@@ -6,7 +6,7 @@ impl PostgresSwarmServiceRepository {
         &self,
         actor: ActorId,
         administrator: bool,
-        expected: &SwarmServiceDetails,
+        expected: &citadel_swarm_services::SwarmService,
     ) -> Result<ServiceUpdateCheck, SwarmServiceError> {
         checkable_image(expected)?;
         let mut tx = self.pool.begin().await.map_err(storage)?;

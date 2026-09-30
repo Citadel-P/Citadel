@@ -5,7 +5,7 @@ import type { ContainerStatePatch } from './container-order';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { normalizeContainerReference, normalizeDockerId } from '@/lib/utils';
 import {
-  type ContainerDataView,
+  type ContainerRuntimeView,
   type ContainerView,
   PlatformStatus,
   type ProblemDetails,
@@ -13,7 +13,7 @@ import {
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 
-export type ContainerDetailsView = ContainerDataView & {
+export type ContainerDetailsView = ContainerRuntimeView & {
   resourceId: string;
   platformId: string;
 };
@@ -42,9 +42,9 @@ export const toContainerDetailsView = (container: ContainerView): ContainerDetai
 });
 
 export const mergeContainerRuntimeUpdate = (
-  current: Partial<ContainerDataView> | undefined,
-  container: ContainerDataView,
-): Partial<ContainerDataView> => ({
+  current: Partial<ContainerRuntimeView> | undefined,
+  container: ContainerRuntimeView,
+): Partial<ContainerRuntimeView> => ({
   ...current,
   id: container.id,
   name: container.name,
@@ -83,14 +83,14 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   useLayoutEffect(() => {
     currentIdentity.current = identity;
   }, [identity]);
-  const [live, setLive] = useState<{ identity: string; value: Partial<ContainerDataView> | undefined }>();
+  const [live, setLive] = useState<{ identity: string; value: Partial<ContainerRuntimeView> | undefined }>();
   const liveContainerInfo = live?.identity === identity ? live.value : undefined;
   const setLiveContainerInfo = useCallback(
     (
       update:
-        | Partial<ContainerDataView>
+        | Partial<ContainerRuntimeView>
         | undefined
-        | ((current: Partial<ContainerDataView> | undefined) => Partial<ContainerDataView>),
+        | ((current: Partial<ContainerRuntimeView> | undefined) => Partial<ContainerRuntimeView>),
     ) => {
       if (currentIdentity.current !== identity) return;
       setLive((previous) => ({
@@ -192,7 +192,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   useDockerDaemonGroup(platformId, { onContainerEvent, onContainerStateChange });
 
   const handleContainerInfoUpdated = useCallback(
-    (container: ContainerDataView) => {
+    (container: ContainerRuntimeView) => {
       if (
         normalizeDockerId(container.id) !== dockerContainerId ||
         (container.dockerNodeId ?? undefined) !== (containerData?.dockerNodeId ?? undefined)
@@ -204,7 +204,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   );
 
   const handleContainerInfoPatch = useCallback(
-    (patch: Partial<ContainerDataView> & { resourceId: string }) => {
+    (patch: Partial<ContainerRuntimeView> & { resourceId: string }) => {
       if (patch.resourceId !== containerData?.resourceId) return;
       setLiveContainerInfo((current) => ({ ...current, ...patch }));
     },

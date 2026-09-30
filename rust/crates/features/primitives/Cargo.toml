@@ -7,6 +7,9 @@ publish = false
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
 uuid.workspace = true
 
 [lints]

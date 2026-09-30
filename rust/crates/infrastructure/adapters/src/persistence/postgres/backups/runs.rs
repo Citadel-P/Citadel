@@ -7,14 +7,14 @@ impl PostgresBackupPersistence {
         actor: ActorId,
         policy_id: Uuid,
         trigger: &str,
-        expected_webhook: Option<&'a Value>,
+        expected_webhook: Option<&'a citadel_primitives::WebhookConfig>,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         let trigger = trigger.to_owned();
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let p=sqlx::query("SELECT p.name,p.source,p.backuprepositoryid,p.enabled,p.controlstate,p.runasactorid,p.webhook,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.archivedat IS NULL AND r.archivedat IS NULL FOR UPDATE OF p,r").bind(policy_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BackupError::NotFound)?;
             if let Some(expected) = expected_webhook {
-                let current: Option<Value> = p.try_get("webhook").map_err(storage)?;
+                let current = p.try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>("webhook").map_err(storage)?.and_then(|v| v.0);
                 if current.as_ref() != Some(expected) {
                     return Err(BackupError::Conflict(
                         "Webhook configuration changed.".into(),
@@ -86,7 +86,12 @@ impl PostgresBackupPersistence {
                         attention_policy_count: row
                             .try_get("attentionpolicycount")
                             .map_err(storage)?,
-                        last_run_status: row.try_get("lastrunstatus").map_err(storage)?,
+                        last_run_status: row
+                            .try_get::<Option<String>, _>("lastrunstatus")
+                            .map_err(storage)?
+                            .map(|value| value.parse())
+                            .transpose()
+                            .map_err(storage)?,
                         last_run_at: row.try_get("lastrunat").map_err(storage)?,
                     })
                 })
@@ -110,7 +115,7 @@ impl PostgresBackupPersistence {
     pub(super) fn enqueue_webhook_impl<'a>(
         &'a self,
         policy_id: Uuid,
-        expected_webhook: &'a Value,
+        expected_webhook: &'a citadel_primitives::WebhookConfig,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         self.enqueue_run(
             ActorId::new(Uuid::from_u128(1)),
@@ -229,7 +234,7 @@ impl PostgresBackupPersistence {
             record_run_activity(&mut tx, id).await?;
             tx.commit().await.map_err(storage)?;
             Ok(Some(BackupClaim {
-                policy: self.get_policy(policy_id).await?,
+                policy: self.get_policy_for_execution(policy_id).await?,
                 repository: self.get_repository(repo_id).await?,
                 run: self.get_run(id).await?,
             }))
@@ -278,7 +283,7 @@ impl PostgresBackupPersistence {
                     "Backup Run already has an immutable source plan.".into(),
                 ));
             }
-            let aggregate_key = backup_source_key(&claim.run.source_snapshot)?;
+            let aggregate_key = claim.run.source_snapshot.key();
             for item in &plan.items {
                 let source_key = docker_volume_key(
                     item.platform_id,
@@ -337,7 +342,7 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let finished = sqlx::query("UPDATE backupruns SET status=$2,snapshotavailability=$3,resticsnapshotid=$4,parentsnapshotid=$5,filesprocessed=$6,bytesprocessed=$7,bytesadded=$8,exitcode=$9,errorcode=$10,errormessage=$11,warnings=$12,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status).bind(result.snapshot_availability).bind(&result.restic_snapshot_id).bind(&result.parent_snapshot_id).bind(result.files_processed).bind(result.bytes_processed).bind(result.bytes_added).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).bind(sqlx::types::Json(&result.warnings)).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let finished = sqlx::query("UPDATE backupruns SET status=$2,snapshotavailability=$3,resticsnapshotid=$4,parentsnapshotid=$5,filesprocessed=$6,bytesprocessed=$7,bytesadded=$8,exitcode=$9,errorcode=$10,errormessage=$11,warnings=$12,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status.as_str()).bind(result.snapshot_availability.as_str()).bind(&result.restic_snapshot_id).bind(&result.parent_snapshot_id).bind(result.files_processed).bind(result.bytes_processed).bind(result.bytes_added).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).bind(sqlx::types::Json(&result.warnings)).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if finished == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(());
@@ -346,7 +351,7 @@ impl PostgresBackupPersistence {
                 sqlx::query("UPDATE backuprunitems SET status=$3,resticsnapshotid=$4,parentsnapshotid=$5,filesprocessed=$6,bytesprocessed=$7,bytesadded=$8,exitcode=$9,errorcode=$10,errormessage=$11,startedat=COALESCE(startedat,CURRENT_TIMESTAMP),completedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND backuprunid=$2 AND status IN ('Queued','Running')")
                     .bind(item.id)
                     .bind(claim.run.id)
-                    .bind(item.status)
+                    .bind(item.status.as_str())
                     .bind(&item.restic_snapshot_id)
                     .bind(&item.parent_snapshot_id)
                     .bind(item.files_processed)
@@ -374,7 +379,11 @@ impl PostgresBackupPersistence {
                 &result.logs,
             )
             .await?;
-            if matches!(result.status, "Succeeded" | "SucceededWithWarnings") {
+            if matches!(
+                result.status,
+                citadel_backups::BackupRunStatus::Succeeded
+                    | citadel_backups::BackupRunStatus::SucceededWithWarnings
+            ) {
                 sqlx::query("WITH retained AS (SELECT id FROM backupruns WHERE backuppolicyid=$1 AND snapshotavailability='Available' AND status IN ('Succeeded','SucceededWithWarnings') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) UPDATE backupruns SET snapshotavailability='Expired' WHERE backuppolicyid=$1 AND snapshotavailability='Available' AND status IN ('Succeeded','SucceededWithWarnings') AND id NOT IN (SELECT id FROM retained)")
                     .bind(claim.policy.id)
                     .bind(i64::from(claim.policy.keep_last_successful.max(1)))
@@ -387,7 +396,11 @@ impl PostgresBackupPersistence {
                 claim.repository.id,
                 claim.run.id,
                 Some(claim.policy.id),
-                matches!(result.status, "Succeeded" | "SucceededWithWarnings"),
+                matches!(
+                    result.status,
+                    citadel_backups::BackupRunStatus::Succeeded
+                        | citadel_backups::BackupRunStatus::SucceededWithWarnings
+                ),
             )
             .await?;
             record_run_activity(&mut tx, claim.run.id).await?;

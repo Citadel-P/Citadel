@@ -37,7 +37,7 @@ impl BuildConsumerRuntime for BuildConsumers {
                         .get(actor, true, claim.resource_id)
                         .await
                         .map_err(failure)?;
-                    if current.status != "Healthy"
+                    if current.status != citadel_deployments::DeploymentStatus::Healthy
                         || !matches!(current.spec.image,
                         citadel_deployments::DeploymentImageInfo::Build { applied_build_run_id: Some(run),.. } if run==claim.build_run_id)
                     {

@@ -1,11 +1,11 @@
-import { InspectImageView } from '@/api/generated/api.types';
+import { ImageInspectionView } from '@/api/generated/api.types';
 import { DetailFacts } from '@/components/custom/resource-detail';
 import { RegistryDisplay } from '@/components/custom/registry-display';
 import { byteTransform } from '@/lib/bytes.helper';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
-export const ImageInfoTable = ({ image }: { image: InspectImageView | undefined }) => {
+export const ImageInfoTable = ({ image }: { image: ImageInspectionView | undefined }) => {
   const formatDateTime = useProfileDateTimeFormatter();
   if (!image) return null;
   return (

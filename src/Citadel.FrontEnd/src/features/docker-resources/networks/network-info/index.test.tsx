@@ -1,12 +1,17 @@
 import { render, screen } from '@testing-library/react';
-import type { DockerNetworkDetailsView } from '@/api/generated/api.types';
+import type { NetworkView } from '@/api/generated/api.types';
 import { NetworkInfoComponents } from '.';
 
 describe('network details', () => {
   it('shows driver options even when the network has no attached containers', () => {
     const Content = NetworkInfoComponents.Tabs[0].Content;
-    const resource: DockerNetworkDetailsView = {
+    const resource: NetworkView = {
       id: 'network-id',
+      capabilities: null,
+      inUse: false,
+      isStale: false,
+      nodeHostname: null,
+      staleReason: null,
       name: 'empty-network',
       driver: 'bridge',
       scope: 'local',

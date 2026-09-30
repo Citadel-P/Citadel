@@ -1,7 +1,7 @@
 use super::*;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "$type")]
-// This closed compatibility enum is serialized immediately at mutation
+// This closed activity enum is serialized immediately at mutation
 // boundaries. Boxing its larger snapshots would add heap allocations to every
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]

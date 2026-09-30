@@ -35,15 +35,12 @@ async fn task_inspection_and_terminal_preserve_permissions_node_identity_and_red
             StatusCode::FORBIDDEN
         );
     }
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
+    super::realtime_groups::replace_specific_permissions(
+        &f,
+        &reader,
+        vec![SpecificPermission::Terminal],
     )
-    .bind(SpecificPermission::Terminal as i32)
-    .bind(reader.actor_id.value())
-    .bind(f.platform_id)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    .await;
     let terminal = send(&f, &format!("{base}/terminal"), Some(reader.clone())).await;
     let status = terminal.status();
     let terminal = json_body(terminal).await;
@@ -55,15 +52,12 @@ async fn task_inspection_and_terminal_preserve_permissions_node_identity_and_red
             .status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
+    super::realtime_groups::replace_specific_permissions(
+        &f,
+        &reader,
+        vec![SpecificPermission::Inspect],
     )
-    .bind(SpecificPermission::Inspect as i32)
-    .bind(reader.actor_id.value())
-    .bind(f.platform_id)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(
         send(&f, &format!("{base}/terminal"), Some(reader.clone()))
             .await

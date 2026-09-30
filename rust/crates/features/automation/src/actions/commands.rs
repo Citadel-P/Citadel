@@ -1,6 +1,6 @@
 use crate::*;
-use citadel_git::repositories::webhooks::RepoWebhookConfig;
 use citadel_primitives::ActorId;
+use citadel_primitives::WebhookConfig;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub struct AutomationActionConfiguration {
     pub schedule_enabled: bool,
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: Option<String>,
-    pub webhook: Option<RepoWebhookConfig>,
+    pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Option<Uuid>,
@@ -91,6 +91,25 @@ impl AutomationActionConfiguration {
             || self.run_as_actor_id.is_some_and(|id| id.is_nil())
         {
             return Err(AutomationError::Validation("Schedule fields must be at most 128 characters and Run-as Actor must not be empty.".into()));
+        }
+        if let Some(expression) = self
+            .schedule_cron
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            citadel_primitives::schedule::CronSchedule::parse(
+                expression,
+                self.schedule_time_zone.as_deref().unwrap_or("UTC"),
+            )
+            .map_err(|error| AutomationError::Validation(error.into()))?;
+        } else if self
+            .schedule_time_zone
+            .as_deref()
+            .is_some_and(|zone| zone.parse::<chrono_tz::Tz>().is_err())
+        {
+            return Err(AutomationError::Validation(
+                "Schedule time zone is invalid.".into(),
+            ));
         }
         if let Some(webhook) = &self.webhook {
             webhook

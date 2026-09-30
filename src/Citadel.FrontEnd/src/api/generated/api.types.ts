@@ -10,11 +10,6 @@
  * ---------------------------------------------------------------
  */
 
-export enum ResourcesCatalogGitRepositorySyncMode {
-  Manual = "Manual",
-  PullInterval = "PullInterval",
-}
-
 export enum WebhookProvider {
   GitHub = "GitHub",
   GitLab = "GitLab",
@@ -28,14 +23,13 @@ export enum WebhookAuthScheme {
   BearerToken = "BearerToken",
 }
 
-export enum VolumeFileEntryType {
-  Directory = "Directory",
+export enum VolumeEntryType {
   File = "File",
+  Directory = "Directory",
   Symlink = "Symlink",
   Other = "Other",
 }
 
-/** @default "Live" */
 export enum VolumeBackupConsistency {
   Live = "Live",
   StopAttachedContainers = "StopAttachedContainers",
@@ -125,11 +119,10 @@ export enum SwarmServiceSynchronizationState {
 export enum SwarmServiceOwnership {
   Unmanaged = "Unmanaged",
   DockerStackExternal = "DockerStackExternal",
-  CitadelDeployment = "CitadelDeployment",
-  CitadelStack = "CitadelStack",
   CitadelService = "CitadelService",
-  System = "System",
+  CitadelStack = "CitadelStack",
   OwnershipConflict = "OwnershipConflict",
+  System = "System",
 }
 
 export enum SwarmServiceOperationState {
@@ -163,22 +156,9 @@ export enum SwarmServiceHealth {
 
 export enum SwarmQuorumState {
   Unknown = "Unknown",
-  Healthy = "Healthy",
-  Degraded = "Degraded",
   Lost = "Lost",
-}
-
-export enum SwarmNodeAgentOperationState {
-  Running = "Running",
-  Completed = "Completed",
-  Failed = "Failed",
-}
-
-export enum SwarmNodeAgentOperationKind {
-  Install = "Install",
-  Repair = "Repair",
-  Upgrade = "Upgrade",
-  Remove = "Remove",
+  Degraded = "Degraded",
+  Healthy = "Healthy",
 }
 
 export enum StopSignal {
@@ -188,20 +168,11 @@ export enum StopSignal {
   SIGQUIT = "SIGQUIT",
 }
 
-/**
- * @format int32
- * @default 24
- */
+/** @default 24 */
 export enum StatsHours {
   Value24 = 24,
   Value48 = 48,
   Value72 = 72,
-}
-
-export enum StackVolumeKind {
-  DeclaredNamed = "DeclaredNamed",
-  ExternalNamed = "ExternalNamed",
-  AnonymousNamed = "AnonymousNamed",
 }
 
 export enum StackUpdateBehavior {
@@ -347,6 +318,7 @@ export enum ResourceType {
 
 export enum ResourceControlState {
   Idle = "Idle",
+  Queued = "Queued",
   Processing = "Processing",
 }
 
@@ -362,7 +334,18 @@ export enum ResourceBindingKind {
   Secret = "Secret",
 }
 
-export enum RegistryType {
+export enum RegistryTagStatus {
+  Active = "Active",
+  Inactive = "Inactive",
+}
+
+export enum RegistryStatus {
+  Active = "Active",
+  Disabled = "Disabled",
+  Deprecated = "Deprecated",
+}
+
+export enum RegistryKind {
   Custom = "Custom",
   DockerHub = "DockerHub",
   Azure = "Azure",
@@ -371,10 +354,10 @@ export enum RegistryType {
   GitHub = "GitHub",
 }
 
-export enum RegistryStatus {
-  Active = "Active",
-  Disabled = "Disabled",
-  Deprecated = "Deprecated",
+export enum QueueBuildTrigger {
+  Manual = "Manual",
+  Webhook = "Webhook",
+  Dependency = "Dependency",
 }
 
 export enum PruneResource {
@@ -519,19 +502,26 @@ export enum GitRepositorySyncMode {
   PullInterval = "PullInterval",
 }
 
-export enum GitRepositoryEntryType {
-  Directory = "Directory",
-  File = "File",
-  Symlink = "Symlink",
-  Submodule = "Submodule",
-}
-
-export enum GitReposStatus {
+export enum GitRepositoryStatus {
   Unknown = "Unknown",
   Pending = "Pending",
   Created = "Created",
   Healthy = "Healthy",
   Degraded = "Degraded",
+}
+
+export enum GitRepositoryRefStatus {
+  Pending = "Pending",
+  Syncing = "Syncing",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
+}
+
+export enum GitEntryTypeView {
+  Directory = "Directory",
+  File = "File",
+  Symlink = "Symlink",
+  Submodule = "Submodule",
 }
 
 export enum GitChangedPathStatus {
@@ -611,6 +601,7 @@ export enum BuildRunTrigger {
   Automation = "Automation",
   Schedule = "Schedule",
   Webhook = "Webhook",
+  Dependency = "Dependency",
 }
 
 export enum BuildRunStatus {
@@ -642,18 +633,9 @@ export enum BuildAgentPoolProvider {
   SelfManagedVm = "SelfManagedVm",
 }
 
-/** @default "InboundAgent" */
 export enum BuildAgentPoolConnectionMode {
   InboundAgent = "InboundAgent",
   EdgeAgent = "EdgeAgent",
-}
-
-export enum BackupSourceType {
-  DockerVolume = "DockerVolume",
-  CitadelSystem = "CitadelSystem",
-  Stack = "Stack",
-  Deployment = "Deployment",
-  SwarmService = "SwarmService",
 }
 
 export enum BackupSnapshotAvailability {
@@ -687,6 +669,7 @@ export enum BackupRunStatus {
 }
 
 export enum BackupRunItemStatus {
+  Queued = "Queued",
   Pending = "Pending",
   Running = "Running",
   Succeeded = "Succeeded",
@@ -723,9 +706,16 @@ export enum BackupRepositoryType {
 }
 
 export enum BackupRepositoryStatus {
+  Unavailable = "Unavailable",
   Unknown = "Unknown",
   Uninitialized = "Uninitialized",
   Ready = "Ready",
+}
+
+export enum BackupQueueTrigger {
+  Manual = "Manual",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
 }
 
 export enum BackupExecutionLocation {
@@ -739,6 +729,23 @@ export enum BackupCoverageStatus {
   Protected = "Protected",
   Warning = "Warning",
   Failed = "Failed",
+}
+
+export enum AutomationRunTrigger {
+  Manual = "Manual",
+  Test = "Test",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
+}
+
+export enum AutomationRunStatus {
+  Queued = "Queued",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
 }
 
 export enum AutoUpdateStatus {
@@ -1018,506 +1025,6 @@ export enum ActivityEventType {
   ServiceAccountTokenRevoked = "ServiceAccountTokenRevoked",
 }
 
-export enum ActionRunTrigger {
-  Manual = "Manual",
-  Test = "Test",
-  Schedule = "Schedule",
-  Webhook = "Webhook",
-}
-
-export enum ActionRunStatus {
-  Queued = "Queued",
-  Running = "Running",
-  Succeeded = "Succeeded",
-  Failed = "Failed",
-  TimedOut = "TimedOut",
-  Cancelled = "Cancelled",
-  Rejected = "Rejected",
-}
-
-export type RegistryConfiguration =
-  | ({
-      $type: "AWS";
-    } & RegistryConfigurationAWSRegistry)
-  | ({
-      $type: "Azure";
-    } & RegistryConfigurationAzureRegistry)
-  | ({
-      $type: "Custom";
-    } & RegistryConfigurationCustomRegistry)
-  | ({
-      $type: "DockerHub";
-    } & RegistryConfigurationDockerHubRegistry)
-  | ({
-      $type: "GitHub";
-    } & RegistryConfigurationGitHubRegistry)
-  | ({
-      $type: "Gitlab";
-    } & RegistryConfigurationGitlabRegistry);
-
-export type PlatformDescriptor =
-  | ({
-      $type: "Docker";
-    } & PlatformDescriptorDockerPlatformDescriptor)
-  | ({
-      $type: "DockerSwarm";
-    } & PlatformDescriptorDockerSwarmPlatformDescriptor)
-  | ({
-      $type: "Kubernetes";
-    } & PlatformDescriptorKubernetesPlatformDescriptor);
-
-export type BuildAgentPoolProviderSpec =
-  | ({
-      $type: "AwsEc2";
-    } & BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec)
-  | ({
-      $type: "SelfManagedVm";
-    } & BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec);
-
-export type BackupSourceSpec =
-  | ({
-      $type: "CitadelSystem";
-    } & BackupSourceSpecCitadelSystemBackupSource)
-  | ({
-      $type: "Deployment";
-    } & BackupSourceSpecDeploymentBackupSource)
-  | ({
-      $type: "DockerVolume";
-    } & BackupSourceSpecDockerVolumeBackupSource)
-  | ({
-      $type: "Stack";
-    } & BackupSourceSpecStackBackupSource)
-  | ({
-      $type: "SwarmService";
-    } & BackupSourceSpecSwarmServiceBackupSource);
-
-export type BackupRepositorySpec =
-  | ({
-      $type: "FileSystem";
-    } & BackupRepositorySpecFileSystemBackupRepositorySpec)
-  | ({
-      $type: "S3Compatible";
-    } & BackupRepositorySpecS3CompatibleBackupRepositorySpec);
-
-export type ActivityEventInfo =
-  | ({
-      $type: "ActionCreated";
-    } & ActivityEventInfoAutomationActionCreated)
-  | ({
-      $type: "ActionDeleted";
-    } & ActivityEventInfoAutomationActionDeleted)
-  | ({
-      $type: "ActionRenamed";
-    } & ActivityEventInfoAutomationActionRenamed)
-  | ({
-      $type: "ActionRunCancelled";
-    } & ActivityEventInfoAutomationActionRunCancelled)
-  | ({
-      $type: "ActionRunFailed";
-    } & ActivityEventInfoAutomationActionRunFailed)
-  | ({
-      $type: "ActionRunQueued";
-    } & ActivityEventInfoAutomationActionRunQueued)
-  | ({
-      $type: "ActionRunRejected";
-    } & ActivityEventInfoAutomationActionRunRejected)
-  | ({
-      $type: "ActionRunStarted";
-    } & ActivityEventInfoAutomationActionRunStarted)
-  | ({
-      $type: "ActionRunSucceeded";
-    } & ActivityEventInfoAutomationActionRunSucceeded)
-  | ({
-      $type: "ActionRunTimedOut";
-    } & ActivityEventInfoAutomationActionRunTimedOut)
-  | ({
-      $type: "ActionUpdated";
-    } & ActivityEventInfoAutomationActionUpdated)
-  | ({
-      $type: "AlertRuleCreated";
-    } & ActivityEventInfoAlertRuleCreated)
-  | ({
-      $type: "AlertRuleDeleted";
-    } & ActivityEventInfoAlertRuleDeleted)
-  | ({
-      $type: "AlertRuleRenamed";
-    } & ActivityEventInfoAlertRuleRenamed)
-  | ({
-      $type: "AlertRuleUpdated";
-    } & ActivityEventInfoAlertRuleUpdated)
-  | ({
-      $type: "BackupPolicyArchived";
-    } & ActivityEventInfoBackupPolicyArchived)
-  | ({
-      $type: "BackupPolicyCreated";
-    } & ActivityEventInfoBackupPolicyCreated)
-  | ({
-      $type: "BackupPolicyRenamed";
-    } & ActivityEventInfoBackupPolicyRenamed)
-  | ({
-      $type: "BackupPolicyUpdated";
-    } & ActivityEventInfoBackupPolicyUpdated)
-  | ({
-      $type: "BackupRunCompleted";
-    } & ActivityEventInfoBackupRunCompleted)
-  | ({
-      $type: "BackupRunQueued";
-    } & ActivityEventInfoBackupRunQueued)
-  | ({
-      $type: "BackupRunStarted";
-    } & ActivityEventInfoBackupRunStarted)
-  | ({
-      $type: "BuildAgentPoolCreated";
-    } & ActivityEventInfoBuildAgentPoolCreated)
-  | ({
-      $type: "BuildAgentPoolDeleted";
-    } & ActivityEventInfoBuildAgentPoolDeleted)
-  | ({
-      $type: "BuildAgentPoolRenamed";
-    } & ActivityEventInfoBuildAgentPoolRenamed)
-  | ({
-      $type: "BuildAgentPoolTested";
-    } & ActivityEventInfoBuildAgentPoolTested)
-  | ({
-      $type: "BuildAgentPoolUpdated";
-    } & ActivityEventInfoBuildAgentPoolUpdated)
-  | ({
-      $type: "BuildCreated";
-    } & ActivityEventInfoBuildCreated)
-  | ({
-      $type: "BuildDeleted";
-    } & ActivityEventInfoBuildDeleted)
-  | ({
-      $type: "BuildRenamed";
-    } & ActivityEventInfoBuildRenamed)
-  | ({
-      $type: "BuildRunCancelled";
-    } & ActivityEventInfoBuildRunCancelled)
-  | ({
-      $type: "BuildRunFailed";
-    } & ActivityEventInfoBuildRunFailed)
-  | ({
-      $type: "BuildRunQueued";
-    } & ActivityEventInfoBuildRunQueued)
-  | ({
-      $type: "BuildRunStarted";
-    } & ActivityEventInfoBuildRunStarted)
-  | ({
-      $type: "BuildRunSucceeded";
-    } & ActivityEventInfoBuildRunSucceeded)
-  | ({
-      $type: "BuildRunTimedOut";
-    } & ActivityEventInfoBuildRunTimedOut)
-  | ({
-      $type: "BuildUpdated";
-    } & ActivityEventInfoBuildUpdated)
-  | ({
-      $type: "BuildWebhookReceived";
-    } & ActivityEventInfoBuildWebhookReceived)
-  | ({
-      $type: "DeploymentAdopted";
-    } & ActivityEventInfoDeploymentAdopted)
-  | ({
-      $type: "DeploymentApplied";
-    } & ActivityEventInfoDeploymentApplied)
-  | ({
-      $type: "DeploymentCreated";
-    } & ActivityEventInfoDeploymentCreated)
-  | ({
-      $type: "DeploymentDegraded";
-    } & ActivityEventInfoDeploymentDegraded)
-  | ({
-      $type: "DeploymentDeleted";
-    } & ActivityEventInfoDeploymentDeleted)
-  | ({
-      $type: "DeploymentDuplicated";
-    } & ActivityEventInfoDeploymentDuplicated)
-  | ({
-      $type: "DeploymentPaused";
-    } & ActivityEventInfoDeploymentPaused)
-  | ({
-      $type: "DeploymentRenamed";
-    } & ActivityEventInfoDeploymentRenamed)
-  | ({
-      $type: "DeploymentStarted";
-    } & ActivityEventInfoDeploymentStarted)
-  | ({
-      $type: "DeploymentStopped";
-    } & ActivityEventInfoDeploymentStopped)
-  | ({
-      $type: "DeploymentUpdated";
-    } & ActivityEventInfoDeploymentUpdated)
-  | ({
-      $type: "GitRepoCloned";
-    } & ActivityEventInfoGitRepoCloned)
-  | ({
-      $type: "GitRepoCreated";
-    } & ActivityEventInfoGitRepoCreated)
-  | ({
-      $type: "GitRepoDeleted";
-    } & ActivityEventInfoGitRepoDeleted)
-  | ({
-      $type: "GitRepoPulled";
-    } & ActivityEventInfoGitRepoPulled)
-  | ({
-      $type: "GitRepoRenamed";
-    } & ActivityEventInfoGitRepoRenamed)
-  | ({
-      $type: "GitRepoUpdated";
-    } & ActivityEventInfoGitRepoUpdated)
-  | ({
-      $type: "GitRepoWebhookReceived";
-    } & ActivityEventInfoGitRepoWebhookReceived)
-  | ({
-      $type: "InitialAdministratorCreated";
-    } & ActivityEventInfoInitialAdministratorCreated)
-  | ({
-      $type: "LicenseEnteredGracePeriod";
-    } & ActivityEventInfoLicenseEnteredGracePeriod)
-  | ({
-      $type: "LicenseExpired";
-    } & ActivityEventInfoLicenseExpired)
-  | ({
-      $type: "LicenseInstalled";
-    } & ActivityEventInfoLicenseInstalled)
-  | ({
-      $type: "LicenseRemoved";
-    } & ActivityEventInfoLicenseRemoved)
-  | ({
-      $type: "LicenseReplaced";
-    } & ActivityEventInfoLicenseReplaced)
-  | ({
-      $type: "LicenseValidationFailed";
-    } & ActivityEventInfoLicenseValidationFailed)
-  | ({
-      $type: "OidcProviderCreated";
-    } & ActivityEventInfoOidcProviderCreated)
-  | ({
-      $type: "OidcProviderDeleted";
-    } & ActivityEventInfoOidcProviderDeleted)
-  | ({
-      $type: "OidcProviderRenamed";
-    } & ActivityEventInfoOidcProviderRenamed)
-  | ({
-      $type: "OidcProviderUpdated";
-    } & ActivityEventInfoOidcProviderUpdated)
-  | ({
-      $type: "PlatformConnected";
-    } & ActivityEventInfoPlatformConnected)
-  | ({
-      $type: "PlatformCreated";
-    } & ActivityEventInfoPlatformCreated)
-  | ({
-      $type: "PlatformDeleted";
-    } & ActivityEventInfoPlatformDeleted)
-  | ({
-      $type: "PlatformDisconnected";
-    } & ActivityEventInfoPlatformDisconnected)
-  | ({
-      $type: "PlatformNodeAgentLifecycle";
-    } & ActivityEventInfoPlatformNodeAgentLifecycle)
-  | ({
-      $type: "PlatformRenamed";
-    } & ActivityEventInfoPlatformRenamed)
-  | ({
-      $type: "RegistryCreated";
-    } & ActivityEventInfoRegistryCreated)
-  | ({
-      $type: "RegistryDeleted";
-    } & ActivityEventInfoRegistryDeleted)
-  | ({
-      $type: "RegistryRenamed";
-    } & ActivityEventInfoRegistryRenamed)
-  | ({
-      $type: "RegistryUpdated";
-    } & ActivityEventInfoRegistryUpdated)
-  | ({
-      $type: "RoleCreated";
-    } & ActivityEventInfoRoleCreated)
-  | ({
-      $type: "RoleDeleted";
-    } & ActivityEventInfoRoleDeleted)
-  | ({
-      $type: "RoleRenamed";
-    } & ActivityEventInfoRoleRenamed)
-  | ({
-      $type: "RoleUpdated";
-    } & ActivityEventInfoRoleUpdated)
-  | ({
-      $type: "ServiceAccountArchived";
-    } & ActivityEventInfoServiceAccountArchived)
-  | ({
-      $type: "ServiceAccountCreated";
-    } & ActivityEventInfoServiceAccountCreated)
-  | ({
-      $type: "ServiceAccountDisabled";
-    } & ActivityEventInfoServiceAccountDisabled)
-  | ({
-      $type: "ServiceAccountEnabled";
-    } & ActivityEventInfoServiceAccountEnabled)
-  | ({
-      $type: "ServiceAccountRenamed";
-    } & ActivityEventInfoServiceAccountRenamed)
-  | ({
-      $type: "ServiceAccountTokenCreated";
-    } & ActivityEventInfoServiceAccountTokenCreated)
-  | ({
-      $type: "ServiceAccountTokenRevoked";
-    } & ActivityEventInfoServiceAccountTokenRevoked)
-  | ({
-      $type: "ServiceAccountUpdated";
-    } & ActivityEventInfoServiceAccountUpdated)
-  | ({
-      $type: "StackApplied";
-    } & ActivityEventInfoStackApplied)
-  | ({
-      $type: "StackCreated";
-    } & ActivityEventInfoStackCreated)
-  | ({
-      $type: "StackDegraded";
-    } & ActivityEventInfoStackDegraded)
-  | ({
-      $type: "StackDeleted";
-    } & ActivityEventInfoStackDeleted)
-  | ({
-      $type: "StackDriftDetected";
-    } & ActivityEventInfoStackDriftDetected)
-  | ({
-      $type: "StackDriftResolved";
-    } & ActivityEventInfoStackDriftResolved)
-  | ({
-      $type: "StackDuplicated";
-    } & ActivityEventInfoStackDuplicated)
-  | ({
-      $type: "StackGitAutoDeployFailed";
-    } & ActivityEventInfoStackGitAutoDeployFailed)
-  | ({
-      $type: "StackGitAutoUpdated";
-    } & ActivityEventInfoStackGitAutoUpdated)
-  | ({
-      $type: "StackGitUpdateAvailable";
-    } & ActivityEventInfoStackGitUpdateAvailable)
-  | ({
-      $type: "StackImported";
-    } & ActivityEventInfoStackImported)
-  | ({
-      $type: "StackPaused";
-    } & ActivityEventInfoStackPaused)
-  | ({
-      $type: "StackReconciliationAttempted";
-    } & ActivityEventInfoStackReconciliationAttempted)
-  | ({
-      $type: "StackRenamed";
-    } & ActivityEventInfoStackRenamed)
-  | ({
-      $type: "StackRollback";
-    } & ActivityEventInfoStackRollback)
-  | ({
-      $type: "StackStarted";
-    } & ActivityEventInfoStackStarted)
-  | ({
-      $type: "StackStopped";
-    } & ActivityEventInfoStackStopped)
-  | ({
-      $type: "StackUpdated";
-    } & ActivityEventInfoStackUpdated)
-  | ({
-      $type: "StackWebhookReceived";
-    } & ActivityEventInfoStackWebhookReceived)
-  | ({
-      $type: "SwarmServiceAdopted";
-    } & ActivityEventInfoSwarmServiceAdopted)
-  | ({
-      $type: "SwarmServiceApplied";
-    } & ActivityEventInfoSwarmServiceApplied)
-  | ({
-      $type: "SwarmServiceCreated";
-    } & ActivityEventInfoSwarmServiceCreated)
-  | ({
-      $type: "SwarmServiceDeleted";
-    } & ActivityEventInfoSwarmServiceDeleted)
-  | ({
-      $type: "SwarmServiceDuplicated";
-    } & ActivityEventInfoSwarmServiceDuplicated)
-  | ({
-      $type: "SwarmServiceForceUpdated";
-    } & ActivityEventInfoSwarmServiceForceUpdated)
-  | ({
-      $type: "SwarmServiceOperationFailed";
-    } & ActivityEventInfoSwarmServiceOperationFailed)
-  | ({
-      $type: "SwarmServiceRenamed";
-    } & ActivityEventInfoSwarmServiceRenamed)
-  | ({
-      $type: "SwarmServiceScaled";
-    } & ActivityEventInfoSwarmServiceScaled)
-  | ({
-      $type: "SwarmServiceUpdated";
-    } & ActivityEventInfoSwarmServiceUpdated)
-  | ({
-      $type: "SwarmServiceWebhookReceived";
-    } & ActivityEventInfoSwarmServiceWebhookReceived)
-  | ({
-      $type: "TeamCreated";
-    } & ActivityEventInfoTeamCreated)
-  | ({
-      $type: "TeamDeleted";
-    } & ActivityEventInfoTeamDeleted)
-  | ({
-      $type: "TeamRenamed";
-    } & ActivityEventInfoTeamRenamed)
-  | ({
-      $type: "TeamUpdated";
-    } & ActivityEventInfoTeamUpdated)
-  | ({
-      $type: "UserCreated";
-    } & ActivityEventInfoUserCreated)
-  | ({
-      $type: "UserDeleted";
-    } & ActivityEventInfoUserDeleted)
-  | ({
-      $type: "UserMfaDisabled";
-    } & ActivityEventInfoUserMfaDisabled)
-  | ({
-      $type: "UserMfaEnabled";
-    } & ActivityEventInfoUserMfaEnabled)
-  | ({
-      $type: "UserMfaRecoveryCodeUsed";
-    } & ActivityEventInfoUserMfaRecoveryCodeUsed)
-  | ({
-      $type: "UserMfaRecoveryCodesRegenerated";
-    } & ActivityEventInfoUserMfaRecoveryCodesRegenerated)
-  | ({
-      $type: "UserMfaResetByAdministrator";
-    } & ActivityEventInfoUserMfaResetByAdministrator)
-  | ({
-      $type: "UserMfaVerificationFailed";
-    } & ActivityEventInfoUserMfaVerificationFailed)
-  | ({
-      $type: "UserOtherSessionsRevoked";
-    } & ActivityEventInfoUserOtherSessionsRevoked)
-  | ({
-      $type: "UserPasswordChanged";
-    } & ActivityEventInfoUserPasswordChanged)
-  | ({
-      $type: "UserPreferencesUpdated";
-    } & ActivityEventInfoUserPreferencesUpdated)
-  | ({
-      $type: "UserProfileUpdated";
-    } & ActivityEventInfoUserProfileUpdated)
-  | ({
-      $type: "UserRenamed";
-    } & ActivityEventInfoUserRenamed)
-  | ({
-      $type: "UserSessionRevoked";
-    } & ActivityEventInfoUserSessionRevoked)
-  | ({
-      $type: "UserUpdated";
-    } & ActivityEventInfoUserUpdated)
-  | ({
-      $type: "VolumeContentDownloaded";
-    } & ActivityEventInfoVolumeContentDownloaded);
-
 export interface AccessTokenResponse {
   accessToken: string;
 }
@@ -1533,906 +1040,8 @@ export interface ActivitiesView {
 
 export interface ActivityChangedField {
   name: string;
-  newValue: null | string;
-  oldValue: null | string;
-}
-
-export interface ActivityEventInfoAlertRuleCreated {
-  $type: "AlertRuleCreated";
-  alertRule: AlertRuleSnapshot;
-}
-
-export interface ActivityEventInfoAlertRuleDeleted {
-  $type: "AlertRuleDeleted";
-  alertRule: AlertRuleSnapshot;
-}
-
-export interface ActivityEventInfoAlertRuleRenamed {
-  $type: "AlertRuleRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoAlertRuleUpdated {
-  $type: "AlertRuleUpdated";
-  newRule: AlertRuleSnapshot;
-  oldRule: AlertRuleSnapshot;
-}
-
-export interface ActivityEventInfoAutomationActionCreated {
-  $type: "ActionCreated";
-  action: AutomationActionSnapshot;
-}
-
-export interface ActivityEventInfoAutomationActionDeleted {
-  $type: "ActionDeleted";
-  action: AutomationActionSnapshot;
-}
-
-export interface ActivityEventInfoAutomationActionRenamed {
-  $type: "ActionRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoAutomationActionRunCancelled {
-  $type: "ActionRunCancelled";
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunFailed {
-  $type: "ActionRunFailed";
-  /** @format int64 */
-  durationMs: null | number;
-  errorMessage: null | string;
-  /** @format int32 */
-  exitCode: null | number;
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunQueued {
-  $type: "ActionRunQueued";
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunRejected {
-  $type: "ActionRunRejected";
-  reason: string;
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunStarted {
-  $type: "ActionRunStarted";
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunSucceeded {
-  $type: "ActionRunSucceeded";
-  /** @format int64 */
-  durationMs: null | number;
-  /** @format int32 */
-  exitCode: null | number;
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionRunTimedOut {
-  $type: "ActionRunTimedOut";
-  /** @format int64 */
-  durationMs: null | number;
-  errorMessage: null | string;
-  /** @format uuid */
-  runId: string;
-  trigger: ActionRunTrigger;
-}
-
-export interface ActivityEventInfoAutomationActionUpdated {
-  $type: "ActionUpdated";
-  newAction: AutomationActionSnapshot;
-  oldAction: AutomationActionSnapshot;
-}
-
-export interface ActivityEventInfoBackupPolicyArchived {
-  $type: "BackupPolicyArchived";
-  policy: BackupPolicyActivitySnapshot;
-}
-
-export interface ActivityEventInfoBackupPolicyCreated {
-  $type: "BackupPolicyCreated";
-  policy: BackupPolicyActivitySnapshot;
-}
-
-export interface ActivityEventInfoBackupPolicyRenamed {
-  $type: "BackupPolicyRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoBackupPolicyUpdated {
-  $type: "BackupPolicyUpdated";
-  newPolicy: BackupPolicyActivitySnapshot;
-  oldPolicy: BackupPolicyActivitySnapshot;
-}
-
-export interface ActivityEventInfoBackupRunCompleted {
-  $type: "BackupRunCompleted";
-  /** @format int64 */
-  durationMs?: number | null;
-  errorMessage?: string | null;
-  /** @format uuid */
-  runId: string;
-  status: string;
-  trigger: string;
-}
-
-export interface ActivityEventInfoBackupRunQueued {
-  $type: "BackupRunQueued";
-  /** @format uuid */
-  runId: string;
-  trigger: string;
-}
-
-export interface ActivityEventInfoBackupRunStarted {
-  $type: "BackupRunStarted";
-  /** @format uuid */
-  runId: string;
-  trigger: string;
-}
-
-export interface ActivityEventInfoBuildAgentPoolCreated {
-  $type: "BuildAgentPoolCreated";
-  pool: BuildAgentPoolSnapshot;
-}
-
-export interface ActivityEventInfoBuildAgentPoolDeleted {
-  $type: "BuildAgentPoolDeleted";
-  pool: BuildAgentPoolSnapshot;
-}
-
-export interface ActivityEventInfoBuildAgentPoolRenamed {
-  $type: "BuildAgentPoolRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoBuildAgentPoolTested {
-  $type: "BuildAgentPoolTested";
-  message: null | string;
-  pool: BuildAgentPoolSnapshot;
-  status: BuildAgentPoolValidationStatus;
-}
-
-export interface ActivityEventInfoBuildAgentPoolUpdated {
-  $type: "BuildAgentPoolUpdated";
-  newPool: BuildAgentPoolSnapshot;
-  oldPool: BuildAgentPoolSnapshot;
-}
-
-export interface ActivityEventInfoBuildCreated {
-  $type: "BuildCreated";
-  build: BuildProjectSnapshot;
-}
-
-export interface ActivityEventInfoBuildDeleted {
-  $type: "BuildDeleted";
-  build: BuildProjectSnapshot;
-}
-
-export interface ActivityEventInfoBuildRenamed {
-  $type: "BuildRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoBuildRunCancelled {
-  $type: "BuildRunCancelled";
-  /** @format uuid */
-  runId: string;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildRunFailed {
-  $type: "BuildRunFailed";
-  /** @format int64 */
-  durationMs: null | number;
-  errorMessage: null | string;
-  /** @format int32 */
-  exitCode: null | number;
-  /** @format uuid */
-  runId: string;
-  status: BuildRunStatus;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildRunQueued {
-  $type: "BuildRunQueued";
-  /** @format uuid */
-  runId: string;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildRunStarted {
-  $type: "BuildRunStarted";
-  /** @format uuid */
-  runId: string;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildRunSucceeded {
-  $type: "BuildRunSucceeded";
-  /** @format int64 */
-  durationMs: null | number;
-  /** @format int32 */
-  exitCode: null | number;
-  imageDigest: null | string;
-  /** @format uuid */
-  runId: string;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildRunTimedOut {
-  $type: "BuildRunTimedOut";
-  /** @format int64 */
-  durationMs: null | number;
-  errorMessage: null | string;
-  /** @format uuid */
-  runId: string;
-  trigger: BuildRunTrigger;
-}
-
-export interface ActivityEventInfoBuildUpdated {
-  $type: "BuildUpdated";
-  newBuild: BuildProjectSnapshot;
-  oldBuild: BuildProjectSnapshot;
-}
-
-export interface ActivityEventInfoBuildWebhookReceived {
-  $type: "BuildWebhookReceived";
-  authType: string;
-  branch: null | string;
-  commitSha: null | string;
-  deliveryId: null | string;
-  dispatchedBranch?: null | string;
-  dispatchedCommitSha?: null | string;
-  eventType: null | string;
-  execution: string;
-  reason: null | string;
-  repositoryFullName: null | string;
-  /** @format uuid */
-  requestId: string;
-  status: string;
-}
-
-export interface ActivityEventInfoDeploymentAdopted {
-  $type: "DeploymentAdopted";
-  containerId: string;
-  containerName: string;
-  deployment: DeploymentSnapshot;
-}
-
-export interface ActivityEventInfoDeploymentApplied {
-  $type: "DeploymentApplied";
-  deployment: null | DeploymentSnapshot;
-  result: DeploymentResultSnapshot;
-}
-
-export interface ActivityEventInfoDeploymentCreated {
-  $type: "DeploymentCreated";
-  deployment: DeploymentSnapshot;
-}
-
-export interface ActivityEventInfoDeploymentDegraded {
-  $type: "DeploymentDegraded";
-  reason: string;
-}
-
-export interface ActivityEventInfoDeploymentDeleted {
-  $type: "DeploymentDeleted";
-  deployment: DeploymentSnapshot;
-}
-
-export interface ActivityEventInfoDeploymentDuplicated {
-  $type: "DeploymentDuplicated";
-  deployment: DeploymentSnapshot;
-  source: ActivitySourceResource;
-}
-
-export interface ActivityEventInfoDeploymentPaused {
-  $type: "DeploymentPaused";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoDeploymentRenamed {
-  $type: "DeploymentRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoDeploymentStarted {
-  $type: "DeploymentStarted";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoDeploymentStopped {
-  $type: "DeploymentStopped";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoDeploymentUpdated {
-  $type: "DeploymentUpdated";
-  newDeployment: DeploymentSnapshot;
-  oldDeployment: DeploymentSnapshot;
-}
-
-export interface ActivityEventInfoGitRepoCloned {
-  $type: "GitRepoCloned";
-  gitRepo: GitRepositorySnapshot;
-  result: RepoSyncResultSnapshot;
-}
-
-export interface ActivityEventInfoGitRepoCreated {
-  $type: "GitRepoCreated";
-  gitRepo: GitRepositorySnapshot;
-}
-
-export interface ActivityEventInfoGitRepoDeleted {
-  $type: "GitRepoDeleted";
-  gitRepo: GitRepositorySnapshot;
-}
-
-export interface ActivityEventInfoGitRepoPulled {
-  $type: "GitRepoPulled";
-  gitRepo: GitRepositorySnapshot;
-  result: RepoSyncResultSnapshot;
-}
-
-export interface ActivityEventInfoGitRepoRenamed {
-  $type: "GitRepoRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoGitRepoUpdated {
-  $type: "GitRepoUpdated";
-  newGitRepo: GitRepositorySnapshot;
-  oldGitRepo: GitRepositorySnapshot;
-}
-
-export interface ActivityEventInfoGitRepoWebhookReceived {
-  $type: "GitRepoWebhookReceived";
-  authType: string;
-  branch: null | string;
-  commitSha: null | string;
-  deliveryId: null | string;
-  dispatchedBranch?: null | string;
-  dispatchedCommitSha?: null | string;
-  eventType: null | string;
-  execution: string;
-  reason: null | string;
-  repositoryFullName: null | string;
-  /** @format uuid */
-  requestId: string;
-  status: string;
-}
-
-export interface ActivityEventInfoInitialAdministratorCreated {
-  $type: "InitialAdministratorCreated";
-  mode: string;
-  /** @format uuid */
-  userId: string;
-  userName: string;
-}
-
-export interface ActivityEventInfoLicenseEnteredGracePeriod {
-  $type: "LicenseEnteredGracePeriod";
-  license: LicenseActivitySnapshot;
-}
-
-export interface ActivityEventInfoLicenseExpired {
-  $type: "LicenseExpired";
-  license: LicenseActivitySnapshot;
-}
-
-export interface ActivityEventInfoLicenseInstalled {
-  $type: "LicenseInstalled";
-  license: LicenseActivitySnapshot;
-}
-
-export interface ActivityEventInfoLicenseRemoved {
-  $type: "LicenseRemoved";
-  license: LicenseActivitySnapshot;
-}
-
-export interface ActivityEventInfoLicenseReplaced {
-  $type: "LicenseReplaced";
-  newLicense: LicenseActivitySnapshot;
-  oldLicense: LicenseActivitySnapshot;
-}
-
-export interface ActivityEventInfoLicenseValidationFailed {
-  $type: "LicenseValidationFailed";
-  errorCode: null | string;
-  fingerprint: null | string;
-  status: LicenseStatus;
-}
-
-export interface ActivityEventInfoOidcProviderCreated {
-  $type: "OidcProviderCreated";
-  provider: OidcProviderActivitySnapshot;
-}
-
-export interface ActivityEventInfoOidcProviderDeleted {
-  $type: "OidcProviderDeleted";
-  provider: OidcProviderActivitySnapshot;
-}
-
-export interface ActivityEventInfoOidcProviderRenamed {
-  $type: "OidcProviderRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoOidcProviderUpdated {
-  $type: "OidcProviderUpdated";
-  newProvider: OidcProviderActivitySnapshot;
-  oldProvider: OidcProviderActivitySnapshot;
-}
-
-export interface ActivityEventInfoPlatformConnected {
-  $type: "PlatformConnected";
-  platform: PlatformSnapshot;
-  previousStatus: PlatformStatus;
-}
-
-export interface ActivityEventInfoPlatformCreated {
-  $type: "PlatformCreated";
-  platform: PlatformSnapshot;
-}
-
-export interface ActivityEventInfoPlatformDeleted {
-  $type: "PlatformDeleted";
-  platform: PlatformSnapshot;
-}
-
-export interface ActivityEventInfoPlatformDisconnected {
-  $type: "PlatformDisconnected";
-  platform: PlatformSnapshot;
-  previousStatus: PlatformStatus;
-}
-
-export interface ActivityEventInfoPlatformNodeAgentLifecycle {
-  $type: "PlatformNodeAgentLifecycle";
-  kind: SwarmNodeAgentOperationKind;
-  message: null | string;
-  /** @format uuid */
-  operationId: string;
-  state: SwarmNodeAgentOperationState;
-}
-
-export interface ActivityEventInfoPlatformRenamed {
-  $type: "PlatformRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoRegistryCreated {
-  $type: "RegistryCreated";
-  registry: RegistrySnapshot;
-}
-
-export interface ActivityEventInfoRegistryDeleted {
-  $type: "RegistryDeleted";
-  registry: RegistrySnapshot;
-}
-
-export interface ActivityEventInfoRegistryRenamed {
-  $type: "RegistryRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoRegistryUpdated {
-  $type: "RegistryUpdated";
-  newRegistry: RegistrySnapshot;
-  oldRegistry: RegistrySnapshot;
-}
-
-export interface ActivityEventInfoRoleCreated {
-  $type: "RoleCreated";
-  role: RoleActivitySnapshot;
-}
-
-export interface ActivityEventInfoRoleDeleted {
-  $type: "RoleDeleted";
-  role: RoleActivitySnapshot;
-}
-
-export interface ActivityEventInfoRoleRenamed {
-  $type: "RoleRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoRoleUpdated {
-  $type: "RoleUpdated";
-  newRole: RoleActivitySnapshot;
-  oldRole: RoleActivitySnapshot;
-}
-
-export interface ActivityEventInfoServiceAccountArchived {
-  $type: "ServiceAccountArchived";
-  /** @format uuid */
-  accountId: string;
-}
-
-export interface ActivityEventInfoServiceAccountCreated {
-  $type: "ServiceAccountCreated";
-  account: ServiceAccountActivitySnapshot;
-}
-
-export interface ActivityEventInfoServiceAccountDisabled {
-  $type: "ServiceAccountDisabled";
-  /** @format uuid */
-  accountId: string;
-}
-
-export interface ActivityEventInfoServiceAccountEnabled {
-  $type: "ServiceAccountEnabled";
-  /** @format uuid */
-  accountId: string;
-}
-
-export interface ActivityEventInfoServiceAccountRenamed {
-  $type: "ServiceAccountRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoServiceAccountTokenCreated {
-  $type: "ServiceAccountTokenCreated";
-  /** @format uuid */
-  accountId: string;
-  /** @format date-time */
-  expiresAtUtc: string | null;
-  publicHint: string;
-  /** @format uuid */
-  tokenId: string;
-  tokenName: string;
-}
-
-export interface ActivityEventInfoServiceAccountTokenRevoked {
-  $type: "ServiceAccountTokenRevoked";
-  /** @format uuid */
-  accountId: string;
-  publicHint: string;
-  /** @format uuid */
-  tokenId: string;
-}
-
-export interface ActivityEventInfoServiceAccountUpdated {
-  $type: "ServiceAccountUpdated";
-  newAccount: ServiceAccountActivitySnapshot;
-  oldAccount: ServiceAccountActivitySnapshot;
-}
-
-export interface ActivityEventInfoStackApplied {
-  $type: "StackApplied";
-  result: StackResultSnapshot;
-  stack: null | StackSnapshot;
-}
-
-export interface ActivityEventInfoStackCreated {
-  $type: "StackCreated";
-  stack: StackSnapshot;
-}
-
-export interface ActivityEventInfoStackDegraded {
-  $type: "StackDegraded";
-  reason: string;
-}
-
-export interface ActivityEventInfoStackDeleted {
-  $type: "StackDeleted";
-  stack: StackSnapshot;
-}
-
-export interface ActivityEventInfoStackDriftDetected {
-  $type: "StackDriftDetected";
-  fingerprint: string;
-  reason: string;
-}
-
-export interface ActivityEventInfoStackDriftResolved {
-  $type: "StackDriftResolved";
-  previousFingerprint: string;
-}
-
-export interface ActivityEventInfoStackDuplicated {
-  $type: "StackDuplicated";
-  source: ActivitySourceResource;
-  stack: StackSnapshot;
-}
-
-export interface ActivityEventInfoStackGitAutoDeployFailed {
-  $type: "StackGitAutoDeployFailed";
-  branch: string;
-  currentCommitSha: string;
-  gitRepositoryName: string;
-  reason: string;
-  remoteCommitSha: string;
-}
-
-export interface ActivityEventInfoStackGitAutoUpdated {
-  $type: "StackGitAutoUpdated";
-  branch: string;
-  gitRepositoryName: string;
-  previousCommitSha: string;
-  updatedCommitSha: string;
-}
-
-export interface ActivityEventInfoStackGitUpdateAvailable {
-  $type: "StackGitUpdateAvailable";
-  branch: string;
-  currentCommitSha: string;
-  gitRepositoryName: string;
-  remoteCommitSha: string;
-}
-
-export interface ActivityEventInfoStackImported {
-  $type: "StackImported";
-  projectName: string;
-  serviceNames: string[];
-  stack: StackSnapshot;
-}
-
-export interface ActivityEventInfoStackPaused {
-  $type: "StackPaused";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoStackReconciliationAttempted {
-  $type: "StackReconciliationAttempted";
-  actions: StackReconciliationAction[];
-  driftFingerprint: string;
-  status: StackReconciliationStatus;
-}
-
-export interface ActivityEventInfoStackRenamed {
-  $type: "StackRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoStackRollback {
-  $type: "StackRollback";
-  newStack: null | StackSnapshot;
-  oldStack: null | StackSnapshot;
-  result: StackResultSnapshot;
-}
-
-export interface ActivityEventInfoStackStarted {
-  $type: "StackStarted";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoStackStopped {
-  $type: "StackStopped";
-  containerIds: string[];
-}
-
-export interface ActivityEventInfoStackUpdated {
-  $type: "StackUpdated";
-  newStack: StackSnapshot;
-  oldStack: StackSnapshot;
-}
-
-export interface ActivityEventInfoStackWebhookReceived {
-  $type: "StackWebhookReceived";
-  authType: string;
-  branch: null | string;
-  commitSha: null | string;
-  deliveryId: null | string;
-  dispatchedBranch?: null | string;
-  dispatchedCommitSha?: null | string;
-  eventType: null | string;
-  execution: string;
-  reason: null | string;
-  repositoryFullName: null | string;
-  /** @format uuid */
-  requestId: string;
-  status: string;
-}
-
-export interface ActivityEventInfoSwarmServiceAdopted {
-  $type: "SwarmServiceAdopted";
-  dockerServiceId: string;
-  service: SwarmServiceActivitySnapshot;
-}
-
-export interface ActivityEventInfoSwarmServiceApplied {
-  $type: "SwarmServiceApplied";
-  /** @format uuid */
-  operationId: string;
-  warnings: string[];
-}
-
-export interface ActivityEventInfoSwarmServiceCreated {
-  $type: "SwarmServiceCreated";
-  service: SwarmServiceActivitySnapshot;
-}
-
-export interface ActivityEventInfoSwarmServiceDeleted {
-  $type: "SwarmServiceDeleted";
-  service: SwarmServiceActivitySnapshot;
-}
-
-export interface ActivityEventInfoSwarmServiceDuplicated {
-  $type: "SwarmServiceDuplicated";
-  service: SwarmServiceActivitySnapshot;
-  source: ActivitySourceResource;
-}
-
-export interface ActivityEventInfoSwarmServiceForceUpdated {
-  $type: "SwarmServiceForceUpdated";
-  /** @format uuid */
-  operationId: string;
-  warnings: string[];
-}
-
-export interface ActivityEventInfoSwarmServiceOperationFailed {
-  $type: "SwarmServiceOperationFailed";
-  kind: SwarmServiceOperationKind;
-  /** @format uuid */
-  operationId: string;
-  reason: string;
-}
-
-export interface ActivityEventInfoSwarmServiceRenamed {
-  $type: "SwarmServiceRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoSwarmServiceScaled {
-  $type: "SwarmServiceScaled";
-  /** @format uuid */
-  operationId: string;
-  /** @format int32 */
-  replicas: number;
-  warnings: string[];
-}
-
-export interface ActivityEventInfoSwarmServiceUpdated {
-  $type: "SwarmServiceUpdated";
-  newService: SwarmServiceActivitySnapshot;
-  oldService: SwarmServiceActivitySnapshot;
-}
-
-export interface ActivityEventInfoSwarmServiceWebhookReceived {
-  $type: "SwarmServiceWebhookReceived";
-  authType: string;
-  deliveryId: null | string;
-  execution: string;
-  reason: null | string;
-  /** @format uuid */
-  requestId: string;
-  status: string;
-}
-
-export interface ActivityEventInfoTeamCreated {
-  $type: "TeamCreated";
-  team: TeamActivitySnapshot;
-}
-
-export interface ActivityEventInfoTeamDeleted {
-  $type: "TeamDeleted";
-  team: TeamActivitySnapshot;
-}
-
-export interface ActivityEventInfoTeamRenamed {
-  $type: "TeamRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoTeamUpdated {
-  $type: "TeamUpdated";
-  newTeam: TeamActivitySnapshot;
-  oldTeam: TeamActivitySnapshot;
-}
-
-export interface ActivityEventInfoUserCreated {
-  $type: "UserCreated";
-  user: UserActivitySnapshot;
-}
-
-export interface ActivityEventInfoUserDeleted {
-  $type: "UserDeleted";
-  user: UserActivitySnapshot;
-}
-
-export interface ActivityEventInfoUserMfaDisabled {
-  $type: "UserMfaDisabled";
-}
-
-export interface ActivityEventInfoUserMfaEnabled {
-  $type: "UserMfaEnabled";
-}
-
-export interface ActivityEventInfoUserMfaRecoveryCodeUsed {
-  $type: "UserMfaRecoveryCodeUsed";
-}
-
-export interface ActivityEventInfoUserMfaRecoveryCodesRegenerated {
-  $type: "UserMfaRecoveryCodesRegenerated";
-}
-
-export interface ActivityEventInfoUserMfaResetByAdministrator {
-  $type: "UserMfaResetByAdministrator";
-  /** @format uuid */
-  targetUserId: string;
-}
-
-export interface ActivityEventInfoUserMfaVerificationFailed {
-  $type: "UserMfaVerificationFailed";
-}
-
-export interface ActivityEventInfoUserOtherSessionsRevoked {
-  $type: "UserOtherSessionsRevoked";
-  /** @format int32 */
-  count: number;
-}
-
-export interface ActivityEventInfoUserPasswordChanged {
-  $type: "UserPasswordChanged";
-}
-
-export interface ActivityEventInfoUserPreferencesUpdated {
-  $type: "UserPreferencesUpdated";
-  changes: ActivityChangedField[];
-}
-
-export interface ActivityEventInfoUserProfileUpdated {
-  $type: "UserProfileUpdated";
-  changes: ActivityChangedField[];
-}
-
-export interface ActivityEventInfoUserRenamed {
-  $type: "UserRenamed";
-  newName: string;
-  oldName: string;
-}
-
-export interface ActivityEventInfoUserSessionRevoked {
-  $type: "UserSessionRevoked";
-  /** @format uuid */
-  sessionId: string;
-}
-
-export interface ActivityEventInfoUserUpdated {
-  $type: "UserUpdated";
-  newUser: UserActivitySnapshot;
-  oldUser: UserActivitySnapshot;
-  passwordChanged: boolean;
-}
-
-export interface ActivityEventInfoVolumeContentDownloaded {
-  $type: "VolumeContentDownloaded";
-  fileName: string;
-  isDirectory: boolean;
-  path: string;
-  volumeName: string;
+  newValue?: string | null;
+  oldValue?: string | null;
 }
 
 export interface ActivitySourceResource {
@@ -2452,7 +1061,7 @@ export interface ActivityView {
   eventType: ActivityEventType;
   /** @format uuid */
   id: string;
-  info: ActivityEventInfo;
+  info: PublicActivityEventInfo;
   /** @format uuid */
   platformId: string | null;
   platformName: string;
@@ -2647,6 +1256,25 @@ export interface AlertResourceScope {
   resourceType: AlertResourceType;
 }
 
+export interface AlertRuleActivitySnapshot {
+  channelIds: string[];
+  /** @format int32 */
+  cooldownSeconds?: number | null;
+  description?: string | null;
+  /** @format uuid */
+  id: string;
+  limitedTo: any[];
+  name: string;
+  quietHours: any[];
+  /** @format int32 */
+  requiredMatches?: number | null;
+  severity: string;
+  status: string;
+  /** @format double */
+  threshold?: number | null;
+  type: string;
+}
+
 export type AlertRuleConfig = AlertRuleInput & {
   /** @format uuid */
   id: string;
@@ -2673,25 +1301,6 @@ export interface AlertRuleInput {
 export type AlertRuleListItem = AlertRuleView & {
   channels: AlertChannelView[];
 };
-
-export interface AlertRuleSnapshot {
-  channelIds: string[];
-  /** @format int32 */
-  cooldownSeconds: null | number;
-  description: null | string;
-  /** @format uuid */
-  id: string;
-  limitedTo: AlertResourceScope[];
-  name: string;
-  quietHours: AlertQuietHour[];
-  /** @format int32 */
-  requiredMatches: null | number;
-  severity: AlertSeverity;
-  status: AlertRuleStatus;
-  /** @format double */
-  threshold: null | number;
-  type: AlertType;
-}
 
 export interface AlertRuleView {
   capabilities: null | ResourceCapabilitiesView;
@@ -2769,6 +1378,34 @@ export type AuthorizedTagView = TagView & {
   capabilities: ResourceCapabilitiesView;
 };
 
+export interface AutoUpdateState {
+  currentDigest?: string | null;
+  /** @format date-time */
+  lastCheckedAt: string;
+  lastError?: string | null;
+  remoteDigest?: string | null;
+  status: AutoUpdateStatus;
+}
+
+export interface AutomationActionActivitySnapshot {
+  alertOnFailure: boolean;
+  code: string;
+  defaultArgsJson: string;
+  description?: string | null;
+  enabled: boolean;
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  runAsActorId: string;
+  scheduleCron?: string | null;
+  scheduleEnabled: boolean;
+  scheduleTimeZone: string;
+  /** @format int32 */
+  timeoutSeconds: number;
+  webhook?: null | WebhookConfig;
+}
+
 export interface AutomationActionInput {
   alertOnFailure: boolean;
   code: string;
@@ -2784,76 +1421,13 @@ export interface AutomationActionInput {
   tagIds?: string[];
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | RepoWebhookConfig;
+  webhook?: null | WebhookConfig;
 }
 
 export interface AutomationActionRunLogsView {
   logs: string;
   /** @format uuid */
   runId: string;
-}
-
-export interface AutomationActionRunStreamItem {
-  error?: null | {
-    code?: number;
-    message?: string;
-  };
-  errorMessage?: string | null;
-  progressMessage?: string | null;
-  /** @format uuid */
-  runId?: string | null;
-  status?: string | null;
-  stream?: string | null;
-}
-
-export interface AutomationActionRunView {
-  /** @format uuid */
-  actionId: string;
-  actionName: string;
-  argsJson: string;
-  codeHash: string;
-  codeSnapshot: string | null;
-  /** @format int64 */
-  durationMs?: number | null;
-  errorMessage?: string | null;
-  /** @format int32 */
-  exitCode?: number | null;
-  /** @format date-time */
-  finishedAt?: string | null;
-  /** @format uuid */
-  id: string;
-  logs?: string | null;
-  /** @format date-time */
-  queuedAt: string;
-  /** @format uuid */
-  runAsActorId: string;
-  /** @format date-time */
-  startedAt?: string | null;
-  status: ActionRunStatus;
-  /** @format int32 */
-  timeoutSeconds: number;
-  trigger: ActionRunTrigger;
-  /** @format uuid */
-  triggeredByActorId?: string | null;
-}
-
-export interface AutomationActionSnapshot {
-  alertOnFailure: boolean;
-  code: string;
-  defaultArgsJson: string;
-  description: null | string;
-  enabled: boolean;
-  /** @format uuid */
-  id: string;
-  name: string;
-  /** @format uuid */
-  runAsActorId: string;
-  scheduleCron: null | string;
-  scheduleEnabled: boolean;
-  scheduleTimeZone: string;
-  /** @format int32 */
-  timeoutSeconds: number;
-  webhook: null | AutomationWebhookConfig;
 }
 
 export interface AutomationActionView {
@@ -2887,7 +1461,23 @@ export interface AutomationActionView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | RepoWebhookConfig;
+  webhook: null | WebhookConfig;
+}
+
+export interface AutomationProgress {
+  error: null | AutomationProgressError;
+  errorMessage: string | null;
+  progressMessage: string | null;
+  /** @format uuid */
+  runId: string | null;
+  status: null | AutomationRunStatus;
+  stream: string | null;
+}
+
+export interface AutomationProgressError {
+  /** @format int32 */
+  code: number;
+  message: string;
 }
 
 export interface AutomationRunView {
@@ -2913,21 +1503,47 @@ export interface AutomationRunView {
   runAsActorId: string;
   /** @format date-time */
   startedAt: string | null;
-  status: ActionRunStatus;
+  status: AutomationRunStatus;
   /** @format int32 */
   timeoutSeconds: number;
-  trigger: ActionRunTrigger;
+  trigger: AutomationRunTrigger;
   /** @format uuid */
   triggeredByActorId: string | null;
 }
 
-export interface AutomationWebhookConfig {
-  authScheme?: WebhookAuthScheme;
-  branchFilter?: null | string;
+export interface AwsEc2BuildAgentPoolProviderSpec {
+  /** @default "" */
+  amiId?: string;
+  /** @default "Amd64" */
+  architecture?: CpuArchitecture;
   /** @default false */
-  enabled?: boolean;
-  provider?: WebhookProvider;
-  secret?: null | string;
+  assignPublicIp?: boolean;
+  /** @default null */
+  assumeRoleArn?: string | null;
+  /**
+   * @format uuid
+   * @default null
+   */
+  awsCredentialSecretId?: string | null;
+  /** @default null */
+  instanceProfileName?: string | null;
+  /** @default "" */
+  instanceType?: string;
+  /** @default null */
+  keyPairName?: string | null;
+  /** @default "" */
+  region?: string;
+  /**
+   * @format int32
+   * @default 0
+   */
+  rootVolumeSizeGb?: number;
+  /** @default [] */
+  securityGroupIds?: string[];
+  /** @default "" */
+  subnetId?: string;
+  /** @default null */
+  tags?: Record<string, string> | null;
 }
 
 export interface BackupCoverageView {
@@ -2945,12 +1561,16 @@ export interface BackupCoverageView {
   status: BackupCoverageStatus;
 }
 
+export interface BackupMetadataPatch {
+  description?: string | null;
+}
+
 export interface BackupPolicyActivitySnapshot {
   alertOnFailure: boolean;
   /** @format uuid */
   backupRepositoryId: string;
-  cron: null | string;
-  description: null | string;
+  cron?: string | null;
+  description?: string | null;
   enabled: boolean;
   /** @format uuid */
   id: string;
@@ -2961,7 +1581,7 @@ export interface BackupPolicyActivitySnapshot {
   runAsActorId: string;
   sourceKey: string;
   sourceType: string;
-  timeZone: null | string;
+  timeZone?: string | null;
   /** @format int32 */
   timeoutSeconds: number;
   webhookEnabled: boolean;
@@ -2984,7 +1604,7 @@ export interface BackupPolicyInput {
   timeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | BackupWebhookConfig;
+  webhook?: null | WebhookConfig;
 }
 
 export interface BackupPolicyView {
@@ -3026,8 +1646,25 @@ export interface BackupPolicyView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | BackupWebhookConfig;
+  webhook: null | WebhookConfig;
 }
+
+export type BackupPreviewResource =
+  | {
+      /** @format uuid */
+      deploymentId: string;
+      deploymentName: string;
+    }
+  | {
+      /** @format uuid */
+      stackId: string;
+      stackName: string;
+    }
+  | {
+      /** @format uuid */
+      swarmServiceId: string;
+      swarmServiceName: string;
+    };
 
 export interface BackupRepositoryInput {
   description?: string | null;
@@ -3037,33 +1674,29 @@ export interface BackupRepositoryInput {
   spec: BackupRepositorySpec;
 }
 
-export interface BackupRepositorySpecFileSystemBackupRepositorySpec {
-  $type: "FileSystem";
-  location: BackupExecutionLocation;
-  path: string;
-  /** @format uuid */
-  platformId: null | string;
-  type?: BackupRepositoryType;
-}
-
-export interface BackupRepositorySpecS3CompatibleBackupRepositorySpec {
-  $type: "S3Compatible";
-  /** @format uuid */
-  accessKeySecretId: string;
-  /** @default false */
-  allowInsecureHttp?: boolean;
-  bucket: string;
-  bucketLookup: S3BucketLookup;
-  /** @format uri */
-  endpoint: string;
-  prefix: null | string;
-  region: null | string;
-  /** @format uuid */
-  secretKeySecretId: string;
-  /** @format uuid */
-  sessionTokenSecretId: null | string;
-  type?: BackupRepositoryType;
-}
+export type BackupRepositorySpec =
+  | {
+      $type: "FileSystem";
+      location: BackupExecutionLocation;
+      path: string;
+      /** @format uuid */
+      platformId?: string | null;
+    }
+  | {
+      $type: "S3Compatible";
+      /** @format uuid */
+      accessKeySecretId: string;
+      allowInsecureHttp?: boolean;
+      bucket: string;
+      bucketLookup?: S3BucketLookup;
+      endpoint: string;
+      prefix?: string | null;
+      region?: string | null;
+      /** @format uuid */
+      secretKeySecretId: string;
+      /** @format uuid */
+      sessionTokenSecretId?: string | null;
+    };
 
 export interface BackupRepositoryValidationView {
   /** @format uuid */
@@ -3112,8 +1745,6 @@ export interface BackupRepositoryView {
   /** @format date-time */
   updatedAt: string;
 }
-
-export type BackupRestoreRunStream = BackupRestoreRunStreamItem[];
 
 export interface BackupRestoreRunStreamItem {
   /** @format int32 */
@@ -3183,8 +1814,6 @@ export interface BackupRunItemView {
   volumeName: string;
 }
 
-export type BackupRunStream = BackupRunStreamItem[];
-
 export interface BackupRunStreamItem {
   /** @format int32 */
   exitCode?: number | null;
@@ -3232,54 +1861,84 @@ export interface BackupRunView {
   warnings: string[];
 }
 
-export interface BackupSourceSpecCitadelSystemBackupSource {
-  $type: "CitadelSystem";
-  stableKey?: string | null;
-  type?: BackupSourceType;
-}
-
-export interface BackupSourceSpecDeploymentBackupSource {
-  $type: "Deployment";
-  /** @format uuid */
-  deploymentId: string;
-  stableKey?: string | null;
-  type?: BackupSourceType;
-}
-
-export interface BackupSourceSpecDockerVolumeBackupSource {
-  $type: "DockerVolume";
-  consistency?: VolumeBackupConsistency;
-  dockerNodeId?: null | string;
+export type BackupSourcePreview = BackupPreviewResource & {
   /** @format uuid */
   platformId: string;
-  stableKey?: string | null;
-  type?: BackupSourceType;
-  volumeName: string;
+  platformName: string;
+  platformStatus: PlatformStatus;
+  volumes: BackupVolumePreview[];
+  warnings: string[];
+};
+
+export type BackupSourceSpec =
+  | {
+      $type: "DockerVolume";
+      consistency?: VolumeBackupConsistency;
+      dockerNodeId?: string | null;
+      /** @format uuid */
+      platformId: string;
+      volumeName: string;
+    }
+  | {
+      $type: "CitadelSystem";
+    }
+  | {
+      $type: "Stack";
+      /** @format uuid */
+      stackId: string;
+    }
+  | {
+      $type: "Deployment";
+      /** @format uuid */
+      deploymentId: string;
+    }
+  | {
+      $type: "SwarmService";
+      /** @format uuid */
+      swarmServiceId: string;
+    };
+
+export interface BackupVolumePreview {
+  dockerNodeId?: string | null;
+  hasBackupCoverage: boolean;
+  isExternal: boolean;
+  isShared: boolean;
+  kind: string;
+  name: string;
+  nodeHostname?: string | null;
 }
 
-export interface BackupSourceSpecStackBackupSource {
-  $type: "Stack";
-  stableKey?: string | null;
+export interface BuildAgentPoolActivitySnapshot {
+  architecture: string;
+  /** @format int32 */
+  cleanupTimeoutSeconds: number;
+  description?: string | null;
+  enabled: boolean;
+  /** @format int32 */
+  failureRetentionMinutes: number;
+  /** @format int32 */
+  heartbeatTimeoutSeconds: number;
   /** @format uuid */
-  stackId: string;
-  type?: BackupSourceType;
-}
-
-export interface BackupSourceSpecSwarmServiceBackupSource {
-  $type: "SwarmService";
-  stableKey?: string | null;
-  /** @format uuid */
-  swarmServiceId: string;
-  type?: BackupSourceType;
-}
-
-export interface BackupWebhookConfig {
-  authScheme?: WebhookAuthScheme;
-  branchFilter?: null | string;
-  /** @default false */
-  enabled?: boolean;
-  provider?: WebhookProvider;
-  secret?: null | string;
+  id: string;
+  instanceType: string;
+  /** @format date-time */
+  lastValidatedAt?: string | null;
+  lastValidationMessage?: string | null;
+  lastValidationStatus: string;
+  /** @format int32 */
+  maxActiveBuilders: number;
+  /** @format int32 */
+  maximumInstanceLifetimeSeconds: number;
+  name: string;
+  provider: string;
+  providerSpec: any;
+  /** @format int32 */
+  provisioningTimeoutSeconds: number;
+  /** @format int32 */
+  queueTimeoutSeconds: number;
+  region: string;
+  /** @format int32 */
+  registrationTimeoutSeconds: number;
 }
 
 export interface BuildAgentPoolInput {
@@ -3306,71 +1965,13 @@ export interface BuildAgentPoolInput {
   tagIds?: string[];
 }
 
-export interface BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec {
-  $type: "AwsEc2";
-  amiId: string;
-  architecture: CpuArchitecture;
-  assignPublicIp: boolean;
-  assumeRoleArn: null | string;
-  /** @format uuid */
-  awsCredentialSecretId: null | string;
-  instanceProfileName: null | string;
-  instanceType: string;
-  keyPairName: null | string;
-  provider?: BuildAgentPoolProvider;
-  region: string;
-  /** @format int32 */
-  rootVolumeSizeGb: number;
-  securityGroupIds: string[];
-  subnetId: string;
-  tags?: null | Record<string, string>;
-}
-
-export interface BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec {
-  $type: "SelfManagedVm";
-  architecture: CpuArchitecture;
-  connectionMode?: BuildAgentPoolConnectionMode;
-  endpoint: null | string;
-  labels?: null | string[];
-  /** @format int32 */
-  maxWorkers: number;
-  provider?: BuildAgentPoolProvider;
-  /** @format uuid */
-  registrationSecretId?: null | string;
-}
-
-export interface BuildAgentPoolSnapshot {
-  architecture: CpuArchitecture;
-  /** @format int32 */
-  cleanupTimeoutSeconds: number;
-  description: null | string;
-  enabled: boolean;
-  /** @format int32 */
-  failureRetentionMinutes: number;
-  /** @format int32 */
-  heartbeatTimeoutSeconds: number;
-  /** @format uuid */
-  id: string;
-  instanceType: string;
-  /** @format date-time */
-  lastValidatedAt: null | string;
-  lastValidationMessage: null | string;
-  lastValidationStatus: BuildAgentPoolValidationStatus;
-  /** @format int32 */
-  maxActiveBuilders: number;
-  /** @format int32 */
-  maximumInstanceLifetimeSeconds: number;
-  name: string;
-  provider: BuildAgentPoolProvider;
-  providerSpec: BuildAgentPoolProviderSpec;
-  /** @format int32 */
-  provisioningTimeoutSeconds: number;
-  /** @format int32 */
-  queueTimeoutSeconds: number;
-  region: string;
-  /** @format int32 */
-  registrationTimeoutSeconds: number;
-}
+export type BuildAgentPoolProviderSpec =
+  | (AwsEc2BuildAgentPoolProviderSpec & {
+      $type: "AwsEc2";
+    })
+  | (SelfManagedVmBuildAgentPoolProviderSpec & {
+      $type: "SelfManagedVm";
+    });
 
 export interface BuildAgentPoolView {
   /** @format date-time */
@@ -3435,14 +2036,47 @@ export interface BuildLogEntry {
   stream: string;
 }
 
+export interface BuildMetadataPatch {
+  description?: string | null;
+}
+
 export interface BuildPlatformSnapshot {
   address: string | null;
   /** @format uuid */
   buildAgentPoolId: string | null;
-  builderKind: string | null;
+  builderKind: null | BuildProjectBuilderKind;
   /** @format uuid */
   id: string | null;
   name: string | null;
+}
+
+export interface BuildProjectActivitySnapshot {
+  branch: string;
+  /** @format uuid */
+  buildAgentPoolId?: string | null;
+  buildSecrets: BuildSecretActivitySnapshot[];
+  builderKind: string;
+  contextPath: string;
+  description?: string | null;
+  dockerfilePath: string;
+  enabled: boolean;
+  /** @format uuid */
+  gitRepositoryId: string;
+  /** @format uuid */
+  id: string;
+  imageRepository: string;
+  name: string;
+  /** @format uuid */
+  platformId?: string | null;
+  /** @format uuid */
+  registryId: string;
+  /** @format int32 */
+  retentionRunCount: number;
+  tagTemplates: string[];
+  target?: string | null;
+  /** @format int32 */
+  timeoutSeconds: number;
+  webhook?: null | WebhookConfig;
 }
 
 export interface BuildProjectInput {
@@ -3471,36 +2105,7 @@ export interface BuildProjectInput {
   target?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | BuildWebhookConfig;
-}
-
-export interface BuildProjectSnapshot {
-  branch: string;
-  /** @format uuid */
-  buildAgentPoolId: null | string;
-  buildSecrets?: null | BuildSecretSpec[];
-  builderKind: BuildProjectBuilderKind;
-  contextPath: string;
-  description: null | string;
-  dockerfilePath: string;
-  enabled: boolean;
-  /** @format uuid */
-  gitRepositoryId: string;
-  /** @format uuid */
-  id: string;
-  imageRepository: string;
-  name: string;
-  /** @format uuid */
-  platformId: null | string;
-  /** @format uuid */
-  registryId: string;
-  /** @format int32 */
-  retentionRunCount: number;
-  tagTemplates: string[];
-  target: null | string;
-  /** @format int32 */
-  timeoutSeconds: number;
-  webhook: null | BuildWebhookConfig;
+  webhook?: null | WebhookConfig;
 }
 
 export interface BuildProjectView {
@@ -3548,7 +2153,7 @@ export interface BuildProjectView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | BuildWebhookConfig;
+  webhook: null | WebhookConfig;
 }
 
 export interface BuildRunView {
@@ -3590,19 +2195,16 @@ export interface BuildRunView {
   triggeredByActorId: string;
 }
 
-export interface BuildSecretSpec {
+export interface BuildSecretActivitySnapshot {
   id: string;
   /** @format uuid */
   secretId: string;
 }
 
-export interface BuildWebhookConfig {
-  authScheme?: WebhookAuthScheme;
-  branchFilter?: null | string;
-  /** @default false */
-  enabled?: boolean;
-  provider?: WebhookProvider;
-  secret?: null | string;
+export interface BuildSecretSpec {
+  id: string;
+  /** @format uuid */
+  secretId: string;
 }
 
 export interface ChangeCurrentPasswordRequest {
@@ -3667,6 +2269,10 @@ export interface ComposeProjectStackDraftView {
   tagIds: string[];
 }
 
+export interface ConfigContentView {
+  content: string;
+}
+
 export interface ConfirmMandatoryMfaSetupInput {
   code: string;
 }
@@ -3681,32 +2287,6 @@ export interface ContainerAdoptionDraft {
   issues: AdoptionIssue[];
   previewFingerprint: string;
   source: AdoptionSource;
-}
-
-export interface ContainerDataView {
-  capabilities?: null | PlatformCapabilities;
-  containerStat?: null | ContainerStatView;
-  controlState: ResourceControlState;
-  /** @format int64 */
-  created?: number;
-  /** @format uuid */
-  deploymentId?: string | null;
-  dockerNodeId?: string | null;
-  hasCitadelOwnershipLabels: boolean;
-  id: string;
-  image: string;
-  imageId: string;
-  isSwarmTask: boolean;
-  isSystem: boolean;
-  name: string;
-  /** @format uuid */
-  platformId?: string;
-  ports?: null | Record<string, HostPortBinding[]>;
-  stack?: string | null;
-  /** @format uuid */
-  stackId?: string | null;
-  state: ContainerStateStatus;
-  systemRole?: null | ContainerSystemRole;
 }
 
 export interface ContainerDeploymentUpdateState {
@@ -3735,62 +2315,92 @@ export interface ContainerDeploymentView {
   status: DeploymentStatus;
 }
 
-export type ContainerIdsInput = string[];
-
-export interface ContainerImageResult {
-  id: string;
-  name: string;
-  networks: Record<string, string>;
-  ports: Record<string, HostPortBinding[]>;
-  state: ContainerStateStatus;
-  volumes: string[];
-}
-
-export interface ContainerInfoView {
-  capabilities?: null | PlatformCapabilities;
+export interface ContainerHistory {
   containerId: string;
-  deploymentView?: null | ContainerDeploymentView;
-  finishedAt: string;
-  imageView?: null | ImageView;
-  name: string;
-  networks: Record<string, string>;
-  /** @format uuid */
-  platformId: string;
-  platformName: string;
-  ports: Record<string, HostPortBinding[]>;
-  startedAt: string;
-  state: ContainerStateStatus;
-  volumes: string[];
+  containerName: string;
+  stats: ContainerStatView[];
 }
 
-export interface ContainerInspectView {
+export interface ContainerInspectionView {
   appArmorProfile?: string | null;
-  args: string[];
-  config?: object | null;
+  args?: string[];
+  config?: Record<string, any> | null;
   created: string;
   driver?: string | null;
-  execIDs: string[];
-  graphDriver?: object | null;
-  hostConfig?: object | null;
+  execIDs?: string[];
+  graphDriver?: Record<string, any> | null;
+  hostConfig?: Record<string, any> | null;
   hostnamePath?: string | null;
   hostsPath?: string | null;
   id: string;
   image?: string | null;
   logPath?: string | null;
   mountLabel?: string | null;
-  mounts: object[];
+  mounts?: Record<string, any>[];
   name?: string | null;
-  networkSettings?: object | null;
+  networkSettings?: Record<string, any> | null;
   path?: string | null;
   platform?: string | null;
   processLabel?: string | null;
   resolvConfPath?: string | null;
+  /** @format int64 */
   restartCount?: number | null;
   /** @format int64 */
   sizeRootFs?: number | null;
   /** @format int64 */
   sizeRw?: number | null;
-  state?: object | null;
+  state?: Record<string, any> | null;
+  [key: string]: any;
+}
+
+export interface ContainerRuntimeListView {
+  containers: ContainerRuntimeView[];
+}
+
+export interface ContainerRuntimeView {
+  capabilities: null | PlatformCapabilitiesView;
+  containerStat: null | ContainerStatView;
+  controlState: ResourceControlState;
+  /** @format int64 */
+  created: number;
+  /** @format uuid */
+  deploymentId: string | null;
+  dockerNodeId: string | null;
+  hasCitadelOwnershipLabels: boolean;
+  /** Docker container ID; the statistics containerId is Citadel's database UUID. */
+  id: string;
+  image: string;
+  imageId: string;
+  isSwarmTask: boolean;
+  isSystem: boolean;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  ports: Record<string, HostPortBinding[] | null> | null;
+  stack: string | null;
+  /** @format uuid */
+  stackId: string | null;
+  state: ContainerStateStatus;
+  systemRole: null | ContainerSystemRole;
+}
+
+export interface ContainerStatSnapshot {
+  /** @format uuid */
+  containerId: string;
+  /** @format double */
+  cpuUsage: number;
+  /** @format int64 */
+  created: number;
+  /** @format double */
+  memoryActive: number;
+  /** @format double */
+  memoryCache: number;
+  /** @format double */
+  memoryLimit: number;
+  /** @format double */
+  rxBytes: number;
+  /** @format double */
+  txBytes: number;
 }
 
 export interface ContainerStatView {
@@ -3812,8 +2422,21 @@ export interface ContainerStatView {
   txBytes: number;
 }
 
-export interface ContainerStatsView {
-  stats: ContainerStatView[];
+export interface ContainerSummaryView {
+  capabilities: null | PlatformCapabilitiesView;
+  containerId: string;
+  deploymentView: null | ContainerDeploymentView;
+  finishedAt: string;
+  imageView: null | ImageView;
+  name: string;
+  networks: Record<string, string>;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  ports: Record<string, HostPortBinding[] | null>;
+  startedAt: string;
+  state: ContainerStateStatus;
+  volumes: string[];
 }
 
 export interface ContainerView {
@@ -3853,20 +2476,6 @@ export interface ContainerView {
   updated: number;
 }
 
-export interface ContainerVolumeResult {
-  id: string;
-  image: string;
-  imageId: string;
-  name: string;
-  networks: Record<string, string>;
-  ports: Record<string, HostPortBinding[]>;
-  state: ContainerStateStatus;
-}
-
-export interface ContainersDataView {
-  containers: ContainerDataView[];
-}
-
 export interface ContainersResponse {
   capabilities: PlatformCapabilitiesView;
   containers: ContainerView[];
@@ -3901,10 +2510,6 @@ export type CreateNetworkInput = CreateRuntimeNetwork & {
   /** @format uuid */
   platformId: string;
 };
-
-export interface CreateNetworkView {
-  id: string;
-}
 
 export interface CreateOidcProviderRequest {
   allowEmailAutoLink: boolean;
@@ -3991,14 +2596,8 @@ export interface CreateStackInput {
   tagIds?: string[];
 }
 
-export interface CreateSwarmConfigInput {
-  data: string;
-  labels?: Record<string, string>;
-  name: string;
-}
-
-export interface CreateSwarmSecretInput {
-  data: string;
+export interface CreateSwarmMaterialInput {
+  data?: string;
   labels?: Record<string, string>;
   name: string;
 }
@@ -4015,7 +2614,7 @@ export interface CreateSwarmServiceInput {
 
 export interface CreateTeamRequest {
   name: string;
-  resourceAccesses?: TeamResourceAccessInput[];
+  resourceAccesses?: ResourceAccessInput[];
   roleIds?: string[];
   userIds?: string[];
 }
@@ -4025,7 +2624,7 @@ export interface CreateUserRequest {
   isEnabled?: boolean;
   name: string;
   password: string;
-  resourceAccesses?: UserResourceAccessInput[];
+  resourceAccesses?: ResourceAccessInput[];
   roleIds?: string[];
   teamIds?: string[];
 }
@@ -4034,6 +2633,10 @@ export type CreateVolumeInput = CreateRuntimeVolume & {
   /** @format uuid */
   platformId: string;
 };
+
+export interface CreatedNetworkView {
+  id: string;
+}
 
 export type CreatedServiceAccountTokenView = ServiceAccountTokenView & {
   token: string;
@@ -4050,10 +2653,10 @@ export interface CurrentProfileAuthenticationView {
 }
 
 export interface CurrentProfileAuthorizationView {
-  alertRules: IdentityApplicationProfileResourceCapabilities;
-  bindings: IdentityApplicationProfileResourceCapabilities;
+  alertRules: ResourceCapabilitiesView;
+  bindings: ResourceCapabilitiesView;
   isAdministrator: boolean;
-  tags: IdentityApplicationProfileResourceCapabilities;
+  tags: ResourceCapabilitiesView;
 }
 
 export interface CurrentProfileView {
@@ -4079,10 +2682,8 @@ export interface DeleteGitAccountsInput {
   ids: string[];
 }
 
-export interface DeleteImageResult {
-  items: {
-    result: Record<string, string>;
-  }[];
+export interface DeleteImageView {
+  result: Record<string, string>;
 }
 
 export interface DeleteImagesInput {
@@ -4091,6 +2692,10 @@ export interface DeleteImagesInput {
   noPrune?: boolean;
   /** @format uuid */
   platformId: string;
+}
+
+export interface DeleteImagesView {
+  items: DeleteImageView[];
 }
 
 export type DeleteInput = DeleteContainerOptions & {
@@ -4134,22 +2739,20 @@ export interface DeleteVolumesInput {
   platformId: string;
 }
 
+export interface DeploymentActivitySnapshot {
+  description?: string | null;
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  spec: any;
+}
+
 export interface DeploymentApplyError {
   /** @format int64 */
   code: number;
   message: string;
-}
-
-export interface DeploymentBackupSourcePreviewView {
-  /** @format uuid */
-  deploymentId: string;
-  deploymentName: string;
-  /** @format uuid */
-  platformId: string;
-  platformName: string;
-  platformStatus: PlatformStatus;
-  volumes: StackBackupVolumePreviewItem[];
-  warnings: string[];
 }
 
 export interface DeploymentCapabilities {
@@ -4178,8 +2781,6 @@ export interface DeploymentDuplicateDraftView {
   draft: CreateDeploymentInputView;
   warnings: DuplicateWarning[];
 }
-
-export type DeploymentIds = string[];
 
 export type DeploymentImageInfo =
   | {
@@ -4210,20 +2811,10 @@ export type DeploymentImageInfo =
       resolvedImageReference?: string | null;
     };
 
-export interface DeploymentResultSnapshot {
-  containerIds?: null | string[];
-  message?: null | string;
-  resourceBindings?: null | ResourceBindingSnapshot[];
-}
-
-export interface DeploymentSnapshot {
-  description?: null | string;
-  /** @format uuid */
-  id: string;
-  name: string;
-  /** @format uuid */
-  platformId: string;
-  spec?: null | DeploymentSpec;
+export interface DeploymentResultActivitySnapshot {
+  containerIds?: string[] | null;
+  message?: string | null;
+  resourceBindings?: any;
 }
 
 export interface DeploymentSpec {
@@ -4251,7 +2842,7 @@ export interface DeploymentStreamItem {
 }
 
 export interface DeploymentView {
-  autoUpdateState?: null | DeploymentsModelAutoUpdateState;
+  autoUpdateState?: null | AutoUpdateState;
   capabilities?: null | DeploymentCapabilities;
   /** @format uuid */
   containerId?: string | null;
@@ -4280,7 +2871,7 @@ export interface DeploymentView {
 }
 
 export interface DeploymentsView {
-  capabilities: DeploymentsModelResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   deployments: DeploymentView[];
 }
 
@@ -4301,53 +2892,69 @@ export interface DockerHubRepositoryInfo {
   pullCount?: number;
 }
 
-export interface DockerHubTagView {
+export interface DockerHubTag {
   /** @format int64 */
-  fullSize?: number;
+  fullSize?: number | null;
   /** @format int64 */
-  id?: number;
-  image?: {
-    architecture?: string;
-    digest?: string;
-    lastPulled?: string | null;
-    os?: string;
-    /** @format int64 */
-    size?: number;
-    status?: "Active" | "Inactive";
-  };
+  id?: number | null;
+  image?: null | DockerHubTagImage;
   lastPulled?: string | null;
   lastUpdated?: string | null;
-  name?: string;
-  status?: "Active" | "Inactive";
+  name?: string | null;
+  status: RegistryTagStatus;
 }
 
-export interface DockerNetworkDetailsView {
-  attachable: boolean;
-  capabilities?: null | NetworkCapabilities;
-  configFrom?: string | null;
-  configOnly: boolean;
-  containers: Record<string, NetworkConnectedContainer>;
-  created: string;
-  dockerNodeId?: string | null;
-  driver: string;
-  enableIPv4: boolean;
-  enableIPv6: boolean;
-  id: string;
-  inUse?: boolean;
-  ingress: boolean;
-  internal: boolean;
-  ipam?: null | IpAddressManagementConfig;
-  isStale?: boolean;
-  isSystem: boolean;
-  labels: Record<string, string>;
-  name: string;
-  nodeHostname?: string | null;
-  options: Record<string, string>;
-  peers: NetworkPeerInfo[];
-  scope: string;
-  staleReason?: string | null;
-  [key: string]: any;
+export interface DockerHubTagImage {
+  architecture?: string | null;
+  digest?: string | null;
+  lastPulled?: string | null;
+  os?: string | null;
+  /** @format int64 */
+  size?: number | null;
+  status: RegistryTagStatus;
 }
+
+export interface DockerPlatformDescriptor {
+  apiVersion?: string | null;
+  architecture?: string | null;
+  /** @format int64 */
+  containerCount?: number | null;
+  /** @format int64 */
+  containersPaused?: number | null;
+  /** @format int64 */
+  containersRunning?: number | null;
+  /** @format int64 */
+  containersStopped?: number | null;
+  daemonId?: string;
+  driver?: string | null;
+  /** @format int64 */
+  imageUsedBytes?: number | null;
+  minimumApiVersion?: string | null;
+  operatingSystem?: string | null;
+  osType?: string | null;
+  osVersion?: string | null;
+  /** @format int64 */
+  volumeUsedBytes?: number | null;
+}
+
+export type DockerSwarmPlatformDescriptor = DockerPlatformDescriptor & {
+  clusterCreatedAt?: string | null;
+  clusterId?: string | null;
+  controlAvailable?: boolean | null;
+  error?: string | null;
+  localNodeState?: string | null;
+  /** @format int64 */
+  managers?: number | null;
+  nodeAddr?: string | null;
+  nodeID?: string | null;
+  /** @format int64 */
+  nodes?: number | null;
+  remoteManagers?: RuntimeSwarmPeer[] | null;
+  /** @format int64 */
+  runningTaskCount?: number | null;
+  /** @format int64 */
+  serviceCount?: number | null;
+};
 
 export interface DuplicateDraftWarning {
   code: string;
@@ -4368,39 +2975,67 @@ export interface DuplicateWarning {
   message: string;
 }
 
-export interface EdgeAgentEnrollmentView {
+export interface EdgeEnrollmentView {
   /** @format uuid */
   enrollmentId: string;
   /** @format date-time */
   expiresAtUtc: string;
-  instructions: {
-    agentImage: string;
-    coreUrl: string;
-    dockerRunCommand: string;
-    environment: Record<string, string>;
-  };
+  instructions: EdgeInstructionsView;
   /** @format uuid */
   platformId: string;
   token: string;
 }
 
-export interface EdgeAgentStatusView {
+export interface EdgeInstructionsView {
+  agentImage: string;
+  coreUrl: string;
+  dockerRunCommand: string;
+  environment: Record<string, string>;
+}
+
+export interface EdgeStatusView {
   agentFingerprint?: string | null;
   connectionStatus: string;
+  /** @format date-time */
   enrollmentExpiresAtUtc?: string | null;
+  /** @format date-time */
   lastConnectedAtUtc?: string | null;
+  /** @format date-time */
   lastDisconnectedAtUtc?: string | null;
+  /** @format date-time */
   lastHeartbeatAtUtc?: string | null;
   lastSeenHostname?: string | null;
   lastSeenVersion?: string | null;
   /** @format int32 */
   protocolVersion?: number | null;
+  /** @format date-time */
   revokedAtUtc?: string | null;
 }
 
-export interface ExposedPortsResult {
+export interface ExposedPortsView {
   ports: string[];
 }
+
+/** Repository summaries returned by the registry browser, never credentials. */
+export type ExternalRepository =
+  | {
+      $type: "DockerHub";
+      isPrivate: boolean;
+      lastUpdated?: string | null;
+      name?: string | null;
+      namespace?: string | null;
+      /** @format int64 */
+      pullCount: number;
+    }
+  | {
+      $type: "GitHub";
+      createdAt?: string | null;
+      htmlUrl?: string | null;
+      id: string;
+      name?: string | null;
+      updatedAt?: string | null;
+      url?: string | null;
+    };
 
 export interface ExternalSecretInput {
   externalKey: string;
@@ -4420,11 +3055,6 @@ export interface ExternalSecretPatch {
   name?: string | null;
   /** @format uuid */
   providerId?: string | null;
-}
-
-export interface ExternalSecretTestResultView {
-  message: string;
-  success: boolean;
 }
 
 export interface GitAccountConfigView {
@@ -4488,19 +3118,27 @@ export type GitAuthConfiguration =
       username: string;
     };
 
-export interface GitChangedPathView {
+export interface GitChangedPath {
   path: string;
   previousPath?: string | null;
   status: GitChangedPathStatus;
 }
 
-export interface GitCommitComparisonView {
+export interface GitCommitComparison {
   baseCommitSha: string;
-  files: GitChangedPathView[];
+  files: GitChangedPath[];
   headCommitSha: string;
   isTruncated: boolean;
   /** @format uuid */
   repositoryId: string;
+}
+
+export interface GitComposeDiscovery {
+  branch: string;
+  projects: GitComposeProjectCandidate[];
+  /** @format uuid */
+  repositoryId: string;
+  resolvedCommitSha: string;
 }
 
 export interface GitComposeProjectCandidate {
@@ -4510,25 +3148,68 @@ export interface GitComposeProjectCandidate {
   workingDirectory: string;
 }
 
-export interface GitHubCrPackageVersion {
-  createdAt?: string | null;
-  htmlUrl?: string | null;
-  /** @format int64 */
-  id: number;
-  metadata?: {
-    container?: {
-      tags?: string[];
-    };
-  };
+export interface GitDirectoryEntry {
+  mode: string;
   name: string;
-  packageHtmlUrl?: string | null;
-  updatedAt?: string | null;
-  url?: string | null;
+  path: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  size?: number | null;
+  targetCommitSha?: string | null;
+  type: GitEntryTypeView;
+}
+
+export interface GitDirectoryListing {
+  commitSha: string;
+  entries: GitDirectoryEntry[];
+  isTruncated: boolean;
+  path: string;
+  providerRepositoryUrl?: string | null;
+  /** @format uuid */
+  repositoryId: string;
+}
+
+export interface GitFileContent {
+  commitSha: string;
+  content?: string | null;
+  isBinary: boolean;
+  isTruncated: boolean;
+  path: string;
+  previewUnavailableReason?: string | null;
+  providerUrl?: string | null;
+  /** @format uuid */
+  repositoryId: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  size: number;
+  type: GitEntryTypeView;
 }
 
 export interface GitRepositoriesResponse {
   capabilities: ResourceCapabilitiesView;
   gitRepositories: AuthorizedGitRepositoryView[];
+}
+
+export interface GitRepositoryActivitySnapshot {
+  defaultBranch: string;
+  description?: string | null;
+  /** @format uuid */
+  gitAccountId?: string | null;
+  /** @format uuid */
+  id: string;
+  name: string;
+  onClone?: any;
+  onPull?: any;
+  resolvedCommitSha?: string | null;
+  /** @format int32 */
+  syncIntervalMinutes?: number | null;
+  syncMode: string;
+  url: string;
+  webhook?: null | WebhookConfig;
 }
 
 export interface GitRepositoryBranchResponse {
@@ -4538,14 +3219,6 @@ export interface GitRepositoryBranchResponse {
 
 export interface GitRepositoryBranchesResponse {
   branches: GitRepositoryBranchResponse[];
-}
-
-export interface GitRepositoryComposeDiscovery {
-  branch: string;
-  projects: GitComposeProjectCandidate[];
-  /** @format uuid */
-  repositoryId: string;
-  resolvedCommitSha: string;
 }
 
 export interface GitRepositoryConfigResponse {
@@ -4560,45 +3233,10 @@ export interface GitRepositoryConfigResponse {
   onPull: null | RepoCommand;
   /** @format int32 */
   syncIntervalMinutes: number | null;
-  syncMode: ResourcesCatalogGitRepositorySyncMode;
+  syncMode: GitRepositorySyncMode;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: null | RepoWebhookConfig;
-}
-
-export interface GitRepositoryDirectoryListingView {
-  commitSha: string;
-  entries: GitRepositoryEntryView[];
-  isTruncated: boolean;
-  path: string;
-  providerRepositoryUrl?: string | null;
-  /** @format uuid */
-  repositoryId: string;
-}
-
-export interface GitRepositoryEntryView {
-  mode: string;
-  name: string;
-  path: string;
-  /** @format int64 */
-  size?: number | null;
-  targetCommitSha?: string | null;
-  type: GitRepositoryEntryType;
-}
-
-export interface GitRepositoryFileContentView {
-  commitSha: string;
-  content?: string | null;
-  isBinary: boolean;
-  isTruncated: boolean;
-  path: string;
-  previewUnavailableReason?: string | null;
-  providerUrl?: string | null;
-  /** @format uuid */
-  repositoryId: string;
-  /** @format int64 */
-  size: number;
-  type: GitRepositoryEntryType;
+  webhook: null | WebhookConfig;
 }
 
 export interface GitRepositoryPatch {
@@ -4611,10 +3249,10 @@ export interface GitRepositoryPatch {
   onPull?: null | RepoCommand;
   /** @format int32 */
   syncIntervalMinutes?: number | null;
-  syncMode?: null | ResourcesCatalogGitRepositorySyncMode;
+  syncMode?: null | GitRepositorySyncMode;
   tagIds?: string[] | null;
   url?: string | null;
-  webhook?: any;
+  webhook?: null | WebhookPatch;
 }
 
 export interface GitRepositoryRefView {
@@ -4627,29 +3265,16 @@ export interface GitRepositoryRefView {
   /** @format date-time */
   lastSyncedAt: string;
   resolvedCommitSha: string | null;
-  status: GitReposStatus;
+  status: GitRepositoryRefStatus;
 }
 
 export interface GitRepositoryRefsResponse {
   refs: GitRepositoryRefView[];
 }
 
-export interface GitRepositorySnapshot {
-  defaultBranch: string;
-  description: null | string;
-  /** @format uuid */
-  gitAccountId: null | string;
-  /** @format uuid */
-  id: string;
-  name: string;
-  onClone: null | RepoCommand;
-  onPull: null | RepoCommand;
-  resolvedCommitSha?: null | string;
-  /** @format int32 */
-  syncIntervalMinutes: null | number;
-  syncMode: GitRepositorySyncMode;
-  url: string;
-  webhook: null | RepoWebhookConfig;
+export interface GitRepositorySyncActivitySnapshot {
+  commitSha?: string | null;
+  message?: string | null;
 }
 
 export interface GitRepositoryView {
@@ -4668,13 +3293,33 @@ export interface GitRepositoryView {
   name: string;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
-  status: GitReposStatus;
+  status: GitRepositoryStatus;
   /** @format int32 */
   syncIntervalMinutes: number | null;
-  syncMode: ResourcesCatalogGitRepositorySyncMode;
+  syncMode: GitRepositorySyncMode;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: null | RepoWebhookConfig;
+  webhook: null | WebhookConfig;
+}
+
+export interface GithubContainerMetadata {
+  tags?: string[] | null;
+}
+
+export interface GithubPackageMetadata {
+  container?: null | GithubContainerMetadata;
+}
+
+export interface GithubPackageVersion {
+  createdAt?: string | null;
+  htmlUrl?: string | null;
+  /** @format int64 */
+  id: number;
+  metadata?: null | GithubPackageMetadata;
+  name: string;
+  packageHtmlUrl?: string | null;
+  updatedAt?: string | null;
+  url?: string | null;
 }
 
 export type GlobalBindingsResponse = ResourceBindingsView & {
@@ -4717,46 +3362,52 @@ export interface HealthResponse {
   status: string;
 }
 
-export interface HistoryImageResult {
-  comment: string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  created: number | string;
-  createdBy: string;
-  id: string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  size: number | string;
+export interface HistoryContainerStatSnapshot {
+  stats: {
+    /** @format uuid */
+    containerId: string;
+    /** @format double */
+    cpuUsage: number;
+    /** @format int64 */
+    created: number;
+    /** @format double */
+    memoryActive: number;
+    /** @format double */
+    memoryCache: number;
+    /** @format double */
+    memoryLimit: number;
+    /** @format double */
+    rxBytes: number;
+    /** @format double */
+    txBytes: number;
+  }[];
+}
+
+export interface HistoryPlatformStatSnapshot {
+  stats: {
+    /** @format double */
+    cpuUsage: number;
+    /** @format int64 */
+    created: number;
+    /** @format int64 */
+    diskTotalBytes: number | null;
+    /** @format double */
+    diskUsage: number | null;
+    /** @format int64 */
+    diskUsedBytes: number | null;
+    /** @format double */
+    memoryUsage: number;
+    /** @format double */
+    rxBytes: number;
+    /** @format double */
+    txBytes: number;
+  }[];
 }
 
 export interface HostPortBinding {
-  hostIP?: null | string;
-  hostPort?: null | string;
+  hostIP?: string | null;
+  hostPort?: string | null;
 }
-
-export type IImageRepository =
-  | {
-      $type: "DockerHub";
-      isPrivate?: boolean;
-      lastUpdated?: string | null;
-      name: string;
-      namespace?: string | null;
-      /** @format int64 */
-      pullCount?: number;
-    }
-  | {
-      $type: "GitHub";
-      createdAt?: string | null;
-      htmlUrl?: string | null;
-      id: string;
-      name: string;
-      updatedAt?: string | null;
-      url?: string | null;
-    };
 
 export interface IdentityResourceAccessSnapshot {
   permissionLevel: PermissionLevel;
@@ -4771,14 +3422,6 @@ export interface Ids {
   ids: string[];
 }
 
-export interface ImageCapabilities {
-  canExecute: boolean;
-  canInspect: boolean;
-  canPull: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-}
-
 export interface ImageCapabilitiesView {
   canExecute: boolean;
   canInspect: boolean;
@@ -4787,12 +3430,66 @@ export interface ImageCapabilitiesView {
   canWrite: boolean;
 }
 
+export interface ImageContainer {
+  id: string;
+  name: string;
+  networks: Record<string, string>;
+  ports: any;
+  state: string;
+  volumes: string[];
+}
+
+export interface ImageInspection {
+  architecture: string;
+  cmd: string[];
+  containers: ImageContainer[];
+  created: string;
+  dockerNodeId?: string | null;
+  entryPoint: string[];
+  env: string[];
+  exposedPorts: string[];
+  id: string;
+  labels: Record<string, string>;
+  layers: ImageLayer[];
+  name: string;
+  os: string;
+  registry?: any;
+  repoTags: string[];
+  /** @format int64 */
+  size: number;
+  stopSignal?: string | null;
+  tag: string;
+  user?: string | null;
+  volumes: string[];
+  workingDir?: string | null;
+}
+
+export type ImageInspectionView = ImageInspection & {
+  capabilities?: null | ImageCapabilitiesView;
+};
+
+export interface ImageLayer {
+  comment: string;
+  /** @format int64 */
+  created: number;
+  createdBy: string;
+  id: string;
+  /** @format int64 */
+  size: number;
+}
+
+export interface ImagePullError {
+  /** @format int64 */
+  code?: number | null;
+  message?: string | null;
+}
+
 export interface ImageRegistryView {
   /** @format uuid */
   id: string;
   name: string;
   registryHost: string;
-  type: RegistryType;
+  type: RegistryKind;
 }
 
 export interface ImageUpdateState {
@@ -4855,28 +3552,6 @@ export interface InitializeCitadelRequest {
   password: string;
 }
 
-export interface InspectImageView {
-  architecture: string;
-  capabilities?: null | ImageCapabilities;
-  cmd: string[];
-  containers: ContainerImageResult[];
-  created: string;
-  dockerNodeId?: string | null;
-  env: string[];
-  exposedPorts: string[];
-  id: string;
-  labels: Record<string, string>;
-  layers: HistoryImageResult[];
-  name: string;
-  os: string;
-  registry?: null | RegistryView;
-  repoTags: string[];
-  /** @format int64 */
-  size: number;
-  tag: string;
-  volumes: string[];
-}
-
 export interface InstallLicenseRequest {
   license: string;
 }
@@ -4886,16 +3561,11 @@ export interface InternalSecretInput {
   value: string;
 }
 
-export interface IpAddressManagementConfig {
-  config: IpamSubnetConfiguration[];
-  driver: null | string;
-  options: Record<string, string>;
-}
-
-export interface IpamSubnetConfiguration {
-  gateway: null | string;
-  ipRange: null | string;
-  subnet: null | string;
+export interface KubernetesPlatformDescriptor {
+  apiServerUrl?: string | null;
+  clusterName?: string | null;
+  clusterVersion?: string | null;
+  namespace?: string | null;
 }
 
 /** Activity summary embedded in resource HTTP and realtime responses. */
@@ -4905,26 +3575,29 @@ export interface LatestActivityView {
   eventType: ActivityEventType;
   /** @format uuid */
   id: string;
-  info: ActivityEventInfo;
+  info: PublicActivityEventInfo;
   resourceType: ActivityResourceType;
   status: ActivityStatus;
 }
 
 export interface LicenseActivitySnapshot {
-  customerId: null | string;
-  customerName: null | string;
+  customerId?: string | null;
+  customerName?: string | null;
   effectiveCapabilities: LicenseCapability[];
   effectiveEdition: string;
   /** @format date-time */
-  expiresAt: null | string;
-  fingerprint: null | string;
+  expiresAt?: string | null;
+  fingerprint?: string | null;
   /** @format date-time */
-  graceUntil: null | string;
-  licenseId: null | string;
-  licensedEdition: null | string;
-  replacedLicenseId: null | string;
-  /** @format int32 */
-  schema: null | number;
+  graceUntil?: string | null;
+  licenseId?: string | null;
+  licensedEdition?: string | null;
+  replacedLicenseId?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  schema?: number | null;
   status: LicenseStatus;
 }
 
@@ -4983,6 +3656,11 @@ export interface LifeCycleSpec {
   stopTimeout?: number | null;
 }
 
+export interface LogSnapshot {
+  lines: string[];
+  truncated: boolean;
+}
+
 export interface LoginRequest {
   emailOrName: string;
   password: string;
@@ -4993,9 +3671,16 @@ export interface LoginResponse {
   nextStep: LoginNextStep;
 }
 
+export interface LookupResourceInfo {
+  group?: string | null;
+  /** @format uuid */
+  id: string;
+  name: string;
+}
+
 export interface ManagedSwarmServiceView {
   appliedImageDigest: string | null;
-  autoUpdateState: SwarmServicesModelAutoUpdateState;
+  autoUpdateState: AutoUpdateState;
   capabilities: null | SwarmServiceCapabilities;
   controlState: ResourceControlState;
   /** @format date-time */
@@ -5031,7 +3716,7 @@ export interface ManagedSwarmServiceView {
 }
 
 export interface ManagedSwarmServicesView {
-  capabilities: SwarmServicesModelResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   swarmServices: ManagedSwarmServiceView[];
 }
 
@@ -5056,11 +3741,12 @@ export interface MfaVerificationView {
   accessToken: string;
 }
 
-export interface NetworkCapabilities {
-  canExecute: boolean;
-  canInspect: boolean;
-  canRead: boolean;
-  canWrite: boolean;
+export interface NetworkAttachmentView {
+  endpointId: string | null;
+  ipV4Address: string | null;
+  ipv6Address: string | null;
+  macAddress: string | null;
+  name: string | null;
 }
 
 export interface NetworkCapabilitiesView {
@@ -5070,17 +3756,15 @@ export interface NetworkCapabilitiesView {
   canWrite: boolean;
 }
 
-export interface NetworkConnectedContainer {
-  endpointId: string;
-  ipV4Address: string;
-  ipv6Address: string;
-  macAddress: string;
-  name: string;
+export interface NetworkIpamView {
+  config: RuntimeIpamConfig[];
+  driver: string | null;
+  options: Record<string, string>;
 }
 
-export interface NetworkPeerInfo {
-  ip: string;
-  name: string;
+export interface NetworkPeerView {
+  ip: string | null;
+  name: string | null;
 }
 
 export interface NetworkView {
@@ -5088,7 +3772,7 @@ export interface NetworkView {
   capabilities: null | NetworkCapabilitiesView;
   configFrom: string | null;
   configOnly: boolean;
-  containers: Record<string, NetworkConnectedContainer>;
+  containers: Record<string, NetworkAttachmentView>;
   created: string;
   dockerNodeId: string | null;
   driver: string;
@@ -5098,14 +3782,14 @@ export interface NetworkView {
   inUse: boolean;
   ingress: boolean;
   internal: boolean;
-  ipam: null | IpAddressManagementConfig;
+  ipam: null | NetworkIpamView;
   isStale: boolean;
   isSystem: boolean;
   labels: Record<string, string>;
   name: string;
   nodeHostname: string | null;
   options: Record<string, string>;
-  peers: NetworkPeerInfo[];
+  peers: NetworkPeerView[];
   scope: string;
   staleReason: string | null;
 }
@@ -5125,14 +3809,14 @@ export interface NewGitRepository {
   onPull?: null | RepoCommand;
   /** @format int32 */
   syncIntervalMinutes?: number | null;
-  syncMode?: ResourcesCatalogGitRepositorySyncMode;
+  syncMode?: GitRepositorySyncMode;
   tagIds?: string[];
   url: string;
-  webhook?: null | RepoWebhookConfig;
+  webhook?: null | WebhookConfig;
 }
 
 export interface NewRegistry {
-  configuration: RegistryConfiguration;
+  configuration: RegistrySpec;
   description?: string | null;
   name: string;
   /** Required for custom registry addresses; inferred for Docker Hub and GitHub. */
@@ -5156,9 +3840,81 @@ export interface NewTag {
   name: string;
 }
 
-export type NodeAgentProgressList = SwarmNodeAgentProgressItem[];
+export interface NodeAgentCoverage {
+  agentConnectionState: string;
+  architecture: string;
+  availability: string;
+  compatible: boolean;
+  dataSource: string;
+  dockerNodeId: string;
+  dockerReachable: boolean;
+  eligible: boolean;
+  hostname: string;
+  /** @format date-time */
+  lastHeartbeatAtUtc?: string | null;
+  /** @format date-time */
+  lastSuccessfulReconciliationAt?: string | null;
+  nodeStatus: string;
+  projectionStale: boolean;
+  reasons: string[];
+  role: string;
+  schedulable: boolean;
+  serviceTaskState?: string | null;
+  staleReason?: string | null;
+  /** @format date-time */
+  staleSince?: string | null;
+  supported: boolean;
+}
 
-export interface OidcDiscoveryResultView {
+export interface NodeAgentOperation {
+  error?: string | null;
+  kind: string;
+  /** @format uuid */
+  operationId: string;
+  /** @format date-time */
+  startedAtUtc: string;
+  state: string;
+}
+
+export interface NodeAgentProgress {
+  errorMessage?: string | null;
+  isCompleted: boolean;
+  isWarning: boolean;
+  message: string;
+  /** @format uuid */
+  operationId: string;
+  /** @format uuid */
+  platformId: string;
+  stage: string;
+}
+
+export interface NodeInspectionView {
+  address: string;
+  architecture: string;
+  availability: string;
+  /** @format date-time */
+  createdAt?: string | null;
+  /** @format int32 */
+  desiredTaskCount: number;
+  engineVersion: string;
+  hostname: string;
+  id: string;
+  isLeader: boolean;
+  labels: Record<string, string>;
+  operatingSystem: string;
+  reachability: string;
+  role: string;
+  /** @format int32 */
+  runningTaskCount: number;
+  status: string;
+  statusMessage?: string | null;
+  /** @format date-time */
+  updatedAt?: string | null;
+  /** @format int64 */
+  versionIndex: number;
+}
+
+export interface OidcDiscoveryView {
   authorizationEndpoint: string;
   issuer: string;
   jwksUri: string;
@@ -5177,12 +3933,12 @@ export interface OidcLoginProvidersView {
 
 export interface OidcProviderActivitySnapshot {
   allowEmailAutoLink: boolean;
-  allowedEmailDomains: null | string;
+  allowedEmailDomains?: string | null;
   autoProvisionUsers: boolean;
   clientId: string;
   /** @format uuid */
-  defaultRoleId: null | string;
-  description: null | string;
+  defaultRoleId?: string | null;
+  description?: string | null;
   displayName: string;
   enabled: boolean;
   /** @format uuid */
@@ -5190,8 +3946,8 @@ export interface OidcProviderActivitySnapshot {
   issuer: string;
   name: string;
   requireEmailVerified: boolean;
-  requiredClaimName: null | string;
-  requiredClaimValues: null | string;
+  requiredClaimName?: string | null;
+  requiredClaimValues?: string | null;
   scopes: string;
 }
 
@@ -5228,21 +3984,11 @@ export interface OidcProvidersView {
 
 export interface PagedActivityView {
   items: ActivityView[];
-  /**
-   * @format int32
-   * @min 1
-   */
+  /** @format int32 */
   page: number;
-  /**
-   * @format int32
-   * @min 1
-   * @max 500
-   */
+  /** @format int32 */
   pageSize: number;
-  /**
-   * @format int64
-   * @min 0
-   */
+  /** @format int64 */
   totalCount: number;
 }
 
@@ -5311,7 +4057,7 @@ export interface PagedResultTeamView {
     isEnabled: boolean;
     members: TeamMemberView[] | null;
     name: string;
-    resourceAccesses: TeamResourceAccessView[] | null;
+    resourceAccesses: ResourceAccessView[] | null;
     roles: ResourceInfo[] | null;
     /** @format int32 */
     totalMembers: number;
@@ -5333,7 +4079,7 @@ export interface PagedResultUserView {
     id: string;
     isEnabled: boolean;
     name: string;
-    resourceAccesses: UserResourceAccessView[] | null;
+    resourceAccesses: ResourceAccessView[] | null;
     roles: ResourceInfo[] | null;
     teams: ResourceInfo[] | null;
   }[];
@@ -5419,11 +4165,6 @@ export interface PatchPlatformMetadataInput {
   tags?: string[] | null;
 }
 
-export interface PatchResourceMetadata {
-  description?: string | null;
-  tags?: string[];
-}
-
 export interface PatchResourceMetadataInput {
   description?: string | null;
   tags?: string[] | null;
@@ -5451,7 +4192,7 @@ export interface PatchStackMetadataInput {
 
 export interface PatchTeamRequest {
   isEnabled?: boolean | null;
-  resourceAccesses?: TeamResourceAccessInput[] | null;
+  resourceAccesses?: ResourceAccessInput[] | null;
   roleIds?: string[] | null;
   userIds?: string[] | null;
 }
@@ -5471,12 +4212,10 @@ export interface PatchUserRequest {
   email?: string | null;
   isEnabled?: boolean | null;
   password?: string | null;
-  resourceAccesses?: UserResourceAccessInput[] | null;
+  resourceAccesses?: ResourceAccessInput[] | null;
   roleIds?: string[] | null;
   teamIds?: string[] | null;
 }
-
-export type PermissionMatrixResponse = Record<string, PermissionMatrixViewItem>;
 
 export interface PermissionMatrixViewItem {
   label: string;
@@ -5485,11 +4224,34 @@ export interface PermissionMatrixViewItem {
   specificPermissions: Record<string, PermissionLevel>;
 }
 
-export interface PlatformBackupSummariesView {
-  platforms: PlatformBackupSummaryView[];
+export interface PlatformActivitySnapshot {
+  address: string;
+  agentVersion?: string | null;
+  connectorType: string;
+  /** @format int64 */
+  cpuCount: number;
+  description?: string | null;
+  /** @format uuid */
+  id: string;
+  /** @format int64 */
+  imageCount: number;
+  /** @format int64 */
+  memTotal: number;
+  name: string;
+  /** @format int32 */
+  networkCount: number;
+  platformDescriptor: any;
+  serverVersion?: string | null;
+  status: string;
+  /** @format int32 */
+  volumeCount: number;
 }
 
-export interface PlatformBackupSummaryView {
+export interface PlatformBackupSummaries {
+  platforms: PlatformBackupSummary[];
+}
+
+export interface PlatformBackupSummary {
   /** @format int32 */
   attentionPolicyCount: number;
   /** @format int32 */
@@ -5499,8 +4261,8 @@ export interface PlatformBackupSummaryView {
   /** @format int32 */
   enabledPolicyCount: number;
   /** @format date-time */
-  lastRunAt: string | null;
-  lastRunStatus: null | BackupRunStatus;
+  lastRunAt?: string | null;
+  lastRunStatus?: null | BackupRunStatus;
   /** @format uuid */
   platformId: string;
   /** @format int32 */
@@ -5509,17 +4271,6 @@ export interface PlatformBackupSummaryView {
   stackPolicyCount: number;
   /** @format int32 */
   swarmServicePolicyCount: number;
-}
-
-export interface PlatformCapabilities {
-  canExecute: boolean;
-  canInspect: boolean;
-  canManageNodeAgents: boolean;
-  canOpenTerminal: boolean;
-  canPull: boolean;
-  canRead: boolean;
-  canViewLogs: boolean;
-  canWrite: boolean;
 }
 
 export interface PlatformCapabilitiesView {
@@ -5533,109 +4284,25 @@ export interface PlatformCapabilitiesView {
   canWrite: boolean;
 }
 
-export interface PlatformDescriptorDockerPlatformDescriptor {
-  $type: "Docker";
-  apiVersion?: null | string;
-  architecture?: null | string;
-  /** @format int64 */
-  containerCount: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersStopped: number;
-  daemonId: string;
-  driver?: null | string;
-  /** @format int64 */
-  imageUsedBytes?: null | number;
-  minimumApiVersion?: null | string;
-  operatingSystem?: null | string;
-  osType?: null | string;
-  osVersion?: null | string;
-  /** @format int64 */
-  volumeUsedBytes?: null | number;
-}
+export type PlatformDescriptor =
+  | (DockerPlatformDescriptor & {
+      $type: "Docker";
+    })
+  | (DockerSwarmPlatformDescriptor & {
+      $type: "DockerSwarm";
+    })
+  | (KubernetesPlatformDescriptor & {
+      $type: "Kubernetes";
+    });
 
-export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
-  $type: "DockerSwarm";
-  apiVersion?: null | string;
-  architecture?: null | string;
-  /** @format date-time */
-  clusterCreatedAt?: null | string;
-  clusterId?: null | string;
-  /** @format int64 */
-  containerCount: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersStopped: number;
-  controlAvailable: boolean;
-  daemonId: string;
-  driver?: null | string;
-  error?: null | string;
-  /** @format int64 */
-  imageUsedBytes?: null | number;
-  localNodeState: string;
-  /** @format int64 */
-  managers: number;
-  minimumApiVersion?: null | string;
-  nodeAddr: string;
-  nodeID: string;
-  /** @format int64 */
-  nodes: number;
-  operatingSystem?: null | string;
-  osType?: null | string;
-  osVersion?: null | string;
-  remoteManagers?: null | SwarmPeer[];
-  /** @format int64 */
-  runningTaskCount?: null | number;
-  /** @format int64 */
-  serviceCount?: null | number;
-  /** @format int64 */
-  volumeUsedBytes?: null | number;
-}
-
-export interface PlatformDescriptorKubernetesPlatformDescriptor {
-  $type: "Kubernetes";
-  apiServerUrl: null | string;
-  clusterName: null | string;
-  clusterVersion: null | string;
-  namespace: null | string;
-}
-
-export interface PlatformInput {
+/** Omitted fields preserve their stored value. Only address and description allow null. */
+export interface PlatformPatch {
   address?: string | null;
-  connectorType?: "Unknown" | "Local" | "Agent" | "EdgeAgent";
+  connectorType?: PlatformConnectorType;
   description?: string | null;
   name?: string;
   pruneHistoricalSwarmTaskContainers?: boolean;
-  type?: "Docker" | "DockerSwarm" | "Kubernetes";
-}
-
-export interface PlatformSnapshot {
-  address: string;
-  agentVersion: null | string;
-  connectorType: PlatformConnectorType;
-  /** @format int64 */
-  cpuCount: number;
-  description: null | string;
-  /** @format uuid */
-  id: string;
-  /** @format int64 */
-  imageCount: number;
-  /** @format int64 */
-  memTotal: number;
-  name: string;
-  /** @format int32 */
-  networkCount: number;
-  platformDescriptor: PlatformDescriptor;
-  serverVersion: null | string;
-  status: PlatformStatus;
-  /** @format int32 */
-  volumeCount: number;
+  type?: PlatformType;
 }
 
 export interface PlatformStatView {
@@ -5655,10 +4322,6 @@ export interface PlatformStatView {
   rxBytes: number;
   /** @format double */
   txBytes: number;
-}
-
-export interface PlatformStatsView {
-  stats: PlatformStatView[];
 }
 
 export interface PlatformView {
@@ -5682,7 +4345,7 @@ export interface PlatformView {
   name: string;
   /** @format int32 */
   networkCount: number;
-  platformDescriptor?: null | PlatformDescriptor;
+  platformDescriptor: null | PlatformDescriptor;
   pruneHistoricalSwarmTaskContainers: boolean;
   serverVersion: string | null;
   /** @format int64 */
@@ -5703,7 +4366,7 @@ export interface PlatformsResponse {
 }
 
 export interface Policies {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   policies: BackupPolicyView[];
 }
 
@@ -5713,13 +4376,19 @@ export interface Pools {
 }
 
 export interface ProblemDetails {
+  capability?: string | null;
   detail?: string | null;
-  errors?: Record<string, string[]>;
-  requestId?: string;
+  effectiveEdition?: string | null;
+  errors?: Record<string, string[]> | null;
+  licenseStatus?: string | null;
+  requestId?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
   status: number;
   title: string;
-  traceId?: string;
-  /** @format uri-reference */
+  traceId?: string | null;
   type: string;
 }
 
@@ -5768,6 +4437,681 @@ export interface PrunePlatformView {
   volumesDeleted: string[];
 }
 
+export type PublicActivityEventInfo =
+  | {
+      $type: "InitialAdministratorCreated";
+      mode: string;
+      /** @format uuid */
+      userId: string;
+      userName: string;
+    }
+  | {
+      $type: "AlertRuleCreated";
+      alertRule: AlertRuleActivitySnapshot;
+    }
+  | {
+      $type: "AlertRuleUpdated";
+      newRule: AlertRuleActivitySnapshot;
+      oldRule: AlertRuleActivitySnapshot;
+    }
+  | {
+      $type: "BackupPolicyCreated";
+      policy: BackupPolicyActivitySnapshot;
+    }
+  | {
+      $type: "BackupRunQueued";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BackupRunStarted";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BackupRunCompleted";
+      /** @format int64 */
+      durationMs?: number | null;
+      errorMessage?: string | null;
+      /** @format uuid */
+      runId: string;
+      status: string;
+      trigger: string;
+    }
+  | {
+      $type: "BackupPolicyRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "BackupPolicyUpdated";
+      newPolicy: BackupPolicyActivitySnapshot;
+      oldPolicy: BackupPolicyActivitySnapshot;
+    }
+  | {
+      $type: "AlertRuleRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | (VolumeContentDownloaded & {
+      $type: "VolumeContentDownloaded";
+    })
+  | (WebhookActivityDetails & {
+      $type: "GitRepoWebhookReceived";
+    })
+  | (WebhookActivityDetails & {
+      $type: "StackWebhookReceived";
+    })
+  | (WebhookActivityDetails & {
+      $type: "BuildWebhookReceived";
+    })
+  | (WebhookActivityDetails & {
+      $type: "SwarmServiceWebhookReceived";
+    })
+  | {
+      $type: "UserProfileUpdated";
+      changes: ActivityChangedField[];
+    }
+  | {
+      $type: "UserPreferencesUpdated";
+      changes: ActivityChangedField[];
+    }
+  | {
+      $type: "UserPasswordChanged";
+    }
+  | {
+      $type: "UserSessionRevoked";
+      /** @format uuid */
+      sessionId: string;
+    }
+  | {
+      $type: "UserOtherSessionsRevoked";
+      /** @format int32 */
+      count: number;
+    }
+  | {
+      $type: "UserMfaEnabled";
+    }
+  | {
+      $type: "UserMfaDisabled";
+    }
+  | {
+      $type: "UserMfaVerificationFailed";
+    }
+  | {
+      $type: "UserMfaRecoveryCodeUsed";
+    }
+  | {
+      $type: "UserMfaRecoveryCodesRegenerated";
+    }
+  | {
+      $type: "UserMfaResetByAdministrator";
+      /** @format uuid */
+      targetUserId: string;
+    }
+  | {
+      $type: "UserCreated";
+      user: UserActivitySnapshot;
+    }
+  | {
+      $type: "UserUpdated";
+      newUser: UserActivitySnapshot;
+      oldUser: UserActivitySnapshot;
+      passwordChanged: boolean;
+    }
+  | {
+      $type: "UserRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "UserDeleted";
+      user: UserActivitySnapshot;
+    }
+  | {
+      $type: "TeamCreated";
+      team: TeamActivitySnapshot;
+    }
+  | {
+      $type: "TeamUpdated";
+      newTeam: TeamActivitySnapshot;
+      oldTeam: TeamActivitySnapshot;
+    }
+  | {
+      $type: "TeamRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "TeamDeleted";
+      team: TeamActivitySnapshot;
+    }
+  | {
+      $type: "RoleCreated";
+      role: RoleActivitySnapshot;
+    }
+  | {
+      $type: "RoleUpdated";
+      newRole: RoleActivitySnapshot;
+      oldRole: RoleActivitySnapshot;
+    }
+  | {
+      $type: "RoleRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "RoleDeleted";
+      role: RoleActivitySnapshot;
+    }
+  | {
+      $type: "ServiceAccountCreated";
+      account: ServiceAccountActivitySnapshot;
+    }
+  | {
+      $type: "ServiceAccountUpdated";
+      newAccount: ServiceAccountActivitySnapshot;
+      oldAccount: ServiceAccountActivitySnapshot;
+    }
+  | {
+      $type: "ServiceAccountRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "ServiceAccountEnabled";
+      /** @format uuid */
+      accountId: string;
+    }
+  | {
+      $type: "ServiceAccountDisabled";
+      /** @format uuid */
+      accountId: string;
+    }
+  | {
+      $type: "ServiceAccountArchived";
+      /** @format uuid */
+      accountId: string;
+    }
+  | {
+      $type: "ServiceAccountTokenCreated";
+      /** @format uuid */
+      accountId: string;
+      /** @format date-time */
+      expiresAtUtc?: string | null;
+      publicHint: string;
+      /** @format uuid */
+      tokenId: string;
+      tokenName: string;
+    }
+  | {
+      $type: "ServiceAccountTokenRevoked";
+      /** @format uuid */
+      accountId: string;
+      publicHint: string;
+      /** @format uuid */
+      tokenId: string;
+    }
+  | {
+      $type: "LicenseInstalled";
+      license: LicenseActivitySnapshot;
+    }
+  | {
+      $type: "LicenseReplaced";
+      newLicense: LicenseActivitySnapshot;
+      oldLicense: LicenseActivitySnapshot;
+    }
+  | {
+      $type: "LicenseRemoved";
+      license: LicenseActivitySnapshot;
+    }
+  | {
+      $type: "LicenseEnteredGracePeriod";
+      license: LicenseActivitySnapshot;
+    }
+  | {
+      $type: "LicenseExpired";
+      license: LicenseActivitySnapshot;
+    }
+  | {
+      $type: "LicenseValidationFailed";
+      errorCode?: string | null;
+      fingerprint?: string | null;
+      status: LicenseStatus;
+    }
+  | {
+      $type: "OidcProviderCreated";
+      provider: OidcProviderActivitySnapshot;
+    }
+  | {
+      $type: "OidcProviderUpdated";
+      newProvider: OidcProviderActivitySnapshot;
+      oldProvider: OidcProviderActivitySnapshot;
+    }
+  | {
+      $type: "OidcProviderRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "OidcProviderDeleted";
+      provider: OidcProviderActivitySnapshot;
+    }
+  | {
+      $type: "RegistryCreated";
+      registry: RegistryActivitySnapshot;
+    }
+  | {
+      $type: "RegistryUpdated";
+      newRegistry: RegistryActivitySnapshot;
+      oldRegistry: RegistryActivitySnapshot;
+    }
+  | {
+      $type: "RegistryRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "RegistryDeleted";
+      registry: RegistryActivitySnapshot;
+    }
+  | {
+      $type: "DeploymentCreated";
+      deployment: DeploymentActivitySnapshot;
+    }
+  | {
+      $type: "DeploymentAdopted";
+      containerId: string;
+      containerName: string;
+      deployment: DeploymentActivitySnapshot;
+    }
+  | {
+      $type: "DeploymentDuplicated";
+      deployment: DeploymentActivitySnapshot;
+      source: ActivitySourceResource;
+    }
+  | {
+      $type: "DeploymentUpdated";
+      newDeployment: DeploymentActivitySnapshot;
+      oldDeployment: DeploymentActivitySnapshot;
+    }
+  | {
+      $type: "DeploymentRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "DeploymentDeleted";
+      deployment: DeploymentActivitySnapshot;
+    }
+  | {
+      $type: "DeploymentStarted";
+      containerIds: string[];
+    }
+  | {
+      $type: "DeploymentStopped";
+      containerIds: string[];
+    }
+  | {
+      $type: "DeploymentPaused";
+      containerIds: string[];
+    }
+  | {
+      $type: "DeploymentDegraded";
+      reason: string;
+    }
+  | {
+      $type: "StackDegraded";
+      reason: string;
+    }
+  | {
+      $type: "DeploymentApplied";
+      deployment?: null | DeploymentActivitySnapshot;
+      result: DeploymentResultActivitySnapshot;
+    }
+  | {
+      $type: "StackCreated";
+      stack: StackActivitySnapshot;
+    }
+  | {
+      $type: "StackDuplicated";
+      source: ActivitySourceResource;
+      stack: StackActivitySnapshot;
+    }
+  | {
+      $type: "StackUpdated";
+      newStack: StackActivitySnapshot;
+      oldStack: StackActivitySnapshot;
+    }
+  | {
+      $type: "StackRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "StackDeleted";
+      stack: StackActivitySnapshot;
+    }
+  | {
+      $type: "StackStarted";
+      containerIds: string[];
+    }
+  | {
+      $type: "StackStopped";
+      containerIds: string[];
+    }
+  | {
+      $type: "StackPaused";
+      containerIds: string[];
+    }
+  | {
+      $type: "StackApplied";
+      result: StackResultActivitySnapshot;
+      stack?: null | StackActivitySnapshot;
+    }
+  | {
+      $type: "StackRollback";
+      newStack?: null | StackActivitySnapshot;
+      oldStack?: null | StackActivitySnapshot;
+      result: StackResultActivitySnapshot;
+    }
+  | {
+      $type: "StackDriftDetected";
+      fingerprint: string;
+      reason: string;
+    }
+  | {
+      $type: "StackDriftResolved";
+      previousFingerprint: string;
+    }
+  | {
+      $type: "StackImported";
+      projectName: string;
+      serviceNames?: string[];
+      stack: StackActivitySnapshot;
+    }
+  | {
+      $type: "SwarmServiceCreated";
+      service: SwarmServiceActivitySnapshot;
+    }
+  | {
+      $type: "SwarmServiceDuplicated";
+      service: SwarmServiceActivitySnapshot;
+      source: ActivitySourceResource;
+    }
+  | {
+      $type: "SwarmServiceAdopted";
+      dockerServiceId: string;
+      service: SwarmServiceActivitySnapshot;
+    }
+  | {
+      $type: "SwarmServiceUpdated";
+      newService: SwarmServiceActivitySnapshot;
+      oldService: SwarmServiceActivitySnapshot;
+    }
+  | {
+      $type: "SwarmServiceRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "SwarmServiceDeleted";
+      service: SwarmServiceActivitySnapshot;
+    }
+  | {
+      $type: "SwarmServiceApplied";
+      /** @format uuid */
+      operationId: string;
+      warnings: string[];
+    }
+  | {
+      $type: "SwarmServiceScaled";
+      /** @format uuid */
+      operationId: string;
+      /** @format int32 */
+      replicas: number;
+      warnings: string[];
+    }
+  | {
+      $type: "SwarmServiceForceUpdated";
+      /** @format uuid */
+      operationId: string;
+      warnings: string[];
+    }
+  | {
+      $type: "SwarmServiceOperationFailed";
+      kind: string;
+      /** @format uuid */
+      operationId: string;
+      reason: string;
+    }
+  | {
+      $type: "PlatformConnected";
+      platform: PlatformActivitySnapshot;
+      previousStatus: string;
+    }
+  | {
+      $type: "PlatformDisconnected";
+      platform: PlatformActivitySnapshot;
+      previousStatus: string;
+    }
+  | {
+      $type: "PlatformCreated";
+      platform: PlatformActivitySnapshot;
+    }
+  | {
+      $type: "PlatformRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "PlatformDeleted";
+      platform: PlatformActivitySnapshot;
+    }
+  | {
+      $type: "PlatformNodeAgentLifecycle";
+      kind: string;
+      message: string;
+      /** @format uuid */
+      operationId: string;
+      state: string;
+    }
+  | {
+      $type: "GitRepoCreated";
+      gitRepo: GitRepositoryActivitySnapshot;
+    }
+  | {
+      $type: "GitRepoUpdated";
+      newGitRepo: GitRepositoryActivitySnapshot;
+      oldGitRepo: GitRepositoryActivitySnapshot;
+    }
+  | {
+      $type: "GitRepoRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "GitRepoDeleted";
+      gitRepo: GitRepositoryActivitySnapshot;
+    }
+  | {
+      $type: "GitRepoPulled";
+      gitRepo: GitRepositoryActivitySnapshot;
+      result: GitRepositorySyncActivitySnapshot;
+    }
+  | {
+      $type: "GitRepoCloned";
+      gitRepo: GitRepositoryActivitySnapshot;
+      result: GitRepositorySyncActivitySnapshot;
+    }
+  | {
+      $type: "ActionCreated";
+      action: AutomationActionActivitySnapshot;
+    }
+  | {
+      $type: "ActionUpdated";
+      newAction: AutomationActionActivitySnapshot;
+      oldAction: AutomationActionActivitySnapshot;
+    }
+  | {
+      $type: "ActionRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "ActionDeleted";
+      action: AutomationActionActivitySnapshot;
+    }
+  | {
+      $type: "ActionRunQueued";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunStarted";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunSucceeded";
+      /** @format int64 */
+      durationMs?: number | null;
+      /** @format int32 */
+      exitCode?: number | null;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunFailed";
+      /** @format int64 */
+      durationMs?: number | null;
+      errorMessage?: string | null;
+      /** @format int32 */
+      exitCode?: number | null;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunTimedOut";
+      /** @format int64 */
+      durationMs?: number | null;
+      errorMessage?: string | null;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunCancelled";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "ActionRunRejected";
+      reason: string;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunQueued";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunStarted";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunSucceeded";
+      /** @format int64 */
+      durationMs?: number | null;
+      /** @format int32 */
+      exitCode?: number | null;
+      imageDigest?: string | null;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunFailed";
+      /** @format int64 */
+      durationMs?: number | null;
+      errorMessage?: string | null;
+      /** @format int32 */
+      exitCode?: number | null;
+      /** @format uuid */
+      runId: string;
+      status: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunTimedOut";
+      /** @format int64 */
+      durationMs?: number | null;
+      errorMessage?: string | null;
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildRunCancelled";
+      /** @format uuid */
+      runId: string;
+      trigger: string;
+    }
+  | {
+      $type: "BuildCreated";
+      build: BuildProjectActivitySnapshot;
+    }
+  | {
+      $type: "BuildUpdated";
+      newBuild: BuildProjectActivitySnapshot;
+      oldBuild: BuildProjectActivitySnapshot;
+    }
+  | {
+      $type: "BuildRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "BuildDeleted";
+      build: BuildProjectActivitySnapshot;
+    }
+  | {
+      $type: "BuildAgentPoolCreated";
+      pool: BuildAgentPoolActivitySnapshot;
+    }
+  | {
+      $type: "BuildAgentPoolUpdated";
+      newPool: BuildAgentPoolActivitySnapshot;
+      oldPool: BuildAgentPoolActivitySnapshot;
+    }
+  | {
+      $type: "BuildAgentPoolRenamed";
+      newName: string;
+      oldName: string;
+    }
+  | {
+      $type: "BuildAgentPoolDeleted";
+      pool: BuildAgentPoolActivitySnapshot;
+    }
+  | {
+      $type: "BuildAgentPoolTested";
+      message: string;
+      pool: BuildAgentPoolActivitySnapshot;
+      status: string;
+    };
+
 export interface PullImageInput {
   imageTag: string;
   /** @format uuid */
@@ -5779,23 +5123,11 @@ export interface PullImageInput {
 export interface PullImageStreamItem {
   digest?: string | null;
   dockerImageId?: string | null;
-  error?: {
-    /** @format int64 */
-    code?: number;
-    message?: string | null;
-  };
+  error?: null | ImagePullError;
   errorMessage?: string | null;
   from?: string | null;
   id?: string | null;
-  progress?: {
-    /** @format int64 */
-    current?: number;
-    /** @format int64 */
-    start?: number;
-    /** @format int64 */
-    total?: number;
-    units?: string | null;
-  };
+  progress?: null | PlatformsImagePullImagePullProgress;
   progressMessage?: string | null;
   status?: string | null;
   stream?: string | null;
@@ -5829,8 +5161,18 @@ export interface RegistriesResponse {
   registries: AuthorizedRegistryView[];
 }
 
+export interface RegistryActivitySnapshot {
+  configuration: any;
+  description: string;
+  /** @format uuid */
+  id: string;
+  name: string;
+  registryHost: string;
+  status: string;
+}
+
 export interface RegistryConfigResponse {
-  configuration: RegistryConfiguration;
+  configuration: RegistrySpec;
   description: string;
   /** @format uuid */
   id: string;
@@ -5840,51 +5182,24 @@ export interface RegistryConfigResponse {
   tags: ResourcesTagsTagSummary[];
 }
 
-export interface RegistryConfigurationAWSRegistry {
-  $type: "AWS";
-  accessKey: string;
-  authenticationRequired: boolean;
-  region: string;
-  secretAccessKey: string;
-}
-
-export interface RegistryConfigurationAzureRegistry {
-  $type: "Azure";
-  password: string;
-  userName: string;
-}
-
-export interface RegistryConfigurationCustomRegistry {
-  $type: "Custom";
-  /** @default false */
-  authEnabled?: null | boolean;
-  password?: null | string;
-  userName?: null | string;
-}
-
-export interface RegistryConfigurationDockerHubRegistry {
-  $type: "DockerHub";
-  pat?: null | string;
-  userName?: null | string;
-}
-
-export interface RegistryConfigurationGitHubRegistry {
-  $type: "GitHub";
-  /** @default false */
-  ghcrAuthEnabled?: null | boolean;
-  nameSpace: string;
-  pat?: null | string;
-}
-
-export interface RegistryConfigurationGitlabRegistry {
-  $type: "Gitlab";
-  instanceUrl: string;
-  pat: string;
-  userName: string;
+/** Partial provider settings; omission preserves a value and null removes it. */
+export interface RegistryConfigurationPatch {
+  $type?: null | RegistryKind;
+  accessKey?: string | null;
+  authEnabled?: boolean | null;
+  authenticationRequired?: boolean | null;
+  ghcrAuthEnabled?: boolean | null;
+  instanceUrl?: string | null;
+  nameSpace?: string | null;
+  password?: string | null;
+  pat?: string | null;
+  region?: string | null;
+  secretAccessKey?: string | null;
+  userName?: string | null;
 }
 
 export interface RegistryPatch {
-  configuration?: any;
+  configuration?: null | RegistryConfigurationPatch;
   description?: string | null;
   name?: string | null;
   registryHost?: string | null;
@@ -5892,15 +5207,42 @@ export interface RegistryPatch {
   tagIds?: string[] | null;
 }
 
-export interface RegistrySnapshot {
-  configuration: RegistryConfiguration;
-  description: string;
-  /** @format uuid */
-  id: string;
-  name: string;
-  registryHost: string;
-  status: RegistryStatus;
-}
+export type RegistrySpec =
+  | {
+      $type: "Custom";
+      authEnabled?: boolean | null;
+      password?: string | null;
+      userName?: string | null;
+    }
+  | {
+      $type: "DockerHub";
+      pat?: string | null;
+      userName?: string | null;
+    }
+  | {
+      $type: "Azure";
+      password: string;
+      userName: string;
+    }
+  | {
+      $type: "AWS";
+      accessKey: string;
+      authenticationRequired?: boolean | null;
+      region: string;
+      secretAccessKey: string;
+    }
+  | {
+      $type: "Gitlab";
+      instanceUrl: string;
+      pat: string;
+      userName: string;
+    }
+  | {
+      $type: "GitHub";
+      ghcrAuthEnabled?: boolean | null;
+      nameSpace?: string | null;
+      pat?: string | null;
+    };
 
 export interface RegistryView {
   /** @format date-time */
@@ -5914,7 +5256,7 @@ export interface RegistryView {
   registryHost: string;
   status: RegistryStatus;
   tags: ResourcesTagsTagSummary[];
-  type: RegistryType;
+  type: RegistryKind;
 }
 
 export interface RenameAlertRuleInput {
@@ -6002,7 +5344,7 @@ export interface RenameUserRequest {
 }
 
 export interface ReplaceResourceTagsInput {
-  tagIds: string[];
+  tagIds?: string[];
 }
 
 export interface RepoCommand {
@@ -6010,27 +5352,8 @@ export interface RepoCommand {
   path?: string;
 }
 
-export interface RepoSyncResultSnapshot {
-  commitSha?: null | string;
-  message?: null | string;
-}
-
-/** Shared webhook wire configuration and defaults. */
-export interface RepoWebhookConfig {
-  /** @default "GitHubHmacSha256" */
-  authScheme?: WebhookAuthScheme;
-  /** @default null */
-  branchFilter?: string | null;
-  /** @default false */
-  enabled?: boolean;
-  /** @default "GitHub" */
-  provider?: WebhookProvider;
-  /** @default null */
-  secret?: string | null;
-}
-
 export interface Repositories {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   repositories: BackupRepositoryView[];
 }
 
@@ -6043,6 +5366,25 @@ export interface RepositoryLocationInput {
 export interface ResolveInput {
   ids: string[];
   resolutionNote?: string | null;
+}
+
+export interface ResourceAccessInput {
+  permissionLevel: PermissionLevel;
+  /** @format uuid */
+  resourceId: string;
+  resourceType: ResourceType;
+  specificPermissions?: SpecificPermission[];
+}
+
+export interface ResourceAccessView {
+  /** @format uuid */
+  id: string | null;
+  permissionLevel: PermissionLevel;
+  /** @format uuid */
+  resourceId: string;
+  resourceName: string | null;
+  resourceType: ResourceType;
+  specificPermissions: SpecificPermission[] | null;
 }
 
 export interface ResourceBindingInput {
@@ -6134,7 +5476,7 @@ export interface RevokeOtherProfileSessionsView {
 
 export interface RoleActivitySnapshot {
   permissions: RolePermissionActivitySnapshot[];
-  roleType: RoleType;
+  roleType: string;
 }
 
 export interface RolePermissionActivitySnapshot {
@@ -6165,7 +5507,7 @@ export interface RoleView {
 }
 
 export interface RolesResponse {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   roles: RoleView[];
 }
 
@@ -6180,8 +5522,6 @@ export interface Rules {
   alertRules: AlertRuleListItem[];
   capabilities: ResourceCapabilitiesView;
 }
-
-export type RunAsActorUsageList = RunAsActorUsageView[];
 
 export interface RunAsActorUsageView {
   /** @format uuid */
@@ -6218,6 +5558,11 @@ export interface RuntimeIpamConfig {
   subnet?: string | null;
 }
 
+export interface RuntimeSwarmPeer {
+  address: string;
+  nodeId: string;
+}
+
 export interface ScaleSwarmServiceInput {
   /** @format int32 */
   replicas: number;
@@ -6241,11 +5586,6 @@ export interface SecretDefinitionView {
 export interface SecretDefinitionsResponse {
   capabilities: ResourceCapabilitiesView;
   secrets: SecretDefinitionView[];
-}
-
-export interface SecretProviderConnectionTestResultView {
-  message: string;
-  success: boolean;
 }
 
 export interface SecretProviderInput {
@@ -6277,8 +5617,24 @@ export interface SecretProvidersResponse {
   providers: SecretProviderView[];
 }
 
+export interface SecretTestResult {
+  message: string;
+  success: boolean;
+}
+
+export interface SelfManagedVmBuildAgentPoolProviderSpec {
+  architecture?: CpuArchitecture;
+  connectionMode?: BuildAgentPoolConnectionMode;
+  endpoint?: string | null;
+  labels?: string[] | null;
+  /** @format int32 */
+  maxWorkers?: number;
+  /** @format uuid */
+  registrationSecretId?: string | null;
+}
+
 export interface ServiceAccountActivitySnapshot {
-  description: null | string;
+  description?: string | null;
   /** @format uuid */
   id: string;
   isEnabled: boolean;
@@ -6375,26 +5731,73 @@ export interface ServiceAccountView {
 }
 
 export interface ServiceAccountsResponse {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   pagedResult: PagedResultServiceAccountView;
+}
+
+export interface ServiceInspectionView {
+  configIds: string[];
+  /** @format date-time */
+  createdAt?: string | null;
+  /** @format int32 */
+  desiredTaskCount: number;
+  id: string;
+  image: string;
+  labels: Record<string, string>;
+  mode: string;
+  name: string;
+  networkIds: string[];
+  ports: string[];
+  /** @format int32 */
+  runningTaskCount: number;
+  secretIds: string[];
+  updateMessage?: string | null;
+  updateState: string;
+  /** @format date-time */
+  updatedAt?: string | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  versionIndex: number;
 }
 
 export interface ServiceMetadataInput {
   description?: string | null;
 }
 
+export interface ServiceStatistics {
+  complete: boolean;
+  dockerServiceId: string;
+  /** @min 0 */
+  expectedTasks: number;
+  missingDockerNodeIds: string[];
+  /** @format date-time */
+  newestSampleAt?: string | null;
+  observedContainerProjectionIds: string[];
+  /** @min 0 */
+  observedTasks: number;
+  /** @format date-time */
+  oldestSampleAt?: string | null;
+  stats: ContainerStatSnapshot[];
+}
+
 export interface SetupStatusView {
-  /**
-   * @min 8
-   * @max 128
-   */
+  /** @min 0 */
   passwordMaximumLength: number;
-  /**
-   * @min 8
-   * @max 128
-   */
+  /** @min 0 */
   passwordMinimumLength: number;
   requiresSetup: boolean;
+}
+
+export interface StackActivitySnapshot {
+  description?: string | null;
+  driftPolicy: any;
+  /** @format uuid */
+  id: string;
+  name: string;
+  stackRelease?: any;
+  stackSource: string;
 }
 
 export interface StackAdoptionIssue {
@@ -6402,28 +5805,6 @@ export interface StackAdoptionIssue {
   fieldPath: string | null;
   message: string;
   severity: string;
-}
-
-export interface StackBackupSourcePreviewView {
-  /** @format uuid */
-  platformId: string;
-  platformName: string;
-  platformStatus: PlatformStatus;
-  /** @format uuid */
-  stackId: string;
-  stackName: string;
-  volumes: StackBackupVolumePreviewItem[];
-  warnings: string[];
-}
-
-export interface StackBackupVolumePreviewItem {
-  dockerNodeId?: string | null;
-  hasBackupCoverage: boolean;
-  isExternal: boolean;
-  isShared: boolean;
-  kind: StackVolumeKind;
-  name: string;
-  nodeHostname?: string | null;
 }
 
 export interface StackBuildImageBinding {
@@ -6551,6 +5932,10 @@ export interface StackDuplicateDraftView {
   warnings: DuplicateDraftWarning[];
 }
 
+export interface StackHistory {
+  containers: ContainerHistory[];
+}
+
 export interface StackReconciliationAction {
   action: StackReconciliationActionType;
   containerId: string;
@@ -6566,17 +5951,6 @@ export interface StackReconciliationResult {
   /** @format uuid */
   stackId: string;
   status: StackReconciliationStatus;
-}
-
-export interface StackReleaseSnapshot {
-  /** @format uuid */
-  createdByActorId: string;
-  /** @format uuid */
-  platformId: string;
-  resourceBindings?: null | ResourceBindingSnapshot[];
-  source?: null | StackReleaseSource;
-  spec: StackSpec;
-  version: null | string;
 }
 
 export interface StackReleaseSource {
@@ -6622,20 +5996,10 @@ export interface StackReleasesView {
   releases: StackReleaseView[];
 }
 
-export interface StackResultSnapshot {
-  containerIds?: null | string[];
-  message?: null | string;
-  resourceBindings?: null | ResourceBindingSnapshot[];
-}
-
-export interface StackSnapshot {
-  description: null | string;
-  driftPolicy: StackDriftPolicy;
-  /** @format uuid */
-  id: string;
-  name: string;
-  stackRelease: null | StackReleaseSnapshot;
-  stackSource: StackSource;
+export interface StackResultActivitySnapshot {
+  containerIds?: string[] | null;
+  message?: string | null;
+  resourceBindings?: any;
 }
 
 export type StackSpec =
@@ -6670,14 +6034,6 @@ export interface StackSpecCommon {
   projectName?: string | null;
   /** @format uuid */
   registryId?: string | null;
-}
-
-export interface StackStatsView {
-  containers: {
-    containerId: string;
-    containerName: string;
-    stats: ContainerStatView[];
-  }[];
 }
 
 export interface StackStreamItem {
@@ -6733,26 +6089,17 @@ export interface StackView {
   version: string | null;
 }
 
-export interface StackWebhookConfig {
-  authScheme?: WebhookAuthScheme;
-  branchFilter?: string | null;
-  enabled?: boolean;
+export type StackWebhookConfig = WebhookConfig & {
   forceDeploy?: boolean;
-  provider?: WebhookProvider;
-  secret?: string | null;
-}
+};
 
 export interface StacksView {
-  capabilities: StacksModelResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   stacks: StackView[];
 }
 
 export interface StartProfileMfaSetupInput {
   password: string;
-}
-
-export interface SwarmConfigDataView {
-  content: string;
 }
 
 export interface SwarmConfigView {
@@ -6774,14 +6121,175 @@ export interface SwarmConfigView {
   versionIndex: number;
 }
 
-export interface SwarmConfigsView {
-  capabilities: PlatformCapabilities;
-  items: SwarmConfigView[];
+export interface SwarmItemsResponseSwarmConfigView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    capabilities: null | PlatformCapabilitiesView;
+    /** @format date-time */
+    createdAt: string | null;
+    id: string;
+    inUse: boolean;
+    isStale: boolean;
+    labels: Record<string, string>;
+    name: string;
+    /** @format date-time */
+    observedAt: string;
+    serviceNames: string[];
+    templatingDriver: string | null;
+    /** @format date-time */
+    updatedAt: string | null;
+    /** @format int64 */
+    versionIndex: number;
+  }[];
 }
 
-export interface SwarmLogsView {
-  lines: string[];
-  truncated: boolean;
+export interface SwarmItemsResponseSwarmNetworkView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    capabilities: null | PlatformCapabilitiesView;
+    /** @format date-time */
+    createdAt: string | null;
+    driver: string;
+    enableIPv6: boolean;
+    id: string;
+    isAttachable: boolean;
+    isEncrypted: boolean;
+    isIngress: boolean;
+    isInternal: boolean;
+    isStale: boolean;
+    labels: Record<string, string>;
+    name: string;
+    /** @format date-time */
+    observedAt: string;
+    scope: string;
+    serviceNames: string[];
+    subnets: string[];
+  }[];
+}
+
+export interface SwarmItemsResponseSwarmNodeView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    address: string;
+    architecture: string;
+    availability: string;
+    capabilities: null | PlatformCapabilitiesView;
+    /** @format date-time */
+    createdAt: string | null;
+    /** @format int32 */
+    desiredTaskCount: number;
+    engineVersion: string;
+    hostname: string;
+    id: string;
+    isLeader: boolean;
+    isStale: boolean;
+    labels: Record<string, string>;
+    /** @format date-time */
+    observedAt: string;
+    operatingSystem: string;
+    reachability: string;
+    role: string;
+    /** @format int32 */
+    runningTaskCount: number;
+    status: string;
+    statusMessage: string | null;
+    /** @format date-time */
+    updatedAt: string | null;
+    /** @format int64 */
+    versionIndex: number;
+  }[];
+}
+
+export interface SwarmItemsResponseSwarmSecretView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    capabilities: null | PlatformCapabilitiesView;
+    /** @format date-time */
+    createdAt: string | null;
+    driver: string | null;
+    id: string;
+    inUse: boolean;
+    isStale: boolean;
+    labels: Record<string, string>;
+    name: string;
+    /** @format date-time */
+    observedAt: string;
+    serviceNames: string[];
+    /** @format date-time */
+    updatedAt: string | null;
+    /** @format int64 */
+    versionIndex: number;
+  }[];
+}
+
+export interface SwarmItemsResponseSwarmServiceView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    capabilities: null | PlatformCapabilitiesView;
+    configIds: string[];
+    /** @format date-time */
+    createdAt: string | null;
+    /** @format int32 */
+    desiredTaskCount: number;
+    dockerStackNamespace: string | null;
+    id: string;
+    image: string;
+    isStale: boolean;
+    labels: Record<string, string>;
+    mode: string;
+    name: string;
+    networkIds: string[];
+    /** @format date-time */
+    observedAt: string;
+    ownership: SwarmServiceOwnership;
+    ownershipDiagnostic: string | null;
+    ports: string[];
+    /** @format int32 */
+    runningTaskCount: number;
+    secretIds: string[];
+    /** @format uuid */
+    stackId: string | null;
+    /** @format uuid */
+    swarmServiceId: string | null;
+    updateMessage: string | null;
+    updateState: string;
+    /** @format date-time */
+    updatedAt: string | null;
+    /** @format int64 */
+    versionIndex: number;
+  }[];
+}
+
+export interface SwarmItemsResponseSwarmTaskView {
+  capabilities: PlatformCapabilitiesView;
+  items: {
+    capabilities: null | PlatformCapabilitiesView;
+    /** @format date-time */
+    createdAt: string | null;
+    desiredState: string;
+    error: string | null;
+    id: string;
+    image: string;
+    isStale: boolean;
+    name: string;
+    nodeHostname: string;
+    nodeId: string;
+    /** @format date-time */
+    observedAt: string;
+    ports: string[];
+    serviceId: string;
+    serviceName: string;
+    /** @format int32 */
+    slot: number | null;
+    state: string;
+    statusMessage: string | null;
+    /** @format date-time */
+    statusTimestamp: string | null;
+    /** @format date-time */
+    updatedAt: string | null;
+    /** @format int64 */
+    versionIndex: number;
+  }[];
 }
 
 export interface SwarmNetworkView {
@@ -6805,112 +6313,46 @@ export interface SwarmNetworkView {
   subnets: string[];
 }
 
-export interface SwarmNetworksView {
-  capabilities: PlatformCapabilities;
-  items: SwarmNetworkView[];
-}
-
-export interface SwarmNodeAgentCoverageView {
+export interface SwarmNodeAgentCoverage {
   agentImageDigest?: string | null;
   agentImageReference?: string | null;
   canManageNodeAgents: boolean;
+  /** @min 0 */
   connectedNodes: number;
+  /** @min 0 */
   coveredNodes: number;
+  /** @min 0 */
   eligibleNodes: number;
+  /** @min 0 */
   enrollingNodes: number;
+  /** @format date-time */
   enrollmentExpiresAtUtc?: string | null;
+  /** @min 0 */
   incompatibleNodes: number;
   isInstalled: boolean;
+  /** @format date-time */
   lastMembershipReconciliationAtUtc?: string | null;
+  /** @min 0 */
   missingNodes: number;
-  nodes: SwarmNodeAgentNodeCoverageResult[];
+  nodes: NodeAgentCoverage[];
+  /** @min 0 */
   offlineNodes: number;
-  operation?: SwarmNodeAgentOperationResult | null;
+  operation?: null | NodeAgentOperation;
   reasons: string[];
+  /** @min 0 */
   staleNodes: number;
   state: string;
+  /** @min 0 */
   totalNodes: number;
+  /** @min 0 */
   unschedulableNodes: number;
+  /** @min 0 */
   unsupportedNodes: number;
-}
-
-export interface SwarmNodeAgentNodeCoverageResult {
-  agentConnectionState: string;
-  architecture: string;
-  availability: string;
-  compatible: boolean;
-  dataSource: string;
-  dockerNodeId: string;
-  dockerReachable: boolean;
-  eligible: boolean;
-  hostname: string;
-  lastHeartbeatAtUtc?: string | null;
-  lastSuccessfulReconciliationAt?: string | null;
-  nodeStatus: string;
-  projectionStale: boolean;
-  reasons: string[];
-  role: string;
-  schedulable: boolean;
-  serviceTaskState?: string | null;
-  staleReason?: string | null;
-  staleSince?: string | null;
-  supported: boolean;
-}
-
-export interface SwarmNodeAgentOperationResult {
-  error?: string | null;
-  kind: string;
-  /** @format uuid */
-  operationId: string;
-  /** @format date-time */
-  startedAtUtc: string;
-  state: string;
-}
-
-export interface SwarmNodeAgentProgressItem {
-  errorMessage?: null | string;
-  /** @default false */
-  isCompleted?: boolean;
-  /** @default false */
-  isWarning?: boolean;
-  message: string;
-  /** @format uuid */
-  operationId: string;
-  /** @format uuid */
-  platformId: string;
-  stage: string;
 }
 
 export interface SwarmNodeAvailabilityTarget {
   nodeId: string;
   /** @format int64 */
-  versionIndex: number;
-}
-
-export interface SwarmNodeInspectView {
-  address: string;
-  architecture: string;
-  availability: string;
-  /** @format date-time */
-  createdAt: string | null;
-  desiredTaskCount: number;
-  engineVersion: string;
-  hostname: string;
-  id: string;
-  isLeader: boolean;
-  labels: Record<string, string>;
-  operatingSystem: string;
-  reachability: string;
-  role: string;
-  runningTaskCount: number;
-  status: string;
-  statusMessage: string | null;
-  /** @format date-time */
-  updatedAt: string | null;
-  /**
-   * @format int64
-   * @min 0
-   */
   versionIndex: number;
 }
 
@@ -6944,11 +6386,6 @@ export interface SwarmNodeView {
   versionIndex: number;
 }
 
-export interface SwarmNodesView {
-  capabilities: PlatformCapabilities;
-  items: SwarmNodeView[];
-}
-
 export interface SwarmOverviewView {
   capabilities: PlatformCapabilitiesView;
   /** @format int64 */
@@ -6976,11 +6413,6 @@ export interface SwarmOverviewView {
   serviceStatusCounts: WorkloadStatusCounts;
   /** @format int64 */
   volumeCount: number;
-}
-
-export interface SwarmPeer {
-  addr: null | string;
-  nodeID: null | string;
 }
 
 export interface SwarmPreflightInput {
@@ -7020,21 +6452,16 @@ export interface SwarmSecretView {
   versionIndex: number;
 }
 
-export interface SwarmSecretsView {
-  capabilities: PlatformCapabilities;
-  items: SwarmSecretView[];
-}
-
 export interface SwarmServiceActivitySnapshot {
-  description: null | string;
+  description?: string | null;
   dockerName: string;
-  dockerServiceId: null | string;
+  dockerServiceId?: string | null;
   /** @format uuid */
   id: string;
   name: string;
   /** @format uuid */
   platformId: string;
-  spec: SwarmServiceSpec;
+  spec: any;
 }
 
 export interface SwarmServiceAdoptionDraftView {
@@ -7055,18 +6482,6 @@ export interface SwarmServiceAdoptionSource {
   /** @format uuid */
   platformId: string;
   platformName: string;
-}
-
-export interface SwarmServiceBackupSourcePreviewView {
-  /** @format uuid */
-  platformId: string;
-  platformName: string;
-  platformStatus: PlatformStatus;
-  /** @format uuid */
-  swarmServiceId: string;
-  swarmServiceName: string;
-  volumes: StackBackupVolumePreviewItem[];
-  warnings: string[];
 }
 
 export interface SwarmServiceCapabilities {
@@ -7119,31 +6534,6 @@ export type SwarmServiceImageInfo =
       resolvedDigest?: string | null;
       resolvedImageReference?: string | null;
     };
-
-export interface SwarmServiceInspectView {
-  configIds: string[];
-  /** @format date-time */
-  createdAt: string | null;
-  desiredTaskCount: number;
-  id: string;
-  image: string;
-  labels: Record<string, string>;
-  mode: string;
-  name: string;
-  networkIds: string[];
-  ports: string[];
-  runningTaskCount: number;
-  secretIds: string[];
-  updateMessage: string | null;
-  updateState: string;
-  /** @format date-time */
-  updatedAt: string | null;
-  /**
-   * @format int64
-   * @min 0
-   */
-  versionIndex: number;
-}
 
 export interface SwarmServiceMount {
   kind: MountKind;
@@ -7239,24 +6629,8 @@ export interface SwarmServiceSpec {
   updateBehavior?: UpdateBehavior;
   updatePolicy?: null | SwarmServiceUpdatePolicy;
   user?: string | null;
-  webhook?: null | SwarmServiceWebhookConfig;
+  webhook?: null | WebhookConfig;
   workingDirectory?: string | null;
-}
-
-export interface SwarmServiceStatsView {
-  complete: boolean;
-  dockerServiceId: string;
-  /** @format int64 */
-  expectedTasks: number;
-  missingDockerNodeIds: string[];
-  /** @format date-time */
-  newestSampleAt?: string | null;
-  observedContainerProjectionIds: string[];
-  /** @format int64 */
-  observedTasks: number;
-  /** @format date-time */
-  oldestSampleAt?: string | null;
-  stats: ContainerStatView[];
 }
 
 export interface SwarmServiceUpdatePolicy {
@@ -7303,19 +6677,6 @@ export interface SwarmServiceView {
   versionIndex: number;
 }
 
-export interface SwarmServiceWebhookConfig {
-  authScheme?: WebhookAuthScheme;
-  branchFilter?: string | null;
-  enabled?: boolean;
-  provider?: WebhookProvider;
-  secret?: string | null;
-}
-
-export interface SwarmServicesView {
-  capabilities: PlatformCapabilities;
-  items: SwarmServiceView[];
-}
-
 export interface SwarmStackCompatibilityIssue {
   code: string;
   fieldPath?: string | null;
@@ -7326,10 +6687,6 @@ export interface SwarmStackCompatibilityIssue {
 export interface SwarmStackCompatibilityReport {
   isCompatible: boolean;
   issues: SwarmStackCompatibilityIssue[];
-}
-
-export interface SwarmTaskTerminalView {
-  dockerContainerId: string;
 }
 
 export interface SwarmTaskView {
@@ -7359,11 +6716,6 @@ export interface SwarmTaskView {
   updatedAt: string | null;
   /** @format int64 */
   versionIndex: number;
-}
-
-export interface SwarmTasksView {
-  capabilities: PlatformCapabilities;
-  items: SwarmTaskView[];
 }
 
 export interface TagPatch {
@@ -7399,6 +6751,10 @@ export interface TaskHistory {
   stats: ContainerStatView[];
 }
 
+export interface TaskTerminalView {
+  dockerContainerId: string;
+}
+
 export interface TeamActivitySnapshot {
   isEnabled: boolean;
   memberActorIds: string[];
@@ -7414,32 +6770,11 @@ export interface TeamMemberView {
   resourceId: string;
 }
 
-export interface TeamResourceAccessInput {
-  permissionLevel: PermissionLevel;
-  /** @format uuid */
-  resourceId: string;
-  resourceType: ResourceType;
-  specificPermissions?: SpecificPermission[];
-}
-
-export interface TeamResourceAccessView {
-  /** @format uuid */
-  id: string | null;
-  permissionLevel: PermissionLevel;
-  /** @format uuid */
-  resourceId: string;
-  resourceName: string | null;
-  resourceType: ResourceType;
-  specificPermissions: SpecificPermission[] | null;
-}
-
 export interface TeamSearchItemView {
   /** @format uuid */
   id: string;
   name: string;
 }
-
-export type TeamSearchItems = TeamSearchItemView[];
 
 export interface TeamView {
   actorId: ActorId;
@@ -7448,7 +6783,7 @@ export interface TeamView {
   isEnabled: boolean;
   members: TeamMemberView[] | null;
   name: string;
-  resourceAccesses: TeamResourceAccessView[] | null;
+  resourceAccesses: ResourceAccessView[] | null;
   roles: ResourceInfo[] | null;
   /** @format int32 */
   totalMembers: number;
@@ -7456,7 +6791,7 @@ export interface TeamView {
 }
 
 export interface TeamsResponse {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   pagedResult: PagedResultTeamView;
 }
 
@@ -7497,7 +6832,7 @@ export interface UpdateAutomationActionInput {
   scheduleTimeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | RepoWebhookConfig;
+  webhook?: null | WebhookPatch;
 }
 
 export interface UpdateAutomationActionMetadata {
@@ -7515,23 +6850,23 @@ export interface UpdateBackupPolicyInput {
   keepLastSuccessful?: number | null;
   /** @format uuid */
   runAsActorId?: string | null;
-  source?: BackupSourceSpec | null;
+  source?: null | BackupSourceSpec;
   timeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: object | null;
+  webhook?: null | WebhookPatch;
 }
 
 export interface UpdateBackupRepositoryInput {
   description?: string | null;
-  spec?: BackupRepositorySpec | null;
+  spec?: null | BackupRepositorySpec;
 }
 
 export interface UpdateBuildAgentPoolInput {
   /** @format int32 */
   cleanupTimeoutSeconds?: number | null;
   description?: string | null;
-  enabled?: boolean;
+  enabled?: boolean | null;
   /** @format int32 */
   failureRetentionMinutes?: number | null;
   /** @format int32 */
@@ -7553,8 +6888,8 @@ export interface UpdateBuildProjectInput {
   branch?: string | null;
   /** @format uuid */
   buildAgentPoolId?: string | null;
-  buildArgs?: BuildArgSpec[];
-  buildSecrets?: BuildSecretSpec[];
+  buildArgs?: BuildArgSpec[] | null;
+  buildSecrets?: BuildSecretSpec[] | null;
   builderKind?: BuildProjectBuilderKind;
   contextPath?: string | null;
   description?: string | null;
@@ -7569,11 +6904,11 @@ export interface UpdateBuildProjectInput {
   registryId?: string;
   /** @format int32 */
   retentionRunCount?: number | null;
-  tagTemplates?: string[];
+  tagTemplates?: string[] | null;
   target?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: object | null;
+  webhook?: null | WebhookPatch;
 }
 
 export interface UpdateCurrentProfileRequest {
@@ -7629,41 +6964,12 @@ export interface UserPreferencesView {
   timeZone: string | null;
 }
 
-export interface UserResourceAccessInput {
-  permissionLevel: PermissionLevel;
-  /** @format uuid */
-  resourceId: string;
-  resourceType: ResourceType;
-  specificPermissions?: SpecificPermission[];
-}
-
-export interface UserResourceAccessRequest {
-  permissionLevel: PermissionLevel;
-  /** @format uuid */
-  resourceId: string;
-  resourceType: ResourceType;
-  specificPermissions?: SpecificPermission[];
-}
-
-export interface UserResourceAccessView {
-  /** @format uuid */
-  id: string | null;
-  permissionLevel: PermissionLevel;
-  /** @format uuid */
-  resourceId: string;
-  resourceName: string | null;
-  resourceType: ResourceType;
-  specificPermissions: SpecificPermission[] | null;
-}
-
 export interface UserSearchItemView {
   email: string;
   /** @format uuid */
   id: string;
   name: string;
 }
-
-export type UserSearchItems = UserSearchItemView[];
 
 export interface UserSessionSummaryView {
   /** @format date-time */
@@ -7692,13 +6998,13 @@ export interface UserView {
   id: string;
   isEnabled: boolean;
   name: string;
-  resourceAccesses: UserResourceAccessView[] | null;
+  resourceAccesses: ResourceAccessView[] | null;
   roles: ResourceInfo[] | null;
   teams: ResourceInfo[] | null;
 }
 
 export interface UsersResponse {
-  capabilities: ServerCapabilitiesResourceCapabilities;
+  capabilities: ResourceCapabilitiesView;
   pagedResult: PagedResultUserView;
 }
 
@@ -7724,8 +7030,25 @@ export interface VolumeCapabilitiesView {
   canWrite: boolean;
 }
 
-export interface VolumeDirectoryView {
-  entries: VolumeFileEntryView[];
+export interface VolumeContainerView {
+  id: string;
+  image: string;
+  imageId: string;
+  name: string;
+  networks: Record<string, string>;
+  ports: Record<string, HostPortBinding[]>;
+  state: ContainerStateStatus;
+}
+
+export interface VolumeContentDownloaded {
+  fileName: string;
+  isDirectory: boolean;
+  path: string;
+  volumeName: string;
+}
+
+export interface VolumeDirectory {
+  entries: VolumeFileEntry[];
   isTruncated: boolean;
   path: string;
   /** @format uuid */
@@ -7733,15 +7056,18 @@ export interface VolumeDirectoryView {
   volumeName: string;
 }
 
-export interface VolumeFileEntryView {
+export interface VolumeFileEntry {
   linkTarget?: string | null;
   /** @format date-time */
   modifiedAt?: string | null;
   name: string;
   path: string;
-  /** @format int64 */
+  /**
+   * @format int64
+   * @min 0
+   */
   size?: number | null;
-  type: VolumeFileEntryType;
+  type: VolumeEntryType;
 }
 
 export interface VolumeUsageDataView {
@@ -7755,7 +7081,7 @@ export interface VolumeView {
   backupCoverage?: null | BackupCoverageView;
   capabilities: null | VolumeCapabilitiesView;
   clusterVolume: any;
-  containers: ContainerVolumeResult[];
+  containers: VolumeContainerView[];
   createdAt: string;
   dockerNodeId: string | null;
   driver: string;
@@ -7776,6 +7102,52 @@ export interface VolumeView {
 export interface VolumesResponse {
   capabilities: ResourceCapabilitiesView;
   volumes: VolumeView[];
+}
+
+/**
+ * Safe webhook audit metadata. Authentication headers, credentials and request
+ * bodies are deliberately not representable in the persisted event.
+ */
+export type WebhookActivityDetails = WebhookActivitySource & {
+  authType: string;
+  dispatchedBranch?: string | null;
+  dispatchedCommitSha?: string | null;
+  execution: string;
+  reason?: string | null;
+  /** @format uuid */
+  requestId: string;
+  status: string;
+};
+
+export interface WebhookActivitySource {
+  branch?: string | null;
+  commitSha?: string | null;
+  deliveryId?: string | null;
+  eventType?: string | null;
+  repositoryFullName?: string | null;
+}
+
+/** Shared webhook wire configuration and defaults. */
+export interface WebhookConfig {
+  /** @default "GitHubHmacSha256" */
+  authScheme?: WebhookAuthScheme;
+  /** @default null */
+  branchFilter?: string | null;
+  /** @default false */
+  enabled?: boolean;
+  /** @default "GitHub" */
+  provider?: WebhookProvider;
+  /** @default null */
+  secret?: string | null;
+}
+
+/** Partial configuration. Defaults belong to creation, never to omitted patch fields. */
+export interface WebhookPatch {
+  authScheme?: WebhookAuthScheme;
+  branchFilter?: string | null;
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  secret?: string | null;
 }
 
 export interface WebhookResponse {
@@ -7805,15 +7177,6 @@ export interface WorkloadStatusCounts {
   unknown: number;
 }
 
-export interface DeploymentsModelAutoUpdateState {
-  currentDigest?: string | null;
-  /** @format date-time */
-  lastCheckedAt: string;
-  lastError?: string | null;
-  remoteDigest?: string | null;
-  status: AutoUpdateStatus;
-}
-
 export interface DeploymentsModelImagePullProgress {
   /** @format int64 */
   current?: number | null;
@@ -7824,29 +7187,15 @@ export interface DeploymentsModelImagePullProgress {
   units?: string | null;
 }
 
-export interface DeploymentsModelResourceCapabilities {
-  canExecute: boolean;
-  canRead: boolean;
-  canWrite: boolean;
+export interface PlatformsImagePullImagePullProgress {
+  /** @format int64 */
+  current?: number | null;
+  /** @format int64 */
+  start?: number | null;
+  /** @format int64 */
+  total?: number | null;
+  units?: string | null;
 }
-
-export type GetDockerHubRepositoriesResponse = DockerHubRepositoryInfo[];
-
-export type GetDockerHubRepositoryTagsResponse = DockerHubTagView[];
-
-export type GetExternalRepositoriesResponse = IImageRepository[];
-
-export type GetGhcrPackageVersionsResponse = GitHubCrPackageVersion[];
-
-export interface IdentityApplicationProfileResourceCapabilities {
-  canExecute: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-}
-
-export type LookupResponse = ResourceInfo[];
-
-export type PullImageResponse = PullImageStreamItem[];
 
 export interface ResourcesTagsTagSummary {
   color: string;
@@ -7854,8 +7203,6 @@ export interface ResourcesTagsTagSummary {
   id: string;
   name: string;
 }
-
-export type RunAutomationActionResponse = AutomationActionRunStreamItem[];
 
 export interface ServerAlertsHttpEvents {
   pagedResult: AlertEventPage;
@@ -7874,7 +7221,7 @@ export interface ServerBackupsHttpLogs {
 }
 
 export interface ServerBackupsHttpQueueInput {
-  trigger?: string | null;
+  trigger?: null | BackupQueueTrigger;
 }
 
 export interface ServerBackupsHttpRuns {
@@ -7888,41 +7235,12 @@ export interface ServerBuildsHttpLogs {
 }
 
 export interface ServerBuildsHttpQueueInput {
-  trigger?: string | null;
+  trigger?: null | QueueBuildTrigger;
 }
 
 export interface ServerBuildsHttpRuns {
   runs: BuildRunView[];
 }
-
-export interface ServerCapabilitiesResourceCapabilities {
-  canExecute: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-}
-
-export interface StacksModelResourceCapabilities {
-  canExecute: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-}
-
-export interface SwarmServicesModelAutoUpdateState {
-  currentDigest: string | null;
-  /** @format date-time */
-  lastCheckedAt: string;
-  lastError: string | null;
-  remoteDigest: string | null;
-  status: AutoUpdateStatus;
-}
-
-export interface SwarmServicesModelResourceCapabilities {
-  canExecute: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-}
-
-export type TestAutomationActionResponse = AutomationActionRunStreamItem[];
 
 export type QueryParamsType = Record<string | number, any>;
 export type ResponseFormat = keyof Omit<Body, "body" | "bodyUsed">;
@@ -9336,7 +8654,7 @@ export class Api<
      * @summary Queue an Automation Action run
      * @request POST:/api/v1/automation/actions/{id}/run
      * @secure
-     * @response `200` `RunAutomationActionResponse` Success
+     * @response `200` `(AutomationProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -9351,7 +8669,7 @@ export class Api<
       data: null | RunInput,
       params: RequestParams = {},
     ) =>
-      this.request<RunAutomationActionResponse, ProblemDetails>({
+      this.request<AutomationProgress[], ProblemDetails>({
         path: `/api/v1/automation/actions/${id}/run`,
         method: "POST",
         body: data,
@@ -9408,7 +8726,7 @@ export class Api<
      * @summary Get an Automation Action run
      * @request GET:/api/v1/automation/actions/{id}/runs/{runId}
      * @secure
-     * @response `200` `AutomationActionRunView` Success
+     * @response `200` `AutomationRunView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -9422,7 +8740,7 @@ export class Api<
       runId: string,
       params: RequestParams = {},
     ) =>
-      this.request<AutomationActionRunView, ProblemDetails>({
+      this.request<AutomationRunView, ProblemDetails>({
         path: `/api/v1/automation/actions/${id}/runs/${runId}`,
         method: "GET",
         secure: true,
@@ -9556,7 +8874,7 @@ export class Api<
      * @summary Queue a test Automation Action run
      * @request POST:/api/v1/automation/actions/{id}/test
      * @secure
-     * @response `200` `TestAutomationActionResponse` Success
+     * @response `200` `(AutomationProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -9571,7 +8889,7 @@ export class Api<
       data: null | RunInput,
       params: RequestParams = {},
     ) =>
-      this.request<TestAutomationActionResponse, ProblemDetails>({
+      this.request<AutomationProgress[], ProblemDetails>({
         path: `/api/v1/automation/actions/${id}/test`,
         method: "POST",
         body: data,
@@ -9649,7 +8967,7 @@ export class Api<
      * @summary Get Platform Backup summaries
      * @request GET:/api/v1/backupPolicies/platform-summaries
      * @secure
-     * @response `200` `PlatformBackupSummariesView` Success
+     * @response `200` `PlatformBackupSummaries` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -9663,7 +8981,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<PlatformBackupSummariesView, ProblemDetails>({
+      this.request<PlatformBackupSummaries, ProblemDetails>({
         path: `/api/v1/backupPolicies/platform-summaries`,
         method: "GET",
         query: query,
@@ -9809,7 +9127,7 @@ export class Api<
      */
     updateBackupPolicyMetadata: (
       id: string,
-      data: PatchResourceMetadata,
+      data: BackupMetadataPatch,
       params: RequestParams = {},
     ) =>
       this.request<BackupPolicyView, ProblemDetails>({
@@ -9830,7 +9148,7 @@ export class Api<
      * @summary Run a Backup Policy with progress
      * @request POST:/api/v1/backupPolicies/{id}/run
      * @secure
-     * @response `200` `BackupRunStream` Success
+     * @response `200` `(BackupRunStreamItem)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -9845,7 +9163,7 @@ export class Api<
       data: ServerBackupsHttpQueueInput,
       params: RequestParams = {},
     ) =>
-      this.request<BackupRunStream, ProblemDetails>({
+      this.request<BackupRunStreamItem[], ProblemDetails>({
         path: `/api/v1/backupPolicies/${id}/run`,
         method: "POST",
         body: data,
@@ -10550,7 +9868,7 @@ export class Api<
      * @summary Restore a Backup Volume with progress
      * @request POST:/api/v1/backupRuns/{id}/restoreVolume/run
      * @secure
-     * @response `200` `BackupRestoreRunStream` Success
+     * @response `200` `(BackupRestoreRunStreamItem)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -10565,7 +9883,7 @@ export class Api<
       data: RestoreInput,
       params: RequestParams = {},
     ) =>
-      this.request<BackupRestoreRunStream, ProblemDetails>({
+      this.request<BackupRestoreRunStreamItem[], ProblemDetails>({
         path: `/api/v1/backupRuns/${id}/restoreVolume/run`,
         method: "POST",
         body: data,
@@ -10771,7 +10089,7 @@ export class Api<
      */
     updateBuildAgentPoolMetadata: (
       id: string,
-      data: PatchResourceMetadata,
+      data: BuildMetadataPatch,
       params: RequestParams = {},
     ) =>
       this.request<AuthorizedPool, ProblemDetails>({
@@ -10792,7 +10110,7 @@ export class Api<
      * @summary Create build pool Edge Agent enrollment
      * @request POST:/api/v1/buildAgentPools/{id}/edge/enrollments
      * @secure
-     * @response `200` `EdgeAgentEnrollmentView` Success
+     * @response `200` `EdgeEnrollmentView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -10806,7 +10124,7 @@ export class Api<
       id: string,
       params: RequestParams = {},
     ) =>
-      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+      this.request<EdgeEnrollmentView, ProblemDetails>({
         path: `/api/v1/buildAgentPools/${id}/edge/enrollments`,
         method: "POST",
         secure: true,
@@ -10848,7 +10166,7 @@ export class Api<
      * @summary Get build pool Edge Agent status
      * @request GET:/api/v1/buildAgentPools/{id}/edge/status
      * @secure
-     * @response `200` `EdgeAgentStatusView` Success
+     * @response `200` `EdgeStatusView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -10859,7 +10177,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getBuildAgentPoolEdgeStatus: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentStatusView, ProblemDetails>({
+      this.request<EdgeStatusView, ProblemDetails>({
         path: `/api/v1/buildAgentPools/${id}/edge/status`,
         method: "GET",
         secure: true,
@@ -11146,7 +10464,7 @@ export class Api<
      */
     updateBuildMetadata: (
       id: string,
-      data: PatchResourceMetadata,
+      data: BuildMetadataPatch,
       params: RequestParams = {},
     ) =>
       this.request<AuthorizedProject, ProblemDetails>({
@@ -11414,7 +10732,7 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      * @response `default` `ProblemDetails` Request failed
      */
-    pauseContainers: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    pauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/containers/pause`,
         method: "PATCH",
@@ -11443,7 +10761,7 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      * @response `default` `ProblemDetails` Request failed
      */
-    restartContainers: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    restartContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/containers/restart`,
         method: "PATCH",
@@ -11472,7 +10790,7 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      * @response `default` `ProblemDetails` Request failed
      */
-    startContainers: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    startContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/containers/start`,
         method: "PATCH",
@@ -11501,7 +10819,7 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      * @response `default` `ProblemDetails` Request failed
      */
-    stopContainers: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    stopContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/containers/stop`,
         method: "PATCH",
@@ -11530,7 +10848,7 @@ export class Api<
      * @response `502` `ProblemDetails` Bad Gateway
      * @response `default` `ProblemDetails` Request failed
      */
-    unpauseContainers: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    unpauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/containers/unpause`,
         method: "PATCH",
@@ -11637,7 +10955,7 @@ export class Api<
      * @summary getContainerData
      * @request GET:/api/v1/containers/{id}/data
      * @secure
-     * @response `200` `ContainerDataView` Success
+     * @response `200` `ContainerRuntimeView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11649,7 +10967,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getContainerData: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerDataView, ProblemDetails>({
+      this.request<ContainerRuntimeView, ProblemDetails>({
         path: `/api/v1/containers/${id}/data`,
         method: "GET",
         secure: true,
@@ -11665,7 +10983,7 @@ export class Api<
      * @summary getContainerInfo
      * @request GET:/api/v1/containers/{id}/info
      * @secure
-     * @response `200` `ContainerInfoView` Success
+     * @response `200` `ContainerSummaryView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11677,7 +10995,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getContainerInfo: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, ProblemDetails>({
+      this.request<ContainerSummaryView, ProblemDetails>({
         path: `/api/v1/containers/${id}/info`,
         method: "GET",
         secure: true,
@@ -11693,7 +11011,7 @@ export class Api<
      * @summary Inspect a Container with sensitive environment values redacted
      * @request GET:/api/v1/containers/{id}/inspect
      * @secure
-     * @response `200` `ContainerInspectView` Success
+     * @response `200` `ContainerInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11705,7 +11023,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     inspectContainer: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, ProblemDetails>({
+      this.request<ContainerInspectionView, ProblemDetails>({
         path: `/api/v1/containers/${id}/inspect`,
         method: "GET",
         secure: true,
@@ -11721,7 +11039,7 @@ export class Api<
      * @summary Get Container statistics
      * @request GET:/api/v1/containers/{id}/stats
      * @secure
-     * @response `200` `ContainerStatsView` Success
+     * @response `200` `HistoryContainerStatSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11738,7 +11056,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<ContainerStatsView, ProblemDetails>({
+      this.request<HistoryContainerStatSnapshot, ProblemDetails>({
         path: `/api/v1/containers/${id}/stats`,
         method: "GET",
         query: query,
@@ -11766,7 +11084,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    deleteDeployments: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    deleteDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments`,
         method: "DELETE",
@@ -11891,7 +11209,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    pauseDeployments: (data: DeploymentIds, params: RequestParams = {}) =>
+    pauseDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments/pause`,
         method: "POST",
@@ -11952,7 +11270,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    restartDeployments: (data: DeploymentIds, params: RequestParams = {}) =>
+    restartDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments/restart`,
         method: "POST",
@@ -11981,7 +11299,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    resumeDeployments: (data: DeploymentIds, params: RequestParams = {}) =>
+    resumeDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments/resume`,
         method: "POST",
@@ -12010,7 +11328,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    startDeployments: (data: DeploymentIds, params: RequestParams = {}) =>
+    startDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments/start`,
         method: "POST",
@@ -12039,7 +11357,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    stopDeployments: (data: DeploymentIds, params: RequestParams = {}) =>
+    stopDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/deployments/stop`,
         method: "POST",
@@ -12109,7 +11427,7 @@ export class Api<
      * @summary Preview Deployment Backup volumes
      * @request GET:/api/v1/deployments/{deploymentId}/backup-source-preview
      * @secure
-     * @response `200` `DeploymentBackupSourcePreviewView` Success
+     * @response `200` `BackupSourcePreview` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12124,7 +11442,7 @@ export class Api<
       deploymentId: string,
       params: RequestParams = {},
     ) =>
-      this.request<DeploymentBackupSourcePreviewView, ProblemDetails>({
+      this.request<BackupSourcePreview, ProblemDetails>({
         path: `/api/v1/deployments/${deploymentId}/backup-source-preview`,
         method: "GET",
         secure: true,
@@ -12324,7 +11642,7 @@ export class Api<
      * @summary getDeploymentContainerInfo
      * @request GET:/api/v1/deployments/{id}/info
      * @secure
-     * @response `200` `ContainerInfoView` Success
+     * @response `200` `ContainerSummaryView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12336,7 +11654,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getDeploymentContainerInfo: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, ProblemDetails>({
+      this.request<ContainerSummaryView, ProblemDetails>({
         path: `/api/v1/deployments/${id}/info`,
         method: "GET",
         secure: true,
@@ -12352,7 +11670,7 @@ export class Api<
      * @summary inspectDeployment
      * @request GET:/api/v1/deployments/{id}/inspect
      * @secure
-     * @response `200` `ContainerInspectView` Success
+     * @response `200` `ContainerInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12364,7 +11682,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     inspectDeployment: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, ProblemDetails>({
+      this.request<ContainerInspectionView, ProblemDetails>({
         path: `/api/v1/deployments/${id}/inspect`,
         method: "GET",
         secure: true,
@@ -12380,7 +11698,7 @@ export class Api<
      * @summary Get Deployment statistics
      * @request GET:/api/v1/deployments/{id}/stats
      * @secure
-     * @response `200` `ContainerStatsView` Success
+     * @response `200` `HistoryContainerStatSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12396,7 +11714,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<ContainerStatsView, ProblemDetails>({
+      this.request<HistoryContainerStatSnapshot, ProblemDetails>({
         path: `/api/v1/deployments/${id}/stats`,
         method: "GET",
         query: query,
@@ -12852,7 +12170,7 @@ export class Api<
      * @summary Compare immutable Git commits
      * @request GET:/api/v1/gitRepositories/{id}/compare
      * @secure
-     * @response `200` `GitCommitComparisonView` Success
+     * @response `200` `GitCommitComparison` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12871,7 +12189,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitCommitComparisonView, ProblemDetails>({
+      this.request<GitCommitComparison, ProblemDetails>({
         path: `/api/v1/gitRepositories/${id}/compare`,
         method: "GET",
         query: query,
@@ -12888,7 +12206,7 @@ export class Api<
      * @summary Discover Compose projects in a Git repository
      * @request GET:/api/v1/gitRepositories/{id}/compose-projects
      * @secure
-     * @response `200` `GitRepositoryComposeDiscovery` Success
+     * @response `200` `GitComposeDiscovery` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12907,7 +12225,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryComposeDiscovery, ProblemDetails>({
+      this.request<GitComposeDiscovery, ProblemDetails>({
         path: `/api/v1/gitRepositories/${id}/compose-projects`,
         method: "GET",
         query: query,
@@ -12924,7 +12242,7 @@ export class Api<
      * @summary List files in an immutable Git tree
      * @request GET:/api/v1/gitRepositories/{id}/files
      * @secure
-     * @response `200` `GitRepositoryDirectoryListingView` Success
+     * @response `200` `GitDirectoryListing` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12943,7 +12261,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryDirectoryListingView, ProblemDetails>({
+      this.request<GitDirectoryListing, ProblemDetails>({
         path: `/api/v1/gitRepositories/${id}/files`,
         method: "GET",
         query: query,
@@ -12960,7 +12278,7 @@ export class Api<
      * @summary Read a bounded immutable Git file
      * @request GET:/api/v1/gitRepositories/{id}/files/content
      * @secure
-     * @response `200` `GitRepositoryFileContentView` Success
+     * @response `200` `GitFileContent` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12979,7 +12297,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryFileContentView, ProblemDetails>({
+      this.request<GitFileContent, ProblemDetails>({
         path: `/api/v1/gitRepositories/${id}/files/content`,
         method: "GET",
         query: query,
@@ -13115,7 +12433,7 @@ export class Api<
      * @summary Delete Images
      * @request DELETE:/api/v1/images
      * @secure
-     * @response `200` `DeleteImageResult` Success
+     * @response `200` `DeleteImagesView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13127,7 +12445,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     deleteImages: (data: DeleteImagesInput, params: RequestParams = {}) =>
-      this.request<DeleteImageResult, ProblemDetails>({
+      this.request<DeleteImagesView, ProblemDetails>({
         path: `/api/v1/images`,
         method: "DELETE",
         body: data,
@@ -13145,7 +12463,7 @@ export class Api<
      * @summary List Docker Hub repositories
      * @request GET:/api/v1/images/dockerhub/{registryName}/repositories
      * @secure
-     * @response `200` `GetDockerHubRepositoriesResponse` Success
+     * @response `200` `(DockerHubRepositoryInfo)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13159,7 +12477,7 @@ export class Api<
       registryName: string,
       params: RequestParams = {},
     ) =>
-      this.request<GetDockerHubRepositoriesResponse, ProblemDetails>({
+      this.request<DockerHubRepositoryInfo[], ProblemDetails>({
         path: `/api/v1/images/dockerhub/${registryName}/repositories`,
         method: "GET",
         secure: true,
@@ -13175,7 +12493,7 @@ export class Api<
      * @summary List Docker Hub repository tags
      * @request GET:/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags
      * @secure
-     * @response `200` `GetDockerHubRepositoryTagsResponse` Success
+     * @response `200` `(DockerHubTag)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13190,7 +12508,7 @@ export class Api<
       repositoryName: string,
       params: RequestParams = {},
     ) =>
-      this.request<GetDockerHubRepositoryTagsResponse, ProblemDetails>({
+      this.request<DockerHubTag[], ProblemDetails>({
         path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
         method: "GET",
         secure: true,
@@ -13206,7 +12524,7 @@ export class Api<
      * @summary List GitHub package versions
      * @request GET:/api/v1/images/ghcr/{registryName}/{packageName}/versions
      * @secure
-     * @response `200` `GetGhcrPackageVersionsResponse` Success
+     * @response `200` `(GithubPackageVersion)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13221,7 +12539,7 @@ export class Api<
       packageName: string,
       params: RequestParams = {},
     ) =>
-      this.request<GetGhcrPackageVersionsResponse, ProblemDetails>({
+      this.request<GithubPackageVersion[], ProblemDetails>({
         path: `/api/v1/images/ghcr/${registryName}/${packageName}/versions`,
         method: "GET",
         secure: true,
@@ -13237,7 +12555,7 @@ export class Api<
      * @summary Pull a Docker image with progress
      * @request POST:/api/v1/images/pull
      * @secure
-     * @response `200` `PullImageResponse` Success
+     * @response `200` `(PullImageStreamItem)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13248,7 +12566,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     pullImage: (data: PullImageInput, params: RequestParams = {}) =>
-      this.request<PullImageResponse, ProblemDetails>({
+      this.request<PullImageStreamItem[], ProblemDetails>({
         path: `/api/v1/images/pull`,
         method: "POST",
         body: data,
@@ -13291,7 +12609,7 @@ export class Api<
      * @summary Inspect an Image on its owning Docker node
      * @request GET:/api/v1/images/{platformId}/{imageId}
      * @secure
-     * @response `200` `InspectImageView` Success
+     * @response `200` `ImageInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13311,7 +12629,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<InspectImageView, ProblemDetails>({
+      this.request<ImageInspectionView, ProblemDetails>({
         path: `/api/v1/images/${platformId}/${imageId}`,
         method: "GET",
         query: query,
@@ -13328,7 +12646,7 @@ export class Api<
      * @summary Read exposed ports using the Citadel Image ID
      * @request GET:/api/v1/images/{platformId}/{imageId}/_ports
      * @secure
-     * @response `200` `ExposedPortsResult` Success
+     * @response `200` `ExposedPortsView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13345,7 +12663,7 @@ export class Api<
       imageId: string,
       params: RequestParams = {},
     ) =>
-      this.request<ExposedPortsResult, ProblemDetails>({
+      this.request<ExposedPortsView, ProblemDetails>({
         path: `/api/v1/images/${platformId}/${imageId}/_ports`,
         method: "GET",
         secure: true,
@@ -13361,7 +12679,7 @@ export class Api<
      * @summary List Registry repositories
      * @request GET:/api/v1/images/{registryName}/repositories
      * @secure
-     * @response `200` `GetExternalRepositoriesResponse` Success
+     * @response `200` `(ExternalRepository)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13375,7 +12693,7 @@ export class Api<
       registryName: string,
       params: RequestParams = {},
     ) =>
-      this.request<GetExternalRepositoriesResponse, ProblemDetails>({
+      this.request<ExternalRepository[], ProblemDetails>({
         path: `/api/v1/images/${registryName}/repositories`,
         method: "GET",
         secure: true,
@@ -13518,7 +12836,7 @@ export class Api<
      * @summary Look up accessible resources
      * @request GET:/api/v1/lookup
      * @secure
-     * @response `200` `LookupResponse` Success
+     * @response `200` `(LookupResourceInfo)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13539,7 +12857,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<LookupResponse, ProblemDetails>({
+      this.request<LookupResourceInfo[], ProblemDetails>({
         path: `/api/v1/lookup`,
         method: "GET",
         query: query,
@@ -13584,7 +12902,7 @@ export class Api<
      * @summary Create a Network
      * @request POST:/api/v1/networks
      * @secure
-     * @response `200` `CreateNetworkView` Success
+     * @response `200` `CreatedNetworkView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13595,7 +12913,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     createNetwork: (data: CreateNetworkInput, params: RequestParams = {}) =>
-      this.request<CreateNetworkView, ProblemDetails>({
+      this.request<CreatedNetworkView, ProblemDetails>({
         path: `/api/v1/networks`,
         method: "POST",
         body: data,
@@ -13649,7 +12967,7 @@ export class Api<
      * @summary Inspect a Platform Network
      * @request GET:/api/v1/networks/{platformId}/{networkId}
      * @secure
-     * @response `200` `DockerNetworkDetailsView` Success
+     * @response `200` `NetworkView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13666,7 +12984,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<DockerNetworkDetailsView, ProblemDetails>({
+      this.request<NetworkView, ProblemDetails>({
         path: `/api/v1/networks/${platformId}/${networkId}`,
         method: "GET",
         query: query,
@@ -13771,7 +13089,7 @@ export class Api<
      * @summary Test OIDC discovery
      * @request POST:/api/v1/oidcProviders/testDiscovery
      * @secure
-     * @response `200` `OidcDiscoveryResultView` Success
+     * @response `200` `OidcDiscoveryView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13783,7 +13101,7 @@ export class Api<
       data: TestOidcDiscoveryRequest,
       params: RequestParams = {},
     ) =>
-      this.request<OidcDiscoveryResultView, ProblemDetails>({
+      this.request<OidcDiscoveryView, ProblemDetails>({
         path: `/api/v1/oidcProviders/testDiscovery`,
         method: "POST",
         body: data,
@@ -13918,7 +13236,7 @@ export class Api<
      * @summary Test OIDC provider discovery
      * @request POST:/api/v1/oidcProviders/{id}/testDiscovery
      * @secure
-     * @response `200` `OidcDiscoveryResultView` Success
+     * @response `200` `OidcDiscoveryView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13928,7 +13246,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     testOidcProviderDiscovery: (id: string, params: RequestParams = {}) =>
-      this.request<OidcDiscoveryResultView, ProblemDetails>({
+      this.request<OidcDiscoveryView, ProblemDetails>({
         path: `/api/v1/oidcProviders/${id}/testDiscovery`,
         method: "POST",
         secure: true,
@@ -14149,7 +13467,7 @@ export class Api<
      */
     updatePlatform: (
       id: string,
-      data: PlatformInput,
+      data: PlatformPatch,
       params: RequestParams = {},
     ) =>
       this.request<PlatformView, ProblemDetails>({
@@ -14228,7 +13546,7 @@ export class Api<
      * @summary Create an Edge Agent enrollment token
      * @request POST:/api/v1/platforms/{id}/edge/enrollments
      * @secure
-     * @response `200` `EdgeAgentEnrollmentView` Success
+     * @response `200` `EdgeEnrollmentView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14239,7 +13557,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     createEdgeAgentEnrollment: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+      this.request<EdgeEnrollmentView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/enrollments`,
         method: "POST",
         secure: true,
@@ -14281,7 +13599,7 @@ export class Api<
      * @summary Get Edge Agent connection status
      * @request GET:/api/v1/platforms/{id}/edge/status
      * @secure
-     * @response `200` `EdgeAgentStatusView` Success
+     * @response `200` `EdgeStatusView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14292,7 +13610,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getEdgeAgentStatus: (id: string, params: RequestParams = {}) =>
-      this.request<EdgeAgentStatusView, ProblemDetails>({
+      this.request<EdgeStatusView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/status`,
         method: "GET",
         secure: true,
@@ -14308,7 +13626,7 @@ export class Api<
      * @summary Get Docker Swarm node-agent coverage
      * @request GET:/api/v1/platforms/{id}/node-agent-coverage
      * @secure
-     * @response `200` `SwarmNodeAgentCoverageView` Success
+     * @response `200` `SwarmNodeAgentCoverage` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14319,7 +13637,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getSwarmNodeAgentCoverage: (id: string, params: RequestParams = {}) =>
-      this.request<SwarmNodeAgentCoverageView, ProblemDetails>({
+      this.request<SwarmNodeAgentCoverage, ProblemDetails>({
         path: `/api/v1/platforms/${id}/node-agent-coverage`,
         method: "GET",
         secure: true,
@@ -14335,7 +13653,7 @@ export class Api<
      * @summary Remove Docker Swarm node agents
      * @request DELETE:/api/v1/platforms/{id}/node-agents
      * @secure
-     * @response `200` `NodeAgentProgressList` Success
+     * @response `200` `(NodeAgentProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14346,7 +13664,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     removeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgressList, ProblemDetails>({
+      this.request<NodeAgentProgress[], ProblemDetails>({
         path: `/api/v1/platforms/${id}/node-agents`,
         method: "DELETE",
         secure: true,
@@ -14362,7 +13680,7 @@ export class Api<
      * @summary Install Docker Swarm node agents
      * @request POST:/api/v1/platforms/{id}/node-agents/install
      * @secure
-     * @response `200` `NodeAgentProgressList` Success
+     * @response `200` `(NodeAgentProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14373,7 +13691,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     installSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgressList, ProblemDetails>({
+      this.request<NodeAgentProgress[], ProblemDetails>({
         path: `/api/v1/platforms/${id}/node-agents/install`,
         method: "POST",
         secure: true,
@@ -14389,7 +13707,7 @@ export class Api<
      * @summary Repair Docker Swarm node-agent coverage
      * @request POST:/api/v1/platforms/{id}/node-agents/repair
      * @secure
-     * @response `200` `NodeAgentProgressList` Success
+     * @response `200` `(NodeAgentProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14400,7 +13718,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     repairSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgressList, ProblemDetails>({
+      this.request<NodeAgentProgress[], ProblemDetails>({
         path: `/api/v1/platforms/${id}/node-agents/repair`,
         method: "POST",
         secure: true,
@@ -14416,7 +13734,7 @@ export class Api<
      * @summary Upgrade Docker Swarm node agents
      * @request POST:/api/v1/platforms/{id}/node-agents/upgrade
      * @secure
-     * @response `200` `NodeAgentProgressList` Success
+     * @response `200` `(NodeAgentProgress)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14427,7 +13745,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     upgradeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgressList, ProblemDetails>({
+      this.request<NodeAgentProgress[], ProblemDetails>({
         path: `/api/v1/platforms/${id}/node-agents/upgrade`,
         method: "POST",
         secure: true,
@@ -14476,7 +13794,7 @@ export class Api<
      * @summary Get Platform statistics
      * @request GET:/api/v1/platforms/{id}/stats
      * @secure
-     * @response `200` `PlatformStatsView` Success
+     * @response `200` `HistoryPlatformStatSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14492,7 +13810,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<PlatformStatsView, ProblemDetails>({
+      this.request<HistoryPlatformStatSnapshot, ProblemDetails>({
         path: `/api/v1/platforms/${id}/stats`,
         method: "GET",
         query: query,
@@ -14628,7 +13946,7 @@ export class Api<
      * @summary List Swarm Configs
      * @request GET:/api/v1/platforms/{platformId}/swarm/configs
      * @secure
-     * @response `200` `SwarmConfigsView` Success
+     * @response `200` `SwarmItemsResponseSwarmConfigView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14638,7 +13956,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listSwarmConfigs: (platformId: string, params: RequestParams = {}) =>
-      this.request<SwarmConfigsView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmConfigView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/configs`,
         method: "GET",
         secure: true,
@@ -14666,7 +13984,7 @@ export class Api<
      */
     createSwarmConfig: (
       platformId: string,
-      data: CreateSwarmConfigInput,
+      data: CreateSwarmMaterialInput,
       params: RequestParams = {},
     ) =>
       this.request<void, ProblemDetails>({
@@ -14716,7 +14034,7 @@ export class Api<
      * @summary getSwarmConfigData
      * @request GET:/api/v1/platforms/{platformId}/swarm/configs/{resourceId}/content
      * @secure
-     * @response `200` `SwarmConfigDataView` Success
+     * @response `200` `ConfigContentView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14731,7 +14049,7 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmConfigDataView, ProblemDetails>({
+      this.request<ConfigContentView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/configs/${resourceId}/content`,
         method: "GET",
         secure: true,
@@ -14780,7 +14098,7 @@ export class Api<
      * @summary List Swarm Networks
      * @request GET:/api/v1/platforms/{platformId}/swarm/networks
      * @secure
-     * @response `200` `SwarmNetworksView` Success
+     * @response `200` `SwarmItemsResponseSwarmNetworkView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14790,7 +14108,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listSwarmNetworks: (platformId: string, params: RequestParams = {}) =>
-      this.request<SwarmNetworksView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmNetworkView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/networks`,
         method: "GET",
         secure: true,
@@ -14836,7 +14154,7 @@ export class Api<
      * @summary List Swarm Nodes
      * @request GET:/api/v1/platforms/{platformId}/swarm/nodes
      * @secure
-     * @response `200` `SwarmNodesView` Success
+     * @response `200` `SwarmItemsResponseSwarmNodeView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14846,7 +14164,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listSwarmNodes: (platformId: string, params: RequestParams = {}) =>
-      this.request<SwarmNodesView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmNodeView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/nodes`,
         method: "GET",
         secure: true,
@@ -14957,7 +14275,7 @@ export class Api<
      * @summary inspectSwarmNode
      * @request GET:/api/v1/platforms/{platformId}/swarm/nodes/{nodeId}/inspect
      * @secure
-     * @response `200` `SwarmNodeInspectView` Success
+     * @response `200` `NodeInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14972,7 +14290,7 @@ export class Api<
       nodeId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmNodeInspectView, ProblemDetails>({
+      this.request<NodeInspectionView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/nodes/${nodeId}/inspect`,
         method: "GET",
         secure: true,
@@ -15020,7 +14338,7 @@ export class Api<
      * @summary List Swarm Secrets
      * @request GET:/api/v1/platforms/{platformId}/swarm/secrets
      * @secure
-     * @response `200` `SwarmSecretsView` Success
+     * @response `200` `SwarmItemsResponseSwarmSecretView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15030,7 +14348,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listSwarmSecrets: (platformId: string, params: RequestParams = {}) =>
-      this.request<SwarmSecretsView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmSecretView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/secrets`,
         method: "GET",
         secure: true,
@@ -15058,7 +14376,7 @@ export class Api<
      */
     createSwarmSecret: (
       platformId: string,
-      data: CreateSwarmSecretInput,
+      data: CreateSwarmMaterialInput,
       params: RequestParams = {},
     ) =>
       this.request<void, ProblemDetails>({
@@ -15173,7 +14491,7 @@ export class Api<
      * @summary List Swarm Services
      * @request GET:/api/v1/platforms/{platformId}/swarm/services
      * @secure
-     * @response `200` `SwarmServicesView` Success
+     * @response `200` `SwarmItemsResponseSwarmServiceView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15183,7 +14501,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listSwarmServices: (platformId: string, params: RequestParams = {}) =>
-      this.request<SwarmServicesView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmServiceView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/services`,
         method: "GET",
         secure: true,
@@ -15294,7 +14612,7 @@ export class Api<
      * @summary inspectSwarmService
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/inspect
      * @secure
-     * @response `200` `SwarmServiceInspectView` Success
+     * @response `200` `ServiceInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15309,7 +14627,7 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceInspectView, ProblemDetails>({
+      this.request<ServiceInspectionView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/inspect`,
         method: "GET",
         secure: true,
@@ -15325,7 +14643,7 @@ export class Api<
      * @summary Read bounded Service logs
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/logs
      * @secure
-     * @response `200` `SwarmLogsView` Success
+     * @response `200` `LogSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15351,7 +14669,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmLogsView, ProblemDetails>({
+      this.request<LogSnapshot, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/logs`,
         method: "GET",
         query: query,
@@ -15398,7 +14716,7 @@ export class Api<
      * @summary Get Service statistics and node coverage
      * @request GET:/api/v1/platforms/{platformId}/swarm/services/{resourceId}/stats
      * @secure
-     * @response `200` `SwarmServiceStatsView` Success
+     * @response `200` `ServiceStatistics` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15418,7 +14736,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceStatsView, ProblemDetails>({
+      this.request<ServiceStatistics, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/services/${resourceId}/stats`,
         method: "GET",
         query: query,
@@ -15435,7 +14753,7 @@ export class Api<
      * @summary List Swarm Tasks
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks
      * @secure
-     * @response `200` `SwarmTasksView` Success
+     * @response `200` `SwarmItemsResponseSwarmTaskView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15458,7 +14776,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTasksView, ProblemDetails>({
+      this.request<SwarmItemsResponseSwarmTaskView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/tasks`,
         method: "GET",
         query: query,
@@ -15505,7 +14823,7 @@ export class Api<
      * @summary Inspect the current Task container
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/inspect
      * @secure
-     * @response `200` `ContainerInspectView` Success
+     * @response `200` `ContainerInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15522,7 +14840,7 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<ContainerInspectView, ProblemDetails>({
+      this.request<ContainerInspectionView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/inspect`,
         method: "GET",
         secure: true,
@@ -15538,7 +14856,7 @@ export class Api<
      * @summary Read current Task logs on its owning node
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/logs
      * @secure
-     * @response `200` `SwarmLogsView` Success
+     * @response `200` `LogSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15564,7 +14882,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmLogsView, ProblemDetails>({
+      this.request<LogSnapshot, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/logs`,
         method: "GET",
         query: query,
@@ -15618,7 +14936,7 @@ export class Api<
      * @summary Resolve the current Task terminal target
      * @request GET:/api/v1/platforms/{platformId}/swarm/tasks/{resourceId}/terminal
      * @secure
-     * @response `200` `SwarmTaskTerminalView` Success
+     * @response `200` `TaskTerminalView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15635,7 +14953,7 @@ export class Api<
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmTaskTerminalView, ProblemDetails>({
+      this.request<TaskTerminalView, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/swarm/tasks/${resourceId}/terminal`,
         method: "GET",
         secure: true,
@@ -15754,7 +15072,7 @@ export class Api<
      * @summary Browse a Volume directory
      * @request GET:/api/v1/platforms/{platformId}/volumes/{name}/files
      * @secure
-     * @response `200` `VolumeDirectoryView` Success
+     * @response `200` `VolumeDirectory` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -15774,7 +15092,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<VolumeDirectoryView, ProblemDetails>({
+      this.request<VolumeDirectory, ProblemDetails>({
         path: `/api/v1/platforms/${platformId}/volumes/${name}/files`,
         method: "GET",
         query: query,
@@ -16655,7 +15973,7 @@ export class Api<
      * @summary Test a Vault-compatible KV v2 Secret provider connection
      * @request POST:/api/v1/resourceBindings/secret-providers/vault-kv2/test
      * @secure
-     * @response `200` `SecretProviderConnectionTestResultView` Success
+     * @response `200` `SecretTestResult` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16668,7 +15986,7 @@ export class Api<
       data: TestSecretProviderInput,
       params: RequestParams = {},
     ) =>
-      this.request<SecretProviderConnectionTestResultView, ProblemDetails>({
+      this.request<SecretTestResult, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/vault-kv2/test`,
         method: "POST",
         body: data,
@@ -16852,7 +16170,7 @@ export class Api<
      * @summary Test an external Secret reference
      * @request POST:/api/v1/resourceBindings/secrets/external/test
      * @secure
-     * @response `200` `ExternalSecretTestResultView` Success
+     * @response `200` `SecretTestResult` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16865,7 +16183,7 @@ export class Api<
       data: TestExternalSecretInput,
       params: RequestParams = {},
     ) =>
-      this.request<ExternalSecretTestResultView, ProblemDetails>({
+      this.request<SecretTestResult, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets/external/test`,
         method: "POST",
         body: data,
@@ -17151,14 +16469,14 @@ export class Api<
      * @name GetPermissionMatrix
      * @summary Get permission matrix
      * @request GET:/api/v1/roles/permissions/matrix
-     * @response `200` `PermissionMatrixResponse` Success
+     * @response `200` `Record<string,PermissionMatrixViewItem>` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
     getPermissionMatrix: (params: RequestParams = {}) =>
-      this.request<PermissionMatrixResponse, ProblemDetails>({
+      this.request<Record<string, PermissionMatrixViewItem>, ProblemDetails>({
         path: `/api/v1/roles/permissions/matrix`,
         method: "GET",
         format: "json",
@@ -17736,7 +17054,7 @@ export class Api<
      * @summary List Service Account execution usages
      * @request GET:/api/v1/serviceAccounts/{id}/usages
      * @secure
-     * @response `200` `RunAsActorUsageList` Success
+     * @response `200` `(RunAsActorUsageView)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -17746,7 +17064,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     listServiceAccountUsages: (id: string, params: RequestParams = {}) =>
-      this.request<RunAsActorUsageList, ProblemDetails>({
+      this.request<RunAsActorUsageView[], ProblemDetails>({
         path: `/api/v1/serviceAccounts/${id}/usages`,
         method: "GET",
         secure: true,
@@ -17823,7 +17141,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    deleteStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    deleteStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks`,
         method: "DELETE",
@@ -17944,7 +17262,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    pauseStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    pauseStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks/pause`,
         method: "POST",
@@ -18032,7 +17350,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    restartStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    restartStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks/restart`,
         method: "POST",
@@ -18060,7 +17378,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    resumeStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    resumeStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks/resume`,
         method: "POST",
@@ -18118,7 +17436,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    startStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    startStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks/start`,
         method: "POST",
@@ -18146,7 +17464,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    stopStacks: (data: ContainerIdsInput, params: RequestParams = {}) =>
+    stopStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/stacks/stop`,
         method: "POST",
@@ -18282,7 +17600,7 @@ export class Api<
      * @summary Preview Stack Backup volumes
      * @request GET:/api/v1/stacks/{stackId}/backup-source-preview
      * @secure
-     * @response `200` `StackBackupSourcePreviewView` Success
+     * @response `200` `BackupSourcePreview` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -18297,7 +17615,7 @@ export class Api<
       stackId: string,
       params: RequestParams = {},
     ) =>
-      this.request<StackBackupSourcePreviewView, ProblemDetails>({
+      this.request<BackupSourcePreview, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/backup-source-preview`,
         method: "GET",
         secure: true,
@@ -18341,7 +17659,7 @@ export class Api<
      * @summary Inspect a Stack Container with sensitive environment values redacted
      * @request GET:/api/v1/stacks/{stackId}/containers/{containerId}/inspect
      * @secure
-     * @response `200` `ContainerInspectView` Success
+     * @response `200` `ContainerInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -18357,7 +17675,7 @@ export class Api<
       containerId: string,
       params: RequestParams = {},
     ) =>
-      this.request<ContainerInspectView, ProblemDetails>({
+      this.request<ContainerInspectionView, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/containers/${containerId}/inspect`,
         method: "GET",
         secure: true,
@@ -18373,7 +17691,7 @@ export class Api<
      * @summary Get Stack runtime containers
      * @request GET:/api/v1/stacks/{stackId}/data
      * @secure
-     * @response `200` `ContainersDataView` Success
+     * @response `200` `ContainerRuntimeListView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -18383,7 +17701,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     getContainersData: (stackId: string, params: RequestParams = {}) =>
-      this.request<ContainersDataView, ProblemDetails>({
+      this.request<ContainerRuntimeListView, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/data`,
         method: "GET",
         secure: true,
@@ -18538,7 +17856,7 @@ export class Api<
      * @summary Get Stack Container statistics
      * @request GET:/api/v1/stacks/{stackId}/stats
      * @secure
-     * @response `200` `StackStatsView` Success
+     * @response `200` `StackHistory` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -18554,7 +17872,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<StackStatsView, ProblemDetails>({
+      this.request<StackHistory, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/stats`,
         method: "GET",
         query: query,
@@ -18640,10 +17958,7 @@ export class Api<
      * @response `503` `ProblemDetails` Service Unavailable
      * @response `default` `ProblemDetails` Request failed
      */
-    deleteSwarmServices: (
-      data: ContainerIdsInput,
-      params: RequestParams = {},
-    ) =>
+    deleteSwarmServices: (data: string[], params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/swarmServices`,
         method: "DELETE",
@@ -18879,7 +18194,7 @@ export class Api<
      * @summary Preview Service Backup volumes
      * @request GET:/api/v1/swarmServices/{id}/backup-source-preview
      * @secure
-     * @response `200` `SwarmServiceBackupSourcePreviewView` Success
+     * @response `200` `BackupSourcePreview` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -18894,7 +18209,7 @@ export class Api<
       id: string,
       params: RequestParams = {},
     ) =>
-      this.request<SwarmServiceBackupSourcePreviewView, ProblemDetails>({
+      this.request<BackupSourcePreview, ProblemDetails>({
         path: `/api/v1/swarmServices/${id}/backup-source-preview`,
         method: "GET",
         secure: true,
@@ -18992,7 +18307,7 @@ export class Api<
      * @summary Inspect the deployed managed Service
      * @request GET:/api/v1/swarmServices/{id}/inspect
      * @secure
-     * @response `200` `SwarmServiceInspectView` Success
+     * @response `200` `ServiceInspectionView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -19003,7 +18318,7 @@ export class Api<
      * @response `default` `ProblemDetails` Request failed
      */
     inspectManagedSwarmService: (id: string, params: RequestParams = {}) =>
-      this.request<SwarmServiceInspectView, ProblemDetails>({
+      this.request<ServiceInspectionView, ProblemDetails>({
         path: `/api/v1/swarmServices/${id}/inspect`,
         method: "GET",
         secure: true,
@@ -19019,7 +18334,7 @@ export class Api<
      * @summary Read managed Service logs
      * @request GET:/api/v1/swarmServices/{id}/logs
      * @secure
-     * @response `200` `SwarmLogsView` Success
+     * @response `200` `LogSnapshot` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -19044,7 +18359,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<SwarmLogsView, ProblemDetails>({
+      this.request<LogSnapshot, ProblemDetails>({
         path: `/api/v1/swarmServices/${id}/logs`,
         method: "GET",
         query: query,
@@ -19389,7 +18704,7 @@ export class Api<
      * @summary Search Teams for assignment
      * @request GET:/api/v1/teams/search
      * @secure
-     * @response `200` `TeamSearchItems` Success
+     * @response `200` `(TeamSearchItemView)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -19410,7 +18725,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<TeamSearchItems, ProblemDetails>({
+      this.request<TeamSearchItemView[], ProblemDetails>({
         path: `/api/v1/teams/search`,
         method: "GET",
         query: query,
@@ -19559,7 +18874,7 @@ export class Api<
      */
     removeTeamResourceAccess: (
       id: string,
-      data: TeamResourceAccessInput,
+      data: ResourceAccessInput,
       params: RequestParams = {},
     ) =>
       this.request<TeamView, ProblemDetails>({
@@ -19592,7 +18907,7 @@ export class Api<
      */
     addTeamResourceAccess: (
       id: string,
-      data: TeamResourceAccessInput,
+      data: ResourceAccessInput,
       params: RequestParams = {},
     ) =>
       this.request<TeamView, ProblemDetails>({
@@ -19800,7 +19115,7 @@ export class Api<
      * @summary Search Users for assignment
      * @request GET:/api/v1/users/search
      * @secure
-     * @response `200` `UserSearchItems` Success
+     * @response `200` `(UserSearchItemView)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -19821,7 +19136,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<UserSearchItems, ProblemDetails>({
+      this.request<UserSearchItemView[], ProblemDetails>({
         path: `/api/v1/users/search`,
         method: "GET",
         query: query,
@@ -19933,7 +19248,7 @@ export class Api<
      */
     removeUserResourceAccess: (
       id: string,
-      data: UserResourceAccessRequest,
+      data: ResourceAccessInput,
       params: RequestParams = {},
     ) =>
       this.request<UserView, ProblemDetails>({
@@ -19966,7 +19281,7 @@ export class Api<
      */
     addUserResourceAccess: (
       id: string,
-      data: UserResourceAccessRequest,
+      data: ResourceAccessInput,
       params: RequestParams = {},
     ) =>
       this.request<UserView, ProblemDetails>({

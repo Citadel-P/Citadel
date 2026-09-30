@@ -1,4 +1,6 @@
 pub mod requests;
 pub mod spec;
 pub mod views;
-pub mod webhook;
+
+#[cfg(test)]
+mod tests;

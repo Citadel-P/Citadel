@@ -8,6 +8,10 @@ import { AppContext } from '@/lib/context/app-context';
 import type { ReactNode } from 'react';
 
 const standaloneContainer: ContainerDetailsView = {
+  capabilities: null,
+  containerStat: null,
+  created: 0,
+  ports: {},
   resourceId: '019f0000-0000-7000-8000-000000000001',
   platformId: '019f0000-0000-7000-8000-000000000002',
   id: 'ea5f935b4706',

@@ -1,7 +1,7 @@
 //! HTTP/PostgreSQL ports of CheckStackUpdates: access, persisted update state,
 //! read failures and edit/Apply races, without introducing a frontend workaround.
 use super::*;
-use citadel_stacks::{StackDetails, StackUpdateScanner, StackUpdateState};
+use citadel_stacks::{StackUpdateScanner, StackUpdateState};
 
 pub(super) struct Scanner {
     pool: sqlx::PgPool,
@@ -24,7 +24,7 @@ impl Scanner {
 impl StackUpdateScanner for Scanner {
     fn scan<'a>(
         &'a self,
-        stack: &'a StackDetails,
+        stack: &'a citadel_stacks::Stack,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         Box::pin(async move {
@@ -282,7 +282,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         if kind == "StackGitAutoUpdated" {
             assert_eq!(observation.info["UpdatedCommitSha"], "c".repeat(40));
             assert_eq!(
-                persisted.source.unwrap().resolved_commit_sha,
+                persisted.source.as_ref().unwrap().resolved_commit_sha,
                 "c".repeat(40)
             );
         } else {

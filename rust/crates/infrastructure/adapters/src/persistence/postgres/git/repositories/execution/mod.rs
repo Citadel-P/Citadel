@@ -15,7 +15,7 @@ use citadel_primitives::ActorId;
 
 use citadel_git::{
     GitRepositoryExecutionError, GitRepositoryExecutionPersistence, GitRepositoryRef,
-    GitRepositorySource, GitRepositorySyncMode, GitRepositoryWebhook, GitSyncClaim, SyncResult,
+    GitRepositorySource, GitRepositorySyncMode, GitSyncClaim, SyncResult,
 };
 
 use futures_util::future::BoxFuture;

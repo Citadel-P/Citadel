@@ -159,9 +159,11 @@ where
         failed |= item.exit_code.is_some_and(|code| code != 0)
             || item.stack_status.as_deref() == Some("Failed");
         if let Some(value) = item.stack_status.as_deref() {
-            status = citadel_stacks::StackReleaseStatus::parse(value).map_err(|error| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-            })?;
+            status = value
+                .parse::<citadel_stacks::StackReleaseStatus>()
+                .map_err(|error| {
+                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
+                })?;
         } else if item.exit_code == Some(0) {
             status = citadel_stacks::StackReleaseStatus::Healthy;
         }

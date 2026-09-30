@@ -1,8 +1,8 @@
 import {
-  ContainerInfoView,
+  ContainerSummaryView,
   ContainerStateStatus,
   ContainerStatView,
-  ContainerDataView,
+  ContainerRuntimeView,
 } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
@@ -25,7 +25,7 @@ import {
   MemoryUsageCell,
 } from '@/components/custom/common';
 
-type ContainerInfoRow = ContainerInfoView & {
+type ContainerInfoRow = ContainerSummaryView & {
   containerStat: Partial<ContainerStatView>;
   state: ContainerStateStatus;
   id: string;
@@ -152,7 +152,7 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
   return [...cols, ...coreCols];
 };
 
-export const ContainerOverview = ({ container }: { container?: ContainerDataView | undefined }) => {
+export const ContainerOverview = ({ container }: { container?: ContainerRuntimeView | undefined }) => {
   const [overviewOpen, setOverviewOpen] = useLocalStorage('container-overview-open', true);
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
@@ -251,7 +251,7 @@ export const DeploymentContainerInfoTable = ({
   displayOptions,
 }: {
   deploymentId: string;
-  container?: ContainerDataView | undefined;
+  container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
 }) => {
   const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId });
@@ -273,8 +273,8 @@ const ContainerInfoTableRenderer = ({
   displayOptions,
   isLoading,
 }: {
-  containerInfo?: ContainerInfoView | undefined;
-  container?: ContainerDataView | undefined;
+  containerInfo?: ContainerSummaryView | undefined;
+  container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
   isLoading?: boolean;
 }) => {

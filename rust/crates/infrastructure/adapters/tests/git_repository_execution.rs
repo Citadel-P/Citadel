@@ -510,10 +510,10 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         )
         .await
         .unwrap();
-        assert_eq!(repository.status, "Healthy");
+        assert_eq!(repository.status, citadel_git::GitRepositoryStatus::Healthy);
         assert_eq!(
-            repository.latest_activity.as_ref().unwrap()["status"],
-            "Success"
+            repository.latest_activity.as_ref().unwrap().status,
+            citadel_activities::ActivityStatus::Success
         );
     }
     // Editing a source after a polling failure must not inherit the silent Poll trigger.
@@ -551,10 +551,10 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
     let repository = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
         .await
         .unwrap();
-    assert_eq!(repository.status, "Healthy");
+    assert_eq!(repository.status, citadel_git::GitRepositoryStatus::Healthy);
     assert_eq!(
-        repository.latest_activity.as_ref().unwrap()["status"],
-        "Success"
+        repository.latest_activity.as_ref().unwrap().status,
+        citadel_activities::ActivityStatus::Success
     );
     let claim = poll(&store, &pool, actor, id, "main").await;
     store
@@ -613,12 +613,13 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         notification.payload().is_empty(),
         "notifications only wake the durable outbox reader"
     );
-    let payload: serde_json::Value =
-        sqlx::query_scalar("SELECT payload FROM alertobservations WHERE payload->>'resource_id'=$1")
-            .bind(id.to_string())
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let payload: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM alertobservations WHERE payload->>'resource_id'=$1",
+    )
+    .bind(id.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let observation: citadel_alerts::AlertObservation = serde_json::from_value(payload).unwrap();
     assert_eq!(observation.alert_type, "WebhookGitRepoSyncFailed");
     assert_eq!(observation.resource_id, id);

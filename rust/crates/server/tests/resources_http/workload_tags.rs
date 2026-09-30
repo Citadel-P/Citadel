@@ -1,6 +1,6 @@
 use super::*;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
-use citadel_identity::{NewUserMutation, UserRepository, UserResourceAccessInput};
+use citadel_identity::{NewUserMutation, ResourceAccessInput, UserRepository};
 
 // ResourceTagIntegrationTests: replacement must persist atomically and the
 // resource's own permission controls both reads and writes.
@@ -125,7 +125,7 @@ pub(super) async fn verify(
         users
             .add_resource_access(
                 reader.subject_id,
-                &UserResourceAccessInput {
+                &ResourceAccessInput {
                     resource_type: resource,
                     resource_id: id,
                     permission_level: PermissionLevel::Read,

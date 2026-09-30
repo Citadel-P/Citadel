@@ -2,6 +2,7 @@ use super::apply::*;
 use super::mutations::*;
 use crate::PreparedDeploymentImage;
 use crate::RuntimeDeploymentResult;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 
 use std::sync::Mutex;
@@ -14,6 +15,20 @@ use tokio::sync::Notify;
 use super::*;
 use crate::DeploymentImageInfo;
 use crate::UpdateBehavior;
+
+#[test]
+fn metadata_normalization_retains_deployment_specific_limits() {
+    let mut name = " api.v1 ".to_owned();
+    normalize_name(&mut name).unwrap();
+    assert_eq!(name, "api.v1");
+    assert!(normalize_name(&mut "api service".to_owned()).is_err());
+    assert!(normalize_name(&mut "a".repeat(65)).is_err());
+    let mut description = Some(" \t ".to_owned());
+    normalize_description(&mut description).unwrap();
+    assert_eq!(description, None);
+    assert!(normalize_description(&mut Some("é".repeat(300))).is_ok());
+    assert!(normalize_description(&mut Some("é".repeat(301))).is_err());
+}
 
 fn spec() -> DeploymentSpec {
     DeploymentSpec {
@@ -343,7 +358,7 @@ impl DeploymentRepository for TimeoutStore {
         _: ActorId,
         _: bool,
         _: &'a DeploymentFilter,
-    ) -> BoxFuture<'a, Result<Vec<DeploymentDetails>, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<crate::Deployment>>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -352,7 +367,7 @@ impl DeploymentRepository for TimeoutStore {
         _: ActorId,
         _: bool,
         _: Uuid,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -361,7 +376,7 @@ impl DeploymentRepository for TimeoutStore {
         _: ActorId,
         _: bool,
         _: &'a CreateDeployment,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -372,7 +387,7 @@ impl DeploymentRepository for TimeoutStore {
         _: Uuid,
         _: i64,
         _: &'a DeploymentSpec,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -382,7 +397,7 @@ impl DeploymentRepository for TimeoutStore {
         _: bool,
         _: Uuid,
         _: &'a UpdateDeploymentMetadata,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -392,7 +407,7 @@ impl DeploymentRepository for TimeoutStore {
         _: bool,
         _: Uuid,
         _: &'a str,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>> {
         async { unreachable!() }.boxed()
     }
 
@@ -667,7 +682,7 @@ async fn timed_out_delete_releases_its_claim() {
                 name: "web".to_owned(),
                 docker_container_ids: vec!["container".to_owned()],
                 row_version: 1,
-                previous_status: "Healthy".to_owned(),
+                previous_status: crate::DeploymentStatus::Healthy,
                 description: None,
                 spec: spec(),
             },
@@ -707,7 +722,7 @@ async fn dropping_the_request_does_not_cancel_claim_recovery() {
                 name: "web".to_owned(),
                 docker_container_ids: vec!["container".to_owned()],
                 row_version: 1,
-                previous_status: "Healthy".to_owned(),
+                previous_status: crate::DeploymentStatus::Healthy,
                 description: None,
                 spec: spec(),
             },
@@ -874,7 +889,7 @@ fn apply_store(
             name: "web".to_owned(),
             docker_container_ids: Vec::new(),
             row_version: 1,
-            previous_status: "Created".to_owned(),
+            previous_status: crate::DeploymentStatus::Created,
             description: None,
             spec: spec(),
         },
@@ -908,7 +923,7 @@ async fn create_rejects_new_auto_deploy_without_its_entitlement() {
                 name: "web".to_owned(),
                 docker_container_ids: Vec::new(),
                 row_version: 1,
-                previous_status: "Created".to_owned(),
+                previous_status: crate::DeploymentStatus::Created,
                 description: None,
                 spec: spec(),
             },

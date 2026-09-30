@@ -19,7 +19,7 @@ pub struct BackupSourcePreview {
     pub resource: BackupPreviewResource,
     pub platform_id: Uuid,
     pub platform_name: String,
-    pub platform_status: String,
+    pub platform_status: citadel_primitives::PlatformStatus,
     pub volumes: Vec<BackupVolumePreview>,
     pub warnings: Vec<String>,
 }

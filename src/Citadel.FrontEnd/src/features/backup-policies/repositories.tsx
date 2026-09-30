@@ -1,7 +1,5 @@
 import {
   BackupRepositorySpec,
-  BackupRepositorySpecFileSystemBackupRepositorySpec,
-  BackupRepositorySpecS3CompatibleBackupRepositorySpec,
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
@@ -350,14 +348,14 @@ function RepositoryDialog({
   const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
   const specDisabled = formDisabled || editing?.status === BackupRepositoryStatus.Ready;
   const isS3 = selectedType === BackupRepositoryType.S3Compatible;
-  const s3Spec = input.spec as BackupRepositorySpecS3CompatibleBackupRepositorySpec;
-  const fileSystemSpec = input.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const s3Spec = input.spec as Extract<BackupRepositorySpec, { $type: 'S3Compatible' }>;
+  const fileSystemSpec = input.spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
   const fileSystemLocation = fileSystemSpec.location ?? BackupExecutionLocation.Core;
 
   const setSpec = (
     patch: Partial<
-      Omit<BackupRepositorySpecFileSystemBackupRepositorySpec, '$type'> &
-        Omit<BackupRepositorySpecS3CompatibleBackupRepositorySpec, '$type'>
+      Omit<Extract<BackupRepositorySpec, { $type: 'FileSystem' }>, '$type'> &
+        Omit<Extract<BackupRepositorySpec, { $type: 'S3Compatible' }>, '$type'>
     >,
   ) =>
     setInput((current) => ({
@@ -754,7 +752,7 @@ function validateRepositoryInput(input: BackupRepositoryFormInput, editing: Back
   if (!editing && !input.passwordSecretId) return 'Password secret is required.';
 
   if (input.spec.$type === 'S3Compatible') {
-    const spec = input.spec as BackupRepositorySpecS3CompatibleBackupRepositorySpec;
+    const spec = input.spec as Extract<BackupRepositorySpec, { $type: 'S3Compatible' }>;
     if (!spec.endpoint?.trim()) return 'S3 endpoint is required.';
     if (!spec.bucket?.trim()) return 'S3 bucket is required.';
     if (!spec.accessKeySecretId) return 'Access key secret is required.';
@@ -762,7 +760,7 @@ function validateRepositoryInput(input: BackupRepositoryFormInput, editing: Back
     return null;
   }
 
-  const spec = input.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const spec = input.spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
   if (spec.location === BackupExecutionLocation.Platform && !spec.platformId) return 'Platform is required.';
   if (!spec.path?.trim()) return 'Repository path is required.';
   return null;

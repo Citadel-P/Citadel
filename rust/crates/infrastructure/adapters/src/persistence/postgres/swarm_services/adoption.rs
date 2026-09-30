@@ -1,6 +1,7 @@
 use super::*;
 use crate::connectors::routing::swarm_services::SwarmServiceRuntimeRouter;
 use citadel_contracts::citadel::swarm::v1::SwarmServiceMessage;
+use citadel_primitives::AuthorizedResource;
 use citadel_swarm_services::{adoption::*, *};
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -249,7 +250,10 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
         id: &'a str,
         input: &'a AdoptSwarmService,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         Box::pin(async move {
             let (_, service) = self.load(actor, admin, platform, id, cancel).await?;
             if !bool::from(
@@ -307,18 +311,18 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
             validate_tags(&mut tx, &input.tag_ids).await?;
             let new_id = Uuid::now_v7();
             let health = if service.desired_task_count == 0 {
-                "Stopped"
+                citadel_swarm_services::SwarmServiceHealth::Stopped
             } else if service.update_state.contains("paused")
                 || service.running_task_count < service.desired_task_count
             {
-                "Degraded"
+                citadel_swarm_services::SwarmServiceHealth::Degraded
             } else {
-                "Healthy"
+                citadel_swarm_services::SwarmServiceHealth::Healthy
             };
             let version = i64::try_from(service.version_index).map_err(storage)?;
             sqlx::query("INSERT INTO swarmservices(id,platformid,name,description,dockername,dockerserviceid,dockerversionindex,spec,desiredspechash,lastappliedruntimehash,health,synchronizationstate,controlstate,rowversion,createdbyactorid,createdat,updatedat,autoupdatestate_lastcheckedat,autoupdatestate_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'DesiredChangesPending','Idle',0,$12,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'-infinity','Unknown')")
                 .bind(new_id).bind(platform).bind(&input.name).bind(&input.description).bind(&service.name).bind(id).bind(version)
-                .bind(input.spec.to_storage_value()?).bind(input.spec.desired_hash()).bind(&service.runtime_hash).bind(health).bind(actor.value())
+                .bind(input.spec.to_storage_value()?).bind(input.spec.desired_hash()).bind(&service.runtime_hash).bind(health.as_str()).bind(actor.value())
                 .execute(&mut *tx).await.map_err(database_error)?;
             replace_tags(&mut tx, new_id, actor, &input.tag_ids).await?;
             sqlx::query("UPDATE swarmserviceprojections SET swarmserviceid=$3,ownership='CitadelService',ownershipdiagnostic=NULL,runningtaskcount=$4,desiredtaskcount=$5,versionindex=$6,updatestate=$7,updatemessage=$8,liveruntimehash=$9 WHERE platformid=$1 AND dockerserviceid=$2")

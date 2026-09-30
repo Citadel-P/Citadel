@@ -10,22 +10,16 @@ pub(super) fn normalize_name(value: &mut String) -> Result<(), SwarmServiceError
     Ok(())
 }
 pub(super) fn normalize_description(value: &mut Option<String>) -> Result<(), SwarmServiceError> {
-    if let Some(description) = value {
-        *description = description.trim().to_owned();
-        if description.len() > 500 {
-            return Err(validation(
-                "Service description cannot exceed 500 characters.",
-            ));
-        }
-        if description.is_empty() {
-            *value = None;
-        }
+    *value = citadel_primitives::normalization::optional_text(value.take());
+    if value
+        .as_ref()
+        .is_some_and(|description| description.len() > 500)
+    {
+        return Err(validation(
+            "Service description cannot exceed 500 characters.",
+        ));
     }
     Ok(())
-}
-pub(super) fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
-    let mut seen = HashSet::with_capacity(ids.len());
-    ids.iter().copied().filter(|id| seen.insert(*id)).collect()
 }
 pub(super) fn referenced_binding_names(
     environment: &[String],
@@ -81,4 +75,22 @@ pub(super) fn redact(mut message: String, values: &[String]) -> String {
 }
 pub(super) fn validation(message: &str) -> SwarmServiceError {
     SwarmServiceError::Validation(message.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metadata_normalization_retains_service_specific_limits() {
+        let mut name = " web service ".to_owned();
+        normalize_name(&mut name).unwrap();
+        assert_eq!(name, "web service");
+        assert!(normalize_name(&mut "a".repeat(101)).is_err());
+        let mut description = Some(" \t ".to_owned());
+        normalize_description(&mut description).unwrap();
+        assert_eq!(description, None);
+        assert!(normalize_description(&mut Some("é".repeat(250))).is_ok());
+        assert!(normalize_description(&mut Some("é".repeat(251))).is_err());
+    }
 }

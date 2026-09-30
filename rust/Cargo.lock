@@ -609,7 +609,6 @@ dependencies = [
  "citadel-activities",
  "citadel-alerts",
  "citadel-execution",
- "citadel-git",
  "citadel-primitives",
  "citadel-tags",
  "futures-util",
@@ -649,6 +648,7 @@ name = "citadel-bindings"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "citadel-primitives",
  "futures-util",
  "serde",
  "serde_json",
@@ -664,7 +664,6 @@ dependencies = [
  "chrono",
  "citadel-activities",
  "citadel-alerts",
- "citadel-git",
  "citadel-licensing",
  "citadel-primitives",
  "citadel-tags",
@@ -714,6 +713,7 @@ name = "citadel-deployments"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "citadel-activities",
  "citadel-alerts",
  "citadel-licensing",
  "citadel-primitives",
@@ -771,6 +771,7 @@ version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "citadel-activities",
  "citadel-execution",
  "citadel-primitives",
  "citadel-tags",
@@ -829,6 +830,7 @@ name = "citadel-platforms"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "citadel-deployments",
  "citadel-primitives",
  "citadel-swarm-services",
  "citadel-tags",
@@ -848,7 +850,10 @@ dependencies = [
 name = "citadel-primitives"
 version = "0.0.0"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -868,7 +873,6 @@ dependencies = [
 name = "citadel-registries"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "citadel-primitives",
  "citadel-tags",
  "futures-util",
@@ -962,7 +966,6 @@ dependencies = [
  "chrono",
  "citadel-activities",
  "citadel-alerts",
- "citadel-git",
  "citadel-platforms",
  "citadel-primitives",
  "citadel-tags",

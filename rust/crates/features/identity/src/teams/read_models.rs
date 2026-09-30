@@ -10,7 +10,7 @@ pub struct TeamDetails {
     pub total_members: i32,
     pub users: Option<Vec<ResourceInfo>>,
     pub roles: Option<Vec<ResourceInfo>>,
-    pub resource_accesses: Option<Vec<TeamResourceAccessDetails>>,
+    pub resource_accesses: Option<Vec<ResourceAccessDetails>>,
     pub members: Option<Vec<TeamMemberDetails>>,
 }
 
@@ -28,15 +28,4 @@ pub struct TeamMemberDetails {
 pub struct TeamSearchItemDetails {
     pub id: Uuid,
     pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamResourceAccessDetails {
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    pub resource_name: Option<String>,
-    pub permission_level: PermissionLevel,
-    pub specific_permissions: Option<Vec<SpecificPermission>>,
-    pub id: Option<Uuid>,
 }

@@ -5,7 +5,7 @@ pub(super) async fn begin(
     store: &PostgresDeploymentRepository,
     actor: ActorId,
     administrator: bool,
-    expected: &DeploymentDetails,
+    expected: &citadel_deployments::Deployment,
 ) -> Result<DeploymentUpdateCheck, DeploymentError> {
     checkable_deployment_image(expected)?;
     let mut tx = store.pool.begin().await.map_err(storage)?;
@@ -78,7 +78,7 @@ impl PostgresDeploymentRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a DeploymentDetails,
+        expected: &'a citadel_deployments::Deployment,
     ) -> BoxFuture<'a, Result<citadel_deployments::DeploymentUpdateCheck, DeploymentError>> {
         Box::pin(updates::begin(self, actor, administrator, expected))
     }

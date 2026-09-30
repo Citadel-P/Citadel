@@ -1,4 +1,4 @@
-import { PlatformCapabilities, SwarmSecretView } from '@/api/generated/api.types';
+import { PlatformCapabilitiesView, SwarmSecretView } from '@/api/generated/api.types';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
@@ -11,7 +11,7 @@ export type SwarmSecretInfoView = SwarmSecretView & {
   platformId: string;
   description: null;
   status: boolean;
-  capabilities?: PlatformCapabilities | null;
+  capabilities?: PlatformCapabilitiesView | null;
 };
 
 export const useSecretsGroup = (platformId: string) => {

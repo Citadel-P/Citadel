@@ -19,8 +19,8 @@ pub struct RegistryPatch {
     pub registry_host: Option<String>,
     pub status: Option<RegistryStatus>,
     #[serde(default)]
-    pub configuration: MetadataPatch<Value>,
+    pub configuration: PatchField<Value>,
     #[serde(default)]
-    pub description: MetadataPatch<String>,
+    pub description: PatchField<String>,
     pub tag_ids: Option<Vec<Uuid>>,
 }

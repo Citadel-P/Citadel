@@ -7,11 +7,13 @@ use crate::PasswordPolicy;
 use crate::PatchField;
 use crate::ResourceInfo;
 use crate::StoredPage;
-use crate::permission_matrix;
 use crate::validate_email;
 use crate::validate_name;
+use crate::{ResourceAccessDetails, ResourceAccessInput};
 use chrono::{DateTime, Utc};
-use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
+use citadel_primitives::ActorId;
+#[cfg(test)]
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -32,12 +34,9 @@ use service::enabled_by_default;
 pub use model::User;
 
 pub use commands::{
-    AddUserRole, CreateUser, DeleteUsers, NewUserMutation, PatchUser, RenameUser,
-    UserPatchMutation, UserResourceAccess, UserResourceAccessInput,
+    AddUserRole, CreateUser, DeleteUsers, NewUserMutation, PatchUser, RenameUser, UserPatchMutation,
 };
 
-pub use read_models::{
-    UserDetails, UserPasswordContext, UserResourceAccessDetails, UserSearchItemDetails,
-};
+pub use read_models::{UserDetails, UserPasswordContext, UserSearchItemDetails};
 
 pub use service::{UserMutationService, UserReadService};

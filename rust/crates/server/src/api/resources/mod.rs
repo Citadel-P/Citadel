@@ -13,7 +13,6 @@ pub mod git_accounts;
 pub mod git_repositories;
 pub mod licensing;
 pub mod lookup;
-pub mod metadata_patch;
 pub mod mfa;
 pub mod oidc;
 pub mod platforms;
@@ -29,3 +28,7 @@ pub mod teams;
 pub mod users;
 pub mod vocabulary;
 pub mod webhooks;
+
+pub mod resource_access;
+
+pub mod schema_models;

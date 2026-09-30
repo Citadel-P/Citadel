@@ -1,43 +1,11 @@
-use serde::Deserialize;
-
-#[derive(Debug, Clone, Default)]
-pub enum MetadataPatch<T> {
-    #[default]
-    Missing,
-    Null,
-    Value(T),
-}
-
-impl<'de, T> Deserialize<'de> for MetadataPatch<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Option::<T>::deserialize(deserializer).map(|value| value.map_or(Self::Null, Self::Value))
-    }
-}
-
-impl<T: Clone> MetadataPatch<T> {
-    #[must_use]
-    pub fn merge_optional(&self, current: Option<&T>) -> Option<T> {
-        match self {
-            Self::Missing => current.cloned(),
-            Self::Null => None,
-            Self::Value(value) => Some(value.clone()),
-        }
-    }
-}
-
+use citadel_primitives::PatchField;
 use serde_json::Value;
 
-fn merge_json_patch(patch: &MetadataPatch<Value>, current: Option<&Value>) -> Option<Value> {
+fn merge_json_patch(patch: &PatchField<Value>, current: Option<&Value>) -> Option<Value> {
     match patch {
-        MetadataPatch::Missing => current.cloned(),
-        MetadataPatch::Null => None,
-        MetadataPatch::Value(patch) => {
+        PatchField::Missing => current.cloned(),
+        PatchField::Null => None,
+        PatchField::Value(patch) => {
             let mut value = current.cloned().unwrap_or(Value::Null);
             apply_json_merge_patch(&mut value, patch);
             Some(value)
@@ -45,25 +13,7 @@ fn merge_json_patch(patch: &MetadataPatch<Value>, current: Option<&Value>) -> Op
     }
 }
 
-fn apply_json_merge_patch(target: &mut Value, patch: &Value) {
-    let Value::Object(patch) = patch else {
-        *target = patch.clone();
-        return;
-    };
-    if !target.is_object() {
-        *target = Value::Object(serde_json::Map::new());
-    }
-    let target = target
-        .as_object_mut()
-        .expect("target was initialized as an object");
-    for (key, value) in patch {
-        if value.is_null() {
-            target.remove(key);
-        } else {
-            apply_json_merge_patch(target.entry(key.clone()).or_insert(Value::Null), value);
-        }
-    }
-}
+use citadel_primitives::merge_json as apply_json_merge_patch;
 
 impl crate::RegistryPatch {
     pub fn apply_to(&self, old: &crate::RegistryDetails) -> crate::NewRegistry {
@@ -87,7 +37,7 @@ impl crate::RegistryPatch {
 
 #[cfg(test)]
 mod tests {
-    use super::MetadataPatch;
+    use super::PatchField;
     use serde_json::json;
 
     use super::merge_json_patch;
@@ -100,7 +50,7 @@ mod tests {
             "userName":"operator",
             "password":"old-secret"
         });
-        let patch = MetadataPatch::Value(json!({"password":"new-secret"}));
+        let patch = PatchField::Value(json!({"password":"new-secret"}));
         assert_eq!(
             merge_json_patch(&patch, Some(&current)).unwrap(),
             json!({
@@ -111,7 +61,7 @@ mod tests {
             })
         );
 
-        let patch = MetadataPatch::Value(json!({"password":null}));
+        let patch = PatchField::Value(json!({"password":null}));
         assert!(
             merge_json_patch(&patch, Some(&current))
                 .unwrap()

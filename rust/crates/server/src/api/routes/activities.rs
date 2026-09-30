@@ -54,7 +54,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Activiti
     tag = "Activities",
     summary = "Get an authorized activity",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ActivityView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::activities::views::ActivityView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -86,7 +86,7 @@ async fn get_by_id(
     tag = "Activities",
     summary = "List authorized activities",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ActivitiesView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::activities::views::ActivitiesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<crate::api::resources::vocabulary::ActivityResourceTypeSchema>, Query), ("EventType" = Option<crate::api::resources::vocabulary::ActivityEventTypeSchema>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),

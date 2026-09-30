@@ -1,16 +1,5 @@
 use super::*;
 
-impl RegistryStatus {
-    #[must_use]
-    pub const fn as_database_str(self) -> &'static str {
-        match self {
-            Self::Active => "Active",
-            Self::Disabled => "Disabled",
-            Self::Deprecated => "Deprecated",
-        }
-    }
-}
-
 impl NewRegistry {
     pub fn validate(&mut self) -> Result<(), RegistryError> {
         validate_name_identifier(&self.name, "Registry")?;

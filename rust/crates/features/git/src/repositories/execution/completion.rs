@@ -31,8 +31,8 @@ where
         // another read if this one returns an older snapshot.
         completion.borrow_and_update();
         let reference = read().await?.ok_or(GitRepositoryExecutionError::NotFound)?;
-        match reference.status.as_str() {
-            "Healthy" => {
+        match reference.status {
+            crate::GitRepositoryRefStatus::Healthy => {
                 let commit = reference
                     .resolved_commit_sha
                     .ok_or(GitRepositoryExecutionError::NotSynchronized)?;
@@ -43,12 +43,12 @@ where
                 }
                 return Ok(commit);
             }
-            "Failed" | "Degraded" => {
+            crate::GitRepositoryRefStatus::Degraded => {
                 return Err(GitRepositoryExecutionError::Validation(
                     "Repository synchronization failed. See its activity for details.".into(),
                 ));
             }
-            _ => {}
+            crate::GitRepositoryRefStatus::Pending | crate::GitRepositoryRefStatus::Syncing => {}
         }
         tokio::select! {
             _ = tokio::time::sleep(FALLBACK) => {},

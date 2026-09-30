@@ -1,3 +1,4 @@
+use citadel_backups::spec::BackupSourceSpec;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -104,9 +105,24 @@ impl PostgresBackupSourcePlanner {
     }
 
     async fn plan_volume(&self, claim: &BackupClaim) -> Result<BackupSourcePlan, BackupError> {
-        let platform_id = uuid_field(&claim.run.source_snapshot, "platformId")?;
-        let volume_name = string_field(&claim.run.source_snapshot, "volumeName")?;
-        let docker_node_id = optional_string(&claim.run.source_snapshot, "dockerNodeId");
+        let BackupSourceSpec::DockerVolume {
+            platform_id,
+            volume_name,
+            docker_node_id,
+            ..
+        } = &claim.run.source_snapshot
+        else {
+            return Err(BackupError::Validation(
+                "Expected a Docker Volume source.".into(),
+            ));
+        };
+        let platform_id = *platform_id;
+        let volume_name = volume_name.trim().to_owned();
+        let docker_node_id = docker_node_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned);
         let platform = self.platform(platform_id).await?;
         validate_node_target(&platform.kind, docker_node_id.as_deref())?;
         validate_repository(&platform.kind, &claim.repository.repository_type)?;
@@ -125,11 +141,10 @@ impl PostgresBackupSourcePlanner {
 
     async fn plan_deployment(
         &self,
-        source: &Value,
+        deployment_id: Uuid,
         repository_type: Option<&str>,
         preview: bool,
     ) -> Result<BackupSourcePlan, BackupError> {
-        let deployment_id = uuid_field(source, "deploymentId")?;
         let row = sqlx::query(
             "SELECT d.name,d.platformid,d.spec,p.platformdescriptor,p.status FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=$1",
         )
@@ -174,7 +189,7 @@ impl PostgresBackupSourcePlanner {
                 .into_iter()
                 .map(|volume| BackupSourceItem::new(platform.id, volume, None, None))
                 .collect(),
-            warnings: if preview && platform.status != "Online" {
+            warnings: if preview && platform.status != citadel_primitives::PlatformStatus::Online {
                 vec!["The Deployment Platform is offline. Saved volume settings are used as a fallback.".into()]
             } else {
                 vec![]
@@ -185,11 +200,10 @@ impl PostgresBackupSourcePlanner {
 
     async fn plan_stack(
         &self,
-        source: &Value,
+        stack_id: Uuid,
         repository_type: Option<&str>,
         cancellation: &tokio_util::sync::CancellationToken,
     ) -> Result<BackupSourcePlan, BackupError> {
-        let stack_id = uuid_field(source, "stackId")?;
         let row = sqlx::query(
             "SELECT s.name,r.id AS releaseid,r.platformid,r.spec,p.platformdescriptor,p.status FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1",
         )
@@ -306,11 +320,10 @@ impl PostgresBackupSourcePlanner {
 
     async fn plan_swarm_service(
         &self,
-        source: &Value,
+        id: Uuid,
         repository_type: Option<&str>,
         cancellation: &tokio_util::sync::CancellationToken,
     ) -> Result<BackupSourcePlan, BackupError> {
-        let id = uuid_field(source, "swarmServiceId")?;
         let row = sqlx::query(
             "SELECT s.name,s.platformid,s.spec,s.dockerserviceid,p.platformdescriptor,p.status,sp.desiredtaskcount,sp.runningtaskcount,sp.isstale FROM swarmservices s JOIN platforms p ON p.id=s.platformid LEFT JOIN swarmserviceprojections sp ON sp.platformid=s.platformid AND (sp.swarmserviceid=s.id OR sp.dockerserviceid=s.dockerserviceid) WHERE s.id=$1",
         )
@@ -452,38 +465,38 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
     }
     fn validate_source<'a>(
         &'a self,
-        source: &'a Value,
+        source: &'a BackupSourceSpec,
         repository: &'a citadel_backups::BackupRepository,
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
-            match discriminator(source)? {
-                "DockerVolume" => {
-                    let platform = self.platform(uuid_field(source, "platformId")?).await?;
-                    validate_node_target(
-                        &platform.kind,
-                        optional_string(source, "dockerNodeId").as_deref(),
-                    )?;
+            match source {
+                BackupSourceSpec::DockerVolume {
+                    platform_id,
+                    docker_node_id,
+                    ..
+                } => {
+                    let platform = self.platform(*platform_id).await?;
+                    validate_node_target(&platform.kind, docker_node_id.as_deref())?;
                     validate_repository(&platform.kind, &repository.repository_type)?;
                 }
-                "Deployment" => {
-                    self.plan_deployment(source, Some(&repository.repository_type), false)
+                BackupSourceSpec::Deployment { deployment_id } => {
+                    self.plan_deployment(*deployment_id, Some(&repository.repository_type), false)
                         .await?;
                 }
-                "Stack" => {
-                    self.plan_stack(source, Some(&repository.repository_type), cancellation)
+                BackupSourceSpec::Stack { stack_id } => {
+                    self.plan_stack(*stack_id, Some(&repository.repository_type), cancellation)
                         .await?;
                 }
-                "SwarmService" => {
+                BackupSourceSpec::SwarmService { swarm_service_id } => {
                     self.plan_swarm_service(
-                        source,
+                        *swarm_service_id,
                         Some(&repository.repository_type),
                         cancellation,
                     )
                     .await?;
                 }
-                "CitadelSystem" => {}
-                _ => return Err(BackupError::Validation("Unsupported Backup source.".into())),
+                BackupSourceSpec::CitadelSystem {} => {}
             }
             Ok(())
         })
@@ -494,33 +507,33 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<BackupSourcePlan, BackupError>> {
         Box::pin(async move {
-            match discriminator(&claim.run.source_snapshot)? {
-                "DockerVolume" => self.plan_volume(claim).await,
-                "Deployment" => {
+            match &claim.run.source_snapshot {
+                BackupSourceSpec::DockerVolume { .. } => self.plan_volume(claim).await,
+                BackupSourceSpec::Deployment { deployment_id } => {
                     self.plan_deployment(
-                        &claim.run.source_snapshot,
+                        *deployment_id,
                         Some(&claim.repository.repository_type),
                         false,
                     )
                     .await
                 }
-                "Stack" => {
+                BackupSourceSpec::Stack { stack_id } => {
                     self.plan_stack(
-                        &claim.run.source_snapshot,
+                        *stack_id,
                         Some(&claim.repository.repository_type),
                         cancellation,
                     )
                     .await
                 }
-                "SwarmService" => {
+                BackupSourceSpec::SwarmService { swarm_service_id } => {
                     self.plan_swarm_service(
-                        &claim.run.source_snapshot,
+                        *swarm_service_id,
                         Some(&claim.repository.repository_type),
                         cancellation,
                     )
                     .await
                 }
-                "CitadelSystem" => {
+                BackupSourceSpec::CitadelSystem {} => {
                     let builder = self.system_builder.as_ref().ok_or_else(|| {
                         BackupError::Validation(
                             "Citadel system recovery bundle creation is unavailable.".into(),
@@ -534,9 +547,6 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
                         local_directory: Some(directory),
                     })
                 }
-                _ => Err(BackupError::Validation(
-                    "Backup source type is unsupported.".into(),
-                )),
             }
         })
     }
@@ -546,7 +556,7 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
 struct Platform {
     id: Uuid,
     kind: String,
-    status: String,
+    status: citadel_primitives::PlatformStatus,
 }
 
 #[derive(Debug)]
@@ -669,7 +679,11 @@ fn platform_from_row(row: &sqlx::postgres::PgRow) -> Result<Platform, BackupErro
             .or_else(|_| row.try_get("id"))
             .map_err(storage)?,
         kind: discriminator(&descriptor)?.to_owned(),
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
     })
 }
 
@@ -695,7 +709,7 @@ fn validate_service_projection(row: &sqlx::postgres::PgRow, name: &str) -> Resul
 }
 
 fn require_online(platform: &Platform) -> Result<(), BackupError> {
-    if platform.status == "Online" {
+    if platform.status == citadel_primitives::PlatformStatus::Online {
         Ok(())
     } else {
         Err(BackupError::Validation(
@@ -766,21 +780,6 @@ fn discriminator(value: &Value) -> Result<&str, BackupError> {
         .or_else(|| value.get("Type"))
         .and_then(Value::as_str)
         .ok_or_else(|| BackupError::Validation("Backup source type is missing.".into()))
-}
-
-fn uuid_field(value: &Value, key: &str) -> Result<Uuid, BackupError> {
-    let alternate = pascal(key);
-    value
-        .get(key)
-        .or_else(|| value.get(&alternate))
-        .and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok())
-        .ok_or_else(|| BackupError::Validation(format!("Backup source '{key}' is invalid.")))
-}
-
-fn string_field(value: &Value, key: &str) -> Result<String, BackupError> {
-    optional_string(value, key)
-        .ok_or_else(|| BackupError::Validation(format!("Backup source '{key}' is missing.")))
 }
 
 fn optional_string(value: &Value, key: &str) -> Option<String> {

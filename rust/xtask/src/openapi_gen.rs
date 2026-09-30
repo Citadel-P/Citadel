@@ -233,7 +233,7 @@ fn error_statuses(operation: &Value) -> BTreeSet<u16> {
 }
 
 fn validate_references(document: &Value) -> Result<(), Box<dyn std::error::Error>> {
-    fn walk(value: &Value, document: &Value) -> Result<(), Box<dyn std::error::Error>> {
+    fn walk(value: &Value, document: &Value, missing: &mut BTreeSet<String>) {
         match value {
             Value::Object(map) => {
                 if let Some(reference) = map
@@ -242,22 +242,31 @@ fn validate_references(document: &Value) -> Result<(), Box<dyn std::error::Error
                     .and_then(|r| r.strip_prefix('#'))
                     && document.pointer(reference).is_none()
                 {
-                    return Err(format!("Dangling OpenAPI reference: #{reference}").into());
+                    missing.insert(format!("#{reference}"));
                 }
                 for value in map.values() {
-                    walk(value, document)?;
+                    walk(value, document, missing);
                 }
             }
             Value::Array(values) => {
                 for value in values {
-                    walk(value, document)?;
+                    walk(value, document, missing);
                 }
             }
             _ => {}
         }
-        Ok(())
     }
-    walk(document, document)
+    let mut missing = BTreeSet::new();
+    walk(document, document, &mut missing);
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Dangling OpenAPI references: {}",
+            missing.into_iter().collect::<Vec<_>>().join(", ")
+        )
+        .into())
+    }
 }
 
 fn frontend_types(full: &Value) -> Result<String, Box<dyn std::error::Error>> {
@@ -348,7 +357,7 @@ mod tests {
         let full = document(false);
         let schemas = &full["components"]["schemas"];
         for name in [
-            "ActivityEventInfo",
+            "PublicActivityEventInfo",
             "PlatformDescriptor",
             "DeploymentImageInfo",
             "BackupSourceSpec",

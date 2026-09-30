@@ -1,4 +1,4 @@
-use crate::api::resources::git_repositories::webhook::RepoWebhookConfig;
+use citadel_primitives::WebhookConfig;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -14,7 +14,8 @@ pub struct AutomationActionInput {
     pub schedule_enabled: bool,
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: Option<String>,
-    pub webhook: Option<RepoWebhookConfig>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Option<Uuid>,
@@ -33,7 +34,7 @@ impl From<AutomationActionInput> for citadel_automation::AutomationActionConfigu
             schedule_enabled: value.schedule_enabled,
             schedule_cron: value.schedule_cron,
             schedule_time_zone: value.schedule_time_zone,
-            webhook: value.webhook.map(Into::into),
+            webhook: value.webhook,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
             run_as_actor_id: value.run_as_actor_id,
@@ -53,7 +54,7 @@ impl From<citadel_automation::AutomationActionConfiguration> for AutomationActio
             schedule_enabled: value.schedule_enabled,
             schedule_cron: value.schedule_cron,
             schedule_time_zone: value.schedule_time_zone,
-            webhook: value.webhook.map(Into::into),
+            webhook: value.webhook,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
             run_as_actor_id: value.run_as_actor_id,

@@ -204,7 +204,7 @@ impl PostgresBuildRepository {
                     })?),
                     citadel_activities::ActivityEventInfo::BuildAgentPoolTested {
                         pool: pool.snapshot(),
-                        status: pool.last_validation_status.clone(),
+                        status: pool.last_validation_status.to_string(),
                         message,
                     },
                     Utc::now(),
@@ -272,7 +272,7 @@ impl PostgresBuildRepository {
             .map_err(storage)?
             .ok_or(BuildError::NotFound)
             .and_then(map_pool)?;
-            if current.control_state != "Idle" {
+            if current.control_state != citadel_primitives::ResourceControlState::Idle {
                 return Err(BuildError::Conflict("The Build Pool is processing.".into()));
             }
             sqlx::query("UPDATE buildagentpools SET enabled=false,archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1")

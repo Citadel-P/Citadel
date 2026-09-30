@@ -1,5 +1,6 @@
 use super::*;
 use chrono::{DateTime, Utc};
+use citadel_primitives::normalization::optional_text;
 use uuid::Uuid;
 
 use citadel_activities::OidcProviderActivitySnapshot;
@@ -144,7 +145,7 @@ impl OidcProvider {
         let provider = Self {
             id,
             name: name.trim().to_owned(),
-            description: normalize_optional(description),
+            description: optional_text(description),
             display_name: display_name.trim().to_owned(),
             issuer: normalize_issuer(&issuer),
             client_id: client_id.trim().to_owned(),
@@ -155,7 +156,7 @@ impl OidcProvider {
             allow_email_auto_link,
             require_email_verified,
             allowed_email_domains: normalize_csv(allowed_email_domains),
-            required_claim_name: normalize_optional(required_claim_name),
+            required_claim_name: optional_text(required_claim_name),
             required_claim_values: normalize_csv(required_claim_values),
             default_role_id: default_role_id.filter(|id| !id.is_nil()),
             created_by_actor_id,
@@ -435,12 +436,6 @@ fn normalize_issuer(value: &str) -> String {
 
 fn normalize_scopes(value: &str) -> String {
     value.split_ascii_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn normalize_optional(value: Option<String>) -> Option<String> {
-    value
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
 }
 
 fn normalize_csv(value: Option<String>) -> Option<String> {

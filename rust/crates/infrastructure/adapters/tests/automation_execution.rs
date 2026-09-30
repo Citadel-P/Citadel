@@ -67,7 +67,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
     assert_eq!(
         rejected
             .iter()
-            .filter(|run| run.status == "Rejected")
+            .filter(|run| run.status == citadel_automation::AutomationRunStatus::Rejected)
             .count(),
         1
     );
@@ -92,7 +92,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .finish(
             &claim,
             &AutomationRunResult {
-                status: "Succeeded",
+                status: citadel_automation::AutomationRunStatus::Succeeded,
                 exit_code: Some(0),
                 logs: "done".to_owned(),
                 error: None,
@@ -107,14 +107,14 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
             .find(|run| run.id == queued.id)
             .unwrap()
             .status,
-        "Succeeded"
+        citadel_automation::AutomationRunStatus::Succeeded
     );
     // A repeated or late completion must not generate a second activity.
     let committed = store
         .finish(
             &claim,
             &AutomationRunResult {
-                status: "Failed",
+                status: citadel_automation::AutomationRunStatus::Failed,
                 exit_code: Some(1),
                 logs: "late".into(),
                 error: Some("late".into()),
@@ -152,7 +152,10 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
             .is_none()
     );
     let recovered = store.list_runs(action.id, 10).await.unwrap();
-    assert_eq!(recovered[0].status, "Failed");
+    assert_eq!(
+        recovered[0].status,
+        citadel_automation::AutomationRunStatus::Failed
+    );
     assert!(
         recovered[0]
             .error_message

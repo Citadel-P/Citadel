@@ -17,7 +17,7 @@ pub struct BuildProjectConfiguration {
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub retention_run_count: Option<i32>,
     #[serde(default)]
@@ -33,19 +33,19 @@ fn platform_builder() -> String {
 
 impl BuildProjectConfiguration {
     pub fn validate(&mut self) -> Result<(), BuildError> {
-        citadel_git::repositories::webhooks::validate_webhook(self.webhook.as_ref())
-            .map_err(|error| BuildError::Validation(error.to_string()))?;
+        if let Some(webhook) = &self.webhook {
+            webhook
+                .validate()
+                .map_err(|error| BuildError::Validation(error.into()))?;
+        }
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(BuildError::Validation(
                 "Build Project name must contain between 1 and 128 characters.".to_owned(),
             ));
         }
-        self.description = self
-            .description
-            .take()
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty());
+        self.description =
+            citadel_primitives::normalization::optional_text(self.description.take());
         if self
             .description
             .as_ref()

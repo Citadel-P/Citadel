@@ -7,7 +7,7 @@ pub struct AutomationRun {
     pub action_id: Uuid,
     pub action_name: String,
     pub trigger: String,
-    pub status: String,
+    pub status: crate::AutomationRunStatus,
     pub run_as_actor_id: Uuid,
     pub triggered_by_actor_id: Option<Uuid>,
     pub args_json: String,

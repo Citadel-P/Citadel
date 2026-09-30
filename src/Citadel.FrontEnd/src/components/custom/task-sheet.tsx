@@ -15,7 +15,7 @@ import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActorCell, LogViewer, TargetCell, UpdateAvailableNotice } from '@/components/custom/common';
+import { ActorCell, LogViewer, TargetCell } from '@/components/custom/common';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
@@ -25,28 +25,20 @@ import {
   ApplyDeploymentInput,
   Ids,
   DeploymentStreamItem,
-  ActivityEventInfo,
+  PublicActivityEventInfo,
   PullImageInput,
   PullImageStreamItem,
   ResolveInput,
   AuthorizedRegistryView,
   ActivityStatus,
-  ActivityEventInfoGitRepoPulled,
-  ActivityEventInfoGitRepoCloned,
-  ActivityEventInfoDeploymentApplied,
-  ActivityEventInfoStackApplied,
-  ActivityEventInfoStackRollback,
-  ActivityEventInfoGitRepoWebhookReceived,
-  ActivityEventInfoStackWebhookReceived,
-  ActivityEventInfoBuildWebhookReceived,
-  ActivityEventInfoSwarmServiceWebhookReceived,
-  BuildProjectSnapshot,
+  BuildProjectActivitySnapshot,
   ApplyStackInput,
-  AutomationActionRunStreamItem,
+  AutomationProgress,
   BackupRunItemStatus,
   BackupRunItemView,
   BackupRunStatus,
   BackupRunStreamItem,
+  BackupRestoreRunStreamItem,
   BackupRestoreStatus,
   RollbackStackInput,
   RunInput,
@@ -54,11 +46,11 @@ import {
   RestoreInput,
   StackReleaseStatus,
   StackReleaseSource,
-  StackSnapshot,
+  StackActivitySnapshot,
   StackStreamItem,
   ScaleSwarmServiceInput,
   SwarmServiceProgressItem,
-  SwarmNodeAgentProgressItem,
+  NodeAgentProgress,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
@@ -109,14 +101,6 @@ type AutomationActionRunParams = {
   name: string;
   mode: 'run' | 'test';
 } & RunInput;
-
-type BackupRestoreRunStreamItem = {
-  restoreRunId: string;
-  status?: BackupRestoreStatus | null;
-  message?: string | null;
-  stream?: string | null;
-  exitCode?: number | null;
-};
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -346,10 +330,10 @@ function EventSheetTitle({
   );
 }
 
-type InfoOf<T extends ActivityEventInfo['$type']> = Extract<ActivityEventInfo, { $type: T }>;
+type InfoOf<T extends PublicActivityEventInfo['$type']> = Extract<PublicActivityEventInfo, { $type: T }>;
 
 type ActivityInfoRendererMap = {
-  [K in ActivityEventInfo['$type']]?: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
+  [K in PublicActivityEventInfo['$type']]?: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
@@ -560,61 +544,9 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
   StackDriftDetected: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
   StackDriftResolved: (info) => <KeyValueBlock label="Resolved drift fingerprint" value={info.previousFingerprint} />,
-  StackReconciliationAttempted: (info) => {
-    const actions = info.actions.map((action) => {
-      const result = action.succeeded ? 'succeeded' : `failed${action.errorMessage ? `: ${action.errorMessage}` : ''}`;
-      return `${action.action} ${action.serviceName} (${action.containerId}) ${result}`;
-    });
-
-    return (
-      <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-        <span>Reconciliation status: {info.status}</span>
-        <KeyValueBlock label="Drift fingerprint" value={info.driftFingerprint} />
-        {actions.length > 0 && <KeyValueBlock label="Actions" value={actions} />}
-      </div>
-    );
-  },
-
   StackStarted: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackStopped: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackPaused: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
-  StackGitUpdateAvailable: (info) => (
-    <UpdateAvailableNotice
-      title="Git update available:"
-      actionLabel="Deploy"
-      targetLabel="stack"
-      sourceLabel={`${info.gitRepositoryName}${info.branch ? `/${info.branch}` : ''}`}
-      sourceTitle={info.gitRepositoryName}
-      currentLabel={shortCommit(info.currentCommitSha)}
-      nextLabel={shortCommit(info.remoteCommitSha)}
-      currentTitle={info.currentCommitSha}
-      nextTitle={info.remoteCommitSha}
-      dismissible={false}
-    />
-  ),
-  StackGitAutoUpdated: (info) => (
-    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      <span>
-        Stack auto-updated from <b>{shortCommit(info.previousCommitSha)}</b> to{' '}
-        <b>{shortCommit(info.updatedCommitSha)}</b>.
-      </span>
-      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
-      <KeyValueBlock label="Branch" value={info.branch} />
-      <KeyValueBlock label="Previous commit" value={info.previousCommitSha} />
-      <KeyValueBlock label="Updated commit" value={info.updatedCommitSha} />
-    </div>
-  ),
-  StackGitAutoDeployFailed: (info) => (
-    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      <AlertMessage type="error" title="Auto deploy failed">
-        {info.reason}
-      </AlertMessage>
-      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
-      <KeyValueBlock label="Branch" value={info.branch} />
-      <KeyValueBlock label="Current commit" value={info.currentCommitSha} />
-      <KeyValueBlock label="Remote commit" value={info.remoteCommitSha} />
-    </div>
-  ),
   StackWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
   StackRenamed: (info) => (
@@ -705,10 +637,6 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   AlertRuleCreated: (info, activity) => (
     <SpecViewer spec={info.alertRule} resourceId={activity.resourceId} title="Initial configuration" />
-  ),
-
-  AlertRuleDeleted: (info, activity) => (
-    <SpecViewer spec={info.alertRule} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
   AlertRuleRenamed: (info) => (
@@ -857,7 +785,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ActionRunRejected: (info) => <AutomationRunDetails info={info} status="Rejected" />,
 };
 
-function DuplicateSource({ source }: { source: Extract<ActivityEventInfo, { source: unknown }>['source'] }) {
+function DuplicateSource({ source }: { source: Extract<PublicActivityEventInfo, { source: unknown }>['source'] }) {
   return (
     <div className="flex items-center gap-2">
       <span>Duplicated from</span>
@@ -877,11 +805,11 @@ export function ActivityAlertZone({
   date,
 }: {
   info:
-    | ActivityEventInfoGitRepoPulled
-    | ActivityEventInfoGitRepoCloned
-    | ActivityEventInfoDeploymentApplied
-    | ActivityEventInfoStackApplied
-    | ActivityEventInfoStackRollback
+    | InfoOf<'GitRepoPulled'>
+    | InfoOf<'GitRepoCloned'>
+    | InfoOf<'DeploymentApplied'>
+    | InfoOf<'StackApplied'>
+    | InfoOf<'StackRollback'>
     | null
     | undefined;
   activity: ActivityView | null | undefined;
@@ -962,10 +890,10 @@ function WebhookActivityDetails({
   info,
 }: {
   info:
-    | ActivityEventInfoGitRepoWebhookReceived
-    | ActivityEventInfoStackWebhookReceived
-    | ActivityEventInfoBuildWebhookReceived
-    | ActivityEventInfoSwarmServiceWebhookReceived;
+    | InfoOf<'GitRepoWebhookReceived'>
+    | InfoOf<'StackWebhookReceived'>
+    | InfoOf<'BuildWebhookReceived'>
+    | InfoOf<'SwarmServiceWebhookReceived'>;
 }) {
   const displayReason = formatWebhookReason(info.reason);
   const title =
@@ -986,10 +914,10 @@ function WebhookActivityDetails({
 
 function compactWebhookDetails(
   info:
-    | ActivityEventInfoGitRepoWebhookReceived
-    | ActivityEventInfoStackWebhookReceived
-    | ActivityEventInfoBuildWebhookReceived
-    | ActivityEventInfoSwarmServiceWebhookReceived,
+    | InfoOf<'GitRepoWebhookReceived'>
+    | InfoOf<'StackWebhookReceived'>
+    | InfoOf<'BuildWebhookReceived'>
+    | InfoOf<'SwarmServiceWebhookReceived'>,
   message: string,
   reason: string | null | undefined,
 ) {
@@ -1026,7 +954,9 @@ function formatWebhookReason(reason: string | null | undefined) {
   }
 }
 
-function stripStackReleaseSource(stack: StackSnapshot | null | undefined): StackSnapshot | null | undefined {
+function stripStackReleaseSource(
+  stack: StackActivitySnapshot | null | undefined,
+): StackActivitySnapshot | null | undefined {
   if (!stack?.stackRelease || !('source' in stack.stackRelease)) return stack;
 
   const { source: _source, ...stackRelease } = stack.stackRelease;
@@ -1037,8 +967,8 @@ function stripStackReleaseSource(stack: StackSnapshot | null | undefined): Stack
 }
 
 function stripBuildProjectSecrets(
-  build: BuildProjectSnapshot | null | undefined,
-): BuildProjectSnapshot | null | undefined {
+  build: BuildProjectActivitySnapshot | null | undefined,
+): BuildProjectActivitySnapshot | null | undefined {
   if (!build?.webhook?.secret) return build;
 
   return {
@@ -1440,7 +1370,7 @@ function useSwarmNodeAgentProgress(params: SwarmNodeAgentParams) {
     params.action === 'remove'
       ? `api/v1/platforms/${params.platformId}/node-agents`
       : `api/v1/platforms/${params.platformId}/node-agents/${params.action}`;
-  return useStreamProgress<Record<string, never>, SwarmNodeAgentProgressItem>({
+  return useStreamProgress<Record<string, never>, NodeAgentProgress>({
     endpoint,
     method: params.action === 'remove' ? 'DELETE' : 'POST',
     request,
@@ -1622,7 +1552,7 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<RunInput, AutomationActionRunStreamItem>({
+  const state = useStreamProgress<RunInput, AutomationProgress>({
     endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
     request,
     successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',

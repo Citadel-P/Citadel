@@ -315,7 +315,11 @@ fn map_activity(row: sqlx::postgres::PgRow) -> Result<ActivityRecord, IdentityEr
         resource_id: row.try_get("resourceid").map_err(storage)?,
         platform_name: row.try_get("platform_name").map_err(storage)?,
         resource_name: row.try_get("resourcename").map_err(storage)?,
-        platform_status: row.try_get("platform_status").map_err(storage)?,
+        platform_status: row
+            .try_get::<String, _>("platform_status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         resource_type,
         event_type,
         status: ActivityStatus::from_database_str(&status).ok_or_else(|| {

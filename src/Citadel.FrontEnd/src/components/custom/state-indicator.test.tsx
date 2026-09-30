@@ -30,3 +30,8 @@ it('keeps resource-specific badge meanings and diagnostic details', () => {
   );
   expect(screen.getByText('Invalid')).toHaveAttribute('title', 'Credentials rejected');
 });
+
+it('shows unavailable backup repositories as an error', () => {
+  render(<StateIndicator variant="badge" value="Unavailable" />);
+  expect(screen.getByText('Unavailable')).toHaveClass('text-red-700');
+});

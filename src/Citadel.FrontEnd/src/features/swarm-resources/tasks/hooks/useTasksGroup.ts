@@ -1,4 +1,4 @@
-import type { PlatformCapabilities, SwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
+import type { PlatformCapabilitiesView, SwarmServiceView, SwarmTaskView } from '@/api/generated/api.types';
 import type { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
@@ -8,7 +8,7 @@ import { useLiveSwarmItems, useLiveSwarmResource } from '../../hooks/useSwarmRes
 
 export type SwarmTaskInfoView = SwarmTaskView & {
   platformId: string;
-  capabilities?: PlatformCapabilities | null;
+  capabilities?: PlatformCapabilitiesView | null;
 };
 
 const TASK_LIMIT = 200;

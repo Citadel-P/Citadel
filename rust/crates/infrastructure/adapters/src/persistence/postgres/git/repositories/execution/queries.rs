@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::WebhookConfig;
 
 impl PostgresGitRepositoryExecutionPersistence {
     pub(super) fn enqueue<'a>(
@@ -6,7 +7,7 @@ impl PostgresGitRepositoryExecutionPersistence {
         actor_id: ActorId,
         id: Uuid,
         branch: Option<&'a str>,
-        expected: Option<&'a GitRepositoryWebhook>,
+        expected: Option<&'a WebhookConfig>,
         trigger: &'a str,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         Box::pin(async move {
@@ -20,8 +21,8 @@ impl PostgresGitRepositoryExecutionPersistence {
             .map_err(storage)?
             .ok_or(GitRepositoryExecutionError::NotFound)?;
             if let Some(expected) = expected {
-                let value: Option<Value> = row.try_get("webhook").map_err(storage)?;
-                if value.as_ref().map(map_webhook).transpose()?.as_ref() != Some(expected) {
+                let value = row.try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>("webhook").map_err(storage)?.and_then(|v| v.0);
+                if value.as_ref() != Some(expected) {
                     return Err(GitRepositoryExecutionError::Conflict);
                 }
             }
@@ -164,17 +165,18 @@ impl PostgresGitRepositoryExecutionPersistence {
     pub(super) fn get_webhook_impl<'a>(
         &'a self,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<Option<GitRepositoryWebhook>, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'a, Result<Option<WebhookConfig>, GitRepositoryExecutionError>> {
         Box::pin(async move {
-            let value = sqlx::query_scalar::<_, Option<Value>>(
-                "SELECT webhook FROM gitrepositories WHERE id=$1",
-            )
+            let value = sqlx::query_scalar::<
+                _,
+                Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>,
+            >("SELECT webhook FROM gitrepositories WHERE id=$1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await
             .map_err(storage)?
             .ok_or(GitRepositoryExecutionError::NotFound)?;
-            value.as_ref().map(map_webhook).transpose()
+            Ok(value.and_then(|v| v.0))
         })
     }
 }

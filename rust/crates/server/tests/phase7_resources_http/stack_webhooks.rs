@@ -157,7 +157,7 @@ pub async fn verify(
         .await
         .unwrap();
     assert!(
-        matches!(&duplicate.draft.spec, citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. } if webhook.secret.is_none()),
+        matches!(&duplicate.draft.spec, citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. } if webhook.config.secret.is_none()),
         "duplicate config must not copy authentication credentials"
     );
 }

@@ -171,7 +171,7 @@ impl PostgresAlertRepository {
             let id = Uuid::now_v7();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let inserted = sqlx::query("INSERT INTO alertevents(id,alertruleid,type,severity,info,resourceid,resourcename,resourcetype,deduplicationkey,openincidentkey) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) ON CONFLICT (openincidentkey) WHERE openincidentkey IS NOT NULL DO NOTHING RETURNING id")
-                .bind(id).bind(event.alert_rule_id).bind(&event.alert_type).bind(&event.severity).bind(&event.info).bind(event.resource_id).bind(&event.resource_name).bind(&event.resource_type).bind(&event.deduplication_key)
+                .bind(id).bind(event.alert_rule_id).bind(&event.alert_type).bind(event.severity.as_str()).bind(&event.info).bind(event.resource_id).bind(&event.resource_name).bind(&event.resource_type).bind(&event.deduplication_key)
                 .fetch_optional(&mut *transaction).await.map_err(storage)?;
             match inserted {
                 Some(_) => {
@@ -206,12 +206,13 @@ impl PostgresAlertRepository {
             let rules = self.configured_rules(&observation.alert_type).await?;
             let advanced_alerting = !rules
                 .iter()
-                .any(|rule| rule.created_by_actor_id != Uuid::from_u128(1))
+                .any(|rule| rule.audit.created_by_actor_id.value() != Uuid::from_u128(1))
                 || self.entitlements.advanced_alerting().await?;
             let rules = rules
                 .iter()
                 .filter(|rule| {
-                    (advanced_alerting || rule.created_by_actor_id == Uuid::from_u128(1))
+                    (advanced_alerting
+                        || rule.audit.created_by_actor_id.value() == Uuid::from_u128(1))
                         && rule_applies(rule, observation.resource_id)
                         && !is_in_quiet_hours(&rule.quiet_hours, observation.observed_at)
                 })

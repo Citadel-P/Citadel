@@ -139,21 +139,31 @@ pub(super) fn map_action(row: sqlx::postgres::PgRow) -> Result<AutomationAction,
         schedule_cron: row.try_get("schedulecron").map_err(storage)?,
         schedule_time_zone: row.try_get("scheduletimezone").map_err(storage)?,
         webhook: row
-            .try_get::<Option<sqlx::types::Json<Option<RepoWebhookConfig>>>, _>("webhook")
+            .try_get::<Option<sqlx::types::Json<Option<WebhookConfig>>>, _>("webhook")
             .map_err(storage)?
             .and_then(|sqlx::types::Json(value)| value),
         timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,
         alert_on_failure: row.try_get("alertonfailure").map_err(storage)?,
         run_as_actor_id: row.try_get("runasactorid").map_err(storage)?,
-        control_state: row.try_get("controlstate").map_err(storage)?,
+        control_state: row
+            .try_get::<String, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         current_run_id: row.try_get("currentrunid").map_err(storage)?,
         row_version: row.try_get("rowversion").map_err(storage)?,
-        created_by_actor_id: row.try_get("createdbyactorid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
+
         updated_at: row.try_get("updatedat").map_err(storage)?,
         last_scheduled_run_at: row.try_get("lastscheduledrunat").map_err(storage)?,
         tags: Vec::new(),
         latest_run: None,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: row.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                row.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
     })
 }
 
@@ -163,7 +173,11 @@ pub(super) fn map_run(row: sqlx::postgres::PgRow) -> Result<AutomationRun, Autom
         action_id: row.try_get("actionid").map_err(storage)?,
         action_name: row.try_get("actionname").map_err(storage)?,
         trigger: row.try_get("trigger").map_err(storage)?,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         run_as_actor_id: row.try_get("runasactorid").map_err(storage)?,
         triggered_by_actor_id: row.try_get("triggeredbyactorid").map_err(storage)?,
         args_json: row

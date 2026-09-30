@@ -1,3 +1,4 @@
+use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
 use citadel_platforms::PlatformInfoPort;
 use std::ffi::OsString;
 
@@ -247,21 +248,22 @@ impl BackupExecutor for DockerResticBackupExecutor {
                         Ok(retention_logs) => {
                             logs.extend(retention_logs);
                             if warnings.is_empty() {
-                                "Succeeded"
+                                citadel_backups::BackupRunStatus::Succeeded
                             } else {
-                                "SucceededWithWarnings"
+                                citadel_backups::BackupRunStatus::SucceededWithWarnings
                             }
                         }
                         Err(error) => {
                             warnings.push(format!(
                                 "Snapshot was created, but retention failed: {error}"
                             ));
-                            "SucceededWithWarnings"
+                            citadel_backups::BackupRunStatus::SucceededWithWarnings
                         }
                     };
                     BackupExecutionResult {
                         status,
-                        snapshot_availability: "Available",
+                        snapshot_availability:
+                            citadel_backups::BackupSnapshotAvailability::Available,
                         restic_snapshot_id: snapshot,
                         parent_snapshot_id: None,
                         files_processed: summary.files_processed,
@@ -289,7 +291,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
         Box::pin(async move {
             match self.run_restore(claim, cancellation).await {
                 Ok(logs) => RestoreExecutionResult {
-                    status: "Succeeded",
+                    status: citadel_backups::BackupRestoreStatus::Succeeded,
                     exit_code: Some(0),
                     error_code: None,
                     error_message: None,
@@ -297,9 +299,9 @@ impl BackupExecutor for DockerResticBackupExecutor {
                 },
                 Err(error) => RestoreExecutionResult {
                     status: if cancellation.is_cancelled() {
-                        "Cancelled"
+                        citadel_backups::BackupRestoreStatus::Cancelled
                     } else {
-                        "Failed"
+                        citadel_backups::BackupRestoreStatus::Failed
                     },
                     exit_code: None,
                     error_code: Some(
@@ -438,7 +440,7 @@ impl DockerResticBackupExecutor {
                     logs.extend(item_logs);
                     results.push(BackupRunItemResult {
                         id: item.id,
-                        status: "Succeeded",
+                        status: citadel_backups::BackupRunItemStatus::Succeeded,
                         restic_snapshot_id: Some(snapshot),
                         parent_snapshot_id: summary.parent_snapshot_id,
                         files_processed: summary.files_processed,
@@ -454,9 +456,9 @@ impl DockerResticBackupExecutor {
                     results.push(BackupRunItemResult {
                         id: item.id,
                         status: if cancellation.is_cancelled() {
-                            "Cancelled"
+                            citadel_backups::BackupRunItemStatus::Cancelled
                         } else {
-                            "Failed"
+                            citadel_backups::BackupRunItemStatus::Failed
                         },
                         restic_snapshot_id: None,
                         parent_snapshot_id: None,
@@ -1295,22 +1297,23 @@ impl DockerResticBackupExecutor {
         &self,
         repository: &BackupRepository,
     ) -> Result<std::collections::HashMap<String, String>, String> {
-        if repository.repository_type != "S3Compatible" {
+        let BackupRepositorySpec::S3Compatible {
+            endpoint,
+            bucket,
+            prefix,
+            access_key_secret_id,
+            secret_key_secret_id,
+            session_token_secret_id,
+            ..
+        } = &repository.spec
+        else {
             return Err(
                 "Agent backup execution currently requires an S3-compatible Backup Repository."
                     .to_owned(),
             );
-        }
-        let endpoint = required(&repository.spec, "endpoint")?
-            .trim()
-            .trim_end_matches('/');
-        let bucket = required(&repository.spec, "bucket")?;
-        let prefix = repository
-            .spec
-            .get("prefix")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim_matches('/');
+        };
+        let endpoint = endpoint.trim().trim_end_matches('/');
+        let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
         let location = if prefix.is_empty() {
             format!("s3:{endpoint}/{bucket}")
         } else {
@@ -1327,25 +1330,20 @@ impl DockerResticBackupExecutor {
             ),
             ("RESTIC_REPOSITORY".to_owned(), location),
         ]);
-        for (field, key) in [
-            ("accessKeySecretId", "AWS_ACCESS_KEY_ID"),
-            ("secretKeySecretId", "AWS_SECRET_ACCESS_KEY"),
+        for (id, key) in [
+            (*access_key_secret_id, "AWS_ACCESS_KEY_ID"),
+            (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
         ] {
             environment.insert(
                 key.to_owned(),
                 self.secrets
-                    .resolve(uuid_field(&repository.spec, field)?)
+                    .resolve(id)
                     .await
                     .map_err(|error| error.to_string())?
                     .to_string(),
             );
         }
-        if let Some(id) = repository
-            .spec
-            .get("sessionTokenSecretId")
-            .and_then(Value::as_str)
-            .and_then(|value| Uuid::parse_str(value).ok())
-        {
+        if let Some(id) = *session_token_secret_id {
             environment.insert(
                 "AWS_SESSION_TOKEN".to_owned(),
                 self.secrets
@@ -1382,10 +1380,9 @@ impl DockerResticBackupExecutor {
             "RESTIC_REPOSITORY".into(),
         ];
         let mut env = vec![("RESTIC_PASSWORD".into(), OsString::from(password.as_str()))];
-        match repo.repository_type.as_str() {
-            "FileSystem" => {
-                let path = required(&repo.spec, "path")?;
-                let path = if required(&repo.spec, "location")? == "Core" {
+        match &repo.spec {
+            BackupRepositorySpec::FileSystem { location, path, .. } => {
+                let path = if *location == BackupExecutionLocation::Core {
                     self.core_repository_path(path)?.display().to_string()
                 } else {
                     path.to_owned()
@@ -1393,47 +1390,37 @@ impl DockerResticBackupExecutor {
                 args.extend(["--volume".into(), format!("{path}:/repository").into()]);
                 env.push(("RESTIC_REPOSITORY".into(), "/repository".into()));
             }
-            "S3Compatible" => {
-                let endpoint = required(&repo.spec, "endpoint")?
-                    .trim()
-                    .trim_end_matches('/');
-                let bucket = required(&repo.spec, "bucket")?;
-                let prefix = repo
-                    .spec
-                    .get("prefix")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .trim_matches('/');
+            BackupRepositorySpec::S3Compatible {
+                endpoint,
+                bucket,
+                prefix,
+                access_key_secret_id,
+                secret_key_secret_id,
+                session_token_secret_id,
+                ..
+            } => {
+                let endpoint = endpoint.trim().trim_end_matches('/');
+                let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
                 let repository = if prefix.is_empty() {
                     format!("s3:{endpoint}/{bucket}")
                 } else {
                     format!("s3:{endpoint}/{bucket}/{prefix}")
                 };
                 env.push(("RESTIC_REPOSITORY".into(), repository.into()));
-                for (field, key) in [
-                    ("accessKeySecretId", "AWS_ACCESS_KEY_ID"),
-                    ("secretKeySecretId", "AWS_SECRET_ACCESS_KEY"),
+                for (id, key) in [
+                    (*access_key_secret_id, "AWS_ACCESS_KEY_ID"),
+                    (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
                 ] {
-                    let secret = self
-                        .secrets
-                        .resolve(uuid_field(&repo.spec, field)?)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let secret = self.secrets.resolve(id).await.map_err(|e| e.to_string())?;
                     args.extend(["--env".into(), key.into()]);
                     env.push((key.into(), OsString::from(secret.as_str())));
                 }
-                if let Some(id) = repo
-                    .spec
-                    .get("sessionTokenSecretId")
-                    .and_then(Value::as_str)
-                    .and_then(|v| Uuid::parse_str(v).ok())
-                {
+                if let Some(id) = *session_token_secret_id {
                     let secret = self.secrets.resolve(id).await.map_err(|e| e.to_string())?;
                     args.extend(["--env".into(), "AWS_SESSION_TOKEN".into()]);
                     env.push(("AWS_SESSION_TOKEN".into(), OsString::from(secret.as_str())));
                 }
             }
-            other => return Err(format!("Backup Repository type '{other}' is unsupported.")),
         }
         Ok((args, env))
     }
@@ -1448,44 +1435,38 @@ impl DockerResticBackupExecutor {
             .await
             .map_err(|error| error.to_string())?;
         let mut environment = vec![("RESTIC_PASSWORD".into(), OsString::from(password.as_str()))];
-        let location = match repository.repository_type.as_str() {
-            "FileSystem" => {
-                if required(&repository.spec, "location")? != "Core" {
+        let location = match &repository.spec {
+            BackupRepositorySpec::FileSystem { location, path, .. } => {
+                if *location != BackupExecutionLocation::Core {
                     return Err(
                         "Citadel system backup requires a Core or S3-compatible repository.".into(),
                     );
                 }
-                self.core_repository_path(required(&repository.spec, "path")?)?
-                    .into_os_string()
+                self.core_repository_path(path)?.into_os_string()
             }
-            "S3Compatible" => {
-                let endpoint = required(&repository.spec, "endpoint")?
-                    .trim()
-                    .trim_end_matches('/');
-                let bucket = required(&repository.spec, "bucket")?;
-                let prefix = repository
-                    .spec
-                    .get("prefix")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .trim_matches('/');
-                for (field, key) in [
-                    ("accessKeySecretId", "AWS_ACCESS_KEY_ID"),
-                    ("secretKeySecretId", "AWS_SECRET_ACCESS_KEY"),
+            BackupRepositorySpec::S3Compatible {
+                endpoint,
+                bucket,
+                prefix,
+                access_key_secret_id,
+                secret_key_secret_id,
+                session_token_secret_id,
+                ..
+            } => {
+                let endpoint = endpoint.trim().trim_end_matches('/');
+                let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
+                for (id, key) in [
+                    (*access_key_secret_id, "AWS_ACCESS_KEY_ID"),
+                    (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
                 ] {
                     let value = self
                         .secrets
-                        .resolve(uuid_field(&repository.spec, field)?)
+                        .resolve(id)
                         .await
                         .map_err(|error| error.to_string())?;
                     environment.push((key.into(), OsString::from(value.as_str())));
                 }
-                if let Some(id) = repository
-                    .spec
-                    .get("sessionTokenSecretId")
-                    .and_then(Value::as_str)
-                    .and_then(|value| Uuid::parse_str(value).ok())
-                {
+                if let Some(id) = *session_token_secret_id {
                     let value = self
                         .secrets
                         .resolve(id)
@@ -1499,7 +1480,6 @@ impl DockerResticBackupExecutor {
                     format!("s3:{endpoint}/{bucket}/{prefix}").into()
                 }
             }
-            kind => return Err(format!("Backup Repository type '{kind}' is unsupported.")),
         };
         Ok((location, environment))
     }
@@ -1510,10 +1490,13 @@ impl DockerResticBackupExecutor {
         location: &str,
         platform_id: Option<Uuid>,
     ) -> Result<(), String> {
-        if repository.repository_type == "FileSystem"
-            && required(&repository.spec, "location")? == "Core"
+        if let BackupRepositorySpec::FileSystem {
+            location: BackupExecutionLocation::Core,
+            path,
+            ..
+        } = &repository.spec
         {
-            self.core_repository_path(required(&repository.spec, "path")?)?;
+            self.core_repository_path(path)?;
         }
         match location {
             "Core" if platform_id.is_none() => {}
@@ -1526,10 +1509,14 @@ impl DockerResticBackupExecutor {
             }
             _ => return Err("Backup Repository operation location is invalid.".to_owned()),
         }
-        if repository.repository_type == "FileSystem"
-            && required(&repository.spec, "location")? == "Platform"
+        if let BackupRepositorySpec::FileSystem {
+            location: BackupExecutionLocation::Platform,
+            platform_id: repository_platform,
+            ..
+        } = &repository.spec
         {
-            let repository_platform = uuid_field(&repository.spec, "platformId")?;
+            let repository_platform =
+                repository_platform.ok_or_else(|| "Repository Platform is required.".to_owned())?;
             self.targets.require_local(repository_platform).await?;
             if location != "Platform" || platform_id != Some(repository_platform) {
                 return Err(
@@ -1802,8 +1789,12 @@ fn failed_backup(
     items: Vec<BackupRunItemResult>,
 ) -> BackupExecutionResult {
     BackupExecutionResult {
-        status: if cancelled { "Cancelled" } else { "Failed" },
-        snapshot_availability: "NotCreated",
+        status: if cancelled {
+            citadel_backups::BackupRunStatus::Cancelled
+        } else {
+            citadel_backups::BackupRunStatus::Failed
+        },
+        snapshot_availability: citadel_backups::BackupSnapshotAvailability::NotCreated,
         restic_snapshot_id: None,
         parent_snapshot_id: None,
         files_processed: None,
@@ -1880,20 +1871,6 @@ fn redact(value: &str) -> String {
         .join("\n")
 }
 
-fn required<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|v| !v.trim().is_empty())
-        .ok_or_else(|| format!("Backup field '{key}' is missing."))
-}
-
-fn uuid_field(value: &Value, key: &str) -> Result<Uuid, String> {
-    required(value, key).and_then(|value| {
-        Uuid::parse_str(value).map_err(|_| format!("Backup field '{key}' is invalid."))
-    })
-}
-
 fn policy_tag(id: Uuid) -> String {
     format!("citadel-policy-{id}")
 }
@@ -1935,19 +1912,26 @@ mod tests {
             normalized_name: "test".into(),
             description: None,
             repository_type: "FileSystem".into(),
-            spec: serde_json::json!({"location":"Core","path":"../outside"}),
+            spec: serde_json::from_value(
+                serde_json::json!({"$type":"FileSystem","location":"Core","path":"../outside"}),
+            )
+            .unwrap(),
             password_secret_id: Uuid::now_v7(),
-            status: "Unknown".into(),
-            control_state: "Idle".into(),
+            status: citadel_backups::BackupRepositoryStatus::Unknown,
+            control_state: citadel_primitives::ResourceControlState::Idle,
             current_run_id: None,
             control_started_at: None,
             last_pruned_at: None,
             last_checked_at: None,
-            created_by_actor_id: Uuid::now_v7(),
-            created_at: now,
+
             updated_at: now,
             archived_at: None,
             row_version: 1,
+
+            audit: citadel_primitives::AuditMetadata {
+                created_at: now,
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+            },
         };
         let error = executor
             .repository(

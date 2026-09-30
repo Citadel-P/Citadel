@@ -1,5 +1,9 @@
 //! Docker/Agent inventory JSON projected into the existing public resource fields.
 //! Move selected fields; never rename user-owned dictionary keys recursively.
+use super::{
+    inventory_views::NetworkIpamView,
+    inventory_views::{NetworkAttachmentView, NetworkPeerView},
+};
 use serde_json::{Value, json};
 
 fn project(value: Value, fields: &[(&str, &str)]) -> Value {
@@ -28,7 +32,7 @@ fn array(value: Value, map: fn(Value) -> Value) -> Value {
     })
 }
 
-pub(crate) fn ipam(value: Value) -> Value {
+pub(crate) fn ipam(value: Value) -> Result<Option<NetworkIpamView>, serde_json::Error> {
     let mut value = project(
         value,
         &[
@@ -38,7 +42,7 @@ pub(crate) fn ipam(value: Value) -> Value {
         ],
     );
     if value.is_null() {
-        return value;
+        return Ok(None);
     }
     value["config"] = array(value["config"].take(), |v| {
         project(
@@ -53,10 +57,10 @@ pub(crate) fn ipam(value: Value) -> Value {
     if value["options"].is_null() {
         value["options"] = json!({});
     }
-    value
+    serde_json::from_value(value)
 }
-pub(crate) fn network_container(value: Value) -> Value {
-    project(
+pub(crate) fn network_container(value: Value) -> Result<NetworkAttachmentView, serde_json::Error> {
+    serde_json::from_value(project(
         value,
         &[
             ("Name", "name"),
@@ -65,10 +69,10 @@ pub(crate) fn network_container(value: Value) -> Value {
             ("IPv4Address", "ipV4Address"),
             ("IPv6Address", "ipv6Address"),
         ],
-    )
+    ))
 }
-pub(crate) fn peer(value: Value) -> Value {
-    project(value, &[("Name", "name"), ("IP", "ip")])
+pub(crate) fn peer(value: Value) -> Result<NetworkPeerView, serde_json::Error> {
+    serde_json::from_value(project(value, &[("Name", "name"), ("IP", "ip")]))
 }
 
 pub(crate) fn cluster_volume(value: Value) -> Value {
@@ -184,22 +188,25 @@ mod tests {
     }
     #[test]
     fn network_fields_match_the_frontend_and_preserve_dictionary_keys() {
-        let value = ipam(
+        let value = serde_json::to_value(ipam(
             json!({"Driver":"default", "Options":{"Mixed.Option":"yes"}, "Config":[{"Subnet":"10.0.0.0/24", "IPRange":"10.0.0.0/25", "Gateway":"10.0.0.1", "AuxiliaryAddresses":{"Hidden":"unused"}}]}),
-        );
+        ).unwrap()).unwrap();
         assert_eq!(
             value["config"][0],
             json!({"subnet":"10.0.0.0/24", "ipRange":"10.0.0.0/25", "gateway":"10.0.0.1"})
         );
         assert_eq!(value["options"]["Mixed.Option"], "yes");
-        assert_eq!(ipam(value.clone()), value);
-        let c = network_container(
-            json!({"Name":"web", "EndpointID":"ep", "MacAddress":"mac", "IPv4Address":"10.0.0.2/24", "IPv6Address":"::2/64"}),
+        assert_eq!(
+            serde_json::to_value(ipam(value.clone()).unwrap()).unwrap(),
+            value
         );
+        let c = serde_json::to_value(network_container(
+            json!({"Name":"web", "EndpointID":"ep", "MacAddress":"mac", "IPv4Address":"10.0.0.2/24", "IPv6Address":"::2/64"}),
+        ).unwrap()).unwrap();
         assert_eq!(c["ipV4Address"], "10.0.0.2/24");
         assert_eq!(c["endpointId"], "ep");
         assert_eq!(
-            peer(json!({"Name":"node", "IP":"10.0.0.3"})),
+            serde_json::to_value(peer(json!({"Name":"node", "IP":"10.0.0.3"})).unwrap()).unwrap(),
             json!({"name":"node", "ip":"10.0.0.3"})
         );
         assert!(system_network("HOST", false));

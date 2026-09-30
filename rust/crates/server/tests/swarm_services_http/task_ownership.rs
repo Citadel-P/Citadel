@@ -59,7 +59,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
             .await
             .unwrap()
             .control_state,
-        "Idle"
+        citadel_primitives::ResourceControlState::Idle
     );
     assert_eq!(
         service.observe_active_operations(None, 25).await.unwrap(),
@@ -75,9 +75,12 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
     let applied = repository.get_authorized(actor, true, id).await.unwrap();
     assert_eq!(
         applied.current_operation.as_ref().unwrap().state,
-        "Completed"
+        citadel_swarm_services::SwarmServiceOperationState::Completed
     );
-    assert_eq!(applied.control_state, "Idle");
+    assert_eq!(
+        applied.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     let version = applied.row_version;
     // Service claims live inside the accepted task, so rejection never creates
     // an operation or consumes a semaphore permit permanently.
@@ -116,8 +119,14 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
         .await
         .unwrap();
     let unknown = repository.get_authorized(actor, true, id).await.unwrap();
-    assert_eq!(unknown.control_state, "Idle");
-    assert_eq!(unknown.current_operation.unwrap().state, "OutcomeUnknown");
+    assert_eq!(
+        unknown.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
+    assert_eq!(
+        unknown.current_operation.as_ref().unwrap().state,
+        citadel_swarm_services::SwarmServiceOperationState::OutcomeUnknown
+    );
 }
 
 struct CancellingRuntime(tokio::sync::Notify);

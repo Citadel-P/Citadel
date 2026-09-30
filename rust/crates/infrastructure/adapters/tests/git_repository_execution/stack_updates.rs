@@ -48,7 +48,7 @@ pub async fn verify(
         git.clone(),
     );
     for relevant in [false, true] {
-        if let Some(StackSpec::Git { watch_paths, .. }) = &mut stack.spec {
+        if let Some(StackSpec::Git { watch_paths, .. }) = &mut stack.resource.spec {
             *watch_paths = if relevant {
                 vec!["config/**".into()]
             } else {
@@ -80,7 +80,7 @@ pub async fn verify(
             relevant.then_some(remote)
         );
     }
-    if let Some(StackSpec::Git { commit_sha, .. }) = &mut stack.spec {
+    if let Some(StackSpec::Git { commit_sha, .. }) = &mut stack.resource.spec {
         *commit_sha = Some(applied.into());
     }
     assert!(

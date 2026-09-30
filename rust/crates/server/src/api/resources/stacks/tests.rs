@@ -116,19 +116,4 @@ fn stack_schemas_describe_native_requests_streams_and_shared_types() {
             "#/components/schemas/PatchStackMetadataInput"
         );
     }
-    let compatibility = crate::openapi::compatibility::schemas();
-    for name in [
-        "ActorType",
-        "PlatformType",
-        "ResourceBindingKind",
-        "ResourceBindingScope",
-        "SecretDeliveryMode",
-        "DuplicateSourceInput",
-        "StackIds",
-        "StackStreamItems",
-        "StackStreamItem",
-        "StackApplyEventType",
-    ] {
-        assert!(!compatibility.contains_key(name), "{name} is still frozen");
-    }
 }

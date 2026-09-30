@@ -1,15 +1,19 @@
 use crate::api::resources::{
+    activities::views::LatestActivityView,
     capabilities::ResourceCapabilitiesView,
-    git_repositories::spec::{GitRepositorySyncMode, RepoCommand},
+    git_repositories::spec::{
+        GitRepositoryRefStatus, GitRepositoryStatus, GitRepositorySyncMode, RepoCommand,
+    },
     tags::views::TagSummary,
 };
 use chrono::{DateTime, Utc};
 use citadel_git::RemoteBranch;
+use citadel_primitives::ResourceControlState;
+use citadel_primitives::WebhookConfig;
 use serde::Serialize;
-use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitDirectoryListing {
     pub repository_id: Uuid,
@@ -33,7 +37,7 @@ impl From<citadel_git::GitDirectoryListing> for GitDirectoryListing {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitDirectoryEntry {
     pub name: String,
@@ -58,7 +62,7 @@ impl From<citadel_git::GitDirectoryEntry> for GitDirectoryEntry {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
 pub enum GitEntryTypeView {
     Directory,
     File,
@@ -88,7 +92,7 @@ impl From<GitEntryTypeView> for citadel_git::GitBrowserEntryType {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitFileContent {
     pub repository_id: Uuid,
@@ -121,7 +125,7 @@ impl From<citadel_git::GitFileContent> for GitFileContent {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitComparison {
     pub repository_id: Uuid,
@@ -143,7 +147,7 @@ impl From<citadel_git::GitCommitComparison> for GitCommitComparison {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitComposeDiscovery {
     pub repository_id: Uuid,
@@ -163,7 +167,7 @@ impl From<citadel_git::GitComposeDiscovery> for GitComposeDiscovery {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitComposeProjectCandidate {
     pub working_directory: String,
@@ -191,16 +195,18 @@ pub struct GitRepositoryRefView {
     pub branch: String,
     #[schema(required = true)]
     pub resolved_commit_sha: Option<String>,
-    #[schema(value_type = crate::openapi::compatibility::GitReposStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::git::GitRepositoryRefStatusSchema)]
+    pub status: GitRepositoryRefStatus,
     #[schema(required = true)]
     pub last_error: Option<String>,
     pub last_synced_at: DateTime<Utc>,
 }
 
-impl From<citadel_git::GitRepositoryRef> for GitRepositoryRefView {
-    fn from(value: citadel_git::GitRepositoryRef) -> Self {
-        Self {
+impl TryFrom<citadel_git::GitRepositoryRef> for GitRepositoryRefView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_git::GitRepositoryRef) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             git_repository_id: value.git_repository_id,
             branch: value.branch,
@@ -208,11 +214,11 @@ impl From<citadel_git::GitRepositoryRef> for GitRepositoryRefView {
             status: value.status,
             last_error: value.last_error,
             last_synced_at: value.last_synced_at,
-        }
+        })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub enum GitChangedPathStatus {
     Added,
     Modified,
@@ -248,7 +254,7 @@ impl From<GitChangedPathStatus> for citadel_git::GitChangedPathStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitChangedPath {
     pub status: GitChangedPathStatus,
@@ -280,26 +286,28 @@ pub struct GitRepositoryView {
     pub sync_mode: GitRepositorySyncMode,
     #[schema(required = true)]
     pub sync_interval_minutes: Option<i32>,
-    #[schema(value_type = Option<crate::openapi::compatibility::RepoWebhookConfig>, required = true)]
-    pub webhook: Option<Value>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     #[schema(required = true)]
     pub on_clone: Option<RepoCommand>,
     #[schema(required = true)]
     pub on_pull: Option<RepoCommand>,
-    #[schema(value_type = crate::openapi::compatibility::GitReposStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::git::GitRepositoryStatusSchema)]
+    pub status: GitRepositoryStatus,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
-    #[schema(value_type = Option<crate::api::resources::activities::views::LatestActivityView>, required = true)]
-    pub latest_activity_view: Option<Value>,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
+    #[schema(required = true)]
+    pub latest_activity_view: Option<LatestActivityView>,
     pub tags: Vec<TagSummary>,
 }
 
-impl From<citadel_git::GitRepository> for GitRepositoryView {
-    fn from(value: citadel_git::GitRepository) -> Self {
-        Self {
+impl TryFrom<citadel_git::GitRepository> for GitRepositoryView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_git::GitRepository) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             name: value.name,
             description: value.description,
@@ -312,15 +320,12 @@ impl From<citadel_git::GitRepository> for GitRepositoryView {
             on_clone: value.on_clone.map(|v| v.into()),
             on_pull: value.on_pull.map(|v| v.into()),
             status: value.status,
-            created_at: value.created_at,
-            created_by_actor_id: value.created_by_actor_id,
+            created_at: value.audit.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
             control_state: value.control_state,
-            latest_activity_view:
-                crate::api::resources::activities::presentation::public_latest_activity(
-                    value.latest_activity,
-                ),
+            latest_activity_view: value.latest_activity.map(LatestActivityView::from),
             tags: value.tags.into_iter().map(Into::into).collect(),
-        }
+        })
     }
 }
 
@@ -381,8 +386,8 @@ pub(crate) struct GitRepositoryConfigResponse {
     pub(crate) sync_mode: GitRepositorySyncMode,
     #[schema(required = true)]
     pub(crate) sync_interval_minutes: Option<i32>,
-    #[schema(value_type = Option<crate::openapi::compatibility::RepoWebhookConfig>, required = true)]
-    pub(crate) webhook: Option<Value>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub(crate) webhook: Option<WebhookConfig>,
     #[schema(required = true)]
     pub(crate) on_clone: Option<RepoCommand>,
     #[schema(required = true)]

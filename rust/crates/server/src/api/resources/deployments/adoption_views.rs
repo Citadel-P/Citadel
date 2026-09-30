@@ -56,6 +56,7 @@ pub struct AdoptionDeploymentDraft {
     pub platform_id: Uuid,
     #[schema(required = true)]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
     pub tag_ids: Vec<Uuid>,
 }
@@ -66,7 +67,7 @@ impl From<citadel_deployments::adoption::AdoptionDeploymentDraft> for AdoptionDe
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec,
             tag_ids: value.tag_ids,
         }
     }

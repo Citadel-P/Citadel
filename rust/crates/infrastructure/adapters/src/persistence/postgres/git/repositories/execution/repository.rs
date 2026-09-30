@@ -1,3 +1,4 @@
+use citadel_primitives::WebhookConfig;
 #[derive(Clone)]
 pub struct PostgresGitRepositoryExecutionPersistence {
     pub(super) pool: PgPool,
@@ -46,7 +47,7 @@ impl GitRepositoryExecutionPersistence for PostgresGitRepositoryExecutionPersist
         actor_id: ActorId,
         id: Uuid,
         branch: &'a str,
-        expected: &'a GitRepositoryWebhook,
+        expected: &'a WebhookConfig,
     ) -> BoxFuture<'a, Result<(), GitRepositoryExecutionError>> {
         self.enqueue_webhook_impl(actor_id, id, branch, expected)
     }
@@ -107,7 +108,7 @@ impl GitRepositoryExecutionPersistence for PostgresGitRepositoryExecutionPersist
     fn get_webhook<'a>(
         &'a self,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<Option<GitRepositoryWebhook>, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'a, Result<Option<WebhookConfig>, GitRepositoryExecutionError>> {
         self.get_webhook_impl(id)
     }
 }

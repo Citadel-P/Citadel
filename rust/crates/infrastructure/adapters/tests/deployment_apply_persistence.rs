@@ -504,15 +504,16 @@ async fn assert_activity(
         .get_authorized(ActorId::new(SYSTEM_ACTOR_ID), true, deployment_id)
         .await
         .unwrap();
-    let latest = detail.latest_activity.unwrap();
-    assert_eq!(latest["status"], expected_status);
+    let latest = detail.latest_activity.as_ref().unwrap();
+    assert_eq!(latest.status.as_database_str(), expected_status);
     assert_eq!(
         latest
-            .pointer("/info/Result/Message")
+            .info
+            .pointer("/Result/Message")
             .and_then(Value::as_str),
         expected_message
     );
-    assert!(latest["info"].get("Result").is_some());
+    assert!(latest.info.get("Result").is_some());
     assert_eq!(status, expected_status);
     assert_eq!(
         info.pointer("/Result/Message").and_then(Value::as_str),

@@ -53,7 +53,7 @@ pub struct DeletionClaim {
     pub name: String,
     pub docker_container_ids: Vec<String>,
     pub row_version: i64,
-    pub previous_status: String,
+    pub previous_status: crate::DeploymentStatus,
     pub description: Option<String>,
     pub spec: DeploymentSpec,
 }

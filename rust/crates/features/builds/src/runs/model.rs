@@ -18,7 +18,7 @@ pub struct BuildRun {
     pub image_repository: String,
     pub image_references: Vec<String>,
     pub trigger: String,
-    pub status: String,
+    pub status: BuildRunStatus,
     pub image_digest: Option<String>,
     pub timeout_seconds: i32,
     pub queued_at: DateTime<Utc>,
@@ -38,7 +38,7 @@ pub struct BuildClaim {
 
 #[derive(Debug, Clone)]
 pub struct BuildExecutionResult {
-    pub status: &'static str,
+    pub status: BuildRunStatus,
     pub exit_code: Option<i32>,
     pub image_digest: Option<String>,
     pub resolved_commit_sha: Option<String>,

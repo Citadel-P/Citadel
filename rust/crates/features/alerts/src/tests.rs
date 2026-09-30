@@ -57,11 +57,11 @@ fn rejects_duplicate_channel_bindings() {
         name: "failure".into(),
         description: None,
         alert_type: "BuildRunFailed".into(),
-        severity: "Critical".into(),
+        severity: crate::AlertSeverity::Critical,
         cooldown_seconds: Some(60),
         required_matches: None,
         threshold: None,
-        status: "Enabled".into(),
+        status: crate::AlertRuleStatus::Enabled,
         channel_ids: vec![id, id],
         limited_to: vec![],
         quiet_hours: vec![],
@@ -74,4 +74,28 @@ fn delivery_retry_backoff_is_bounded() {
     assert_eq!(retry_delay(1), chrono::Duration::seconds(1));
     assert_eq!(retry_delay(4), chrono::Duration::minutes(2));
     assert_eq!(retry_delay(i32::MAX), chrono::Duration::minutes(30));
+}
+
+#[test]
+fn rule_status_defaults_to_enabled_and_preserves_disabled_in_audit_snapshots() {
+    let input = serde_json::json!({"type":"PlatformUnreachable","severity":"Warning"});
+    let default: AlertRuleConfiguration = serde_json::from_value(input.clone()).unwrap();
+    assert_eq!(default.status, AlertRuleStatus::Enabled);
+    for status in AlertRuleStatus::ALL {
+        let mut value = input.clone();
+        value["status"] = serde_json::to_value(status).unwrap();
+        let configuration: AlertRuleConfiguration = serde_json::from_value(value).unwrap();
+        assert_eq!(configuration.status, *status);
+        assert_eq!(configuration.snapshot(Uuid::nil()).status, status.as_str());
+        assert_eq!(status.as_str().parse::<AlertRuleStatus>().unwrap(), *status);
+    }
+    for invalid in [
+        serde_json::json!("enabled"),
+        serde_json::json!("Active"),
+        serde_json::Value::Null,
+    ] {
+        let mut value = input.clone();
+        value["status"] = invalid;
+        assert!(serde_json::from_value::<AlertRuleConfiguration>(value).is_err());
+    }
 }

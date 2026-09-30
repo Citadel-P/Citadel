@@ -35,11 +35,11 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
     ] {
         if operation == "scale" {
             // Use the application writer: direct SQL leaves the earlier denial cached.
-            use citadel_identity::{UserPatchMutation, UserRepository, UserResourceAccessInput};
+            use citadel_identity::{ResourceAccessInput, UserPatchMutation, UserRepository};
             use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
             citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone())
                 .patch(user, &UserPatchMutation {
-                    resource_accesses: Some(vec![UserResourceAccessInput {
+                    resource_accesses: Some(vec![ResourceAccessInput {
                         resource_type: ResourceType::SwarmService, resource_id: id,
                         permission_level: PermissionLevel::Write,
                         specific_permissions: vec![SpecificPermission::Apply],

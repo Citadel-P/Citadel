@@ -7,12 +7,12 @@ use citadel_deployments::permissions::{
     ApplyDeployment, DeleteDeployment, ReadDeployment, ReadDeploymentBindings, WriteDeployment,
 };
 use citadel_deployments::{
-    ApplyClaim, AutoUpdateState, CreateDeployment, DeletionClaim, Deployment,
-    DeploymentBindingSnapshot, DeploymentDetails, DeploymentDraft, DeploymentDuplicateDraft,
-    DeploymentError, DeploymentFilter, DeploymentImageInfo, DeploymentRepository, DeploymentSpec,
-    DuplicateSource, DuplicateWarning, FieldPatch, RuntimeContainerState, RuntimeDeploymentResult,
-    UpdateDeploymentMetadata,
+    ApplyClaim, CreateDeployment, DeletionClaim, Deployment, DeploymentBindingSnapshot,
+    DeploymentDraft, DeploymentDuplicateDraft, DeploymentError, DeploymentFilter,
+    DeploymentImageInfo, DeploymentRepository, DeploymentSpec, DuplicateSource, DuplicateWarning,
+    PatchField, RuntimeContainerState, RuntimeDeploymentResult, UpdateDeploymentMetadata,
 };
+use citadel_primitives::AutoUpdateState;
 use citadel_primitives::{
     ActorId, EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
     SpecificPermissions,

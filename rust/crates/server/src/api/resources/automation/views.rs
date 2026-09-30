@@ -1,5 +1,7 @@
-use crate::api::resources::git_repositories::webhook::RepoWebhookConfig;
+use super::spec::{AutomationRunStatus, AutomationRunTrigger};
 use chrono::{DateTime, Utc};
+use citadel_primitives::ResourceControlState;
+use citadel_primitives::WebhookConfig;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -17,13 +19,13 @@ pub struct AutomationActionView {
     #[schema(required = true)]
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: String,
-    #[schema(required = true)]
-    pub webhook: Option<RepoWebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
     pub row_version: i64,
@@ -37,9 +39,10 @@ pub struct AutomationActionView {
     pub latest_run: Option<AutomationRunView>,
 }
 
-impl From<citadel_automation::AutomationAction> for AutomationActionView {
-    fn from(value: citadel_automation::AutomationAction) -> Self {
-        Self {
+impl TryFrom<citadel_automation::AutomationAction> for AutomationActionView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_automation::AutomationAction) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             name: value.name,
             description: value.description,
@@ -49,20 +52,23 @@ impl From<citadel_automation::AutomationAction> for AutomationActionView {
             schedule_enabled: value.schedule_enabled,
             schedule_cron: value.schedule_cron,
             schedule_time_zone: value.schedule_time_zone,
-            webhook: value.webhook.map(Into::into),
+            webhook: value.webhook,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
             run_as_actor_id: value.run_as_actor_id,
             control_state: value.control_state,
             current_run_id: value.current_run_id,
             row_version: value.row_version,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
             updated_at: value.updated_at,
             last_scheduled_run_at: value.last_scheduled_run_at,
             tags: value.tags.into_iter().map(Into::into).collect(),
-            latest_run: value.latest_run.map(Into::into),
-        }
+            latest_run: value
+                .latest_run
+                .map(AutomationRunView::try_from)
+                .transpose()?,
+        })
     }
 }
 
@@ -72,10 +78,9 @@ pub struct AutomationRunView {
     pub id: Uuid,
     pub action_id: Uuid,
     pub action_name: String,
-    #[schema(value_type = crate::openapi::compatibility::ActionRunTrigger)]
-    pub trigger: String,
-    #[schema(value_type = crate::openapi::compatibility::ActionRunStatus)]
-    pub status: String,
+    pub trigger: AutomationRunTrigger,
+    #[schema(value_type = crate::api::resources::schema_models::automation::AutomationRunStatusSchema)]
+    pub status: AutomationRunStatus,
     pub run_as_actor_id: Uuid,
     #[schema(required = true)]
     pub triggered_by_actor_id: Option<Uuid>,
@@ -99,13 +104,14 @@ pub struct AutomationRunView {
     pub error_message: Option<String>,
 }
 
-impl From<citadel_automation::AutomationRun> for AutomationRunView {
-    fn from(value: citadel_automation::AutomationRun) -> Self {
-        Self {
+impl TryFrom<citadel_automation::AutomationRun> for AutomationRunView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_automation::AutomationRun) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             action_id: value.action_id,
             action_name: value.action_name,
-            trigger: value.trigger,
+            trigger: serde_json::from_value(value.trigger.into())?,
             status: value.status,
             run_as_actor_id: value.run_as_actor_id,
             triggered_by_actor_id: value.triggered_by_actor_id,
@@ -120,35 +126,42 @@ impl From<citadel_automation::AutomationRun> for AutomationRunView {
             exit_code: value.exit_code,
             logs: value.logs,
             error_message: value.error_message,
-        }
+        })
     }
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationProgress {
+    #[schema(required = true)]
     pub run_id: Option<Uuid>,
-    pub status: Option<String>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::automation::AutomationRunStatusSchema>)]
+    pub status: Option<AutomationRunStatus>,
+    #[schema(required = true)]
     pub stream: Option<String>,
+    #[schema(required = true)]
     pub progress_message: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
+    #[schema(required = true)]
     pub error: Option<AutomationProgressError>,
 }
 
-impl From<citadel_automation::AutomationProgress> for AutomationProgress {
-    fn from(value: citadel_automation::AutomationProgress) -> Self {
-        Self {
+impl TryFrom<citadel_automation::AutomationProgress> for AutomationProgress {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_automation::AutomationProgress) -> Result<Self, Self::Error> {
+        Ok(Self {
             run_id: value.run_id,
             status: value.status,
             stream: value.stream,
             progress_message: value.progress_message,
             error_message: value.error_message,
             error: value.error.map(Into::into),
-        }
+        })
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct AutomationProgressError {
     pub code: i32,
     pub message: String,

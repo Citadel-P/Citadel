@@ -1,7 +1,7 @@
+pub use citadel_git::{GitRepositoryRefStatus, GitRepositoryStatus};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = resources::catalog::GitRepositorySyncMode)]
 pub enum GitRepositorySyncMode {
     Manual,
     #[default]

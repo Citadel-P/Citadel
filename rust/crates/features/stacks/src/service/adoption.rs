@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl StackService {
     pub async fn preflight_swarm(
         &self,
@@ -247,7 +248,7 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         mut input: ImportComposeProject,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
         input.spec.validate()?;

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use citadel_primitives::normalization::unique_ids;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,7 +12,6 @@ use crate::CreateSwarmService;
 use crate::RenameSwarmService;
 use crate::ServiceOperationClaim;
 use crate::ServiceOperationKind;
-use crate::SwarmServiceDetails;
 use crate::SwarmServiceError;
 use crate::SwarmServiceFilter;
 use crate::SwarmServiceProgressItem;
@@ -21,7 +20,7 @@ use crate::UpdateSwarmService;
 mod updates;
 pub use updates::{
     ServiceAutomationEntitlements, ServiceImageDigestPort, ServiceUpdateCheck,
-    ServiceUpdateOutcome, checkable_image, evaluate_digest,
+    ServiceUpdateOutcome, checkable_image,
 };
 mod image_updates;
 

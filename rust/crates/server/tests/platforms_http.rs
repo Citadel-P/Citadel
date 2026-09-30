@@ -220,8 +220,10 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
         .await,
     )
     .await;
-    assert_eq!(network["containers"]["container-1"]["Name"], "web");
-    assert_eq!(network["peers"][0]["Name"], "worker-1");
+    assert_eq!(network["containers"]["container-1"]["name"], "web");
+    assert_eq!(network["peers"][0]["name"], "worker-1");
+    assert!(network["containers"]["container-1"]["endpointId"].is_null());
+    assert!(network["containers"]["container-1"].get("Name").is_none());
     assert_eq!(
         send(
             &fixture,
@@ -461,7 +463,8 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     assert_eq!(created_volume["name"], "cache");
 
     fixture.pool.close().await;
-    fixture.docker_server.await.unwrap();
+    fixture.docker_server.abort();
+    assert!(fixture.docker_server.await.unwrap_err().is_cancelled());
     std::fs::remove_file(&fixture.docker_socket).unwrap();
 }
 
@@ -553,7 +556,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         credential_id: None,
         roles: vec!["Admin".to_owned()],
     };
-    let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(10, cluster).await;
+    let (docker, docker_server, docker_socket) = docker_fixture_for_cluster(None, cluster).await;
     let platforms = Arc::new(PlatformReadService::new(Arc::new(
         PostgresPlatformReader::new(pool.clone()),
     )));
@@ -628,13 +631,13 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
 }
 
 async fn docker_fixture_for_cluster(
-    request_limit: usize,
+    request_limit: Option<usize>,
     cluster: String,
 ) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
     let socket = std::env::temp_dir().join(format!("citadel-phase4-http-{}.sock", Uuid::now_v7()));
     let listener = UnixListener::bind(&socket).unwrap();
     let server = tokio::spawn(async move {
-        for _ in 0..request_limit {
+        for _ in 0..request_limit.unwrap_or(usize::MAX) {
             let (mut connection, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -916,6 +919,8 @@ async fn send_json(
 }
 
 async fn json_body(response: axum::response::Response) -> Value {
-    assert_eq!(response.status(), StatusCode::OK);
-    serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
+    let status = response.status();
+    let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    serde_json::from_slice(&body).unwrap()
 }

@@ -240,3 +240,26 @@ describe('DockerPlatform disk usage', () => {
     expect(screen.getByRole('region', { name: 'Connected manager utilization' })).toBeVisible();
   });
 });
+
+describe('DockerPlatform pending metadata', () => {
+  it.each([null, { $type: 'Docker' as const, daemonId: '' }])(
+    'renders an offline Edge platform before its first inventory (%j)',
+    (platformDescriptor) => {
+      render(
+        <MemoryRouter>
+          <DockerPlatform
+            platform={{
+              ...createPlatform(null),
+              status: PlatformStatus.Offline,
+              connectorType: PlatformConnectorType.EdgeAgent,
+              platformDescriptor,
+            }}
+            actions={{}}
+          />
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('link', { name: 'Platform' })).toBeVisible();
+      expect(screen.getByText('- containers')).toBeVisible();
+    },
+  );
+});

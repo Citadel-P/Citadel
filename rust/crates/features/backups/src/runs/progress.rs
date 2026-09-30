@@ -21,9 +21,10 @@ impl BackupProgressItem {
     }
 }
 
+// This stream carries both backup and restore states; restore states are a
+// subset of the backup run vocabulary. Unknown wire values are never terminal.
 pub fn is_terminal(status: &str) -> bool {
-    !matches!(
-        status,
-        "Queued" | "Preparing" | "Running" | "Processing" | "ApplyingRetention"
-    )
+    status
+        .parse::<crate::BackupRunStatus>()
+        .is_ok_and(crate::BackupRunStatus::is_terminal)
 }

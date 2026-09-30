@@ -10,6 +10,7 @@ pub struct AlertRuleActivitySnapshot {
     pub severity: String,
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
+
     pub threshold: Option<serde_json::Number>,
     pub status: String,
     pub channel_ids: Vec<Uuid>,

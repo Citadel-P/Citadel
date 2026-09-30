@@ -69,4 +69,46 @@ if [[ ! -f /.dockerenv && -S /var/run/docker.sock ]] && grep -qi microsoft /proc
   bash "$dev" prepare
   [[ ! -s "$DEV_TEST_DOCKER_LOG" ]]
 fi
+
+# Compose must mount a staged executable that survives Cargo cache cleanup.
+if [[ ! -f /.dockerenv && -S /var/run/docker.sock ]]; then
+  export DEV_TEST_TARGET_DIR="$fixture/cargo target"
+  export DEV_TEST_DOCKER_LOG="$fixture/docker.log"
+  printf 'DATABASE_URL=postgres://citadel:citadel@127.0.0.1:15432/citadel\nCITADEL_RUST_DOCKER_SOCKET=/var/run/docker.sock\nDOCKER_HOST=unix:///var/run/docker.sock\nCITADEL_DATA_ROOT=%s/runtime\n' "$fixture" > "$env_file"
+  cargo() { printf '{"target_directory":"%s"}\n' "$DEV_TEST_TARGET_DIR"; }
+  node() {
+    if [[ "${1:-}" == -p ]]; then echo linux; else command node "$@"; fi
+  }
+  docker() {
+    if [[ "$*" == *' info '* ]]; then echo 'Docker Desktop'; return; fi
+    if [[ "$*" == *' build core' ]]; then
+      [[ -f "$CITADEL_DEV_BINARY" && -x "$CITADEL_DEV_BINARY" ]] || return 1
+      [[ "$CITADEL_DEV_BINARY" != "$DEV_TEST_TARGET_DIR"/* ]] || return 1
+    fi
+    printf '%s\n' "$*" >> "$DEV_TEST_DOCKER_LOG"
+  }
+  export -f cargo node docker
+  cat > "$fixture/rust/scripts/build.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${DEV_TEST_FAIL_BUILD:-false}" != true ]] || exit 1
+profile=debug
+[[ "${1:-}" != --release ]] || profile=release
+mkdir -p -- "$DEV_TEST_TARGET_DIR/$profile"
+printf '#!/bin/sh\necho %s\n' "$profile" > "$DEV_TEST_TARGET_DIR/$profile/citadel-server"
+EOF
+  bash "$dev" compose-up
+  staged="$fixture/runtime/dev-bin/citadel-server"
+  [[ "$(bash "$staged")" == release ]]
+  rm -rf -- "$DEV_TEST_TARGET_DIR"
+  [[ -x "$staged" && "$(bash "$staged")" == release ]]
+  CITADEL_COMPOSE_PROFILE=dev bash "$dev" compose-up
+  [[ "$(bash "$staged")" == debug ]]
+  : > "$DEV_TEST_DOCKER_LOG"
+  if DEV_TEST_FAIL_BUILD=true bash "$dev" compose-up; then
+    echo 'Compose continued after a failed build.' >&2; exit 1
+  fi
+  [[ "$(bash "$staged")" == debug ]]
+  [[ "$(cat "$DEV_TEST_DOCKER_LOG")" != *'--force-recreate'* ]]
+fi
 echo 'Development environment tests passed.'

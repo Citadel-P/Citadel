@@ -657,7 +657,7 @@ export const DockerContainerCell = ({
 }: {
   name: string;
   id: string;
-  state: ContainerStateStatus;
+  state: string;
   platformId: string;
 }) => (
   <div className="flex flex-wrap gap-1 items-center">

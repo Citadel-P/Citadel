@@ -83,10 +83,13 @@ pub(super) async fn exercise_update_checks(
         assert_eq!(status, expected_status, "{body}");
         assert!(!body.to_string().contains("must-not-leak"));
         let persisted = services.get(admin.actor_id, true, id).await.unwrap();
-        assert_eq!(persisted.control_state, "Idle");
+        assert_eq!(
+            persisted.control_state,
+            citadel_primitives::ResourceControlState::Idle
+        );
         assert_eq!(
             persisted.current_operation.as_ref().unwrap().state,
-            "Completed"
+            citadel_swarm_services::SwarmServiceOperationState::Completed
         );
         assert_eq!(
             persisted.applied_image_digest.as_deref(),
@@ -99,9 +102,9 @@ pub(super) async fn exercise_update_checks(
         assert_eq!(
             persisted.auto_update_state.status,
             if mode == 2 {
-                "Failed"
+                citadel_primitives::AutoUpdateStatus::Failed
             } else {
-                "UpdateAvailable"
+                citadel_primitives::AutoUpdateStatus::UpdateAvailable
             }
         );
         assert_eq!(persisted.auto_update_state.last_error.is_some(), mode == 2);
@@ -125,7 +128,7 @@ pub(super) async fn exercise_update_checks(
             .await
             .unwrap()
             .control_state,
-        "Processing"
+        citadel_primitives::ResourceControlState::Processing
     );
     assert_eq!(
         request(app, Method::POST, &url, Some(admin.clone()), None)
@@ -160,7 +163,7 @@ pub(super) async fn exercise_update_checks(
             .await
             .unwrap()
             .control_state
-            != "Idle"
+            != citadel_primitives::ResourceControlState::Idle
         {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
@@ -215,13 +218,16 @@ pub(super) async fn exercise_update_checks(
             .await
             .unwrap()
             .control_state,
-        "Processing"
+        citadel_primitives::ResourceControlState::Processing
     );
     store.complete_update_check(&second, None).await.unwrap();
     let persisted = services.get(admin.actor_id, true, id).await.unwrap();
     assert_eq!(
         persisted.current_operation.as_ref().unwrap().state,
-        "Completed"
+        citadel_swarm_services::SwarmServiceOperationState::Completed
     );
-    assert_eq!(persisted.control_state, "Idle");
+    assert_eq!(
+        persisted.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
 }

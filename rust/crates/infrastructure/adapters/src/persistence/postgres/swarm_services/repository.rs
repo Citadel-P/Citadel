@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
 #[derive(Clone)]
 pub struct PostgresSwarmServiceRepository {
@@ -34,7 +35,7 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a SwarmServiceDetails,
+        expected: &'a citadel_swarm_services::SwarmService,
     ) -> BoxFuture<'a, Result<citadel_swarm_services::ServiceUpdateCheck, SwarmServiceError>> {
         self.begin_update_check_impl(actor, administrator, expected)
     }
@@ -60,7 +61,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         filter: &'a SwarmServiceFilter,
-    ) -> BoxFuture<'a, Result<Vec<SwarmServiceDetails>, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<AuthorizedResource<citadel_swarm_services::SwarmService>>, SwarmServiceError>,
+    > {
         self.list_authorized_impl(actor_id, administrator, filter)
     }
 
@@ -69,7 +73,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        '_,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         self.get_authorized_impl(actor_id, administrator, id)
     }
 
@@ -78,7 +85,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         self.create_impl(actor_id, administrator, input)
     }
 
@@ -88,7 +98,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         administrator: bool,
         id: Uuid,
         input: &'a UpdateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         self.update_impl(actor_id, administrator, id, input)
     }
 
@@ -98,7 +111,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         self.update_description_impl(actor_id, administrator, id, description)
     }
 
@@ -107,7 +123,10 @@ impl SwarmServiceRepository for PostgresSwarmServiceRepository {
         actor_id: ActorId,
         administrator: bool,
         input: &'a RenameSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<AuthorizedResource<citadel_swarm_services::SwarmService>, SwarmServiceError>,
+    > {
         self.rename_impl(actor_id, administrator, input)
     }
 

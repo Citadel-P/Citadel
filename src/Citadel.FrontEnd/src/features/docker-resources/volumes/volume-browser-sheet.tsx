@@ -1,10 +1,5 @@
 import { useApiClientContext } from '@/api/api-client-context';
-import {
-  VolumeView,
-  PlatformStatus,
-  ProblemDetails,
-  VolumeFileEntryType,
-} from '@/api/generated/api.types';
+import { VolumeView, PlatformStatus, ProblemDetails, VolumeEntryType } from '@/api/generated/api.types';
 import { ActionButton } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
@@ -165,7 +160,7 @@ function VolumeTree({
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
 
   const downloadPath = useCallback(
-    async (path: string, entryType: VolumeFileEntryType) => {
+    async (path: string, entryType: VolumeEntryType) => {
       const normalized = normalizeBrowserPath(path);
       if (normalized === ROOT_PATH || !canDownloadEntry(entryType)) return;
 
@@ -259,9 +254,9 @@ function NodeDownloadButton({
   onDownload,
 }: {
   path: string;
-  type: VolumeFileEntryType;
+  type: VolumeEntryType;
   downloadingPath: string | null;
-  onDownload: (path: string, entryType: VolumeFileEntryType) => Promise<void>;
+  onDownload: (path: string, entryType: VolumeEntryType) => Promise<void>;
 }) {
   const isPending = downloadingPath === path;
   const canDownload = canDownloadEntry(type);
@@ -273,9 +268,9 @@ function NodeDownloadButton({
       size="icon-xs"
       className="size-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       disabled={!canDownload || isPending}
-      title={type === VolumeFileEntryType.Directory ? 'Download directory archive' : 'Download file'}
+      title={type === VolumeEntryType.Directory ? 'Download directory archive' : 'Download file'}
       onClick={() => onDownload(path, type)}>
-      {type === VolumeFileEntryType.Directory ? (
+      {type === VolumeEntryType.Directory ? (
         <Archive className={cn('size-3.5', isPending && 'animate-pulse')} />
       ) : (
         <Download className={cn('size-3.5', isPending && 'animate-pulse')} />
@@ -290,35 +285,35 @@ function normalizeBrowserPath(path: string | null | undefined) {
   return normalized.replace(/\/+/g, '/').replace(/\/$/g, '') || ROOT_PATH;
 }
 
-function canDownloadEntry(type: VolumeFileEntryType) {
-  return type === VolumeFileEntryType.File || type === VolumeFileEntryType.Directory;
+function canDownloadEntry(type: VolumeEntryType) {
+  return type === VolumeEntryType.File || type === VolumeEntryType.Directory;
 }
 
-function mapVolumeEntryType(type: VolumeFileEntryType): BrowserEntry['type'] {
+function mapVolumeEntryType(type: VolumeEntryType): BrowserEntry['type'] {
   switch (type) {
-    case VolumeFileEntryType.Directory:
+    case VolumeEntryType.Directory:
       return 'directory';
-    case VolumeFileEntryType.Symlink:
+    case VolumeEntryType.Symlink:
       return 'symlink';
     default:
       return 'file';
   }
 }
 
-function mapBrowserEntryType(type: BrowserEntry['type']): VolumeFileEntryType {
+function mapBrowserEntryType(type: BrowserEntry['type']): VolumeEntryType {
   switch (type) {
     case 'directory':
-      return VolumeFileEntryType.Directory;
+      return VolumeEntryType.Directory;
     case 'symlink':
-      return VolumeFileEntryType.Symlink;
+      return VolumeEntryType.Symlink;
     default:
-      return VolumeFileEntryType.File;
+      return VolumeEntryType.File;
   }
 }
 
-function getDownloadFallbackName(path: string, entryType: VolumeFileEntryType) {
+function getDownloadFallbackName(path: string, entryType: VolumeEntryType) {
   const name = path.split('/').filter(Boolean).at(-1) ?? 'volume';
-  return entryType === VolumeFileEntryType.Directory ? `${name}.tar` : name;
+  return entryType === VolumeEntryType.Directory ? `${name}.tar` : name;
 }
 
 function getContentDispositionFileName(disposition: string | null) {

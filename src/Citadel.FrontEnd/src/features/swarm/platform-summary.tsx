@@ -1,8 +1,4 @@
-import {
-  PlatformBackupSummaryView,
-  WorkloadStatusCounts,
-  ProblemDetails,
-} from '@/api/generated/api.types';
+import { PlatformBackupSummary, WorkloadStatusCounts, ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import Loader from '@/components/ui/loader';
 import { PlatformResourceMetric } from '@/features/platforms/forms/platform-stats';
@@ -29,7 +25,7 @@ export const SwarmPlatformSummary = ({
   platformId: string;
   networkCount: number | string;
   serviceStatusCounts: WorkloadStatusCounts;
-  backupSummary?: PlatformBackupSummaryView;
+  backupSummary?: PlatformBackupSummary;
   isBackupSummaryLoading?: boolean;
   isBackupSummaryError?: boolean;
 }) => {

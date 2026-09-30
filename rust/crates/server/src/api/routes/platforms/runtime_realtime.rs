@@ -77,7 +77,8 @@ pub(crate) async fn realtime_resource_snapshot(
                     .await?
                     .into_iter()
                     .map(|v| map_node_volume(v, volume_cap))
-                    .collect::<Vec<_>>(),
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
             )
             .map_err(failure)?;
             let manager_count =
@@ -93,7 +94,8 @@ pub(crate) async fn realtime_resource_snapshot(
                     .await?
                     .into_iter()
                     .map(|v| map_node_network(v, network_capabilities(platform)))
-                    .collect::<Vec<_>>(),
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
             )
             .map_err(failure)?;
         }
@@ -206,7 +208,9 @@ pub(crate) async fn realtime_resource_snapshot(
             "NetworkEventReceived",
             networks
                 .into_iter()
-                .map(|v| serde_json::to_value(map_network(v, network_capabilities(platform))))
+                .map(|v| {
+                    map_network(v, network_capabilities(platform)).and_then(serde_json::to_value)
+                })
                 .collect::<Result<_, _>>()
                 .map_err(failure)?,
         )
@@ -215,7 +219,7 @@ pub(crate) async fn realtime_resource_snapshot(
             "VolumeEventReceived",
             volumes
                 .into_iter()
-                .map(|v| serde_json::to_value(map_volume(v, volume_cap)))
+                .map(|v| map_volume(v, volume_cap).and_then(serde_json::to_value))
                 .collect::<Result<_, _>>()
                 .map_err(failure)?,
         )

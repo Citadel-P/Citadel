@@ -1,5 +1,6 @@
+use super::spec::*;
+use citadel_primitives::WebhookConfig;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
@@ -7,8 +8,8 @@ use uuid::Uuid;
 pub struct BackupRepositoryInput {
     pub name: String,
     pub description: Option<String>,
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositorySpec)]
-    pub spec: Value,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositorySpecSchema)]
+    pub spec: BackupRepositorySpec,
     pub password_secret_id: Uuid,
 }
 
@@ -39,14 +40,14 @@ impl From<BackupRepositoryInput> for citadel_backups::BackupRepositoryConfigurat
 pub struct BackupPolicyInput {
     pub name: String,
     pub description: Option<String>,
-    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
-    pub source: Value,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupSourceSpecSchema)]
+    pub source: BackupSourceSpec,
     pub backup_repository_id: Uuid,
     pub enabled: bool,
     pub cron: Option<String>,
     pub time_zone: Option<String>,
-    #[schema(value_type = Option<crate::openapi::compatibility::BackupWebhookConfig>)]
-    pub webhook: Option<Value>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub keep_last_successful: Option<i32>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
@@ -126,8 +127,8 @@ impl From<RenameBackupPolicyInput>
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RepositoryLocationInput {
-    #[schema(value_type = crate::openapi::compatibility::BackupExecutionLocation)]
-    pub(crate) location: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupExecutionLocationSchema)]
+    pub(crate) location: BackupExecutionLocation,
     pub(crate) platform_id: Option<Uuid>,
 }
 
@@ -145,7 +146,7 @@ pub(crate) struct RestoreInput {
 #[schema(as = server::backups_http::QueueInput)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct QueueInput {
-    pub(crate) trigger: Option<String>,
+    pub(crate) trigger: Option<BackupQueueTrigger>,
 }
 
 #[derive(Deserialize, Default)]

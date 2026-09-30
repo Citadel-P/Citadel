@@ -12,6 +12,7 @@ it('renders published ports from the Citadel contract and opens the port link', 
           { hostIP: '::', hostPort: '8080' },
         ],
         '443/tcp': [],
+        '53/udp': null,
       }}
     />,
   );

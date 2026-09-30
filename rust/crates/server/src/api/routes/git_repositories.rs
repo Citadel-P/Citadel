@@ -21,13 +21,13 @@ use crate::{
                     GitRepositoryRefsResponse, GitRepositoryView, *,
                 },
             },
-            metadata_patch::MetadataPatch,
         },
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
     request_validation::{ApiQuery, invalid_json},
 };
+use citadel_primitives::PatchField;
 
 use axum::{
     Json, Router,
@@ -116,7 +116,13 @@ async fn refs(
     )?;
     Ok(no_store(
         Json(GitRepositoryRefsResponse {
-            refs: refs.into_iter().map(Into::into).collect(),
+            refs: api_result(
+                refs.into_iter()
+                    .map(GitRepositoryRefView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
         })
         .into_response(),
     ))
@@ -129,7 +135,7 @@ async fn refs(
     tag = "GitRepositories",
     summary = "List files in an immutable Git tree",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryDirectoryListingView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = GitDirectoryListing, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("commitSha" = Option<String>, Query), ("path" = Option<String>, Query)),
@@ -170,7 +176,7 @@ async fn files(
     tag = "GitRepositories",
     summary = "Read a bounded immutable Git file",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryFileContentView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = GitFileContent, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("commitSha" = Option<String>, Query), ("path" = String, Query)),
@@ -215,7 +221,7 @@ async fn file_content(
     tag = "GitRepositories",
     summary = "Compare immutable Git commits",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/GitCommitComparisonView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = GitCommitComparison, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path), ("baseCommitSha" = String, Query), ("headCommitSha" = String, Query)),
@@ -294,7 +300,7 @@ async fn branches(
     tag = "GitRepositories",
     summary = "Discover Compose projects in a Git repository",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/GitRepositoryComposeDiscovery"), content_type = "application/json"),
+        (status = 200, description = "Success", body = GitComposeDiscovery, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
     params(("id" = uuid::Uuid, Path), ("branch" = Option<String>, Query)),
@@ -370,7 +376,11 @@ async fn sync(
         realtime.publish_resource_change("GitRepository", id, "gitRepositoryChanged");
     }
     Ok(no_store(
-        Json(GitRepositoryView::from(repository)).into_response(),
+        Json(api_result(
+            GitRepositoryView::try_from(repository).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -521,7 +531,10 @@ async fn list_git_repositories(
             row_permissions.get(&repository.id).copied().flatten(),
         );
         git_repositories.push(AuthorizedGitRepositoryView {
-            repository: repository.into(),
+            repository: api_result(
+                GitRepositoryView::try_from(repository).map_err(ApiError::internal),
+                &headers,
+            )?,
             capabilities: row_capabilities,
         });
     }
@@ -576,7 +589,10 @@ async fn get_git_repository(
     let repository = load_git_repository(&state, id, &headers).await?;
     Ok(no_store(
         Json(AuthorizedGitRepositoryView {
-            repository: repository.into(),
+            repository: api_result(
+                GitRepositoryView::try_from(repository).map_err(ApiError::internal),
+                &headers,
+            )?,
             capabilities: caps,
         })
         .into_response(),
@@ -614,7 +630,8 @@ async fn get_git_repository_config(
         &headers,
     )
     .await?;
-    let repository = load_git_repository(&state, id, &headers).await?;
+    let details = load_git_repository(&state, id, &headers).await?;
+    let repository = details;
     Ok(no_store(
         Json(GitRepositoryConfigResponse {
             id: repository.id,
@@ -654,7 +671,6 @@ async fn create_git_repository(
     headers: HeaderMap,
     input: Result<Json<NewGitRepository>, JsonRejection>,
 ) -> HttpResult {
-    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let principal = api_result(require_actor(principal), &headers)?;
     authorize_global(
         &state.identity,
@@ -664,6 +680,7 @@ async fn create_git_repository(
         &headers,
     )
     .await?;
+    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let input: citadel_git::CreateGitRepository = input.into();
     let service = citadel_git::GitRepositoryService::new(state.git_repositories.clone());
     let repository = api_result(
@@ -675,7 +692,11 @@ async fn create_git_repository(
     )?;
     publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
     Ok(no_store(
-        Json(GitRepositoryView::from(repository)).into_response(),
+        Json(api_result(
+            GitRepositoryView::try_from(repository).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -704,10 +725,12 @@ async fn update_git_repository(
     headers: HeaderMap,
     input: Result<Json<GitRepositoryPatch>, JsonRejection>,
 ) -> HttpResult {
-    let Json(mut input) = api_result(input.map_err(invalid_json), &headers)?;
-    input.name = None;
-    input.description = MetadataPatch::Missing;
-    input.tag_ids = None;
+    let input = input.map_err(invalid_json).map(|Json(mut input)| {
+        input.name = None;
+        input.description = PatchField::Missing;
+        input.tag_ids = None;
+        input
+    });
     mutate_git_repository(
         state,
         principal,
@@ -724,10 +747,9 @@ async fn mutate_git_repository(
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
-    input: GitRepositoryPatch,
+    input: Result<GitRepositoryPatch, ApiError>,
     kind: citadel_git::GitRepositoryMutationKind,
 ) -> HttpResult {
-    let input: citadel_git::GitRepositoryPatch = input.into();
     let (principal, id) = principal_and_id(&headers, principal, path)?;
     authorize_resource(
         &state.identity,
@@ -739,6 +761,7 @@ async fn mutate_git_repository(
         &headers,
     )
     .await?;
+    let input: citadel_git::GitRepositoryPatch = api_result(input, &headers)?.into();
     let repository = api_result(
         state
             .git_repositories
@@ -749,7 +772,11 @@ async fn mutate_git_repository(
     )?;
     publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
     Ok(no_store(
-        Json(GitRepositoryView::from(repository)).into_response(),
+        Json(api_result(
+            GitRepositoryView::try_from(repository).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -778,16 +805,17 @@ async fn update_git_repository_metadata(
     headers: HeaderMap,
     input: Result<Json<PatchResourceMetadataInput>, JsonRejection>,
 ) -> HttpResult {
-    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     mutate_git_repository(
         state,
         principal,
         path,
         headers,
-        GitRepositoryPatch {
-            description: input.description,
-            ..GitRepositoryPatch::default()
-        },
+        input
+            .map_err(invalid_json)
+            .map(|Json(input)| GitRepositoryPatch {
+                description: input.description,
+                ..GitRepositoryPatch::default()
+            }),
         citadel_git::GitRepositoryMutationKind::Metadata,
     )
     .await
@@ -813,16 +841,17 @@ async fn rename_git_repository(
     headers: HeaderMap,
     input: Result<Json<RenameResourceInput>, JsonRejection>,
 ) -> HttpResult {
+    let principal = Some(Extension(api_result(require_actor(principal), &headers)?));
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     mutate_git_repository(
         state,
         principal,
         Ok(Path(input.id)),
         headers,
-        GitRepositoryPatch {
+        Ok(GitRepositoryPatch {
             name: Some(input.name),
             ..GitRepositoryPatch::default()
-        },
+        }),
         citadel_git::GitRepositoryMutationKind::Rename,
     )
     .await

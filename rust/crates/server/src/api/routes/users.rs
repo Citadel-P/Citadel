@@ -1,3 +1,4 @@
+use crate::api::resources::resource_access::ResourceAccessInput;
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
@@ -6,7 +7,7 @@ use crate::{
             users::{
                 requests::{
                     AddUserRoleRequest, CreateUserRequest, DeleteUsersRequest, PatchUserRequest,
-                    RenameUserRequest, UserResourceAccessRequest, UserSearchFilter, UsersFilter,
+                    RenameUserRequest, UserSearchFilter, UsersFilter,
                 },
                 views::UsersResponse,
             },
@@ -125,7 +126,7 @@ async fn list(
     tag = "Users",
     summary = "Search Users for assignment",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/UserSearchItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::users::views::UserSearchItemView>, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("Query" = Option<String>, Query), ("Limit" = Option<i32>, Query, minimum = 1, maximum = 50, extensions(("x-citadel-default" = json!(20))))),
@@ -389,7 +390,7 @@ async fn remove_role(
     operation_id = "addUserResourceAccess",
     tag = "Users",
     summary = "Add a resource override to a User",
-    request_body = UserResourceAccessRequest,
+    request_body = ResourceAccessInput,
     responses(
         (status = 200, description = "Success", body = crate::api::resources::users::views::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
@@ -403,15 +404,15 @@ async fn add_resource_access(
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
-    payload: Result<Json<UserResourceAccessRequest>, JsonRejection>,
+    payload: Result<Json<ResourceAccessInput>, JsonRejection>,
 ) -> HttpResult {
     let id = api_result(user_path(path), &headers)?;
     let principal = api_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
     )?;
-    let request: UserResourceAccessRequest = api_result(user_json(payload), &headers)?;
-    let request: citadel_identity::UserResourceAccess = request.into();
+    let request: ResourceAccessInput = api_result(user_json(payload), &headers)?;
+    let request: citadel_identity::ResourceAccessInput = request.into();
     let user = api_result(
         state
             .mutations
@@ -430,7 +431,7 @@ async fn add_resource_access(
     operation_id = "removeUserResourceAccess",
     tag = "Users",
     summary = "Remove a resource override from a User",
-    request_body = UserResourceAccessRequest,
+    request_body = ResourceAccessInput,
     responses(
         (status = 200, description = "Success", body = crate::api::resources::users::views::UserView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -444,15 +445,15 @@ async fn remove_resource_access(
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
-    payload: Result<Json<UserResourceAccessRequest>, JsonRejection>,
+    payload: Result<Json<ResourceAccessInput>, JsonRejection>,
 ) -> HttpResult {
     let id = api_result(user_path(path), &headers)?;
     let principal = api_result(
         authorize_administrator(&state, principal, PermissionLevel::Write, Some(id)).await,
         &headers,
     )?;
-    let request: UserResourceAccessRequest = api_result(user_json(payload), &headers)?;
-    let request: citadel_identity::UserResourceAccess = request.into();
+    let request: ResourceAccessInput = api_result(user_json(payload), &headers)?;
+    let request: citadel_identity::ResourceAccessInput = request.into();
     let user = api_result(
         state
             .mutations

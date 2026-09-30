@@ -1,11 +1,15 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl PostgresDeploymentRepository {
     pub(super) fn list_authorized_impl<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         filter: &'a DeploymentFilter,
-    ) -> BoxFuture<'a, Result<Vec<DeploymentDetails>, DeploymentError>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<AuthorizedResource<citadel_deployments::Deployment>>, DeploymentError>,
+    > {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTES}{PROJECTION}
@@ -42,7 +46,8 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError>>
+    {
         Box::pin(async move { get_authorized(&self.pool, actor_id, administrator, id).await })
     }
 
@@ -53,11 +58,12 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         id: Uuid,
     ) -> BoxFuture<'a, Result<DeploymentDuplicateDraft, DeploymentError>> {
         Box::pin(async move {
-            let source = get_authorized(&self.pool, actor_id, administrator, id).await?;
+            let source = get_authorized(&self.pool, actor_id, administrator, id)
+                .await?
+                .resource;
             let name =
-                available_duplicate_name(&self.pool, &source.deployment.name, source.platform_id)
-                    .await?;
-            let warnings = has_likely_host_bind(source.deployment.spec.volumes.as_deref())
+                available_duplicate_name(&self.pool, &source.name, source.platform_id).await?;
+            let warnings = has_likely_host_bind(source.spec.volumes.as_deref())
                 .then(|| DuplicateWarning {
                     code: "HOST_BIND_MOUNT".to_owned(),
                     message: "This deployment contains host paths that may not exist on another platform.".to_owned(),
@@ -69,13 +75,13 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                 draft: DeploymentDraft {
                     name,
                     platform_id: source.platform_id,
-                    description: source.deployment.description,
-                    spec: source.deployment.spec.for_create(),
+                    description: source.description,
+                    spec: source.spec.for_create(),
                     tag_ids: source.tags.iter().map(|tag| tag.id).collect(),
                     duplicate_source: DuplicateSource {
                         resource_type: "Deployment".to_owned(),
-                        resource_id: source.deployment.id,
-                        resource_name: source.deployment.name,
+                        resource_id: source.id,
+                        resource_name: source.name,
                     },
                 },
                 warnings,
@@ -169,7 +175,7 @@ pub(super) async fn get_authorized(
     actor_id: ActorId,
     administrator: bool,
     id: Uuid,
-) -> Result<DeploymentDetails, DeploymentError> {
+) -> Result<AuthorizedResource<citadel_deployments::Deployment>, DeploymentError> {
     let query = format!(
         r#"{AUTHORIZED_CTES}{PROJECTION}
 WHERE d.id=$3 AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) = ANY($4))

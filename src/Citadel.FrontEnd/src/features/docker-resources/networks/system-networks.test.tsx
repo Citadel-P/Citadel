@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { DockerNetworkDetailsView, NetworkView } from '@/api/generated/api.types';
+import { NetworkView } from '@/api/generated/api.types';
 import { NetworkNameRow } from './table';
 import { NetworkInfoComponents } from './network-info';
 
@@ -36,7 +36,7 @@ describe('system networks', () => {
   it('shows the System badge in the network detail header', () => {
     const NameSuffix = NetworkInfoComponents.Header.NameSuffix!;
 
-    render(<NameSuffix resource={{ ...network(true), containers: {}, peers: [] } as DockerNetworkDetailsView} />);
+    render(<NameSuffix resource={{ ...network(true), containers: {}, peers: [] } as NetworkView} />);
 
     expect(screen.getByLabelText('Docker system network')).toBeVisible();
   });

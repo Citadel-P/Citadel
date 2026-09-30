@@ -5,12 +5,12 @@ import {
   NetworkView,
   VolumeView,
   ImageView,
-  SwarmConfigsView,
-  SwarmNetworksView,
-  SwarmNodesView,
-  SwarmSecretsView,
-  SwarmServicesView,
-  SwarmTasksView,
+  SwarmItemsResponseSwarmConfigView,
+  SwarmItemsResponseSwarmNetworkView,
+  SwarmItemsResponseSwarmNodeView,
+  SwarmItemsResponseSwarmSecretView,
+  SwarmItemsResponseSwarmServiceView,
+  SwarmItemsResponseSwarmTaskView,
 } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import type { ContainerStatePatch } from '@/features/docker-resources/containers/hooks/container-order';
@@ -148,12 +148,12 @@ export type DockerDaemonListeners = {
 
 export type SwarmInventoryUpdate = {
   platformId: string;
-  nodes: SwarmNodesView;
-  services: SwarmServicesView;
-  tasks: SwarmTasksView;
-  networks: SwarmNetworksView;
-  secrets: SwarmSecretsView;
-  configs: SwarmConfigsView;
+  nodes: SwarmItemsResponseSwarmNodeView;
+  services: SwarmItemsResponseSwarmServiceView;
+  tasks: SwarmItemsResponseSwarmTaskView;
+  networks: SwarmItemsResponseSwarmNetworkView;
+  secrets: SwarmItemsResponseSwarmSecretView;
+  configs: SwarmItemsResponseSwarmConfigView;
 };
 
 export type SwarmNodeLocalResourcesUpdate = {

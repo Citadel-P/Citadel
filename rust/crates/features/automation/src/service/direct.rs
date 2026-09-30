@@ -56,7 +56,10 @@ impl AutomationService {
                     }
                 };
                 let (sender, receiver) = mpsc::channel(16);
-                let _ = sender.try_send(AutomationProgress::state(&claim.run, "Queued"));
+                let _ = sender.try_send(AutomationProgress::state(
+                    &claim.run,
+                    crate::AutomationRunStatus::Queued,
+                ));
                 let _ = started.send(Ok(receiver));
                 let cancellation = service.shutdown.child_token();
                 let execution = service.execute_claim(&claim, &cancellation, Some(&sender));

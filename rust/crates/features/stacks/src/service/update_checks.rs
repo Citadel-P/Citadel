@@ -1,19 +1,20 @@
 use super::*;
 use crate::StackUpdateBehavior;
 use crate::StackUpdateState;
+use citadel_primitives::AuthorizedResource;
 use sha2::Digest;
 
 pub trait StackUpdateScanner: Send + Sync {
     fn scan_cached<'a>(
         &'a self,
-        stack: &'a StackDetails,
+        stack: &'a crate::Stack,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         self.scan(stack, cancellation)
     }
     fn scan<'a>(
         &'a self,
-        stack: &'a StackDetails,
+        stack: &'a crate::Stack,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>>;
 }
@@ -29,7 +30,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         self.check_updates_mode(actor, administrator, id, false, cancellation)
             .await
     }
@@ -40,7 +41,7 @@ impl StackService {
         id: Uuid,
         scheduled: bool,
         cancellation: &CancellationToken,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         let _permit = self
             .operations
             .clone()
@@ -53,7 +54,7 @@ impl StackService {
             self.notifier.update_check_duplicate();
             StackError::Conflict("A Stack update check is already running.".into())
         })?;
-        if snapshot.control_state != "Idle"
+        if snapshot.control_state != citadel_primitives::ResourceControlState::Idle
             || !matches!(
                 snapshot.status,
                 StackReleaseStatus::Healthy
@@ -90,8 +91,8 @@ impl StackService {
             .await?;
         self.notifier.changed(id, "updated");
         let mut checked = snapshot;
-        checked.stack.stack_update_state = next;
-        checked.stack.row_version += 1;
+        checked.resource.stack_update_state = next;
+        checked.resource.row_version += 1;
         Ok(checked)
     }
 
@@ -237,7 +238,11 @@ impl StackService {
                             .filter(|view| {
                                 view.current_stack_release_id == checked.current_stack_release_id
                             })
-                            .and_then(|view| view.source.map(|source| source.resolved_commit_sha))
+                            .and_then(|view| {
+                                view.resource
+                                    .source
+                                    .map(|source| source.resolved_commit_sha)
+                            })
                     } else {
                         None
                     };
@@ -260,7 +265,7 @@ impl StackService {
         Ok(())
     }
 
-    async fn report_update(&self, stack: &StackDetails, kind: &str, applied_commit: Option<&str>) {
+    async fn report_update(&self, stack: &crate::Stack, kind: &str, applied_commit: Option<&str>) {
         let Some(alerts) = &self.alerts else {
             return;
         };

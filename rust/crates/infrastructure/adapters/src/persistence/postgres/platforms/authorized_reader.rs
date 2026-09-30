@@ -42,7 +42,7 @@ impl AuthorizedPlatformReader for PostgresAuthorizedPlatformReader {
                         id: row.id,
                         name: row.name,
                         address: row.address,
-                        status: row.status,
+                        status: row.status.parse().map_err(AuthorizedReadError::Storage)?,
                         connector_type: row.connectortype,
                     })
                 })

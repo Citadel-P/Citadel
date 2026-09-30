@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl StackService {
     /// Evaluates the bounded set of active Stacks whose drift policy is enabled.
     /// A failure on one Stack is returned to the caller for diagnostics without
@@ -29,7 +30,7 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         mut input: CreateStack,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         normalize_name(&mut input.name)?;
         normalize_description(&mut input.description)?;
         if input.platform_id.is_nil() {
@@ -58,7 +59,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         mut input: UpdateStack,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         if let Some(name) = input.name.as_mut() {
             normalize_name(name)?;
         }
@@ -98,7 +99,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         mut description: Option<String>,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         normalize_description(&mut description)?;
         let updated = self
             .store
@@ -114,7 +115,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         mut name: String,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         normalize_name(&mut name)?;
         let updated = self.store.rename(actor, administrator, id, &name).await?;
         self.notifier.changed(id, "renamed");

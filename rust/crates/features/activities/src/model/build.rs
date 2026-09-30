@@ -17,7 +17,7 @@ pub struct BuildProjectActivitySnapshot {
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Vec<String>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub timeout_seconds: i32,
     pub retention_run_count: i32,
     pub build_secrets: Vec<BuildSecretActivitySnapshot>,

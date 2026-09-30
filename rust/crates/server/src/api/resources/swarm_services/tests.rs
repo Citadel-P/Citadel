@@ -1,6 +1,6 @@
 use super::{spec::*, views::*};
-use crate::api::resources::git_repositories::webhook::{WebhookAuthScheme, WebhookProvider};
 use chrono::Utc;
+use citadel_primitives::{WebhookAuthScheme, WebhookProvider};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -17,27 +17,32 @@ fn spec() -> SwarmServiceSpec {
 fn spec_roundtrip_preserves_configuration_and_native_webhook_vocabulary() {
     let wire = spec();
     let domain: citadel_swarm_services::SwarmServiceSpec = wire.clone().into();
-    assert_eq!(domain.webhook.as_ref().unwrap().provider, "GitLab");
+    assert_eq!(
+        domain.webhook.as_ref().unwrap().provider,
+        WebhookProvider::GitLab
+    );
     assert_eq!(SwarmServiceSpec::try_from(domain).unwrap(), wire);
-    let defaults: SwarmServiceWebhookConfig = serde_json::from_value(json!({})).unwrap();
+    let defaults: citadel_primitives::WebhookConfig = serde_json::from_value(json!({})).unwrap();
     assert_eq!(defaults.provider, WebhookProvider::GitHub);
     assert_eq!(defaults.auth_scheme, WebhookAuthScheme::GitHubHmacSha256);
     assert!(
-        serde_json::from_value::<SwarmServiceWebhookConfig>(json!({"provider": "Invalid"}))
+        serde_json::from_value::<citadel_primitives::WebhookConfig>(json!({"provider": "Invalid"}))
             .is_err()
     );
     assert!(
-        serde_json::from_value::<SwarmServiceWebhookConfig>(json!({"authScheme": "Invalid"}))
-            .is_err()
+        serde_json::from_value::<citadel_primitives::WebhookConfig>(
+            json!({"authScheme": "Invalid"})
+        )
+        .is_err()
     );
 }
 
 #[test]
 fn operation_conversion_preserves_failures_and_rejects_unknown_states() {
-    let mut operation = citadel_swarm_services::SwarmServiceOperation {
+    let operation = citadel_swarm_services::SwarmServiceOperation {
         id: Uuid::now_v7(),
-        kind: "Delete".into(),
-        state: "Rejected".into(),
+        kind: citadel_swarm_services::SwarmServiceOperationKind::Delete,
+        state: citadel_swarm_services::SwarmServiceOperationState::Rejected,
         prepared_at: Utc::now(),
         attempted_at: None,
         completed_at: None,
@@ -51,8 +56,11 @@ fn operation_conversion_preserves_failures_and_rejects_unknown_states() {
     assert_eq!(wire["kind"], "Delete");
     assert_eq!(wire["state"], "Rejected");
     assert_eq!(wire["resultMessage"], "Docker rejected deletion");
-    operation.state = "Invalid".into();
-    assert!(SwarmServiceOperationView::try_from(operation).is_err());
+    assert!(
+        "Invalid"
+            .parse::<citadel_swarm_services::SwarmServiceOperationState>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -133,23 +141,6 @@ fn swarm_contracts_are_native_and_describe_real_progress_and_warning_shapes() {
             doc["paths"][format!("/api/v1/swarmServices/{{id}}/{op}")]["post"]["responses"]["200"]
                 ["content"]["application/json"]["schema"]["items"]["$ref"],
             "#/components/schemas/SwarmServiceProgressItem"
-        );
-    }
-    for name in [
-        "SwarmServiceHealth",
-        "SwarmServiceSynchronizationState",
-        "SwarmServiceOperationKind",
-        "SwarmServiceOperationState",
-        "WebhookProvider",
-        "WebhookAuthScheme",
-        "SwarmServiceDuplicateDraftView",
-        "SwarmServiceAdoptionDraftView",
-        "SwarmServiceProgressItems",
-        "SwarmServiceProgressItem",
-    ] {
-        assert!(
-            !crate::openapi::compatibility::schemas().contains_key(name),
-            "{name} is still frozen"
         );
     }
 }

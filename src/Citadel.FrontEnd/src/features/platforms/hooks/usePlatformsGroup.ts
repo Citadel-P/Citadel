@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
+import { PlatformView } from '@/api/generated/api.types';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { PlatformStatsBatchView } from '@/api/types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
@@ -112,9 +112,9 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
       target.imageCount = stats.imageCount;
       target.memTotal = stats.memTotal;
 
-      if (target.type === 'Docker') {
+      if (target.platformDescriptor?.$type === 'Docker') {
         const descriptor = {
-          ...(target.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
+          ...target.platformDescriptor,
           $type: 'Docker' as const,
         };
 

@@ -1,4 +1,4 @@
-import { DockerNetworkDetailsView, NetworkConnectedContainer } from '@/api/generated/api.types';
+import { NetworkView, NetworkAttachmentView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { useAppContext } from '@/lib/context/app-context';
 import { truncate } from '@/lib/truncate';
@@ -8,7 +8,7 @@ import { Box } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
-const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedContainerProps>[] => [
+const columns = (platformId: string | undefined): ColumnDef<NetworkAttachmentRow>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,
@@ -17,9 +17,9 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedCont
         <Box width={13} height={13} className="text-primary" />
         <Link
           to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`}
-          title={row.original.name}
+          title={row.original.name ?? row.original.id}
           className="table-link">
-          {truncate(row.original.name, 24)}
+          {truncate(row.original.name ?? row.original.id, 24)}
         </Link>
       </div>
     ),
@@ -47,9 +47,9 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedCont
   },
 ];
 
-export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetailsView | undefined }) => {
+export const ContainerInfoTable = ({ network }: { network: NetworkView | undefined }) => {
   const { currentPlatform } = useAppContext();
-  const containers: NetworkConnectedContainerProps[] = useMemo(
+  const containers: NetworkAttachmentRow[] = useMemo(
     () =>
       Object.entries(network?.containers ?? [])
         .map(([id, container]) => ({ id, ...container }))
@@ -74,4 +74,4 @@ export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetailsV
   );
 };
 
-type NetworkConnectedContainerProps = NetworkConnectedContainer & { id: string };
+type NetworkAttachmentRow = NetworkAttachmentView & { id: string };

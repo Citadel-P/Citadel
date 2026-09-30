@@ -43,3 +43,6 @@ mod tasks;
 pub use tasks::BuildTaskSpawner;
 
 pub mod permissions;
+
+mod status;
+pub use status::{BuildAgentPoolValidationStatus, BuildRunStatus};

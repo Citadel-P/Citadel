@@ -69,10 +69,14 @@ mod backup_summaries;
 mod backup_webhooks;
 #[path = "phase7_resources_http/build_completion.rs"]
 mod build_completion;
+#[path = "phase7_resources_http/build_contracts.rs"]
+mod build_contracts;
 #[path = "phase7_resources_http/build_pools.rs"]
 mod build_pools;
 #[path = "phase7_resources_http/build_webhooks.rs"]
 mod build_webhooks;
+#[path = "phase7_resources_http/git_contracts.rs"]
+mod git_contracts;
 #[path = "phase7_resources_http/git_webhooks.rs"]
 mod git_webhooks;
 #[path = "phase7_resources_http/stack_webhooks.rs"]
@@ -243,6 +247,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
     let fixture = seed_dependencies(&pool, principal.actor_id).await;
     validation::verify_inputs(&app, &principal, fixture.git_repository).await;
+    git_contracts::verify(&app, &principal).await;
     let suffix = Uuid::now_v7().simple().to_string();
 
     let build_pool_response = request(
@@ -662,6 +667,9 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             "BuildUpdated"
         ]
     );
+    build_entitlement.set_enabled(true);
+    build_contracts::verify(&app, &principal, project_id).await;
+    build_entitlement.set_enabled(false);
     let run = response_json(
         request(
             &app,
@@ -882,7 +890,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .len(),
         0
     );
-    use citadel_identity::{UserRepository, UserResourceAccessInput};
+    use citadel_identity::{ResourceAccessInput, UserRepository};
     let users = citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone());
     for (resource_type, resource_id) in [
         (ResourceType::Build, Uuid::parse_str(project_id).unwrap()),
@@ -906,7 +914,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         users
             .add_resource_access(
                 reader.subject_id,
-                &UserResourceAccessInput {
+                &ResourceAccessInput {
                     resource_type,
                     resource_id,
                     permission_level: citadel_primitives::PermissionLevel::Read,
@@ -950,7 +958,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .status(),
         StatusCode::FORBIDDEN
     );
-    let mut access = UserResourceAccessInput {
+    let mut access = ResourceAccessInput {
         resource_type: ResourceType::Build,
         resource_id: Uuid::parse_str(project_id).unwrap(),
         permission_level: citadel_primitives::PermissionLevel::Read,
@@ -1067,7 +1075,7 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .unwrap();
     assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
     let denied_result = build_store.get_run(denied.id).await.unwrap();
-    assert_eq!(denied_result.status, "Failed");
+    assert_eq!(denied_result.status, citadel_builds::BuildRunStatus::Failed);
     assert_eq!(
         denied_result.error_code.as_deref(),
         Some("build.entitlement")
@@ -1321,7 +1329,7 @@ impl BuildExecutor for FakeBuildExecutor {
                 "Output must be persisted before the execution completes"
             );
             BuildExecutionResult {
-                status: "Succeeded",
+                status: citadel_builds::BuildRunStatus::Succeeded,
                 exit_code: Some(0),
                 image_digest: Some(format!("sha256:{}", "b".repeat(64))),
                 resolved_commit_sha: None,
@@ -1359,7 +1367,7 @@ impl BackupSourcePlanner for FakeBackupPlanner {
     }
     fn validate_source<'a>(
         &'a self,
-        _: &'a Value,
+        _: &'a citadel_backups::spec::BackupSourceSpec,
         _: &'a citadel_backups::BackupRepository,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
@@ -1374,12 +1382,19 @@ impl BackupSourcePlanner for FakeBackupPlanner {
             if self.fail.load(std::sync::atomic::Ordering::Relaxed) {
                 return Err(BackupError::Validation("fixture source unavailable".into()));
             }
-            let source = &claim.policy.source;
+            let citadel_backups::spec::BackupSourceSpec::DockerVolume {
+                platform_id,
+                volume_name,
+                ..
+            } = &claim.policy.source
+            else {
+                panic!("fixture expects volume source")
+            };
             Ok(BackupSourcePlan {
                 display_name: "data".into(),
                 items: vec![citadel_backups::BackupSourceItem::new(
-                    Uuid::parse_str(source["platformId"].as_str().unwrap()).unwrap(),
-                    source["volumeName"].as_str().unwrap().into(),
+                    *platform_id,
+                    volume_name.clone(),
                     None,
                     None,
                 )],
@@ -1413,7 +1428,8 @@ impl BackupExecutor for FakeBackupExecutor {
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
         Box::pin(async move {
-            if repository.spec["path"] == "/outside-allowed-backup-path" {
+            if matches!(&repository.spec, citadel_backups::spec::BackupRepositorySpec::FileSystem { path, .. } if path == "/outside-allowed-backup-path")
+            {
                 return Err(BackupError::Validation(
                     "Core repository path is outside Backups__AllowedCorePaths.".into(),
                 ));
@@ -1429,8 +1445,8 @@ impl BackupExecutor for FakeBackupExecutor {
     ) -> BoxFuture<'a, BackupExecutionResult> {
         Box::pin(async move {
             BackupExecutionResult {
-                status: "Succeeded",
-                snapshot_availability: "Available",
+                status: citadel_backups::BackupRunStatus::Succeeded,
+                snapshot_availability: citadel_backups::BackupSnapshotAvailability::Available,
                 restic_snapshot_id: None,
                 parent_snapshot_id: None,
                 files_processed: None,
@@ -1446,7 +1462,7 @@ impl BackupExecutor for FakeBackupExecutor {
                     .iter()
                     .map(|item| citadel_backups::BackupRunItemResult {
                         id: item.id,
-                        status: "Succeeded",
+                        status: citadel_backups::BackupRunItemStatus::Succeeded,
                         restic_snapshot_id: Some("a".repeat(64)),
                         parent_snapshot_id: None,
                         files_processed: Some(1),
@@ -1467,7 +1483,7 @@ impl BackupExecutor for FakeBackupExecutor {
     ) -> BoxFuture<'a, RestoreExecutionResult> {
         Box::pin(async {
             RestoreExecutionResult {
-                status: "Succeeded",
+                status: citadel_backups::BackupRestoreStatus::Succeeded,
                 exit_code: Some(0),
                 error_code: None,
                 error_message: None,
@@ -1528,7 +1544,7 @@ async fn build_run_api_preserves_queued_resource_snapshots() {
     let persisted = store.get_run(queued.id).await.unwrap();
     for run in [queued, persisted] {
         let response = serde_json::to_value(
-            citadel_server::api::resources::builds::views::BuildRunView::from(run),
+            citadel_server::api::resources::builds::views::BuildRunView::try_from(run).unwrap(),
         )
         .unwrap();
         assert_eq!(

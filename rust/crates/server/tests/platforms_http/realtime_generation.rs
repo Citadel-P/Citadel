@@ -1,7 +1,7 @@
 use super::realtime_groups::{cleanup, invoke, reader, receive, token};
 use super::*;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
-use citadel_identity::{UserRepository, UserResourceAccessInput};
+use citadel_identity::{ResourceAccessInput, UserRepository};
 use citadel_primitives::{PermissionLevel, ResourceType};
 use citadel_server::{
     config::RealtimeConfig,
@@ -34,7 +34,7 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
     let alice = super::lookup::subject(&f).await;
     let bob = super::lookup::subject(&f).await;
     let users = PostgresUserRepository::new(f.pool.clone());
-    let access = UserResourceAccessInput {
+    let access = ResourceAccessInput {
         resource_type: ResourceType::Platform,
         resource_id: f.platform_id,
         permission_level: PermissionLevel::Read,

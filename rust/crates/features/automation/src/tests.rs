@@ -1,9 +1,9 @@
-use crate::jobs::schedule::cron_is_due;
 use crate::runs::logs::allow_net_authority;
 use crate::service::source::automation_source;
 use crate::*;
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
+use citadel_primitives::schedule::schedule_is_due;
 use uuid::Uuid;
 fn input() -> AutomationActionConfiguration {
     AutomationActionConfiguration {
@@ -63,15 +63,19 @@ fn paid_trigger_policy_matches_dotnet_expansion_and_disable_cases() {
         timeout_seconds: 30,
         alert_on_failure: true,
         run_as_actor_id: proposed.run_as_actor_id.unwrap(),
-        control_state: "Idle".into(),
+        control_state: citadel_primitives::ResourceControlState::Idle,
         current_run_id: None,
         row_version: 1,
-        created_by_actor_id: Uuid::now_v7(),
-        created_at: Utc::now(),
+
         updated_at: Utc::now(),
         last_scheduled_run_at: None,
         tags: vec![],
         latest_run: None,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: Utc::now(),
+            created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+        },
     };
     proposed.code = "console.log('changed');".into();
     assert!(!changes_paid_trigger(Some(&current), &proposed));
@@ -120,10 +124,10 @@ fn cron_supports_steps_ranges_lists_and_time_zones() {
     let now = DateTime::parse_from_rfc3339("2026-07-14T08:30:00Z")
         .unwrap()
         .with_timezone(&Utc);
-    assert!(cron_is_due(Some("30 10 * * 2"), "Europe/Paris", now));
-    assert!(cron_is_due(Some("*/15 8-10 * * 1,2"), "UTC", now));
-    assert!(!cron_is_due(Some("31 10 * * *"), "Europe/Paris", now));
-    assert!(!cron_is_due(Some("* * *"), "UTC", now));
+    assert!(schedule_is_due(Some("30 10 * * 2"), "Europe/Paris", now));
+    assert!(schedule_is_due(Some("*/15 8-10 * * 1,2"), "UTC", now));
+    assert!(!schedule_is_due(Some("31 10 * * *"), "Europe/Paris", now));
+    assert!(!schedule_is_due(Some("* * *"), "UTC", now));
 }
 
 #[test]
@@ -143,7 +147,7 @@ fn cron_restricted_days_match_dotnet_cron_schedule_tests() {
             .unwrap()
             .with_timezone(&Utc);
         assert_eq!(
-            cron_is_due(Some(expression), "UTC", now),
+            schedule_is_due(Some(expression), "UTC", now),
             expected,
             "{expression} at {timestamp}"
         );
@@ -172,7 +176,7 @@ fn generated_script_exposes_typed_clients_without_persisting_the_token() {
         action_id: Uuid::now_v7(),
         action_name: "test".to_owned(),
         trigger: "Manual".to_owned(),
-        status: "Running".to_owned(),
+        status: crate::AutomationRunStatus::Running,
         run_as_actor_id: Uuid::now_v7(),
         triggered_by_actor_id: None,
         args_json: r#"{"value":1}"#.to_owned(),

@@ -1,11 +1,4 @@
-import {
-  BackupPolicyView,
-  BackupSourceSpec,
-  BackupSourceSpecDeploymentBackupSource,
-  BackupSourceSpecDockerVolumeBackupSource,
-  BackupSourceSpecStackBackupSource,
-  ResourceControlState,
-} from '@/api/generated/api.types';
+import { BackupSourceSpec, BackupPolicyView, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -89,9 +82,7 @@ const columns = (
   {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
-    cell: ({ row }) => (
-      <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />
-    ),
+    cell: ({ row }) => <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />,
     sortingFn: (rowA, rowB) =>
       String(getBackupPolicyLastRunAt(rowA.original) ?? '').localeCompare(
         String(getBackupPolicyLastRunAt(rowB.original) ?? ''),
@@ -130,7 +121,7 @@ const PolicyNameRow = ({ policy }: { policy: BackupPolicyView }) => (
 
 const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
   if (source.$type === 'DockerVolume') {
-    const dockerSource = source as BackupSourceSpecDockerVolumeBackupSource;
+    const dockerSource = source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>;
 
     return (
       <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
@@ -143,7 +134,7 @@ const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
   }
 
   if (source.$type === 'Stack') {
-    const stackSource = source as BackupSourceSpecStackBackupSource;
+    const stackSource = source as Extract<BackupSourceSpec, { $type: 'Stack' }>;
 
     return (
       <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
@@ -156,7 +147,7 @@ const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
   }
 
   if (source.$type === 'Deployment') {
-    const deploymentSource = source as BackupSourceSpecDeploymentBackupSource;
+    const deploymentSource = source as Extract<BackupSourceSpec, { $type: 'Deployment' }>;
 
     return (
       <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
@@ -191,9 +182,10 @@ const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
 };
 
 const sourceText = (source: BackupSourceSpec) => {
-  if (source.$type === 'DockerVolume') return (source as BackupSourceSpecDockerVolumeBackupSource).volumeName;
-  if (source.$type === 'Stack') return (source as BackupSourceSpecStackBackupSource).stackId;
-  if (source.$type === 'Deployment') return (source as BackupSourceSpecDeploymentBackupSource).deploymentId;
+  if (source.$type === 'DockerVolume')
+    return (source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).volumeName;
+  if (source.$type === 'Stack') return (source as Extract<BackupSourceSpec, { $type: 'Stack' }>).stackId;
+  if (source.$type === 'Deployment') return (source as Extract<BackupSourceSpec, { $type: 'Deployment' }>).deploymentId;
   if (source.$type === 'CitadelSystem') return 'Citadel backup';
   return '';
 };

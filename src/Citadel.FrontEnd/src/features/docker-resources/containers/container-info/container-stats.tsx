@@ -1,4 +1,4 @@
-import { ContainerStateStatus, ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
+import { ContainerStateStatus, ContainerStatView, ContainerRuntimeView } from '@/api/generated/api.types';
 import { StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import { useRead } from '@/lib/hooks';
 import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
@@ -55,7 +55,7 @@ export const ContainerStatsCharts = ({ resource, memory, cpu, network, liveStats
   );
 };
 
-const useLiveStats = (resource: ContainerDataView | undefined) => {
+const useLiveStats = (resource: ContainerRuntimeView | undefined) => {
   const [liveStats, setLiveStats] = useState<Omit<ContainerStatView, 'containerId'>[]>([]);
   const lastStatRef = useRef<ContainerStatView | undefined>(resource?.containerStat);
   const resourceIdRef = useRef<string | undefined>(resource?.id);
@@ -119,7 +119,7 @@ const useDeploymentStatsWindow = (deploymentId: string): StatsQueryState => {
   };
 };
 
-export const ContainerStats = ({ resource }: { resource: ContainerDataView | undefined }) => {
+export const ContainerStats = ({ resource }: { resource: ContainerRuntimeView | undefined }) => {
   const liveStats = useLiveStats(resource);
   const memory = useContainerStatsWindow(resource?.id);
   const cpu = useContainerStatsWindow(resource?.id);
@@ -132,7 +132,7 @@ export const DeploymentStats = ({
   resource,
   deploymentId,
 }: {
-  resource: ContainerDataView | undefined;
+  resource: ContainerRuntimeView | undefined;
   deploymentId: string;
 }) => {
   const liveStats = useLiveStats(resource);

@@ -8,12 +8,8 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'a, Result<BackupRepository, BackupError>> {
         Box::pin(async move {
             let id = Uuid::now_v7();
-            let kind = input
-                .spec
-                .get("$type")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,description,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Unknown',$8)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(kind).bind(&input.spec).bind(input.password_secret_id).bind(actor.value()).execute(&self.pool).await.map_err(storage)?;
+            let kind = input.spec.kind();
+            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,description,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Unknown',$8)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(kind).bind(sqlx::types::Json(&input.spec)).bind(input.password_secret_id).bind(actor.value()).execute(&self.pool).await.map_err(storage)?;
             self.get_repository(id).await
         })
     }
@@ -98,7 +94,7 @@ impl PostgresBackupPersistence {
                 }
             }
             let row = sqlx::query("UPDATE backuprepositories SET description=$2,spec=$3,type=$4,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
-                .bind(id).bind(&input.description).bind(&input.spec).bind(input.spec["$type"].as_str().expect("validated repository type"))
+                .bind(id).bind(&input.description).bind(sqlx::types::Json(&input.spec)).bind(input.spec.kind())
                 .fetch_one(&mut *tx).await.map_err(storage)?;
             let repository = map_repository(row)?;
             tx.commit().await.map_err(storage)?;
@@ -129,6 +125,7 @@ impl PostgresBackupPersistence {
     pub(super) fn record_repository_operation_impl<'a>(
         &'a self,
         id: Uuid,
+        operation_id: Uuid,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
@@ -136,11 +133,32 @@ impl PostgresBackupPersistence {
         message: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(BackupRepository, BackupRepositoryValidation), BackupError>> {
         Box::pin(async move {
-            let status = if succeeded { "Ready" } else { "Unavailable" };
+            let status = if succeeded {
+                citadel_backups::BackupRepositoryValidationStatus::Ready
+            } else {
+                citadel_backups::BackupRepositoryValidationStatus::Unavailable
+            };
             let now = Utc::now();
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            // Lock in the same order as acquisition. A stale executor must not
+            // update readiness or clear the control state of a newer operation.
+            sqlx::query(
+                "SELECT id FROM backuprepositories WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)?;
+            let owns_lease: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND operationtype=$3 AND expiresat>CURRENT_TIMESTAMP)")
+                .bind(id).bind(operation_id).bind(operation).fetch_one(&mut *tx).await.map_err(storage)?;
+            if !owns_lease {
+                return Err(BackupError::Conflict(
+                    "Backup Repository operation lease is no longer owned.".into(),
+                ));
+            }
             let changed = sqlx::query("UPDATE backuprepositories SET status=$2,lastcheckedat=CASE WHEN $3 IN('Validate','Initialize','Check') THEN $5 ELSE lastcheckedat END,lastprunedat=CASE WHEN $3='Prune' AND $4 THEN $5 ELSE lastprunedat END,updatedat=$5,rowversion=rowversion+1,controlstate='Idle',currentrunid=NULL,controlstartedat=NULL WHERE id=$1 AND archivedat IS NULL")
-                .bind(id).bind(status).bind(operation).bind(succeeded).bind(now).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+                .bind(id).bind(status.as_str()).bind(operation).bind(succeeded).bind(now).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed == 0 {
                 return Err(BackupError::NotFound);
             }
@@ -150,10 +168,10 @@ impl PostgresBackupPersistence {
             let error_code = (!succeeded).then_some("backup.repository_unavailable");
             if existing.is_some() {
                 sqlx::query("UPDATE backuprepositoryvalidations SET status=$2,lastvalidatedat=$3,lasterrorcode=$4,lasterrormessage=$5 WHERE id=$1")
-                    .bind(validation_id).bind(status).bind(now).bind(error_code).bind(message).execute(&mut *tx).await.map_err(storage)?;
+                    .bind(validation_id).bind(status.as_str()).bind(now).bind(error_code).bind(message).execute(&mut *tx).await.map_err(storage)?;
             } else {
                 sqlx::query("INSERT INTO backuprepositoryvalidations(id,backuprepositoryid,location,platformid,status,lastvalidatedat,lasterrorcode,lasterrormessage) VALUES($1,$2,$3,$4,$5,$6,$7,$8)")
-                    .bind(validation_id).bind(id).bind(location).bind(platform_id).bind(status).bind(now).bind(error_code).bind(message).execute(&mut *tx).await.map_err(storage)?;
+                    .bind(validation_id).bind(id).bind(location).bind(platform_id).bind(status.as_str()).bind(now).bind(error_code).bind(message).execute(&mut *tx).await.map_err(storage)?;
             }
             tx.commit().await.map_err(storage)?;
             if !succeeded {
@@ -166,7 +184,7 @@ impl PostgresBackupPersistence {
                     backup_repository_id: id,
                     location: location.to_owned(),
                     platform_id,
-                    status: status.to_owned(),
+                    status,
                     last_validated_at: now,
                     last_error_code: error_code.map(str::to_owned),
                     last_error_message: message.map(str::to_owned),

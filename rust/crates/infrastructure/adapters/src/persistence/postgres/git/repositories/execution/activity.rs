@@ -24,7 +24,14 @@ pub(super) async fn repository_snapshot(
         }
         .to_owned(),
         sync_interval_minutes: source.sync_interval_minutes,
-        webhook: mask_webhook(row.try_get("webhook").map_err(storage)?),
+        webhook: row
+            .try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>(
+                "webhook",
+            )
+            .map_err(storage)?
+            .and_then(|v| v.0)
+            .as_ref()
+            .map(citadel_primitives::WebhookConfig::redacted),
         on_clone: parse_json_column(row.try_get("onclone").map_err(storage)?)?,
         on_pull: parse_json_column(row.try_get("onpull").map_err(storage)?)?,
         resolved_commit_sha: commit.map(str::to_owned),

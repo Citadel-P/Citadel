@@ -17,3 +17,5 @@ pub mod service_accounts;
 pub mod teams;
 
 pub mod users;
+
+mod resource_access;

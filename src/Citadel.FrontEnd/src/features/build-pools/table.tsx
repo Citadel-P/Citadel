@@ -1,8 +1,5 @@
 import {
-  BuildAgentPoolProvider,
   BuildAgentPoolConnectionMode,
-  BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
-  BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
   BuildAgentPoolValidationStatus,
   AuthorizedPool,
   ResourceControlState,
@@ -122,14 +119,8 @@ const BuildPoolNameRow = ({
 );
 
 const ProviderCell = ({ pool }: { pool: AuthorizedPool }) => {
-  const aws =
-    pool.provider === BuildAgentPoolProvider.AwsEc2
-      ? (pool.providerSpec as BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec)
-      : undefined;
-  const vm =
-    pool.provider === BuildAgentPoolProvider.SelfManagedVm
-      ? (pool.providerSpec as BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec)
-      : undefined;
+  const aws = pool.providerSpec.$type === 'AwsEc2' ? pool.providerSpec : undefined;
+  const vm = pool.providerSpec.$type === 'SelfManagedVm' ? pool.providerSpec : undefined;
   const label = aws ? 'AWS EC2' : vm ? 'Self-managed VM' : pool.provider;
   const vmTarget = vm?.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? 'Edge Agent' : vm?.endpoint;
   const details = aws

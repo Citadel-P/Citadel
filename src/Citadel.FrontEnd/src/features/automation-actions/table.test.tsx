@@ -1,6 +1,6 @@
 import {
-  ActionRunStatus,
-  ActionRunTrigger,
+  AutomationRunStatus,
+  AutomationRunTrigger,
   AuthorizedAction,
   ResourceControlState,
 } from '@/api/generated/api.types';
@@ -34,7 +34,7 @@ const createAction = (enabled: boolean): AuthorizedAction => ({
     id: 'run-id',
     actionId: 'action-id',
     actionName: 'Action',
-    trigger: ActionRunTrigger.Manual,
+    trigger: AutomationRunTrigger.Manual,
     runAsActorId: 'actor-id',
     triggeredByActorId: null,
     argsJson: '{}',
@@ -47,7 +47,7 @@ const createAction = (enabled: boolean): AuthorizedAction => ({
     exitCode: 0,
     logs: null,
     errorMessage: null,
-    status: ActionRunStatus.Succeeded,
+    status: AutomationRunStatus.Succeeded,
     queuedAt: '2026-08-02T00:00:00Z',
   },
   tags: [],

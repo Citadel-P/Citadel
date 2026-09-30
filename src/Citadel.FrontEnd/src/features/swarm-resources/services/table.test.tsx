@@ -1,6 +1,6 @@
 import { createSwarmTask } from '@/test/factories/resources';
 import {
-  ContainerDataView,
+  ContainerRuntimeView,
   ContainerStateStatus,
   SwarmServiceOwnership,
   SwarmTaskView,
@@ -52,7 +52,7 @@ describe('ServicesTable', () => {
         memoryActive: 128,
         memoryLimit: 512,
       },
-    } as ContainerDataView;
+    } as ContainerRuntimeView;
 
     const { user } = renderCitadel(
       <ServicesTable

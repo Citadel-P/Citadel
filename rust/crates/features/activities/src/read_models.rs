@@ -58,7 +58,7 @@ pub struct ActivityRecord {
     pub resource_id: Option<Uuid>,
     pub platform_name: String,
     pub resource_name: String,
-    pub platform_status: String,
+    pub platform_status: citadel_primitives::PlatformStatus,
     pub resource_type: ActivityResourceType,
     pub event_type: ActivityEventType,
     pub status: ActivityStatus,
@@ -107,4 +107,17 @@ mod tests {
 pub struct ActivityAccess {
     pub actor_id: citadel_primitives::ActorId,
     pub administrator: bool,
+}
+
+/// Stored activity envelope used by resource detail queries. Event payloads keep
+/// their historical storage shape until the presentation layer projects them.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivitySummary {
+    pub id: Uuid,
+    pub resource_type: ActivityResourceType,
+    pub event_type: ActivityEventType,
+    pub status: ActivityStatus,
+    pub info: serde_json::Value,
+    pub created_at: DateTime<Utc>,
 }

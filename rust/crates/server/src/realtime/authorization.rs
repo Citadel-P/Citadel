@@ -116,7 +116,9 @@ impl RealtimeReadPort for IdentityRealtimeReader {
             self.platforms
                 .get_platform(platform_id)
                 .await
-                .map(|value| value.map(crate::api::resources::platforms::views::PlatformView::from))
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
+                .map(PlatformView::try_from)
+                .transpose()
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })
@@ -142,7 +144,9 @@ impl RealtimeReadPort for IdentityRealtimeReader {
                 .await?;
             super::shared_reads::platform(&self.platforms, platform_id, Some(event))
                 .await?
-                .map(PlatformView::from)
+                .map(PlatformView::try_from)
+                .transpose()
+                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
                 .ok_or(RealtimeReadError::Authorization)
         })
     }

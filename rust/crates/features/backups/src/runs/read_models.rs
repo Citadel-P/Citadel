@@ -12,7 +12,7 @@ pub struct PlatformBackupSummary {
     pub deployment_policy_count: i32,
     pub swarm_service_policy_count: i32,
     pub attention_policy_count: i32,
-    pub last_run_status: Option<String>,
+    pub last_run_status: Option<crate::BackupRunStatus>,
     pub last_run_at: Option<DateTime<Utc>>,
 }
 
@@ -21,10 +21,10 @@ pub struct VolumeBackupCoverage {
     pub platform_id: Uuid,
     pub volume_name: String,
     pub docker_node_id: Option<String>,
-    pub status: String,
+    pub status: crate::BackupCoverageStatus,
     pub policy_count: i32,
     pub last_run_id: Option<Uuid>,
-    pub last_run_status: Option<String>,
+    pub last_run_status: Option<crate::BackupRunStatus>,
     pub last_run_at: Option<DateTime<Utc>>,
     pub last_successful_run_at: Option<DateTime<Utc>>,
 }

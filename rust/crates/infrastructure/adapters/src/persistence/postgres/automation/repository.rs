@@ -99,7 +99,7 @@ impl AutomationRepository for PostgresAutomationRepository {
     fn enqueue_webhook<'a>(
         &'a self,
         id: Uuid,
-        expected_webhook: &'a RepoWebhookConfig,
+        expected_webhook: &'a WebhookConfig,
         args: &'a serde_json::Value,
     ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>> {
         self.enqueue_webhook_impl(id, expected_webhook, args)

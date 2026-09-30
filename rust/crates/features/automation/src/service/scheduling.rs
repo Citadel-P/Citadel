@@ -3,7 +3,7 @@ impl AutomationService {
     pub async fn queue_webhook(
         &self,
         id: Uuid,
-        expected_webhook: &RepoWebhookConfig,
+        expected_webhook: &WebhookConfig,
         args: &Value,
     ) -> Result<(), AutomationError> {
         let action = self.store.get(id).await?;
@@ -69,7 +69,7 @@ impl AutomationService {
                     tracing::warn!(action_id=%action.id, "Scheduled Action exceeds the configured timeout limit");
                     continue;
                 }
-                if !cron_is_due(
+                if !schedule_is_due(
                     action.schedule_cron.as_deref(),
                     &action.schedule_time_zone,
                     minute,

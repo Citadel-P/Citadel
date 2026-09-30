@@ -351,7 +351,7 @@ resource_tag_handlers!(
     operation_id = "replacePlatformTags",
     tag = "Platforms",
     summary = "Replace Platform tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -387,7 +387,7 @@ resource_tag_handlers!(
     operation_id = "replaceRegistryTags",
     tag = "Registries",
     summary = "Replace Registry tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -423,7 +423,7 @@ resource_tag_handlers!(
     operation_id = "replaceGitRepositoryTags",
     tag = "GitRepositories",
     summary = "Replace Git repository tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -459,7 +459,7 @@ resource_tag_handlers!(
     operation_id = "replaceAutomationActionTags",
     tag = "AutomationActions",
     summary = "Replace AutomationAction tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -495,7 +495,7 @@ resource_tag_handlers!(
     operation_id = "replaceBuildTags",
     tag = "BuildProjects",
     summary = "Replace BuildProject tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -531,7 +531,7 @@ resource_tag_handlers!(
     operation_id = "replaceBuildAgentPoolTags",
     tag = "BuildAgentPools",
     summary = "Replace BuildAgentPool tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -567,7 +567,7 @@ resource_tag_handlers!(
     operation_id = "replaceBackupPolicyTags",
     tag = "BackupPolicies",
     summary = "Replace BackupPolicy tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -603,7 +603,7 @@ resource_tag_handlers!(
     operation_id = "replaceDeploymentTags",
     tag = "Deployments",
     summary = "Replace Deployment tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -639,7 +639,7 @@ resource_tag_handlers!(
     operation_id = "replaceStackTags",
     tag = "Stacks",
     summary = "Replace Stack tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -675,7 +675,7 @@ resource_tag_handlers!(
     operation_id = "replaceSwarmServiceTags",
     tag = "SwarmServices",
     summary = "Replace SwarmService tags",
-    request_body = ref("#/components/schemas/ReplaceResourceTagsInput"),
+    request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors

@@ -1,7 +1,6 @@
 import {
-  PlatformBackupSummaryView,
+  PlatformBackupSummary,
   PlatformConnectorType,
-  PlatformDescriptorDockerPlatformDescriptor,
   PlatformStatView,
   PlatformStatus,
   PlatformType,
@@ -120,7 +119,7 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
 
 type PlatformResourceSummaryProps = {
   platform: PlatformView;
-  backupSummary?: PlatformBackupSummaryView;
+  backupSummary?: PlatformBackupSummary;
   isBackupSummaryLoading?: boolean;
   isBackupSummaryError?: boolean;
 };
@@ -144,7 +143,7 @@ const PlatformResourceSummaryContent = ({
   isBackupSummaryError = false,
   swarmOverview,
 }: PlatformResourceSummaryProps & { swarmOverview?: SwarmOverviewView }) => {
-  const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
+  const descriptor = platform.platformDescriptor?.$type !== 'Kubernetes' ? platform.platformDescriptor : null;
   const currentDisk = getCurrentDiskUsage(platform);
   const resourceMetrics: ResourceMetric[] = [
     {

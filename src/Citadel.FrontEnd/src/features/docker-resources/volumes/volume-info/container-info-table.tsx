@@ -1,4 +1,4 @@
-import { ContainerVolumeResult, VolumeView, PlatformView } from '@/api/generated/api.types';
+import { VolumeContainerView, VolumeView, PlatformView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
@@ -8,7 +8,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Link } from 'react-router';
 import { DockerContainerCell, DockerImageCell, DockerNetworksCell } from '@/components/custom/common';
 
-const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ContainerVolumeResult>[] => [
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<VolumeContainerView>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

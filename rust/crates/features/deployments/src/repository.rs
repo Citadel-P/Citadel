@@ -1,6 +1,7 @@
 //! Transactional durable Deployment persistence.
 use crate::*;
 use citadel_primitives::ActorId;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 pub trait DeploymentRepository: Send + Sync {
@@ -8,7 +9,7 @@ pub trait DeploymentRepository: Send + Sync {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a DeploymentDetails,
+        expected: &'a crate::Deployment,
     ) -> BoxFuture<'a, Result<DeploymentUpdateCheck, DeploymentError>> {
         let _ = (actor, administrator, expected);
         Box::pin(async {
@@ -20,7 +21,7 @@ pub trait DeploymentRepository: Send + Sync {
     fn complete_update_check<'a>(
         &'a self,
         claim: &'a DeploymentUpdateCheck,
-        state: Option<&'a crate::AutoUpdateState>,
+        state: Option<&'a citadel_primitives::AutoUpdateState>,
     ) -> BoxFuture<'a, Result<(), DeploymentError>> {
         let _ = (claim, state);
         Box::pin(async {
@@ -66,21 +67,21 @@ pub trait DeploymentRepository: Send + Sync {
         actor_id: ActorId,
         administrator: bool,
         filter: &'a DeploymentFilter,
-    ) -> BoxFuture<'a, Result<Vec<DeploymentDetails>, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<crate::Deployment>>, DeploymentError>>;
 
     fn get_authorized<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 
     fn create<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateDeployment,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 
     fn update_config<'a>(
         &'a self,
@@ -89,7 +90,7 @@ pub trait DeploymentRepository: Send + Sync {
         id: Uuid,
         expected_row_version: i64,
         spec: &'a DeploymentSpec,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 
     fn update_metadata<'a>(
         &'a self,
@@ -97,7 +98,7 @@ pub trait DeploymentRepository: Send + Sync {
         administrator: bool,
         id: Uuid,
         input: &'a UpdateDeploymentMetadata,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 
     fn rename<'a>(
         &'a self,
@@ -105,7 +106,7 @@ pub trait DeploymentRepository: Send + Sync {
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 
     fn duplicate_draft<'a>(
         &'a self,

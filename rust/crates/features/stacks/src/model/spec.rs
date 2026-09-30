@@ -58,53 +58,18 @@ pub enum StackUpdateBehavior {
     StackAutoDeploy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StackReleaseStatus {
-    Unknown,
-    Created,
-    Applying,
-    Healthy,
-    Pending,
-    Paused,
-    Degraded,
-    Failed,
-    Stopped,
-    TimedOut,
-}
-
-impl StackReleaseStatus {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Unknown => "Unknown",
-            Self::Created => "Created",
-            Self::Applying => "Applying",
-            Self::Healthy => "Healthy",
-            Self::Pending => "Pending",
-            Self::Paused => "Paused",
-            Self::Degraded => "Degraded",
-            Self::Failed => "Failed",
-            Self::Stopped => "Stopped",
-            Self::TimedOut => "TimedOut",
-        }
-    }
-
-    pub fn parse(value: &str) -> Result<Self, StackError> {
-        match value {
-            "Unknown" => Ok(Self::Unknown),
-            "Created" => Ok(Self::Created),
-            "Applying" => Ok(Self::Applying),
-            "Healthy" => Ok(Self::Healthy),
-            "Pending" => Ok(Self::Pending),
-            "Paused" => Ok(Self::Paused),
-            "Degraded" => Ok(Self::Degraded),
-            "Failed" => Ok(Self::Failed),
-            "Stopped" => Ok(Self::Stopped),
-            "TimedOut" => Ok(Self::TimedOut),
-            other => Err(StackError::Storage(format!(
-                "invalid persisted Stack release status '{other}'"
-            ))),
-        }
+citadel_primitives::status_enum! {
+    pub enum StackReleaseStatus {
+        Unknown,
+        Created,
+        Applying,
+        Healthy,
+        Pending,
+        Paused,
+        Degraded,
+        Failed,
+        Stopped,
+        TimedOut,
     }
 }
 
@@ -235,43 +200,12 @@ impl StackBuildImageBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WebhookProvider {
-    GitHub,
-    GitLab,
-    Generic,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WebhookAuthScheme {
-    GitHubHmacSha256,
-    GitLabSignedToken,
-    GitLabLegacyToken,
-    BearerToken,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StackWebhookConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_webhook_provider")]
-    pub provider: WebhookProvider,
-    #[serde(default = "default_webhook_auth")]
-    pub auth_scheme: WebhookAuthScheme,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub secret: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub branch_filter: Option<String>,
+    #[serde(flatten)]
+    pub config: citadel_primitives::WebhookConfig,
     #[serde(default)]
     pub force_deploy: bool,
-}
-
-const fn default_webhook_provider() -> WebhookProvider {
-    WebhookProvider::GitHub
-}
-
-const fn default_webhook_auth() -> WebhookAuthScheme {
-    WebhookAuthScheme::GitHubHmacSha256
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -442,13 +376,9 @@ impl StackSpec {
                     validate_relative(path, "Repository path")?;
                 }
                 validate_relative_optional(working_directory.as_deref(), "Working directory")?;
-                let webhook = webhook
-                    .as_ref()
-                    .map(serde_json::to_value)
-                    .transpose()
-                    .map_err(json_storage)?;
-                citadel_git::repositories::webhooks::validate_webhook(webhook.as_ref())
-                    .map_err(|error| validation(&error.to_string()))?;
+                if let Some(webhook) = webhook {
+                    webhook.config.validate().map_err(validation)?;
+                }
             }
         }
         Ok(())
@@ -721,10 +651,7 @@ pub(crate) fn normalize_name(name: &mut String) -> Result<(), StackError> {
 }
 
 pub(crate) fn normalize_description(value: &mut Option<String>) -> Result<(), StackError> {
-    *value = value.take().and_then(|item| {
-        let trimmed = item.trim().to_owned();
-        (!trimmed.is_empty()).then_some(trimmed)
-    });
+    *value = citadel_primitives::normalization::optional_text(value.take());
     if value.as_ref().is_some_and(|item| item.len() > 2_000) {
         return Err(validation(
             "Stack description must not exceed 2000 characters.",
@@ -752,6 +679,7 @@ pub enum StackImportKind {
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectRuntimeService {
     pub name: String,
+
     pub image: Option<String>,
     pub container_count: usize,
     pub states: Vec<String>,
@@ -763,6 +691,7 @@ pub struct StackAdoptionIssue {
     pub code: String,
     pub message: String,
     pub severity: String,
+
     pub field_path: Option<String>,
 }
 
@@ -771,8 +700,10 @@ pub struct StackAdoptionIssue {
 pub struct ComposeProjectServiceComparison {
     pub name: String,
     pub runtime_container_count: usize,
+
     pub runtime_image: Option<String>,
     pub defined_in_source: bool,
+
     pub source_image: Option<String>,
 }
 
@@ -786,45 +717,16 @@ pub struct ComposeProjectImportValidation {
     pub can_import_sensitive_environment_values: bool,
 }
 
-pub(crate) fn merge_json(base: &mut Value, patch: &Value) {
-    match (base, patch) {
-        (Value::Object(base), Value::Object(patch)) => {
-            for (key, value) in patch {
-                if value.is_null() {
-                    base.remove(key);
-                } else {
-                    merge_json(base.entry(key).or_insert(Value::Null), value);
-                }
-            }
-        }
-        (base, patch) => *base = patch.clone(),
-    }
-}
+pub(crate) use citadel_primitives::merge_json;
 
 pub(crate) fn rename_object_keys(value: &mut Value, pascal: bool) {
-    match value {
-        Value::Object(map) => {
-            let old = std::mem::take(map);
-            for (key, mut child) in old {
-                rename_object_keys(&mut child, pascal);
-                let mut chars = key.chars();
-                let renamed = match chars.next() {
-                    Some(first) if pascal => {
-                        first.to_ascii_uppercase().to_string() + chars.as_str()
-                    }
-                    Some(first) => first.to_ascii_lowercase().to_string() + chars.as_str(),
-                    None => key,
-                };
-                map.insert(renamed, child);
-            }
-        }
-        Value::Array(values) => {
-            for child in values {
-                rename_object_keys(child, pascal);
-            }
-        }
-        _ => {}
-    }
+    use citadel_primitives::json_keys::{PropertyCase, map_property_keys};
+    let case = if pascal {
+        PropertyCase::Pascal
+    } else {
+        PropertyCase::Camel
+    };
+    *value = map_property_keys(value.take(), case, &[]);
 }
 
 pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
@@ -841,6 +743,19 @@ pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_normalization_retains_stack_specific_limits() {
+        let mut name = " stack project ".to_owned();
+        normalize_name(&mut name).unwrap();
+        assert_eq!(name, "stack project");
+        assert!(normalize_name(&mut "a".repeat(101)).is_err());
+        let mut description = Some(" \t ".to_owned());
+        normalize_description(&mut description).unwrap();
+        assert_eq!(description, None);
+        assert!(normalize_description(&mut Some("é".repeat(1_000))).is_ok());
+        assert!(normalize_description(&mut Some("é".repeat(1_001))).is_err());
+    }
 
     #[test]
     fn successful_git_apply_advances_and_clears_the_update_state() {
@@ -910,5 +825,24 @@ mod tests {
         assert_eq!(binding.applied_build_run_id, Some(run_id));
         assert_eq!(binding.resolved_build_run_id, Some(run_id));
         assert_eq!(binding.applied_at, Some(applied_at));
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::StackReleaseStatus;
+
+    #[test]
+    fn release_statuses_roundtrip_and_unknown_storage_values_are_rejected() {
+        for status in StackReleaseStatus::ALL {
+            assert_eq!(
+                status.as_str().parse::<StackReleaseStatus>().unwrap(),
+                *status
+            );
+            assert_eq!(serde_json::to_value(status).unwrap(), status.as_str());
+        }
+        for invalid in ["", "healthy", "Timedout", "Stopped ", "Invalid"] {
+            assert!(invalid.parse::<StackReleaseStatus>().is_err());
+        }
     }
 }

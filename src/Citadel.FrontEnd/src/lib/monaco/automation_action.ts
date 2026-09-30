@@ -80,7 +80,7 @@ type CitadelStacksClient = CitadelResourceGroup<"stacks"> & {
   rollbackStack: CitadelActionMethod<"rollbackStack">;
 };
 
-type CitadelAutomationTrigger = \`\${ApiTypes.ActionRunTrigger}\`;
+type CitadelAutomationTrigger = \`\${ApiTypes.AutomationRunTrigger}\`;
 type CitadelHttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | string;
 
 interface CitadelAutomationRun {

@@ -5,12 +5,12 @@ use crate::*;
 pub struct BackupPolicyConfiguration {
     pub name: String,
     pub description: Option<String>,
-    pub source: Value,
+    pub source: crate::spec::BackupSourceSpec,
     pub backup_repository_id: Uuid,
     pub enabled: bool,
     pub cron: Option<String>,
     pub time_zone: Option<String>,
-    pub webhook: Option<Value>,
+    pub webhook: Option<citadel_primitives::WebhookConfig>,
     pub keep_last_successful: Option<i32>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
@@ -27,27 +27,21 @@ impl BackupPolicyConfiguration {
                 "Backup Repository is required.".into(),
             ));
         }
-        match discriminator(&self.source)? {
-            "DockerVolume" => {
-                required_uuid(&self.source, "platformId")?;
-                required_string(&self.source, "volumeName")?;
-            }
-            "CitadelSystem" => {}
-            "Stack" => {
-                required_uuid(&self.source, "stackId")?;
-            }
-            "Deployment" => {
-                required_uuid(&self.source, "deploymentId")?;
-            }
-            "SwarmService" => {
-                required_uuid(&self.source, "swarmServiceId")?;
-            }
-            _ => {
+        self.source.validate()?;
+        if let Some(webhook) = &mut self.webhook {
+            webhook.secret =
+                citadel_primitives::normalization::optional_text(webhook.secret.take());
+            webhook.branch_filter =
+                citadel_primitives::normalization::optional_text(webhook.branch_filter.take());
+            webhook
+                .validate()
+                .map_err(|e| BackupError::Validation(e.into()))?;
+            if webhook.enabled && webhook.secret.is_none() {
                 return Err(BackupError::Validation(
-                    "Backup source type is unsupported.".into(),
+                    "An enabled Webhook requires a secret.".into(),
                 ));
             }
-        };
+        }
         let keep = self.keep_last_successful.unwrap_or(14);
         if !(1..=1000).contains(&keep) {
             return Err(BackupError::Validation(
@@ -68,8 +62,7 @@ impl BackupPolicyConfiguration {
             .is_some_and(|value| !value.trim().is_empty())
         {
             let zone = self.time_zone.as_deref().unwrap_or("UTC");
-            if !valid_cron(self.cron.as_deref().unwrap_or_default()) || zone.parse::<Tz>().is_err()
-            {
+            if CronSchedule::parse(self.cron.as_deref().unwrap_or_default(), zone).is_err() {
                 return Err(BackupError::Validation(
                     "Backup schedule requires a valid five-field cron expression and time zone."
                         .into(),

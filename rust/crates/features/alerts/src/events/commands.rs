@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub struct NewAlertEvent {
     pub alert_rule_id: Uuid,
     pub alert_type: String,
-    pub severity: String,
+    pub severity: crate::AlertSeverity,
     pub info: Value,
     pub resource_id: Option<Uuid>,
     pub resource_name: String,

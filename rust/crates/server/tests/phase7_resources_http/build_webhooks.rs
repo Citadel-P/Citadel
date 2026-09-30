@@ -4,6 +4,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Default)]
 pub struct Entitlement(AtomicBool);
+impl Entitlement {
+    pub(super) fn set_enabled(&self, enabled: bool) {
+        self.0.store(enabled, Ordering::Relaxed);
+    }
+}
 impl BuildEntitlements for Entitlement {
     fn enabled(
         &self,
@@ -113,7 +118,7 @@ pub async fn verify(
     assert!(builds.process_one(&CancellationToken::new()).await.unwrap());
     assert_eq!(
         builds.store().get_run(run.id).await.unwrap().status,
-        "Succeeded"
+        citadel_builds::BuildRunStatus::Succeeded
     );
     super::build_completion::verify(pool, run.id, &consumers).await;
     let events: i64 = sqlx::query_scalar(

@@ -82,19 +82,3 @@ pub(super) fn extract_git_domain(repository_url: &str) -> Result<String, GitRepo
         Ok(host.to_owned())
     }
 }
-
-pub(super) fn merge_json_patch(
-    patch: &citadel_git::repositories::FieldPatch<Value>,
-    current: Option<&Value>,
-) -> Option<Value> {
-    use citadel_git::repositories::FieldPatch;
-    match patch {
-        FieldPatch::Missing => current.cloned(),
-        FieldPatch::Null => None,
-        FieldPatch::Value(patch) => {
-            let mut value = current.cloned().unwrap_or(Value::Null);
-            apply_json_merge_patch(&mut value, patch);
-            Some(value)
-        }
-    }
-}

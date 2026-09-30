@@ -1,4 +1,4 @@
-import type { BuildWebhookConfig } from '@/api/generated/api.types';
+import type { WebhookConfig } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { useState } from 'react';
@@ -14,7 +14,7 @@ describe('WebhookConfigField', () => {
     });
 
     function Harness() {
-      const [value, setValue] = useState<BuildWebhookConfig>({ enabled: true });
+      const [value, setValue] = useState<WebhookConfig>({ enabled: true });
       return (
         <WebhookConfigField
           resourceType="swarm-service"

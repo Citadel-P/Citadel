@@ -11,32 +11,34 @@ pub(super) async fn record_run_activity(
         .await
         .map_err(storage)?;
     let run = map_run(row)?;
-    let info = match run.status.as_str() {
-        "Queued" => ActivityEventInfo::BackupRunQueued {
+    let info = match run.status {
+        citadel_backups::BackupRunStatus::Queued => ActivityEventInfo::BackupRunQueued {
             run_id: id,
             trigger: run.trigger,
         },
-        "Running" => ActivityEventInfo::BackupRunStarted {
+        citadel_backups::BackupRunStatus::Running => ActivityEventInfo::BackupRunStarted {
             run_id: id,
             trigger: run.trigger,
         },
-        "Succeeded"
-        | "SucceededWithWarnings"
-        | "Failed"
-        | "TimedOut"
-        | "Cancelled"
-        | "Interrupted"
-        | "Rejected" => ActivityEventInfo::BackupRunCompleted {
+        citadel_backups::BackupRunStatus::Succeeded
+        | citadel_backups::BackupRunStatus::SucceededWithWarnings
+        | citadel_backups::BackupRunStatus::Failed
+        | citadel_backups::BackupRunStatus::TimedOut
+        | citadel_backups::BackupRunStatus::Cancelled
+        | citadel_backups::BackupRunStatus::Interrupted
+        | citadel_backups::BackupRunStatus::Rejected => ActivityEventInfo::BackupRunCompleted {
             run_id: id,
             trigger: run.trigger,
-            status: run.status,
+            status: run.status.to_string(),
             duration_ms: run
                 .started_at
                 .zip(run.completed_at)
                 .map(|(start, end)| (end - start).num_milliseconds().max(0)),
             error_message: run.error_message,
         },
-        _ => {
+        citadel_backups::BackupRunStatus::Preparing
+        | citadel_backups::BackupRunStatus::Processing
+        | citadel_backups::BackupRunStatus::ApplyingRetention => {
             return Err(BackupError::Storage(
                 "Invalid Backup Activity transition.".into(),
             ));

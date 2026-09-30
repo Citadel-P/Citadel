@@ -1,12 +1,14 @@
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::stacks::spec::*;
 use crate::api::resources::tags::views::TagSummary;
 use crate::api::resources::{
-    activities::views::LatestActivityView,
-    common::{DuplicateSourceInput, PlatformStatus, ResourceControlState},
-    platforms::requests::PlatformType,
-    stacks::requests::CreateStackInput,
+    activities::views::LatestActivityView, common::DuplicateSourceInput,
+    platforms::requests::PlatformType, stacks::requests::CreateStackInput,
 };
 use chrono::{DateTime, Utc};
+use citadel_primitives::AuthorizedResource;
+use citadel_primitives::PlatformStatus;
+use citadel_primitives::ResourceControlState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -16,9 +18,12 @@ pub struct StackReleaseView {
     pub id: Uuid,
     pub stack_id: Uuid,
     pub platform_id: Uuid,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackReleaseStatusSchema)]
     pub status: StackReleaseStatus,
     pub version: String,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub spec: StackSpec,
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackReleaseSourceSchema>)]
     pub source: Option<StackReleaseSource>,
     pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
     pub created_at: DateTime<Utc>,
@@ -26,24 +31,24 @@ pub struct StackReleaseView {
     pub actor_name: String,
     #[schema(value_type = crate::api::resources::vocabulary::ActorTypeSchema)]
     pub actor_type: citadel_identity::ActorType,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
     pub platform_status: PlatformStatus,
     pub platform_name: Option<String>,
 }
 
-impl TryFrom<citadel_stacks::StackReleaseDetails> for StackReleaseView {
+impl TryFrom<citadel_stacks::StackRelease> for StackReleaseView {
     type Error = serde_json::Error;
 
-    fn try_from(value: citadel_stacks::StackReleaseDetails) -> Result<Self, Self::Error> {
+    fn try_from(value: citadel_stacks::StackRelease) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: value.release.id,
-            stack_id: value.release.stack_id,
-            platform_id: value.release.platform_id,
-            status: value.release.status.into(),
-            version: value.release.version,
-            spec: value.release.spec.into(),
-            source: value.release.source.map(|item| item.into()),
+            id: value.id,
+            stack_id: value.stack_id,
+            platform_id: value.platform_id,
+            status: value.status,
+            version: value.version,
+            spec: value.spec,
+            source: value.source,
             resource_bindings: value
-                .release
                 .resource_bindings
                 .map(|items| {
                     items
@@ -52,11 +57,11 @@ impl TryFrom<citadel_stacks::StackReleaseDetails> for StackReleaseView {
                         .collect::<Result<Vec<_>, _>>()
                 })
                 .transpose()?,
-            created_at: value.release.created_at,
-            created_by_actor_id: value.release.created_by_actor_id,
+            created_at: value.created_at,
+            created_by_actor_id: value.created_by_actor_id,
             actor_name: value.actor_name,
             actor_type: serde_json::from_value(value.actor_type.into())?,
-            platform_status: serde_json::from_value(value.platform_status.into())?,
+            platform_status: value.platform_status,
             platform_name: value.platform_name,
         })
     }
@@ -84,15 +89,6 @@ pub struct StackCapabilities {
     pub can_view_releases: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
-#[schema(as = stacks::model::ResourceCapabilities)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceCapabilities {
-    pub can_read: bool,
-    pub can_write: bool,
-    pub can_execute: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackView {
@@ -100,12 +96,17 @@ pub struct StackView {
     pub name: String,
     #[schema(required = true)]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackUpdateStateSchema)]
     pub stack_update_state: StackUpdateState,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackDriftPolicySchema)]
     pub drift_policy: StackDriftPolicy,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackReleaseStatusSchema)]
     pub status: StackReleaseStatus,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
     pub control_state: ResourceControlState,
     pub current_stack_release_id: Uuid,
     pub platform_type: PlatformType,
@@ -113,12 +114,13 @@ pub struct StackView {
     pub platform_id: Option<Uuid>,
     #[schema(required = true)]
     pub version: Option<String>,
-    #[schema(required = true)]
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::stacks::StackSpecSchema>)]
     pub spec: Option<StackSpec>,
-    #[schema(required = true)]
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::stacks::StackReleaseSourceSchema>)]
     pub source: Option<StackReleaseSource>,
     #[schema(required = true)]
     pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
     pub platform_status: PlatformStatus,
     #[schema(required = true)]
     pub platform_name: Option<String>,
@@ -130,27 +132,29 @@ pub struct StackView {
     pub row_version: i64,
 }
 
-impl TryFrom<citadel_stacks::StackDetails> for StackView {
+impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
     type Error = serde_json::Error;
 
-    fn try_from(value: citadel_stacks::StackDetails) -> Result<Self, Self::Error> {
+    fn try_from(value: AuthorizedResource<citadel_stacks::Stack>) -> Result<Self, Self::Error> {
+        let permission = value.effective_permission;
+        let value = value.resource;
         Ok(Self {
-            id: value.stack.id,
-            name: value.stack.name,
-            description: value.stack.description,
-            stack_source: value.stack.stack_source.into(),
-            stack_update_state: value.stack.stack_update_state.into(),
-            drift_policy: value.stack.drift_policy.into(),
-            status: value.status.into(),
-            created_at: value.stack.created_at,
-            created_by_actor_id: value.stack.created_by_actor_id,
-            control_state: serde_json::from_value(value.stack.control_state.into())?,
-            current_stack_release_id: value.stack.current_stack_release_id,
+            id: value.id,
+            name: value.name,
+            description: value.description,
+            stack_source: value.stack_source,
+            stack_update_state: value.stack_update_state,
+            drift_policy: value.drift_policy,
+            status: value.status,
+            created_at: value.audit.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            control_state: value.control_state,
+            current_stack_release_id: value.current_stack_release_id,
             platform_type: value.platform_type.into(),
             platform_id: value.platform_id,
             version: value.version,
-            spec: value.spec.map(|item| item.into()),
-            source: value.source.map(|item| item.into()),
+            spec: value.spec,
+            source: value.source,
             resource_bindings: value
                 .resource_bindings
                 .map(|items| {
@@ -160,17 +164,14 @@ impl TryFrom<citadel_stacks::StackDetails> for StackView {
                         .collect::<Result<Vec<_>, _>>()
                 })
                 .transpose()?,
-            platform_status: serde_json::from_value(value.platform_status.into())?,
+            platform_status: value.platform_status,
             platform_name: value.platform_name,
             tags: value.tags.into_iter().map(|item| item.into()).collect(),
-            latest_activity_view: value
-                .latest_activity
-                .map(LatestActivityView::from_stored)
-                .transpose()?,
+            latest_activity_view: value.latest_activity.map(LatestActivityView::from),
             capabilities: Some(crate::api::resources::stacks::capabilities::capabilities(
-                value.effective_permission,
+                permission,
             )),
-            row_version: value.stack.row_version,
+            row_version: value.row_version,
         })
     }
 }
@@ -179,7 +180,7 @@ impl TryFrom<citadel_stacks::StackDetails> for StackView {
 #[serde(rename_all = "camelCase")]
 pub struct StacksView {
     pub stacks: Vec<StackView>,
-    pub capabilities: ResourceCapabilities,
+    pub capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -191,9 +192,13 @@ pub struct StackConfigView {
     pub platform_type: PlatformType,
     #[schema(required = true)]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub stack_source: StackSource,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
     pub spec: StackSpec,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackUpdateStateSchema)]
     pub stack_update_state: StackUpdateState,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackDriftPolicySchema)]
     pub drift_policy: StackDriftPolicy,
     pub row_version: i64,
 }
@@ -206,10 +211,10 @@ impl From<citadel_stacks::StackConfig> for StackConfigView {
             platform_id: value.platform_id,
             platform_type: value.platform_type.into(),
             description: value.description,
-            stack_source: value.stack_source.into(),
-            spec: value.spec.into(),
-            stack_update_state: value.stack_update_state.into(),
-            drift_policy: value.drift_policy.into(),
+            stack_source: value.stack_source,
+            spec: value.spec,
+            stack_update_state: value.stack_update_state,
+            drift_policy: value.drift_policy,
             row_version: value.row_version,
         }
     }
@@ -227,6 +232,7 @@ pub struct StackStreamItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackReleaseStatusSchema>)]
     pub stack_status: Option<StackReleaseStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
@@ -244,7 +250,7 @@ impl From<citadel_stacks::StackProgressItem> for StackStreamItem {
             message,
             progress_message,
             exit_code: value.exit_code,
-            stack_status: value.stack_status.map(|item| item.into()),
+            stack_status: value.stack_status,
             severity: value.severity,
         }
     }
@@ -285,9 +291,9 @@ impl From<citadel_stacks::StackDuplicateDraft> for StackDuplicateDraftView {
                 name: value.draft.name,
                 platform_id: value.draft.platform_id,
                 description: value.draft.description,
-                stack_source: value.draft.stack_source.into(),
-                spec: value.draft.spec.into(),
-                drift_policy: Some(value.draft.drift_policy.into()),
+                stack_source: value.draft.stack_source,
+                spec: value.draft.spec,
+                drift_policy: Some(value.draft.drift_policy),
                 tag_ids: value.draft.tag_ids,
                 duplicate_source: Some(DuplicateSourceInput {
                     resource_type: citadel_activities::ActivityResourceType::Stack,
@@ -308,6 +314,7 @@ pub struct ComposeProjectImportSourceView {
     pub project_name: String,
     pub container_ids: Vec<String>,
     pub container_names: Vec<String>,
+    #[schema(value_type = Vec<crate::api::resources::schema_models::stacks::ComposeProjectRuntimeServiceSchema>)]
     pub services: Vec<ComposeProjectRuntimeService>,
 }
 
@@ -319,7 +326,7 @@ impl From<citadel_stacks::ComposeProjectImportSource> for ComposeProjectImportSo
             project_name: value.project_name,
             container_ids: value.container_ids,
             container_names: value.container_names,
-            services: value.services.into_iter().map(|item| item.into()).collect(),
+            services: value.services,
         }
     }
 }
@@ -331,6 +338,7 @@ pub struct ComposeProjectStackDraftView {
     pub platform_id: Uuid,
     #[schema(required = true)]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::stacks::StackDriftPolicySchema)]
     pub drift_policy: StackDriftPolicy,
     pub tag_ids: Vec<Uuid>,
 }
@@ -341,7 +349,7 @@ impl From<citadel_stacks::ComposeProjectStackDraft> for ComposeProjectStackDraft
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            drift_policy: value.drift_policy.into(),
+            drift_policy: value.drift_policy,
             tag_ids: value.tag_ids,
         }
     }
@@ -353,6 +361,7 @@ pub struct ComposeProjectImportDraftView {
     pub import_kind: StackImportKind,
     pub source: ComposeProjectImportSourceView,
     pub draft: ComposeProjectStackDraftView,
+    #[schema(value_type = Vec<crate::api::resources::schema_models::stacks::StackAdoptionIssueSchema>)]
     pub issues: Vec<StackAdoptionIssue>,
     pub runtime_fingerprint: String,
 }
@@ -363,7 +372,7 @@ impl From<citadel_stacks::ComposeProjectImportDraft> for ComposeProjectImportDra
             import_kind: value.import_kind.into(),
             source: value.source.into(),
             draft: value.draft.into(),
-            issues: value.issues.into_iter().map(|item| item.into()).collect(),
+            issues: value.issues,
             runtime_fingerprint: value.runtime_fingerprint,
         }
     }

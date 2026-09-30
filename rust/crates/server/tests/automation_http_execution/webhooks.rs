@@ -159,7 +159,7 @@ pub async fn verify(
     assert_eq!(response.status(), StatusCode::ACCEPTED);
     assert_eq!(body(response).await["status"], "queued");
     let run = store.list_runs(id, 1).await.unwrap().remove(0);
-    assert_eq!(run.status, "Queued");
+    assert_eq!(run.status, citadel_automation::AutomationRunStatus::Queued);
     assert_eq!(run.trigger, "Webhook");
     assert_eq!(run.run_as_actor_id, admin.actor_id.value());
     assert_eq!(run.triggered_by_actor_id, None);
@@ -190,7 +190,10 @@ pub async fn verify(
             .unwrap()
     );
     let completed = store.get_run(id, run.id).await.unwrap();
-    assert_eq!(completed.status, "Succeeded");
+    assert_eq!(
+        completed.status,
+        citadel_automation::AutomationRunStatus::Succeeded
+    );
     assert!(completed.logs.unwrap().contains("webhook received from-ci"));
     let activity: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='ActionRunQueued'",

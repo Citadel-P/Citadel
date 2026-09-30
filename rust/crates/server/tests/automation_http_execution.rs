@@ -150,7 +150,8 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .unwrap();
     let running = store.list_runs(id, 1).await.unwrap().remove(0);
     assert_eq!(
-        running.status, "Running",
+        running.status,
+        citadel_automation::AutomationRunStatus::Running,
         "output must arrive before process exit"
     );
     // The same resource remains exclusively claimed while its HTTP stream is open.
@@ -177,9 +178,45 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     );
     assert!(String::from_utf8_lossy(&wire).contains("[redacted]"));
     let run = store.get_run(id, running.id).await.unwrap();
+    let detail = request(
+        &app,
+        Method::GET,
+        &format!("/api/v1/automation/actions/{id}/runs/{}", run.id),
+        Some(admin.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(detail.status(), StatusCode::OK);
+    let detail = body(detail).await;
+    assert_eq!(detail["status"], "Succeeded");
+    assert_eq!(detail["trigger"], "Manual");
+    assert_eq!(detail["exitCode"], 0);
+    assert!(detail["logs"].as_str().unwrap().contains("last"));
+    let listed = request(
+        &app,
+        Method::GET,
+        &format!("/api/v1/automation/actions/{id}/runs"),
+        Some(admin.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(listed.status(), StatusCode::OK);
+    let listed = body(listed).await;
+    let listed_run = listed["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["id"] == detail["id"])
+        .unwrap();
+    for key in ["status", "trigger", "exitCode", "actionId"] {
+        assert_eq!(listed_run[key], detail[key]);
+    }
     assert_eq!(run.exit_code, Some(0));
     assert!(run.logs.unwrap().contains("last"));
-    assert_eq!(store.get(id).await.unwrap().control_state, "Idle");
+    assert_eq!(
+        store.get(id).await.unwrap().control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
     assert!(!root.join(run.id.to_string()).exists());
 
     for (code, expected, seconds) in [
@@ -211,7 +248,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
             .await
             .unwrap()
             .remove(0);
-        assert_eq!(run.status, expected);
+        assert_eq!(run.status.as_str(), expected);
         if expected == "Failed" {
             assert_eq!(run.exit_code, Some(7));
         }
@@ -309,16 +346,21 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     .await
     .unwrap();
     let run = store.list_runs(id, 1).await.unwrap().remove(0);
-    assert_eq!(run.status, "Running");
+    assert_eq!(run.status, citadel_automation::AutomationRunStatus::Running);
     drop(stream);
     tokio::time::timeout(Duration::from_secs(5), async {
-        while store.get_run(id, run.id).await.unwrap().status == "Running" {
+        while store.get_run(id, run.id).await.unwrap().status
+            == citadel_automation::AutomationRunStatus::Running
+        {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
     .await
     .unwrap();
-    assert_eq!(store.get_run(id, run.id).await.unwrap().status, "Cancelled");
+    assert_eq!(
+        store.get_run(id, run.id).await.unwrap().status,
+        citadel_automation::AutomationRunStatus::Cancelled
+    );
     assert!(!root.join(run.id.to_string()).exists());
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='ActionRunCancelled'").bind(id).fetch_one(&db).await.unwrap();
     assert_eq!(count, 1);
@@ -345,7 +387,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let runs = store.list_runs(stalled_id, 1).await.unwrap();
-            if runs[0].status == "Cancelled" {
+            if runs[0].status == citadel_automation::AutomationRunStatus::Cancelled {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;

@@ -1,5 +1,6 @@
 use crate::*;
 use citadel_primitives::ActorId;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 
@@ -29,12 +30,12 @@ pub trait SwarmServiceRepository: Send + Sync {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a SwarmServiceDetails,
+        expected: &'a crate::SwarmService,
     ) -> BoxFuture<'a, Result<ServiceUpdateCheck, SwarmServiceError>>;
     fn complete_update_check<'a>(
         &'a self,
         claim: &'a ServiceUpdateCheck,
-        state: Option<&'a crate::AutoUpdateState>,
+        state: Option<&'a citadel_primitives::AutoUpdateState>,
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>>;
     fn recover_update_checks(
         &self,
@@ -46,40 +47,40 @@ pub trait SwarmServiceRepository: Send + Sync {
         actor_id: ActorId,
         administrator: bool,
         filter: &'a SwarmServiceFilter,
-    ) -> BoxFuture<'a, Result<Vec<SwarmServiceDetails>, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<crate::SwarmService>>, SwarmServiceError>>;
     fn get_authorized(
         &self,
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'_, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
     fn create<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         input: &'a CreateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
     fn update<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
         input: &'a UpdateSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
     fn update_description<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
 
     fn rename<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
         input: &'a RenameSwarmService,
-    ) -> BoxFuture<'a, Result<SwarmServiceDetails, SwarmServiceError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError>>;
     fn delete<'a>(
         &'a self,
         actor_id: ActorId,

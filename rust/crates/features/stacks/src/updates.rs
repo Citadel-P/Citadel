@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 use crate::ImageUpdateState;
 use crate::RecreateStackOnNewImageState;
-use crate::StackDetails;
 use crate::StackError;
 use crate::StackReleaseStatus;
 use crate::StackSpec;
@@ -45,10 +44,10 @@ pub struct ManualStackUpdateEvaluation {
 }
 
 pub fn build_manual_stack_checks(
-    stack: &StackDetails,
+    stack: &crate::Stack,
     scheduled: bool,
 ) -> Result<Vec<ManualStackImageCheck>, StackError> {
-    if stack.control_state == "Processing" {
+    if stack.control_state == citadel_primitives::ResourceControlState::Processing {
         return Err(StackError::Conflict(
             "The Stack is currently processing another operation.".to_owned(),
         ));
@@ -169,7 +168,7 @@ pub fn evaluate_manual_stack_updates(
             baselines += 1;
             remote.clone()
         };
-        let update_available = !current.eq_ignore_ascii_case(remote);
+        let update_available = !citadel_primitives::image_digests_equal(&current, remote);
         next.push(ImageUpdateState {
             service_name: check.service_name.clone(),
             image_name: check.image_name.clone(),
@@ -190,7 +189,7 @@ pub fn evaluate_manual_stack_updates(
                     && state
                         .remote_digest
                         .as_deref()
-                        .is_some_and(|value| value.eq_ignore_ascii_case(remote))
+                        .is_some_and(|value| citadel_primitives::image_digests_equal(value, remote))
             }) {
                 newly_detected.push(item.clone());
             }
@@ -278,7 +277,53 @@ mod tests {
         assert!(repeated.newly_detected_updates.is_empty());
     }
 
-    fn stack(update_behavior: StackUpdateBehavior, compose: &str, build_api: bool) -> StackDetails {
+    #[test]
+    fn equivalent_digest_forms_do_not_trigger_stack_updates_or_repeat_notifications() {
+        let stack = stack(
+            StackUpdateBehavior::Notify,
+            "services:\n  api:\n    image: nginx:latest\n",
+            false,
+        );
+        let checks = build_manual_stack_checks(&stack, false).unwrap();
+        let deployed = BTreeMap::from([(
+            state_key(&checks[0].service_name, &checks[0].image_name),
+            "nginx@sha256:ABC".to_owned(),
+        )]);
+        let remote = BTreeMap::from([(checks[0].key.clone(), "sha256:abc".to_owned())]);
+        let equal = evaluate_manual_stack_updates(
+            &stack.stack_update_state,
+            &checks,
+            &remote,
+            Utc::now(),
+            Some(&deployed),
+        );
+        assert!(equal.available_updates.is_empty());
+        assert!(equal.newly_detected_updates.is_empty());
+        assert_eq!(equal.baselines_created, 0);
+
+        let changed_remote =
+            BTreeMap::from([(checks[0].key.clone(), "nginx@sha256:new".to_owned())]);
+        let changed = evaluate_manual_stack_updates(
+            &equal.state,
+            &checks,
+            &changed_remote,
+            Utc::now(),
+            Some(&deployed),
+        );
+        assert_eq!(changed.newly_detected_updates.len(), 1);
+        let bare_remote = BTreeMap::from([(checks[0].key.clone(), "sha256:NEW".to_owned())]);
+        let repeated = evaluate_manual_stack_updates(
+            &changed.state,
+            &checks,
+            &bare_remote,
+            Utc::now(),
+            Some(&deployed),
+        );
+        assert_eq!(repeated.available_updates.len(), 1);
+        assert!(repeated.newly_detected_updates.is_empty());
+    }
+
+    fn stack(update_behavior: StackUpdateBehavior, compose: &str, build_api: bool) -> crate::Stack {
         let id = Uuid::now_v7();
         let registry_id = Uuid::now_v7();
         let spec = StackSpec::WebEditor {
@@ -306,20 +351,23 @@ mod tests {
                 ..Default::default()
             },
         };
-        StackDetails {
-            stack: crate::Stack {
-                id,
-                name: "stack".to_owned(),
-                description: None,
-                stack_source: StackSource::WebEditor,
-                stack_update_state: StackUpdateState::new(&spec),
-                drift_policy: StackDriftPolicy::default(),
+        crate::Stack {
+            id,
+            name: "stack".to_owned(),
+            description: None,
+            stack_source: StackSource::WebEditor,
+            stack_update_state: StackUpdateState::new(&spec),
+            drift_policy: StackDriftPolicy::default(),
+
+            control_state: citadel_primitives::ResourceControlState::Idle,
+            current_stack_release_id: Uuid::now_v7(),
+            row_version: 0,
+
+            audit: citadel_primitives::AuditMetadata {
                 created_at: Utc::now(),
-                created_by_actor_id: Uuid::now_v7(),
-                control_state: "Idle".to_owned(),
-                current_stack_release_id: Uuid::now_v7(),
-                row_version: 0,
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
             },
+
             status: StackReleaseStatus::Healthy,
             platform_type: citadel_platforms::PlatformKind::Docker,
             platform_id: Some(Uuid::now_v7()),
@@ -327,11 +375,10 @@ mod tests {
             spec: Some(spec),
             source: None,
             resource_bindings: None,
-            platform_status: "Online".to_owned(),
+            platform_status: citadel_primitives::PlatformStatus::Online,
             platform_name: Some("local".to_owned()),
             tags: Vec::<TagSummary>::new(),
             latest_activity: None,
-            effective_permission: citadel_primitives::EffectivePermission::Administrator,
         }
     }
 }

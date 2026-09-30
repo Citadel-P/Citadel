@@ -93,7 +93,7 @@ pub trait BackupSourcePlanner: Send + Sync {
     ) -> BoxFuture<'a, Result<policies::read_models::BackupSourcePreview, BackupError>>;
     fn validate_source<'a>(
         &'a self,
-        source: &'a Value,
+        source: &'a crate::spec::BackupSourceSpec,
         repository: &'a BackupRepository,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>>;

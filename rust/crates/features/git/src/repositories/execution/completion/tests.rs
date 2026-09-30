@@ -1,13 +1,13 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-fn reference(status: &str) -> GitRepositoryRef {
+fn reference(status: crate::GitRepositoryRefStatus) -> GitRepositoryRef {
     GitRepositoryRef {
         id: Uuid::nil(),
         git_repository_id: Uuid::nil(),
         branch: "main".into(),
         resolved_commit_sha: Some("a".repeat(40)),
-        status: status.into(),
+        status,
         last_error: None,
         last_synced_at: Utc::now(),
     }
@@ -27,9 +27,9 @@ async fn five_second_sync_with_multiple_waiters_reads_only_initial_and_completio
             wait(receiver, || {
                 reads.fetch_add(1, Ordering::SeqCst);
                 let status = if healthy.load(Ordering::SeqCst) {
-                    "Healthy"
+                    crate::GitRepositoryRefStatus::Healthy
                 } else {
-                    "Syncing"
+                    crate::GitRepositoryRefStatus::Syncing
                 };
                 std::future::ready(Ok(Some(reference(status))))
             })
@@ -62,9 +62,9 @@ async fn missed_or_closed_signal_recovers_at_ten_seconds_without_spinning() {
             wait(receiver, || {
                 let n = observed.fetch_add(1, Ordering::SeqCst);
                 std::future::ready(Ok(Some(reference(if n == 0 {
-                    "Pending"
+                    crate::GitRepositoryRefStatus::Pending
                 } else {
-                    "Healthy"
+                    crate::GitRepositoryRefStatus::Healthy
                 }))))
             })
             .await
@@ -91,9 +91,9 @@ async fn completion_during_read_is_not_lost_and_hint_never_replaces_authoritativ
             signal.send_modify(|_| {});
         }
         std::future::ready(Ok(Some(reference(if reads < 3 {
-            "Pending"
+            crate::GitRepositoryRefStatus::Pending
         } else {
-            "Healthy"
+            crate::GitRepositoryRefStatus::Healthy
         }))))
     })
     .await
@@ -131,9 +131,12 @@ async fn cancellation_and_timeout_interrupt_even_a_hung_enqueue_or_read() {
 #[tokio::test]
 async fn terminal_failures_missing_refs_and_invalid_commits_still_fail() {
     let (signal, _) = watch::channel(());
-    for status in ["Failed", "Degraded", "Healthy"] {
+    for status in [
+        crate::GitRepositoryRefStatus::Degraded,
+        crate::GitRepositoryRefStatus::Healthy,
+    ] {
         let mut row = reference(status);
-        if status == "Healthy" {
+        if status == crate::GitRepositoryRefStatus::Healthy {
             row.resolved_commit_sha = Some("invalid".into());
         }
         assert!(

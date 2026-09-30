@@ -5,7 +5,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchParent {
     pub id: Uuid,
-    #[schema(value_type = crate::openapi::compatibility::GlobalSearchResourceType)]
+    #[schema(value_type = GlobalSearchResourceType)]
     pub resource_type: ResourceType,
     pub name: String,
 }
@@ -33,7 +33,7 @@ impl From<citadel_discovery::GlobalSearchParent> for GlobalSearchParent {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchStatus {
     pub label: String,
-    #[schema(value_type = crate::openapi::compatibility::SearchStatusTone)]
+    #[schema(value_type = SearchStatusTone)]
     pub tone: &'static str,
 }
 
@@ -59,7 +59,7 @@ impl From<citadel_discovery::GlobalSearchStatus> for GlobalSearchStatus {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchItem {
     pub id: Uuid,
-    #[schema(value_type = crate::openapi::compatibility::GlobalSearchResourceType)]
+    #[schema(value_type = GlobalSearchResourceType)]
     pub resource_type: ResourceType,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -98,7 +98,7 @@ impl From<citadel_discovery::GlobalSearchItem> for GlobalSearchItem {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchGroup {
-    #[schema(value_type = crate::openapi::compatibility::GlobalSearchCategory)]
+    #[schema(value_type = GlobalSearchCategory)]
     pub category: &'static str,
     pub items: Vec<GlobalSearchItem>,
 }
@@ -144,3 +144,41 @@ impl From<citadel_discovery::GlobalSearchResults> for GlobalSearchResponse {
         }
     }
 }
+
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+pub enum SearchStatusTone {
+    Positive,
+    Negative,
+    Warning,
+    Info,
+    Neutral,
+}
+
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+pub enum GlobalSearchCategory {
+    Platforms,
+    Stacks,
+    Deployments,
+    Repositories,
+    Registries,
+    Automations,
+    Backups,
+    Builds,
+    SwarmServices,
+}
+
+pub struct GlobalSearchResourceType;
+impl utoipa::PartialSchema for GlobalSearchResourceType {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::schema::ObjectBuilder::new()
+            .schema_type(utoipa::openapi::schema::Type::String)
+            .enum_values(Some(
+                citadel_discovery::search::supported_resource_types()
+                    .map(|kind| serde_json::to_value(kind).expect("resource type serializes")),
+            ))
+            .into()
+    }
+}
+impl utoipa::ToSchema for GlobalSearchResourceType {}

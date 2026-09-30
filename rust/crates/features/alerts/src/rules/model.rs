@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -8,16 +7,15 @@ pub struct AlertRule {
     pub name: String,
     pub description: Option<String>,
     pub alert_type: String,
-    pub severity: String,
+    pub severity: crate::AlertSeverity,
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
     pub threshold: Option<f64>,
-    pub status: String,
+    pub status: crate::AlertRuleStatus,
     pub channel_ids: Vec<Uuid>,
     pub limited_to: Vec<Value>,
     pub quiet_hours: Vec<Value>,
-    pub created_by_actor_id: Uuid,
-    pub created_at: DateTime<Utc>,
+    pub audit: citadel_primitives::AuditMetadata,
 }
 
 impl AlertRule {
@@ -27,11 +25,11 @@ impl AlertRule {
             name: self.name.clone(),
             description: self.description.clone(),
             alert_type: self.alert_type.clone(),
-            severity: self.severity.clone(),
+            severity: self.severity.to_string(),
             cooldown_seconds: self.cooldown_seconds,
             required_matches: self.required_matches,
             threshold: self.threshold.and_then(serde_json::Number::from_f64),
-            status: self.status.clone(),
+            status: self.status.to_string(),
             channel_ids: self.channel_ids.clone(),
             limited_to: self.limited_to.clone(),
             quiet_hours: self.quiet_hours.clone(),

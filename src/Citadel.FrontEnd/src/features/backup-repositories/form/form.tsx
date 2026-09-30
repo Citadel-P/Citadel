@@ -1,9 +1,7 @@
 import {
+  BackupRepositorySpec,
   BackupExecutionLocation,
   BackupRepositoryInput,
-  BackupRepositorySpec,
-  BackupRepositorySpecFileSystemBackupRepositorySpec,
-  BackupRepositorySpecS3CompatibleBackupRepositorySpec,
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
@@ -34,16 +32,14 @@ import { useParams } from 'react-router';
 
 export type BackupRepositoryFormInput = BackupRepositoryInput & Partial<BackupRepositoryView>;
 
-export const createFileSystemSpec = (): BackupRepositorySpecFileSystemBackupRepositorySpec & {
-  $type: 'FileSystem';
-} => ({
+export const createFileSystemSpec = (): Extract<BackupRepositorySpec, { $type: 'FileSystem' }> => ({
   $type: 'FileSystem',
   location: BackupExecutionLocation.Core,
   platformId: null,
   path: '',
 });
 
-export const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec & { $type: 'S3Compatible' } => ({
+export const createS3Spec = (): Extract<BackupRepositorySpec, { $type: 'S3Compatible' }> => ({
   $type: 'S3Compatible',
   endpoint: '',
   bucket: '',
@@ -133,7 +129,7 @@ export function BackupRepositoryForm({
   const original = resource ?? createDefaultInput();
   const currentSpec = mergeSpec(original.spec, update.spec);
   const selectedType = currentSpec?.$type ?? BackupRepositoryType.FileSystem;
-  const fileSystemSpec = currentSpec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const fileSystemSpec = currentSpec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
   const selectedLocation = fileSystemSpec.location ?? BackupExecutionLocation.Core;
   const specDisabled = disabled || (mode === 'edit' && resource?.status === BackupRepositoryStatus.Ready);
 
@@ -551,7 +547,7 @@ export function toUpdateInput(payload: BackupRepositoryFormInput): UpdateBackupR
 
 export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec {
   if (spec.$type === 'S3Compatible') {
-    const s3 = spec as BackupRepositorySpecS3CompatibleBackupRepositorySpec;
+    const s3 = spec as Extract<BackupRepositorySpec, { $type: 'S3Compatible' }>;
     return {
       $type: 'S3Compatible',
       endpoint: s3.endpoint,
@@ -566,7 +562,7 @@ export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec 
     };
   }
 
-  const fileSystem = spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const fileSystem = spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
   const location = fileSystem.location ?? BackupExecutionLocation.Core;
   return {
     $type: 'FileSystem',
@@ -578,7 +574,7 @@ export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec 
 
 export function getRepositoryOperationContext(repository: BackupRepositoryView): RepositoryLocationInput {
   if (repository.spec.$type === 'FileSystem') {
-    const fileSystem = repository.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+    const fileSystem = repository.spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
     const location = fileSystem.location ?? BackupExecutionLocation.Core;
     return {
       location,

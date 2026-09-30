@@ -1,29 +1,31 @@
-use crate::api::resources::capabilities::ResourceCapabilities;
+use super::spec::*;
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use chrono::{DateTime, Utc};
+use citadel_primitives::PlatformStatus;
+use citadel_primitives::ResourceControlState;
+use citadel_primitives::WebhookConfig;
 use serde::Serialize;
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryView {
     #[schema(required = true)]
-    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
+    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
     #[schema(required = true)]
     pub description: Option<String>,
     #[serde(rename = "type")]
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryType)]
-    pub repository_type: String,
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositorySpec)]
-    pub spec: Value,
+    pub repository_type: BackupRepositoryType,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositorySpecSchema)]
+    pub spec: BackupRepositorySpec,
     pub password_secret_id: Uuid,
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryStatus)]
-    pub status: String,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositoryStatusSchema)]
+    pub status: BackupRepositoryStatus,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
     #[schema(required = true)]
@@ -40,15 +42,16 @@ pub struct BackupRepositoryView {
     pub row_version: i64,
 }
 
-impl From<citadel_backups::BackupRepository> for BackupRepositoryView {
-    fn from(value: citadel_backups::BackupRepository) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupRepository> for BackupRepositoryView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupRepository) -> Result<Self, Self::Error> {
+        Ok(Self {
             capabilities: None,
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
             description: value.description,
-            repository_type: value.repository_type,
+            repository_type: serde_json::from_value(value.repository_type.into())?,
             spec: value.spec,
             password_secret_id: value.password_secret_id,
             status: value.status,
@@ -57,12 +60,12 @@ impl From<citadel_backups::BackupRepository> for BackupRepositoryView {
             control_started_at: value.control_started_at,
             last_pruned_at: value.last_pruned_at,
             last_checked_at: value.last_checked_at,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
             updated_at: value.updated_at,
             archived_at: value.archived_at,
             row_version: value.row_version,
-        }
+        })
     }
 }
 
@@ -73,28 +76,28 @@ pub struct BackupPolicyView {
     #[schema(required = true)]
     pub latest_run: Option<BackupRunView>,
     #[schema(required = true)]
-    pub capabilities: Option<crate::api::resources::platforms::views::ResourceCapabilitiesView>,
+    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
     #[schema(required = true)]
     pub description: Option<String>,
-    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
-    pub source: Value,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupSourceSpecSchema)]
+    pub source: BackupSourceSpec,
     pub backup_repository_id: Uuid,
     pub enabled: bool,
     #[schema(required = true)]
     pub cron: Option<String>,
     #[schema(required = true)]
     pub time_zone: Option<String>,
-    #[schema(value_type = Option<crate::openapi::compatibility::BackupWebhookConfig>, required = true)]
-    pub webhook: Option<Value>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub keep_last_successful: i32,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
     #[schema(required = true)]
@@ -109,11 +112,12 @@ pub struct BackupPolicyView {
     pub row_version: i64,
 }
 
-impl From<citadel_backups::BackupPolicy> for BackupPolicyView {
-    fn from(value: citadel_backups::BackupPolicy) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupPolicy> for BackupPolicyView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupPolicy) -> Result<Self, Self::Error> {
+        Ok(Self {
             tags: value.tags.into_iter().map(Into::into).collect(),
-            latest_run: value.latest_run.map(Into::into),
+            latest_run: value.latest_run.map(BackupRunView::try_from).transpose()?,
             capabilities: None,
             id: value.id,
             name: value.name,
@@ -133,12 +137,12 @@ impl From<citadel_backups::BackupPolicy> for BackupPolicyView {
             current_run_id: value.current_run_id,
             last_scheduled_run_at: value.last_scheduled_run_at,
             first_successful_run_at: value.first_successful_run_at,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
             updated_at: value.updated_at,
             archived_at: value.archived_at,
             row_version: value.row_version,
-        }
+        })
     }
 }
 
@@ -149,16 +153,14 @@ pub struct BackupRunView {
     pub backup_policy_id: Uuid,
     pub policy_name_snapshot: String,
     pub backup_repository_id: Uuid,
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryType)]
-    pub repository_type_snapshot: String,
-    #[schema(value_type = crate::openapi::compatibility::BackupSourceSpec)]
-    pub source_snapshot: Value,
-    #[schema(value_type = crate::openapi::compatibility::BackupRunTrigger)]
-    pub trigger: String,
-    #[schema(value_type = crate::openapi::compatibility::BackupRunStatus)]
-    pub status: String,
-    #[schema(value_type = crate::openapi::compatibility::BackupSnapshotAvailability)]
-    pub snapshot_availability: String,
+    pub repository_type_snapshot: BackupRepositoryType,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupSourceSpecSchema)]
+    pub source_snapshot: BackupSourceSpec,
+    pub trigger: BackupRunTrigger,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRunStatusSchema)]
+    pub status: BackupRunStatus,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupSnapshotAvailabilitySchema)]
+    pub snapshot_availability: BackupSnapshotAvailability,
     #[schema(required = true)]
     pub restic_snapshot_id: Option<String>,
     #[schema(required = true)]
@@ -185,16 +187,19 @@ pub struct BackupRunView {
     pub items: Vec<BackupRunItemView>,
 }
 
-impl From<citadel_backups::BackupRun> for BackupRunView {
-    fn from(value: citadel_backups::BackupRun) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupRun> for BackupRunView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupRun) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             backup_policy_id: value.backup_policy_id,
             policy_name_snapshot: value.policy_name_snapshot,
             backup_repository_id: value.backup_repository_id,
-            repository_type_snapshot: value.repository_type_snapshot,
+            repository_type_snapshot: serde_json::from_value(
+                value.repository_type_snapshot.into(),
+            )?,
             source_snapshot: value.source_snapshot,
-            trigger: value.trigger,
+            trigger: serde_json::from_value(value.trigger.into())?,
             status: value.status,
             snapshot_availability: value.snapshot_availability,
             restic_snapshot_id: value.restic_snapshot_id,
@@ -210,8 +215,12 @@ impl From<citadel_backups::BackupRun> for BackupRunView {
             error_code: value.error_code,
             error_message: value.error_message,
             triggered_by_actor_id: value.triggered_by_actor_id,
-            items: value.items.into_iter().map(|value| value.into()).collect(),
-        }
+            items: value
+                .items
+                .into_iter()
+                .map(BackupRunItemView::try_from)
+                .collect::<Result<_, _>>()?,
+        })
     }
 }
 
@@ -226,8 +235,8 @@ pub struct BackupRunItemView {
     pub docker_node_id: Option<String>,
     #[schema(required = true)]
     pub node_hostname: Option<String>,
-    #[schema(value_type = crate::openapi::compatibility::BackupRunItemStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRunItemStatusSchema)]
+    pub status: BackupRunItemStatus,
     #[schema(required = true)]
     pub restic_snapshot_id: Option<String>,
     #[schema(required = true)]
@@ -250,9 +259,10 @@ pub struct BackupRunItemView {
     pub error_message: Option<String>,
 }
 
-impl From<citadel_backups::BackupRunItem> for BackupRunItemView {
-    fn from(value: citadel_backups::BackupRunItem) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupRunItem> for BackupRunItemView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupRunItem) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             backup_run_id: value.backup_run_id,
             platform_id: value.platform_id,
@@ -270,7 +280,7 @@ impl From<citadel_backups::BackupRunItem> for BackupRunItemView {
             exit_code: value.exit_code,
             error_code: value.error_code,
             error_message: value.error_message,
-        }
+        })
     }
 }
 
@@ -287,8 +297,8 @@ pub struct BackupRestoreRunView {
     pub target_docker_node_id: Option<String>,
     pub target_volume_name: String,
     pub overwrite_existing: bool,
-    #[schema(value_type = crate::openapi::compatibility::BackupRestoreStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRestoreStatusSchema)]
+    pub status: BackupRestoreStatus,
     pub queued_at: DateTime<Utc>,
     #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
@@ -303,9 +313,10 @@ pub struct BackupRestoreRunView {
     pub triggered_by_actor_id: Uuid,
 }
 
-impl From<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
-    fn from(value: citadel_backups::BackupRestoreRun) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupRestoreRun) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             backup_run_id: value.backup_run_id,
             backup_repository_id: value.backup_repository_id,
@@ -322,7 +333,7 @@ impl From<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
             error_code: value.error_code,
             error_message: value.error_message,
             triggered_by_actor_id: value.triggered_by_actor_id,
-        }
+        })
     }
 }
 
@@ -331,12 +342,12 @@ impl From<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
 pub struct BackupRepositoryValidationView {
     pub id: Uuid,
     pub backup_repository_id: Uuid,
-    #[schema(value_type = crate::openapi::compatibility::BackupExecutionLocation)]
-    pub location: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupExecutionLocationSchema)]
+    pub location: BackupExecutionLocation,
     #[schema(required = true)]
     pub platform_id: Option<Uuid>,
-    #[schema(value_type = crate::openapi::compatibility::BackupRepositoryValidationStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositoryValidationStatusSchema)]
+    pub status: BackupRepositoryValidationStatus,
     pub last_validated_at: DateTime<Utc>,
     #[schema(required = true)]
     pub last_error_code: Option<String>,
@@ -344,18 +355,19 @@ pub struct BackupRepositoryValidationView {
     pub last_error_message: Option<String>,
 }
 
-impl From<citadel_backups::BackupRepositoryValidation> for BackupRepositoryValidationView {
-    fn from(value: citadel_backups::BackupRepositoryValidation) -> Self {
-        Self {
+impl TryFrom<citadel_backups::BackupRepositoryValidation> for BackupRepositoryValidationView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_backups::BackupRepositoryValidation) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             backup_repository_id: value.backup_repository_id,
-            location: value.location,
+            location: serde_json::from_value(value.location.into())?,
             platform_id: value.platform_id,
             status: value.status,
             last_validated_at: value.last_validated_at,
             last_error_code: value.last_error_code,
             last_error_message: value.last_error_message,
-        }
+        })
     }
 }
 
@@ -375,7 +387,7 @@ impl From<citadel_backups::BackupLog> for BackupLog {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(untagged)]
 pub enum BackupPreviewResource {
     Deployment {
@@ -416,21 +428,25 @@ impl From<citadel_backups::policies::read_models::BackupPreviewResource> for Bac
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupSourcePreview {
     #[serde(flatten)]
     pub resource: BackupPreviewResource,
     pub platform_id: Uuid,
     pub platform_name: String,
-    pub platform_status: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
+    pub platform_status: PlatformStatus,
     pub volumes: Vec<BackupVolumePreview>,
     pub warnings: Vec<String>,
 }
 
-impl From<citadel_backups::policies::read_models::BackupSourcePreview> for BackupSourcePreview {
-    fn from(value: citadel_backups::policies::read_models::BackupSourcePreview) -> Self {
-        Self {
+impl TryFrom<citadel_backups::policies::read_models::BackupSourcePreview> for BackupSourcePreview {
+    type Error = serde_json::Error;
+    fn try_from(
+        value: citadel_backups::policies::read_models::BackupSourcePreview,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             resource: value.resource.into(),
             platform_id: value.platform_id,
             platform_name: value.platform_name,
@@ -441,11 +457,11 @@ impl From<citadel_backups::policies::read_models::BackupSourcePreview> for Backu
                 .map(|value| value.into())
                 .collect(),
             warnings: value.warnings,
-        }
+        })
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupVolumePreview {
     pub name: String,
@@ -471,7 +487,7 @@ impl From<citadel_backups::policies::read_models::BackupVolumePreview> for Backu
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformBackupSummary {
     pub platform_id: Uuid,
@@ -482,13 +498,17 @@ pub struct PlatformBackupSummary {
     pub deployment_policy_count: i32,
     pub swarm_service_policy_count: i32,
     pub attention_policy_count: i32,
-    pub last_run_status: Option<String>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRunStatusSchema>)]
+    pub last_run_status: Option<BackupRunStatus>,
     pub last_run_at: Option<DateTime<Utc>>,
 }
 
-impl From<citadel_backups::runs::read_models::PlatformBackupSummary> for PlatformBackupSummary {
-    fn from(value: citadel_backups::runs::read_models::PlatformBackupSummary) -> Self {
-        Self {
+impl TryFrom<citadel_backups::runs::read_models::PlatformBackupSummary> for PlatformBackupSummary {
+    type Error = serde_json::Error;
+    fn try_from(
+        value: citadel_backups::runs::read_models::PlatformBackupSummary,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             platform_id: value.platform_id,
             policy_count: value.policy_count,
             enabled_policy_count: value.enabled_policy_count,
@@ -499,7 +519,7 @@ impl From<citadel_backups::runs::read_models::PlatformBackupSummary> for Platfor
             attention_policy_count: value.attention_policy_count,
             last_run_status: value.last_run_status,
             last_run_at: value.last_run_at,
-        }
+        })
     }
 }
 
@@ -507,7 +527,7 @@ impl From<citadel_backups::runs::read_models::PlatformBackupSummary> for Platfor
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Repositories {
     pub(crate) repositories: Vec<BackupRepositoryView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -543,5 +563,31 @@ pub(crate) struct Events {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Policies {
     pub(crate) policies: Vec<BackupPolicyView>,
-    pub(crate) capabilities: ResourceCapabilities,
+    pub(crate) capabilities: ResourceCapabilitiesView,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct PlatformBackupSummaries {
+    pub platforms: Vec<PlatformBackupSummary>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRunStreamItem {
+    pub run_id: Uuid,
+    #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRunStatusSchema>)]
+    pub status: Option<BackupRunStatus>,
+    pub message: Option<String>,
+    pub stream: Option<String>,
+    pub exit_code: Option<i32>,
+}
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRestoreRunStreamItem {
+    pub restore_run_id: Uuid,
+    #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRestoreStatusSchema>)]
+    pub status: Option<BackupRestoreStatus>,
+    pub message: Option<String>,
+    pub stream: Option<String>,
+    pub exit_code: Option<i32>,
 }

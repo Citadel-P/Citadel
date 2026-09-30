@@ -1,12 +1,16 @@
 //! Deployment HTTP and realtime representations.
-use crate::api::resources::deployments::spec::{AutoUpdateState, DeploymentSpec, DuplicateWarning};
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
+use crate::api::resources::deployments::spec::{DeploymentSpec, DuplicateWarning};
 use crate::api::resources::tags::views::TagSummary;
 use crate::api::resources::{
-    activities::views::LatestActivityView,
-    common::{DuplicateSourceInput, PlatformStatus, ResourceControlState},
+    activities::views::LatestActivityView, common::DuplicateSourceInput,
     deployments::spec::DeploymentStatus,
 };
 use chrono::{DateTime, Utc};
+use citadel_primitives::AuthorizedResource;
+use citadel_primitives::AutoUpdateState;
+use citadel_primitives::PlatformStatus;
+use citadel_primitives::ResourceControlState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -24,15 +28,6 @@ pub struct DeploymentCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = deployments::model::ResourceCapabilities)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceCapabilities {
-    pub can_read: bool,
-    pub can_write: bool,
-    pub can_execute: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentView {
@@ -43,11 +38,16 @@ pub struct DeploymentView {
     pub platform_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentStatusSchema)]
     pub status: DeploymentStatus,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
     pub control_state: ResourceControlState,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<crate::api::resources::schema_models::primitives::AutoUpdateStateSchema>)]
     pub auto_update_state: Option<AutoUpdateState>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
     pub platform_status: PlatformStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform_name: Option<String>,
@@ -76,6 +76,7 @@ pub struct DeploymentConfigView {
     pub platform_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
 }
 
@@ -83,7 +84,7 @@ pub struct DeploymentConfigView {
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentsView {
     pub deployments: Vec<DeploymentView>,
-    pub capabilities: ResourceCapabilities,
+    pub capabilities: ResourceCapabilitiesView,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -100,6 +101,7 @@ pub struct CreateDeploymentInputView {
     pub platform_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentSpecSchema)]
     pub spec: DeploymentSpec,
     pub tag_ids: Vec<Uuid>,
     pub duplicate_source: DuplicateSourceInput,
@@ -145,26 +147,26 @@ pub struct ImagePullProgress {
     pub units: Option<String>,
 }
 
-impl TryFrom<citadel_deployments::DeploymentDetails> for DeploymentView {
+impl TryFrom<AuthorizedResource<citadel_deployments::Deployment>> for DeploymentView {
     type Error = serde_json::Error;
 
-    fn try_from(value: citadel_deployments::DeploymentDetails) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: AuthorizedResource<citadel_deployments::Deployment>,
+    ) -> Result<Self, Self::Error> {
+        let permission = value.effective_permission;
+        let value = value.resource;
         Ok(Self {
-            id: value.deployment.id,
-            name: value.deployment.name,
-            description: value.deployment.description,
-            platform_id: value.deployment.platform_id,
-            created_at: value.deployment.created_at,
-            created_by_actor_id: value.deployment.created_by_actor_id,
-            status: serde_json::from_value(value.deployment.status.into())?,
-            control_state: serde_json::from_value(value.deployment.control_state.into())?,
-            auto_update_state: value
-                .deployment
-                .auto_update_state
-                .map(TryInto::try_into)
-                .transpose()?,
-            spec: value.deployment.spec.into(),
-            platform_status: serde_json::from_value(value.platform_status.into())?,
+            id: value.id,
+            name: value.name,
+            description: value.description,
+            platform_id: value.platform_id,
+            created_at: value.audit.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            status: value.status,
+            control_state: value.control_state,
+            auto_update_state: value.auto_update_state,
+            spec: value.spec,
+            platform_status: value.platform_status,
             platform_name: value.platform_name,
             image_name: value.image_name,
             image_id: value.image_id,
@@ -172,14 +174,9 @@ impl TryFrom<citadel_deployments::DeploymentDetails> for DeploymentView {
             docker_container_id: value.docker_container_id,
             docker_image_id: value.docker_image_id,
             tags: value.tags.into_iter().map(Into::into).collect(),
-            latest_activity_view: value
-                .latest_activity
-                .map(LatestActivityView::from_stored)
-                .transpose()?,
+            latest_activity_view: value.latest_activity.map(LatestActivityView::from),
             capabilities: Some(
-                crate::api::resources::deployments::capabilities::capabilities(
-                    value.effective_permission,
-                ),
+                crate::api::resources::deployments::capabilities::capabilities(permission),
             ),
         })
     }
@@ -192,7 +189,7 @@ impl From<citadel_deployments::DeploymentConfig> for DeploymentConfigView {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec,
         }
     }
 }
@@ -205,7 +202,7 @@ impl TryFrom<citadel_deployments::DeploymentDraft> for CreateDeploymentInputView
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec,
             tag_ids: value.tag_ids,
             duplicate_source: value.duplicate_source.try_into()?,
         })
@@ -277,7 +274,7 @@ mod tests {
             control_state: ResourceControlState::Idle,
             auto_update_state: Some(AutoUpdateState {
                 last_checked_at: Utc::now(),
-                status: crate::api::resources::common::AutoUpdateStatus::Unknown,
+                status: citadel_primitives::AutoUpdateStatus::Unknown,
                 current_digest: None,
                 remote_digest: None,
                 last_error: None,

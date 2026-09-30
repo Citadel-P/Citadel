@@ -1,20 +1,21 @@
 use super::{adoption_views::AdoptionIssue, spec::*, views::DeploymentView};
-use crate::api::resources::{activities::views::LatestActivityView, common::*};
+use crate::api::resources::common::*;
 use chrono::Utc;
+use citadel_primitives::AuthorizedResource;
+use citadel_primitives::{AutoUpdateState, AutoUpdateStatus, ResourceControlState};
 use serde_json::json;
 use uuid::Uuid;
 
-fn details() -> citadel_deployments::DeploymentDetails {
-    citadel_deployments::DeploymentDetails {
-        deployment: citadel_deployments::Deployment {
+fn details() -> AuthorizedResource<citadel_deployments::Deployment> {
+    AuthorizedResource {
+        resource: citadel_deployments::Deployment {
             id: Uuid::now_v7(),
             name: "web".into(),
             description: None,
             platform_id: Uuid::now_v7(),
-            created_at: Utc::now(),
-            created_by_actor_id: Uuid::now_v7(),
-            status: "Healthy".into(),
-            control_state: "Idle".into(),
+
+            status: citadel_deployments::DeploymentStatus::Healthy,
+            control_state: citadel_primitives::ResourceControlState::Idle,
             row_version: 1,
             auto_update_state: None,
             spec: serde_json::from_value::<DeploymentSpec>(json!({
@@ -22,16 +23,22 @@ fn details() -> citadel_deployments::DeploymentDetails {
             }))
             .unwrap()
             .into(),
+
+            audit: citadel_primitives::AuditMetadata {
+                created_at: Utc::now(),
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+            },
+
+            platform_status: citadel_primitives::PlatformStatus::Online,
+            platform_name: Some("docker".into()),
+            image_name: None,
+            image_id: None,
+            container_id: None,
+            docker_container_id: None,
+            docker_image_id: None,
+            tags: vec![],
+            latest_activity: None,
         },
-        platform_status: "Online".into(),
-        platform_name: Some("docker".into()),
-        image_name: None,
-        image_id: None,
-        container_id: None,
-        docker_container_id: None,
-        docker_image_id: None,
-        tags: vec![],
-        latest_activity: None,
         effective_permission: citadel_primitives::EffectivePermission::Administrator,
     }
 }
@@ -42,11 +49,11 @@ fn native_statuses_preserve_wire_values_and_reject_invalid_stored_state() {
         "Unknown", "Created", "Pending", "Applying", "Healthy", "Degraded", "Failed", "Stopped",
     ] {
         let mut record = details();
-        record.deployment.status = status.into();
+        record.resource.status = status.parse().unwrap();
         for control in ["Idle", "Processing"] {
-            record.deployment.control_state = control.into();
+            record.resource.control_state = control.parse().unwrap();
             for platform in ["Offline", "Online"] {
-                record.platform_status = platform.into();
+                record.resource.platform_status = platform.parse().unwrap();
                 let wire = serde_json::to_value(DeploymentView::try_from(record.clone()).unwrap())
                     .unwrap();
                 assert_eq!(wire["status"], status);
@@ -55,19 +62,21 @@ fn native_statuses_preserve_wire_values_and_reject_invalid_stored_state() {
             }
         }
     }
-    let mut record = details();
-    record.deployment.status = "Invalid".into();
-    assert!(DeploymentView::try_from(record).is_err());
-    let mut record = details();
-    record.deployment.control_state = "Invalid".into();
-    assert!(DeploymentView::try_from(record).is_err());
-    let mut record = details();
-    record.platform_status = "Invalid".into();
-    assert!(DeploymentView::try_from(record).is_err());
+    assert!(
+        "Invalid"
+            .parse::<citadel_deployments::DeploymentStatus>()
+            .is_err()
+    );
+    assert!("Invalid".parse::<ResourceControlState>().is_err());
+    assert!(
+        "Invalid"
+            .parse::<citadel_primitives::PlatformStatus>()
+            .is_err()
+    );
 }
 
 #[test]
-fn update_checks_keep_digests_and_errors_across_native_conversion() {
+fn update_checks_keep_digests_and_errors_across_serialization() {
     for status in [
         AutoUpdateStatus::Unknown,
         AutoUpdateStatus::UpToDate,
@@ -82,21 +91,24 @@ fn update_checks_keep_digests_and_errors_across_native_conversion() {
             remote_digest: Some("sha256:remote".into()),
             last_error: Some("Registry unavailable".into()),
         };
-        let stored: citadel_deployments::AutoUpdateState = state.clone().into();
-        assert_eq!(stored.status, status.as_str());
-        assert_eq!(AutoUpdateState::try_from(stored).unwrap(), state);
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["status"], status.as_str());
+        assert_eq!(
+            serde_json::from_value::<AutoUpdateState>(json).unwrap(),
+            state
+        );
     }
 }
 
 #[test]
 fn latest_activity_preserves_failures_and_normalizes_payload_keys() {
     let mut record = details();
-    record.latest_activity = Some(json!({
+    record.resource.latest_activity = Some(serde_json::from_value(json!({
         "id": Uuid::now_v7(), "resourceType": "Deployment", "eventType": "DeploymentApplied",
         "status": "Failure", "createdAt": Utc::now(),
         "info": {"$type": "DeploymentApplied", "Result": {"Message": "Container failed", "IsSuccess": false},
                  "Spec": {"Labels": {"Owner": "OPS"}}}
-    }));
+    })).unwrap());
     let wire = serde_json::to_value(DeploymentView::try_from(record).unwrap()).unwrap();
     assert_eq!(wire["latestActivityView"]["status"], "Failure");
     assert_eq!(
@@ -107,7 +119,10 @@ fn latest_activity_preserves_failures_and_normalizes_payload_keys() {
         wire["latestActivityView"]["info"]["spec"]["labels"]["Owner"],
         "OPS"
     );
-    assert!(LatestActivityView::from_stored(json!({"status": "Failure"})).is_err());
+    assert!(
+        serde_json::from_value::<citadel_activities::ActivitySummary>(json!({"status": "Failure"}))
+            .is_err()
+    );
     assert!(
         serde_json::to_value(DeploymentView::try_from(details()).unwrap())
             .unwrap()
@@ -168,23 +183,33 @@ fn deployment_schemas_use_native_shared_contracts() {
     );
     assert_eq!(
         schemas["LatestActivityView"]["properties"]["info"]["$ref"],
-        "#/components/schemas/ActivityEventInfo"
+        "#/components/schemas/PublicActivityEventInfo"
     );
     assert_eq!(
         schemas["ActivityStatus"]["enum"],
         json!(["Success", "Failure", "Warning", "Information"])
     );
-    let frozen = crate::openapi::compatibility::schemas();
-    for name in [
-        "DeploymentStatus",
-        "ResourceControlState",
-        "PlatformStatus",
-        "AutoUpdateStatus",
-        "LatestActivityView",
-        "AdoptionIssueSeverity",
-        "ActivityResourceType",
-        "ActivityStatus",
-    ] {
-        assert!(!frozen.contains_key(name), "{name} is still frozen");
+}
+
+#[test]
+fn deployments_and_swarm_services_publish_the_shared_auto_update_state() {
+    let doc = serde_json::to_value(crate::openapi::document(false)).unwrap();
+    let schemas = &doc["components"]["schemas"];
+    for resource in ["DeploymentView", "ManagedSwarmServiceView"] {
+        assert!(
+            schemas[resource]["properties"]["autoUpdateState"]
+                .to_string()
+                .contains("#/components/schemas/AutoUpdateState")
+        );
     }
+    assert_eq!(
+        schemas["AutoUpdateState"]["properties"]["status"]["$ref"],
+        "#/components/schemas/AutoUpdateStatus"
+    );
+    assert!(schemas.get("deployments.model.AutoUpdateState").is_none());
+    assert!(
+        schemas
+            .get("swarm_services.model.AutoUpdateState")
+            .is_none()
+    );
 }

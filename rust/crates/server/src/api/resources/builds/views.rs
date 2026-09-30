@@ -1,10 +1,8 @@
-use crate::api::resources::{
-    builds::spec::{BuildArgSpec, BuildSecretSpec},
-    capabilities::ResourceCapabilitiesView,
-};
+use crate::api::resources::{builds::spec::*, capabilities::ResourceCapabilitiesView};
 use chrono::{DateTime, Utc};
+use citadel_primitives::ResourceControlState;
+use citadel_primitives::WebhookConfig;
 use serde::Serialize;
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -27,8 +25,7 @@ pub struct BuildProjectView {
     pub target: Option<String>,
     pub build_args: Vec<BuildArgSpec>,
     pub build_secrets: Vec<BuildSecretSpec>,
-    #[schema(value_type = crate::openapi::compatibility::BuildProjectBuilderKind)]
-    pub builder_kind: String,
+    pub builder_kind: BuildProjectBuilderKind,
     #[schema(required = true)]
     pub platform_id: Option<Uuid>,
     #[schema(required = true)]
@@ -36,14 +33,14 @@ pub struct BuildProjectView {
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Vec<String>,
-    #[schema(value_type = Option<crate::openapi::compatibility::BuildWebhookConfig>, required = true)]
-    pub webhook: Option<Value>,
+    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: i32,
     pub retention_run_count: i32,
     #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub control_started_at: Option<i64>,
     pub created_by_actor_id: Uuid,
@@ -54,11 +51,12 @@ pub struct BuildProjectView {
     pub row_version: i64,
 }
 
-impl From<citadel_builds::BuildProject> for BuildProjectView {
-    fn from(value: citadel_builds::BuildProject) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildProject> for BuildProjectView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildProject) -> Result<Self, Self::Error> {
+        Ok(Self {
             tags: value.tags.into_iter().map(Into::into).collect(),
-            latest_run: value.latest_run.map(|value| value.into()),
+            latest_run: value.latest_run.map(BuildRunView::try_from).transpose()?,
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
@@ -79,7 +77,7 @@ impl From<citadel_builds::BuildProject> for BuildProjectView {
                 .into_iter()
                 .map(|value| value.into())
                 .collect(),
-            builder_kind: value.builder_kind,
+            builder_kind: serde_json::from_value(value.builder_kind.into())?,
             platform_id: value.platform_id,
             build_agent_pool_id: value.build_agent_pool_id,
             registry_id: value.registry_id,
@@ -91,12 +89,12 @@ impl From<citadel_builds::BuildProject> for BuildProjectView {
             current_run_id: value.current_run_id,
             control_state: value.control_state,
             control_started_at: value.control_started_at,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
             updated_at: value.updated_at,
             archived_at: value.archived_at,
             row_version: value.row_version,
-        }
+        })
     }
 }
 
@@ -120,10 +118,9 @@ pub struct BuildRunView {
     pub registry_host: String,
     pub image_repository: String,
     pub image_references: Vec<String>,
-    #[schema(value_type = crate::openapi::compatibility::BuildRunTrigger)]
-    pub trigger: String,
-    #[schema(value_type = crate::openapi::compatibility::BuildRunStatus)]
-    pub status: String,
+    pub trigger: BuildRunTrigger,
+    #[schema(value_type = crate::api::resources::schema_models::builds::BuildRunStatusSchema)]
+    pub status: BuildRunStatus,
     #[schema(required = true)]
     pub image_digest: Option<String>,
     pub timeout_seconds: i32,
@@ -141,15 +138,16 @@ pub struct BuildRunView {
     pub triggered_by_actor_id: Uuid,
 }
 
-impl From<citadel_builds::BuildRun> for BuildRunView {
-    fn from(value: citadel_builds::BuildRun) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildRun> for BuildRunView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildRun) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             build_project_id: value.build_project_id,
             project_name_snapshot: value.project_name_snapshot,
             git_repository_id: value.git_repository_id,
             git_repository_name_snapshot: value.git_repository_name_snapshot,
-            platform_snapshot: value.platform_snapshot.into(),
+            platform_snapshot: value.platform_snapshot.try_into()?,
             branch: value.branch,
             resolved_commit_sha: value.resolved_commit_sha,
             context_path: value.context_path,
@@ -159,7 +157,7 @@ impl From<citadel_builds::BuildRun> for BuildRunView {
             registry_host: value.registry_host,
             image_repository: value.image_repository,
             image_references: value.image_references,
-            trigger: value.trigger,
+            trigger: serde_json::from_value(value.trigger.into())?,
             status: value.status,
             image_digest: value.image_digest,
             timeout_seconds: value.timeout_seconds,
@@ -170,7 +168,7 @@ impl From<citadel_builds::BuildRun> for BuildRunView {
             error_code: value.error_code,
             error_message: value.error_message,
             triggered_by_actor_id: value.triggered_by_actor_id,
-        }
+        })
     }
 }
 
@@ -184,10 +182,8 @@ pub struct BuildAgentPoolView {
     #[schema(required = true)]
     pub description: Option<String>,
     pub enabled: bool,
-    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProvider)]
-    pub provider: String,
-    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProviderSpec)]
-    pub provider_spec: Value,
+    pub provider: BuildAgentPoolProvider,
+    pub provider_spec: BuildAgentPoolProviderSpec,
     pub max_active_builders: i32,
     pub queue_timeout_seconds: i32,
     pub provisioning_timeout_seconds: i32,
@@ -196,14 +192,14 @@ pub struct BuildAgentPoolView {
     pub cleanup_timeout_seconds: i32,
     pub maximum_instance_lifetime_seconds: i32,
     pub failure_retention_minutes: i32,
-    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolValidationStatus)]
-    pub last_validation_status: String,
+    #[schema(value_type = crate::api::resources::schema_models::builds::BuildAgentPoolValidationStatusSchema)]
+    pub last_validation_status: BuildAgentPoolValidationStatus,
     #[schema(required = true)]
     pub last_validation_message: Option<String>,
     #[schema(required = true)]
     pub last_validated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub control_triggered_by: Option<Uuid>,
     #[schema(required = true)]
@@ -216,17 +212,18 @@ pub struct BuildAgentPoolView {
     pub row_version: i64,
 }
 
-impl From<citadel_builds::BuildAgentPool> for BuildAgentPoolView {
-    fn from(value: citadel_builds::BuildAgentPool) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildAgentPool> for BuildAgentPoolView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildAgentPool) -> Result<Self, Self::Error> {
+        Ok(Self {
             tags: value.tags.into_iter().map(Into::into).collect(),
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
             description: value.description,
             enabled: value.enabled,
-            provider: value.provider,
-            provider_spec: value.provider_spec,
+            provider: serde_json::from_value(value.provider.into())?,
+            provider_spec: serde_json::from_value(value.provider_spec)?,
             max_active_builders: value.max_active_builders,
             queue_timeout_seconds: value.queue_timeout_seconds,
             provisioning_timeout_seconds: value.provisioning_timeout_seconds,
@@ -241,12 +238,12 @@ impl From<citadel_builds::BuildAgentPool> for BuildAgentPoolView {
             control_state: value.control_state,
             control_triggered_by: value.control_triggered_by,
             control_started_at: value.control_started_at,
-            created_by_actor_id: value.created_by_actor_id,
-            created_at: value.created_at,
+            created_by_actor_id: value.audit.created_by_actor_id.value(),
+            created_at: value.audit.created_at,
             updated_at: value.updated_at,
             archived_at: value.archived_at,
             row_version: value.row_version,
-        }
+        })
     }
 }
 
@@ -341,19 +338,23 @@ pub struct BuildPlatformSnapshot {
     #[schema(required = true)]
     pub address: Option<String>,
     #[schema(required = true)]
-    pub builder_kind: Option<String>,
+    pub builder_kind: Option<BuildProjectBuilderKind>,
     #[schema(required = true)]
     pub build_agent_pool_id: Option<Uuid>,
 }
 
-impl From<citadel_builds::BuildPlatformSnapshot> for BuildPlatformSnapshot {
-    fn from(value: citadel_builds::BuildPlatformSnapshot) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildPlatformSnapshot> for BuildPlatformSnapshot {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildPlatformSnapshot) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             name: value.name,
             address: value.address,
-            builder_kind: value.builder_kind,
+            builder_kind: value
+                .builder_kind
+                .map(|v| serde_json::from_value(v.into()))
+                .transpose()?,
             build_agent_pool_id: value.build_agent_pool_id,
-        }
+        })
     }
 }

@@ -1,6 +1,6 @@
-#![cfg(unix)]
 //! Ports ForgejoPush_ShouldUpdateAndDeployGitStack and the Vault KV v2
 //! resolve/inject/redact scenario against actual external services and Docker.
+#![cfg(unix)]
 use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_adapters::{
     connectors::{docker::DockerClient, routing::stacks::StackRuntimeRouter},
@@ -254,7 +254,7 @@ Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(citadel_runtime::
         assert_eq!(stacks.process_webhooks().await.unwrap(),1);
         let applied=PostgresStackRepository::new(pool.clone()).get_authorized(ActorId::new(SYSTEM_ACTOR_ID),true,stack.id).await.unwrap();
         assert_eq!(applied.status,citadel_stacks::StackReleaseStatus::Healthy);
-        assert_eq!(applied.source.unwrap().resolved_commit_sha,updated_commit);
+        assert_eq!(applied.source.as_ref().unwrap().resolved_commit_sha,updated_commit);
         assert_runtime(&docker,stack.id,"two").await;
         inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "two").await;
         let audits:Vec<String>=sqlx::query_scalar("SELECT row_to_json(a)::text FROM activityevents a WHERE resourceid=ANY($1)")

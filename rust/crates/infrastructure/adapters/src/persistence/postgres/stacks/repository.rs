@@ -1,4 +1,5 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 
 #[derive(Clone)]
 pub struct PostgresStackRepository {
@@ -25,7 +26,7 @@ impl StackRepository for PostgresStackRepository {
         &'a self,
         actor: ActorId,
         administrator: bool,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         state: &'a StackUpdateState,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         self.save_update_check_impl(actor, administrator, expected, state)
@@ -33,7 +34,7 @@ impl StackRepository for PostgresStackRepository {
 
     fn enqueue_webhook<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         commit: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         self.enqueue_webhook_impl(expected, commit)
@@ -52,7 +53,7 @@ impl StackRepository for PostgresStackRepository {
 
     fn record_drift<'a>(
         &'a self,
-        expected: &'a StackDetails,
+        expected: &'a citadel_stacks::Stack,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>> {
@@ -63,7 +64,7 @@ impl StackRepository for PostgresStackRepository {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<StackDetails>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         self.drift_monitor_candidates_impl(after, limit)
     }
 
@@ -72,7 +73,7 @@ impl StackRepository for PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         filter: &'a StackFilter,
-    ) -> BoxFuture<'a, Result<Vec<StackDetails>, StackError>> {
+    ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         self.list_authorized_impl(actor, administrator, filter)
     }
 
@@ -81,7 +82,7 @@ impl StackRepository for PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'_, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.get_authorized_impl(actor, administrator, id)
     }
 
@@ -90,7 +91,7 @@ impl StackRepository for PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         input: &'a CreateStack,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.create_impl(actor, administrator, input)
     }
 
@@ -102,7 +103,7 @@ impl StackRepository for PostgresStackRepository {
         expected_row_version: i64,
         input: &'a UpdateStack,
         spec: &'a StackSpec,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.update_impl(actor, administrator, id, expected_row_version, input, spec)
     }
 
@@ -112,7 +113,7 @@ impl StackRepository for PostgresStackRepository {
         administrator: bool,
         id: Uuid,
         description: Option<&'a str>,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.update_metadata_impl(actor, administrator, id, description)
     }
 
@@ -122,7 +123,7 @@ impl StackRepository for PostgresStackRepository {
         administrator: bool,
         id: Uuid,
         name: &'a str,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.rename_impl(actor, administrator, id, name)
     }
 
@@ -131,7 +132,7 @@ impl StackRepository for PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<StackReleaseDetails>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<StackRelease>, StackError>> {
         self.releases_impl(actor, administrator, id)
     }
 
@@ -277,7 +278,7 @@ impl StackRepository for PostgresStackRepository {
         administrator: bool,
         input: &'a ImportComposeProject,
         claim: &'a StackImportClaim,
-    ) -> BoxFuture<'a, Result<StackDetails, StackError>> {
+    ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         self.import_impl(actor, administrator, input, claim)
     }
 

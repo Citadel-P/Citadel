@@ -89,13 +89,18 @@ impl RegistryBrowser {
             } else {
                 let repo: DockerHubRepositoryInfo =
                     serde_json::from_value(value.clone()).map_err(|_| failure())?;
-                let mut repo = serde_json::to_value(repo).map_err(|_| failure())?;
-                if kind == RegistryBrowseKind::Repositories {
-                    let o = repo.as_object_mut().expect("repository object");
-                    o.insert("$type".into(), "DockerHub".into());
-                    o.remove("isTrusted");
-                    o.remove("isAutomated");
+                let repo = if kind == RegistryBrowseKind::Repositories {
+                    serde_json::to_value(ExternalRepository::DockerHub {
+                        name: repo.name,
+                        namespace: repo.namespace,
+                        last_updated: repo.last_updated,
+                        is_private: repo.is_private,
+                        pull_count: repo.pull_count,
+                    })
+                } else {
+                    serde_json::to_value(repo)
                 }
+                .map_err(|_| failure())?;
                 result.push(repo);
             }
         }
@@ -169,7 +174,14 @@ impl RegistryBrowser {
                     .get("id")
                     .and_then(Value::as_i64)
                     .ok_or_else(failure)?;
-                result.push(json!({"$type":"GitHub","id":id.to_string(),"name":value["name"],"createdAt":value["created_at"],"updatedAt":value["updated_at"],"url":value["url"],"htmlUrl":value["html_url"]}));
+                result.push(json!(ExternalRepository::GitHub {
+                    id: id.to_string(),
+                    name: text(value, "name"),
+                    created_at: text(value, "created_at"),
+                    updated_at: text(value, "updated_at"),
+                    url: text(value, "url"),
+                    html_url: text(value, "html_url"),
+                }));
             }
         }
         Ok(Value::Array(result))
@@ -234,14 +246,36 @@ async fn body(response: reqwest::Response) -> Result<Value, RegistryError> {
     }
     serde_json::from_slice(&bytes).map_err(|_| failure())
 }
+fn text(value: &Value, field: &str) -> Option<String> {
+    value.get(field).and_then(Value::as_str).map(str::to_owned)
+}
 fn tag_view(value: &Value) -> Value {
     let status = |v: &Value| {
         if v.as_str() == Some("active") {
-            "Active"
+            RegistryTagStatus::Active
         } else {
-            "Inactive"
+            RegistryTagStatus::Inactive
         }
     };
-    let image = value.get("images").and_then(Value::as_array).and_then(|v|v.first()).map(|i|json!({"architecture":i["architecture"],"digest":i["digest"],"os":i["os"],"size":i["size"],"status":status(&i["status"]),"lastPulled":i["last_pulled"]}));
-    json!({"id":value["id"],"name":value["name"],"image":image,"lastUpdated":value["last_updated"],"fullSize":value["full_size"],"status":status(&value["status"]),"lastPulled":value["tag_last_pulled"]})
+    let image = value
+        .get("images")
+        .and_then(Value::as_array)
+        .and_then(|images| images.first())
+        .map(|image| DockerHubTagImage {
+            architecture: text(image, "architecture"),
+            digest: text(image, "digest"),
+            os: text(image, "os"),
+            size: image["size"].as_i64(),
+            status: status(&image["status"]),
+            last_pulled: text(image, "last_pulled"),
+        });
+    json!(DockerHubTag {
+        id: value["id"].as_i64(),
+        name: text(value, "name"),
+        image,
+        last_updated: text(value, "last_updated"),
+        full_size: value["full_size"].as_i64(),
+        status: status(&value["status"]),
+        last_pulled: text(value, "tag_last_pulled"),
+    })
 }

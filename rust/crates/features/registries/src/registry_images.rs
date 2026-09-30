@@ -55,3 +55,55 @@ pub fn validate_browse_name(value: &str, registry: bool) -> Result<(), &'static 
     }
     Ok(())
 }
+
+/// Repository summaries returned by the registry browser, never credentials.
+#[derive(Debug, Serialize)]
+#[serde(tag = "$type")]
+pub enum ExternalRepository {
+    #[serde(rename_all = "camelCase")]
+    DockerHub {
+        name: Option<String>,
+        namespace: Option<String>,
+        last_updated: Option<String>,
+        is_private: bool,
+        pull_count: i64,
+    },
+    #[serde(rename_all = "camelCase")]
+    GitHub {
+        id: String,
+        name: Option<String>,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+        url: Option<String>,
+        html_url: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum RegistryTagStatus {
+    Active,
+    Inactive,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerHubTag {
+    pub id: Option<i64>,
+    pub name: Option<String>,
+    pub image: Option<DockerHubTagImage>,
+    pub last_updated: Option<String>,
+    pub full_size: Option<i64>,
+    pub status: RegistryTagStatus,
+    pub last_pulled: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerHubTagImage {
+    pub architecture: Option<String>,
+    pub digest: Option<String>,
+    pub os: Option<String>,
+    pub size: Option<i64>,
+    pub status: RegistryTagStatus,
+    pub last_pulled: Option<String>,
+}

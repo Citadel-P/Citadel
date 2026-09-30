@@ -70,7 +70,18 @@ const getDefaultStyle = (value: string) => {
     return styles.success;
   }
   if (
-    ['failed', 'failure', 'error', 'rejected', 'timedout', 'interrupted', 'offline', 'dead', 'invalid'].includes(value)
+    [
+      'failed',
+      'failure',
+      'error',
+      'rejected',
+      'timedout',
+      'interrupted',
+      'offline',
+      'dead',
+      'invalid',
+      'unavailable',
+    ].includes(value)
   ) {
     return styles.danger;
   }

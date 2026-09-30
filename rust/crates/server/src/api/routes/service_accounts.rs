@@ -2,7 +2,7 @@ use crate::{
     api::{
         error::{HttpResult, api_result},
         resources::{
-            capabilities::ResourceCapabilities,
+            capabilities::ResourceCapabilitiesView,
             service_accounts::{
                 requests::{
                     AddServiceAccountResourceAccessRequest, AddServiceAccountRoleRequest,
@@ -113,7 +113,7 @@ async fn list(
     )?;
     Ok(Json(ServiceAccountsResponse {
         paged_result: paged_result.into(),
-        capabilities: ResourceCapabilities::from(permission),
+        capabilities: ResourceCapabilitiesView::from(permission),
     })
     .into_response())
 }
@@ -255,7 +255,7 @@ async fn update(
     tag = "ServiceAccounts",
     summary = "List Service Account execution usages",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/RunAsActorUsageList"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<crate::api::resources::service_accounts::views::RunAsActorUsageView>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),

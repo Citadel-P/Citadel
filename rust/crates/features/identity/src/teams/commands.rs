@@ -1,15 +1,5 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamResourceAccessInput {
-    pub resource_type: ResourceType,
-    pub resource_id: Uuid,
-    pub permission_level: PermissionLevel,
-    #[serde(default)]
-    pub specific_permissions: Vec<SpecificPermission>,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeam {
@@ -19,7 +9,7 @@ pub struct CreateTeam {
     #[serde(default)]
     pub role_ids: Vec<Uuid>,
     #[serde(default)]
-    pub resource_accesses: Vec<TeamResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -32,7 +22,7 @@ pub struct PatchTeam {
     #[serde(default)]
     pub role_ids: PatchField<Vec<Uuid>>,
     #[serde(default)]
-    pub resource_accesses: PatchField<Vec<TeamResourceAccessInput>>,
+    pub resource_accesses: PatchField<Vec<ResourceAccessInput>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,7 +59,7 @@ pub struct NewTeamMutation {
     pub created_at: DateTime<Utc>,
     pub user_ids: Vec<Uuid>,
     pub role_ids: Vec<Uuid>,
-    pub resource_accesses: Vec<TeamResourceAccessInput>,
+    pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -77,5 +67,5 @@ pub struct TeamPatchMutation {
     pub is_enabled: Option<bool>,
     pub user_ids: Option<Vec<Uuid>>,
     pub role_ids: Option<Vec<Uuid>>,
-    pub resource_accesses: Option<Vec<TeamResourceAccessInput>>,
+    pub resource_accesses: Option<Vec<ResourceAccessInput>>,
 }

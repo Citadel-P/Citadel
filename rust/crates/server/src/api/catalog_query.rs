@@ -1,13 +1,13 @@
 use crate::api::{
     error::{HttpResult, api_result},
     resource_access::require_actor,
-    resources::metadata_patch::MetadataPatch,
 };
 use axum::{
     extract::{Extension, Path, rejection::PathRejection},
     http::HeaderMap,
 };
 use citadel_identity::ActorPrincipal;
+use citadel_primitives::PatchField;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ pub(crate) struct RenameResourceInput {
 pub(crate) struct PatchResourceMetadataInput {
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    pub(crate) description: MetadataPatch<String>,
+    pub(crate) description: PatchField<String>,
     #[serde(default, rename = "tags")]
     pub(crate) _tags: Option<Vec<String>>,
 }

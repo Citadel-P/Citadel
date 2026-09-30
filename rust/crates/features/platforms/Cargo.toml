@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-deployments = { path = "../deployments" }
 citadel-tags = { path = "../tags" }
 citadel-swarm-services = { path = "../swarm-services" }
 citadel-primitives = { path = "../primitives" }

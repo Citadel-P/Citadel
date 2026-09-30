@@ -343,6 +343,7 @@ fn feature_facades_and_dependencies_keep_presentation_in_server() {
         for path in feature_sources(&package.join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             assert!(!source.contains("utoipa"), "{}", path.display());
+            assert!(!source.contains("#[schema("), "{}", path.display());
         }
     }
 }

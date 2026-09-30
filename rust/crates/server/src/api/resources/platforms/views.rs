@@ -1,3 +1,8 @@
+use super::{
+    inventory_views::NetworkIpamView,
+    inventory_views::{NetworkAttachmentView, NetworkPeerView, VolumeContainerView},
+};
+use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::platforms::requests::PruneResource;
 use crate::api::resources::platforms::runtime_mapping;
 use chrono::{DateTime, Utc};
@@ -5,14 +10,6 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceCapabilitiesView {
-    pub can_read: bool,
-    pub can_write: bool,
-    pub can_execute: bool,
-}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -109,10 +106,9 @@ pub struct PlatformView {
     #[serde(rename = "type")]
     #[schema(value_type = crate::api::resources::platforms::requests::PlatformType)]
     pub platform_type: String,
-    #[schema(value_type = crate::api::resources::common::PlatformStatus)]
-    pub status: String,
-    #[schema(value_type = crate::openapi::compatibility::PlatformConnectorType)]
-    pub connector_type: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
+    pub status: citadel_primitives::PlatformStatus,
+    pub connector_type: super::descriptor_views::PlatformConnectorType,
     pub deployment_count: i64,
     pub stack_count: i64,
     pub deployment_status_counts: WorkloadStatusCounts,
@@ -120,8 +116,8 @@ pub struct PlatformView {
     pub swarm_service_status_counts: WorkloadStatusCounts,
     #[schema(required = true)]
     pub stats: Option<Vec<PlatformStatView>>,
-    #[schema(value_type = Option<crate::openapi::compatibility::PlatformDescriptor>)]
-    pub platform_descriptor: Value,
+    #[schema(required = true)]
+    pub platform_descriptor: Option<super::descriptor_views::PlatformDescriptor>,
     #[schema(required = true)]
     pub cluster_id: Option<String>,
     pub prune_historical_swarm_task_containers: bool,
@@ -129,9 +125,10 @@ pub struct PlatformView {
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
-impl From<citadel_platforms::PlatformDetails> for PlatformView {
-    fn from(value: citadel_platforms::PlatformDetails) -> Self {
-        Self {
+impl TryFrom<citadel_platforms::PlatformDetails> for PlatformView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_platforms::PlatformDetails) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             tags: value.tags.into_iter().map(Into::into).collect(),
             name: value.name,
@@ -146,7 +143,7 @@ impl From<citadel_platforms::PlatformDetails> for PlatformView {
             server_version: value.server_version,
             platform_type: value.platform_type,
             status: value.status,
-            connector_type: value.connector_type,
+            connector_type: serde_json::from_value(Value::String(value.connector_type))?,
             deployment_count: value.deployment_count,
             stack_count: value.stack_count,
             deployment_status_counts: value.deployment_status_counts.into(),
@@ -155,15 +152,15 @@ impl From<citadel_platforms::PlatformDetails> for PlatformView {
             stats: value
                 .stats
                 .map(|items| items.into_iter().map(Into::into).collect()),
-            platform_descriptor: value.platform_descriptor,
+            platform_descriptor: serde_json::from_value(value.platform_descriptor)?,
             cluster_id: value.cluster_id,
             prune_historical_swarm_task_containers: value.prune_historical_swarm_task_containers,
             capabilities: None,
-        }
+        })
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatView {
     pub container_id: Uuid,
@@ -200,15 +197,15 @@ pub struct ContainerView {
     pub name: String,
     pub docker_image_id: String,
     pub created: i64,
-    #[schema(value_type = crate::openapi::compatibility::ContainerStateStatus)]
+    #[schema(value_type = super::inventory_views::ContainerStateStatus)]
     pub state: String,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: citadel_primitives::ResourceControlState,
     pub updated: i64,
     #[schema(required = true)]
     pub stack: Option<String>,
     pub is_system: bool,
-    #[schema(value_type = Option<crate::openapi::compatibility::ContainerSystemRole>, required = true)]
+    #[schema(value_type = Option<super::container_views::ContainerSystemRole>, required = true)]
     pub system_role: Option<String>,
     pub has_citadel_ownership_labels: bool,
     pub is_swarm_task: bool,
@@ -224,7 +221,7 @@ pub struct ContainerView {
     pub projection_stale_reason: Option<String>,
     #[schema(required = true)]
     pub last_stats: Option<ContainerStatView>,
-    #[schema(value_type = BTreeMap<String, Vec<crate::openapi::compatibility::HostPortBinding>>)]
+    #[schema(value_type = BTreeMap<String, Vec<super::inventory_views::HostPortBinding>>)]
     pub ports: Value,
     #[schema(required = true)]
     pub deployment_id: Option<Uuid>,
@@ -279,14 +276,14 @@ pub struct ContainerDeploymentView {
     pub id: Uuid,
     pub name: String,
     pub platform_id: Uuid,
-    #[schema(value_type = crate::api::resources::deployments::spec::DeploymentStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::deployments::DeploymentStatusSchema)]
+    pub status: citadel_deployments::DeploymentStatus,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
-    #[schema(value_type = crate::api::resources::common::PlatformStatus)]
-    pub platform_status: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: citadel_primitives::ResourceControlState,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::PlatformStatusSchema)]
+    pub platform_status: citadel_primitives::PlatformStatus,
     pub auto_update_state: ContainerDeploymentUpdateState,
 }
 
@@ -313,8 +310,7 @@ pub struct ImageRegistryView {
     pub name: String,
     pub registry_host: String,
     #[serde(rename = "type")]
-    #[schema(value_type = crate::openapi::compatibility::RegistryType)]
-    pub registry_type: String,
+    pub registry_type: crate::api::resources::registries::spec::RegistryKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
@@ -329,8 +325,8 @@ pub struct ImageView {
     pub is_in_use: bool,
     pub platform_id: Uuid,
     pub created_at: DateTime<Utc>,
-    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
-    pub control_state: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: citadel_primitives::ResourceControlState,
     #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     #[schema(required = true)]
@@ -395,14 +391,12 @@ pub struct NetworkView {
     pub in_use: bool,
     #[schema(required = true)]
     pub config_from: Option<String>,
-    #[schema(value_type = Option<crate::openapi::compatibility::IpAddressManagementConfig>, required = true)]
-    pub ipam: Option<Value>,
+    #[schema(required = true)]
+    pub ipam: Option<NetworkIpamView>,
     pub options: BTreeMap<String, String>,
     pub labels: BTreeMap<String, String>,
-    #[schema(value_type = BTreeMap<String, crate::openapi::compatibility::NetworkConnectedContainer>)]
-    pub containers: BTreeMap<String, Value>,
-    #[schema(value_type = Vec<crate::openapi::compatibility::NetworkPeerInfo>)]
-    pub peers: Vec<Value>,
+    pub containers: BTreeMap<String, NetworkAttachmentView>,
+    pub peers: Vec<NetworkPeerView>,
     pub is_system: bool,
     #[schema(required = true)]
     pub docker_node_id: Option<String>,
@@ -415,10 +409,11 @@ pub struct NetworkView {
     pub capabilities: Option<NetworkCapabilitiesView>,
 }
 
-impl From<citadel_platforms::NetworkDetails> for NetworkView {
-    fn from(value: citadel_platforms::NetworkDetails) -> Self {
+impl TryFrom<citadel_platforms::NetworkDetails> for NetworkView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_platforms::NetworkDetails) -> Result<Self, Self::Error> {
         let is_system = runtime_mapping::system_network(&value.name, value.ingress);
-        Self {
+        Ok(Self {
             name: value.name,
             id: value.id,
             created: value.created,
@@ -432,22 +427,26 @@ impl From<citadel_platforms::NetworkDetails> for NetworkView {
             config_only: value.config_only,
             in_use: value.in_use,
             config_from: value.config_from,
-            ipam: value.ipam.map(runtime_mapping::ipam),
+            ipam: value.ipam.map(runtime_mapping::ipam).transpose()?.flatten(),
             options: value.options,
             labels: value.labels,
             containers: value
                 .containers
                 .into_iter()
-                .map(|(id, c)| (id, runtime_mapping::network_container(c)))
-                .collect(),
-            peers: value.peers.into_iter().map(runtime_mapping::peer).collect(),
+                .map(|(id, c)| runtime_mapping::network_container(c).map(|c| (id, c)))
+                .collect::<Result<_, _>>()?,
+            peers: value
+                .peers
+                .into_iter()
+                .map(runtime_mapping::peer)
+                .collect::<Result<_, _>>()?,
             is_system,
             docker_node_id: value.docker_node_id,
             node_hostname: value.node_hostname,
             is_stale: value.is_stale,
             stale_reason: value.stale_reason,
             capabilities: None,
-        }
+        })
     }
 }
 
@@ -466,8 +465,7 @@ pub struct VolumeView {
     pub cluster_volume: Option<Value>,
     #[schema(required = true)]
     pub usage_data: Option<VolumeUsageDataView>,
-    #[schema(value_type = Vec<crate::openapi::compatibility::ContainerVolumeResult>)]
-    pub containers: Vec<Value>,
+    pub containers: Vec<VolumeContainerView>,
     pub status: BTreeMap<String, String>,
     pub labels: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
@@ -482,9 +480,10 @@ pub struct VolumeView {
     pub capabilities: Option<VolumeCapabilitiesView>,
 }
 
-impl From<citadel_platforms::VolumeDetails> for VolumeView {
-    fn from(value: citadel_platforms::VolumeDetails) -> Self {
-        Self {
+impl TryFrom<citadel_platforms::VolumeDetails> for VolumeView {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_platforms::VolumeDetails) -> Result<Self, Self::Error> {
+        Ok(Self {
             backup_coverage: None,
             id: value.id,
             name: value.name,
@@ -495,7 +494,11 @@ impl From<citadel_platforms::VolumeDetails> for VolumeView {
             created_at: value.created_at,
             cluster_volume: value.cluster_volume.map(runtime_mapping::cluster_volume),
             usage_data: value.usage_data.map(Into::into),
-            containers: value.containers,
+            containers: value
+                .containers
+                .into_iter()
+                .map(serde_json::from_value)
+                .collect::<Result<_, _>>()?,
             status: value.status,
             labels: value.labels,
             options: value.options,
@@ -504,7 +507,7 @@ impl From<citadel_platforms::VolumeDetails> for VolumeView {
             is_stale: value.is_stale,
             stale_reason: value.stale_reason,
             capabilities: None,
-        }
+        })
     }
 }
 
@@ -602,7 +605,7 @@ pub struct SwarmServiceView {
     pub secret_ids: Vec<String>,
     pub config_ids: Vec<String>,
     pub labels: BTreeMap<String, String>,
-    #[schema(value_type = crate::openapi::compatibility::SwarmServiceOwnership)]
+    #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceOwnershipSchema)]
     pub ownership: String,
     #[schema(required = true)]
     pub docker_stack_namespace: Option<String>,
@@ -839,27 +842,11 @@ impl From<citadel_platforms::SwarmSecretSummary> for SwarmSecretView {
     }
 }
 
-impl ContainerView {
-    /// Shared HTTP/live runtime shape: `id` is the Docker ID, not the DB UUID.
-    pub fn runtime_data(&self) -> Value {
-        serde_json::json!({
-            "id":self.container_id,"name":self.name,"platformId":self.platform_id,
-            "image":self.image_view.as_ref().map_or("", |image| image.name.as_str()),"imageId":self.docker_image_id,"state":self.state,
-            "controlState":self.control_state,"created":self.created,"stack":self.stack,
-            "ports":self.ports,"containerStat":self.last_stats,
-            "isSystem":self.is_system,"systemRole":self.system_role,
-            "hasCitadelOwnershipLabels":self.has_citadel_ownership_labels,
-            "isSwarmTask":self.is_swarm_task,"dockerNodeId":self.docker_node_id,
-            "deploymentId":self.deployment_id,"stackId":self.stack_id,
-            "capabilities":self.capabilities,
-        })
-    }
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInspectionView {
     #[serde(flatten)]
+    #[schema(value_type = crate::api::resources::schema_models::platforms::ImageInspectionSchema)]
     pub image: citadel_platforms::images::ImageInspection,
     pub capabilities: Option<ImageCapabilitiesView>,
 }
@@ -896,8 +883,8 @@ impl From<citadel_platforms::WorkloadStatusCounts> for WorkloadStatusCounts {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDeploymentUpdateState {
     pub last_checked_at: DateTime<Utc>,
-    #[schema(value_type = crate::api::resources::common::AutoUpdateStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::AutoUpdateStatusSchema)]
+    pub status: citadel_primitives::AutoUpdateStatus,
 }
 
 impl From<citadel_platforms::ContainerDeploymentUpdateState> for ContainerDeploymentUpdateState {
@@ -944,20 +931,20 @@ pub(crate) struct VolumesResponse {
     pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwarmItemsResponse<T> {
     pub(crate) items: Vec<T>,
     pub(crate) capabilities: PlatformCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TaskTerminalView {
     pub(crate) docker_container_id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct History<T> {
     pub(crate) stats: Vec<T>,
 }
@@ -970,7 +957,7 @@ pub(crate) struct TaskHistory {
     pub(crate) stats: Vec<crate::api::resources::platforms::views::ContainerStatView>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ContainerHistory {
     pub(crate) container_id: String,
@@ -978,7 +965,7 @@ pub(crate) struct ContainerHistory {
     pub(crate) stats: Vec<crate::api::resources::platforms::views::ContainerStatView>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct StackHistory {
     pub(crate) containers: Vec<ContainerHistory>,
 }
@@ -1105,12 +1092,12 @@ impl AgentSetupView {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupCoverageView {
-    #[schema(value_type = crate::openapi::compatibility::BackupCoverageStatus)]
-    pub status: String,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupCoverageStatusSchema)]
+    pub status: citadel_backups::BackupCoverageStatus,
     pub policy_count: i32,
     pub last_run_id: Option<Uuid>,
-    #[schema(value_type = Option<crate::openapi::compatibility::BackupRunStatus>)]
-    pub last_run_status: Option<String>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRunStatusSchema>)]
+    pub last_run_status: Option<citadel_backups::BackupRunStatus>,
     pub last_run_at: Option<DateTime<Utc>>,
     pub last_successful_run_at: Option<DateTime<Utc>>,
     pub next_run_at: Option<DateTime<Utc>>,

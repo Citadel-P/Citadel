@@ -12,12 +12,12 @@ pub struct AlertRuleConfiguration {
     pub description: Option<String>,
     #[serde(rename = "type")]
     pub alert_type: String,
-    pub severity: String,
+    pub severity: crate::AlertSeverity,
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
     pub threshold: Option<f64>,
     #[serde(default = "enabled_status")]
-    pub status: String,
+    pub status: crate::AlertRuleStatus,
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
     #[serde(default)]
@@ -71,10 +71,9 @@ impl AlertRuleConfiguration {
     }
 
     fn is_threshold_rule(&self) -> bool {
-        matches!(
-            self.alert_type.as_str(),
-            "PlatformCpuHigh" | "PlatformRamHigh" | "PlatformDiskHigh"
-        )
+        self.alert_type
+            .parse::<crate::AlertType>()
+            .is_ok_and(crate::AlertType::is_threshold)
     }
 
     pub fn snapshot(&self, id: Uuid) -> citadel_activities::AlertRuleActivitySnapshot {
@@ -83,11 +82,11 @@ impl AlertRuleConfiguration {
             name: self.name.clone(),
             description: self.description.clone(),
             alert_type: self.alert_type.clone(),
-            severity: self.severity.clone(),
+            severity: self.severity.to_string(),
             cooldown_seconds: self.cooldown_seconds,
             required_matches: self.required_matches,
             threshold: self.threshold.and_then(serde_json::Number::from_f64),
-            status: self.status.clone(),
+            status: self.status.to_string(),
             channel_ids: self.channel_ids.clone(),
             limited_to: self.limited_to.clone(),
             quiet_hours: self.quiet_hours.clone(),
@@ -105,14 +104,6 @@ impl AlertRuleConfiguration {
         }
         if self.alert_type.trim().is_empty() {
             return Err(AlertError::Validation("Alert type is required.".into()));
-        }
-        if !matches!(self.severity.as_str(), "Info" | "Warning" | "Critical") {
-            return Err(AlertError::Validation("Alert severity is invalid.".into()));
-        }
-        if !matches!(self.status.as_str(), "Enabled" | "Disabled") {
-            return Err(AlertError::Validation(
-                "Alert Rule status is invalid.".into(),
-            ));
         }
         if invalid_cooldown(self.cooldown_seconds) {
             return Err(AlertError::InvalidCooldown);
@@ -164,11 +155,11 @@ impl From<&AlertRule> for AlertRuleConfiguration {
             name: value.name.clone(),
             description: value.description.clone(),
             alert_type: value.alert_type.clone(),
-            severity: value.severity.clone(),
+            severity: value.severity,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: value.status.clone(),
+            status: value.status,
             channel_ids: value.channel_ids.clone(),
             limited_to: value.limited_to.clone(),
             quiet_hours: value.quiet_hours.clone(),

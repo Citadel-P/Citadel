@@ -58,7 +58,7 @@ pub(super) async fn verify(
         assert_eq!(command.resource_id, id.to_string());
         assert_eq!(
             builds.store().get_pool(id).await.unwrap().control_state,
-            "Processing"
+            citadel_primitives::ResourceControlState::Processing
         );
         assert_eq!(
             request(app, Method::POST, &uri, Some(principal.clone()), None)
@@ -87,7 +87,9 @@ pub(super) async fn verify(
         }
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
             loop {
-                if builds.store().get_pool(id).await.unwrap().control_state == "Idle" {
+                if builds.store().get_pool(id).await.unwrap().control_state
+                    == citadel_primitives::ResourceControlState::Idle
+                {
                     break;
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -98,7 +100,11 @@ pub(super) async fn verify(
         let stored = builds.store().get_pool(id).await.unwrap();
         assert_eq!(
             stored.last_validation_status,
-            if available { "Ready" } else { "Invalid" }
+            if available {
+                citadel_builds::BuildAgentPoolValidationStatus::Ready
+            } else {
+                citadel_builds::BuildAgentPoolValidationStatus::Invalid
+            }
         );
         assert!(stored.last_validated_at.is_some());
         assert!(stored.control_triggered_by.is_none());
@@ -248,7 +254,7 @@ async fn verify_health_persistence(db: &sqlx::PgPool, builds: &Arc<BuildService>
     );
     assert_eq!(
         builds.store().get_pool(id).await.unwrap().control_state,
-        "Idle"
+        citadel_primitives::ResourceControlState::Idle
     );
     let after: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
         .bind(id)
@@ -506,7 +512,7 @@ async fn verify_shutdown_ownership(db: &sqlx::PgPool, id: Uuid, actor: ActorId) 
     assert_eq!(tasks.active(), 1);
     assert_eq!(
         service.store().get_pool(id).await.unwrap().control_state,
-        "Processing"
+        citadel_primitives::ResourceControlState::Processing
     );
     caller.abort();
     assert!(caller.await.unwrap_err().is_cancelled());
@@ -522,8 +528,14 @@ async fn verify_shutdown_ownership(db: &sqlx::PgPool, id: Uuid, actor: ActorId) 
         .unwrap();
     assert_eq!(tasks.active(), 0);
     let stored = service.store().get_pool(id).await.unwrap();
-    assert_eq!(stored.control_state, "Idle");
-    assert_eq!(stored.last_validation_status, "Invalid");
+    assert_eq!(
+        stored.control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
+    assert_eq!(
+        stored.last_validation_status,
+        citadel_builds::BuildAgentPoolValidationStatus::Invalid
+    );
     assert!(
         stored
             .last_validation_message

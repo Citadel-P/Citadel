@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use citadel_primitives::normalization::unique_ids;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,14 +15,13 @@ use crate::CreateDeployment;
 use crate::DeletionClaim;
 use crate::DeploymentBindingSnapshot;
 use crate::DeploymentConfig;
-use crate::DeploymentDetails;
 use crate::DeploymentDuplicateDraft;
 use crate::DeploymentError;
 use crate::DeploymentFilter;
 use crate::DeploymentImageInfo;
 use crate::DeploymentProgress;
 use crate::DeploymentSpec;
-use crate::FieldPatch;
+use crate::PatchField;
 use crate::ResolvedDeploymentBindings;
 use crate::RuntimeContainerState;
 use crate::RuntimeDeploymentCommand;
@@ -43,11 +42,11 @@ use crate::DeploymentRepository;
 use crate::DeploymentRuntime;
 use crate::EmptyDeploymentBindingResolver;
 use bindings::*;
-use mutations::{normalize_description, normalize_name, unique_ids};
-pub use updates::{DeploymentUpdateCheck, checkable_deployment_image, evaluate_deployment_digest};
+use mutations::{normalize_description, normalize_name};
+pub use updates::{DeploymentUpdateCheck, checkable_deployment_image};
 pub trait DeploymentChangeNotifier: Send + Sync {
     fn changed(&self, deployment_id: Uuid, event: &'static str);
-    fn adopted(&self, deployment: &DeploymentDetails) {
+    fn adopted(&self, deployment: &crate::Deployment) {
         self.changed(deployment.id, "created");
     }
 }

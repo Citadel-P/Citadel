@@ -68,7 +68,7 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \
 ENTRYPOINT ["/usr/local/bin/citadel-entrypoint"]
 CMD ["serve"]
 
-# Development mounts the local Cargo binary into runtime-base, reusing its cache.
+# Development stages the locally built binary and mounts it into runtime-base.
 # The default production image still contains the release binary and built UI.
 FROM runtime-base AS final
 COPY --from=build --chown=65532:0 /tmp/citadel-server /app/citadel-server

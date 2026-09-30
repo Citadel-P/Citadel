@@ -4,7 +4,7 @@ use citadel_stacks::{StackWebhookJob, can_queue_stack_webhook, stack_webhook_fin
 impl PostgresStackRepository {
     pub(super) async fn enqueue_stack_webhook(
         &self,
-        expected: &StackDetails,
+        expected: &citadel_stacks::Stack,
         commit: Option<&str>,
     ) -> Result<(), StackError> {
         if commit.is_some_and(|sha| {

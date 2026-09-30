@@ -87,6 +87,21 @@ macro_rules! permission_policy {
     (@specific) => { None };
 }
 
+/// Resource returned by an ACL-aware query together with the requesting actor's access.
+/// Permission metadata is not part of the resource itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuthorizedResource<T> {
+    pub resource: T,
+    pub effective_permission: EffectivePermission,
+}
+
+impl<T> std::ops::Deref for AuthorizedResource<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.resource
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -15,8 +15,8 @@ pub use repositories::{
     GitBrowserEntryType, GitCommitComparison, GitComposeDiscovery, GitComposeProjectCandidate,
     GitDirectoryEntry, GitDirectoryListing, GitFileContent, GitRepositoryExecutionError,
     GitRepositoryExecutionPersistence, GitRepositoryExecutionService, GitRepositoryRef,
-    GitRepositorySource, GitRepositorySyncMode, GitRepositoryWebhook, GitSnapshot, GitSnapshotFile,
-    GitSyncClaim, GitWebhookOutcome,
+    GitRepositorySource, GitRepositorySyncMode, GitSnapshot, GitSnapshotFile, GitSyncClaim,
+    GitWebhookOutcome,
 };
 
 pub use repositories::{
@@ -25,3 +25,6 @@ pub use repositories::{
 };
 
 pub mod permissions;
+
+mod status;
+pub use status::{GitRepositoryRefStatus, GitRepositoryStatus};

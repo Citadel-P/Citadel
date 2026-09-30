@@ -119,7 +119,7 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
     store.authorization_snapshot(bob.actor_id).await.unwrap();
     let mut alice_watch = store.authorization_changes(alice.actor_id).unwrap();
     let bob_watch = store.authorization_changes(bob.actor_id).unwrap();
-    let access = UserResourceAccessInput {
+    let access = ResourceAccessInput {
         resource_type: kind,
         resource_id: ids[0],
         permission_level: PermissionLevel::Read,
@@ -306,7 +306,7 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
     teams
         .add_resource_access(
             team.id,
-            &TeamResourceAccessInput {
+            &ResourceAccessInput {
                 resource_type: kind,
                 resource_id: ids[2],
                 permission_level: PermissionLevel::Read,
@@ -318,6 +318,40 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
         )
         .await
         .unwrap();
+    assert!(
+        store
+            .resource_permission(alice.actor_id, kind, ids[2])
+            .await
+            .unwrap()
+            .is_some()
+    );
+    // Revoking a team grant must invalidate an already-cached inherited permission.
+    let team_access = ResourceAccessInput {
+        resource_type: kind,
+        resource_id: ids[2],
+        permission_level: PermissionLevel::Read,
+        specific_permissions: vec![],
+    };
+    alice_watch.borrow_and_update();
+    teams
+        .remove_resource_access(team.id, &team_access, changed_by, Utc::now())
+        .await
+        .unwrap();
+    assert!(alice_watch.has_changed().unwrap());
+    assert!(
+        store
+            .resource_permission(alice.actor_id, kind, ids[2])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // Re-granting must invalidate the cached denial too, before the cascade test.
+    alice_watch.borrow_and_update();
+    teams
+        .add_resource_access(team.id, &team_access, changed_by, Utc::now(), true)
+        .await
+        .unwrap();
+    assert!(alice_watch.has_changed().unwrap());
     assert!(
         store
             .resource_permission(alice.actor_id, kind, ids[2])

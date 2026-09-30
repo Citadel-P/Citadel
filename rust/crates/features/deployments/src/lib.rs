@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+pub use citadel_primitives::PatchField;
 
 pub mod adoption;
 mod tasks;
@@ -6,10 +7,10 @@ pub use tasks::DeploymentTaskSpawner;
 mod commands;
 mod model;
 mod read_models;
-pub use commands::{CreateDeployment, FieldPatch, UpdateDeploymentMetadata};
+pub use commands::{CreateDeployment, UpdateDeploymentMetadata};
 pub use read_models::{
-    DeploymentConfig, DeploymentDetails, DeploymentDraft, DeploymentDuplicateDraft,
-    DeploymentFilter, DuplicateSource, DuplicateWarning,
+    DeploymentConfig, DeploymentDraft, DeploymentDuplicateDraft, DeploymentFilter, DuplicateSource,
+    DuplicateWarning,
 };
 pub mod permissions;
 mod repository;
@@ -22,14 +23,17 @@ pub use runtime::{
 };
 
 pub use model::{
-    ApplyClaim, AutoUpdateState, ContainerRestartPolicy, DeletionClaim, Deployment,
-    DeploymentApplyError, DeploymentBindingSnapshot, DeploymentError, DeploymentImageInfo,
-    DeploymentProgress, DeploymentSpec, ImagePullProgress, LifeCycleSpec, PreparedDeploymentImage,
+    ApplyClaim, ContainerRestartPolicy, DeletionClaim, Deployment, DeploymentApplyError,
+    DeploymentBindingSnapshot, DeploymentError, DeploymentImageInfo, DeploymentProgress,
+    DeploymentSpec, ImagePullProgress, LifeCycleSpec, PreparedDeploymentImage,
     ResolvedDeploymentBinding, ResolvedDeploymentBindings, ResolvedDeploymentBuild, ResourceSpec,
     RuntimeContainerState, RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
     UpdateBehavior,
 };
 pub use service::{
     DeploymentChangeNotifier, DeploymentService, DeploymentUpdateCheck,
-    NoopDeploymentChangeNotifier, checkable_deployment_image, evaluate_deployment_digest,
+    NoopDeploymentChangeNotifier, checkable_deployment_image,
 };
+
+mod status;
+pub use status::DeploymentStatus;

@@ -1,7 +1,7 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Network } from 'lucide-react';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
-import { DockerNetworkDetailsView } from '@/api/generated/api.types';
+import { NetworkView } from '@/api/generated/api.types';
 import { Box, Info, Share2 } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { NetworkInfoTable } from './network-info-table';
@@ -15,7 +15,7 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { SystemBadge } from '@/components/custom/system-badge';
 import { useSearchParams } from 'react-router';
 
-export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetailsView> = {
+export const NetworkInfoComponents: RequiredDockerInfoComponents<NetworkView> = {
   Header: {
     Icon: Network,
     Status: ({ resource }) => (
@@ -34,7 +34,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
   Tabs: [
     {
       label: 'Inspect',
-      disabled: (resource: DockerNetworkDetailsView) => !hasCapability(resource, 'canRead'),
+      disabled: (resource: NetworkView) => !hasCapability(resource, 'canRead'),
       Content: ({ resource }) => <InspectNetworkWrapper resource={resource} />,
     },
   ],
@@ -50,7 +50,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
   },
 };
 
-const InspectNetworkWrapper = ({ resource }: { resource: DockerNetworkDetailsView }) => {
+const InspectNetworkWrapper = ({ resource }: { resource: NetworkView }) => {
   return (
     <div className="flex flex-col gap-(--section-gap)">
       <DetailSection title="Network configuration" description="Driver, scope, and connection settings." icon={Info}>

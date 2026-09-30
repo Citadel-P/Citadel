@@ -1,8 +1,8 @@
 //! Non-mutating Docker-to-Deployment draft mapping.
-use crate::DeploymentDetails;
 use crate::DeploymentError;
 use crate::DeploymentSpec;
 use citadel_primitives::ActorId;
+use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -68,7 +68,7 @@ pub trait ContainerAdoptionPort: Send + Sync {
         id: Uuid,
         input: AdoptContainer,
         cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<DeploymentDetails, DeploymentError>>;
+    ) -> BoxFuture<'a, Result<AuthorizedResource<crate::Deployment>, DeploymentError>>;
 }
 
 // Docker and generated protobuf inspection documents spell acronyms differently.

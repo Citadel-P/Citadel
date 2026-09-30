@@ -1,34 +1,5 @@
 use super::*;
-
-pub(super) fn map_webhook(
-    value: &Value,
-) -> Result<GitRepositoryWebhook, GitRepositoryExecutionError> {
-    let field = |name: &str| {
-        value.as_object().and_then(|object| {
-            object
-                .iter()
-                .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
-        })
-    };
-    let enabled = field("enabled").and_then(Value::as_bool).unwrap_or(false);
-    let provider = field("provider")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHub")
-        .to_owned();
-    let auth_scheme = field("authScheme")
-        .and_then(Value::as_str)
-        .unwrap_or("GitHubHmacSha256")
-        .to_owned();
-    Ok(GitRepositoryWebhook {
-        enabled,
-        provider,
-        auth_scheme,
-        secret: field("secret").and_then(Value::as_str).map(str::to_owned),
-        branch_filter: field("branchFilter")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-    })
-}
+use citadel_git::{GitRepositoryRefStatus, GitRepositoryStatus};
 
 pub(super) async fn get_source(
     pool: &PgPool,
@@ -76,7 +47,11 @@ pub(super) fn map_ref(
         git_repository_id: row.try_get("gitrepositoryid").map_err(storage)?,
         branch: row.try_get("branch").map_err(storage)?,
         resolved_commit_sha: row.try_get("resolvedcommitsha").map_err(storage)?,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         last_error: row.try_get("lasterror").map_err(storage)?,
         last_synced_at: row.try_get("lastsyncedat").map_err(storage)?,
     })
@@ -121,15 +96,18 @@ pub(super) async fn finish_sync(
     .await
     .map_err(storage)?;
     let (status, commit) = if let Some(result) = result {
-        ("Healthy", Some(result.commit.as_str()))
+        (
+            GitRepositoryRefStatus::Healthy,
+            Some(result.commit.as_str()),
+        )
     } else {
-        ("Degraded", None)
+        (GitRepositoryRefStatus::Degraded, None)
     };
     let affected = sqlx::query(
         "UPDATE gitrepositoryrefs SET status=$2,resolvedcommitsha=COALESCE($3,resolvedcommitsha),lasterror=$4,lastsyncedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Syncing'",
     )
     .bind(claim.reference_id)
-    .bind(status)
+    .bind(status.as_str())
     .bind(commit)
     .bind(error)
     .execute(&mut *transaction)
@@ -166,15 +144,19 @@ pub(super) async fn finish_sync(
         .fetch_optional(&mut *transaction)
         .await
         .map_err(storage)?
-        .unwrap_or_else(|| "Unknown".into())
+        .map(|value| value.parse::<GitRepositoryRefStatus>())
+        .transpose()
+        .map_err(storage)?
+        .map(GitRepositoryStatus::from)
+        .unwrap_or(GitRepositoryStatus::Unknown)
     } else {
-        status.to_owned()
+        GitRepositoryStatus::from(status)
     };
     sqlx::query(
         "UPDATE gitrepositories SET status=$2,controlstate=$3,controlstartedat=NULL,controltriggeredby=CASE WHEN $4 THEN controltriggeredby ELSE NULL END,rowversion=rowversion+1 WHERE id=$1",
     )
     .bind(claim.repository.id)
-    .bind(if pending { "Pending" } else { &repository_status })
+    .bind(if pending { GitRepositoryStatus::Pending } else { repository_status }.as_str())
     .bind(if pending { "Queued" } else { "Idle" })
     .bind(pending)
     .execute(&mut *transaction)
@@ -249,17 +231,6 @@ pub(super) async fn finish_sync(
     transaction.commit().await.map_err(storage)
 }
 
-pub(super) fn mask_webhook(value: Option<Value>) -> Option<Value> {
-    value.map(|mut webhook| {
-        if let Some(object) = webhook.as_object_mut()
-            && object.get("secret").is_some_and(|value| !value.is_null())
-        {
-            object.insert("secret".to_owned(), Value::String("********".to_owned()));
-        }
-        webhook
-    })
-}
-
 pub(super) fn parse_json_column(
     value: Option<String>,
 ) -> Result<Option<Value>, GitRepositoryExecutionError> {
@@ -286,6 +257,6 @@ pub(super) fn is_object_id(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-pub(super) fn storage(error: sqlx::Error) -> GitRepositoryExecutionError {
+pub(super) fn storage(error: impl std::fmt::Display) -> GitRepositoryExecutionError {
     GitRepositoryExecutionError::Storage(error.to_string())
 }

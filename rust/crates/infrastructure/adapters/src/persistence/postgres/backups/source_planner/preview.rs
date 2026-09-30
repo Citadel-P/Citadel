@@ -5,7 +5,6 @@ use citadel_backups::policies::read_models::{
 };
 use citadel_platforms::containers::{ContainerInspectionPort, ContainerTarget};
 use citadel_primitives::{ActorId, ResourceType};
-use serde_json::json;
 use sqlx::AssertSqlSafe;
 
 impl PostgresBackupSourcePlanner {
@@ -180,13 +179,9 @@ impl PostgresBackupSourcePlanner {
             }
             kind => {
                 let plan = match kind {
-                    BackupPreviewKind::Stack => {
-                        self.plan_stack(&json!({"stackId":id}), None, cancellation)
-                            .await?
-                    }
+                    BackupPreviewKind::Stack => self.plan_stack(id, None, cancellation).await?,
                     BackupPreviewKind::SwarmService => {
-                        self.plan_swarm_service(&json!({"swarmServiceId":id}), None, cancellation)
-                            .await?
+                        self.plan_swarm_service(id, None, cancellation).await?
                     }
                     BackupPreviewKind::Deployment => unreachable!(),
                 };
@@ -213,7 +208,7 @@ impl PostgresBackupSourcePlanner {
                 }
             }
         }
-        if platform.status != "Online" {
+        if platform.status != citadel_primitives::PlatformStatus::Online {
             warnings.push("The source Platform is offline or unavailable.".into());
         }
         if volumes.is_empty() {

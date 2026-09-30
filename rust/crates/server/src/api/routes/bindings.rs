@@ -96,7 +96,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Bindings
     summary = "Test a Vault-compatible KV v2 Secret provider connection",
     request_body = crate::api::resources::bindings::requests::TestSecretProviderInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SecretProviderConnectionTestResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::bindings::SecretTestResultSchema, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     security(("Bearer" = [])),
@@ -132,7 +132,7 @@ async fn test_secret_provider(
     summary = "Test an external Secret reference",
     request_body = crate::api::resources::bindings::requests::TestExternalSecretInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/ExternalSecretTestResultView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::schema_models::bindings::SecretTestResultSchema, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     security(("Bearer" = [])),

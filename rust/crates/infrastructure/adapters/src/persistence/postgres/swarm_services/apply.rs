@@ -198,21 +198,21 @@ impl PostgresSwarmServiceRepository {
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
         Box::pin(async move {
             let state = if outcome_unknown {
-                "OutcomeUnknown"
+                citadel_swarm_services::SwarmServiceOperationState::OutcomeUnknown
             } else {
-                "Rejected"
+                citadel_swarm_services::SwarmServiceOperationState::Rejected
             };
             let sync = if outcome_unknown {
-                "OutcomeUnknown"
+                citadel_swarm_services::SwarmServiceSynchronizationState::OutcomeUnknown
             } else {
-                "DesiredChangesPending"
+                citadel_swarm_services::SwarmServiceSynchronizationState::DesiredChangesPending
             };
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let row = sqlx::query("SELECT name,platformid,operationkind FROM swarmservices WHERE id=$1 AND operationid=$2 FOR UPDATE")
                 .bind(claim.id).bind(claim.operation_id).fetch_optional(&mut *tx).await.map_err(storage)?
                 .ok_or(SwarmServiceError::NotFound)?;
             let changed=sqlx::query("UPDATE swarmservices SET operationstate=$3,completedat=$4,resultcode=$5,resultmessage=$6,health=CASE WHEN $7 THEN health ELSE 'Failed' END,synchronizationstate=$8,controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1,updatedat=$4 WHERE id=$1 AND operationid=$2 AND operationstate IN ('Prepared','PendingAcceptance','Accepted')")
-                .bind(claim.id).bind(claim.operation_id).bind(state).bind(Utc::now()).bind(if outcome_unknown{"OutcomeUnknown"}else{"RolloutFailed"}).bind(message).bind(outcome_unknown).bind(sync)
+                .bind(claim.id).bind(claim.operation_id).bind(state.as_str()).bind(Utc::now()).bind(if outcome_unknown{"OutcomeUnknown"}else{"RolloutFailed"}).bind(message).bind(outcome_unknown).bind(sync.as_str())
                 .execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed != 1 {
                 return Err(SwarmServiceError::Conflict(

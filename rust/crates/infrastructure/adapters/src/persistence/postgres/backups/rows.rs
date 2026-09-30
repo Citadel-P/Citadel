@@ -99,19 +99,36 @@ pub(super) fn map_repository(r: sqlx::postgres::PgRow) -> Result<BackupRepositor
         normalized_name: r.try_get("normalizedname").map_err(storage)?,
         description: r.try_get("description").map_err(storage)?,
         repository_type: r.try_get("type").map_err(storage)?,
-        spec: r.try_get("spec").map_err(storage)?,
+        spec: r
+            .try_get::<sqlx::types::Json<citadel_backups::spec::BackupRepositorySpec>, _>("spec")
+            .map_err(storage)?
+            .0,
         password_secret_id: r.try_get("passwordsecretid").map_err(storage)?,
-        status: r.try_get("status").map_err(storage)?,
-        control_state: r.try_get("controlstate").map_err(storage)?,
+        status: r
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
+        control_state: r
+            .try_get::<String, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         current_run_id: r.try_get("currentrunid").map_err(storage)?,
         control_started_at: r.try_get("controlstartedat").map_err(storage)?,
         last_pruned_at: r.try_get("lastprunedat").map_err(storage)?,
         last_checked_at: r.try_get("lastcheckedat").map_err(storage)?,
-        created_by_actor_id: r.try_get("createdbyactorid").map_err(storage)?,
-        created_at: r.try_get("createdat").map_err(storage)?,
+
         updated_at: r.try_get("updatedat").map_err(storage)?,
         archived_at: r.try_get("archivedat").map_err(storage)?,
         row_version: r.try_get("rowversion").map_err(storage)?,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: r.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                r.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
     })
 }
 
@@ -123,25 +140,43 @@ pub(super) fn map_policy(r: sqlx::postgres::PgRow) -> Result<BackupPolicy, Backu
         name: r.try_get("name").map_err(storage)?,
         normalized_name: r.try_get("normalizedname").map_err(storage)?,
         description: r.try_get("description").map_err(storage)?,
-        source: r.try_get("source").map_err(storage)?,
+        source: r
+            .try_get::<sqlx::types::Json<citadel_backups::spec::BackupSourceSpec>, _>("source")
+            .map_err(storage)?
+            .0,
         backup_repository_id: r.try_get("backuprepositoryid").map_err(storage)?,
         enabled: r.try_get("enabled").map_err(storage)?,
         cron: r.try_get("cron").map_err(storage)?,
         time_zone: r.try_get("timezone").map_err(storage)?,
-        webhook: r.try_get("webhook").map_err(storage)?,
+        webhook: r
+            .try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>(
+                "webhook",
+            )
+            .map_err(storage)?
+            .and_then(|v| v.0),
         keep_last_successful: r.try_get("keeplastsuccessful").map_err(storage)?,
         timeout_seconds: r.try_get("timeoutseconds").map_err(storage)?,
         alert_on_failure: r.try_get("alertonfailure").map_err(storage)?,
         run_as_actor_id: r.try_get("runasactorid").map_err(storage)?,
-        control_state: r.try_get("controlstate").map_err(storage)?,
+        control_state: r
+            .try_get::<String, _>("controlstate")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         current_run_id: r.try_get("currentrunid").map_err(storage)?,
         last_scheduled_run_at: r.try_get("lastscheduledrunat").map_err(storage)?,
         first_successful_run_at: r.try_get("firstsuccessfulrunat").map_err(storage)?,
-        created_by_actor_id: r.try_get("createdbyactorid").map_err(storage)?,
-        created_at: r.try_get("createdat").map_err(storage)?,
+
         updated_at: r.try_get("updatedat").map_err(storage)?,
         archived_at: r.try_get("archivedat").map_err(storage)?,
         row_version: r.try_get("rowversion").map_err(storage)?,
+
+        audit: citadel_primitives::AuditMetadata {
+            created_at: r.try_get("createdat").map_err(storage)?,
+            created_by_actor_id: citadel_primitives::ActorId::new(
+                r.try_get("createdbyactorid").map_err(storage)?,
+            ),
+        },
     })
 }
 
@@ -152,10 +187,23 @@ pub(super) fn map_run(r: sqlx::postgres::PgRow) -> Result<BackupRun, BackupError
         policy_name_snapshot: r.try_get("policynamesnapshot").map_err(storage)?,
         backup_repository_id: r.try_get("backuprepositoryid").map_err(storage)?,
         repository_type_snapshot: r.try_get("repositorytypesnapshot").map_err(storage)?,
-        source_snapshot: r.try_get("sourcesnapshot").map_err(storage)?,
+        source_snapshot: r
+            .try_get::<sqlx::types::Json<citadel_backups::spec::BackupSourceSpec>, _>(
+                "sourcesnapshot",
+            )
+            .map_err(storage)?
+            .0,
         trigger: r.try_get("trigger").map_err(storage)?,
-        status: r.try_get("status").map_err(storage)?,
-        snapshot_availability: r.try_get("snapshotavailability").map_err(storage)?,
+        status: r
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
+        snapshot_availability: r
+            .try_get::<String, _>("snapshotavailability")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         restic_snapshot_id: r.try_get("resticsnapshotid").map_err(storage)?,
         parent_snapshot_id: r.try_get("parentsnapshotid").map_err(storage)?,
         files_processed: r.try_get("filesprocessed").map_err(storage)?,
@@ -209,7 +257,11 @@ pub(super) fn map_run_item(row: sqlx::postgres::PgRow) -> Result<BackupRunItem, 
         volume_name: row.try_get("volumename").map_err(storage)?,
         docker_node_id: row.try_get("dockernodeid").map_err(storage)?,
         node_hostname: row.try_get("nodehostname").map_err(storage)?,
-        status: row.try_get("status").map_err(storage)?,
+        status: row
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         restic_snapshot_id: row.try_get("resticsnapshotid").map_err(storage)?,
         parent_snapshot_id: row.try_get("parentsnapshotid").map_err(storage)?,
         files_processed: row.try_get("filesprocessed").map_err(storage)?,
@@ -233,7 +285,11 @@ pub(super) fn map_restore(r: sqlx::postgres::PgRow) -> Result<BackupRestoreRun, 
         target_docker_node_id: r.try_get("targetdockernodeid").map_err(storage)?,
         target_volume_name: r.try_get("targetvolumename").map_err(storage)?,
         overwrite_existing: r.try_get("overwriteexisting").map_err(storage)?,
-        status: r.try_get("status").map_err(storage)?,
+        status: r
+            .try_get::<String, _>("status")
+            .map_err(storage)?
+            .parse()
+            .map_err(storage)?,
         queued_at: r.try_get("queuedat").map_err(storage)?,
         started_at: r.try_get("startedat").map_err(storage)?,
         completed_at: r.try_get("completedat").map_err(storage)?,
@@ -245,46 +301,14 @@ pub(super) fn map_restore(r: sqlx::postgres::PgRow) -> Result<BackupRestoreRun, 
 }
 
 pub(super) fn backup_source_key(source: &Value) -> Result<String, BackupError> {
-    let kind = source
-        .get("$type")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BackupError::Validation("Backup source type is missing.".into()))?;
-    let uuid = |field: &str| {
-        source
-            .get(field)
-            .and_then(Value::as_str)
-            .and_then(|value| Uuid::parse_str(value).ok())
-            .ok_or_else(|| BackupError::Validation(format!("Backup source '{field}' is invalid.")))
-    };
-    match kind {
-        "DockerVolume" => {
-            let platform = uuid("platformId")?;
-            let volume = source
-                .get("volumeName")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| BackupError::Validation("Backup Volume name is missing.".into()))?;
-            Ok(docker_volume_key(
-                platform,
-                source.get("dockerNodeId").and_then(Value::as_str),
-                volume,
-            ))
-        }
-        "CitadelSystem" => Ok("citadel-system".into()),
-        "Stack" => Ok(format!("stack:{}", uuid("stackId")?)),
-        "Deployment" => Ok(format!("deployment:{}", uuid("deploymentId")?)),
-        "SwarmService" => Ok(format!("swarm-service:{}", uuid("swarmServiceId")?)),
-        _ => Err(BackupError::Validation(
-            "Backup source type is unsupported.".into(),
-        )),
-    }
+    let source: citadel_backups::spec::BackupSourceSpec =
+        serde_json::from_value(source.clone()).map_err(storage)?;
+    source.validate()?;
+    Ok(source.key())
 }
 
 pub(super) fn docker_volume_key(platform: Uuid, node: Option<&str>, volume: &str) -> String {
-    match node.filter(|value| !value.is_empty()) {
-        Some(node) => format!("{platform}:{node}:{volume}"),
-        None => format!("{platform}:{volume}"),
-    }
+    citadel_backups::spec::docker_volume_source_key(platform, node, volume)
 }
 
 pub(super) fn storage(e: impl std::fmt::Display) -> BackupError {

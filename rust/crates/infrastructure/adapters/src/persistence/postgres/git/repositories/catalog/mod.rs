@@ -1,3 +1,4 @@
+use citadel_primitives::PatchField;
 mod queries;
 
 mod rows;
@@ -100,7 +101,7 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
             .bind(actor_id.value())
             .bind(repository.sync_mode.as_database_str())
             .bind(repository.sync_interval_minutes)
-            .bind(repository.webhook.as_ref())
+            .bind(repository.webhook.as_ref().map(sqlx::types::Json))
             .bind(serialize_optional(&repository.on_clone)?)
             .bind(serialize_optional(&repository.on_pull)?)
             .execute(&mut *transaction)
@@ -162,7 +163,13 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
                 sync_interval_minutes: patch
                     .sync_interval_minutes
                     .merge_optional(old.sync_interval_minutes.as_ref()),
-                webhook: merge_json_patch(&patch.webhook, old.webhook.as_ref()),
+                webhook: match &patch.webhook {
+                    PatchField::Missing => old.webhook.clone(),
+                    PatchField::Null => None,
+                    PatchField::Value(patch) => {
+                        Some(patch.clone().apply(old.webhook.clone().unwrap_or_default()))
+                    }
+                },
                 on_clone: patch.on_clone.merge_optional(old.on_clone.as_ref()),
                 on_pull: patch.on_pull.merge_optional(old.on_pull.as_ref()),
                 tag_ids: patch
@@ -192,7 +199,7 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
             )
             .bind(id).bind(&updated.name).bind(updated.description.as_deref()).bind(&updated.url).bind(&updated.default_branch).bind(updated.git_account_id)
             .bind(updated.sync_mode.as_database_str()).bind(updated.sync_interval_minutes)
-            .bind(updated.webhook.as_ref()).bind(serialize_optional(&updated.on_clone)?).bind(serialize_optional(&updated.on_pull)?).bind(source_changed).bind(actor_id.value())
+            .bind(updated.webhook.as_ref().map(sqlx::types::Json)).bind(serialize_optional(&updated.on_clone)?).bind(serialize_optional(&updated.on_pull)?).bind(source_changed).bind(actor_id.value())
             .execute(&mut *transaction).await.map_err(database_error)?.rows_affected();
             exactly_one(affected)?;
             if source_changed {

@@ -581,7 +581,7 @@ impl PostgresEdgeStore {
             changed |= crate::persistence::postgres::platforms::status::platform_status(
                 &mut tx,
                 snapshot.platform_id,
-                "Online",
+                citadel_primitives::PlatformStatus::Online,
             )
             .await?;
         }

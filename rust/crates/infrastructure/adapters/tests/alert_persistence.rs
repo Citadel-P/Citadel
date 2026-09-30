@@ -42,11 +42,11 @@ async fn durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_a
                 name: format!("durable-{resource}"),
                 description: None,
                 alert_type: "PlatformCpuHigh".into(),
-                severity: "Critical".into(),
+                severity: citadel_alerts::AlertSeverity::Critical,
                 cooldown_seconds: None,
                 required_matches: Some(2),
                 threshold: Some(80.0),
-                status: "Enabled".into(),
+                status: citadel_alerts::AlertRuleStatus::Enabled,
                 channel_ids: vec![],
                 quiet_hours: vec![],
                 limited_to: vec![json!({"resourceId":resource,"resourceType":"Platform"})],
@@ -181,11 +181,11 @@ async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
                     name: format!("severity-{severity}-{resource}"),
                     description: None,
                     alert_type: "BuildRunFailed".into(),
-                    severity: severity.into(),
+                    severity: severity.parse().unwrap(),
                     cooldown_seconds: Some(60),
                     required_matches: None,
                     threshold: None,
-                    status: "Enabled".into(),
+                    status: citadel_alerts::AlertRuleStatus::Enabled,
                     channel_ids: vec![],
                     quiet_hours: vec![],
                     limited_to: vec![json!({"resourceId":resource,"resourceType":"Build"})],
@@ -300,11 +300,11 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         name: format!("phase7-rule-{}", Uuid::now_v7().simple()),
         description: None,
         alert_type: "BuildRunFailed".into(),
-        severity: "Critical".into(),
+        severity: citadel_alerts::AlertSeverity::Critical,
         cooldown_seconds: Some(60),
         required_matches: None,
         threshold: None,
-        status: "Enabled".into(),
+        status: citadel_alerts::AlertRuleStatus::Enabled,
         channel_ids,
         limited_to: vec![],
         quiet_hours: vec![],
@@ -320,7 +320,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     let event = NewAlertEvent {
         alert_rule_id: rule.id,
         alert_type: rule.alert_type.clone(),
-        severity: rule.severity.clone(),
+        severity: rule.severity,
         info: json!({"humanMessage":"Build failed."}),
         resource_id: Some(Uuid::now_v7()),
         resource_name: "build".into(),
@@ -433,11 +433,11 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
                 name: format!("phase7-evaluated-rule-{}", Uuid::now_v7().simple()),
                 description: None,
                 alert_type: "Phase7EvaluationProbe".into(),
-                severity: "Warning".into(),
+                severity: citadel_alerts::AlertSeverity::Warning,
                 cooldown_seconds: Some(60),
                 required_matches: None,
                 threshold: None,
-                status: "Enabled".into(),
+                status: citadel_alerts::AlertRuleStatus::Enabled,
                 channel_ids: vec![channel.id],
                 limited_to: vec![],
                 quiet_hours: vec![],
@@ -495,11 +495,11 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
                 name: format!("phase7-threshold-rule-{}", Uuid::now_v7().simple()),
                 description: None,
                 alert_type: "PlatformCpuHigh".into(),
-                severity: "Warning".into(),
+                severity: citadel_alerts::AlertSeverity::Warning,
                 cooldown_seconds: None,
                 required_matches: Some(2),
                 threshold: Some(80.0),
-                status: "Enabled".into(),
+                status: citadel_alerts::AlertRuleStatus::Enabled,
                 channel_ids: vec![],
                 limited_to: vec![],
                 quiet_hours: vec![],
@@ -544,7 +544,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     );
     assert_eq!(
         store.get_event(threshold_event.id).await.unwrap().status,
-        "Resolved"
+        citadel_alerts::AlertEventStatus::Resolved
     );
     assert_eq!(
         notifications.load(Ordering::SeqCst),
@@ -554,13 +554,16 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
     store.acknowledge(actor, &[raised.id]).await.unwrap();
     assert_eq!(
         store.get_event(raised.id).await.unwrap().status,
-        "Acknowledged"
+        citadel_alerts::AlertEventStatus::Acknowledged
     );
     store
         .resolve(actor, &[raised.id], Some("recovered"))
         .await
         .unwrap();
-    assert_eq!(store.get_event(raised.id).await.unwrap().status, "Resolved");
+    assert_eq!(
+        store.get_event(raised.id).await.unwrap().status,
+        citadel_alerts::AlertEventStatus::Resolved
+    );
     assert_eq!(
         store
             .list_events(
@@ -691,7 +694,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
     ] {
         let resource = Uuid::now_v7();
         let rule=store.create_rule(actor,&AlertRuleConfiguration {
-            name:format!("parity-{case}-{resource}"),description:None,alert_type:"PlatformCpuHigh".into(),severity:"Warning".into(),cooldown_seconds:Some(60),required_matches:Some(if case=="severity" {1} else {3}),threshold:Some(80.0),status:if case=="disabled" {"Disabled"} else {"Enabled"}.into(),channel_ids:vec![],
+            name:format!("parity-{case}-{resource}"),description:None,alert_type:"PlatformCpuHigh".into(),severity: citadel_alerts::AlertSeverity::Warning,cooldown_seconds:Some(60),required_matches:Some(if case=="severity" {1} else {3}),threshold:Some(80.0),status:if case=="disabled" {citadel_alerts::AlertRuleStatus::Disabled} else {citadel_alerts::AlertRuleStatus::Enabled},channel_ids:vec![],
             limited_to:vec![json!({"resourceId":if case=="scope" {Uuid::now_v7()} else {resource},"resourceType":"Platform"})],
             quiet_hours:if case=="quiet" {vec![json!({"$type":"Daily","timezone":"UTC","startTime":"00:00:00","endTime":"23:59:59"})]} else {vec![]},
         }).await.unwrap();
@@ -704,11 +707,11 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
                             name: format!("critical-{resource}"),
                             description: None,
                             alert_type: "PlatformCpuHigh".into(),
-                            severity: "Critical".into(),
+                            severity: citadel_alerts::AlertSeverity::Critical,
                             cooldown_seconds: Some(60),
                             required_matches: Some(1),
                             threshold: Some(95.0),
-                            status: "Enabled".into(),
+                            status: citadel_alerts::AlertRuleStatus::Enabled,
                             channel_ids: vec![],
                             limited_to: vec![
                                 json!({"resourceId":resource,"resourceType":"Platform"}),
@@ -834,7 +837,7 @@ async fn recurring_offline_observations_survive_cooldown_and_expose_responsible_
     observation.matched = false;
     store.process_event(&observation).await.unwrap();
     let recovered = store.get_event(first.id).await.unwrap();
-    assert_eq!(recovered.status, "Resolved");
+    assert_eq!(recovered.status, citadel_alerts::AlertEventStatus::Resolved);
     assert_eq!(recovered.resolved_by_actor_id, Some(Uuid::from_u128(1)));
     assert_eq!(recovered.actor_name.as_deref(), Some("System"));
     assert_eq!(recovered.actor_type.as_deref(), Some("System"));

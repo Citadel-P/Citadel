@@ -5,7 +5,7 @@ use citadel_adapters::persistence::postgres::identity::{
 use citadel_deployments::DeploymentRepository;
 use citadel_deployments::permissions::{ApplyDeployment, CreateDeployment, ReadDeployment};
 use citadel_identity::{
-    ActorRepository, IdentityError, UserPatchMutation, UserRepository, UserResourceAccessInput,
+    ActorRepository, IdentityError, ResourceAccessInput, UserPatchMutation, UserRepository,
 };
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 
@@ -219,7 +219,7 @@ pub(super) async fn set_read_access(
     let patch = UserPatchMutation {
         resource_accesses: Some(
             ids.iter()
-                .map(|id| UserResourceAccessInput {
+                .map(|id| ResourceAccessInput {
                     resource_type: ResourceType::Deployment,
                     resource_id: *id,
                     permission_level: PermissionLevel::Read,

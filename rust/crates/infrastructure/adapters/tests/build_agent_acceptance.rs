@@ -178,7 +178,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
             None => AgentDockerBuildExecutor::new_edge(directory.clone(),edge_registry.clone(),Arc::new(NoSecrets),credentials,1024*1024),
         };
         let completed=executor.execute(&claim,&Logs{store:store.clone(),id:queued.id},&cancel).await;
-        assert_eq!(completed.status,"Succeeded","{completed:?}");
+        assert_eq!(completed.status,citadel_builds::BuildRunStatus::Succeeded,"{completed:?}");
         assert_eq!(completed.resolved_commit_sha.as_deref(),Some(commit.as_str()));
         let reference=completed.image_references.first().unwrap().clone();
         let digest=completed.image_digest.as_ref().expect("Push must report the Registry digest");
@@ -187,7 +187,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
             .header("Accept","application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json").send().await.unwrap();
         assert!(manifest.status().is_success());assert_eq!(manifest.headers()["docker-content-digest"],digest.as_str());
         assert!(store.finish(&claim,&completed).await.unwrap());
-        let persisted=store.get_run(queued.id).await.unwrap();assert_eq!(persisted.status,"Succeeded");assert_eq!(persisted.image_digest,Some(digest.clone()));
+        let persisted=store.get_run(queued.id).await.unwrap();assert_eq!(persisted.status,citadel_builds::BuildRunStatus::Succeeded);assert_eq!(persisted.image_digest,Some(digest.clone()));
         assert!(!store.logs(queued.id).await.unwrap().is_empty(),"Streamed progress must be persisted");
         // Inspect the built filesystem without executing the scratch image.
         let container=String::from_utf8(nested(&daemon_name,&["create",&reference,"/unused"]).await).unwrap().trim().to_owned();

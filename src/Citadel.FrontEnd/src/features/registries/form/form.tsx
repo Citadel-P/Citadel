@@ -1,8 +1,6 @@
 import {
-  RegistryType,
-  RegistryConfigurationGitHubRegistry,
-  RegistryConfigurationCustomRegistry,
-  RegistryConfigurationDockerHubRegistry,
+  RegistryKind,
+  RegistryConfigurationPatch,
   RegistryStatus,
   NewRegistry,
   RegistryPatch,
@@ -62,7 +60,7 @@ const registry_status = {
   },
 };
 
-const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
+const RegistryKindSelector = ({ value, onChange, disabled }: any) => {
   const selected = registryInfo[value as keyof typeof registryInfo];
 
   return (
@@ -135,13 +133,13 @@ export const RegistryForm = ({
   });
 
   const original = resource ?? ({} as RegistryInput);
-  const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryType.DockerHub;
+  const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryKind.DockerHub;
   const isCustomAuthEnabled =
-    ((update.configuration as RegistryConfigurationCustomRegistry)?.authEnabled ??
-      (original.configuration as RegistryConfigurationCustomRegistry)?.authEnabled) === true;
+    ((update.configuration as RegistryConfigurationPatch)?.authEnabled ??
+      (original.configuration as RegistryConfigurationPatch)?.authEnabled) === true;
   const isGhcrAuthEnabled =
-    ((update.configuration as RegistryConfigurationGitHubRegistry)?.ghcrAuthEnabled ??
-      (original.configuration as RegistryConfigurationGitHubRegistry)?.ghcrAuthEnabled) === true;
+    ((update.configuration as RegistryConfigurationPatch)?.ghcrAuthEnabled ??
+      (original.configuration as RegistryConfigurationPatch)?.ghcrAuthEnabled) === true;
 
   const schema = useMemo(
     () => ({
@@ -154,10 +152,10 @@ export const RegistryForm = ({
             required: true,
             disabled: mode === 'edit',
             render: (value, set) => (
-              <RegistryTypeSelector
-                value={value ?? RegistryType.DockerHub}
+              <RegistryKindSelector
+                value={value ?? RegistryKind.DockerHub}
                 disabled={mode === 'edit'}
-                onChange={(v: RegistryType) =>
+                onChange={(v: RegistryKind) =>
                   set(() => ({
                     configuration: {
                       $type: v,
@@ -220,7 +218,7 @@ export const RegistryForm = ({
         ],
       }),
 
-      ...(provider === RegistryType.GitHub
+      ...(provider === RegistryKind.GitHub
         ? {
             GitHub: defineSection<RegistryInput>({
               title: 'GitHub',
@@ -248,10 +246,10 @@ export const RegistryForm = ({
                             onChange={(value) =>
                               set((prev) => ({
                                 configuration: {
-                                  ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
-                                  $type: 'GitHub',
+                                  ...((prev.configuration ?? {}) as RegistryConfigurationPatch),
+                                  $type: RegistryKind.GitHub,
                                   nameSpace: value,
-                                } satisfies RegistryConfigurationGitHubRegistry,
+                                } satisfies RegistryConfigurationPatch,
                               }))
                             }
                             prefixPlaceholder="ghcr.io/"
@@ -272,10 +270,10 @@ export const RegistryForm = ({
                           onChange={(value) =>
                             set((prev) => ({
                               configuration: {
-                                ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
-                                $type: 'GitHub',
+                                ...((prev.configuration ?? {}) as RegistryConfigurationPatch),
+                                $type: RegistryKind.GitHub,
                                 ghcrAuthEnabled: value,
-                              } satisfies RegistryConfigurationGitHubRegistry,
+                              } satisfies RegistryConfigurationPatch,
                             }))
                           }
                         />
@@ -309,10 +307,10 @@ export const RegistryForm = ({
                             onChange={(v) =>
                               set((prev) => ({
                                 configuration: {
-                                  ...((prev.configuration as RegistryConfigurationGitHubRegistry) ?? {}),
-                                  $type: 'GitHub',
+                                  ...((prev.configuration as RegistryConfigurationPatch) ?? {}),
+                                  $type: RegistryKind.GitHub,
                                   pat: v,
-                                } satisfies RegistryConfigurationGitHubRegistry,
+                                } satisfies RegistryConfigurationPatch,
                               }))
                             }
                           />
@@ -325,7 +323,7 @@ export const RegistryForm = ({
           }
         : {}),
 
-      ...(provider === RegistryType.DockerHub
+      ...(provider === RegistryKind.DockerHub
         ? {
             DockerHub: defineSection<RegistryInput>({
               title: 'DockerHub',
@@ -341,10 +339,10 @@ export const RegistryForm = ({
                       onChange={(v) =>
                         set((prev) => ({
                           configuration: {
-                            ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
-                            $type: 'DockerHub',
+                            ...((prev.configuration as RegistryConfigurationPatch) ?? {}),
+                            $type: RegistryKind.DockerHub,
                             userName: v,
-                          } satisfies RegistryConfigurationDockerHubRegistry,
+                          } satisfies RegistryConfigurationPatch,
                         }))
                       }
                     />
@@ -372,10 +370,10 @@ export const RegistryForm = ({
                       onChange={(v) =>
                         set((prev) => ({
                           configuration: {
-                            ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
-                            $type: 'DockerHub',
+                            ...((prev.configuration as RegistryConfigurationPatch) ?? {}),
+                            $type: RegistryKind.DockerHub,
                             pat: v,
-                          } satisfies RegistryConfigurationDockerHubRegistry,
+                          } satisfies RegistryConfigurationPatch,
                         }))
                       }
                     />
@@ -386,7 +384,7 @@ export const RegistryForm = ({
           }
         : {}),
 
-      ...(provider === RegistryType.Custom
+      ...(provider === RegistryKind.Custom
         ? {
             Custom: defineSection<RegistryInput>({
               title: 'Custom Settings',
@@ -410,7 +408,7 @@ export const RegistryForm = ({
                         <FieldInput
                           value={value ?? ''}
                           placeholder="myregistry.example"
-                          onChange={(v) => set({ registryHost: v, configuration: { $type: 'Custom' } })}
+                          onChange={(v) => set({ registryHost: v, configuration: { $type: RegistryKind.Custom } })}
                         />
                       ),
                     }),
@@ -426,10 +424,10 @@ export const RegistryForm = ({
                           onChange={(value) =>
                             set((prev) => ({
                               configuration: {
-                                ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
-                                $type: 'Custom',
+                                ...((prev.configuration ?? {}) as RegistryConfigurationPatch),
+                                $type: RegistryKind.Custom,
                                 authEnabled: value,
-                              } satisfies RegistryConfigurationCustomRegistry,
+                              } satisfies RegistryConfigurationPatch,
                             }))
                           }
                         />
@@ -457,10 +455,10 @@ export const RegistryForm = ({
                                 onChange={(v) =>
                                   set((prev) => ({
                                     configuration: {
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
-                                      $type: 'Custom',
+                                      ...((prev.configuration ?? {}) as RegistryConfigurationPatch),
+                                      $type: RegistryKind.Custom,
                                       userName: v,
-                                    } satisfies RegistryConfigurationCustomRegistry,
+                                    } satisfies RegistryConfigurationPatch,
                                   }))
                                 }
                               />
@@ -480,8 +478,8 @@ export const RegistryForm = ({
                                 onChange={(v) =>
                                   set((prev) => ({
                                     configuration: {
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
-                                      $type: 'Custom',
+                                      ...((prev.configuration ?? {}) as RegistryConfigurationPatch),
+                                      $type: RegistryKind.Custom,
                                       password: v,
                                     },
                                   }))

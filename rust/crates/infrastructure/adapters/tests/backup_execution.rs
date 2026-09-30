@@ -81,7 +81,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let mut repository_input = BackupRepositoryConfiguration {
         name: format!("backup-repository-{}", Uuid::now_v7().simple()),
         description: None,
-        spec: json!({"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"}),
+        spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"})).unwrap(),
         password_secret_id: secret,
     };
     repository_input.validate().unwrap();
@@ -89,11 +89,72 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .create_repository(actor, &repository_input)
         .await
         .unwrap();
+    let expired_operation = Uuid::now_v7();
+    assert!(
+        store
+            .acquire_repository_operation(
+                repository.id,
+                expired_operation,
+                "Validate",
+                Utc::now() - Duration::seconds(1)
+            )
+            .await
+            .unwrap()
+    );
+    let operation_id = Uuid::now_v7();
+    assert!(
+        store
+            .acquire_repository_operation(
+                repository.id,
+                operation_id,
+                "Validate",
+                Utc::now() + Duration::minutes(5)
+            )
+            .await
+            .unwrap()
+    );
+    assert!(matches!(
+        store
+            .record_repository_operation(
+                repository.id,
+                expired_operation,
+                "Validate",
+                "Core",
+                None,
+                false,
+                Some("stale result")
+            )
+            .await,
+        Err(citadel_backups::BackupError::Conflict(_))
+    ));
+    let owner: Uuid = sqlx::query_scalar(
+        "SELECT ownerrunid FROM backuprepositoryleases WHERE backuprepositoryid=$1",
+    )
+    .bind(repository.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(owner, operation_id);
     let (_, validation) = store
-        .record_repository_operation(repository.id, "Validate", "Core", None, true, None)
+        .record_repository_operation(
+            repository.id,
+            operation_id,
+            "Validate",
+            "Core",
+            None,
+            true,
+            None,
+        )
         .await
         .unwrap();
-    assert_eq!(validation.status, "Ready");
+    store
+        .release_repository_operation(repository.id, operation_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        validation.status,
+        citadel_backups::BackupRepositoryValidationStatus::Ready
+    );
     let persisted_validation: (String, String) =
         sqlx::query_as("SELECT location,status FROM backuprepositoryvalidations WHERE id=$1")
             .bind(validation.id)
@@ -107,7 +168,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         let mut input = BackupPolicyConfiguration {
             name: format!("backup-policy-{suffix}-{}", Uuid::now_v7().simple()),
             description: None,
-            source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":format!("volume-{suffix}")}),
+            source: serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"volumeName":format!("volume-{suffix}")})).unwrap(),
             backup_repository_id: repository.id,
             enabled: true,
             cron: None,
@@ -120,7 +181,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             tag_ids: vec![tag],
         };
         input.validate(actor).unwrap();
-        policies.push(store.create_policy(actor, &input).await.unwrap());
+        let created = store.create_policy(actor, &input).await.unwrap();
+        assert_eq!(created.tags.len(), 1);
+        assert_eq!(created.tags[0].id, tag);
+        assert!(created.latest_run.is_none());
+        policies.push(created);
     }
     let persisted_tags: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM resourcetags WHERE resourcetype='BackupPolicy' AND resourceid=ANY($1) AND tagid=$2",
@@ -144,7 +209,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let mut invalid_policy = BackupPolicyConfiguration {
         name: format!("invalid-tag-policy-{}", Uuid::now_v7().simple()),
         description: None,
-        source: json!({"$type":"DockerVolume","platformId":platform,"volumeName":"invalid"}),
+        source: serde_json::from_value(
+            json!({"$type":"DockerVolume","platformId":platform,"volumeName":"invalid"}),
+        )
+        .unwrap(),
         backup_repository_id: repository.id,
         enabled: true,
         cron: None,
@@ -183,7 +251,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .enqueue_backup(actor, policies[1].id, "Manual")
         .await
         .unwrap();
-    assert_eq!(first.snapshot_availability, "Pending");
+    assert_eq!(
+        first.snapshot_availability,
+        citadel_backups::BackupSnapshotAvailability::Pending
+    );
 
     let (left, right) = tokio::join!(
         store.claim_backup(Utc::now() - Duration::minutes(5)),
@@ -212,12 +283,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     ));
     let authorizer = IdentityBackupRunAuthorizer::new(identity);
     assert!(authorizer.authorize_backup(&guarded_claim).await.is_err());
-    sqlx::query("INSERT INTO actorroles(actorid,roleid) VALUES($1,$2)")
-        .bind(actor.value())
-        .bind(ADMIN_ROLE_ID)
-        .execute(&pool)
-        .await
-        .unwrap();
+    // Use the mutation boundary so the authorization cache observes the grant.
+    use citadel_identity::UserRepository;
+    citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone())
+        .add_role(user, ADMIN_ROLE_ID, ActorId::new(SYSTEM_ACTOR_ID), Utc::now(), true)
+        .await.unwrap();
     authorizer.authorize_backup(&guarded_claim).await.unwrap();
     let planner = PostgresBackupSourcePlanner::new(pool.clone());
     let plan = planner
@@ -231,7 +301,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
     let prepared = store.get_run(first_claim.run.id).await.unwrap();
     assert_eq!(prepared.items.len(), 1);
-    assert_eq!(prepared.items[0].status, "Queued");
+    assert_eq!(
+        prepared.items[0].status,
+        citadel_backups::BackupRunItemStatus::Queued
+    );
     // A new request owns the policy before attempting its repository. Completion
     // must wait at the policy without taking the repository in reverse order.
     let mut enqueue = pool.begin().await.unwrap();
@@ -270,7 +343,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap()
         .unwrap();
     let completed = store.get_run(first_claim.run.id).await.unwrap();
-    assert_eq!(completed.items[0].status, "Succeeded");
+    assert_eq!(
+        completed.items[0].status,
+        citadel_backups::BackupRunItemStatus::Succeeded
+    );
     store.finish_backup(&first_claim, &result).await.unwrap();
     assert_run_activities(&pool, &first_claim.run, "Succeeded", "Success", true).await;
     store
@@ -295,7 +371,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .finish_restore(
             &restore,
             &citadel_backups::RestoreExecutionResult {
-                status: "Succeeded",
+                status: citadel_backups::BackupRestoreStatus::Succeeded,
                 exit_code: Some(0),
                 error_code: None,
                 error_message: None,
@@ -317,7 +393,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
     assert_ne!(
         store.get_run(late_claim.run.id).await.unwrap().status,
-        "Interrupted"
+        citadel_backups::BackupRunStatus::Interrupted
     );
     citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
         .await
@@ -482,7 +558,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             &CancellationToken::new(),
         )
         .await;
-    assert_eq!(rejected.status, "Failed");
+    assert_eq!(rejected.status, citadel_backups::BackupRunStatus::Failed);
     assert!(
         rejected
             .error_message
@@ -505,8 +581,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .unwrap()
             .unwrap();
         let mut result = success_result("outcome", None);
-        result.status = outcome;
-        result.snapshot_availability = "Missing";
+        result.status = outcome.parse().unwrap();
+        result.snapshot_availability = citadel_backups::BackupSnapshotAvailability::Missing;
         result.error_message = Some("Test outcome".into());
         store.finish_backup(&claim, &result).await.unwrap();
         store.finish_backup(&claim, &result).await.unwrap();
@@ -519,7 +595,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         }
     }
 
-    let webhook = json!({"isEnabled": true});
+    let webhook = json!({"enabled": true, "provider":"Generic", "authScheme":"BearerToken", "secret":"fixture-key"});
     sqlx::query("UPDATE backuppolicies SET webhook=$2 WHERE id=$1")
         .bind(policies[0].id)
         .bind(&webhook)
@@ -527,7 +603,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
     let webhook_run = store
-        .enqueue_webhook(policies[0].id, &webhook)
+        .enqueue_webhook(
+            policies[0].id,
+            &serde_json::from_value(webhook.clone()).unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(webhook_run.triggered_by_actor_id, SYSTEM_ACTOR_ID);
@@ -689,9 +768,12 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
         }
     };
     let (result, ()) = tokio::join!(run, agent);
-    assert_eq!(result.status, "Failed");
+    assert_eq!(result.status, citadel_backups::BackupRunStatus::Failed);
     assert_eq!(result.items.len(), 1);
-    assert_eq!(result.items[0].status, "Failed");
+    assert_eq!(
+        result.items[0].status,
+        citadel_backups::BackupRunItemStatus::Failed
+    );
     assert!(wrong_outbound.try_recv().is_err());
     assert_eq!(selected.pending_count(), 0);
 }
@@ -752,8 +834,8 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         let snapshot = "a".repeat(64);
         let mut repository = backup.repository.clone();
         repository.repository_type = "S3Compatible".into();
-        repository.spec = json!({"endpoint":"http://s3.test", "bucket":"backups",
-            "accessKeySecretId":Uuid::now_v7(), "secretKeySecretId":Uuid::now_v7()});
+        repository.spec = serde_json::from_value(json!({"$type":"S3Compatible", "endpoint":"http://s3.test", "bucket":"backups",
+            "accessKeySecretId":Uuid::now_v7(), "secretKeySecretId":Uuid::now_v7(), "allowInsecureHttp":true})).unwrap();
         let mut source = backup.run.clone();
         source.restic_snapshot_id = Some(snapshot.clone());
         let claim = RestoreClaim {
@@ -769,7 +851,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 target_docker_node_id: Some("restore-node".into()),
                 target_volume_name: "target".into(),
                 overwrite_existing: false,
-                status: "Running".into(),
+                status: citadel_backups::BackupRestoreStatus::Running,
                 queued_at: Utc::now(),
                 started_at: Some(Utc::now()),
                 completed_at: None,
@@ -898,9 +980,9 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         assert_eq!(
             result.status,
             if root == "/unexpected" {
-                "Failed"
+                citadel_backups::BackupRestoreStatus::Failed
             } else {
-                "Succeeded"
+                citadel_backups::BackupRestoreStatus::Succeeded
             }
         );
         assert!(
@@ -914,8 +996,8 @@ async fn edge_restore_uses_the_saved_snapshot_root(
 fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult {
     let snapshot = marker.repeat(64);
     BackupExecutionResult {
-        status: "Succeeded",
-        snapshot_availability: "Available",
+        status: citadel_backups::BackupRunStatus::Succeeded,
+        snapshot_availability: citadel_backups::BackupSnapshotAvailability::Available,
         restic_snapshot_id: Some(snapshot.clone()),
         parent_snapshot_id: None,
         files_processed: Some(1),
@@ -929,7 +1011,7 @@ fn success_result(marker: &str, item_id: Option<Uuid>) -> BackupExecutionResult 
         items: item_id
             .map(|id| BackupRunItemResult {
                 id,
-                status: "Succeeded",
+                status: citadel_backups::BackupRunItemStatus::Succeeded,
                 restic_snapshot_id: Some(snapshot),
                 parent_snapshot_id: None,
                 files_processed: Some(1),

@@ -337,7 +337,7 @@ async fn persist_snapshot_with_health(
         crate::persistence::postgres::platforms::status::platform_status(
             transaction,
             snapshot.platform_id,
-            "Online",
+            citadel_primitives::PlatformStatus::Online,
         )
         .await
         .map_err(storage)?;

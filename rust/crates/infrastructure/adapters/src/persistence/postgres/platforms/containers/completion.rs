@@ -1,10 +1,12 @@
 //! Parent status, lifecycle activities and claim release are one idempotent commit.
 use super::super::status;
 use citadel_activities::ActivityEventInfo;
+use citadel_deployments::DeploymentStatus;
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind,
     containers::{ContainerClaim, ContainerCompletion, ContainerStatePatch},
 };
+use citadel_stacks::StackReleaseStatus;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -61,13 +63,21 @@ pub(super) async fn finish(
         let container = containers
             .iter()
             .find(|c| c.get::<Option<Uuid>, _>("deploymentid") == Some(id));
-        let next = container.map_or("Degraded", |c| status::deployment_status(c.get("state")));
-        if row.get::<String, _>("status") == next {
+        let next = container.map_or(DeploymentStatus::Degraded, |c| {
+            status::deployment_status(c.get("state"))
+        });
+        if row
+            .try_get::<&str, _>("status")
+            .map_err(storage)?
+            .parse::<DeploymentStatus>()
+            .map_err(storage)?
+            == next
+        {
             continue;
         }
         sqlx::query("UPDATE deployments SET status=$2 WHERE id=$1 AND containeroperationid=$3")
             .bind(id)
-            .bind(next)
+            .bind(next.as_str())
             .bind(claim)
             .execute(&mut *tx)
             .await
@@ -77,10 +87,16 @@ pub(super) async fn finish(
             .into_iter()
             .collect();
         let info = match next {
-            "Healthy" => Some(ActivityEventInfo::DeploymentStarted { container_ids: ids }),
-            "Stopped" => Some(ActivityEventInfo::DeploymentStopped { container_ids: ids }),
-            "Pending" => Some(ActivityEventInfo::DeploymentPaused { container_ids: ids }),
-            "Degraded" => Some(ActivityEventInfo::DeploymentDegraded {
+            DeploymentStatus::Healthy => {
+                Some(ActivityEventInfo::DeploymentStarted { container_ids: ids })
+            }
+            DeploymentStatus::Stopped => {
+                Some(ActivityEventInfo::DeploymentStopped { container_ids: ids })
+            }
+            DeploymentStatus::Pending => {
+                Some(ActivityEventInfo::DeploymentPaused { container_ids: ids })
+            }
+            DeploymentStatus::Degraded => Some(ActivityEventInfo::DeploymentDegraded {
                 reason: "The associated container is missing or unavailable.".into(),
             }),
             _ => None,
@@ -91,7 +107,7 @@ pub(super) async fn finish(
                 row,
                 row.get("platformid"),
                 info,
-                next == "Degraded",
+                next == DeploymentStatus::Degraded,
                 false,
             )
             .await
@@ -106,21 +122,29 @@ pub(super) async fn finish(
             .collect();
         let states: Vec<&str> = members.iter().map(|c| c.get("state")).collect();
         let next = status::stack_status(&states);
-        if row.get::<String, _>("status") == next {
+        if row
+            .try_get::<&str, _>("status")
+            .map_err(storage)?
+            .parse::<StackReleaseStatus>()
+            .map_err(storage)?
+            == next
+        {
             continue;
         }
         sqlx::query("UPDATE stackreleases SET status=$2 WHERE id=$1")
             .bind(row.get::<Uuid, _>("releaseid"))
-            .bind(next)
+            .bind(next.as_str())
             .execute(&mut *tx)
             .await
             .map_err(storage)?;
         let mut ids: Vec<String> = members
             .iter()
             .filter(|c| match next {
-                "Healthy" => c.get::<&str, _>("state") == "running",
-                "Paused" => c.get::<&str, _>("state") == "paused",
-                "Stopped" => matches!(c.get::<&str, _>("state"), "exited" | "offline"),
+                StackReleaseStatus::Healthy => c.get::<&str, _>("state") == "running",
+                StackReleaseStatus::Paused => c.get::<&str, _>("state") == "paused",
+                StackReleaseStatus::Stopped => {
+                    matches!(c.get::<&str, _>("state"), "exited" | "offline")
+                }
                 _ => false,
             })
             .map(|c| c.get("dockercontainerid"))
@@ -128,10 +152,16 @@ pub(super) async fn finish(
         ids.sort();
         ids.dedup();
         let info = match next {
-            "Healthy" => Some(ActivityEventInfo::StackStarted { container_ids: ids }),
-            "Stopped" => Some(ActivityEventInfo::StackStopped { container_ids: ids }),
-            "Paused" => Some(ActivityEventInfo::StackPaused { container_ids: ids }),
-            "Degraded" => Some(ActivityEventInfo::StackDegraded {
+            StackReleaseStatus::Healthy => {
+                Some(ActivityEventInfo::StackStarted { container_ids: ids })
+            }
+            StackReleaseStatus::Stopped => {
+                Some(ActivityEventInfo::StackStopped { container_ids: ids })
+            }
+            StackReleaseStatus::Paused => {
+                Some(ActivityEventInfo::StackPaused { container_ids: ids })
+            }
+            StackReleaseStatus::Degraded => Some(ActivityEventInfo::StackDegraded {
                 reason: "One or more associated containers are missing or not running normally."
                     .into(),
             }),
@@ -143,7 +173,7 @@ pub(super) async fn finish(
                 row,
                 row.get("platformid"),
                 info,
-                next == "Degraded",
+                next == StackReleaseStatus::Degraded,
                 true,
             )
             .await
@@ -190,6 +220,6 @@ pub(super) async fn finish(
     tx.commit().await.map_err(storage)?;
     Ok(completion)
 }
-fn storage(error: sqlx::Error) -> RuntimeCapabilityError {
+fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
 }

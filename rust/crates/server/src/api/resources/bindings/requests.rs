@@ -1,7 +1,7 @@
-use crate::api::resources::{
-    bindings::spec::{ResourceBindingKind, ResourceBindingScope, SecretDeliveryMode},
-    metadata_patch::MetadataPatch,
+use crate::api::resources::bindings::spec::{
+    ResourceBindingKind, ResourceBindingScope, SecretDeliveryMode,
 };
+use citadel_primitives::PatchField;
 use citadel_primitives::ResourceType;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -150,7 +150,7 @@ pub struct ExternalSecretPatch {
     pub external_key: Option<String>,
     #[serde(default)]
     #[schema(value_type = Option<i32>, required = false)]
-    pub external_version: MetadataPatch<i32>,
+    pub external_version: PatchField<i32>,
 }
 
 impl From<ExternalSecretPatch> for citadel_bindings::ExternalSecretPatch {
@@ -160,7 +160,7 @@ impl From<ExternalSecretPatch> for citadel_bindings::ExternalSecretPatch {
             provider_id: value.provider_id,
             external_path: value.external_path,
             external_key: value.external_key,
-            external_version: value.external_version.into(),
+            external_version: value.external_version,
         }
     }
 }
@@ -172,7 +172,7 @@ impl From<citadel_bindings::ExternalSecretPatch> for ExternalSecretPatch {
             provider_id: value.provider_id,
             external_path: value.external_path,
             external_key: value.external_key,
-            external_version: value.external_version.into(),
+            external_version: value.external_version,
         }
     }
 }

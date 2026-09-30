@@ -1,7 +1,7 @@
 use crate::*;
 use chrono::{DateTime, Utc};
-use citadel_git::repositories::webhooks::RepoWebhookConfig;
 use citadel_primitives::ActorId;
+use citadel_primitives::WebhookConfig;
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 use uuid::Uuid;
@@ -64,7 +64,7 @@ pub trait AutomationRepository: Send + Sync {
     fn enqueue_webhook<'a>(
         &'a self,
         id: Uuid,
-        expected_webhook: &'a RepoWebhookConfig,
+        expected_webhook: &'a WebhookConfig,
         args: &'a Value,
     ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>>;
     fn claim_next<'a>(

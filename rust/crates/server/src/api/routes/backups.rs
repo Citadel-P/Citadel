@@ -3,7 +3,9 @@ use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
         resources::backups::{
+            patch::*,
             requests::{QueueInput, RepositoryLocationInput, RestoreInput, RunFilter, *},
+            spec::BackupExecutionLocation,
             views::{Events, Logs, Policies, Repositories, Restores, Runs, *},
         },
     },
@@ -138,7 +140,7 @@ macro_rules! backup_source_preview {
                 }),
                 &h,
             )?;
-            Ok(no_store(Json(BackupSourcePreview::from(preview)).into_response()))
+            Ok(no_store(Json(api_result(BackupSourcePreview::try_from(preview).map_err(ApiError::internal), &h)?).into_response()))
         }
     };
 }
@@ -151,7 +153,7 @@ backup_source_preview!(
     tag = "Deployments",
     summary = "Preview Deployment Backup volumes",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/DeploymentBackupSourcePreviewView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = BackupSourcePreview, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("deploymentId" = uuid::Uuid, Path)),
@@ -171,7 +173,7 @@ backup_source_preview!(
     tag = "Stacks",
     summary = "Preview Stack Backup volumes",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/StackBackupSourcePreviewView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = BackupSourcePreview, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("stackId" = uuid::Uuid, Path)),
@@ -191,7 +193,7 @@ backup_source_preview!(
     tag = "SwarmServices",
     summary = "Preview Service Backup volumes",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceBackupSourcePreviewView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = BackupSourcePreview, content_type = "application/json"),
         crate::openapi::errors::ExternalResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -202,13 +204,6 @@ backup_source_preview!(
     SwarmService,
     SwarmService
 );
-
-fn json_uuid(value: &serde_json::Value, key: &str) -> Option<Uuid> {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok())
-}
 
 fn logs_text(logs: Vec<BackupLog>) -> String {
     let capacity = logs
@@ -329,13 +324,16 @@ async fn list_policies(
         .into_iter()
         .map(|item| {
             let id = item.id;
-            let mut view = BackupPolicyView::from(item);
+            let mut view = api_result(
+                BackupPolicyView::try_from(item).map_err(ApiError::internal),
+                &h,
+            )?;
             view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
                 permissions.get(&id).copied().flatten(),
             ));
-            view
+            Ok::<_, crate::api::error::HttpError>(view)
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupPolicy)
@@ -396,10 +394,14 @@ async fn create_policy(
         &h,
     )?;
     Ok(no_store(
-        Json(BackupPolicyView::from(result(
-            s.backups.store().create_policy(p.actor_id, &i).await,
+        Json(api_result(
+            BackupPolicyView::try_from(result(
+                s.backups.store().create_policy(p.actor_id, &i).await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -434,7 +436,11 @@ async fn get_policy(
         &h,
     )
     .await?;
-    let mut view = BackupPolicyView::from(result(s.backups.store().get_policy(id).await, &h)?);
+    let mut view = api_result(
+        BackupPolicyView::try_from(result(s.backups.store().get_policy(id).await, &h)?)
+            .map_err(ApiError::internal),
+        &h,
+    )?;
     let permission = api_result(
         s.identity
             .permission_for_resource(&p, ResourceType::BackupPolicy, id)
@@ -454,8 +460,8 @@ async fn get_policy(
     tag = "BackupPolicies",
     summary = "Update a Backup Policy",
     request_body(content(
-        (ref("#/components/schemas/UpdateBackupPolicyInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/UpdateBackupPolicyInput") = "application/json")
+        (UpdateBackupPolicyInput = "application/merge-patch+json"),
+        (UpdateBackupPolicyInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = BackupPolicyView, content_type = "application/json"),
@@ -493,6 +499,7 @@ async fn update_policy(
     )
     .await?;
     let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let patch = api_result(typed_patch::<UpdateBackupPolicyInput>(patch), &h)?;
     let current = result(s.backups.store().get_policy(id).await, &h)?;
     let input = result(
         citadel_backups::policies::patch::merge(&current, &patch),
@@ -546,13 +553,17 @@ async fn update_policy(
         )?;
     }
     Ok(no_store(
-        Json(BackupPolicyView::from(result(
-            s.backups
-                .store()
-                .update_policy(p.actor_id, id, current.row_version, &input)
-                .await,
+        Json(api_result(
+            BackupPolicyView::try_from(result(
+                s.backups
+                    .store()
+                    .update_policy(p.actor_id, id, current.row_version, &input)
+                    .await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -591,10 +602,14 @@ async fn rename_policy(
     )
     .await?;
     Ok(no_store(
-        Json(BackupPolicyView::from(result(
-            s.backups.store().rename_policy(p.actor_id, &input).await,
+        Json(api_result(
+            BackupPolicyView::try_from(result(
+                s.backups.store().rename_policy(p.actor_id, &input).await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -606,8 +621,8 @@ async fn rename_policy(
     tag = "BackupPolicies",
     summary = "Update Backup Policy metadata",
     request_body(content(
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+        (BackupMetadataPatch = "application/merge-patch+json"),
+        (BackupMetadataPatch = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = BackupPolicyView, content_type = "application/json"),
@@ -645,18 +660,23 @@ async fn update_policy_metadata(
     )
     .await?;
     let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let patch = api_result(typed_patch::<BackupMetadataPatch>(patch), &h)?;
     let description = result(
         citadel_backups::policies::metadata::description_patch(&patch),
         &h,
     )?;
     Ok(no_store(
-        Json(BackupPolicyView::from(result(
-            s.backups
-                .store()
-                .update_policy_description(p.actor_id, id, description)
-                .await,
+        Json(api_result(
+            BackupPolicyView::try_from(result(
+                s.backups
+                    .store()
+                    .update_policy_description(p.actor_id, id, description)
+                    .await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -676,23 +696,7 @@ async fn authorize_policy_dependencies(
         headers,
     )
     .await?;
-    let resource = match input
-        .source
-        .get("$type")
-        .and_then(serde_json::Value::as_str)
-    {
-        Some("DockerVolume") => {
-            json_uuid(&input.source, "platformId").map(|id| (ResourceType::Platform, id))
-        }
-        Some("Stack") => json_uuid(&input.source, "stackId").map(|id| (ResourceType::Stack, id)),
-        Some("Deployment") => {
-            json_uuid(&input.source, "deploymentId").map(|id| (ResourceType::Deployment, id))
-        }
-        Some("SwarmService") => {
-            json_uuid(&input.source, "swarmServiceId").map(|id| (ResourceType::SwarmService, id))
-        }
-        _ => None,
-    };
+    let resource = input.source.resource();
     if let Some((resource_type, resource_id)) = resource {
         auth(
             state,
@@ -778,13 +782,16 @@ async fn list_repositories(
         .into_iter()
         .map(|item| {
             let id = item.id;
-            let mut view = BackupRepositoryView::from(item);
+            let mut view = api_result(
+                BackupRepositoryView::try_from(item).map_err(ApiError::internal),
+                &h,
+            )?;
             view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
                 permissions.get(&id).copied().flatten(),
             ));
-            view
+            Ok::<_, crate::api::error::HttpError>(view)
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupRepository)
@@ -834,10 +841,14 @@ async fn create_repository(
     result(i.validate(), &h)?;
     authorize_repository_dependencies(&s, &p, &i, &h).await?;
     Ok(no_store(
-        Json(BackupRepositoryView::from(result(
-            s.backups.store().create_repository(p.actor_id, &i).await,
+        Json(api_result(
+            BackupRepositoryView::try_from(result(
+                s.backups.store().create_repository(p.actor_id, &i).await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -872,8 +883,11 @@ async fn get_repository(
         &h,
     )
     .await?;
-    let mut view =
-        BackupRepositoryView::from(result(s.backups.store().get_repository(id).await, &h)?);
+    let mut view = api_result(
+        BackupRepositoryView::try_from(result(s.backups.store().get_repository(id).await, &h)?)
+            .map_err(ApiError::internal),
+        &h,
+    )?;
     let permission = api_result(
         s.identity
             .permission_for_resource(&p, ResourceType::BackupRepository, id)
@@ -893,8 +907,8 @@ async fn get_repository(
     tag = "BackupRepositories",
     summary = "Update a Backup Repository",
     request_body(content(
-        (ref("#/components/schemas/UpdateBackupRepositoryInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/UpdateBackupRepositoryInput") = "application/json")
+        (UpdateBackupRepositoryInput = "application/merge-patch+json"),
+        (UpdateBackupRepositoryInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = BackupRepositoryView, content_type = "application/json"),
@@ -932,6 +946,7 @@ async fn update_repository(
     )
     .await?;
     let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let patch = api_result(typed_patch::<UpdateBackupRepositoryInput>(patch), &h)?;
     if patch.get("spec").is_some_and(|v| !v.is_null()) {
         let current = result(s.backups.store().get_repository(id).await, &h)?;
         let input = result(
@@ -941,10 +956,14 @@ async fn update_repository(
         authorize_repository_dependencies(&s, &p, &input, &h).await?;
     }
     Ok(no_store(
-        Json(BackupRepositoryView::from(result(
-            s.backups.store().update_repository(id, &patch).await,
+        Json(api_result(
+            BackupRepositoryView::try_from(result(
+                s.backups.store().update_repository(id, &patch).await,
+                &h,
+            )?)
+            .map_err(ApiError::internal),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -1119,7 +1138,10 @@ async fn repository_operation(
             .repository_operation(
                 id,
                 op,
-                &input.location,
+                match input.location {
+                    BackupExecutionLocation::Core => "Core",
+                    BackupExecutionLocation::Platform => "Platform",
+                },
                 input.platform_id,
                 &operation_cancellation,
             )
@@ -1128,7 +1150,12 @@ async fn repository_operation(
     )?;
     if op == "Validate" {
         return Ok(no_store(
-            Json(BackupRepositoryValidationView::from(operation.validation)).into_response(),
+            Json(api_result(
+                BackupRepositoryValidationView::try_from(operation.validation)
+                    .map_err(ApiError::internal),
+                &h,
+            )?)
+            .into_response(),
         ));
     }
     if let Some(message) = operation.error_message {
@@ -1152,7 +1179,7 @@ async fn authorize_repository_dependencies(
         headers,
     )
     .await?;
-    if let Some(platform_id) = json_uuid(&input.spec, "platformId") {
+    if let Some(platform_id) = input.spec.platform_id() {
         auth(
             state,
             principal,
@@ -1170,10 +1197,9 @@ fn validate_repository_location(
     input: &RepositoryLocationInput,
     headers: &HeaderMap,
 ) -> HttpResult<()> {
-    let valid = match input.location.as_str() {
-        "Core" => input.platform_id.is_none(),
-        "Platform" => input.platform_id.is_some_and(|id| !id.is_nil()),
-        _ => false,
+    let valid = match input.location {
+        BackupExecutionLocation::Core => input.platform_id.is_none(),
+        BackupExecutionLocation::Platform => input.platform_id.is_some_and(|id| !id.is_nil()),
     };
     api_result(
         if valid {
@@ -1252,9 +1278,11 @@ async fn queue_restore(
 ) -> HttpResult {
     let p = actor(p, &h)?;
     Ok(no_store(
-        Json(BackupRestoreRunView::from(
-            enqueue_restore(&s, &p, id, i, &h).await?,
-        ))
+        Json(api_result(
+            BackupRestoreRunView::try_from(enqueue_restore(&s, &p, id, i, &h).await?)
+                .map_err(ApiError::internal),
+            &h,
+        )?)
         .into_response(),
     ))
 }
@@ -1344,22 +1372,26 @@ async fn list_restores(
     }
     Ok(no_store(
         Json(Restores {
-            runs: result(
-                s.backups
-                    .store()
-                    .list_restores(
-                        p.actor_id,
-                        p.is_administrator(),
-                        f.backup_run_id,
-                        f.policy_id,
-                        f.limit.unwrap_or(50),
-                    )
-                    .await,
+            runs: api_result(
+                result(
+                    s.backups
+                        .store()
+                        .list_restores(
+                            p.actor_id,
+                            p.is_administrator(),
+                            f.backup_run_id,
+                            f.policy_id,
+                            f.limit.unwrap_or(50),
+                        )
+                        .await,
+                    &h,
+                )?
+                .into_iter()
+                .map(BackupRestoreRunView::try_from)
+                .collect::<Result<_, _>>()
+                .map_err(ApiError::internal),
                 &h,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+            )?,
         })
         .into_response(),
     ))
@@ -1398,7 +1430,11 @@ async fn get_restore(
     )
     .await?;
     Ok(no_store(
-        Json(BackupRestoreRunView::from(restore)).into_response(),
+        Json(api_result(
+            BackupRestoreRunView::try_from(restore).map_err(ApiError::internal),
+            &h,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -1486,7 +1522,7 @@ async fn cancel_restore(
     tag = "BackupPolicies",
     summary = "Get Platform Backup summaries",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/PlatformBackupSummariesView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = PlatformBackupSummaries, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
     params(("platformIds" = Vec<uuid::Uuid>, Query)),
@@ -1541,7 +1577,17 @@ async fn platform_summaries(
         &h,
     )?;
     Ok(no_store(
-        Json(serde_json::json!({"platforms":platforms.into_iter().map(PlatformBackupSummary::from).collect::<Vec<_>>()})).into_response(),
+        Json(PlatformBackupSummaries {
+            platforms: api_result(
+                platforms
+                    .into_iter()
+                    .map(PlatformBackupSummary::try_from)
+                    .collect::<Result<_, _>>()
+                    .map_err(ApiError::internal),
+                &h,
+            )?,
+        })
+        .into_response(),
     ))
 }
 
@@ -1570,7 +1616,13 @@ async fn queue_backup(
     let p = actor(p, &h)?;
     let input = input.map(|ValidatedJson(v)| v).unwrap_or_default();
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
-    Ok(no_store(Json(BackupRunView::from(run)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            BackupRunView::try_from(run).map_err(ApiError::internal),
+            &h,
+        )?)
+        .into_response(),
+    ))
 }
 
 async fn enqueue_backup(
@@ -1589,13 +1641,7 @@ async fn enqueue_backup(
         h,
     )
     .await?;
-    let trigger = input.trigger.unwrap_or_else(|| "Manual".into());
-    if !matches!(trigger.as_str(), "Manual" | "Schedule" | "Webhook") {
-        return api_result(
-            Err(ApiError::Validation("Backup trigger is invalid.".into())),
-            h,
-        );
-    }
+    let trigger = input.trigger.unwrap_or_default().as_str();
     if trigger != "Manual" {
         result(s.backups.ensure_automated_operations().await, h)?;
     }
@@ -1643,21 +1689,25 @@ async fn list_runs(
     }
     Ok(no_store(
         Json(Runs {
-            runs: result(
-                s.backups
-                    .store()
-                    .list_runs(
-                        p.actor_id,
-                        p.is_administrator(),
-                        f.policy_id,
-                        f.limit.unwrap_or(50),
-                    )
-                    .await,
+            runs: api_result(
+                result(
+                    s.backups
+                        .store()
+                        .list_runs(
+                            p.actor_id,
+                            p.is_administrator(),
+                            f.policy_id,
+                            f.limit.unwrap_or(50),
+                        )
+                        .await,
+                    &h,
+                )?
+                .into_iter()
+                .map(BackupRunView::try_from)
+                .collect::<Result<_, _>>()
+                .map_err(ApiError::internal),
                 &h,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+            )?,
         })
         .into_response(),
     ))
@@ -1694,7 +1744,13 @@ async fn get_run(
         &h,
     )
     .await?;
-    Ok(no_store(Json(BackupRunView::from(run)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            BackupRunView::try_from(run).map_err(ApiError::internal),
+            &h,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1821,7 +1877,7 @@ async fn cancel_backup(
     summary = "Run a Backup Policy with progress",
     request_body = QueueInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/BackupRunStream"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<BackupRunStreamItem>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -1862,7 +1918,7 @@ async fn run_backup(
     summary = "Restore a Backup Volume with progress",
     request_body = RestoreInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/BackupRestoreRunStream"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<BackupRestoreRunStreamItem>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -1908,8 +1964,8 @@ fn response(
     // The durable worker owns execution. Dropping this HTTP body only releases this
     // bounded subscription; explicit Cancel remains the authority to cancel a run.
     let stream = async_stream::stream! {
-        yield Ok::<_,std::convert::Infallible>(bytes::Bytes::from_static(b"["));
-        yield Ok(encode(BackupProgressItem::message(id,"Queued",queued),restore,false));
+        yield Ok::<_,serde_json::Error>(bytes::Bytes::from_static(b"["));
+        yield encode(BackupProgressItem::message(id,"Queued",queued),restore,false);
         let mut refresh=tokio::time::interval(std::time::Duration::from_secs(15));
         let mut received_output=false;
         refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1928,22 +1984,22 @@ fn response(
             if !authorized.ok().flatten().is_some_and(|p|p.level.grants(PermissionLevel::Execute) && (!restore || p.has_specific(citadel_primitives::SpecificPermission::Restore))) {break;}
             if let Some(item)=update && !is_terminal(item.status.as_deref().unwrap_or("Running")) {
                 received_output |= item.status.is_none();
-                yield Ok(encode((*item).clone(),restore,true));
+                yield encode((*item).clone(),restore,true);
                 continue;
             }
             // Recheck persisted state after lag/restart/completion. We never start a
             // second execution, and emit terminal success only after commit succeeds.
             let current=if restore {
-                state.backups.store().get_restore(id).await.map(|r|(r.status,r.error_message,r.exit_code))
-            } else {state.backups.store().get_run(id).await.map(|r|(r.status,r.error_message,r.exit_code))};
+                state.backups.store().get_restore(id).await.map(|r|(r.status.to_string(),r.error_message,r.exit_code))
+            } else {state.backups.store().get_run(id).await.map(|r|(r.status.to_string(),r.error_message,r.exit_code))};
             let (status,error,exit)=match current {
                 Ok(value)=>value,
-                Err(_)=>{yield Ok(encode(BackupProgressItem::message(id,"Interrupted","Run status is unavailable. Reopen the run to inspect its persisted status."),restore,true));break;}
+                Err(_)=>{yield encode(BackupProgressItem::message(id,"Interrupted","Run status is unavailable. Reopen the run to inspect its persisted status."),restore,true);break;}
             };
             if is_terminal(&status) {
                 let logs=if restore{state.backups.store().restore_logs(id).await}else{state.backups.store().backup_logs(id).await};
-                if !received_output && let Ok(logs)=logs {for log in logs {yield Ok(encode(BackupProgressItem{run_id:id,status:None,message:Some(log.message),stream:Some(log.stream),exit_code:None},restore,true));}}
-                yield Ok(encode(BackupProgressItem{run_id:id,status:Some(status),message:error,stream:None,exit_code:exit},restore,true));
+                if !received_output && let Ok(logs)=logs {for log in logs {yield encode(BackupProgressItem{run_id:id,status:None,message:Some(log.message),stream:Some(log.stream),exit_code:None},restore,true);}}
+                yield encode(BackupProgressItem{run_id:id,status:Some(status),message:error,stream:None,exit_code:exit},restore,true);
                 break;
             }
         }
@@ -1957,19 +2013,56 @@ fn response(
     response
 }
 
-fn encode(item: BackupProgressItem, restore: bool, comma: bool) -> bytes::Bytes {
-    let mut value = serde_json::json!({"runId":item.run_id,"status":item.status,"message":item.message,"stream":item.stream,"exitCode":item.exit_code});
-    if restore {
-        let id = value
-            .as_object_mut()
-            .expect("progress object")
-            .remove("runId");
-        value["restoreRunId"] = id.unwrap_or_default();
-    }
+fn encode(
+    item: BackupProgressItem,
+    restore: bool,
+    comma: bool,
+) -> Result<bytes::Bytes, serde_json::Error> {
     let mut bytes = Vec::new();
     if comma {
         bytes.push(b',');
     }
-    serde_json::to_writer(&mut bytes, &value).expect("progress contains JSON scalars");
-    bytes.into()
+    if restore {
+        serde_json::to_writer(
+            &mut bytes,
+            &BackupRestoreRunStreamItem {
+                restore_run_id: item.run_id,
+                status: item
+                    .status
+                    .map(|v| serde_json::from_value(v.into()))
+                    .transpose()?,
+                message: item.message,
+                stream: item.stream,
+                exit_code: item.exit_code,
+            },
+        )?;
+    } else {
+        serde_json::to_writer(
+            &mut bytes,
+            &BackupRunStreamItem {
+                run_id: item.run_id,
+                status: item
+                    .status
+                    .map(|v| serde_json::from_value(v.into()))
+                    .transpose()?,
+                message: item.message,
+                stream: item.stream,
+                exit_code: item.exit_code,
+            },
+        )?;
+    }
+    Ok(bytes.into())
+}
+
+fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
+    patch: serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
+    if !patch.is_object() {
+        return Err(crate::request_validation::validation_error(
+            "Backup update must be an object.".into(),
+        ));
+    }
+    let patch: T = serde_path_to_error::deserialize(patch)
+        .map_err(|error| crate::request_validation::validation_error(error.to_string()))?;
+    serde_json::to_value(patch).map_err(ApiError::internal)
 }

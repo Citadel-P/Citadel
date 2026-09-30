@@ -22,7 +22,7 @@ pub struct PlatformSummary {
     pub id: Uuid,
     pub name: String,
     pub address: String,
-    pub status: String,
+    pub status: citadel_primitives::PlatformStatus,
     pub connector_type: String,
 }
 
@@ -61,7 +61,7 @@ pub struct RuntimeSwarmInfo {
     pub cluster_created_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSwarmPeer {
     pub node_id: String,

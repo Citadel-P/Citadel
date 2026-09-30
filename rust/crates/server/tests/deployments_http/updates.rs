@@ -12,7 +12,10 @@ pub(super) async fn verify_automatic_apply(
     fail: &AtomicBool,
 ) {
     let store = PostgresDeploymentRepository::new(pool.clone());
-    for (should_fail, expected) in [(true, "Failed"), (false, "UpToDate")] {
+    for (should_fail, expected) in [
+        (true, citadel_primitives::AutoUpdateStatus::Failed),
+        (false, citadel_primitives::AutoUpdateStatus::UpToDate),
+    ] {
         sqlx::query("UPDATE deployments SET spec=jsonb_set(jsonb_set(spec::jsonb,'{UpdateBehavior}','\"AutoDeploy\"'::jsonb),'{Image,ResolvedDigest}',to_jsonb($2::text))::json WHERE id=$1")
             .bind(id).bind(format!("sha256:{}", "a".repeat(64))).execute(pool).await.unwrap();
         fail.store(should_fail, Ordering::Release);
@@ -24,13 +27,20 @@ pub(super) async fn verify_automatic_apply(
             .get_authorized(admin.actor_id, true, id)
             .await
             .unwrap();
-        assert_eq!(current.control_state, "Idle");
+        assert_eq!(
+            current.control_state,
+            citadel_primitives::ResourceControlState::Idle
+        );
         let update = current.auto_update_state.as_ref().unwrap();
         assert_eq!(update.status, expected);
         assert_eq!(update.last_error.is_some(), should_fail);
         assert_eq!(
             current.status,
-            if should_fail { "Failed" } else { "Healthy" }
+            if should_fail {
+                citadel_deployments::DeploymentStatus::Failed
+            } else {
+                citadel_deployments::DeploymentStatus::Healthy
+            }
         );
         if !should_fail {
             assert_eq!(update.current_digest, update.remote_digest);
@@ -232,9 +242,13 @@ pub(super) async fn verify(
         .unwrap();
     assert_eq!(
         checked.auto_update_state.as_ref().unwrap().status,
-        "UpdateAvailable"
+        citadel_primitives::AutoUpdateStatus::UpdateAvailable
     );
-    assert_eq!(checked.status, "Created", "Notify must not Apply");
+    assert_eq!(
+        checked.status,
+        citadel_deployments::DeploymentStatus::Created,
+        "Notify must not Apply"
+    );
     assert!(
         store
             .scheduled_update_candidates(id, 25)

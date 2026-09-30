@@ -1,4 +1,5 @@
 # Overlay on .devcontainer/compose.yaml and compose.wsl.yaml; use dev.sh compose-up.
+# Core mounts a staged executable outside Cargo's disposable target directory.
 # Keep the existing citadel-wsl PostgreSQL service and volume.
 services:
   core:

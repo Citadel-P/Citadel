@@ -48,6 +48,7 @@ impl BackupService {
             .store
             .record_repository_operation(
                 id,
+                operation_id,
                 operation,
                 location,
                 platform_id,

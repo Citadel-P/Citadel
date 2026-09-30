@@ -21,7 +21,7 @@ import { ResourceType } from '@/api/types';
 import { ResourceSkeleton } from './resource-skeleton';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 import TaskSheet from '@/components/custom/task-sheet';
-import { PatchResourceMetadata } from '@/api/generated/api.types';
+import { PatchResourceMetadataInput } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
 
 export type ResourceFormViewProps = { type: ResourceType; mode: 'add' | 'edit'; Components: RequiredFormComponents };
@@ -157,7 +157,7 @@ const EditFormContent = ({
 }: {
   id: string;
   item: RequiredFormFields;
-  updateMetadata?: (variables: { id: string; data: Partial<PatchResourceMetadata> }) => Promise<any>;
+  updateMetadata?: (variables: { id: string; data: Partial<PatchResourceMetadataInput> }) => Promise<any>;
   renameResource?: (variables: { id: string; name: string }) => Promise<any>;
   Components: any;
   type: ResourceType;
@@ -172,7 +172,7 @@ const EditFormContent = ({
 
   const invalidateRelatedQueries = () => queryClient.invalidateQueries();
 
-  const handleUpdateMetadata = async (patch: Partial<PatchResourceMetadata>) => {
+  const handleUpdateMetadata = async (patch: Partial<PatchResourceMetadataInput>) => {
     if (!updateMetadata) return;
     await updateMetadata({ id, data: patch });
     await invalidateRelatedQueries();

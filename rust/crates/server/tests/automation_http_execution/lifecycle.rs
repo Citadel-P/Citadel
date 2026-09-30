@@ -49,8 +49,14 @@ pub(super) async fn verify_request_drop_during_claim(
         loop {
             let runs = store.list_runs(id, 100).await.unwrap();
             if runs.len() == before + 1 && tasks.active() == 0 {
-                assert_eq!(runs[0].status, "Cancelled");
-                assert_eq!(store.get(id).await.unwrap().control_state, "Idle");
+                assert_eq!(
+                    runs[0].status,
+                    citadel_automation::AutomationRunStatus::Cancelled
+                );
+                assert_eq!(
+                    store.get(id).await.unwrap().control_state,
+                    citadel_primitives::ResourceControlState::Idle
+                );
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -94,15 +100,21 @@ pub(super) async fn verify(
     .await
     .unwrap();
     let run = store.list_runs(id, 1).await.unwrap().remove(0);
-    assert_eq!(run.status, "Running");
+    assert_eq!(run.status, citadel_automation::AutomationRunStatus::Running);
     assert!(tasks.active() > 0);
 
     // Keep the viewer connected: shutdown itself must cancel and persist cleanup.
     shutdown.cancel();
     tasks.drain(Duration::from_secs(10)).await.unwrap();
     assert_eq!(tasks.active(), 0);
-    assert_eq!(store.get_run(id, run.id).await.unwrap().status, "Cancelled");
-    assert_eq!(store.get(id).await.unwrap().control_state, "Idle");
+    assert_eq!(
+        store.get_run(id, run.id).await.unwrap().status,
+        citadel_automation::AutomationRunStatus::Cancelled
+    );
+    assert_eq!(
+        store.get(id).await.unwrap().control_state,
+        citadel_primitives::ResourceControlState::Idle
+    );
 
     let before = store.list_runs(id, 100).await.unwrap().len();
     assert!(matches!(

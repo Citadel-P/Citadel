@@ -2,7 +2,7 @@ import { useSetupContext } from '@/features/setup/setup-context';
 import {
   PatchUserRequest,
   CreateUserRequest,
-  UserResourceAccessInput,
+  ResourceAccessInput,
   ResourceInfo,
   LicenseCapability,
   RoleType,
@@ -330,7 +330,7 @@ export const UserForm = ({
               'Grant this user direct access to specific resources outside of their team and role assignments.',
             render: (value, set) => (
               <ResourceOverridesField
-                value={(value as UserResourceAccessInput[] | null) ?? []}
+                value={(value as ResourceAccessInput[] | null) ?? []}
                 onChange={(next) =>
                   set({
                     resourceAccesses: next.map((entry) => ({

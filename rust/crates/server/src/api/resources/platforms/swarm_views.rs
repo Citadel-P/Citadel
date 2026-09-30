@@ -6,7 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmQuorumView {
-    #[schema(value_type = crate::openapi::compatibility::SwarmQuorumState)]
+    #[schema(value_type = SwarmQuorumState)]
     pub state: &'static str,
     pub reachable_managers: i64,
     pub required_managers: i64,
@@ -155,4 +155,13 @@ mod tests {
             );
         }
     }
+}
+
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+pub enum SwarmQuorumState {
+    Unknown,
+    Lost,
+    Degraded,
+    Healthy,
 }

@@ -405,7 +405,9 @@ pub(super) async fn verify_streams(
         .unwrap();
     drop(response);
     for _ in 0..100 {
-        if backups.store().get_run(detached).await.unwrap().status == "Succeeded" {
+        if backups.store().get_run(detached).await.unwrap().status
+            == citadel_backups::BackupRunStatus::Succeeded
+        {
             break;
         }
         backups
@@ -415,7 +417,7 @@ pub(super) async fn verify_streams(
     }
     assert_eq!(
         backups.store().get_run(detached).await.unwrap().status,
-        "Succeeded"
+        citadel_backups::BackupRunStatus::Succeeded
     );
 
     // Explicit cancellation remains available and is visible on the existing stream.

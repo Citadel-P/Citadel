@@ -70,7 +70,7 @@ impl BackupService {
         self.store.finish_backup(&claim, &result).await?;
         self.progress(
             claim.run.id,
-            result.status,
+            result.status.as_str(),
             result
                 .error_message
                 .as_deref()

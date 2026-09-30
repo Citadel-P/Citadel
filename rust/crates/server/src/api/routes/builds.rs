@@ -5,6 +5,7 @@ use crate::{
         resources::{
             builds::{
                 capabilities::{granted, pool_capabilities, project_capabilities},
+                patch::{BuildMetadataPatch, UpdateBuildAgentPoolInput, UpdateBuildProjectInput},
                 requests::{QueueInput, RenamePool, RunFilter, *},
                 views::{AuthorizedPool, AuthorizedProject, Logs, Pools, Projects, Runs, *},
             },
@@ -12,12 +13,12 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson},
+    request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
 };
 
 use axum::{
     Json, Router,
-    extract::{Extension, RawQuery, State},
+    extract::{Extension, RawQuery, State, rejection::JsonRejection},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -319,9 +320,8 @@ async fn create_pool(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    ValidatedJson(input): ValidatedJson<BuildAgentPoolInput>,
+    input: Result<Json<BuildAgentPoolInput>, JsonRejection>,
 ) -> HttpResult {
-    let mut input: citadel_builds::BuildAgentPoolConfiguration = input.into();
     let principal = actor(principal, &headers)?;
     authorize_global_for(
         &state,
@@ -331,6 +331,8 @@ async fn create_pool(
         &headers,
     )
     .await?;
+    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
+    let mut input: citadel_builds::BuildAgentPoolConfiguration = input.into();
     api_result(input.validate().map_err(map_error), &headers)?;
     let pool = api_result(
         state
@@ -429,8 +431,8 @@ async fn test_pool(
     tag = "BuildAgentPools",
     summary = "Update a Build Agent Pool",
     request_body(content(
-        (ref("#/components/schemas/UpdateBuildAgentPoolInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/UpdateBuildAgentPoolInput") = "application/json")
+        (UpdateBuildAgentPoolInput = "application/merge-patch+json"),
+        (UpdateBuildAgentPoolInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
@@ -445,9 +447,18 @@ async fn update_pool(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> HttpResult {
-    save_pool(&state, principal, id, patch, None, false, &headers).await
+    save_pool(
+        &state,
+        principal,
+        id,
+        patch.map(|Json(v)| v).map_err(invalid_json),
+        None,
+        false,
+        &headers,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -457,8 +468,8 @@ async fn update_pool(
     tag = "BuildAgentPools",
     summary = "Update Build Agent Pool metadata",
     request_body(content(
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+        (BuildMetadataPatch = "application/merge-patch+json"),
+        (BuildMetadataPatch = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AuthorizedPool, content_type = "application/json"),
@@ -473,9 +484,18 @@ async fn update_pool_metadata(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> HttpResult {
-    save_pool(&state, principal, id, patch, None, true, &headers).await
+    save_pool(
+        &state,
+        principal,
+        id,
+        patch.map(|Json(v)| v).map_err(invalid_json),
+        None,
+        true,
+        &headers,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -502,7 +522,7 @@ async fn rename_pool(
         &state,
         principal,
         input.id,
-        serde_json::json!({}),
+        Ok(serde_json::json!({})),
         Some(input.name),
         true,
         &headers,
@@ -514,7 +534,7 @@ async fn save_pool(
     state: &BuildsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
     id: Uuid,
-    patch: serde_json::Value,
+    patch: Result<serde_json::Value, ApiError>,
     name: Option<String>,
     metadata_only: bool,
     headers: &HeaderMap,
@@ -529,6 +549,15 @@ async fn save_pool(
         headers,
     )
     .await?;
+    let patch = api_result(patch, headers)?;
+    let patch = api_result(
+        if metadata_only {
+            typed_patch::<BuildMetadataPatch>(patch)
+        } else {
+            typed_patch::<UpdateBuildAgentPoolInput>(patch)
+        },
+        headers,
+    )?;
     let current = api_result(
         state.builds.store().get_pool(id).await.map_err(map_error),
         headers,
@@ -567,22 +596,25 @@ pub(crate) async fn authorized_pools(
         let ids = values.iter().map(|pool| pool.id).collect::<Vec<_>>();
         store.pool_permissions(principal.actor_id, &ids).await?
     };
-    Ok(values
+    values
         .into_iter()
-        .map(|pool| AuthorizedPool {
-            capabilities: pool_capabilities(if principal.is_administrator() {
-                EffectivePermission::Administrator
-            } else {
-                granted(
-                    permissions
-                        .get(&pool.id)
-                        .copied()
-                        .unwrap_or(PermissionLevel::None),
-                )
-            }),
-            pool: pool.into(),
+        .map(|pool| {
+            Ok(AuthorizedPool {
+                capabilities: pool_capabilities(if principal.is_administrator() {
+                    EffectivePermission::Administrator
+                } else {
+                    granted(
+                        permissions
+                            .get(&pool.id)
+                            .copied()
+                            .unwrap_or(PermissionLevel::None),
+                    )
+                }),
+                pool: BuildAgentPoolView::try_from(pool)
+                    .map_err(|e| BuildError::Storage(e.to_string()))?,
+            })
         })
-        .collect())
+        .collect()
 }
 
 async fn pool_permissions(
@@ -622,7 +654,10 @@ async fn pool_response(
     let capabilities = pool_permissions(state, principal, Some(pool.id), headers).await?;
     Ok(no_store(
         Json(AuthorizedPool {
-            pool: pool.into(),
+            pool: api_result(
+                BuildAgentPoolView::try_from(pool).map_err(ApiError::internal),
+                headers,
+            )?,
             capabilities,
         })
         .into_response(),
@@ -678,7 +713,7 @@ async fn archive_pool(
     tag = "BuildAgentPools",
     summary = "Create build pool Edge Agent enrollment",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentEnrollmentView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::EdgeEnrollmentView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -717,7 +752,7 @@ async fn enroll_pool(
     tag = "BuildAgentPools",
     summary = "Get build pool Edge Agent status",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/EdgeAgentStatusView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::platforms::operation_views::EdgeStatusView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -750,7 +785,10 @@ async fn pool_edge_status(
             .map_err(crate::api::routes::platforms::EdgeHttpContext::error),
         &headers,
     )?;
-    Ok(no_store(Json(status).into_response()))
+    Ok(no_store(
+        Json(crate::api::resources::platforms::operation_views::EdgeStatusView::from(status))
+            .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -814,7 +852,7 @@ pub(crate) async fn authorized_projects(
     } else {
         store.project_permissions(principal.actor_id, &ids).await?
     };
-    Ok(projects
+    projects
         .into_iter()
         .map(|project| {
             let level = if principal.is_administrator() {
@@ -827,12 +865,13 @@ pub(crate) async fn authorized_projects(
                         .unwrap_or(PermissionLevel::None),
                 )
             };
-            AuthorizedProject {
-                project: project.into(),
+            Ok(AuthorizedProject {
+                project: BuildProjectView::try_from(project)
+                    .map_err(|e| BuildError::Storage(e.to_string()))?,
                 capabilities: project_capabilities(level),
-            }
+            })
         })
-        .collect())
+        .collect()
 }
 
 async fn project_response(
@@ -930,11 +969,12 @@ async fn create_project(
     State(state): State<BuildsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    ValidatedJson(input): ValidatedJson<BuildProjectInput>,
+    input: Result<Json<BuildProjectInput>, JsonRejection>,
 ) -> HttpResult {
-    let mut input: citadel_builds::BuildProjectConfiguration = input.into();
     let principal = actor(principal, &headers)?;
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
+    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
+    let mut input: citadel_builds::BuildProjectConfiguration = input.into();
     api_result(input.validate().map_err(map_error), &headers)?;
     authorize_build_dependencies(&state, &principal, &input, &headers).await?;
     validate_configuration_entitlements(&state, None, &input, true, &headers).await?;
@@ -972,14 +1012,7 @@ async fn validate_configuration_entitlements(
             headers,
         )?;
     }
-    if updates_webhook
-        && input
-            .webhook
-            .as_ref()
-            .and_then(|value| value.get("enabled"))
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
-    {
+    if updates_webhook && input.webhook.as_ref().is_some_and(|value| value.enabled) {
         api_result(
             state
                 .builds
@@ -1125,8 +1158,8 @@ async fn archive_project(
     tag = "BuildProjects",
     summary = "Update Build Project",
     request_body(content(
-        (ref("#/components/schemas/UpdateBuildProjectInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/UpdateBuildProjectInput") = "application/json")
+        (UpdateBuildProjectInput = "application/merge-patch+json"),
+        (UpdateBuildProjectInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
@@ -1141,9 +1174,18 @@ async fn update_project(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> HttpResult {
-    save_project(&state, principal, id, patch, None, false, &headers).await
+    save_project(
+        &state,
+        principal,
+        id,
+        patch.map(|Json(v)| v).map_err(invalid_json),
+        None,
+        false,
+        &headers,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -1153,8 +1195,8 @@ async fn update_project(
     tag = "BuildProjects",
     summary = "Update Build Project",
     request_body(content(
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+        (BuildMetadataPatch = "application/merge-patch+json"),
+        (BuildMetadataPatch = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AuthorizedProject, content_type = "application/json"),
@@ -1169,9 +1211,18 @@ async fn update_project_metadata(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> HttpResult {
-    save_project(&state, principal, id, patch, None, true, &headers).await
+    save_project(
+        &state,
+        principal,
+        id,
+        patch.map(|Json(v)| v).map_err(invalid_json),
+        None,
+        true,
+        &headers,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -1198,7 +1249,7 @@ async fn rename_project(
         &state,
         principal,
         input.id,
-        serde_json::json!({}),
+        Ok(serde_json::json!({})),
         Some(input.name),
         false,
         &headers,
@@ -1210,14 +1261,23 @@ async fn save_project(
     state: &BuildsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
     id: Uuid,
-    patch: serde_json::Value,
+    patch: Result<serde_json::Value, ApiError>,
     name: Option<String>,
     metadata_only: bool,
     headers: &HeaderMap,
 ) -> HttpResult {
-    let updates_webhook = patch.get("webhook").is_some();
     let principal = actor(principal, headers)?;
     authorize(state, &principal, id, PermissionLevel::Write, headers).await?;
+    let patch = api_result(patch, headers)?;
+    let patch = api_result(
+        if metadata_only {
+            typed_patch::<BuildMetadataPatch>(patch)
+        } else {
+            typed_patch::<UpdateBuildProjectInput>(patch)
+        },
+        headers,
+    )?;
+    let updates_webhook = patch.get("webhook").is_some();
     let current = api_result(
         state.builds.store().get(id).await.map_err(map_error),
         headers,
@@ -1273,7 +1333,7 @@ async fn queue_run(
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
-    input: Option<ValidatedJson<QueueInput>>,
+    input: Result<Option<Json<QueueInput>>, JsonRejection>,
 ) -> HttpResult {
     let principal = actor(principal, &headers)?;
     api_result(
@@ -1289,15 +1349,10 @@ async fn queue_run(
             .await,
         &headers,
     )?;
-    let trigger = input
-        .and_then(|ValidatedJson(value)| value.trigger)
-        .unwrap_or_else(|| "Manual".to_owned());
-    if !matches!(trigger.as_str(), "Manual" | "Webhook" | "Dependency") {
-        return Err(crate::api::error::HttpError::from_parts(
-            ApiError::Validation("Build trigger is invalid.".to_owned()),
-            &headers,
-        ));
-    }
+    let trigger = api_result(input.map_err(invalid_json), &headers)?
+        .and_then(|Json(value)| value.trigger)
+        .unwrap_or_default()
+        .as_str();
     let project = api_result(
         state.builds.store().get(id).await.map_err(map_error),
         &headers,
@@ -1305,7 +1360,7 @@ async fn queue_run(
     api_result(
         state
             .builds
-            .ensure_execution_entitlements(&project, &trigger)
+            .ensure_execution_entitlements(&project, trigger)
             .await
             .map_err(map_error),
         &headers,
@@ -1314,12 +1369,18 @@ async fn queue_run(
         state
             .builds
             .store()
-            .enqueue(principal.actor_id, id, &trigger)
+            .enqueue(principal.actor_id, id, trigger)
             .await
             .map_err(map_error),
         &headers,
     )?;
-    Ok(no_store(Json(BuildRunView::from(run)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            BuildRunView::try_from(run).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1362,7 +1423,13 @@ async fn list_runs(
     )?;
     Ok(no_store(
         Json(Runs {
-            runs: runs.into_iter().map(Into::into).collect(),
+            runs: api_result(
+                runs.into_iter()
+                    .map(BuildRunView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiError::internal),
+                &headers,
+            )?,
         })
         .into_response(),
     ))
@@ -1401,7 +1468,13 @@ async fn get_run(
         &headers,
     )
     .await?;
-    Ok(no_store(Json(BuildRunView::from(run)).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            BuildRunView::try_from(run).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1490,4 +1563,17 @@ async fn cancel_run(
     )?;
     api_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
+    patch: serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
+    if !patch.is_object() {
+        return Err(ApiError::Validation(
+            "Build update must be an object.".into(),
+        ));
+    }
+    let patch: T =
+        serde_json::from_value(patch).map_err(|error| ApiError::Validation(error.to_string()))?;
+    serde_json::to_value(patch).map_err(ApiError::internal)
 }

@@ -4,7 +4,7 @@ pub(super) async fn save(
     store: &PostgresStackRepository,
     actor: ActorId,
     administrator: bool,
-    expected: &StackDetails,
+    expected: &citadel_stacks::Stack,
     state: &StackUpdateState,
 ) -> Result<(), StackError> {
     let mut tx = store.pool.begin().await.map_err(storage)?;

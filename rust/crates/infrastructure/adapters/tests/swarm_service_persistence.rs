@@ -67,7 +67,10 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
         )
         .await
         .unwrap();
-    assert_eq!(created.health, "Created");
+    assert_eq!(
+        created.health,
+        citadel_swarm_services::SwarmServiceHealth::Created
+    );
     assert!(created.has_pending_desired_changes);
     assert_eq!(created.tasks.as_ref().unwrap().len(), 0);
 
@@ -191,9 +194,15 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
             .unwrap(),
         "Healthy"
     );
-    assert_eq!(current.health, "Unknown");
+    assert_eq!(
+        current.health,
+        citadel_swarm_services::SwarmServiceHealth::Unknown
+    );
     assert!(!current.has_pending_desired_changes);
-    assert_eq!(current.current_operation.unwrap().state, "Completed");
+    assert_eq!(
+        current.current_operation.as_ref().unwrap().state,
+        citadel_swarm_services::SwarmServiceOperationState::Completed
+    );
     assert_eq!(
         store
             .list_authorized(
@@ -209,6 +218,23 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
             .len(),
         1
     );
+
+    // Invalid persisted values fail at the repository boundary, before an API view exists.
+    sqlx::query("UPDATE swarmservices SET operationstate='InvalidState' WHERE id=$1")
+        .bind(created.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        store.get_authorized(actor, true, created.id).await,
+        Err(citadel_swarm_services::SwarmServiceError::Storage(message))
+            if message.contains("SwarmServiceOperationState") && message.contains("InvalidState")
+    ));
+    sqlx::query("UPDATE swarmservices SET operationstate='Completed' WHERE id=$1")
+        .bind(created.id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let claims = store.delete(actor, true, &[created.id]).await.unwrap();
     store.mark_delete_attempted(&claims[0]).await.unwrap();

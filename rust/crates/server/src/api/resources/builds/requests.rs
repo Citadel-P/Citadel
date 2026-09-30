@@ -1,6 +1,6 @@
-use crate::api::resources::builds::spec::{BuildArgSpec, BuildSecretSpec};
+use crate::api::resources::builds::spec::*;
+use citadel_primitives::WebhookConfig;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
@@ -20,21 +20,21 @@ pub struct BuildProjectInput {
     pub registry_id: Uuid,
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
-    #[schema(value_type = Option<crate::openapi::compatibility::BuildWebhookConfig>)]
-    pub webhook: Option<Value>,
+    #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub retention_run_count: Option<i32>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
-    #[serde(default = "platform_builder")]
-    #[schema(value_type = crate::openapi::compatibility::BuildProjectBuilderKind)]
-    pub builder_kind: String,
+    #[serde(default)]
+    pub builder_kind: BuildProjectBuilderKind,
     pub build_agent_pool_id: Option<Uuid>,
 }
 
-impl From<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
-    fn from(value: citadel_builds::BuildProjectConfiguration) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildProjectConfiguration) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             description: value.description,
             enabled: value.enabled,
@@ -57,9 +57,9 @@ impl From<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
             timeout_seconds: value.timeout_seconds,
             retention_run_count: value.retention_run_count,
             tag_ids: value.tag_ids,
-            builder_kind: value.builder_kind,
+            builder_kind: serde_json::from_value(value.builder_kind.into())?,
             build_agent_pool_id: value.build_agent_pool_id,
-        }
+        })
     }
 }
 
@@ -88,7 +88,7 @@ impl From<BuildProjectInput> for citadel_builds::BuildProjectConfiguration {
             timeout_seconds: value.timeout_seconds,
             retention_run_count: value.retention_run_count,
             tag_ids: value.tag_ids,
-            builder_kind: value.builder_kind,
+            builder_kind: value.builder_kind.as_str().to_owned(),
             build_agent_pool_id: value.build_agent_pool_id,
         }
     }
@@ -100,8 +100,7 @@ pub struct BuildAgentPoolInput {
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
-    #[schema(value_type = crate::openapi::compatibility::BuildAgentPoolProviderSpec)]
-    pub provider_spec: Value,
+    pub provider_spec: BuildAgentPoolProviderSpec,
     pub max_active_builders: Option<i32>,
     pub queue_timeout_seconds: Option<i32>,
     pub provisioning_timeout_seconds: Option<i32>,
@@ -114,13 +113,14 @@ pub struct BuildAgentPoolInput {
     pub tag_ids: Vec<Uuid>,
 }
 
-impl From<citadel_builds::BuildAgentPoolConfiguration> for BuildAgentPoolInput {
-    fn from(value: citadel_builds::BuildAgentPoolConfiguration) -> Self {
-        Self {
+impl TryFrom<citadel_builds::BuildAgentPoolConfiguration> for BuildAgentPoolInput {
+    type Error = serde_json::Error;
+    fn try_from(value: citadel_builds::BuildAgentPoolConfiguration) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             description: value.description,
             enabled: value.enabled,
-            provider_spec: value.provider_spec,
+            provider_spec: serde_json::from_value(value.provider_spec)?,
             max_active_builders: value.max_active_builders,
             queue_timeout_seconds: value.queue_timeout_seconds,
             provisioning_timeout_seconds: value.provisioning_timeout_seconds,
@@ -130,7 +130,7 @@ impl From<citadel_builds::BuildAgentPoolConfiguration> for BuildAgentPoolInput {
             maximum_instance_lifetime_seconds: value.maximum_instance_lifetime_seconds,
             failure_retention_minutes: value.failure_retention_minutes,
             tag_ids: value.tag_ids,
-        }
+        })
     }
 }
 
@@ -140,7 +140,7 @@ impl From<BuildAgentPoolInput> for citadel_builds::BuildAgentPoolConfiguration {
             name: value.name,
             description: value.description,
             enabled: value.enabled,
-            provider_spec: value.provider_spec,
+            provider_spec: serde_json::json!(value.provider_spec),
             max_active_builders: value.max_active_builders,
             queue_timeout_seconds: value.queue_timeout_seconds,
             provisioning_timeout_seconds: value.provisioning_timeout_seconds,
@@ -152,10 +152,6 @@ impl From<BuildAgentPoolInput> for citadel_builds::BuildAgentPoolConfiguration {
             tag_ids: value.tag_ids,
         }
     }
-}
-
-fn platform_builder() -> String {
-    "Platform".into()
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -168,7 +164,7 @@ pub(crate) struct RenamePool {
 #[schema(as = server::builds_http::QueueInput)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct QueueInput {
-    pub(crate) trigger: Option<String>,
+    pub(crate) trigger: Option<QueueBuildTrigger>,
 }
 
 #[derive(Deserialize, Default)]
@@ -176,4 +172,21 @@ pub(crate) struct QueueInput {
 pub(crate) struct RunFilter {
     pub(crate) project_id: Option<Uuid>,
     pub(crate) limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, utoipa::ToSchema)]
+pub enum QueueBuildTrigger {
+    #[default]
+    Manual,
+    Webhook,
+    Dependency,
+}
+impl QueueBuildTrigger {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Manual => "Manual",
+            Self::Webhook => "Webhook",
+            Self::Dependency => "Dependency",
+        }
+    }
 }

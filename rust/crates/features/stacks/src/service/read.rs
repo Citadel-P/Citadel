@@ -1,11 +1,12 @@
 use super::*;
+use citadel_primitives::AuthorizedResource;
 impl StackService {
     pub async fn list(
         &self,
         actor: ActorId,
         administrator: bool,
         filter: &StackFilter,
-    ) -> Result<Vec<StackDetails>, StackError> {
+    ) -> Result<Vec<AuthorizedResource<crate::Stack>>, StackError> {
         self.store
             .list_authorized(actor, administrator, filter)
             .await
@@ -16,7 +17,7 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> Result<StackDetails, StackError> {
+    ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         self.store.get_authorized(actor, administrator, id).await
     }
 
@@ -34,7 +35,7 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-    ) -> Result<Vec<StackReleaseDetails>, StackError> {
+    ) -> Result<Vec<StackRelease>, StackError> {
         self.store.releases(actor, administrator, id).await
     }
 
@@ -51,7 +52,7 @@ impl StackService {
             ..
         } = &mut spec
         {
-            webhook.secret = None;
+            webhook.config.secret = None;
         }
         spec.common_mut().project_name = None;
         Ok(crate::StackDuplicateDraft {

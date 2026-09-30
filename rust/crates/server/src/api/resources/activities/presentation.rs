@@ -1,29 +1,16 @@
 /// Convert persisted activity property names to the public HTTP/realtime contract.
 pub fn public_activity_info(value: serde_json::Value) -> serde_json::Value {
-    use serde_json::{Map, Value};
-    match value {
-        Value::Object(object) => Value::Object(
-            object
-                .into_iter()
-                .map(|(key, value)| {
-                    let key = camel_case_key(key);
-                    // These are user-defined dictionary keys, not DTO property names.
-                    let value = if matches!(
-                        key.as_str(),
-                        "labels" | "environmentVariables" | "buildArguments" | "buildArgs"
-                    ) && value.is_object()
-                    {
-                        value
-                    } else {
-                        public_activity_info(value)
-                    };
-                    (key, value)
-                })
-                .collect::<Map<_, _>>(),
-        ),
-        Value::Array(items) => Value::Array(items.into_iter().map(public_activity_info).collect()),
-        value => value,
-    }
+    use citadel_primitives::json_keys::{PropertyCase, map_property_keys};
+    map_property_keys(
+        value,
+        PropertyCase::Camel,
+        &[
+            "labels",
+            "environmentVariables",
+            "buildArguments",
+            "buildArgs",
+        ],
+    )
 }
 
 /// Resource details embed the same activity info as the activity endpoints.
@@ -36,15 +23,8 @@ pub fn public_latest_activity(
     activity
 }
 
-fn camel_case_key(mut key: String) -> String {
-    if key.starts_with('$') {
-        return key;
-    }
-    let Some(first) = key.get_mut(0..1) else {
-        return key;
-    };
-    first.make_ascii_lowercase();
-    key
+pub(super) fn camel_case_key(key: String) -> String {
+    citadel_primitives::json_keys::PropertyCase::Camel.key(key)
 }
 
 #[cfg(test)]
