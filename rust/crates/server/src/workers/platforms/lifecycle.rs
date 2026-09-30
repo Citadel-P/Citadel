@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, future::Future};
 use tokio::time::Instant;
 
 const RETRY: Duration = Duration::from_secs(5);
+const OFFLINE_ALERT_INTERVAL: Duration = Duration::from_secs(30);
 const DEPLOYMENT_SAFETY: Duration = Duration::from_secs(5 * 60);
 
 pub(super) struct LifecycleWorker {
@@ -18,6 +19,8 @@ pub(super) struct Progress {
     transition: PlatformHealthTransition,
     persisted: bool,
     recovery_requested: bool,
+    recheck_alert: bool,
+    notified: bool,
 }
 impl Progress {
     fn new(transition: PlatformHealthTransition) -> Self {
@@ -25,6 +28,8 @@ impl Progress {
             transition,
             persisted: false,
             recovery_requested: false,
+            recheck_alert: false,
+            notified: false,
         }
     }
 }
@@ -64,8 +69,10 @@ impl LifecycleWorker {
                 && current.address == target.address
                 && current.connector_type == target.connector_type
         }) {
+            progress.recheck_alert = false;
             return Ok(());
         }
+        progress.recheck_alert = !online;
         let _work = RuntimeWork::PlatformLifecycle.start();
         if !progress.persisted {
             if online {
@@ -123,7 +130,9 @@ impl LifecycleWorker {
         // A failed alert retries this step without repeating a committed status
         // or scheduling another resource recovery plan.
         self.alerts.observe(&observation).await?;
-        if let Some(hub) = &self.realtime {
+        if !progress.notified
+            && let Some(hub) = &self.realtime
+        {
             hub.publish_runtime_change(
                 target.id,
                 "platformInventory",
@@ -131,6 +140,7 @@ impl LifecycleWorker {
                 target.id.to_string(),
             );
         }
+        progress.notified = true;
         Ok(())
     }
 }
@@ -225,6 +235,13 @@ async fn run_transitions<E, A, AF>(
             pending.entry(id).or_insert(Pending {
                 progress,
                 due: Instant::now() + RETRY,
+            });
+        } else if progress.recheck_alert {
+            // Offline conditions can outlast cooldown/quiet hours. Re-evaluate
+            // alerts without repeating committed status or recovery effects.
+            pending.entry(id).or_insert(Pending {
+                progress,
+                due: Instant::now() + OFFLINE_ALERT_INTERVAL,
             });
         }
     }

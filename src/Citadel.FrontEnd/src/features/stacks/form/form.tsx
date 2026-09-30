@@ -11,12 +11,12 @@ import {
   StackDriftPolicy,
   GitRepositoryRefView,
   GitComposeProjectCandidate,
-  BuildProjectView,
+  AuthorizedProject,
   StackBuildImageBinding,
   BuildRunStatus,
   LicenseCapability,
   AdoptionIssueSeverity,
-  ImportComposeProjectInput,
+  ImportRequest,
   StackSpec,
   ComposeProjectImportValidation,
   PlatformType,
@@ -95,7 +95,7 @@ const EMPTY_STACK_CONFIG = {} as StackConfigView;
 const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
 const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
-const EMPTY_BUILD_PROJECTS: BuildProjectView[] = [];
+const EMPTY_BUILD_PROJECTS: AuthorizedProject[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.Disabled,
@@ -418,7 +418,7 @@ const StackBuildImageBindingsField = ({
   onChange,
 }: {
   value?: StackBuildImageBinding[] | null;
-  projects: BuildProjectView[];
+  projects: AuthorizedProject[];
   isLoading?: boolean;
   disabled?: boolean;
   redeployEnabled: boolean;
@@ -573,7 +573,7 @@ const BuildBindingStatus = ({
   binding: StackBuildImageBinding;
   buildProjectId?: string | null;
   isLoading?: boolean;
-  project?: BuildProjectView;
+  project?: AuthorizedProject;
   hasProjects: boolean;
   hasSuccessfulImage: boolean;
   latestStatus?: BuildRunStatus;
@@ -1049,7 +1049,7 @@ export const StackForm = ({
           return Promise.reject(new Error('Validate the Compose source before importing it.'));
         }
 
-        const importPayload: ImportComposeProjectInput = {
+        const importPayload: ImportRequest = {
           name: normalizedPayload.name,
           description: normalizedPayload.description,
           stackSource: normalizedPayload.stackSource,
@@ -1133,10 +1133,10 @@ export const StackForm = ({
 
       const response = await preflightSwarmStack({
         data: {
-          name: 'name' in payload ? payload.name : original.name,
-          platformId: payload.platformId,
-          stackSource: 'stackSource' in payload ? payload.stackSource : original.stackSource,
-          spec: normalizeStackSpec(payload.spec, 'stackSource' in payload ? payload.stackSource : original.stackSource),
+          name: payload.name ?? original.name ?? '',
+          platformId: payload.platformId ?? original.platformId ?? '',
+          stackSource: payload.stackSource ?? original.stackSource,
+          spec: normalizeStackSpec(payload.spec, payload.stackSource ?? original.stackSource),
           driftPolicy: payload.driftPolicy,
         },
       });
@@ -1186,7 +1186,6 @@ export const StackForm = ({
                   items: [
                     defineField<StackInput, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this workload.',
@@ -1197,7 +1196,6 @@ export const StackForm = ({
                     }),
                     defineField<StackInput, 'description'>({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description of this workload.',

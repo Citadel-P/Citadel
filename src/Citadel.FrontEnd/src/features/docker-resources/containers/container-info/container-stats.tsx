@@ -13,11 +13,11 @@ type StatsPanelProps = {
   memory: StatsQueryState;
   cpu: StatsQueryState;
   network: StatsQueryState;
-  liveStats: ContainerStatView[];
+  liveStats: Omit<ContainerStatView, 'containerId'>[];
 };
 
 export type StatsQueryState = {
-  baseStats: ContainerStatView[];
+  baseStats: Omit<ContainerStatView, 'containerId'>[];
   isLoading: boolean;
   windowHours: StatsWindowHours;
   onWindowHoursChange: (hours: StatsWindowHours) => void;
@@ -56,7 +56,7 @@ export const ContainerStatsCharts = ({ resource, memory, cpu, network, liveStats
 };
 
 const useLiveStats = (resource: ContainerDataView | undefined) => {
-  const [liveStats, setLiveStats] = useState<ContainerStatView[]>([]);
+  const [liveStats, setLiveStats] = useState<Omit<ContainerStatView, 'containerId'>[]>([]);
   const lastStatRef = useRef<ContainerStatView | undefined>(resource?.containerStat);
   const resourceIdRef = useRef<string | undefined>(resource?.id);
 
@@ -88,8 +88,10 @@ const useLiveStats = (resource: ContainerDataView | undefined) => {
   return liveStats;
 };
 
-const useCombinedStats = (baseStats: ContainerStatView[], liveStats: ContainerStatView[]) =>
-  useMemo(() => mergeStatsByCreated(baseStats ?? [], liveStats), [baseStats, liveStats]);
+const useCombinedStats = (
+  baseStats: Omit<ContainerStatView, 'containerId'>[],
+  liveStats: Omit<ContainerStatView, 'containerId'>[],
+) => useMemo(() => mergeStatsByCreated(baseStats ?? [], liveStats), [baseStats, liveStats]);
 
 const useContainerStatsWindow = (containerId: string | undefined): StatsQueryState => {
   const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);

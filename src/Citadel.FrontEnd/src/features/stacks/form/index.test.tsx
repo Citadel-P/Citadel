@@ -1,4 +1,8 @@
 import {
+  ActivityEventType,
+  ActivityResourceType,
+  ActivityStatus,
+  LatestActivityView,
   ContainerStateStatus,
   ContainerDataView,
   PlatformType,
@@ -89,6 +93,83 @@ const stack = (platformType: PlatformType): StackView =>
 
 describe('Stack subheader', () => {
   beforeEach(() => useReadMock.mockClear());
+
+  const failedApply: LatestActivityView = {
+    id: 'failed-apply',
+    resourceType: ActivityResourceType.Stack,
+    eventType: ActivityEventType.StackApplied,
+    status: ActivityStatus.Failure,
+    createdAt: '2026-09-29T12:00:00Z',
+    info: { $type: 'StackApplied', stack: null, result: { message: 'Docker rejected the stack update' } },
+  };
+
+  it.each(['StackApplied', 'StackRollback'] as const)(
+    'distinguishes a previous failed %s from healthy runtime',
+    (type) => {
+      const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+      const latestActivityView: LatestActivityView = {
+        ...failedApply,
+        info:
+          type === 'StackApplied'
+            ? failedApply.info
+            : {
+                $type: 'StackRollback',
+                oldStack: null,
+                newStack: null,
+                result: { message: 'Rollback failed' },
+              },
+      };
+      renderCitadel(
+        <SubHeader
+          resource={{ ...stack(PlatformType.DockerSwarm), status: StackReleaseStatus.Healthy, latestActivityView }}
+        />,
+      );
+      expect(screen.getByText('Previous stack operation failed')).toBeVisible();
+      expect(screen.getByText(/stack is currently healthy/)).toBeVisible();
+      expect(screen.queryByText('Last operation failed')).not.toBeInTheDocument();
+    },
+  );
+
+  it('retains failure details until a successful operation replaces them', () => {
+    const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+    const resource = {
+      ...stack(PlatformType.DockerSwarm),
+      status: StackReleaseStatus.Degraded,
+      latestActivityView: failedApply,
+    };
+    const { rerender } = renderCitadel(<SubHeader resource={resource} />);
+    expect(screen.getByText('Last operation failed')).toBeVisible();
+    expect(screen.getByText('Docker rejected the stack update')).toBeVisible();
+    rerender(
+      <SubHeader
+        resource={{
+          ...resource,
+          status: StackReleaseStatus.Healthy,
+          latestActivityView: { ...failedApply, status: ActivityStatus.Success },
+        }}
+      />,
+    );
+    expect(screen.queryByText('Last operation failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Previous stack operation failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Docker rejected the stack update')).not.toBeInTheDocument();
+  });
+
+  it.each(['StackDegraded', 'StackDriftDetected'] as const)('clears a %s warning when runtime recovers', (type) => {
+    const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+    const resource = {
+      ...stack(PlatformType.DockerSwarm),
+      status: StackReleaseStatus.Degraded,
+      latestActivityView: {
+        ...failedApply,
+        status: ActivityStatus.Warning,
+        info: { $type: type, reason: 'Service unavailable' },
+      },
+    };
+    const { rerender } = renderCitadel(<SubHeader resource={resource} />);
+    expect(screen.getByText('Service unavailable')).toBeVisible();
+    rerender(<SubHeader resource={{ ...resource, status: StackReleaseStatus.Healthy }} />);
+    expect(screen.queryByText('Service unavailable')).not.toBeInTheDocument();
+  });
 
   it('does not show Standalone drift guidance for a Swarm Stack', () => {
     const SubHeader = StackFormComponents.EditForm!.SubHeader!;

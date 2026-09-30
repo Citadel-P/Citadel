@@ -83,6 +83,7 @@ impl UserReadService {
 pub struct UserMutationService {
     store: Arc<dyn UserRepository>,
     password_hasher: Arc<dyn PasswordHasher>,
+    password_policy: PasswordPolicy,
     entitlements: Arc<dyn EntitlementService>,
     clock: Arc<dyn Clock>,
 }
@@ -98,9 +99,16 @@ impl UserMutationService {
         Self {
             store,
             password_hasher,
+            password_policy: PasswordPolicy::default(),
             entitlements,
             clock,
         }
+    }
+
+    #[must_use]
+    pub fn with_password_policy(mut self, policy: PasswordPolicy) -> Self {
+        self.password_policy = policy;
+        self
     }
 
     pub async fn create(
@@ -110,7 +118,11 @@ impl UserMutationService {
     ) -> Result<UserDetails, IdentityError> {
         validate_name(&request.name)?;
         validate_email(&request.email)?;
-        validate_password(&request.password, Some(&request.name), Some(&request.email))?;
+        self.password_policy.validate(
+            &request.password,
+            Some(&request.name),
+            Some(&request.email),
+        )?;
         let resource_accesses = validate_user_resource_accesses(request.resource_accesses)?;
         let user = NewUserMutation {
             id: Uuid::now_v7(),
@@ -150,7 +162,7 @@ impl UserMutationService {
                 .password_context(id)
                 .await?
                 .ok_or(IdentityError::NotFound)?;
-            validate_password(
+            self.password_policy.validate(
                 password,
                 Some(&current.name),
                 Some(email.as_deref().unwrap_or(&current.email)),

@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunTrigger } from '@/api/generated/api.types';
+import { AuthorizedProject, BuildRunTrigger } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -21,13 +21,13 @@ export const invalidateBuildQueries = async (queryClient: ReturnType<typeof useQ
   }
 };
 
-const singleSelection = (resources: BuildProjectView | BuildProjectView[]) => {
+const singleSelection = (resources: AuthorizedProject | AuthorizedProject[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
   const multiSelect = Array.isArray(resources) && resources.length > 1;
   return { selected, multiSelect };
 };
 
-const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
+const { dropdown, group, info } = createActionsBuilder<AuthorizedProject>()
   .addAction({
     key: 'edit',
     type: 'command',
@@ -96,10 +96,12 @@ const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
       const selected = Array.isArray(resources) ? resources : [resources];
       const queryClient = useQueryClient();
       const archive = useMutate('archiveBuildProject');
-      const [, setSelectedResources] = useSelectedResources<BuildProjectView>('Build');
+      const [, setSelectedResources] = useSelectedResources<AuthorizedProject>('Build');
       const location = useLocation();
       const navigate = useNavigate();
-      const isCurrentBuildArchived = selected.some((project) => location.pathname === `/builds/edit/${project.id}`);
+      const isCurrentResource = selected.some(
+        (project) => location.pathname.replace(/\/$/, '') === `/builds/edit/${project.id}`,
+      );
 
       return {
         canExecute: selected.length > 0,
@@ -109,10 +111,11 @@ const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
 
           try {
             await Promise.all(selected.map((project) => archive.mutateAsync({ id: project.id } as any)));
-            await invalidateBuildQueries(queryClient);
+            if (isCurrentResource) navigate('/builds', { replace: true });
+            await queryClient.invalidateQueries({ queryKey: ['listBuildProjects'] });
+            await queryClient.invalidateQueries({ queryKey: ['listBuildRuns'] });
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'build' : 'builds'} archived`);
-            if (isCurrentBuildArchived) navigate('/builds', { replace: true });
           } catch {
             /** Nope */
           }

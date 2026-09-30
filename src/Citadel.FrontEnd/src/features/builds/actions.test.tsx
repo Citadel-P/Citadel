@@ -1,4 +1,4 @@
-import type { BuildProjectView } from '@/api/generated/api.types';
+import type { AuthorizedProject } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -21,7 +21,7 @@ describe('BuildInfoActions', () => {
       ),
     );
     const DeleteAction = BuildInfoActions.delete;
-    const project = { id: buildProjectId, name: 'Application image' } as BuildProjectView;
+    const project = { id: buildProjectId, name: 'Application image' } as AuthorizedProject;
     const { user } = renderCitadel(
       <>
         <DeleteAction resource={project} />

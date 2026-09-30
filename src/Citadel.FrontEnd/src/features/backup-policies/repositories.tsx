@@ -356,7 +356,8 @@ function RepositoryDialog({
 
   const setSpec = (
     patch: Partial<
-      BackupRepositorySpecFileSystemBackupRepositorySpec & BackupRepositorySpecS3CompatibleBackupRepositorySpec
+      Omit<BackupRepositorySpecFileSystemBackupRepositorySpec, '$type'> &
+        Omit<BackupRepositorySpecS3CompatibleBackupRepositorySpec, '$type'>
     >,
   ) =>
     setInput((current) => ({
@@ -389,7 +390,7 @@ function RepositoryDialog({
       await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
       if (editing) await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
     } catch {
-     // toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
+      // toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
     }
   };
 

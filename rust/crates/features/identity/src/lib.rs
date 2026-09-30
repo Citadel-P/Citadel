@@ -10,10 +10,10 @@ pub use authentication::{
     AccessTokenClaims, AuthenticatedBearer, Clock, EntitlementService, IdentityService,
     IdentityStore, InitializeCitadel, Login, LoginNextStep, LoginOutcome,
     MAXIMUM_PASSWORD_CHARACTERS, MAXIMUM_SESSIONS_PER_USER, MINIMUM_PASSWORD_CHARACTERS,
-    NewSession, PasswordHasher, PreparedSession, RefreshTokenClaims, ServiceAccountTokenCodec,
-    SessionMetadata, SessionTokenCodec, SessionTokens, SetupInitializationMode, SetupStatus,
-    SystemClock, UserAuthentication, UserSessionRecord, token_digest, validate_email,
-    validate_name, validate_password,
+    NewSession, PasswordHasher, PasswordPolicy, PreparedSession, RefreshTokenClaims,
+    ServiceAccountTokenCodec, SessionMetadata, SessionTokenCodec, SessionTokens,
+    SetupInitializationMode, SetupStatus, SystemClock, UserAuthentication, UserSessionRecord,
+    token_digest, validate_email, validate_name,
 };
 pub mod mfa;
 pub use mfa::{

@@ -1,5 +1,5 @@
 use super::*;
-use citadel_swarm_services::TagSummary;
+use citadel_tags::TagSummary;
 
 pub(super) fn map_service(row: PgRow) -> Result<SwarmServiceDetails, SwarmServiceError> {
     let spec = SwarmServiceSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -169,21 +169,7 @@ pub(super) fn decode_permission(
     })
 }
 fn decode_tags(value: Value) -> Result<Vec<TagSummary>, SwarmServiceError> {
-    #[derive(serde::Deserialize)]
-    struct Tag {
-        id: Uuid,
-        name: String,
-        color: String,
-    }
-    let tags: Vec<Tag> = serde_json::from_value(value).map_err(storage)?;
-    Ok(tags
-        .into_iter()
-        .map(|tag| TagSummary {
-            id: tag.id,
-            name: tag.name,
-            color: tag.color,
-        })
-        .collect())
+    serde_json::from_value(value).map_err(storage)
 }
 
 #[cfg(test)]

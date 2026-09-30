@@ -8,16 +8,15 @@ import {
   ManagedSwarmServiceView,
   PlatformType,
   SwarmServiceConfigReference,
-  SwarmServiceImageInfoSwarmBuildImage,
-  SwarmServiceImageInfoSwarmExternalImage,
-  SwarmServiceRestartCondition,
+  RestartCondition,
   SwarmServiceResources,
-  SwarmServiceSchedulingMode,
+  SchedulingMode,
   SwarmServiceSecretReference,
   SwarmServiceSpec,
+  SwarmServiceImageInfo,
   SwarmNetworkView,
-  SwarmServiceUpdateFailureAction,
-  SwarmServiceUpdateOrder,
+  UpdateFailureAction,
+  UpdateOrder,
   UpdateBehavior,
 } from '@/api/generated/api.types';
 import {
@@ -114,7 +113,7 @@ const failureActions = {
 const defaultSpec = (): SwarmServiceSpec => ({
   image: { $type: 'External', registryId: '', imageTag: '' },
   updateBehavior: UpdateBehavior.Disabled,
-  schedulingMode: SwarmServiceSchedulingMode.Replicated,
+  schedulingMode: SchedulingMode.Replicated,
   replicas: 1,
   command: [],
   arguments: [],
@@ -325,7 +324,6 @@ export const SwarmServiceForm = ({
                   items: [
                     defineField<FormValue, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this managed Service.',
@@ -340,7 +338,6 @@ export const SwarmServiceForm = ({
                     }),
                     defineField<FormValue, 'description'>({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional description of this Service.',
                       render: (value, set) => (
@@ -403,13 +400,13 @@ export const SwarmServiceForm = ({
                   <ItemSelector
                     value={value}
                     collection={schedulingModes}
-                    onChange={(schedulingMode: SwarmServiceSchedulingMode) =>
+                    onChange={(schedulingMode: SchedulingMode) =>
                       set((previous) => ({
                         spec: {
                           ...previous.spec!,
                           schedulingMode,
                           replicas:
-                            schedulingMode === SwarmServiceSchedulingMode.Global
+                            schedulingMode === SchedulingMode.Global
                               ? null
                               : (previous.spec?.replicas ?? 1),
                         },
@@ -418,7 +415,7 @@ export const SwarmServiceForm = ({
                   />
                 ),
               }),
-              ...(currentSpec.schedulingMode === SwarmServiceSchedulingMode.Replicated
+              ...(currentSpec.schedulingMode === SchedulingMode.Replicated
                 ? [
                     defineField<FormValue, 'spec.replicas'>({
                       key: 'spec.replicas',
@@ -496,8 +493,8 @@ export const SwarmServiceForm = ({
                                   spec: {
                                     ...previous.spec!,
                                     image: {
-                                      $type: 'External',
                                       ...((previous.spec?.image as SwarmServiceImageInfoSwarmExternalImage) ?? {}),
+                                      $type: 'External',
                                       registryId: selected?.id ?? '',
                                     } satisfies SwarmServiceImageInfoSwarmExternalImage,
                                   },
@@ -523,8 +520,8 @@ export const SwarmServiceForm = ({
                                   spec: {
                                     ...previous.spec!,
                                     image: {
-                                      $type: 'External',
                                       ...((previous.spec?.image as SwarmServiceImageInfoSwarmExternalImage) ?? {}),
+                                      $type: 'External',
                                       imageTag,
                                     } satisfies SwarmServiceImageInfoSwarmExternalImage,
                                   },
@@ -554,8 +551,8 @@ export const SwarmServiceForm = ({
                               spec: {
                                 ...previous.spec!,
                                 image: {
-                                  $type: 'Build',
                                   ...((previous.spec?.image as SwarmServiceImageInfoSwarmBuildImage) ?? {}),
+                                  $type: 'Build',
                                   buildProjectId: selected?.id ?? '',
                                 } satisfies SwarmServiceImageInfoSwarmBuildImage,
                                 updateBehavior: UpdateBehavior.Disabled,
@@ -1054,7 +1051,7 @@ export const SwarmServiceForm = ({
                       set((previous) => ({
                         spec: {
                           ...previous.spec!,
-                          restartPolicy: enabled ? { condition: SwarmServiceRestartCondition.Any } : null,
+                          restartPolicy: enabled ? { condition: RestartCondition.Any } : null,
                         },
                       }))
                     }
@@ -1070,7 +1067,7 @@ export const SwarmServiceForm = ({
                         <ItemSelector
                           value={value}
                           collection={restartConditions}
-                          onChange={(condition: SwarmServiceRestartCondition) =>
+                          onChange={(condition: RestartCondition) =>
                             set((previous) => ({
                               spec: {
                                 ...previous.spec!,
@@ -1158,8 +1155,8 @@ export const SwarmServiceForm = ({
                           updatePolicy: enabled
                             ? {
                                 parallelism: 1,
-                                order: SwarmServiceUpdateOrder.StopFirst,
-                                failureAction: SwarmServiceUpdateFailureAction.Pause,
+                                order: UpdateOrder.StopFirst,
+                                failureAction: UpdateFailureAction.Pause,
                               }
                             : null,
                         },
@@ -1226,7 +1223,7 @@ export const SwarmServiceForm = ({
                         <ItemSelector
                           value={value}
                           collection={updateOrders}
-                          onChange={(order: SwarmServiceUpdateOrder) =>
+                          onChange={(order: UpdateOrder) =>
                             set((previous) => ({
                               spec: {
                                 ...previous.spec!,
@@ -1244,7 +1241,7 @@ export const SwarmServiceForm = ({
                         <ItemSelector
                           value={value}
                           collection={failureActions}
-                          onChange={(failureAction: SwarmServiceUpdateFailureAction) =>
+                          onChange={(failureAction: UpdateFailureAction) =>
                             set((previous) => ({
                               spec: {
                                 ...previous.spec!,
@@ -1305,8 +1302,8 @@ export const SwarmServiceForm = ({
         </AlertMessage>
       )}
       {duplicateWarnings.map((warning) => (
-        <AlertMessage key={`${warning.code}:${warning.fieldPath ?? ''}`} type="warning" title={warning.code}>
-          {warning.message}
+        <AlertMessage key={warning} type="warning" title="Review required">
+          {warning}
         </AlertMessage>
       ))}
       {adoptFrom && (
@@ -1439,3 +1436,6 @@ export const prepareSwarmServiceSpecForWrite = (spec: SwarmServiceSpec): SwarmSe
     image: { $type: imageType, ...image } as SwarmServiceSpec['image'],
   };
 };
+
+type SwarmServiceImageInfoSwarmBuildImage = Extract<SwarmServiceImageInfo, { $type: 'Build' }>;
+type SwarmServiceImageInfoSwarmExternalImage = Extract<SwarmServiceImageInfo, { $type: 'External' }>;

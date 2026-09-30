@@ -4,8 +4,8 @@ import {
   RegistryConfigurationCustomRegistry,
   RegistryConfigurationDockerHubRegistry,
   RegistryStatus,
-  CreateRegistryInput,
-  PatchRegistryInput,
+  NewRegistry,
+  RegistryPatch,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -104,7 +104,7 @@ const HelperLink = ({ href, info }: { href: string; info: string }) => (
     </span>
   </a>
 );
-type RegistryInput = CreateRegistryInput | PatchRegistryInput;
+type RegistryInput = NewRegistry | RegistryPatch;
 
 export const RegistryForm = ({
   mode,
@@ -126,8 +126,8 @@ export const RegistryForm = ({
     mode,
     basePath: 'registries',
     entityName: 'Registry',
-    onCreate: (payload) => createRegistry({ data: payload as CreateRegistryInput }),
-    onUpdate: (payload) => updateRegistry({ id: id!, data: payload as PatchRegistryInput }),
+    onCreate: (payload) => createRegistry({ data: payload as NewRegistry }),
+    onUpdate: (payload) => updateRegistry({ id: id!, data: payload as RegistryPatch }),
     onRefresh: () => {
       localStorage.removeItem(`Registry:${id ?? 'new'}`);
       queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
@@ -175,7 +175,6 @@ export const RegistryForm = ({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       description: 'Provide a unique name to identify this registry.',
                       required: true,
@@ -187,7 +186,6 @@ export const RegistryForm = ({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional notes to describe the registry’s purpose or usage.',
@@ -250,8 +248,8 @@ export const RegistryForm = ({
                             onChange={(value) =>
                               set((prev) => ({
                                 configuration: {
-                                  $type: 'GitHub',
                                   ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
+                                  $type: 'GitHub',
                                   nameSpace: value,
                                 } satisfies RegistryConfigurationGitHubRegistry,
                               }))
@@ -274,8 +272,8 @@ export const RegistryForm = ({
                           onChange={(value) =>
                             set((prev) => ({
                               configuration: {
-                                $type: 'GitHub',
                                 ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
+                                $type: 'GitHub',
                                 ghcrAuthEnabled: value,
                               } satisfies RegistryConfigurationGitHubRegistry,
                             }))
@@ -311,8 +309,8 @@ export const RegistryForm = ({
                             onChange={(v) =>
                               set((prev) => ({
                                 configuration: {
-                                  $type: 'GitHub',
                                   ...((prev.configuration as RegistryConfigurationGitHubRegistry) ?? {}),
+                                  $type: 'GitHub',
                                   pat: v,
                                 } satisfies RegistryConfigurationGitHubRegistry,
                               }))
@@ -343,8 +341,8 @@ export const RegistryForm = ({
                       onChange={(v) =>
                         set((prev) => ({
                           configuration: {
-                            $type: 'DockerHub',
                             ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
+                            $type: 'DockerHub',
                             userName: v,
                           } satisfies RegistryConfigurationDockerHubRegistry,
                         }))
@@ -374,8 +372,8 @@ export const RegistryForm = ({
                       onChange={(v) =>
                         set((prev) => ({
                           configuration: {
-                            $type: 'DockerHub',
                             ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
+                            $type: 'DockerHub',
                             pat: v,
                           } satisfies RegistryConfigurationDockerHubRegistry,
                         }))
@@ -428,8 +426,8 @@ export const RegistryForm = ({
                           onChange={(value) =>
                             set((prev) => ({
                               configuration: {
-                                $type: 'Custom',
                                 ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
+                                $type: 'Custom',
                                 authEnabled: value,
                               } satisfies RegistryConfigurationCustomRegistry,
                             }))
@@ -459,8 +457,8 @@ export const RegistryForm = ({
                                 onChange={(v) =>
                                   set((prev) => ({
                                     configuration: {
-                                      $type: 'Custom',
                                       ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
+                                      $type: 'Custom',
                                       userName: v,
                                     } satisfies RegistryConfigurationCustomRegistry,
                                   }))
@@ -482,8 +480,8 @@ export const RegistryForm = ({
                                 onChange={(v) =>
                                   set((prev) => ({
                                     configuration: {
-                                      $type: 'Custom',
                                       ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
+                                      $type: 'Custom',
                                       password: v,
                                     },
                                   }))

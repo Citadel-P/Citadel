@@ -1,8 +1,9 @@
+use crate::api::resources::common::DuplicateSourceInput;
 use crate::api::resources::swarm_services::spec::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateSwarmServiceInput {
     pub name: String,
@@ -13,19 +14,21 @@ pub struct CreateSwarmServiceInput {
     #[schema(nullable)]
     pub tag_ids: Vec<Uuid>,
     #[serde(default)]
-    pub duplicate_source: Option<SwarmServiceDuplicateSource>,
+    pub duplicate_source: Option<DuplicateSourceInput>,
 }
 
-impl From<citadel_swarm_services::CreateSwarmService> for CreateSwarmServiceInput {
-    fn from(value: citadel_swarm_services::CreateSwarmService) -> Self {
-        Self {
+impl TryFrom<citadel_swarm_services::CreateSwarmService> for CreateSwarmServiceInput {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_swarm_services::CreateSwarmService) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec.try_into()?,
             tag_ids: value.tag_ids,
-            duplicate_source: value.duplicate_source.map(|item| item.into()),
-        }
+            duplicate_source: value.duplicate_source.map(TryInto::try_into).transpose()?,
+        })
     }
 }
 
@@ -49,12 +52,14 @@ pub struct UpdateSwarmServiceInput {
     pub row_version: i64,
 }
 
-impl From<citadel_swarm_services::UpdateSwarmService> for UpdateSwarmServiceInput {
-    fn from(value: citadel_swarm_services::UpdateSwarmService) -> Self {
-        Self {
-            spec: value.spec.into(),
+impl TryFrom<citadel_swarm_services::UpdateSwarmService> for UpdateSwarmServiceInput {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_swarm_services::UpdateSwarmService) -> Result<Self, Self::Error> {
+        Ok(Self {
+            spec: value.spec.try_into()?,
             row_version: value.row_version,
-        }
+        })
     }
 }
 
@@ -126,15 +131,19 @@ pub struct AdoptSwarmServiceInput {
     pub tag_ids: Vec<Uuid>,
 }
 
-impl From<citadel_swarm_services::adoption::AdoptSwarmService> for AdoptSwarmServiceInput {
-    fn from(value: citadel_swarm_services::adoption::AdoptSwarmService) -> Self {
-        Self {
+impl TryFrom<citadel_swarm_services::adoption::AdoptSwarmService> for AdoptSwarmServiceInput {
+    type Error = serde_json::Error;
+
+    fn try_from(
+        value: citadel_swarm_services::adoption::AdoptSwarmService,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             description: value.description,
-            spec: value.spec.into(),
+            spec: value.spec.try_into()?,
             preview_fingerprint: value.preview_fingerprint,
             tag_ids: value.tag_ids,
-        }
+        })
     }
 }
 

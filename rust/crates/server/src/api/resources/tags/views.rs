@@ -18,7 +18,7 @@ pub(crate) struct AuthorizedTagView {
     pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ResourceTagsResponse {
     pub(crate) tags: Vec<TagSummary>,

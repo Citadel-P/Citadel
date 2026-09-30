@@ -4,7 +4,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, DatabaseZap, Eye, RefreshCw, Scissors, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { getRepositoryOperationContext } from './form/form';
 
@@ -116,6 +116,11 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
       const queryClient = useQueryClient();
       const archive = useMutate('archiveBackupRepository');
       const [, setSelectedResources] = useSelectedResources<BackupRepositoryView>('BackupRepository');
+      const location = useLocation();
+      const navigate = useNavigate();
+      const isCurrentResource = selected.some(
+        (repository) => location.pathname.replace(/\/$/, '') === `/backup-repositories/edit/${repository.id}`,
+      );
 
       return {
         canExecute: selected.length > 0,
@@ -125,7 +130,8 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
 
           try {
             await Promise.all(selected.map((repository) => archive.mutateAsync({ id: repository.id } as any)));
-            await invalidateBackupRepositoryQueries(queryClient);
+            if (isCurrentResource) navigate('/backup-repositories', { replace: true });
+            await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'repository' : 'repositories'} archived`);
           } catch {

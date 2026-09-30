@@ -1,47 +1,12 @@
-import LogoIcon from '@/assets/logo.svg?react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import { Copy, Download, LoaderCircle } from 'lucide-react';
 import QRCode from 'qrcode';
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 
-export function MfaAuthShell({
-  title,
-  description,
-  children,
-  panelClassName,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  panelClassName?: string;
-}) {
-  return (
-    <div className="min-h-screen w-full overflow-auto bg-card">
-      <div className="mx-auto flex min-h-screen flex-col items-center justify-center px-6 py-8">
-        <div className="mb-6 flex items-start">
-          <span className="mr-2 h-9 w-9 rounded bg-primary p-2 text-background">
-            <LogoIcon />
-          </span>
-          <span className="text-2xl font-semibold">Citadel</span>
-        </div>
-
-        <div className={cn('w-full rounded-lg bg-background shadow-sm sm:max-w-md', panelClassName)}>
-          <div className="space-y-5 p-6 sm:p-8">
-            <div className="space-y-2">
-              <h1 className="text-xl font-bold leading-tight md:text-2xl">{title}</h1>
-              {description && <p className="text-sm leading-6 text-muted-foreground">{description}</p>}
-            </div>
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+export { AuthShell as MfaAuthShell } from '../auth-shell';
 
 export function TotpCodeForm({
   label = 'Authenticator code',

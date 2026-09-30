@@ -4,7 +4,7 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { PagedDataTable, TargetCell } from '@/components/custom/common';
 import { StateBadge } from '@/components/custom/state-badge';
-import type { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
+import type { AlertEventView, AlertEventPage } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +20,7 @@ export const AlertEventsTable = ({
   actions,
   isLoading,
 }: {
-  pagedResult: PagedResultViewOfAlertEventView;
+  pagedResult: AlertEventPage;
   isLoading: boolean;
   actions: Record<
     string,
@@ -117,10 +117,7 @@ function AlertTypeCell({ event }: { event: AlertEventView }) {
   const openAlertSheet = useOpenAlertEventSheet();
 
   return (
-    <button
-      type="button"
-      onClick={() => openAlertSheet(event.id)}
-      className="cursor-pointer table-link">
+    <button type="button" onClick={() => openAlertSheet(event.id)} className="cursor-pointer table-link">
       <span>{event.type}</span>
     </button>
   );

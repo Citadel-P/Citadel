@@ -24,7 +24,32 @@ pub fn generate(check: bool) -> Result<(), Box<dyn std::error::Error>> {
         frontend_types(&full)?.as_bytes(),
         check,
     )?;
+    write_or_check(
+        &root
+            .parent()
+            .unwrap()
+            .join("src/Citadel.FrontEnd/src/api/schema/swagger.json"),
+        format!("{}\n", serde_json::to_string_pretty(&full)?).as_bytes(),
+        check,
+    )?;
     verify_frontend_contract(root, &full)?;
+    if !check {
+        let status = std::process::Command::new("npm")
+            .args(["run", "api:generate"])
+            .current_dir(root.parent().unwrap().join("src/Citadel.FrontEnd"))
+            .status()
+            .map_err(|error| {
+                format!(
+                    "Cannot regenerate frontend API types (install Node.js and run npm ci): {error}"
+                )
+            })?;
+        if !status.success() {
+            return Err(
+                "Frontend API generation failed; run npm ci in src/Citadel.FrontEnd and retry"
+                    .into(),
+            );
+        }
+    }
     println!(
         "{} {} full and {} public Utoipa operations",
         if check { "verified" } else { "generated" },
@@ -282,6 +307,87 @@ fn write_or_check(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn resource_tags_use_the_shared_summary_schema() {
+        let full = document(false);
+        let schemas = &full["components"]["schemas"];
+        for name in [
+            "AutomationActionView",
+            "BackupPolicyView",
+            "BuildAgentPoolView",
+            "BuildProjectView",
+            "DeploymentView",
+            "GitRepositoryConfigResponse",
+            "GitRepositoryView",
+            "ManagedSwarmServiceView",
+            "PlatformView",
+            "RegistryConfigResponse",
+            "RegistryView",
+            "ResourceTagsResponse",
+            "StackView",
+        ] {
+            assert_eq!(
+                schemas[name]["properties"]["tags"]["items"]["$ref"],
+                "#/components/schemas/resources.tags.TagSummary",
+                "{name} must use the shared tag summary"
+            );
+        }
+        let tag_summaries = schemas
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|name| name.contains("TagSummary"))
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(tag_summaries, ["resources.tags.TagSummary"]);
+    }
+
+    #[test]
+    fn frontend_contract_retains_discriminated_payloads_and_runtime_projections() {
+        let full = document(false);
+        let schemas = &full["components"]["schemas"];
+        for name in [
+            "ActivityEventInfo",
+            "PlatformDescriptor",
+            "DeploymentImageInfo",
+            "BackupSourceSpec",
+        ] {
+            let schema = &schemas[name];
+            assert!(
+                schema["oneOf"].is_array() || schema["anyOf"].is_array(),
+                "{name} lost its variants"
+            );
+        }
+        assert_eq!(
+            schemas["ContainerView"]["properties"]["state"]["$ref"],
+            "#/components/schemas/ContainerStateStatus"
+        );
+        assert!(schemas["ImageView"]["properties"]["registry"].is_object());
+        assert!(schemas["VolumeView"]["properties"]["backupCoverage"].is_object());
+        for field in ["tags", "latestRun", "capabilities"] {
+            assert!(
+                schemas["BackupPolicyView"]["properties"][field].is_object(),
+                "missing {field}"
+            );
+        }
+        for field in ["name", "platformId", "stackSource", "spec"] {
+            assert!(
+                schemas["SwarmPreflightInput"]["properties"][field].is_object(),
+                "missing {field}"
+            );
+        }
+        let operations = operation_index(&full).unwrap();
+        for (id, view) in [
+            ("getBuildProject", "AuthorizedProject"),
+            ("getBuildAgentPool", "AuthorizedPool"),
+            ("getAutomationAction", "AuthorizedAction"),
+        ] {
+            let response =
+                &operations[id].value["responses"]["200"]["content"]["application/json"]["schema"];
+            assert_eq!(response["$ref"], format!("#/components/schemas/{view}"));
+        }
+    }
 
     #[test]
     fn generated_documents_have_resolvable_references_and_matching_path_parameters() {

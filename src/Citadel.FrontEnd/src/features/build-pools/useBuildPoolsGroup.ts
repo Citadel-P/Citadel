@@ -1,4 +1,7 @@
-import { BuildAgentPoolView, ResourceCapabilities } from '@/api/generated/api.types';
+import {
+  AuthorizedPool,
+  ResourceCapabilitiesView,
+} from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
@@ -12,9 +15,9 @@ export const useBuildPoolsGroup = () => {
     [selectedTagNames],
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listBuildAgentPools', readArgs);
-  const [pools, setPools] = useState<BuildAgentPoolView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
-  const lastFetchedRef = useRef<BuildAgentPoolView[]>([]);
+  const [pools, setPools] = useState<AuthorizedPool[] | undefined>();
+  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
+  const lastFetchedRef = useRef<AuthorizedPool[]>([]);
 
   useEffect(() => {
     if (!data) return;
@@ -28,7 +31,7 @@ export const useBuildPoolsGroup = () => {
   }, [data]);
 
   const matchesActiveFilters = useCallback(
-    (pool: BuildAgentPoolView) => {
+    (pool: AuthorizedPool) => {
       if (selectedTagNames.length === 0) return true;
 
       const tagNames = new Set((pool.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
@@ -38,7 +41,7 @@ export const useBuildPoolsGroup = () => {
   );
 
   const handleBuildAgentPoolInfoUpdated = useCallback(
-    (pool: BuildAgentPoolView, action: string) => {
+    (pool: AuthorizedPool, action: string) => {
       setPools((prev) => {
         if (!prev) return prev;
         if (action === 'create') {

@@ -17,7 +17,10 @@ See [Phase 7.5 implementation evidence](reports/phase7-5-api-parity.md).
 
 Run `bash rust/scripts/build.sh` from the repository root to build the API and
 export `schema/v1.json` and `schema/public-v1.json`. The VS Code build/run and
-debug workflows do this automatically. Plain `cargo build` only compiles.
+debug workflows do this automatically. Generation also copies the full schema to
+`src/Citadel.FrontEnd/src/api/schema/swagger.json` and regenerates the TypeScript
+client with `npm run api:generate`; install frontend dependencies with `npm ci` first.
+Plain `cargo build` only compiles.
 
 The API uses Utoipa and utoipa-axum to share route registration and documentation.
 Schemas derive from Rust DTOs; the former central HTTP catalog and handwritten

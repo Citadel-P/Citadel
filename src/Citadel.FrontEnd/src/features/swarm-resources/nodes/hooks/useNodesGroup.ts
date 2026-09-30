@@ -58,7 +58,7 @@ export const useNodeInfoGroup = (platformId: string, nodeId: string) => {
             name: node.hostname || node.id,
             platformId,
             capabilities:
-              node.capabilities ?? (currentPlatform?.id === platformId ? currentPlatform.capabilities : undefined),
+              node.capabilities ?? (currentPlatform?.id === platformId ? (currentPlatform.capabilities ?? null) : null),
             tasks: taskGroup.items.filter((task) => task.nodeId === node.id),
           }
         : undefined,

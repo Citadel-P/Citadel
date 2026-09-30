@@ -8,25 +8,32 @@ use uuid::Uuid;
 pub struct AutomationActionView {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub code: String,
     pub default_args_json: String,
     pub enabled: bool,
     pub schedule_enabled: bool,
+    #[schema(required = true)]
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: String,
+    #[schema(required = true)]
     pub webhook: Option<RepoWebhookConfig>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub current_run_id: Option<Uuid>,
     pub row_version: i64,
     pub created_by_actor_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub last_scheduled_run_at: Option<DateTime<Utc>>,
     pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
+    #[schema(required = true)]
     pub latest_run: Option<AutomationRunView>,
 }
 
@@ -65,20 +72,30 @@ pub struct AutomationRunView {
     pub id: Uuid,
     pub action_id: Uuid,
     pub action_name: String,
+    #[schema(value_type = crate::openapi::compatibility::ActionRunTrigger)]
     pub trigger: String,
+    #[schema(value_type = crate::openapi::compatibility::ActionRunStatus)]
     pub status: String,
     pub run_as_actor_id: Uuid,
+    #[schema(required = true)]
     pub triggered_by_actor_id: Option<Uuid>,
     pub args_json: String,
+    #[schema(required = true)]
     pub code_snapshot: Option<String>,
     pub code_hash: String,
     pub timeout_seconds: i32,
     pub queued_at: DateTime<Utc>,
+    #[schema(required = true)]
     pub started_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub finished_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub duration_ms: Option<i64>,
+    #[schema(required = true)]
     pub exit_code: Option<i32>,
+    #[schema(required = true)]
     pub logs: Option<String>,
+    #[schema(required = true)]
     pub error_message: Option<String>,
 }
 

@@ -1,4 +1,4 @@
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { ActionButton } from '@/components/custom/action-with-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { RepositoryBrowser } from './repository-browser';
 
 type GitRepositoryBrowseActionProps = {
-  resource?: GitRepositoryView;
+  resource?: AuthorizedGitRepositoryView;
   title?: string;
   branch?: string | null;
   commitSha?: string | null;

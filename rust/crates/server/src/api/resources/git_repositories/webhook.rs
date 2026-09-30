@@ -24,10 +24,8 @@ pub struct RepoWebhookConfig {
     #[serde(alias = "Enabled")]
     pub enabled: bool,
     #[serde(alias = "Provider")]
-    #[schema(inline)]
     pub provider: WebhookProvider,
     #[serde(alias = "AuthScheme")]
-    #[schema(inline)]
     pub auth_scheme: WebhookAuthScheme,
     #[serde(alias = "Secret")]
     pub secret: Option<String>,

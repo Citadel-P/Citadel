@@ -27,7 +27,7 @@ pub use model::{
     DeploymentProgress, DeploymentSpec, ImagePullProgress, LifeCycleSpec, PreparedDeploymentImage,
     ResolvedDeploymentBinding, ResolvedDeploymentBindings, ResolvedDeploymentBuild, ResourceSpec,
     RuntimeContainerState, RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
-    TagSummary, UpdateBehavior,
+    UpdateBehavior,
 };
 pub use service::{
     DeploymentChangeNotifier, DeploymentService, DeploymentUpdateCheck,

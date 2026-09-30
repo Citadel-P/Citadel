@@ -223,7 +223,7 @@ function AlertNotificationChannels() {
   };
 
   const handleVerify = async () => {
-    await verifyChannel(input.alertDestination, input.name, input.url);
+    await verifyChannel(input.alertDestination, input.name ?? '', input.url);
     toast.success('Channel verified successfully!');
   };
 
@@ -284,7 +284,7 @@ function AlertNotificationChannels() {
               <FieldInput
                 className="max-w-full"
                 placeholder="e.g. Engineering Team Channel"
-                value={input.name}
+                value={input.name ?? ''}
                 onChange={(v) => setInput({ ...input, name: v })}
               />
             </div>

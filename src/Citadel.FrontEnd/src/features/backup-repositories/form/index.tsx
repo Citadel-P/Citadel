@@ -19,7 +19,7 @@ export const BackupRepositoryFormComponents: RequiredFormComponents = {
       canEditTitle: false,
       canEditDescription: false,
       Indicator: ({ resource }: { resource: RequiredFormFields }) => (
-        <StateIndicator value={(resource as BackupRepositoryView).status} />
+        <StateIndicator variant="badge" value={(resource as BackupRepositoryView).status} />
       ),
       ActionButtons: ({ resource }) => (
         <GenericActionBarButtons resource={resource} actions={Object.values(BackupRepositoryInfoActions)} />

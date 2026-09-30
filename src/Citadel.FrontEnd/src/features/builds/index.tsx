@@ -1,4 +1,4 @@
-import { BuildProjectView } from '@/api/generated/api.types';
+import { AuthorizedProject } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
@@ -8,7 +8,7 @@ import { BuildsTable } from './table';
 
 const EMPTY_BUILDS: never[] = [];
 
-export const BuildComponents: RequiredComponents<BuildProjectView> = {
+export const BuildComponents: RequiredComponents<AuthorizedProject> = {
   Icon: CitadelIcons.Build,
   Content: ({ items, actions, isLoading }) => <BuildsTable items={items} actions={actions} isLoading={isLoading} />,
   header: {
@@ -21,14 +21,14 @@ export const BuildComponents: RequiredComponents<BuildProjectView> = {
   },
   DropdownActions: BuildDropdownActions,
   GroupActions: ({ items }) => <ActionBar type="Build" items={items} actions={Object.values(BuildGroupActions)} />,
-  useData(): ResourceDataHookResult<BuildProjectView> {
+  useData(): ResourceDataHookResult<AuthorizedProject> {
     const { projects, isLoading, capabilities, error, refetch, isFetching } = useBuildsGroup();
     return { error, refetch, isFetching, items: projects ?? EMPTY_BUILDS, isLoading, capabilities };
   },
   filterItems: filterBuilds,
 };
 
-function filterBuilds(items: BuildProjectView[], search: string) {
+function filterBuilds(items: AuthorizedProject[], search: string) {
   if (!search.trim()) return items;
 
   const value = search.toLowerCase();

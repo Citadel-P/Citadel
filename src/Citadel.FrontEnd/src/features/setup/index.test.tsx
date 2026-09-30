@@ -99,3 +99,16 @@ describe('InitialSetup', () => {
     expect(screen.getByLabelText('Confirm password')).toHaveValue('');
   });
 });
+
+it('uses the server minimum rather than a hardcoded fifteen-character rule', async () => {
+  const completeLogin = vi.fn();
+  server.use(http.post(initializeUrl, () => HttpResponse.json({ accessToken: 'token', nextStep: LoginNextStep.Completed })));
+  const { user } = renderCitadel(<InitialSetup />, { auth: { completeLogin }, setup: { requiresSetup: true, passwordMinimumLength: 8 } });
+  expect(screen.getByText('Use 8 to 128 characters.')).toBeVisible();
+  await user.type(screen.getByLabelText('Username'), 'owner');
+  await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
+  await user.type(screen.getByLabelText('Password'), 'river oak');
+  await user.type(screen.getByLabelText('Confirm password'), 'river oak');
+  await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+  await waitFor(() => expect(completeLogin).toHaveBeenCalledWith('token'));
+});

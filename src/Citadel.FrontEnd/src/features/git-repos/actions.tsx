@@ -1,4 +1,4 @@
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { Pencil, RefreshCw, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ActionConfig, createActionsBuilder } from '@/components/custom/actions-builder';
@@ -7,9 +7,9 @@ import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-const isProcessing = (resource: GitRepositoryView) => resource.controlState === ResourceControlState.Processing;
+const isProcessing = (resource: AuthorizedGitRepositoryView) => resource.controlState === ResourceControlState.Processing;
 
-export const syncGitRepositoryAction: ActionConfig<GitRepositoryView, 'syncGitRepository'> = {
+export const syncGitRepositoryAction: ActionConfig<AuthorizedGitRepositoryView, 'syncGitRepository'> = {
   key: 'sync',
   type: 'command',
   icon: RefreshCw,
@@ -41,7 +41,7 @@ export const syncGitRepositoryAction: ActionConfig<GitRepositoryView, 'syncGitRe
 };
 
 export const { dropdown: GitRepoDropdownActions, group: GitRepoGroupActions } =
-  createActionsBuilder<GitRepositoryView>()
+  createActionsBuilder<AuthorizedGitRepositoryView>()
     .addAction(syncGitRepositoryAction)
     .addAction({
       key: 'edit',

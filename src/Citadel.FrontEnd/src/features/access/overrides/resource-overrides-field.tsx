@@ -2,7 +2,7 @@ import {
   ResourceType,
   PermissionLevel,
   SpecificPermission,
-  PermissionInput,
+  RolePermissionInput,
   PermissionMatrixViewItem,
   LicenseCapability,
 } from '@/api/generated/api.types';
@@ -53,7 +53,7 @@ type DisplayResourceItem = ResourceItem & {
   resourceType: OverrideResourceType;
 };
 
-type ResourceAccessEntry = PermissionInput & {
+type ResourceAccessEntry = RolePermissionInput & {
   resourceId: string;
   resourceName?: string | null;
 };
@@ -375,111 +375,109 @@ export const ResourceOverridesField = ({
 
       {entries.length > 0 && (
         <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Resource</TableHead>
-                <TableHead className="w-32">Level</TableHead>
-                <TableHead className="flex-1">Capabilities</TableHead>
-                <TableHead className="text-center w-28">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from(
-                entries.reduce((grouped, entry) => {
-                  const key = `${entry.resourceType}:${entry.resourceId}`;
-                  const existing = grouped.get(key);
-                  if (!existing) {
-                    grouped.set(key, {
-                      resourceType: entry.resourceType,
-                      resourceId: entry.resourceId,
-                      resourceName: entry.resourceName,
-                      permissionLevel: entry.permissionLevel,
-                      specificPermissions: entry.specificPermissions ?? [],
-                    });
-                  } else if (!existing.resourceName && entry.resourceName) {
-                    existing.resourceName = entry.resourceName;
-                  }
-                  return grouped;
-                }, new Map<string, { resourceType: ResourceType; resourceId: string; resourceName?: string | null; permissionLevel: PermissionLevel; specificPermissions: SpecificPermission[] }>()),
-              )
-                .map(([, row]) => row)
-                .sort((a, b) => {
-                  if (a.resourceType !== b.resourceType) {
-                    return a.resourceType.localeCompare(b.resourceType);
-                  }
-                  const aName = rowName(a.resourceName, a.resourceId);
-                  const bName = rowName(b.resourceName, b.resourceId);
-                  return aName.localeCompare(bName);
-                })
-                .map((row) => {
-                  const resourceType = row.resourceType as OverrideResourceType;
-                  const resourceName = rowName(row.resourceName, row.resourceId);
-                  const matrix = permissionMatrix[resourceType];
-                  const availableSpecific =
-                    row.permissionLevel && matrix
-                      ? Object.entries(matrix.specificPermissions)
-                          .filter(([, minLevel]) => {
-                            const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
-                            return (
-                              levels.indexOf(minLevel as PermissionLevel) <=
-                              levels.indexOf(row.permissionLevel as PermissionLevel)
-                            );
-                          })
-                          .map(([perm]) => perm)
-                      : [];
-                  return (
-                    <TableRow key={getResourceRowKey(row.resourceType, row.resourceId)}>
-                      <ResourceLinkCell
-                        resourceType={resourceType}
-                        resourceId={row.resourceId}
-                        resourceName={resourceName}
-                      />
-                      <TableCell>
-                        <Select value={row.permissionLevel ?? ''} disabled>
-                          <SelectTrigger className="w-full max-w-full">
-                            <SelectValue placeholder="Select level" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background">
-                            {row.permissionLevel && (
-                              <SelectItem value={row.permissionLevel}>{row.permissionLevel}</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        {row.permissionLevel && availableSpecific.length > 0 ? (
-                          <div className="w-full min-w-0 max-w-full">
-                            <MultiSelect
-                              options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
-                              defaultValue={row.specificPermissions}
-                              placeholder="Select capabilities"
-                              onValueChange={() => {}}
-                              maxCount={3}
-                              animation={0}
-                              disabled
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            {row.permissionLevel ? 'No capabilities' : '—'}
-                          </p>
-                        )}
-                      </TableCell>
-                      <ResourceActionsCell
-                        onEdit={() => handleEditRow(row.resourceType)}
-                        onDelete={() =>
-                          onChange(
-                            entries.filter(
-                              (entry) =>
-                                !(entry.resourceType === row.resourceType && entry.resourceId === row.resourceId),
-                            ),
-                          )
-                        }
-                      />
-                    </TableRow>
-                  );
-                })}
-            </TableBody>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Resource</TableHead>
+              <TableHead className="w-32">Level</TableHead>
+              <TableHead className="flex-1">Capabilities</TableHead>
+              <TableHead className="text-center w-28">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from(
+              entries.reduce((grouped, entry) => {
+                const key = `${entry.resourceType}:${entry.resourceId}`;
+                const existing = grouped.get(key);
+                if (!existing) {
+                  grouped.set(key, {
+                    resourceType: entry.resourceType,
+                    resourceId: entry.resourceId,
+                    resourceName: entry.resourceName,
+                    permissionLevel: entry.permissionLevel,
+                    specificPermissions: entry.specificPermissions ?? [],
+                  });
+                } else if (!existing.resourceName && entry.resourceName) {
+                  existing.resourceName = entry.resourceName;
+                }
+                return grouped;
+              }, new Map<string, { resourceType: ResourceType; resourceId: string; resourceName?: string | null; permissionLevel: PermissionLevel; specificPermissions: SpecificPermission[] }>()),
+            )
+              .map(([, row]) => row)
+              .sort((a, b) => {
+                if (a.resourceType !== b.resourceType) {
+                  return a.resourceType.localeCompare(b.resourceType);
+                }
+                const aName = rowName(a.resourceName, a.resourceId);
+                const bName = rowName(b.resourceName, b.resourceId);
+                return aName.localeCompare(bName);
+              })
+              .map((row) => {
+                const resourceType = row.resourceType as OverrideResourceType;
+                const resourceName = rowName(row.resourceName, row.resourceId);
+                const matrix = permissionMatrix[resourceType];
+                const availableSpecific =
+                  row.permissionLevel && matrix
+                    ? Object.entries(matrix.specificPermissions)
+                        .filter(([, minLevel]) => {
+                          const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
+                          return (
+                            levels.indexOf(minLevel as PermissionLevel) <=
+                            levels.indexOf(row.permissionLevel as PermissionLevel)
+                          );
+                        })
+                        .map(([perm]) => perm)
+                    : [];
+                return (
+                  <TableRow key={getResourceRowKey(row.resourceType, row.resourceId)}>
+                    <ResourceLinkCell
+                      resourceType={resourceType}
+                      resourceId={row.resourceId}
+                      resourceName={resourceName}
+                    />
+                    <TableCell>
+                      <Select value={row.permissionLevel ?? ''} disabled>
+                        <SelectTrigger className="w-full max-w-full">
+                          <SelectValue placeholder="Select level" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background">
+                          {row.permissionLevel && (
+                            <SelectItem value={row.permissionLevel}>{row.permissionLevel}</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      {row.permissionLevel && availableSpecific.length > 0 ? (
+                        <div className="w-full min-w-0 max-w-full">
+                          <MultiSelect
+                            options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+                            defaultValue={row.specificPermissions}
+                            placeholder="Select capabilities"
+                            onValueChange={() => {}}
+                            maxCount={3}
+                            animation={0}
+                            disabled
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{row.permissionLevel ? 'No capabilities' : '—'}</p>
+                      )}
+                    </TableCell>
+                    <ResourceActionsCell
+                      onEdit={() => handleEditRow(row.resourceType)}
+                      onDelete={() =>
+                        onChange(
+                          entries.filter(
+                            (entry) =>
+                              !(entry.resourceType === row.resourceType && entry.resourceId === row.resourceId),
+                          ),
+                        )
+                      }
+                    />
+                  </TableRow>
+                );
+              })}
+          </TableBody>
         </Table>
       )}
 
@@ -504,96 +502,94 @@ export const ResourceOverridesField = ({
 
             <div className="overflow-auto flex-1 min-h-0 max-h-[55vh]">
               <Table>
-                  <TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Resource</TableHead>
+                    <TableHead className="w-32">Level</TableHead>
+                    <TableHead className="flex-1">Capabilities</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {resources.length === 0 ? (
                     <TableRow>
-                      <TableHead>Resource</TableHead>
-                      <TableHead className="w-32">Level</TableHead>
-                      <TableHead className="flex-1">Capabilities</TableHead>
+                      <TableCell colSpan={2} className="text-sm text-muted-foreground">
+                        {isResourcesLoading ? 'Loading resources...' : 'No resources found for this type.'}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {resources.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={2} className="text-sm text-muted-foreground">
-                          {isResourcesLoading ? 'Loading resources...' : 'No resources found for this type.'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      resources.map((resource) => {
-                        const matrix = permissionMatrix[resource.resourceType];
-                        if (!matrix) return null;
-                        const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
-                        const maxIndex = levels.indexOf(matrix.maximumLevel as PermissionLevel);
-                        const currentState = selectedByResourceKey[resource.id];
-                        const currentLevel = currentState?.permissionLevel ?? null;
-                        const currentSpecific = currentState?.specificPermissions ?? [];
-                        const currentLevelIndex = currentLevel ? levels.indexOf(currentLevel) : -1;
-                        const availableLevels = levels.filter(
-                          (_, i) => i <= maxIndex && (canExpandAccess || i <= currentLevelIndex),
-                        );
-                        const availableSpecific = !currentLevel
-                          ? []
-                          : Object.entries(matrix.specificPermissions)
-                              .filter(
-                                ([, minLevel]) =>
-                                  levels.indexOf(minLevel as PermissionLevel) <= levels.indexOf(currentLevel),
-                              )
-                              .map(([perm]) => perm)
-                              .filter(
-                                (permission) =>
-                                  canExpandAccess || currentSpecific.includes(permission as SpecificPermission),
-                              );
+                  ) : (
+                    resources.map((resource) => {
+                      const matrix = permissionMatrix[resource.resourceType];
+                      if (!matrix) return null;
+                      const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
+                      const maxIndex = levels.indexOf(matrix.maximumLevel as PermissionLevel);
+                      const currentState = selectedByResourceKey[resource.id];
+                      const currentLevel = currentState?.permissionLevel ?? null;
+                      const currentSpecific = currentState?.specificPermissions ?? [];
+                      const currentLevelIndex = currentLevel ? levels.indexOf(currentLevel) : -1;
+                      const availableLevels = levels.filter(
+                        (_, i) => i <= maxIndex && (canExpandAccess || i <= currentLevelIndex),
+                      );
+                      const availableSpecific = !currentLevel
+                        ? []
+                        : Object.entries(matrix.specificPermissions)
+                            .filter(
+                              ([, minLevel]) =>
+                                levels.indexOf(minLevel as PermissionLevel) <= levels.indexOf(currentLevel),
+                            )
+                            .map(([perm]) => perm)
+                            .filter(
+                              (permission) =>
+                                canExpandAccess || currentSpecific.includes(permission as SpecificPermission),
+                            );
 
-                        return (
-                          <TableRow key={getResourceRowKey(resource.resourceType, resource.id)}>
-                            <ResourceLinkCell
-                              resourceType={resource.resourceType}
-                              resourceId={resource.id}
-                              resourceName={resource.name}
-                            />
-                            <TableCell>
-                              <Select
-                                value={currentLevel ?? ''}
-                                disabled={!canExpandAccess && !currentLevel}
+                      return (
+                        <TableRow key={getResourceRowKey(resource.resourceType, resource.id)}>
+                          <ResourceLinkCell
+                            resourceType={resource.resourceType}
+                            resourceId={resource.id}
+                            resourceName={resource.name}
+                          />
+                          <TableCell>
+                            <Select
+                              value={currentLevel ?? ''}
+                              disabled={!canExpandAccess && !currentLevel}
+                              onValueChange={(v) =>
+                                handleResourcePermissionChange(resource.id, v ? (v as PermissionLevel) : null, [])
+                              }>
+                              <SelectTrigger className="w-40">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background">
+                                {availableLevels.map((level) => (
+                                  <SelectItem key={level} value={level}>
+                                    {level}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            {currentLevel && availableSpecific.length > 0 ? (
+                              <MultiSelect
+                                options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+                                defaultValue={currentSpecific}
                                 onValueChange={(v) =>
-                                  handleResourcePermissionChange(resource.id, v ? (v as PermissionLevel) : null, [])
-                                }>
-                                <SelectTrigger className="w-40">
-                                  <SelectValue placeholder="Select level" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background">
-                                  {availableLevels.map((level) => (
-                                    <SelectItem key={level} value={level}>
-                                      {level}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              {currentLevel && availableSpecific.length > 0 ? (
-                                <MultiSelect
-                                  options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
-                                  defaultValue={currentSpecific}
-                                  onValueChange={(v) =>
-                                    handleResourcePermissionChange(resource.id, currentLevel, v as SpecificPermission[])
-                                  }
-                                  placeholder="Select capabilities"
-                                  maxCount={3}
-                                  animation={0}
-                                  disabled={isResourcesLoading}
-                                />
-                              ) : (
-                                <p className="text-xs text-muted-foreground">
-                                  {currentLevel ? 'No capabilities' : '—'}
-                                </p>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
+                                  handleResourcePermissionChange(resource.id, currentLevel, v as SpecificPermission[])
+                                }
+                                placeholder="Select capabilities"
+                                maxCount={3}
+                                animation={0}
+                                disabled={isResourcesLoading}
+                              />
+                            ) : (
+                              <p className="text-xs text-muted-foreground">{currentLevel ? 'No capabilities' : '—'}</p>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
               </Table>
             </div>
           </div>

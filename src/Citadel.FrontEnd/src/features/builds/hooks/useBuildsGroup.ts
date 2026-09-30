@@ -1,4 +1,7 @@
-import { BuildProjectView, ResourceCapabilities } from '@/api/generated/api.types';
+import {
+  AuthorizedProject,
+  ResourceCapabilitiesView,
+} from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
@@ -13,9 +16,9 @@ export const useBuildsGroup = () => {
     [selectedTagNames],
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs);
-  const [projects, setProjects] = useState<BuildProjectView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
-  const lastFetchedRef = useRef<BuildProjectView[]>([]);
+  const [projects, setProjects] = useState<AuthorizedProject[] | undefined>();
+  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
+  const lastFetchedRef = useRef<AuthorizedProject[]>([]);
 
   useEffect(() => {
     if (!data) return;
@@ -29,7 +32,7 @@ export const useBuildsGroup = () => {
   }, [data]);
 
   const matchesActiveFilters = useCallback(
-    (project: BuildProjectView) => {
+    (project: AuthorizedProject) => {
       if (selectedTagNames.length === 0) return true;
 
       const tagNames = new Set((project.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
@@ -39,7 +42,7 @@ export const useBuildsGroup = () => {
   );
 
   const handleBuildProjectInfoUpdated = useCallback(
-    (project: BuildProjectView, action: string) => {
+    (project: AuthorizedProject, action: string) => {
       setProjects((prev) => {
         if (!prev) return prev;
         if (action === 'create') {

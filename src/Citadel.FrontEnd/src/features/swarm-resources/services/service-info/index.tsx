@@ -24,7 +24,7 @@ export const ServiceInfoComponents: RequiredSwarmInfoComponents<SwarmServiceInfo
   Header: {
     Indicator: ({ resource }) => {
       const availability = getServiceAvailability(resource);
-      return <StateIndicator value={availability.status} tooltip={availability.tooltip} />;
+      return <StateIndicator variant="badge" value={availability.status} tooltip={availability.tooltip} />;
     },
     NameSuffix: ({ resource }) => (
       <>

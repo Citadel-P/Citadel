@@ -8,7 +8,7 @@ use crate::PatchField;
 use crate::User;
 use crate::UserSessionRecord;
 use crate::validate_name;
-use crate::validate_password;
+
 use chrono::{DateTime, Utc};
 use citadel_primitives::{PermissionLevel, ResourceType};
 

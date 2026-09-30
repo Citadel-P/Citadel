@@ -189,7 +189,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     // Recreate the adapter to prove that reads come from PostgreSQL, not process memory.
     let reads = PostgresPlatformReader::new(pool.clone());
     let platforms = reads
-        .list_authorized(ActorId::new(actor_id), true, &[tag_id])
+        .list_authorized(ActorId::new(actor_id), true, &[tag_id.to_string()])
         .await
         .unwrap();
     assert_eq!(platforms.len(), 1);
@@ -631,7 +631,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
         1
     );
     let views = PostgresPlatformReader::new(pool.clone())
-        .list_authorized(ActorId::new(actor), true, &[tag])
+        .list_authorized(ActorId::new(actor), true, &[tag.to_string()])
         .await
         .unwrap();
     let current = &views[0].stats.as_ref().unwrap()[0];

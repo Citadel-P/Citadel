@@ -1,9 +1,9 @@
-import { RegistryView } from '@/api/generated/api.types';
+import { AuthorizedRegistryView } from '@/api/generated/api.types';
 import { Pencil, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
-export const { dropdown: RegistryDropdownActions, group: RegistryGroupActions } = createActionsBuilder<RegistryView>()
+export const { dropdown: RegistryDropdownActions, group: RegistryGroupActions } = createActionsBuilder<AuthorizedRegistryView>()
   .addAction({
     key: 'edit',
     type: 'command',

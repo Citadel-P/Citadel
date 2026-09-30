@@ -40,7 +40,10 @@ describe('mergeContainerRuntimeUpdate', () => {
     dockerNodeId: 'worker-node',
     deploymentId: null,
     stackId: null,
+    capabilities: null,
     containerStat: {
+      containerId: 'container-1',
+      created: 0,
       cpuUsage: 2,
       memoryActive: 1024,
       memoryCache: 0,
@@ -103,6 +106,7 @@ describe('toContainerDetailsView', () => {
       ports: {},
       deploymentId: null,
       stackId: null,
+      capabilities: null,
     } satisfies ContainerView);
 
     expect(details.resourceId).toBe('019f0000-0000-7000-8000-000000000001');
@@ -157,11 +161,24 @@ it('merges detail patches without clearing metadata or accepting another resourc
     controlState: ResourceControlState.Idle,
     ports: { '80': '8080' },
   });
-  act(() => handlers.get('ReceiveContainerInfoPatch')!({ resourceId, containerStat: { cpuUsage: 12 } }));
+  act(() =>
+    handlers.get('ReceiveContainerInfoPatch')!({
+      resourceId,
+      containerStat: {
+        containerId: 'container-1',
+        created: 0,
+        cpuUsage: 12,
+      },
+    }),
+  );
   expect(result.current.containerInfo).toMatchObject({
     state: ContainerStateStatus.Exited,
     name: 'nginx',
-    containerStat: { cpuUsage: 12 },
+    containerStat: {
+      containerId: 'container-1',
+      created: 0,
+      cpuUsage: 12,
+    },
   });
   useRealtimeGroupMock.mock.lastCall![0].removeEventListeners(hub);
   expect(hub.off).toHaveBeenCalledWith('ReceiveContainerInfoPatch', expect.any(Function));

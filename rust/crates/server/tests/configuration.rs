@@ -97,6 +97,8 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
         assert!(!output.contains(secret));
     }
     for invalid in [
+        ("LogFormat", "yaml"),
+        ("EnableLogColor", "invalid"),
         ("ServiceAccounts__MaximumTokenLifetimeDays", "0"),
         ("ServiceAccounts__MaximumActiveTokensPerAccount", "0"),
         ("EdgeAgent__NodeAgentLimitMemoryBytes", "1"),
@@ -113,6 +115,69 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
         assert!(String::from_utf8_lossy(&output.stderr).contains(invalid.0));
     }
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text() {
+    use std::{process::Stdio, time::Duration};
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    for (format, color) in [
+        (None, None),
+        (Some("text"), Some("false")),
+        (Some("text"), Some("true")),
+        (Some("json"), Some("false")),
+        (Some("json"), Some("true")),
+    ] {
+        let root = std::env::temp_dir().join(format!("citadel-logging-{}", uuid::Uuid::now_v7()));
+        let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_citadel-server"));
+        command
+            .env_clear()
+            // Startup logs precede the connection attempt; never use a real database.
+            .env("DATABASE_URL", "postgres://user:secret@127.0.0.1:1/citadel")
+            .env("Transport__Mode", "Disabled")
+            .env("Transport__PublicUrl", "http://localhost:8000")
+            .env("CITADEL_DATA_ROOT", &root)
+            .env("Jwt__Key", "explicit-signing-key-with-at-least-32-bytes")
+            .env(
+                "Secrets__EncryptionKey",
+                "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+            )
+            .arg("serve")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        if let Some(format) = format {
+            command.env("LogFormat", format);
+        }
+        if let Some(color) = color {
+            command.env("EnableLogColor", color);
+        }
+        let mut child = command.spawn().unwrap();
+        let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+        let line = tokio::time::timeout(Duration::from_secs(10), lines.next_line())
+            .await
+            .expect("startup must log promptly")
+            .unwrap()
+            .expect("startup log line");
+        child.kill().await.unwrap();
+        if format == Some("json") {
+            let event: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(event["level"], "INFO");
+            assert_eq!(event["fields"]["message"], "Starting Citadel Core");
+            assert!(!line.contains('\u{1b}'));
+        } else {
+            assert!(line.contains("INFO"));
+            assert!(line.contains("Starting Citadel Core"));
+            assert!(serde_json::from_str::<Value>(&line).is_err());
+            assert_eq!(line.contains('\u{1b}'), color == Some("true"));
+            assert!(!line.contains("citadel_server::"));
+        }
+        assert!(!line.contains("effective_configuration"));
+        if root.exists() {
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
 }
 
 #[test]
@@ -148,4 +213,34 @@ fn explicit_keys_stay_external_and_restore_never_generates_replacement_keys() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("original key"));
     assert!(!root.exists());
+}
+
+#[test]
+fn password_minimum_is_configurable_and_rejects_invalid_values() {
+    let root =
+        std::env::temp_dir().join(format!("citadel-password-config-{}", uuid::Uuid::now_v7()));
+    for (overrides, expected) in [
+        (vec![], 15),
+        (vec![("Passwords__MinimumLength", "8")], 8),
+        (vec![("Passwords__MinimumLength", "128")], 128),
+    ] {
+        let output = run(&root, &overrides, &["print-effective-config"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let config: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(config["passwordMinimumLength"], expected);
+    }
+    for invalid in ["0", "7", "129", "-1", "invalid"] {
+        let output = run(
+            &root,
+            &[("Passwords__MinimumLength", invalid)],
+            &["print-effective-config"],
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("Passwords__MinimumLength"));
+    }
+    std::fs::remove_dir_all(root).unwrap();
 }

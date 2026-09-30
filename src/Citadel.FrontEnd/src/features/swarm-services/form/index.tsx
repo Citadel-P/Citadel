@@ -8,7 +8,7 @@ import {
   ResourceControlState,
   SwarmServiceHealth,
   SwarmServiceOperationState,
-  SwarmServiceSchedulingMode,
+  SchedulingMode,
 } from '@/api/generated/api.types';
 import { RequiredFormComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
@@ -118,14 +118,28 @@ const SwarmServiceFailureAlert = ({ resource }: { resource: ManagedSwarmServiceV
     operationState === SwarmServiceOperationState.OwnershipConflict;
   if (resource.health !== SwarmServiceHealth.Failed && !operationFailed) return null;
 
+  const healthy = resource.health === SwarmServiceHealth.Healthy;
   const message =
     resource.currentOperation?.resultMessage?.trim() ||
     resource.updateMessage?.trim() ||
-    'Docker could not complete the Service rollout. Check the Runtime tasks for details.';
+    (healthy
+      ? 'Review the last operation in Activities for details.'
+      : 'Docker could not complete the Service rollout. Check the Runtime tasks for details.');
+
+  const title = !healthy
+    ? 'Service operation failed'
+    : operationState === SwarmServiceOperationState.OutcomeUnknown
+      ? 'Service operation outcome unknown'
+      : operationState === SwarmServiceOperationState.OwnershipConflict
+        ? 'Service ownership conflict'
+        : operationState === SwarmServiceOperationState.Canceled
+          ? 'Previous service operation canceled'
+          : 'Previous service operation failed';
 
   return (
-    <AlertMessage type="error" title="Service operation failed">
-      {message}
+    <AlertMessage type={healthy ? 'warning' : 'error'} title={title}>
+      {healthy && <span>The service is currently healthy. </span>}
+      <span>{message}</span>
     </AlertMessage>
   );
 };
@@ -189,7 +203,7 @@ const ScaleServiceButton = ({ resource }: { resource: ManagedSwarmServiceView })
   const [replicas, setReplicas] = useState(Number(resource.spec.replicas ?? resource.desiredTaskCount ?? 1));
   const taskSheet = useTaskSheet('SwarmService');
   const disabled =
-    resource.spec.schedulingMode !== SwarmServiceSchedulingMode.Replicated ||
+    resource.spec.schedulingMode !== SchedulingMode.Replicated ||
     !resource.dockerServiceId ||
     resource.controlState === ResourceControlState.Processing ||
     !hasCapability(resource, 'canApply');

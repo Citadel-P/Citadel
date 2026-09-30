@@ -1,4 +1,9 @@
-import { BuildProjectBuilderKind, BuildProjectView, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
+import {
+  BuildProjectBuilderKind,
+  AuthorizedProject,
+  BuildRunStatus,
+  BuildRunView,
+} from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -18,7 +23,7 @@ import { isActiveBuildRun, isBuildProjectActive } from './build-run-state';
 
 type ActionMap = Record<
   string,
-  React.FC<{ resource: BuildProjectView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  React.FC<{ resource: AuthorizedProject; onAction?: (actionKey: string, actionData?: ActionData) => void }>
 >;
 
 export function BuildsTable({
@@ -26,11 +31,11 @@ export function BuildsTable({
   actions,
   isLoading,
 }: {
-  items: BuildProjectView[];
+  items: AuthorizedProject[];
   isLoading: boolean;
   actions: ActionMap;
 }) {
-  const [, setSelectedResources] = useSelectedResources<BuildProjectView>('Build');
+  const [, setSelectedResources] = useSelectedResources<AuthorizedProject>('Build');
   const formatDateTime = useProfileDateTimeFormatter();
   const latestRuns = useMemo(() => indexLatestRuns(items), [items]);
   const cols = useMemo(() => columns(actions ?? {}, latestRuns, formatDateTime), [actions, formatDateTime, latestRuns]);
@@ -42,7 +47,7 @@ const columns = (
   actions: ActionMap,
   latestRuns: Map<string, BuildRunView>,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<BuildProjectView>[] => [
+): ColumnDef<AuthorizedProject>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -74,7 +79,9 @@ const columns = (
     cell: ({ row }) => (
       <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm">
         <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate" title={row.original.branch}>{row.original.branch}</span>
+        <span className="truncate" title={row.original.branch}>
+          {row.original.branch}
+        </span>
       </span>
     ),
     sortingFn: (rowA, rowB) => rowA.original.branch.localeCompare(rowB.original.branch),
@@ -85,7 +92,9 @@ const columns = (
     cell: ({ row }) => {
       const run = latestRuns.get(row.original.id);
       const isPoolBuild = row.original.builderKind === BuildProjectBuilderKind.BuildAgentPool;
-      const label = isPoolBuild ? row.original.buildAgentPoolId : (run?.platformSnapshot?.name ?? row.original.platformId);
+      const label = isPoolBuild
+        ? row.original.buildAgentPoolId
+        : (run?.platformSnapshot?.name ?? row.original.platformId);
       return (
         <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm">
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
@@ -101,7 +110,9 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
     cell: ({ row }) => (
       <span className="inline-flex min-w-0 max-w-80 flex-col text-sm">
-        <span className="truncate" title={row.original.imageRepository}>{row.original.imageRepository}</span>
+        <span className="truncate" title={row.original.imageRepository}>
+          {row.original.imageRepository}
+        </span>
         <span className="truncate text-xs text-muted-foreground" title={row.original.tagTemplates.join(', ')}>
           {row.original.tagTemplates.join(', ')}
         </span>
@@ -152,10 +163,14 @@ const columns = (
   },
 ];
 
-const BuildNameRow = ({ project, run }: { project: BuildProjectView; run?: BuildRunView }) => (
+const BuildNameRow = ({ project, run }: { project: AuthorizedProject; run?: BuildRunView }) => (
   <div className="flex min-w-0 items-center gap-1">
     {run ? (
-      <StateIndicator value={run.status} isProcessing={isBuildProjectProcessing(project) && isActiveRun(run)} kind="buildRun" />
+      <StateIndicator
+        value={run.status}
+        isProcessing={isBuildProjectProcessing(project) && isActiveRun(run)}
+        kind="buildRun"
+      />
     ) : isBuildProjectProcessing(project) ? (
       <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
     ) : (
@@ -167,7 +182,7 @@ const BuildNameRow = ({ project, run }: { project: BuildProjectView; run?: Build
   </div>
 );
 
-function indexLatestRuns(projects: BuildProjectView[]) {
+function indexLatestRuns(projects: AuthorizedProject[]) {
   const map = new Map<string, BuildRunView>();
 
   for (const project of projects) {
@@ -181,6 +196,6 @@ export function isActiveRun(run: Pick<BuildRunView, 'status'>) {
   return isActiveBuildRun(run);
 }
 
-function isBuildProjectProcessing(project: Pick<BuildProjectView, 'controlState' | 'currentRunId' | 'latestRun'>) {
+function isBuildProjectProcessing(project: Pick<AuthorizedProject, 'controlState' | 'currentRunId' | 'latestRun'>) {
   return isBuildProjectActive(project);
 }

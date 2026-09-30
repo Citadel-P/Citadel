@@ -5,7 +5,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchParent {
     pub id: Uuid,
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
+    #[schema(value_type = crate::openapi::compatibility::GlobalSearchResourceType)]
     pub resource_type: ResourceType,
     pub name: String,
 }
@@ -33,6 +33,7 @@ impl From<citadel_discovery::GlobalSearchParent> for GlobalSearchParent {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchStatus {
     pub label: String,
+    #[schema(value_type = crate::openapi::compatibility::SearchStatusTone)]
     pub tone: &'static str,
 }
 
@@ -58,7 +59,7 @@ impl From<citadel_discovery::GlobalSearchStatus> for GlobalSearchStatus {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSearchItem {
     pub id: Uuid,
-    #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
+    #[schema(value_type = crate::openapi::compatibility::GlobalSearchResourceType)]
     pub resource_type: ResourceType,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -97,6 +98,7 @@ impl From<citadel_discovery::GlobalSearchItem> for GlobalSearchItem {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct GlobalSearchGroup {
+    #[schema(value_type = crate::openapi::compatibility::GlobalSearchCategory)]
     pub category: &'static str,
     pub items: Vec<GlobalSearchItem>,
 }

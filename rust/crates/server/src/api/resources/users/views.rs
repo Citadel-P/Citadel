@@ -20,6 +20,7 @@ pub(crate) struct UsersResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferencesView {
+    #[schema(required = true)]
     pub time_zone: Option<String>,
     #[schema(value_type = crate::api::resources::vocabulary::UserDateTimeFormatSchema)]
     pub date_time_format: UserDateTimeFormat,
@@ -82,8 +83,11 @@ pub struct UserView {
     #[schema(value_type = crate::api::resources::vocabulary::ActorIdSchema)]
     pub actor_id: ActorId,
     pub is_enabled: bool,
+    #[schema(required = true)]
     pub teams: Option<Vec<ResourceInfo>>,
+    #[schema(required = true)]
     pub roles: Option<Vec<ResourceInfo>>,
+    #[schema(required = true)]
     pub resource_accesses: Option<Vec<UserResourceAccessView>>,
 }
 
@@ -163,11 +167,13 @@ pub struct UserResourceAccessView {
     #[schema(value_type = crate::api::resources::vocabulary::ResourceTypeSchema)]
     pub resource_type: ResourceType,
     pub resource_id: Uuid,
+    #[schema(required = true)]
     pub resource_name: Option<String>,
     #[schema(value_type = crate::api::resources::vocabulary::PermissionLevelSchema)]
     pub permission_level: PermissionLevel,
-    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>)]
+    #[schema(value_type = Option<Vec<crate::api::resources::vocabulary::SpecificPermissionSchema>>, required = true)]
     pub specific_permissions: Option<Vec<SpecificPermission>>,
+    #[schema(required = true)]
     pub id: Option<Uuid>,
 }
 

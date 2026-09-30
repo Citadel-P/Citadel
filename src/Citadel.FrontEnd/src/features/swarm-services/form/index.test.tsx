@@ -3,7 +3,7 @@ import {
   ResourceControlState,
   SwarmServiceHealth,
   SwarmServiceOperationState,
-  SwarmServiceSchedulingMode,
+  SchedulingMode,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -70,8 +70,57 @@ describe('SwarmServiceFormComponents', () => {
 
     renderCitadel(<SubHeader resource={resource} />);
 
-    expect(screen.getByText('Service operation failed')).toBeVisible();
+    expect(screen.getByText('Previous service operation failed')).toBeVisible();
+    expect(screen.getByText(/service is currently healthy/)).toBeVisible();
     expect(screen.getByText('Docker rejected the Service update')).toBeVisible();
+  });
+
+  it.each([
+    [SwarmServiceOperationState.OutcomeUnknown, 'Service operation outcome unknown'],
+    [SwarmServiceOperationState.OwnershipConflict, 'Service ownership conflict'],
+    [SwarmServiceOperationState.Canceled, 'Previous service operation canceled'],
+    [SwarmServiceOperationState.NotAccepted, 'Previous service operation failed'],
+  ])('keeps %s visible without treating healthy runtime as failed', (state, title) => {
+    const SubHeader = SwarmServiceFormComponents.EditForm!.SubHeader!;
+    renderCitadel(
+      <SubHeader
+        resource={managedService({
+          currentOperation: {
+            state,
+            resultMessage: 'Operation requires review',
+          } as ManagedSwarmServiceView['currentOperation'],
+        })}
+      />,
+    );
+    expect(screen.getByText(title)).toBeVisible();
+    expect(screen.getByText(/service is currently healthy/)).toBeVisible();
+    expect(screen.getByText('Operation requires review')).toBeVisible();
+    expect(screen.queryByText('Service operation failed')).not.toBeInTheDocument();
+  });
+
+  it('clears the previous failure once a successful operation arrives', () => {
+    const SubHeader = SwarmServiceFormComponents.EditForm!.SubHeader!;
+    const resource = managedService({
+      currentOperation: {
+        state: SwarmServiceOperationState.Rejected,
+        resultMessage: 'Update rejected',
+      } as ManagedSwarmServiceView['currentOperation'],
+    });
+    const { rerender, container } = renderCitadel(<SubHeader resource={resource} />);
+    expect(screen.getByText('Update rejected')).toBeVisible();
+    rerender(
+      <SubHeader
+        resource={{
+          ...resource,
+          currentOperation: {
+            ...resource.currentOperation!,
+            state: SwarmServiceOperationState.Completed,
+            resultMessage: null,
+          },
+        }}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('does not show a failure alert for a healthy Service', () => {
@@ -90,7 +139,7 @@ describe('SwarmServiceFormComponents', () => {
       desiredTaskCount: 0,
       hasPendingDesiredChanges: true,
       spec: {
-        schedulingMode: SwarmServiceSchedulingMode.Replicated,
+        schedulingMode: SchedulingMode.Replicated,
         replicas: 1,
         image: { $type: 'External', registryId: 'registry-1', imageTag: 'redis:latest' },
       },
@@ -449,7 +498,7 @@ const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}) =>
     runningTaskCount: 1,
     desiredTaskCount: 1,
     spec: {
-      schedulingMode: SwarmServiceSchedulingMode.Replicated,
+      schedulingMode: SchedulingMode.Replicated,
       replicas: 1,
       image: { $type: 'External', registryId: 'registry-1', imageTag: 'nginx:latest' },
     },

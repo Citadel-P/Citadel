@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 citadel-git = { path = "../git" }
 citadel-primitives = { path = "../primitives" }
+citadel-tags = { path = "../tags" }
 citadel-activities = { path = "../activities" }
 citadel-platforms = { path = "../platforms" }
 chrono.workspace = true

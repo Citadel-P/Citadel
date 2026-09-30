@@ -785,3 +785,124 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
         .unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+async fn recurring_offline_observations_survive_cooldown_and_expose_responsible_actor() {
+    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let store = PostgresAlertRepository::new(pool.clone());
+    let actor = ActorId::new(Uuid::now_v7());
+    let resource = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO users(id,actorid,name,createdbyactorid) VALUES($1,$1,'Alert reviewer',$1)",
+    )
+    .bind(actor.value())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut observation = AlertObservation {
+        alert_type: "PlatformUnreachable".into(),
+        info: json!({"HumanMessage":"Offline"}),
+        resource_id: resource,
+        resource_name: "offline-recheck".into(),
+        resource_type: "Platform".into(),
+        deduplication_component: "inventory".into(),
+        observed_at: Utc::now(),
+        value: None,
+        matched: true,
+    };
+    let first = store.process_event(&observation).await.unwrap().unwrap();
+    assert_eq!(first.actor_id, None);
+    store.acknowledge(actor, &[first.id]).await.unwrap();
+    let acknowledged = store.get_event(first.id).await.unwrap();
+    assert_eq!(acknowledged.actor_id, Some(actor.value()));
+    assert_eq!(acknowledged.actor_name.as_deref(), Some("Alert reviewer"));
+    assert_eq!(acknowledged.actor_type.as_deref(), Some("User"));
+
+    observation.observed_at += Duration::seconds(20);
+    observation.matched = false;
+    store.process_event(&observation).await.unwrap();
+    let recovered = store.get_event(first.id).await.unwrap();
+    assert_eq!(recovered.status, "Resolved");
+    assert_eq!(recovered.resolved_by_actor_id, Some(Uuid::from_u128(1)));
+    assert_eq!(recovered.actor_name.as_deref(), Some("System"));
+    assert_eq!(recovered.actor_type.as_deref(), Some("System"));
+    // Existing automatic resolutions must not attribute resolution to their acknowledger.
+    sqlx::query("UPDATE alertevents SET resolvedbyactorid=NULL WHERE id=$1")
+        .bind(first.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_event(first.id)
+            .await
+            .unwrap()
+            .actor_name
+            .as_deref(),
+        Some("System")
+    );
+
+    observation.observed_at += Duration::seconds(20);
+    observation.matched = true;
+    assert!(store.process_event(&observation).await.unwrap().is_none());
+    observation.observed_at += Duration::minutes(10);
+    let second = store.process_event(&observation).await.unwrap().unwrap();
+    assert_ne!(first.id, second.id);
+    observation.observed_at += Duration::seconds(30);
+    assert!(
+        store.process_event(&observation).await.unwrap().is_none(),
+        "rechecks do not duplicate an open incident"
+    );
+    store.resolve(actor, &[second.id], None).await.unwrap();
+    let page = store
+        .list_events(
+            actor,
+            true,
+            &AlertEventFilter {
+                resource_id: Some(resource),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let resolved = page
+        .items
+        .iter()
+        .find(|event| event.id == second.id)
+        .unwrap();
+    assert_eq!(resolved.actor_id, Some(actor.value()));
+    assert_eq!(resolved.actor_name.as_deref(), Some("Alert reviewer"));
+    assert_eq!(resolved.actor_type.as_deref(), Some("User"));
+    sqlx::query("DELETE FROM alertevents WHERE resourceid=$1")
+        .bind(resource)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM alertrulestates WHERE resourceid=$1")
+        .bind(resource)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM users WHERE actorid=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+}

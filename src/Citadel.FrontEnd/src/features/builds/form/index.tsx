@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunStatus } from '@/api/generated/api.types';
+import { AuthorizedProject, BuildRunStatus } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
@@ -15,7 +15,7 @@ import { BuildForm } from './form';
 import { BuildRunsTab } from './runs';
 import { AlertMessage } from '@/components/custom/alert-message';
 
-type BuildFormResource = BuildProjectView & RequiredFormFields;
+type BuildFormResource = AuthorizedProject & RequiredFormFields;
 
 export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
   AddForm: {
@@ -27,7 +27,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
   EditForm: {
     Header: {
       Indicator: ({ resource }) => {
-        const build = resource as BuildProjectView;
+        const build = resource as AuthorizedProject;
         return <BuildHeaderIndicator build={build} />;
       },
       ActionButtons: ({ resource }) => {
@@ -38,8 +38,8 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ResourceHeaderTagsEditor
             resourceType="Build"
-            resourceId={(resource as BuildProjectView).id}
-            tags={(resource as BuildProjectView).tags}
+            resourceId={(resource as AuthorizedProject).id}
+            tags={(resource as AuthorizedProject).tags}
             disabled={!hasCapability(resource, 'canWrite')}
           />
         </div>
@@ -63,7 +63,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
         Content: ({ resource, metadataChanged }) => (
           <BuildForm
             mode="edit"
-            resource={resource as BuildProjectView}
+            resource={resource as AuthorizedProject}
             disabled={!hasCapability(resource, 'canWrite')}
             metadataChanged={metadataChanged}
           />
@@ -71,19 +71,19 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       },
       {
         label: 'Runs',
-        Content: ({ resource }) => <BuildRunsTab resource={resource as BuildProjectView} />,
+        Content: ({ resource }) => <BuildRunsTab resource={resource as AuthorizedProject} />,
       },
       {
         label: 'Activities',
         Content: ({ resource }) => (
-          <ActivitiesTab resourceId={(resource as BuildProjectView).id} resourceType="Build" />
+          <ActivitiesTab resourceId={(resource as AuthorizedProject).id} resourceType="Build" />
         ),
       },
     ],
     useData(id: string) {
       const { data, isLoading, error, refetch, isFetching } = useRead('getBuildProject', { id });
       const [build, setBuild] = useState<BuildFormResource | undefined>(data?.data as BuildFormResource | undefined);
-      const lastDataRef = useRef<BuildProjectView | undefined>(data?.data);
+      const lastDataRef = useRef<AuthorizedProject | undefined>(data?.data);
 
       useEffect(() => {
         if (data?.data && data.data !== lastDataRef.current) {
@@ -93,7 +93,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       }, [data?.data]);
 
       const handleBuildProjectInfoUpdated = useCallback(
-        (project: BuildProjectView) => {
+        (project: AuthorizedProject) => {
           if (project.id !== id) return;
 
           setBuild((prev) => mergeBuildProjectUpdate(prev, project));
@@ -126,13 +126,14 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
   },
 };
 
-function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
+function BuildHeaderIndicator({ build }: { build: AuthorizedProject }) {
   const latestRun = build.latestRun;
   const isProjectProcessing = isBuildProjectActive(build);
 
   if (!latestRun) {
     return (
       <StateIndicator
+        variant="badge"
         value={isProjectProcessing ? BuildRunStatus.Queued : build.enabled}
         isProcessing={isProjectProcessing}
         enableLabel={!isProjectProcessing}
@@ -143,6 +144,7 @@ function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
 
   return (
     <StateIndicator
+      variant="badge"
       value={latestRun.status}
       isProcessing={isProjectProcessing && isActiveBuildRun(latestRun)}
       kind="buildRun"
@@ -150,7 +152,7 @@ function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
   );
 }
 
-function mergeBuildProjectUpdate(prev: BuildFormResource | undefined, project: BuildProjectView): BuildFormResource {
+function mergeBuildProjectUpdate(prev: BuildFormResource | undefined, project: AuthorizedProject): BuildFormResource {
   if (!prev) return project as BuildFormResource;
 
   const latestRun = selectBuildProjectLatestRun(project, prev.latestRun);

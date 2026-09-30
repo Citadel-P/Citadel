@@ -228,7 +228,7 @@ const DeploymentLatestActivity = ({
 const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) => {
   if (
     deployment.spec?.updateBehavior === UpdateBehavior.Disabled ||
-    deployment.autoUpdateState.status !== AutoUpdateStatus.UpdateAvailable
+    deployment.autoUpdateState?.status !== AutoUpdateStatus.UpdateAvailable
   ) {
     return null;
   }

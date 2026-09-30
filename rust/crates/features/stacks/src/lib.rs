@@ -42,7 +42,7 @@ pub use commands::{
 pub use read_models::{
     ComposeProjectImportDraft, ComposeProjectImportSource, ComposeProjectStackDraft,
     DuplicateDraftWarning, StackConfig, StackDetails, StackDraft, StackDuplicateDraft, StackFilter,
-    StackReleaseDetails, TagSummary,
+    StackReleaseDetails,
 };
 
 pub use compose::{

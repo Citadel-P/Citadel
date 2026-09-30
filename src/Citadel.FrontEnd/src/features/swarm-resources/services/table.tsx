@@ -238,7 +238,7 @@ const mapTaskContainers = (services: SwarmServiceListView[], containers?: Contai
 };
 
 const mapServiceStats = (services: SwarmServiceListView[], containers: Map<string, ContainerDataView>) => {
-  const result = new Map<string, ContainerStatView>();
+  const result = new Map<string, Omit<ContainerStatView, 'containerId'>>();
   for (const service of services) {
     const stats = aggregateTaskStats(service, containers);
     if (stats) result.set(service.id, stats);
@@ -250,7 +250,7 @@ const mapServiceStats = (services: SwarmServiceListView[], containers: Map<strin
 const aggregateTaskStats = (
   service: SwarmServiceListView,
   containers: Map<string, ContainerDataView>,
-): ContainerStatView | undefined => {
+): Omit<ContainerStatView, 'containerId'> | undefined => {
   const stats = service.tasks
     .map((task) => containers.get(task.id))
     .filter((container): container is ContainerDataView => container?.state === ContainerStateStatus.Running)
@@ -258,7 +258,7 @@ const aggregateTaskStats = (
     .filter((stat): stat is ContainerStatView => stat !== null && stat !== undefined);
   if (stats.length === 0) return undefined;
 
-  return stats.reduce<ContainerStatView>(
+  return stats.reduce<Omit<ContainerStatView, 'containerId'>>(
     (total, stat) => ({
       memoryActive: Number(total.memoryActive) + Number(stat.memoryActive ?? 0),
       memoryCache: Number(total.memoryCache) + Number(stat.memoryCache ?? 0),

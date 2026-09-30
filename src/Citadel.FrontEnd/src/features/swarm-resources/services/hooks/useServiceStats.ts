@@ -45,7 +45,7 @@ export const useServiceStatsStream = (platformId: string, containerIds: string[]
   const [liveStats, setLiveStats] = useState<{
     identity: string;
     latestByContainer: Map<string, ContainerStatView>;
-    stats: ContainerStatView[];
+    stats: Omit<ContainerStatView, 'containerId'>[];
   }>({
     identity: '',
     latestByContainer: new Map(),
@@ -98,8 +98,8 @@ export const useServiceStatsStream = (platformId: string, containerIds: string[]
     : { stats: EMPTY_STATS, observedContainers: 0 };
 };
 
-const aggregateCurrentStats = (stats: Iterable<ContainerStatView>): ContainerStatView => {
-  const aggregate: ContainerStatView = {
+const aggregateCurrentStats = (stats: Iterable<ContainerStatView>): Omit<ContainerStatView, 'containerId'> => {
+  const aggregate: Omit<ContainerStatView, 'containerId'> = {
     memoryActive: 0,
     memoryCache: 0,
     cpuUsage: 0,

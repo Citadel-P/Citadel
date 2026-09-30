@@ -57,10 +57,10 @@ impl PlatformReadService {
         &self,
         actor_id: ActorId,
         is_administrator: bool,
-        tag_ids: &[Uuid],
+        tags: &[String],
     ) -> Result<Vec<PlatformDetails>, AuthorizedReadError> {
         self.store
-            .list_authorized(actor_id, is_administrator, tag_ids)
+            .list_authorized(actor_id, is_administrator, tags)
             .await
     }
 

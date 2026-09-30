@@ -1,4 +1,4 @@
-import { AutomationActionView } from '@/api/generated/api.types';
+import { AuthorizedAction } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
@@ -8,7 +8,7 @@ import { useAutomationActionsGroup } from './hooks/useAutomationActionsGroup';
 
 const EMPTY_AUTOMATION_ACTIONS: never[] = [];
 
-export const AutomationActionComponents: RequiredComponents<AutomationActionView> = {
+export const AutomationActionComponents: RequiredComponents<AuthorizedAction> = {
   Icon: CitadelIcons.AutomationAction,
   Content: ({ items, actions, isLoading }) => (
     <AutomationActionsTable items={items} actions={actions} isLoading={isLoading} />
@@ -25,14 +25,14 @@ export const AutomationActionComponents: RequiredComponents<AutomationActionView
   GroupActions: ({ items }) => (
     <ActionBar type="AutomationAction" items={items} actions={Object.values(AutomationActionGroupActions)} />
   ),
-  useData(): ResourceDataHookResult<AutomationActionView> {
+  useData(): ResourceDataHookResult<AuthorizedAction> {
     const { actions, isLoading, capabilities, error, refetch, isFetching } = useAutomationActionsGroup();
     return { error, refetch, isFetching, items: actions ?? EMPTY_AUTOMATION_ACTIONS, isLoading, capabilities };
   },
   filterItems: filterAutomationActions,
 };
 
-function filterAutomationActions(items: AutomationActionView[], search: string) {
+function filterAutomationActions(items: AuthorizedAction[], search: string) {
   if (!search.trim()) return items;
 
   const s = search.toLowerCase();

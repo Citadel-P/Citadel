@@ -38,7 +38,8 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
                 .await
                 .map_err(storage)?;
             let select_query = format!(
-                "{AUTHORIZED_CTE} SELECT event.* FROM alertevents event WHERE {predicate} ORDER BY event.createdat DESC,event.id DESC LIMIT $9 OFFSET $10"
+                "{AUTHORIZED_CTE} {} WHERE {predicate} ORDER BY event.createdat DESC,event.id DESC LIMIT $9 OFFSET $10",
+                super::queries::EVENT_SELECT
             );
             let rows = sqlx::query(AssertSqlSafe(select_query.as_str()))
                 .bind(actor.value())
@@ -67,7 +68,8 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
 impl PostgresAlertRepository {
     pub(super) fn get_event_impl(&self, id: Uuid) -> BoxFuture<'_, Result<AlertEvent, AlertError>> {
         Box::pin(async move {
-            let row = sqlx::query("SELECT * FROM alertevents WHERE id=$1")
+            let query = format!("{} WHERE event.id=$1", super::queries::EVENT_SELECT);
+            let row = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await

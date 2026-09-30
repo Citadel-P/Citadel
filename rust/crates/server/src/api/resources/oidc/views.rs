@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct OidcProviderView {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub display_name: String,
     pub issuer: String,
@@ -15,9 +16,13 @@ pub struct OidcProviderView {
     pub auto_provision_users: bool,
     pub allow_email_auto_link: bool,
     pub require_email_verified: bool,
+    #[schema(required = true)]
     pub allowed_email_domains: Option<String>,
+    #[schema(required = true)]
     pub required_claim_name: Option<String>,
+    #[schema(required = true)]
     pub required_claim_values: Option<String>,
+    #[schema(required = true)]
     pub default_role_id: Option<Uuid>,
     pub has_client_secret: bool,
     pub created_by_actor_id: Uuid,

@@ -1,38 +1,39 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { StackView } from '@/api/generated/api.types';
+import { ResourceResponse } from '@/api/types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useStackGroup = (stackId: string) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('getStack', { stackId });
   const queryClient = useQueryClient();
-  const [stackUpdate, setStackUpdate] = useState<Partial<StackView> | null>(null);
-
-  const stack = useMemo(() => {
-    if (!data?.data) return undefined;
-    if (!stackUpdate) return data.data;
-    return { ...data.data, ...stackUpdate };
-  }, [data, stackUpdate]);
-
   const handleStackInfoUpdated = useCallback(
     (stack: StackView) => {
       if (stack.id !== stackId) return;
       const activityInfo = stack.latestActivityView?.info;
       const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
 
-      setStackUpdate({
-        name: stack.name,
-        status: stack.status,
-        description: stack.description,
-        controlState: stack.controlState,
-        driftPolicy: stack.driftPolicy,
-        stackUpdateState: stack.stackUpdateState,
-        platformStatus: stack.platformStatus,
-        platformName: stack.platformName,
-        latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
-      });
+      queryClient.setQueryData<ResourceResponse<'getStack'>>(['getStack', { stackId }], (current) =>
+        current?.data
+          ? {
+              ...current,
+              data: {
+                ...current.data,
+                name: stack.name,
+                status: stack.status,
+                description: stack.description,
+                controlState: stack.controlState,
+                driftPolicy: stack.driftPolicy,
+                stackUpdateState: stack.stackUpdateState,
+                platformStatus: stack.platformStatus,
+                platformName: stack.platformName,
+                latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
+              },
+            }
+          : current,
+      );
 
       queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: stack.id }] });
     },
@@ -60,5 +61,5 @@ export const useStackGroup = (stackId: string) => {
     removeEventListeners,
   });
 
-  return { error, refetch, isFetching, stack, isLoading };
+  return { error, refetch, isFetching, stack: data?.data, isLoading };
 };

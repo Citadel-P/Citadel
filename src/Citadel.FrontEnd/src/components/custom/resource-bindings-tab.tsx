@@ -1,16 +1,17 @@
 import {
-  ResourceBindingInput,
+  NewResourceBinding,
   ResourceBindingKind,
+  SecretDeliveryMode,
   ResourceBindingView,
   ResourceBindingScope,
-  CreateExternalSecretInput,
-  CreateInternalSecretInput,
+  ExternalSecretInput,
+  InternalSecretInput,
   SecretProviderType,
   TestExternalSecretInput,
   SecretDefinitionView,
   SecretProviderView,
-  UpdateExternalSecretInput,
-  UpdateResourceBindingInput,
+  ExternalSecretPatch,
+  ResourceBindingInput,
 } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -41,10 +42,10 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 
-export const ENV_DELIVERY_MODE = 'EnvironmentVariable';
-export const MOUNTED_FILE_DELIVERY_MODE = 'MountedFile';
-const INTERNAL_SECRET_INPUT: CreateInternalSecretInput = { name: '', value: '' };
-const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
+export const ENV_DELIVERY_MODE = SecretDeliveryMode.EnvironmentVariable;
+export const MOUNTED_FILE_DELIVERY_MODE = SecretDeliveryMode.MountedFile;
+const INTERNAL_SECRET_INPUT: InternalSecretInput = { name: '', value: '' };
+const EXTERNAL_SECRET_INPUT: ExternalSecretInput = {
   name: '',
   providerId: '',
   externalPath: '',
@@ -162,7 +163,7 @@ const ResourceBindingsTabEditor = ({
   disabled?: boolean;
   isLoading: boolean;
   serverEntries: ResourceBindingView[];
-  originalInputs: ResourceBindingInput[];
+  originalInputs: NewResourceBinding[];
   secrets: SecretDefinitionView[];
   canCreateSecret: boolean;
   canManageGlobalSecrets: boolean;
@@ -176,13 +177,13 @@ const ResourceBindingsTabEditor = ({
   const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ResourceBindingView | null>(null);
-  const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
+  const [entryInput, setEntryInput] = useState<NewResourceBinding>(newVariableInput());
   const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
-  const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const [storedSecretInput, setStoredSecretInput] = useState<ExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
-  const updateEntry = async (entryId: string, entry: ResourceBindingInput, message: string) => {
+  const updateEntry = async (entryId: string, entry: NewResourceBinding, message: string) => {
     try {
       await update.mutateAsync({
         scope,
@@ -199,7 +200,7 @@ const ResourceBindingsTabEditor = ({
   };
 
   const createEntry = useCallback(
-    async (entry: ResourceBindingInput, message: string) => {
+    async (entry: NewResourceBinding, message: string) => {
       try {
         await create.mutateAsync({
           scope,
@@ -289,7 +290,7 @@ const ResourceBindingsTabEditor = ({
   const saveStoredSecret = async () => {
     if (!editingStoredSecret) return;
 
-    const payload: UpdateExternalSecretInput = normalizeExternalSecretInput(storedSecretInput);
+    const payload: ExternalSecretPatch = normalizeExternalSecretInput(storedSecretInput);
     try {
       const result = await updateExternalSecret.mutateAsync({
         id: editingStoredSecret.id,
@@ -513,13 +514,13 @@ const ResourceBindingDialog = ({
   onEditStoredSecret,
 }: {
   open: boolean;
-  input: ResourceBindingInput;
+  input: NewResourceBinding;
   secrets: SecretDefinitionView[];
   isPending: boolean;
   editing: boolean;
   allowMountedFile?: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput)) => void;
+  onInputChange: (input: NewResourceBinding | ((prev: NewResourceBinding) => NewResourceBinding)) => void;
   onSave: () => void;
   onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
@@ -586,7 +587,10 @@ const ResourceBindingDialog = ({
                     onValueChange={(secretDeliveryMode) =>
                       onInputChange((prev) => ({
                         ...prev,
-                        secretDeliveryMode,
+                        secretDeliveryMode:
+                          secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE
+                            ? MOUNTED_FILE_DELIVERY_MODE
+                            : ENV_DELIVERY_MODE,
                         targetPath: secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE ? (prev.targetPath ?? '') : null,
                       }))
                     }>
@@ -658,13 +662,13 @@ export const EditExternalSecretDialog = ({
   onTest,
 }: {
   open: boolean;
-  input: CreateExternalSecretInput;
+  input: ExternalSecretInput;
   providers: SecretProviderView[];
   isPending: boolean;
   isTesting: boolean;
   onOpenChange: (open: boolean) => void;
   onInputChange: (
-    input: CreateExternalSecretInput | ((prev: CreateExternalSecretInput) => CreateExternalSecretInput),
+    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
   ) => void;
   onSave: () => void;
   onTest: () => void;
@@ -705,10 +709,10 @@ const ExternalSecretFields = ({
   providers,
   onInputChange,
 }: {
-  input: CreateExternalSecretInput;
+  input: ExternalSecretInput;
   providers: SecretProviderView[];
   onInputChange: (
-    input: CreateExternalSecretInput | ((prev: CreateExternalSecretInput) => CreateExternalSecretInput),
+    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
   ) => void;
 }) => (
   <div className="grid gap-4">
@@ -875,8 +879,8 @@ export const useSecretCreation = (
   const testExternalSecret = useMutate('testExternalSecret');
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<SecretSource>('internal');
-  const [internalInput, setInternalInput] = useState<CreateInternalSecretInput>(INTERNAL_SECRET_INPUT);
-  const [externalInput, setExternalInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const [internalInput, setInternalInput] = useState<InternalSecretInput>(INTERNAL_SECRET_INPUT);
+  const [externalInput, setExternalInput] = useState<ExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const allowExternalSecrets = options?.allowExternalSecrets ?? true;
   const { data: providersData } = useRead('listSecretProviders', undefined, {
     enabled: allowExternalSecrets && open && source === 'vault',
@@ -970,14 +974,13 @@ export const useSecretCreation = (
   };
 };
 
-export const normalizeExternalSecretInput = (input: CreateExternalSecretInput): CreateExternalSecretInput => ({
+export const normalizeExternalSecretInput = (input: ExternalSecretInput): ExternalSecretInput => ({
   ...input,
   externalPath: input.externalPath.trim().replace(/^\/+|\/+$/g, ''),
-  externalVersion:
-    input.externalVersion === '' || input.externalVersion === null ? null : Number(input.externalVersion),
+  externalVersion: input.externalVersion ?? null,
 });
 
-export const toExternalSecretInput = (secret: SecretDefinitionView): CreateExternalSecretInput => ({
+export const toExternalSecretInput = (secret: SecretDefinitionView): ExternalSecretInput => ({
   name: secret.name,
   providerId: secret.providerId ?? '',
   externalPath: secret.externalPath ?? '',
@@ -985,7 +988,7 @@ export const toExternalSecretInput = (secret: SecretDefinitionView): CreateExter
   externalVersion: secret.externalVersion ?? null,
 });
 
-export const toExternalSecretTestInput = (input: CreateExternalSecretInput): TestExternalSecretInput => {
+export const toExternalSecretTestInput = (input: ExternalSecretInput): TestExternalSecretInput => {
   const normalized = normalizeExternalSecretInput(input);
   return {
     providerId: normalized.providerId,
@@ -1015,17 +1018,17 @@ export const CreateSecretDialog = ({
   source: SecretSource;
   allowExternalSecrets: boolean;
   providers: SecretProviderView[];
-  internalInput: CreateInternalSecretInput;
-  externalInput: CreateExternalSecretInput;
+  internalInput: InternalSecretInput;
+  externalInput: ExternalSecretInput;
   isPending: boolean;
   isTesting: boolean;
   onOpenChange: (open: boolean) => void;
   onSourceChange: (source: SecretSource) => void;
   onInternalInputChange: (
-    input: CreateInternalSecretInput | ((prev: CreateInternalSecretInput) => CreateInternalSecretInput),
+    input: InternalSecretInput | ((prev: InternalSecretInput) => InternalSecretInput),
   ) => void;
   onExternalInputChange: (
-    input: CreateExternalSecretInput | ((prev: CreateExternalSecretInput) => CreateExternalSecretInput),
+    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
   ) => void;
   onCreate: () => void;
   onTest: () => void;
@@ -1160,7 +1163,7 @@ export const CreateSecretDialog = ({
   );
 };
 
-export const toInput = (entry: ResourceBindingView): ResourceBindingInput => ({
+export const toInput = (entry: ResourceBindingView): NewResourceBinding => ({
   name: entry.name,
   kind: entry.kind,
   value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
@@ -1170,7 +1173,7 @@ export const toInput = (entry: ResourceBindingView): ResourceBindingInput => ({
   targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const newVariableInput = (): ResourceBindingInput => ({
+const newVariableInput = (): NewResourceBinding => ({
   name: '',
   kind: ResourceBindingKind.Variable,
   value: '',
@@ -1179,7 +1182,7 @@ const newVariableInput = (): ResourceBindingInput => ({
   targetPath: null,
 });
 
-const newSecretInput = (secret?: SecretDefinitionView): ResourceBindingInput => ({
+const newSecretInput = (secret?: SecretDefinitionView): NewResourceBinding => ({
   name: secret?.name ?? '',
   kind: ResourceBindingKind.Secret,
   value: null,
@@ -1188,7 +1191,7 @@ const newSecretInput = (secret?: SecretDefinitionView): ResourceBindingInput => 
   targetPath: null,
 });
 
-const normalizeEntryInput = (entry: ResourceBindingInput): ResourceBindingInput => ({
+const normalizeEntryInput = (entry: NewResourceBinding): NewResourceBinding => ({
   name: entry.name,
   kind: entry.kind,
   value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
@@ -1198,12 +1201,12 @@ const normalizeEntryInput = (entry: ResourceBindingInput): ResourceBindingInput 
   targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const toUpdateInput = (id: string, entry: ResourceBindingInput): UpdateResourceBindingInput => ({
+const toUpdateInput = (id: string, entry: NewResourceBinding): ResourceBindingInput => ({
   id,
   ...normalizeEntryInput(entry),
 });
 
-const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
+const hasDuplicateEntryName = (entries: NewResourceBinding[]): boolean => {
   const names = new Set<string>();
   for (const entry of entries) {
     const name = entry.name.trim().toLowerCase();
@@ -1214,7 +1217,7 @@ const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
   return false;
 };
 
-export const toInputFromView = (entry: ResourceBindingView): ResourceBindingInput => ({
+export const toInputFromView = (entry: ResourceBindingView): NewResourceBinding => ({
   name: entry.name,
   kind: entry.kind,
   value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,

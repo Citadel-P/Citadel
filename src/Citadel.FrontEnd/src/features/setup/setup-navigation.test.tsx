@@ -86,7 +86,7 @@ describe('First-run setup navigation', () => {
       const token = `e30.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
       const refresh = vi.fn(() => HttpResponse.json({ accessToken: token }));
       server.use(
-        http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true })),
+        http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true, passwordMinimumLength: 15, passwordMaximumLength: 128 })),
         http.post('http://localhost/api/v1/setup/initialize', () =>
           HttpResponse.json({ accessToken: token, nextStep: LoginNextStep.Completed }),
         ),
@@ -106,7 +106,7 @@ describe('First-run setup navigation', () => {
     [LoginNextStep.VerifyMfa, 'MFA verification'],
   ] as const)('still requires %s when setup does not return an authenticated session', async (nextStep, page) => {
     server.use(
-      http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true })),
+      http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true, passwordMinimumLength: 15, passwordMaximumLength: 128 })),
       http.post('http://localhost/api/v1/setup/initialize', () => HttpResponse.json({ nextStep })),
     );
     renderSetup('/login');
@@ -117,7 +117,7 @@ describe('First-run setup navigation', () => {
 
   it('shows login when another request has already completed setup', async () => {
     server.use(
-      http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true })),
+      http.get('http://localhost/api/v1/setup/status', () => HttpResponse.json({ requiresSetup: true, passwordMinimumLength: 15, passwordMaximumLength: 128 })),
       http.post('http://localhost/api/v1/setup/initialize', () =>
         HttpResponse.json({ type: 'setup_already_complete', status: 409 }, { status: 409 }),
       ),

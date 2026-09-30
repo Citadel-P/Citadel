@@ -48,7 +48,6 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
       items: [
         defineField({
           key: 'name',
-          persistDraft: true,
           label: 'Name',
           description: `The new volume's name. If not specified, Docker generates a name.`,
           validate: (v) =>

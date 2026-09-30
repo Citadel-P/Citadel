@@ -17,17 +17,28 @@ pub struct LicenseView {
     #[schema(value_type = crate::api::resources::vocabulary::LicenseStatusSchema)]
     pub status: LicenseStatus,
     pub effective_edition: String,
+    #[schema(required = true)]
     pub licensed_edition: Option<String>,
     pub instance_id: Uuid,
+    #[schema(required = true)]
     pub license_schema: Option<u8>,
+    #[schema(required = true)]
     pub license_id: Option<String>,
+    #[schema(required = true)]
     pub replaced_license_id: Option<String>,
+    #[schema(required = true)]
     pub customer_id: Option<String>,
+    #[schema(required = true)]
     pub customer_name: Option<String>,
+    #[schema(required = true)]
     pub fingerprint: Option<String>,
+    #[schema(required = true)]
     pub issued_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub not_before: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub expires_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub grace_until: Option<DateTime<Utc>>,
     pub capabilities: Vec<LicenseCapabilityView>,
     pub warnings: Vec<String>,

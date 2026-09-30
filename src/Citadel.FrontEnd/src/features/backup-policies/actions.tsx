@@ -87,8 +87,8 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
       const [, setSelectedResources] = useSelectedResources<BackupPolicyView>('BackupPolicy');
       const location = useLocation();
       const navigate = useNavigate();
-      const isCurrentPolicyArchived = selected.some(
-        (policy) => location.pathname === `/backup-policies/edit/${policy.id}`,
+      const isCurrentResource = selected.some(
+        (policy) => location.pathname.replace(/\/$/, '') === `/backup-policies/edit/${policy.id}`,
       );
 
       return {
@@ -99,10 +99,12 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
 
           try {
             await Promise.all(selected.map((policy) => archive.mutateAsync({ id: policy.id } as any)));
-            await invalidateBackupPolicyQueries(queryClient);
+            if (isCurrentResource) navigate('/backup-policies', { replace: true });
+            await queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
+            await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
+            await queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
-            if (isCurrentPolicyArchived) navigate('/backup-policies', { replace: true });
           } catch (_error) {
             toast.error(archive.validationErrors ?? 'Failed to archive selected policies');
           }

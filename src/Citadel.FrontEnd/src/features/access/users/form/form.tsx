@@ -1,6 +1,7 @@
+import { useSetupContext } from '@/features/setup/setup-context';
 import {
-  PatchUserInput,
-  CreateUserInput,
+  PatchUserRequest,
+  CreateUserRequest,
   UserResourceAccessInput,
   ResourceInfo,
   LicenseCapability,
@@ -29,7 +30,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { LicenseFeatureIndicator } from '@/components/custom/license-feature-indicator';
 
-type UserInput = CreateUserInput | PatchUserInput;
+type UserInput = CreateUserRequest | PatchUserRequest;
 
 type UserFormResource = Partial<UserInput> & {
   teams?: ResourceInfo[] | null;
@@ -82,6 +83,7 @@ export const UserForm = ({
   resource?: UserFormResource;
   disabled?: boolean;
 }) => {
+  const { passwordMinimumLength, passwordMaximumLength } = useSetupContext();
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<UserInput>>({});
   const formKey = `${mode}:${id ?? 'new'}`;
@@ -123,8 +125,8 @@ export const UserForm = ({
     mode,
     basePath: 'access/users',
     entityName: 'User',
-    onCreate: (payload) => createUser({ data: payload as CreateUserInput }),
-    onUpdate: (payload) => updateUser({ id: id!, data: payload as PatchUserInput }),
+    onCreate: (payload) => createUser({ data: payload as CreateUserRequest }),
+    onUpdate: (payload) => updateUser({ id: id!, data: payload as PatchUserRequest }),
     onRefresh: refreshData,
   });
 
@@ -132,7 +134,7 @@ export const UserForm = ({
     const sanitizedPayload = (() => {
       if (mode !== 'edit') return payload;
 
-      const next = { ...(payload as PatchUserInput) } as Record<string, unknown>;
+      const next = { ...(payload as PatchUserRequest) } as Record<string, unknown>;
       if (typeof next.password === 'string' && next.password.trim().length === 0) {
         delete next.password;
       }
@@ -140,17 +142,17 @@ export const UserForm = ({
     })();
 
     if (mode === 'add') {
-      const pwd = (payload as CreateUserInput).password ?? '';
+      const pwd = (payload as CreateUserRequest).password ?? '';
       if (confirmPassword !== pwd) return;
     }
 
     if (mode === 'edit') {
-      const pwd = String((payload as PatchUserInput).password ?? '');
+      const pwd = String((payload as PatchUserRequest).password ?? '');
       if (pwd && confirmPassword !== pwd) return;
     }
 
     const result = await handleSave(sanitizedPayload);
-    delete (payload as Partial<CreateUserInput>).password;
+    delete (payload as Partial<CreateUserRequest>).password;
     setConfirmPassword('');
     return result;
   };
@@ -172,7 +174,6 @@ export const UserForm = ({
                 ? [
                     defineField<UserInput, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Username',
                       description: 'Provide a unique name to identify this User.',
                       required: true,
@@ -221,8 +222,8 @@ export const UserForm = ({
                 label: 'Password',
                 description:
                   mode === 'edit'
-                    ? 'Leave blank to keep the current password. New passwords require 15 to 128 characters.'
-                    : 'Use 15 to 128 characters.',
+                    ? `Leave blank to keep the current password. New passwords require ${passwordMinimumLength} to ${passwordMaximumLength} characters.`
+                    : `Use ${passwordMinimumLength} to ${passwordMaximumLength} characters.`,
                 required: mode === 'add',
                 validate: (value) => {
                   const password = String(value ?? '');
@@ -231,8 +232,10 @@ export const UserForm = ({
                   if (mode === 'edit' && !password) return null;
 
                   const length = [...password].length;
-                  if (length < 15) return 'Password must be at least 15 characters long';
-                  if (length > 128) return 'Password must be no more than 128 characters long';
+                  if (length < passwordMinimumLength)
+                    return `Password must be at least ${passwordMinimumLength} characters long`;
+                  if (length > passwordMaximumLength)
+                    return `Password must be no more than ${passwordMaximumLength} characters long`;
                   return null;
                 },
                 render: (value, set) => (
@@ -328,14 +331,30 @@ export const UserForm = ({
             render: (value, set) => (
               <ResourceOverridesField
                 value={(value as UserResourceAccessInput[] | null) ?? []}
-                onChange={(next) => set({ resourceAccesses: next })}
+                onChange={(next) =>
+                  set({
+                    resourceAccesses: next.map((entry) => ({
+                      ...entry,
+                      specificPermissions: entry.specificPermissions ?? [],
+                    })),
+                  })
+                }
               />
             ),
           }),
         ],
       }),
     }),
-    [mode, roleOptions, rolesLoading, confirmPassword, setConfirmPassword, update],
+    [
+      passwordMinimumLength,
+      passwordMaximumLength,
+      mode,
+      roleOptions,
+      rolesLoading,
+      confirmPassword,
+      setConfirmPassword,
+      update,
+    ],
   );
 
   return (

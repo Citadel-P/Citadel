@@ -1,4 +1,4 @@
-import { OidcProviderView, ResourceCapabilities } from '@/api/generated/api.types';
+import { OidcProviderView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
@@ -7,7 +7,7 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { OidcProviderInfoActions } from '../actions';
 import { OidcProviderForm } from './form';
 
-type OidcProviderFormResource = OidcProviderView & RequiredFormFields & { capabilities: ResourceCapabilities };
+type OidcProviderFormResource = OidcProviderView & RequiredFormFields & { capabilities: ResourceCapabilitiesView };
 
 export const OidcProviderFormComponents: RequiredFormComponents<OidcProviderFormResource> = {
   AddForm: {
@@ -21,7 +21,7 @@ export const OidcProviderFormComponents: RequiredFormComponents<OidcProviderForm
       canEditTitle: true,
       canEditDescription: true,
       Indicator: ({ resource }) => (
-        <StateIndicator value={Boolean((resource as OidcProviderView).enabled)} enableLabel />
+        <StateIndicator variant="badge" value={Boolean((resource as OidcProviderView).enabled)} enableLabel />
       ),
       ActionButtons: ({ resource }) => {
         const { edit: _edit, ...actions } = OidcProviderInfoActions;

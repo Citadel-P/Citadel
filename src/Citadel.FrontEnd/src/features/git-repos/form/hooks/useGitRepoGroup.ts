@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useGitRepoGroup = (id: string | undefined) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('getGitRepository', { id });
-  const [gitRepo, setGitRepo] = useState<GitRepositoryView | undefined>(data?.data);
-  const lastDataRef = useRef<GitRepositoryView | undefined>(data?.data);
+  const [gitRepo, setGitRepo] = useState<AuthorizedGitRepositoryView | undefined>(data?.data);
+  const lastDataRef = useRef<AuthorizedGitRepositoryView | undefined>(data?.data);
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
@@ -17,7 +17,7 @@ export const useGitRepoGroup = (id: string | undefined) => {
   }, [data?.data]);
 
   const handleGitRepositoryInfoUpdated = useCallback(
-    (repo: GitRepositoryView) => {
+    (repo: AuthorizedGitRepositoryView) => {
       if (repo.id !== id) return;
       const activityInfo = repo.latestActivityView?.info;
       const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;

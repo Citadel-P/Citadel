@@ -1,4 +1,4 @@
-import { PagedResultViewOfTeamView, TeamView } from '@/api/generated/api.types';
+import { PagedResultTeamView, TeamView } from '@/api/generated/api.types';
 import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { useSelectedResources, useTeamQuery } from '@/lib/atoms';
 import { useMemo } from 'react';
@@ -15,7 +15,7 @@ export const Teams = ({
   actions,
   isLoading,
 }: {
-  items: PagedResultViewOfTeamView;
+  items: PagedResultTeamView;
   actions: Record<string, DropdownActionComponent>;
   isLoading: boolean;
 }) => <TeamsTable pagedResult={items} isLoading={isLoading} actions={actions} />;
@@ -27,7 +27,7 @@ export const TeamsTable = ({
   actions,
   isLoading,
 }: {
-  pagedResult: PagedResultViewOfTeamView | undefined;
+  pagedResult: PagedResultTeamView | undefined;
   isLoading: boolean;
   actions: Record<
     string,

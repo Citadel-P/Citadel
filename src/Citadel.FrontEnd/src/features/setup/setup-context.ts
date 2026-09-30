@@ -7,6 +7,8 @@ export interface SetupError {
 }
 
 export interface SetupContextValue {
+  passwordMinimumLength: number;
+  passwordMaximumLength: number;
   isSetupReady: boolean;
   requiresSetup: boolean;
   error?: SetupError;

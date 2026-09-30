@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { StackView, ResourceCapabilities } from '@/api/generated/api.types';
+import { StackView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -17,7 +17,7 @@ export const useStacksGroup = () => {
   }, [selectedPlatformId, selectedTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listStacks', readArgs);
   const [stacks, setStacks] = useState<StackView[] | undefined>();
-  const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
+  const [capabilities, setcapabilities] = useState<ResourceCapabilitiesView | undefined>();
   const lastFetchedRef = useRef<StackView[]>([]);
   const deletedStackIdsRef = useRef<Set<string>>(new Set());
 

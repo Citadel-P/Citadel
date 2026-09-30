@@ -29,7 +29,6 @@ const schema: FormSchema<TestConfiguration> = {
     items: [
       defineField<TestConfiguration, 'name'>({
         key: 'name',
-        persistDraft: true,
         label: 'Name',
         required: true,
         render: (value, set) => (
@@ -38,7 +37,6 @@ const schema: FormSchema<TestConfiguration> = {
       }),
       defineField<TestConfiguration, 'description'>({
         key: 'description',
-        persistDraft: true,
         label: 'Description',
         render: (value, set) => (
           <Input
@@ -64,7 +62,6 @@ const licensedSchema: FormSchema<TestConfiguration> = {
         items: [
           defineField<TestConfiguration, 'name'>({
             key: 'name',
-            persistDraft: true,
             label: 'Name',
             render: (value, set) => (
               <Input
@@ -86,7 +83,6 @@ const licensedFieldSchema: FormSchema<TestConfiguration> = {
     items: [
       defineField<TestConfiguration, 'name'>({
         key: 'name',
-        persistDraft: true,
         label: 'Redeploy On Build',
         description: 'Automatically redeploy this deployment after the selected build succeeds.',
         requiredLicense: 'Team',
@@ -307,7 +303,11 @@ describe('FormShell', () => {
   });
 });
 
-type Credentials = { name: string; password: string; config: { clientSecret: string } };
+type Credentials = {
+  name: string;
+  password: string;
+  config: { clientSecret: string; endpoint?: string; ports?: number[]; data?: string };
+};
 const credentialsOriginal: Credentials = { name: '', password: '', config: { clientSecret: '' } };
 const credentialsSchema: FormSchema<Credentials> = {
   general: {
@@ -315,9 +315,33 @@ const credentialsSchema: FormSchema<Credentials> = {
       defineField<Credentials, 'name'>({
         key: 'name',
         label: 'Name',
-        persistDraft: true,
         render: (value, set) => (
           <Input aria-label="Resource name" value={value ?? ''} onChange={(e) => set({ name: e.target.value })} />
+        ),
+      }),
+      defineField<Credentials, 'config.endpoint'>({
+        key: 'config.endpoint',
+        label: 'Endpoint',
+        render: (value, set) => (
+          <Input
+            aria-label="Endpoint"
+            value={value ?? ''}
+            onChange={(e) =>
+              set({ config: { ...credentialsOriginal.config, endpoint: e.target.value, ports: [8080, 9090] } })
+            }
+          />
+        ),
+      }),
+      defineField<Credentials, 'config.data'>({
+        key: 'config.data',
+        label: 'Secret data',
+        persistDraft: false,
+        render: (value, set) => (
+          <Input
+            aria-label="Secret data"
+            value={value ?? ''}
+            onChange={(e) => set({ config: { ...credentialsOriginal.config, data: e.target.value } })}
+          />
         ),
       }),
       defineField<Credentials, 'password'>({
@@ -369,25 +393,33 @@ function CredentialsForm({
 }
 
 describe('FormShell draft privacy', () => {
-  it('retains credentials for submission but stores and restores only audited fields', async () => {
+  it('retains credentials for submission but restores ordinary settings without persisting credentials', async () => {
     const onSave = vi.fn().mockRejectedValue(new Error('retry later'));
     const { user, unmount } = renderCitadel(<CredentialsForm onSave={onSave} />);
     await user.type(screen.getByLabelText('Resource name'), 'private registry');
+    await user.type(screen.getByLabelText('Endpoint', { selector: 'input' }), 'registry.example.com');
     await user.type(screen.getByLabelText('Password', { exact: true, selector: 'input' }), 'password-value');
     await user.type(screen.getByLabelText('Client secret', { exact: true, selector: 'input' }), 'client-secret-value');
     const stored = localStorage.getItem(storageKey('registry:security-test'))!;
-    expect(JSON.parse(stored).update).toEqual({ name: 'private registry' });
+    expect(JSON.parse(stored).update).toEqual({
+      name: 'private registry',
+      config: { endpoint: 'registry.example.com', ports: [8080, 9090] },
+    });
     expect(stored).not.toContain('password-value');
     expect(stored).not.toContain('client-secret-value');
     await user.click(enabledSaveButton()!);
     expect(onSave).toHaveBeenCalledWith({
       name: 'private registry',
       password: 'password-value',
-      config: { clientSecret: 'client-secret-value' },
+      config: { clientSecret: 'client-secret-value', endpoint: 'registry.example.com', ports: [8080, 9090] },
     });
     unmount();
     renderCitadel(<CredentialsForm />);
     expect(screen.getByLabelText('Resource name')).toHaveValue('private registry');
+    expect(screen.getByLabelText('Endpoint', { selector: 'input' })).toHaveValue('registry.example.com');
+    expect(JSON.parse(localStorage.getItem(storageKey('registry:security-test'))!).update.config.ports).toEqual([
+      8080, 9090,
+    ]);
     expect(screen.getByLabelText('Password', { exact: true, selector: 'input' })).toHaveValue('');
     expect(screen.getByLabelText('Client secret', { exact: true, selector: 'input' })).toHaveValue('');
   });
@@ -411,4 +443,35 @@ it('discards a draft when its saved fields have changed on the server', async ()
   renderCitadel(<CredentialsForm saved={{ ...credentialsOriginal, name: 'new server name' }} />);
   expect(screen.getByLabelText('Resource name')).toHaveValue('new server name');
   expect(localStorage.getItem(storageKey('registry:security-test'))).toBeNull();
+});
+
+it('does not persist original credentials in the draft version or overwrite them when restoring settings', async () => {
+  const saved = { name: '', password: 'saved-password', config: { clientSecret: 'saved-client-secret' } };
+  const first = renderCitadel(<CredentialsForm saved={saved} />);
+  await first.user.type(screen.getByLabelText('Endpoint', { selector: 'input' }), 'registry.example.com');
+  const stored = localStorage.getItem(storageKey('registry:security-test'))!;
+  expect(stored).not.toContain('saved-password');
+  expect(stored).not.toContain('saved-client-secret');
+  first.unmount();
+  renderCitadel(<CredentialsForm saved={saved} />);
+  expect(screen.getByLabelText('Endpoint', { selector: 'input' })).toHaveValue('registry.example.com');
+  expect(screen.getByLabelText('Password', { exact: true, selector: 'input' })).toHaveValue('saved-password');
+  expect(screen.getByLabelText('Client secret', { exact: true, selector: 'input' })).toHaveValue('saved-client-secret');
+});
+
+it('honors explicit secret-field exclusions both when saving and restoring a browser draft', async () => {
+  const first = renderCitadel(<CredentialsForm />);
+  await first.user.type(screen.getByLabelText('Secret data', { selector: 'input' }), 'opaque-sensitive-content');
+  await first.user.type(screen.getByLabelText('Resource name'), 'my registry');
+  const key = storageKey('registry:security-test');
+  const stored = localStorage.getItem(key)!;
+  expect(stored).not.toContain('opaque-sensitive-content');
+  first.unmount();
+  const draft = JSON.parse(stored);
+  draft.update.config = { password: 'injected-password', data: 'injected-data', endpoint: 'registry.example.com' };
+  localStorage.setItem(key, JSON.stringify(draft));
+  renderCitadel(<CredentialsForm />);
+  expect(screen.getByLabelText('Secret data', { selector: 'input' })).toHaveValue('');
+  expect(screen.getByLabelText('Endpoint', { selector: 'input' })).toHaveValue('registry.example.com');
+  expect(localStorage.getItem(key)).not.toContain('injected-');
 });

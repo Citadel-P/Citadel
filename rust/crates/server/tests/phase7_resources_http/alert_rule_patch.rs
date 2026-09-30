@@ -14,6 +14,7 @@ pub(super) async fn verify(
     let mut changes = hub.subscribe();
     let id = rule["id"].as_str().unwrap();
     let path = format!("/api/v1/alertRules/{id}");
+    let metadata_path = format!("{path}/_metadata");
     let channel_id = channel["id"].as_str().unwrap();
     let channel_path = format!("/api/v1/alertRules/channels/{channel_id}");
     let before =
@@ -25,7 +26,20 @@ pub(super) async fn verify(
         } else {
             StatusCode::FORBIDDEN
         };
-        for target in [&path, &channel_path] {
+        for target in [&path, &channel_path, &metadata_path] {
+            // Deferred typed decoding must not reveal validation details before authorization.
+            assert_eq!(
+                request(
+                    app,
+                    Method::PATCH,
+                    target,
+                    principal.clone(),
+                    Some(json!({"status":1,"url":false,"description":42}))
+                )
+                .await
+                .status(),
+                expected
+            );
             assert_eq!(
                 request(
                     app,
@@ -68,6 +82,9 @@ pub(super) async fn verify(
             .await
             .unwrap();
     assert_eq!(persisted, ("Critical".into(), 600, "Disabled".into()));
+    // Compare reads before/after rejection; mutation responses do not include evaluated capabilities.
+    let value =
+        response_json(request(app, Method::GET, &path, Some(admin.clone()), None).await).await;
     for invalid in [
         json!({"cooldownSeconds":5}),
         json!({"severity":"not-a-severity"}),

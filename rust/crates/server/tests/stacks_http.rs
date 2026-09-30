@@ -1,3 +1,5 @@
+#[path = "stacks_http/contracts.rs"]
+mod contracts;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -42,6 +44,8 @@ mod alert_sink;
 mod capabilities;
 #[path = "stacks_http/drift.rs"]
 mod drift;
+#[path = "stacks_http/preflight.rs"]
+mod preflight;
 #[path = "stacks_http/releases.rs"]
 mod releases;
 #[path = "stacks_http/updates.rs"]
@@ -300,6 +304,11 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         .with_entitlements(Arc::new(drift::Entitlements(true))),
     );
     let app = stacks_http::router(StacksHttpState {
+        platforms: Arc::new(citadel_platforms::PlatformReadService::new(Arc::new(
+            citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(
+                pool.clone(),
+            ),
+        ))),
         identity,
         stacks: stacks.clone(),
     });
@@ -351,6 +360,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         roles: vec!["Admin".to_owned()],
     };
 
+    preflight::verify(&app, &pool, &admin, swarm_platform_id).await;
     capabilities::verify(&app, &pool, &admin).await;
 
     let created_response = request(
@@ -387,6 +397,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     )
     .await;
     assert_eq!(cleared["description"], Value::Null);
+    contracts::verify(&app, &admin, id).await;
 
     runtime.hold_apply.store(1, Ordering::Relaxed);
     let apply = request(
@@ -864,6 +875,15 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let imported = response_json(imported_response).await;
     assert_eq!(imported_status, StatusCode::OK, "{imported}");
     let imported_id = Uuid::parse_str(imported["id"].as_str().unwrap()).unwrap();
+    let activity: Value = sqlx::query_scalar(
+        "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='StackImported'",
+    )
+    .bind(imported_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(activity["ServiceNames"], json!(["api"]));
+    assert_eq!(activity["ProjectName"], import_namespace);
     assert_eq!(runtime.apply_calls.lock().unwrap().len(), 3);
     assert_eq!(
         sqlx::query_scalar::<_, Option<Uuid>>(

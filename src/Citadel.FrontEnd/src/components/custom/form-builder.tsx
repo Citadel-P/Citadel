@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { pickDraftFields, useFormDraftKey } from '@/lib/form-drafts';
+import { sanitizeDraft, useFormDraftKey } from '@/lib/form-drafts';
 import { notifyRequestError } from '@/lib/request-error';
 import React, { useMemo, useState, useCallback, useRef, memo, Ref, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ export interface FieldConfig<T> {
   ignoreFormDisabled?: boolean;
   validate?: (value: any) => string | null;
   hideValidationMessage?: boolean;
-  /** Opt in only after auditing this scalar field for credentials or other secrets. */
+  /** Settings are saved by default. Set false for opaque secret fields. */
   persistDraft?: boolean;
   render: (value: any, set: FieldChange<T>) => React.ReactNode;
 }
@@ -954,14 +954,14 @@ export function FormShell<T>({
   const sections = Object.keys(schema);
 
   const fieldMap = useMemo(() => extractFieldMap(schema), [schema]);
-  const draftPaths = JSON.stringify(
+  const excludedDraftPaths = JSON.stringify(
     Object.values(fieldMap)
-      .filter((field) => field.persistDraft)
+      .filter((field) => field.persistDraft === false)
       .map((field) => field.key),
   );
   const safeDraft = useCallback(
-    (value: Partial<T>) => pickDraftFields(value, JSON.parse(draftPaths) as string[]),
-    [draftPaths],
+    (value: Partial<T>) => sanitizeDraft(value, JSON.parse(excludedDraftPaths) as string[]),
+    [excludedDraftPaths],
   );
   // Compare only persisted fields: no credentials enter the draft or its version.
   const draftVersion = JSON.stringify([schemaVersion, safeDraft(original as Partial<T>)]);
@@ -1227,16 +1227,11 @@ export function FormShell<T>({
 
   return (
     <div ref={formRef} className="flex flex-col gap-6">
-      {draftKey && (
-        <p className="text-xs text-muted-foreground">
-          Browser drafts save only the name and description. Re-enter other unsaved settings after leaving this page.
-        </p>
-      )}
       {/* Draft banner (if we restored a draft) */}
       {draftLoadedBanner && (
         <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-3">
           <div className="flex flex-row gap-0.5">
-            <span>Restored saved fields from this browser. Re-enter credentials and other unsaved settings.</span>
+            <span>Restored your settings from this browser. Re-enter any unsaved credentials.</span>
             {lastSavedAtLabel && <span>(updated {lastSavedAtLabel}).</span>}
           </div>
           <div className="flex items-center gap-1">

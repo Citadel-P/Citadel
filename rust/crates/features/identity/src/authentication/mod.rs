@@ -44,7 +44,11 @@ pub use read_models::{
 };
 
 pub use service::{
-    IdentityService, MAXIMUM_PASSWORD_CHARACTERS, MAXIMUM_SESSIONS_PER_USER,
-    MINIMUM_PASSWORD_CHARACTERS, SystemClock, token_digest, validate_email, validate_name,
-    validate_password,
+    IdentityService, MAXIMUM_SESSIONS_PER_USER, SystemClock, token_digest, validate_email,
+    validate_name,
+};
+
+mod password_policy;
+pub use password_policy::{
+    MAXIMUM_PASSWORD_CHARACTERS, MINIMUM_PASSWORD_CHARACTERS, PasswordPolicy,
 };

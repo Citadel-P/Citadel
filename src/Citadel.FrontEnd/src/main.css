@@ -223,6 +223,36 @@
     @apply bg-foreground/50;
   }
 
+  .sidebar-scroll-area {
+    --sidebar-scrollbar-thumb: color-mix(in oklab, var(--foreground) 30%, transparent);
+    scrollbar-width: thin;
+    scrollbar-color: var(--sidebar-scrollbar-thumb) transparent;
+  }
+  .sidebar-scroll-area::-webkit-scrollbar {
+    background-color: transparent;
+  }
+  .sidebar-scroll-area::-webkit-scrollbar-thumb {
+    background-color: var(--sidebar-scrollbar-thumb);
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    .sidebar-scroll-area {
+      /* Use the shared 4px scrollbar instead of the browser's native thin size. */
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .sidebar-scroll-area {
+      --sidebar-scrollbar-thumb: transparent;
+    }
+    [data-slot='sidebar']:hover .sidebar-scroll-area,
+    [data-slot='sidebar']:has(:focus-visible) .sidebar-scroll-area {
+      --sidebar-scrollbar-thumb: color-mix(in oklab, var(--foreground) 30%, transparent);
+    }
+  }
+
   /* Form Element Resets */
   [type='checkbox'],
   [type='radio'] {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { ImagesView, ImageView } from '@/api/generated/api.types';
+import { ImagesResponse, ImageView } from '@/api/generated/api.types';
 import {
   useDockerDaemonGroup,
   ImageEvent,
@@ -11,11 +11,11 @@ import { useRead } from '@/lib/hooks';
 
 export const useImagesGroup = (platformId?: string) => {
   const { data, isLoading, error, refetch, isFetching } = useRead('listImages', { platformId });
-  const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesView>();
+  const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesResponse>();
   const [nodeSnapshot, setNodeSnapshot] = useState<SwarmNodeLocalResourcesUpdate>();
   const capabilities = data?.data.capabilities;
 
-  const imagesInfo = useMemo<ImagesView | undefined>(() => {
+  const imagesInfo = useMemo<ImagesResponse | undefined>(() => {
     const source = realtimeImagesInfo ?? data?.data;
     return source && nodeSnapshot && nodeSnapshot.platformId === platformId && nodeSnapshot.images
       ? { ...source, images: nodeSnapshot.images }
@@ -112,7 +112,7 @@ export const useImagesGroup = (platformId?: string) => {
     [data],
   );
 
-  const handleImagesInfoUpdated = useCallback((images: ImagesView) => {
+  const handleImagesInfoUpdated = useCallback((images: ImagesResponse) => {
     setRealtimeImagesInfo(images);
   }, []);
 

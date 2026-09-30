@@ -1,7 +1,7 @@
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { HardDrive } from 'lucide-react';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
-import { DockerVolumeResultView } from '@/api/generated/api.types';
+import { VolumeView } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { useRead } from '@/lib/hooks';
@@ -13,7 +13,7 @@ import { VolumeInfoActions } from './actions';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useSearchParams } from 'react-router';
 
-export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResultView> = {
+export const VolumeInfoComponents: RequiredDockerInfoComponents<VolumeView> = {
   Header: {
     Icon: HardDrive,
     Status: ({ resource }) => (
@@ -31,7 +31,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
   Tabs: [
     {
       label: 'Inspect',
-      disabled: (resource: DockerVolumeResultView) => !hasCapability(resource, 'canRead'),
+      disabled: (resource: VolumeView) => !hasCapability(resource, 'canRead'),
       Content: ({ resource }) => <InspectVolumeWrapper resource={resource} />,
     },
   ],
@@ -47,7 +47,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
   },
 };
 
-const InspectVolumeWrapper = ({ resource }: { resource: DockerVolumeResultView }) => {
+const InspectVolumeWrapper = ({ resource }: { resource: VolumeView }) => {
   return (
     <div className="flex flex-col gap-(--section-gap)">
       <DetailSection

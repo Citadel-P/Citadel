@@ -3,7 +3,7 @@
 
 use crate::Deployment;
 use crate::DeploymentSpec;
-use crate::model::TagSummary;
+use citadel_tags::TagSummary;
 use serde_json::Value;
 use uuid::Uuid;
 /// ACL-aware enriched read projection, obtained with one repository query.

@@ -40,12 +40,20 @@ describe('platform disk statistics', () => {
     const stats = normalizePlatformStats([
       {
         created: 1,
+        rxBytes: 0,
+        txBytes: 0,
+        cpuUsage: 0,
+        memoryUsage: 0,
         diskUsedBytes: null,
         diskTotalBytes: null,
         diskUsage: null,
       },
       {
         created: 2,
+        rxBytes: 0,
+        txBytes: 0,
+        cpuUsage: 0,
+        memoryUsage: 0,
         diskUsedBytes: 0,
         diskTotalBytes: 100,
         diskUsage: 0,
@@ -71,12 +79,20 @@ describe('platform disk statistics', () => {
       stats: [
         {
           created: 2,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: null,
           diskTotalBytes: null,
           diskUsage: null,
         },
         {
           created: 1,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: 75,
           diskTotalBytes: 100,
           diskUsage: 75,
@@ -91,6 +107,10 @@ describe('platform disk statistics', () => {
     const [normalized] = normalizePlatformStats([
       {
         created: 1,
+        rxBytes: 0,
+        txBytes: 0,
+        cpuUsage: 0,
+        memoryUsage: 0,
         diskUsedBytes: 75,
         diskTotalBytes: 100,
         diskUsage: 101,
@@ -102,6 +122,10 @@ describe('platform disk statistics', () => {
       stats: [
         {
           created: 1,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: 75,
           diskTotalBytes: 100,
           diskUsage: -1,
@@ -122,6 +146,10 @@ describe('platform disk statistics', () => {
       stats: [
         {
           created: 2,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: 75,
           diskTotalBytes: 100,
           diskUsage: 75,
@@ -145,6 +173,10 @@ describe('platform disk statistics', () => {
       stats: [
         {
           created: 2,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: 75,
           diskTotalBytes: 100,
           diskUsage: 75,
@@ -279,6 +311,10 @@ describe('platform disk statistics', () => {
       stats: [
         {
           created: 2,
+          rxBytes: 0,
+          txBytes: 0,
+          cpuUsage: 0,
+          memoryUsage: 0,
           diskUsedBytes: 75,
           diskTotalBytes: 100,
           diskUsage: 75,

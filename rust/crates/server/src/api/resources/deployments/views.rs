@@ -1,10 +1,13 @@
 //! Deployment HTTP and realtime representations.
-use crate::api::resources::deployments::spec::{
-    AutoUpdateState, DeploymentSpec, DuplicateSourceInput, DuplicateWarning, TagSummary,
+use crate::api::resources::deployments::spec::{AutoUpdateState, DeploymentSpec, DuplicateWarning};
+use crate::api::resources::tags::views::TagSummary;
+use crate::api::resources::{
+    activities::views::LatestActivityView,
+    common::{DuplicateSourceInput, PlatformStatus, ResourceControlState},
+    deployments::spec::DeploymentStatus,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
@@ -40,12 +43,12 @@ pub struct DeploymentView {
     pub platform_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
-    pub status: String,
-    pub control_state: String,
+    pub status: DeploymentStatus,
+    pub control_state: ResourceControlState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_update_state: Option<AutoUpdateState>,
     pub spec: DeploymentSpec,
-    pub platform_status: String,
+    pub platform_status: PlatformStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,7 +63,7 @@ pub struct DeploymentView {
     pub docker_image_id: Option<String>,
     pub tags: Vec<TagSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_activity_view: Option<Value>,
+    pub latest_activity_view: Option<LatestActivityView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<DeploymentCapabilities>,
 }
@@ -142,20 +145,26 @@ pub struct ImagePullProgress {
     pub units: Option<String>,
 }
 
-impl From<citadel_deployments::DeploymentDetails> for DeploymentView {
-    fn from(value: citadel_deployments::DeploymentDetails) -> Self {
-        Self {
+impl TryFrom<citadel_deployments::DeploymentDetails> for DeploymentView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::DeploymentDetails) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.deployment.id,
             name: value.deployment.name,
             description: value.deployment.description,
             platform_id: value.deployment.platform_id,
             created_at: value.deployment.created_at,
             created_by_actor_id: value.deployment.created_by_actor_id,
-            status: value.deployment.status,
-            control_state: value.deployment.control_state,
-            auto_update_state: value.deployment.auto_update_state.map(Into::into),
+            status: serde_json::from_value(value.deployment.status.into())?,
+            control_state: serde_json::from_value(value.deployment.control_state.into())?,
+            auto_update_state: value
+                .deployment
+                .auto_update_state
+                .map(TryInto::try_into)
+                .transpose()?,
             spec: value.deployment.spec.into(),
-            platform_status: value.platform_status,
+            platform_status: serde_json::from_value(value.platform_status.into())?,
             platform_name: value.platform_name,
             image_name: value.image_name,
             image_id: value.image_id,
@@ -163,16 +172,16 @@ impl From<citadel_deployments::DeploymentDetails> for DeploymentView {
             docker_container_id: value.docker_container_id,
             docker_image_id: value.docker_image_id,
             tags: value.tags.into_iter().map(Into::into).collect(),
-            latest_activity_view:
-                crate::api::resources::activities::presentation::public_latest_activity(
-                    value.latest_activity,
-                ),
+            latest_activity_view: value
+                .latest_activity
+                .map(LatestActivityView::from_stored)
+                .transpose()?,
             capabilities: Some(
                 crate::api::resources::deployments::capabilities::capabilities(
                     value.effective_permission,
                 ),
             ),
-        }
+        })
     }
 }
 
@@ -188,16 +197,18 @@ impl From<citadel_deployments::DeploymentConfig> for DeploymentConfigView {
     }
 }
 
-impl From<citadel_deployments::DeploymentDraft> for CreateDeploymentInputView {
-    fn from(value: citadel_deployments::DeploymentDraft) -> Self {
-        Self {
+impl TryFrom<citadel_deployments::DeploymentDraft> for CreateDeploymentInputView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::DeploymentDraft) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             platform_id: value.platform_id,
             description: value.description,
             spec: value.spec.into(),
             tag_ids: value.tag_ids,
-            duplicate_source: value.duplicate_source.into(),
-        }
+            duplicate_source: value.duplicate_source.try_into()?,
+        })
     }
 }
 
@@ -221,12 +232,14 @@ impl From<citadel_deployments::ImagePullProgress> for ImagePullProgress {
     }
 }
 
-impl From<citadel_deployments::DeploymentDuplicateDraft> for DeploymentDuplicateDraftView {
-    fn from(value: citadel_deployments::DeploymentDuplicateDraft) -> Self {
-        Self {
-            draft: value.draft.into(),
+impl TryFrom<citadel_deployments::DeploymentDuplicateDraft> for DeploymentDuplicateDraftView {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_deployments::DeploymentDuplicateDraft) -> Result<Self, Self::Error> {
+        Ok(Self {
+            draft: value.draft.try_into()?,
             warnings: value.warnings.into_iter().map(Into::into).collect(),
-        }
+        })
     }
 }
 
@@ -260,11 +273,11 @@ mod tests {
             platform_id: Uuid::now_v7(),
             created_at: Utc::now(),
             created_by_actor_id: Uuid::now_v7(),
-            status: "Created".to_owned(),
-            control_state: "Idle".to_owned(),
+            status: DeploymentStatus::Created,
+            control_state: ResourceControlState::Idle,
             auto_update_state: Some(AutoUpdateState {
                 last_checked_at: Utc::now(),
-                status: "Unknown".to_owned(),
+                status: crate::api::resources::common::AutoUpdateStatus::Unknown,
                 current_digest: None,
                 remote_digest: None,
                 last_error: None,
@@ -285,7 +298,7 @@ mod tests {
                 command: None,
                 environment_variables: None,
             },
-            platform_status: "Online".to_owned(),
+            platform_status: PlatformStatus::Online,
             platform_name: None,
             image_name: None,
             image_id: None,

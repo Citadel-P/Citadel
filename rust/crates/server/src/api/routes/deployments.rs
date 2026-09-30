@@ -116,7 +116,11 @@ async fn check_deployment_updates(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(checked)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(checked).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -227,8 +231,11 @@ async fn list_deployments(
         Json(DeploymentsView {
             deployments: api_result(result, &headers)?
                 .into_iter()
-                .map(DeploymentView::from)
-                .collect(),
+                .map(DeploymentView::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
+                })?,
             capabilities,
         })
         .into_response(),
@@ -273,7 +280,11 @@ async fn get_deployment(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -357,7 +368,11 @@ async fn get_deployment_duplicate_draft(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentDuplicateDraftView::from(draft)).into_response(),
+        Json(api_result(
+            DeploymentDuplicateDraftView::try_from(draft).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -403,7 +418,11 @@ async fn create_deployment(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -457,7 +476,11 @@ async fn update_deployment(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -510,7 +533,11 @@ async fn update_deployment_metadata(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -557,7 +584,11 @@ async fn rename_deployment(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -698,7 +729,11 @@ async fn draft(
         &headers,
     )?;
     Ok(no_store(
-        Json(ContainerAdoptionDraft::from(draft)).into_response(),
+        Json(api_result(
+            ContainerAdoptionDraft::try_from(draft).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -757,7 +792,11 @@ async fn adopt(
         &headers,
     )?;
     Ok(no_store(
-        Json(DeploymentView::from(deployment)).into_response(),
+        Json(api_result(
+            DeploymentView::try_from(deployment).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 

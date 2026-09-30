@@ -189,8 +189,11 @@ pub struct GitRepositoryRefView {
     pub id: Uuid,
     pub git_repository_id: Uuid,
     pub branch: String,
+    #[schema(required = true)]
     pub resolved_commit_sha: Option<String>,
+    #[schema(value_type = crate::openapi::compatibility::GitReposStatus)]
     pub status: String,
+    #[schema(required = true)]
     pub last_error: Option<String>,
     pub last_synced_at: DateTime<Utc>,
 }
@@ -268,19 +271,28 @@ impl From<citadel_git::GitChangedPath> for GitChangedPath {
 pub struct GitRepositoryView {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub url: String,
     pub default_branch: String,
+    #[schema(required = true)]
     pub git_account_id: Option<Uuid>,
     pub sync_mode: GitRepositorySyncMode,
+    #[schema(required = true)]
     pub sync_interval_minutes: Option<i32>,
+    #[schema(value_type = Option<crate::openapi::compatibility::RepoWebhookConfig>, required = true)]
     pub webhook: Option<Value>,
+    #[schema(required = true)]
     pub on_clone: Option<RepoCommand>,
+    #[schema(required = true)]
     pub on_pull: Option<RepoCommand>,
+    #[schema(value_type = crate::openapi::compatibility::GitReposStatus)]
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(value_type = Option<crate::api::resources::activities::views::LatestActivityView>, required = true)]
     pub latest_activity_view: Option<Value>,
     pub tags: Vec<TagSummary>,
 }
@@ -307,15 +319,7 @@ impl From<citadel_git::GitRepository> for GitRepositoryView {
                 crate::api::resources::activities::presentation::public_latest_activity(
                     value.latest_activity,
                 ),
-            tags: value
-                .tags
-                .into_iter()
-                .map(|v| TagSummary {
-                    id: v.id,
-                    name: v.name,
-                    color: v.color,
-                })
-                .collect(),
+            tags: value.tags.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -368,14 +372,20 @@ pub(crate) struct AuthorizedGitRepositoryView {
 pub(crate) struct GitRepositoryConfigResponse {
     pub(crate) id: Uuid,
     pub(crate) name: String,
+    #[schema(required = true)]
     pub(crate) description: Option<String>,
     pub(crate) url: String,
     pub(crate) default_branch: String,
+    #[schema(required = true)]
     pub(crate) git_account_id: Option<Uuid>,
     pub(crate) sync_mode: GitRepositorySyncMode,
+    #[schema(required = true)]
     pub(crate) sync_interval_minutes: Option<i32>,
+    #[schema(value_type = Option<crate::openapi::compatibility::RepoWebhookConfig>, required = true)]
     pub(crate) webhook: Option<Value>,
+    #[schema(required = true)]
     pub(crate) on_clone: Option<RepoCommand>,
+    #[schema(required = true)]
     pub(crate) on_pull: Option<RepoCommand>,
     pub(crate) tags: Vec<crate::api::resources::tags::views::TagSummary>,
 }

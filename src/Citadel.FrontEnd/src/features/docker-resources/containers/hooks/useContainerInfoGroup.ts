@@ -155,7 +155,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         state: container.state,
         created: container.created as number,
         stack: container.stack,
-        containerStat: container.lastStats ?? {},
+        containerStat: container.lastStats ?? undefined,
         ports: container.ports as any,
         controlState: container.controlState,
         imageId: container.dockerImageId,

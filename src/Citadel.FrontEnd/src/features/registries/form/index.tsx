@@ -4,7 +4,10 @@ import { RegistryActions } from './actions';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { RegistryConfigView, RegistryView } from '@/api/generated/api.types';
+import {
+  RegistryConfigResponse,
+  AuthorizedRegistryView,
+} from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
@@ -18,12 +21,12 @@ export const RegistryFormComponents: RequiredFormComponents = {
   EditForm: {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <StateIndicator value={resource.status as any} />;
+        return <StateIndicator variant="badge" value={resource.status as any} />;
       },
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(RegistryActions)} />;
       },
-      Tags: ({ resource }: { resource: RegistryConfigView }) => (
+      Tags: ({ resource }: { resource: RegistryConfigResponse }) => (
         <ResourceHeaderTagsEditor
           resourceType="Registry"
           resourceId={resource.id}
@@ -41,7 +44,7 @@ export const RegistryFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Activities',
-        Content: ({ resource }: { resource: RegistryView }) => {
+        Content: ({ resource }: { resource: AuthorizedRegistryView }) => {
           return <ActivitiesTab resourceId={resource.id} resourceType="Registry" />;
         },
       },

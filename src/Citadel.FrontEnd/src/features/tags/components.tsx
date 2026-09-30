@@ -1,4 +1,4 @@
-import { TagSummaryView, TagView } from '@/api/generated/api.types';
+import { ResourcesTagsTagSummary, TagView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -186,7 +186,7 @@ export const ResourceTagSelector = ({
   );
 };
 
-export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[] | null; max?: number }) => {
+export const TagChips = ({ tags, max = 3 }: { tags?: ResourcesTagsTagSummary[] | TagView[] | null; max?: number }) => {
   const visibleTags = tags?.slice(0, max) ?? [];
   const hiddenCount = Math.max((tags?.length ?? 0) - visibleTags.length, 0);
 
@@ -247,7 +247,7 @@ export const ResourceHeaderTagsEditor = ({
 }: {
   resourceType: EditableResourceType;
   resourceId: string;
-  tags?: TagSummaryView[] | null;
+  tags?: ResourcesTagsTagSummary[] | null;
   disabled?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
@@ -264,7 +264,7 @@ export const ResourceHeaderTagsEditor = ({
     const knownTags = new Map(allTags.map((tag) => [tag.id, tag]));
     return selectedTagIds
       .map((tagId) => knownTags.get(tagId) ?? tags?.find((tag) => tag.id === tagId))
-      .filter((tag): tag is TagSummaryView | TagView => Boolean(tag));
+      .filter((tag): tag is ResourcesTagsTagSummary | TagView => Boolean(tag));
   }, [allTags, selectedTagIds, tags]);
 
   const availableTags = useMemo(() => {

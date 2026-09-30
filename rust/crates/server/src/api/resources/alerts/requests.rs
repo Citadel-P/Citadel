@@ -1,3 +1,4 @@
+use super::spec::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -8,7 +9,7 @@ pub struct AlertChannelInput {
     #[serde(default, deserialize_with = "optional_name")]
     #[schema(nullable)]
     pub name: String,
-    pub alert_destination: String,
+    pub alert_destination: AlertDestination,
     pub url: String,
     pub is_active: bool,
 }
@@ -17,21 +18,23 @@ impl From<AlertChannelInput> for citadel_alerts::AlertChannelConfiguration {
     fn from(value: AlertChannelInput) -> Self {
         Self {
             name: value.name,
-            alert_destination: value.alert_destination,
+            alert_destination: value.alert_destination.as_str().to_owned(),
             url: value.url,
             is_active: value.is_active,
         }
     }
 }
 
-impl From<citadel_alerts::AlertChannelConfiguration> for AlertChannelInput {
-    fn from(value: citadel_alerts::AlertChannelConfiguration) -> Self {
-        Self {
+impl TryFrom<citadel_alerts::AlertChannelConfiguration> for AlertChannelInput {
+    type Error = citadel_alerts::AlertError;
+
+    fn try_from(value: citadel_alerts::AlertChannelConfiguration) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
-            alert_destination: value.alert_destination,
+            alert_destination: decode(value.alert_destination.into())?,
             url: value.url,
             is_active: value.is_active,
-        }
+        })
     }
 }
 
@@ -43,19 +46,19 @@ pub struct AlertRuleInput {
     pub name: String,
     pub description: Option<String>,
     #[serde(rename = "type")]
-    pub alert_type: String,
-    pub severity: String,
+    pub alert_type: AlertType,
+    pub severity: AlertSeverity,
     pub cooldown_seconds: Option<i32>,
     pub required_matches: Option<i32>,
     pub threshold: Option<f64>,
     #[serde(default = "enabled_status")]
-    pub status: String,
+    pub status: AlertRuleStatus,
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
     #[serde(default)]
-    pub limited_to: Vec<Value>,
+    pub limited_to: Vec<AlertResourceScope>,
     #[serde(default)]
-    pub quiet_hours: Vec<Value>,
+    pub quiet_hours: Vec<AlertQuietHour>,
 }
 
 impl From<AlertRuleInput> for citadel_alerts::AlertRuleConfiguration {
@@ -63,34 +66,44 @@ impl From<AlertRuleInput> for citadel_alerts::AlertRuleConfiguration {
         Self {
             name: value.name,
             description: value.description,
-            alert_type: value.alert_type,
-            severity: value.severity,
+            alert_type: value.alert_type.as_str().to_owned(),
+            severity: value.severity.as_str().to_owned(),
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: value.status,
+            status: value.status.as_str().to_owned(),
             channel_ids: value.channel_ids,
-            limited_to: value.limited_to,
-            quiet_hours: value.quiet_hours,
+            limited_to: value
+                .limited_to
+                .into_iter()
+                .map(|item| serde_json::json!(item))
+                .collect(),
+            quiet_hours: value
+                .quiet_hours
+                .into_iter()
+                .map(|item| serde_json::json!(item))
+                .collect(),
         }
     }
 }
 
-impl From<citadel_alerts::AlertRuleConfiguration> for AlertRuleInput {
-    fn from(value: citadel_alerts::AlertRuleConfiguration) -> Self {
-        Self {
+impl TryFrom<citadel_alerts::AlertRuleConfiguration> for AlertRuleInput {
+    type Error = citadel_alerts::AlertError;
+
+    fn try_from(value: citadel_alerts::AlertRuleConfiguration) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
             description: value.description,
-            alert_type: value.alert_type,
-            severity: value.severity,
+            alert_type: decode(value.alert_type.into())?,
+            severity: decode(value.severity.into())?,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,
             threshold: value.threshold,
-            status: value.status,
+            status: decode(value.status.into())?,
             channel_ids: value.channel_ids,
-            limited_to: value.limited_to,
-            quiet_hours: value.quiet_hours,
-        }
+            limited_to: decode(Value::Array(value.limited_to))?,
+            quiet_hours: decode(Value::Array(value.quiet_hours))?,
+        })
     }
 }
 
@@ -98,8 +111,8 @@ fn optional_name<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<St
     Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
-fn enabled_status() -> String {
-    "Enabled".into()
+fn enabled_status() -> AlertRuleStatus {
+    AlertRuleStatus::Enabled
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -135,7 +148,7 @@ pub(crate) struct ResolveInput {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct VerifyInput {
     pub(crate) name: String,
-    pub(crate) alert_destination: String,
+    pub(crate) alert_destination: AlertDestination,
     pub(crate) url: String,
 }
 

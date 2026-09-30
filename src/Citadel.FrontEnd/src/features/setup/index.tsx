@@ -32,7 +32,7 @@ const initialForm: SetupForm = {
 export default function InitialSetup() {
   const navigate = useNavigate();
   const { completeLogin } = useAuthContext();
-  const { markSetupComplete } = useSetupContext();
+  const { markSetupComplete, passwordMinimumLength, passwordMaximumLength } = useSetupContext();
   const initialize = useMutate('initializeCitadel');
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<SetupErrors>({});
@@ -61,10 +61,10 @@ export default function InitialSetup() {
 
     if (!form.password) {
       next.password = 'Password is required.';
-    } else if ([...form.password].length < 15) {
-      next.password = 'Password must be at least 15 characters.';
-    } else if ([...form.password].length > 128) {
-      next.password = 'Password must be no more than 128 characters.';
+    } else if ([...form.password].length < passwordMinimumLength) {
+      next.password = `Password must be at least ${passwordMinimumLength} characters.`;
+    } else if ([...form.password].length > passwordMaximumLength) {
+      next.password = `Password must be no more than ${passwordMaximumLength} characters.`;
     }
 
     if (!form.confirmPassword) {
@@ -120,9 +120,7 @@ export default function InitialSetup() {
   };
 
   return (
-    <MfaAuthShell
-      title="Set up Citadel"
-      description="Create the administrator account for this installation.">
+    <MfaAuthShell title="Set up Citadel" description="Create the administrator account for this installation.">
       {initialize.validationErrors && <AlertMessage type="warning">{initialize.validationErrors}</AlertMessage>}
 
       <form className="space-y-5" onSubmit={submit} noValidate>
@@ -175,7 +173,9 @@ export default function InitialSetup() {
           {errors.password ? (
             <p className="text-xs font-medium text-destructive">{errors.password}</p>
           ) : (
-            <p className="text-xs text-muted-foreground">Use 15 to 128 characters.</p>
+            <p className="text-xs text-muted-foreground">
+              Use {passwordMinimumLength} to {passwordMaximumLength} characters.
+            </p>
           )}
         </div>
 

@@ -25,6 +25,7 @@ export const BackupPolicyFormComponents: RequiredFormComponents<BackupPolicyForm
         const policy = resource as BackupPolicyView;
         return (
           <StateIndicator
+            variant="badge"
             value={policy.enabled}
             isProcessing={policy.controlState === ResourceControlState.Processing}
             enableLabel

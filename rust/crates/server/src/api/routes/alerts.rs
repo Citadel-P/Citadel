@@ -2,15 +2,15 @@
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
-        resources::alerts::{requests::*, views::*},
+        resources::alerts::{patch::*, requests::*, views::*},
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson},
+    request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
 };
 
 use axum::{
     Json, Router,
-    extract::{Extension, State},
+    extract::{Extension, State, rejection::JsonRejection},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -186,15 +186,40 @@ async fn list_channels(
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
-    let channels = result(
+    let records = result(
         s.store
             .list_channels(p.actor_id, p.is_administrator())
             .await,
         &h,
     )?;
+    let ids = records.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = api_result(
+        s.identity
+            .permissions_for_resources(&p, ResourceType::AlertChannel, &ids)
+            .await,
+        &h,
+    )?;
+    let items = records
+        .into_iter()
+        .map(|item| {
+            let id = item.id;
+            let mut view = result(AlertChannelView::try_from(item), &h)?;
+            view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+                permissions.get(&id).copied().flatten(),
+            ));
+            Ok(view)
+        })
+        .collect::<HttpResult<Vec<_>>>()?;
+    let permission = api_result(
+        s.identity
+            .global_permission(&p, ResourceType::AlertChannel)
+            .await,
+        &h,
+    )?;
     Ok(no_store(
         Json(Channels {
-            channels: channels.into_iter().map(Into::into).collect(),
+            channels: items,
+            capabilities: crate::api::resource_access::capabilities_from_permission(permission),
         })
         .into_response(),
     ))
@@ -233,7 +258,9 @@ async fn create_channel(
     let mut i: citadel_alerts::AlertChannelConfiguration = i.into();
     result(i.validate(), &h)?;
     let v = result(s.store.create_channel(p.actor_id, &i).await, &h)?;
-    Ok(no_store(Json(AlertChannelView::from(v)).into_response()))
+    Ok(no_store(
+        Json(result(AlertChannelView::try_from(v), &h)?).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -266,13 +293,20 @@ async fn get_channel(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(AlertChannelView::from(result(
-            s.store.get_channel(id).await,
-            &h,
-        )?))
-        .into_response(),
-    ))
+    let mut view = result(
+        AlertChannelView::try_from(result(s.store.get_channel(id).await, &h)?),
+        &h,
+    )?;
+    let permission = api_result(
+        s.identity
+            .permission_for_resource(&p, ResourceType::AlertChannel, id)
+            .await,
+        &h,
+    )?;
+    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+        permission,
+    ));
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(
@@ -282,8 +316,8 @@ async fn get_channel(
     tag = "AlertRules",
     summary = "Update an Alert Channel",
     request_body(content(
-        (AlertChannelInput = "application/merge-patch+json"),
-        (AlertChannelInput = "application/json")
+        (PatchAlertChannelInput = "application/merge-patch+json"),
+        (PatchAlertChannelInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AlertChannelView, content_type = "application/json"),
@@ -298,7 +332,7 @@ async fn update_channel(
     p: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<PatchAlertChannelInput>, JsonRejection>,
 ) -> HttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -310,11 +344,13 @@ async fn update_channel(
         &h,
     )
     .await?;
+    let Json(patch) = api_result(patch.map_err(invalid_json), &h)?;
+    let patch = patch.into_value();
     Ok(no_store(
-        Json(AlertChannelView::from(result(
-            s.store.update_channel(id, &patch).await,
+        Json(result(
+            AlertChannelView::try_from(result(s.store.update_channel(id, &patch).await, &h)?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -385,7 +421,7 @@ async fn verify_channel(
     .await?;
     let mut i = citadel_alerts::AlertChannelConfiguration {
         name: i.name,
-        alert_destination: i.alert_destination,
+        alert_destination: i.alert_destination.as_str().to_owned(),
         url: i.url,
         is_active: true,
     };
@@ -426,6 +462,9 @@ fn test_event() -> citadel_alerts::AlertEvent {
         acknowledged_at: None,
         resolved_by_actor_id: None,
         resolved_at: None,
+        actor_id: None,
+        actor_name: None,
+        actor_type: None,
         resolution_note: None,
         created_at: now,
         updated_at: now,
@@ -469,7 +508,7 @@ async fn list_events(
     )?;
     Ok(no_store(
         Json(Events {
-            paged_result: paged_result.into(),
+            paged_result: result(paged_result.try_into(), &h)?,
         })
         .into_response(),
     ))
@@ -506,10 +545,10 @@ async fn get_event(
     )
     .await?;
     Ok(no_store(
-        Json(AlertEventView::from(result(
-            s.store.get_event(id).await,
+        Json(result(
+            AlertEventView::try_from(result(s.store.get_event(id).await, &h)?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -638,15 +677,37 @@ async fn list_rules(
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
+    let records = result(
+        s.store.list_rules(p.actor_id, p.is_administrator()).await,
+        &h,
+    )?;
+    let ids = records.iter().map(|item| item.rule.id).collect::<Vec<_>>();
+    let permissions = api_result(
+        s.identity
+            .permissions_for_resources(&p, ResourceType::Alert, &ids)
+            .await,
+        &h,
+    )?;
+    let items = records
+        .into_iter()
+        .map(|item| {
+            let id = item.rule.id;
+            let mut view = result(AlertRuleListItem::try_from(item), &h)?;
+            view.rule.capabilities =
+                Some(crate::api::resource_access::capabilities_from_permission(
+                    permissions.get(&id).copied().flatten(),
+                ));
+            Ok(view)
+        })
+        .collect::<HttpResult<Vec<_>>>()?;
+    let permission = api_result(
+        s.identity.global_permission(&p, ResourceType::Alert).await,
+        &h,
+    )?;
     Ok(no_store(
         Json(Rules {
-            alert_rules: result(
-                s.store.list_rules(p.actor_id, p.is_administrator()).await,
-                &h,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+            alert_rules: items,
+            capabilities: crate::api::resource_access::capabilities_from_permission(permission),
         })
         .into_response(),
     ))
@@ -685,10 +746,10 @@ async fn create_rule(
     let mut i: citadel_alerts::AlertRuleConfiguration = i.into();
     result(i.validate_create(), &h)?;
     Ok(no_store(
-        Json(AlertRuleView::from(result(
-            s.store.create_rule(p.actor_id, &i).await,
+        Json(result(
+            AlertRuleView::try_from(result(s.store.create_rule(p.actor_id, &i).await, &h)?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -723,9 +784,20 @@ async fn get_rule(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(AlertRuleView::from(result(s.store.get_rule(id).await, &h)?)).into_response(),
-    ))
+    let mut view = result(
+        AlertRuleView::try_from(result(s.store.get_rule(id).await, &h)?),
+        &h,
+    )?;
+    let permission = api_result(
+        s.identity
+            .permission_for_resource(&p, ResourceType::Alert, id)
+            .await,
+        &h,
+    )?;
+    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+        permission,
+    ));
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(
@@ -735,7 +807,7 @@ async fn get_rule(
     tag = "AlertRules",
     summary = "Get Alert Rule configuration",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/AlertRuleConfigView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = AlertRuleConfig, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -760,14 +832,7 @@ async fn get_rule_config(
     .await?;
     let rule = result(s.store.get_rule(id).await, &h)?;
     Ok(no_store(
-        Json(json!({
-            "id":rule.id,"name":rule.name,"description":rule.description,
-            "isSystem":rule.created_by_actor_id == Uuid::from_u128(1),
-            "type":rule.alert_type,"severity":rule.severity,"cooldownSeconds":rule.cooldown_seconds,
-            "requiredMatches":rule.required_matches,"threshold":rule.threshold,"status":rule.status,
-            "channelIds":rule.channel_ids,"limitedTo":rule.limited_to,"quietHours":rule.quiet_hours
-        }))
-        .into_response(),
+        Json(result(AlertRuleConfig::try_from(rule), &h)?).into_response(),
     ))
 }
 
@@ -804,10 +869,10 @@ async fn rename_rule(
     )
     .await?;
     Ok(no_store(
-        Json(AlertRuleView::from(result(
-            s.store.rename_rule(p.actor_id, &input).await,
+        Json(result(
+            AlertRuleView::try_from(result(s.store.rename_rule(p.actor_id, &input).await, &h)?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -819,8 +884,8 @@ async fn rename_rule(
     tag = "AlertRules",
     summary = "Update Alert Rule metadata",
     request_body(content(
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchResourceMetadata") = "application/json")
+        (PatchAlertRuleMetadata = "application/merge-patch+json"),
+        (PatchAlertRuleMetadata = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AlertRuleView, content_type = "application/json"),
@@ -835,7 +900,7 @@ async fn update_rule_metadata(
     p: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<PatchAlertRuleMetadata>, JsonRejection>,
 ) -> HttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -847,12 +912,17 @@ async fn update_rule_metadata(
         &h,
     )
     .await?;
+    let Json(patch) = api_result(patch.map_err(invalid_json), &h)?;
+    let patch = patch.into_value();
     let description = result(citadel_alerts::description_patch(&patch), &h)?;
     Ok(no_store(
-        Json(AlertRuleView::from(result(
-            s.store.update_rule_description(id, description).await,
+        Json(result(
+            AlertRuleView::try_from(result(
+                s.store.update_rule_description(id, description).await,
+                &h,
+            )?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }
@@ -864,8 +934,8 @@ async fn update_rule_metadata(
     tag = "AlertRules",
     summary = "Update an Alert Rule",
     request_body(content(
-        (ref("#/components/schemas/PatchAlertRuleInput") = "application/merge-patch+json"),
-        (ref("#/components/schemas/PatchAlertRuleInput") = "application/json")
+        (PatchAlertRuleInput = "application/merge-patch+json"),
+        (PatchAlertRuleInput = "application/json")
     )),
     responses(
         (status = 200, description = "Success", body = AlertRuleView, content_type = "application/json"),
@@ -880,7 +950,7 @@ async fn update_rule(
     p: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     h: HeaderMap,
-    ValidatedJson(patch): ValidatedJson<serde_json::Value>,
+    patch: Result<Json<PatchAlertRuleInput>, JsonRejection>,
 ) -> HttpResult {
     let p = actor(p, &h)?;
     auth(
@@ -892,11 +962,16 @@ async fn update_rule(
         &h,
     )
     .await?;
+    let Json(patch) = api_result(patch.map_err(invalid_json), &h)?;
+    let patch = patch.into_value();
     Ok(no_store(
-        Json(AlertRuleView::from(result(
-            s.store.update_rule(p.actor_id, id, &patch).await,
+        Json(result(
+            AlertRuleView::try_from(result(
+                s.store.update_rule(p.actor_id, id, &patch).await,
+                &h,
+            )?),
             &h,
-        )?))
+        )?)
         .into_response(),
     ))
 }

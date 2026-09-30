@@ -1,4 +1,4 @@
-import { PlatformWorkloadStatusCountsView } from '@/api/generated/api.types';
+import { WorkloadStatusCounts } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -66,7 +66,7 @@ export const getContainerStates = (counts: ContainerWorkloadStatusCounts): Workl
   state('Paused', counts.paused, 'bg-amber-500'),
 ];
 
-const getAvailabilityStates = (counts?: PlatformWorkloadStatusCountsView | null): WorkloadState[] => [
+const getAvailabilityStates = (counts?: WorkloadStatusCounts | null): WorkloadState[] => [
   state('Healthy', counts?.healthy, 'bg-emerald-500'),
   state('Degraded', counts?.degraded, 'bg-amber-500'),
   state('Failed', counts?.failed, 'bg-rose-500', false),
@@ -78,7 +78,7 @@ const getAvailabilityStates = (counts?: PlatformWorkloadStatusCountsView | null)
 export const getDeploymentStates = getAvailabilityStates;
 export const getServiceStates = getAvailabilityStates;
 
-export const getStackStates = (counts?: PlatformWorkloadStatusCountsView | null): WorkloadState[] => [
+export const getStackStates = (counts?: WorkloadStatusCounts | null): WorkloadState[] => [
   state('Healthy', counts?.healthy, 'bg-emerald-500'),
   state('Degraded', counts?.degraded, 'bg-amber-500'),
   state('Failed', counts?.failed, 'bg-rose-500', false),

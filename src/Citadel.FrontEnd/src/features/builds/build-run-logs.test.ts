@@ -1,4 +1,4 @@
-import { BuildRunLogEntry } from '@/api/generated/api.types';
+import { BuildLogEntry } from '@/api/generated/api.types';
 import { formatBuildRunLogViewerEntries } from './build-run-logs';
 
 const format = (message: string, stream = 'stderr') =>
@@ -8,7 +8,7 @@ const format = (message: string, stream = 'stderr') =>
     createdAt: '2026-09-22T00:00:00Z',
     message,
     stream,
-  } as BuildRunLogEntry);
+  } as BuildLogEntry);
 
 describe('build log severity', () => {
   it('leaves Docker progress neutral and colors only the error line within a chunk', () => {

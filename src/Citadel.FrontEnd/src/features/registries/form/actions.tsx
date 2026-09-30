@@ -1,9 +1,9 @@
 import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { RegistryView } from '@/api/generated/api.types';
+import { AuthorizedRegistryView } from '@/api/generated/api.types';
 
-export const { info: RegistryActions } = createActionsBuilder<RegistryView>()
+export const { info: RegistryActions } = createActionsBuilder<AuthorizedRegistryView>()
   .addAction({
     key: 'delete',
     type: 'command',
@@ -15,7 +15,7 @@ export const { info: RegistryActions } = createActionsBuilder<RegistryView>()
     canExecute: () => true,
     useVariables: (resource) => {
       return {
-        ids: [(resource as RegistryView).id],
+        ids: [(resource as AuthorizedRegistryView).id],
       };
     },
     useSuccessHandler: () => {

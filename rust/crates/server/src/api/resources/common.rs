@@ -10,6 +10,7 @@ pub(crate) fn enabled_by_default() -> bool {
 pub struct ResourceInfo {
     pub id: Uuid,
     pub name: String,
+    #[schema(required = true)]
     pub group: Option<String>,
 }
 
@@ -80,4 +81,52 @@ impl From<citadel_identity::ResourceCapabilities> for ResourceCapabilities {
             can_execute: value.can_execute,
         }
     }
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+pub enum ResourceControlState {
+    Idle,
+    Processing,
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+pub enum PlatformStatus {
+    Offline,
+    Online,
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+pub enum AutoUpdateStatus {
+    Unknown,
+    UpToDate,
+    UpdateAvailable,
+    Updating,
+    Failed,
+}
+
+impl AutoUpdateStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "Unknown",
+            Self::UpToDate => "UpToDate",
+            Self::UpdateAvailable => "UpdateAvailable",
+            Self::Updating => "Updating",
+            Self::Failed => "Failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSourceInput {
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityResourceTypeSchema)]
+    pub resource_type: citadel_activities::ActivityResourceType,
+    pub resource_id: Uuid,
+    pub resource_name: String,
 }

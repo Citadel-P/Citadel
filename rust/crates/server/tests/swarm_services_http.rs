@@ -1,3 +1,5 @@
+#[path = "swarm_services_http/contracts.rs"]
+mod contracts;
 use citadel_server::api::routes::swarm_services as swarm_services_http;
 use std::sync::Arc;
 
@@ -205,6 +207,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    contracts::verify(&app, &admin, id).await;
     let mut invalid_spec = created["spec"].clone();
     invalid_spec["replicas"] = json!(-1);
     for (method, path, body, explanation) in [

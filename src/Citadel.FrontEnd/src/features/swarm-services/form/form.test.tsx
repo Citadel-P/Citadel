@@ -74,7 +74,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
                   resourceName: 'redis-service',
                 },
               },
-              warnings: [],
+              warnings: ['Published ports were removed from the duplicate.'],
             },
           },
           isFetching: false,
@@ -346,6 +346,7 @@ describe('SwarmServiceForm', () => {
     expect(screen.getByRole('combobox', { name: 'Registry' })).toHaveTextContent('Docker Hub');
     expect(screen.getByRole('textbox', { name: 'Image Reference' })).toHaveValue('redis');
     expect(screen.getByText(/No Service has been created yet/)).toBeVisible();
+    expect(screen.getByText('Published ports were removed from the duplicate.')).toBeVisible();
   });
 
   it('loads an unmanaged Service adoption draft for review', async () => {

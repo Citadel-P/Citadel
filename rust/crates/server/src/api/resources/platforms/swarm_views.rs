@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SwarmQuorumView {
+    #[schema(value_type = crate::openapi::compatibility::SwarmQuorumState)]
     pub state: &'static str,
     pub reachable_managers: i64,
     pub required_managers: i64,
@@ -17,6 +18,7 @@ pub struct SwarmQuorumView {
 pub struct SwarmOverviewView {
     pub platform_id: Uuid,
     pub health: &'static str,
+    #[schema(required = true)]
     pub message: Option<String>,
     pub is_stale: bool,
     pub node_count: i64,

@@ -23,12 +23,6 @@ pub struct SwarmServiceFilter {
     pub platform_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TagSummary {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-}
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwarmServiceDetails {
     pub service: SwarmService,
@@ -39,7 +33,7 @@ pub struct SwarmServiceDetails {
     pub update_state: Option<String>,
     pub update_message: Option<String>,
     pub current_operation: Option<SwarmServiceOperation>,
-    pub tags: Vec<TagSummary>,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub tasks: Option<Vec<Value>>,
     pub effective_permission: citadel_primitives::EffectivePermission,
 }

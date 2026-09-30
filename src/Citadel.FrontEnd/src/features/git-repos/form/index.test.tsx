@@ -2,7 +2,9 @@ import {
   ActivityEventType,
   ActivityResourceType,
   ActivityStatus,
-  GitRepositoryView,
+  AuthorizedGitRepositoryView,
+  GitReposStatus,
+  ResourceControlState,
   LatestActivityView,
 } from '@/api/generated/api.types';
 import { render, screen } from '@testing-library/react';
@@ -14,9 +16,37 @@ vi.mock('@/lib/monaco', () => ({
   MonacoDiff: () => null,
 }));
 
+it('shows repository processing from enqueue through execution, then the final status', () => {
+  const Indicator = GitRepoFormComponents.EditForm!.Header.Indicator;
+  const repository = {
+    status: GitReposStatus.Pending,
+    // Rust queues synchronization before a worker claims it.
+    controlState: 'Queued',
+  } as unknown as AuthorizedGitRepositoryView;
+  const { rerender } = render(<Indicator resource={repository} />);
+  expect(screen.getByText('Processing')).toHaveAttribute('data-slot', 'badge');
+  expect(screen.queryByText('Pending')).not.toBeInTheDocument();
+
+  rerender(<Indicator resource={{ ...repository, controlState: ResourceControlState.Processing }} />);
+  expect(screen.getByText('Processing')).toBeVisible();
+
+  rerender(
+    <Indicator resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitReposStatus.Healthy }} />,
+  );
+  expect(screen.getByText('Healthy')).toBeVisible();
+  expect(screen.queryByText('Processing')).not.toBeInTheDocument();
+
+  rerender(
+    <Indicator
+      resource={{ ...repository, controlState: ResourceControlState.Idle, status: GitReposStatus.Degraded }}
+    />,
+  );
+  expect(screen.getByText('Degraded')).toBeVisible();
+});
+
 function renderSubHeader(latestActivityView: LatestActivityView | null) {
   const SubHeader = GitRepoFormComponents.EditForm!.SubHeader!;
-  return render(<SubHeader resource={{ latestActivityView } as GitRepositoryView} />);
+  return render(<SubHeader resource={{ latestActivityView } as AuthorizedGitRepositoryView} />);
 }
 
 function activity(eventType: ActivityEventType, overrides: Partial<LatestActivityView> = {}): LatestActivityView {
@@ -32,6 +62,40 @@ function activity(eventType: ActivityEventType, overrides: Partial<LatestActivit
 }
 
 describe('Git repository subheader', () => {
+  it('clears a previous sync error when a realtime update reports recovery', () => {
+    const SubHeader = GitRepoFormComponents.EditForm!.SubHeader!;
+    const latestActivityView = activity(ActivityEventType.GitRepoPulled, {
+      status: ActivityStatus.Failure,
+      info: {
+        $type: 'GitRepoPulled',
+        result: { commitSha: null, message: 'Repository credentials were rejected.' },
+      } as LatestActivityView['info'],
+    });
+    const resource = { latestActivityView, status: GitReposStatus.Degraded } as AuthorizedGitRepositoryView;
+    const { rerender } = render(<SubHeader resource={resource} />);
+    expect(screen.getByText('Repository credentials were rejected.')).toBeVisible();
+
+    rerender(<SubHeader resource={{ ...resource, status: GitReposStatus.Healthy }} />);
+    expect(screen.queryByText('Sync Error')).not.toBeInTheDocument();
+    expect(screen.queryByText('Repository credentials were rejected.')).not.toBeInTheDocument();
+
+    rerender(<SubHeader resource={resource} />);
+    expect(screen.getByText('Sync Error')).toBeVisible();
+  });
+
+  it('preserves warnings on a healthy repository', () => {
+    const SubHeader = GitRepoFormComponents.EditForm!.SubHeader!;
+    const latestActivityView = activity(ActivityEventType.GitRepoPulled, {
+      status: ActivityStatus.Warning,
+      info: {
+        $type: 'GitRepoPulled',
+        result: { commitSha: null, message: 'Post-sync command reported a warning.' },
+      } as LatestActivityView['info'],
+    });
+    render(<SubHeader resource={{ latestActivityView, status: GitReposStatus.Healthy } as AuthorizedGitRepositoryView} />);
+    expect(screen.getByText('Post-sync command reported a warning.')).toBeVisible();
+  });
+
   it('renders without a latest activity', () => {
     expect(renderSubHeader(null).container).toBeEmptyDOMElement();
   });

@@ -7,7 +7,7 @@ import {
   PlatformType,
   PlatformView,
   SwarmOverviewView,
-  TagSummaryView,
+  ResourcesTagsTagSummary,
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg?react';
 import { Link } from 'react-router';
@@ -409,7 +409,7 @@ const WorkloadMetric = ({
   );
 };
 
-const CompactTagSummary = ({ tags }: { tags?: TagSummaryView[] | null }) => {
+const CompactTagSummary = ({ tags }: { tags?: ResourcesTagsTagSummary[] | null }) => {
   const visibleTags = tags?.slice(0, 1) ?? [];
   const hiddenCount = Math.max((tags?.length ?? 0) - visibleTags.length, 0);
 

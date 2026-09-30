@@ -54,7 +54,7 @@ describe('ConfigInfoComponents', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(1);
     expect(screen.getByRole('tab', { name: 'Inspect' })).toBeVisible();
     expect(ConfigInfoComponents.Header.Indicator).toBeDefined();
-    expect(container.querySelector('.h-2.w-2.rounded-full')).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"].rounded-full')).toBeInTheDocument();
   });
 });
 

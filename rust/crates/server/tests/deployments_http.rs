@@ -743,15 +743,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         StatusCode::FORBIDDEN
     );
 
-    sqlx::query(
-        "INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,1,0)",
-    )
-    .bind(Uuid::now_v7())
-    .bind(reader_actor_id)
-    .bind(deployment_id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    authorization::set_read_access(&pool, &reader, &[deployment_id], false).await;
     assert_eq!(
         request(
             &app,

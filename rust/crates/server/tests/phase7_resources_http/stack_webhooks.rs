@@ -146,7 +146,11 @@ pub async fn verify(
     );
     // Revoking the entitlement between reception and processing discards the job.
     entitlement.0.store(false, Ordering::Relaxed);
-    assert_eq!(stacks.process_webhooks().await.unwrap(), 0);
+    assert_eq!(
+        stacks.process_webhooks().await.unwrap(),
+        1,
+        "discarded work still counts as processed"
+    );
     assert_eq!(count().await, 0);
     let duplicate = stacks
         .duplicate_draft(ActorId::new(SYSTEM_ACTOR_ID), true, stack.id)

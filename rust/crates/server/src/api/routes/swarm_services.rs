@@ -4,7 +4,6 @@ use crate::{
         error::{ApiError, HttpResult, api_result, no_store},
         resources::swarm_services::{
             requests::{ServiceMetadataInput, *},
-            spec::*,
             views::*,
         },
     },
@@ -185,7 +184,7 @@ async fn authorize_adoption(
     tag = "Platforms",
     summary = "Review an unmanaged Docker Service for adoption",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceAdoptionDraftView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmServiceAdoptionDraftView, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
     params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path)),
@@ -217,11 +216,13 @@ async fn adoption_draft(
             .map_err(service_error),
         &headers,
     )?;
-    Ok(no_store(Json(serde_json::json!({
-        "draft": {"name":draft.name,"platformId":draft.source.platform_id,"description":draft.description,
-            "spec":SwarmServiceSpec::from(draft.spec),"tagIds":null,"duplicateSource":null},
-        "source":SwarmServiceAdoptionSource::from(draft.source),"issues":draft.issues.into_iter().map(SwarmServiceAdoptionIssue::from).collect::<Vec<_>>(),"previewFingerprint":draft.preview_fingerprint
-    })).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            SwarmServiceAdoptionDraftView::try_from(draft).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -268,7 +269,11 @@ async fn adopt(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(service)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(service).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -315,7 +320,11 @@ async fn update_metadata(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -361,7 +370,11 @@ async fn create(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -405,7 +418,11 @@ async fn update(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -445,7 +462,11 @@ async fn rename(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -524,7 +545,11 @@ async fn check_updates(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }
 
@@ -535,7 +560,7 @@ async fn check_updates(
     tag = "SwarmServices",
     summary = "Apply a managed Docker Swarm Service and stream progress",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<SwarmServiceProgressItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -566,7 +591,7 @@ async fn apply(
     summary = "Scale a managed Docker Swarm Service and stream progress",
     request_body = ScaleSwarmServiceInput,
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<SwarmServiceProgressItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -599,7 +624,7 @@ async fn scale(
     tag = "SwarmServices",
     summary = "Force a managed Docker Swarm Service task update and stream progress",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceProgressItems"), content_type = "application/json"),
+        (status = 200, description = "Success", body = Vec<SwarmServiceProgressItem>, content_type = "application/json"),
         crate::openapi::errors::UnavailableResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -629,7 +654,7 @@ async fn force_update(
     tag = "SwarmServices",
     summary = "Prepare a managed Service duplicate",
     responses(
-        (status = 200, description = "Success", body = ref("#/components/schemas/SwarmServiceDuplicateDraftView"), content_type = "application/json"),
+        (status = 200, description = "Success", body = SwarmServiceDuplicateDraftView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
     params(("id" = uuid::Uuid, Path)),
@@ -653,12 +678,13 @@ async fn duplicate_draft(
             .map_err(service_error),
         &headers,
     )?;
-    Ok(no_store(Json(serde_json::json!({
-        "draft": {"name":draft.name,"platformId":draft.platform_id,"description":draft.description,
-            "spec":SwarmServiceSpec::from(draft.spec),"tagIds":draft.tag_ids,"duplicateSource":{
-                "resourceType":"SwarmService","resourceId":id,"resourceName":draft.source_name}},
-        "warnings":draft.warnings
-    })).into_response()))
+    Ok(no_store(
+        Json(api_result(
+            SwarmServiceDuplicateDraftView::from_draft(draft, id).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -700,8 +726,11 @@ async fn list(
         Json(ManagedSwarmServicesView {
             swarm_services: value
                 .into_iter()
-                .map(ManagedSwarmServiceView::from)
-                .collect(),
+                .map(ManagedSwarmServiceView::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
+                })?,
             capabilities,
         })
         .into_response(),
@@ -740,6 +769,10 @@ async fn get(
         &headers,
     )?;
     Ok(no_store(
-        Json(ManagedSwarmServiceView::from(value)).into_response(),
+        Json(api_result(
+            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+            &headers,
+        )?)
+        .into_response(),
     ))
 }

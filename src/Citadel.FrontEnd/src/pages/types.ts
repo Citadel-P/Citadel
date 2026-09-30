@@ -1,6 +1,6 @@
 import type { ResourceReadState } from '@/components/custom/resource-read-error';
 import type { OverviewFilter } from '@/components/custom/resource-overview';
-import { ResourceCapabilities } from '@/api/generated/api.types';
+import { ResourceCapabilitiesView } from '@/api/generated/api.types';
 
 type ResourceContentProps<T = any> = {
   items: any;
@@ -114,7 +114,7 @@ export type RequiredSwarmInfoComponents<T = any> = RequiredDockerInfoComponents<
 export interface ResourceDataHookResult<T> extends ResourceReadState {
   items: T[];
   isLoading: boolean;
-  capabilities?: ResourceCapabilities;
+  capabilities?: ResourceCapabilitiesView;
 }
 
 export interface TabHeaderOptions {
@@ -229,7 +229,7 @@ export type DropdownActionComponent<T = any> = React.FC<{
   onAction?: (actionKey: string, actionData?: ActionData) => void;
 }>;
 
-export type RequiredFormFields = { name: string; description: string | null; status?: unknown };
+export type RequiredFormFields = { name: string; description?: string | null; status?: unknown };
 
 export interface ResourceFormDataHookResult extends ResourceReadState {
   item?: RequiredFormFields;

@@ -27,3 +27,58 @@ impl PartialSchema for StatsHours {
     }
 }
 impl ToSchema for StatsHours {}
+
+// Schema descriptors for values serialized at the dynamic JSON boundary.
+// Runtime DTOs reference these explicitly instead of exposing untyped JSON.
+macro_rules! wire_schema {
+    ($($name:ident),* $(,)?) => {$(
+        pub struct $name;
+        impl PartialSchema for $name {
+            fn schema() -> RefOr<Schema> { all()[stringify!($name)].clone() }
+        }
+        impl ToSchema for $name {}
+    )*};
+}
+wire_schema!(
+    ActivityEventInfo,
+    ActionRunStatus,
+    ActionRunTrigger,
+    BackupExecutionLocation,
+    BackupRepositorySpec,
+    BackupRepositoryStatus,
+    BackupRepositoryType,
+    BackupRepositoryValidationStatus,
+    BackupRestoreStatus,
+    BackupRunItemStatus,
+    BackupRunStatus,
+    BackupRunTrigger,
+    BackupSnapshotAvailability,
+    BackupSourceSpec,
+    BackupWebhookConfig,
+    BuildAgentPoolProvider,
+    BuildAgentPoolProviderSpec,
+    BuildAgentPoolValidationStatus,
+    BuildProjectBuilderKind,
+    BuildRunStatus,
+    BuildRunTrigger,
+    BuildWebhookConfig,
+    ContainerStateStatus,
+    ContainerSystemRole,
+    GitReposStatus,
+    GlobalSearchCategory,
+    HostPortBinding,
+    IpAddressManagementConfig,
+    PlatformConnectorType,
+    PlatformDescriptor,
+    RegistryConfiguration,
+    RegistryType,
+    RepoWebhookConfig,
+    SearchStatusTone,
+    SwarmQuorumState,
+    SwarmServiceOwnership,
+    ContainerVolumeResult,
+    NetworkConnectedContainer,
+    NetworkPeerInfo,
+    GlobalSearchResourceType,
+    BackupCoverageStatus,
+);

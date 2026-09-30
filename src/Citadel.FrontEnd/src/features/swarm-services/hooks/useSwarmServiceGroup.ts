@@ -15,7 +15,7 @@ export const normalizeManagedSwarmService = (
 
   return {
     ...update,
-    capabilities: update.capabilities ?? current?.capabilities,
+    capabilities: update.capabilities ?? current?.capabilities ?? null,
     tasks:
       update.tasks ??
       (update.synchronizationState === SwarmServiceSynchronizationState.RuntimeMissing ? [] : (current?.tasks ?? [])),

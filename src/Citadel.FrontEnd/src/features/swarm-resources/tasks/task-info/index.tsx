@@ -12,7 +12,7 @@ const canOpenTaskTerminal = (resource: SwarmTaskInfoView) =>
 
 export const TaskInfoComponents: RequiredSwarmInfoComponents<SwarmTaskInfoView> = {
   Header: {
-    Indicator: ({ resource }) => <StateIndicator value={resource.state} kind="swarmTask" />,
+    Indicator: ({ resource }) => <StateIndicator variant="badge" value={resource.state} kind="swarmTask" />,
     NameSuffix: StaleBadge,
     ActionButtons: NoResourceActions,
   },

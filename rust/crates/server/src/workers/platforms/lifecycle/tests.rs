@@ -560,3 +560,57 @@ async fn failed_platform_backlog_cannot_hide_a_newer_online_transition() {
     cancel.cancel();
     worker.await.unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn offline_alerts_are_rechecked_without_repeating_effects_and_stop_on_recovery() {
+    let cancel = CancellationToken::new();
+    let (sender, receiver) = bounded_channel(4, QueueOverflowPolicy::Wait);
+    let target = target();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let writes = Arc::new(AtomicUsize::new(0));
+    let (observations, effects, token) = (attempts.clone(), writes.clone(), cancel.clone());
+    let worker = tokio::spawn(async move {
+        run_transitions(&token, receiver, |mut progress| {
+            if !progress.persisted {
+                effects.fetch_add(1, Ordering::SeqCst);
+                progress.persisted = true;
+            }
+            progress.recheck_alert = !progress.transition.online;
+            observations.fetch_add(1, Ordering::SeqCst);
+            async { (progress, Ok::<_, &str>(())) }
+        })
+        .await;
+    });
+    sender
+        .send(transition(&target, false), &cancel)
+        .await
+        .ok()
+        .unwrap();
+    settle().await;
+    for _ in 0..21 {
+        tokio::time::advance(OFFLINE_ALERT_INTERVAL).await;
+        settle().await;
+    }
+    assert_eq!(
+        attempts.load(Ordering::SeqCst),
+        22,
+        "observations continue past the ten-minute cooldown"
+    );
+    assert_eq!(writes.load(Ordering::SeqCst), 1, "status effects run once");
+    sender
+        .send(transition(&target, true), &cancel)
+        .await
+        .ok()
+        .unwrap();
+    settle().await;
+    tokio::time::advance(OFFLINE_ALERT_INTERVAL * 2).await;
+    settle().await;
+    assert_eq!(
+        attempts.load(Ordering::SeqCst),
+        23,
+        "recovery stops offline rechecks"
+    );
+    assert_eq!(writes.load(Ordering::SeqCst), 2);
+    cancel.cancel();
+    worker.await.unwrap();
+}

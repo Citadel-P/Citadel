@@ -6,7 +6,9 @@ use std::time::Duration;
 use chrono::Utc;
 use citadel_adapters::filesystem::stacks::materializer::GitStackSourceMaterializer;
 use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
-use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
+use citadel_adapters::persistence::postgres::git::repositories::{
+    PostgresGitRepositoryExecutionPersistence, PostgresGitRepositoryPersistence,
+};
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_database::MigrationRunner;
 use citadel_git::{
@@ -485,6 +487,75 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
             "identical polling failure records once"
         );
     }
+    for _ in 0..2 {
+        let claim = poll(&store, &pool, actor, id, "main").await;
+        store
+            .complete(
+                &claim,
+                &SyncResult {
+                    commit: "A".repeat(40),
+                    cloned: false,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            count(&pool, id).await,
+            3,
+            "recovery at the same commit records success once; later unchanged polls stay silent"
+        );
+        let repository = citadel_git::GitRepositoryPersistence::get_git_repository(
+            &PostgresGitRepositoryPersistence::new(pool.clone()),
+            id,
+        )
+        .await
+        .unwrap();
+        assert_eq!(repository.status, "Healthy");
+        assert_eq!(
+            repository.latest_activity.as_ref().unwrap()["status"],
+            "Success"
+        );
+    }
+    // Editing a source after a polling failure must not inherit the silent Poll trigger.
+    let claim = poll(&store, &pool, actor, id, "main").await;
+    store.fail(&claim, "old source unavailable").await.unwrap();
+    let catalog = PostgresGitRepositoryPersistence::new(pool.clone());
+    citadel_git::GitRepositoryPersistence::update_git_repository(
+        &catalog,
+        ActorId::new(actor),
+        id,
+        &citadel_git::GitRepositoryPatch {
+            url: Some("https://example.test/fixed.git".into()),
+            ..Default::default()
+        },
+        citadel_git::GitRepositoryMutationKind::Update,
+    )
+    .await
+    .unwrap();
+    let claim = store
+        .claim_next(Utc::now() - chrono::Duration::minutes(10))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claim.trigger, "Manual");
+    store
+        .complete(
+            &claim,
+            &SyncResult {
+                commit: "A".repeat(40),
+                cloned: false,
+            },
+        )
+        .await
+        .unwrap();
+    let repository = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
+        .await
+        .unwrap();
+    assert_eq!(repository.status, "Healthy");
+    assert_eq!(
+        repository.latest_activity.as_ref().unwrap()["status"],
+        "Success"
+    );
     let claim = poll(&store, &pool, actor, id, "main").await;
     store
         .complete(
@@ -538,8 +609,17 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         .await
         .unwrap()
         .unwrap();
-    let observation: citadel_alerts::AlertObservation =
-        serde_json::from_str(notification.payload()).unwrap();
+    assert!(
+        notification.payload().is_empty(),
+        "notifications only wake the durable outbox reader"
+    );
+    let payload: serde_json::Value =
+        sqlx::query_scalar("SELECT payload FROM alertobservations WHERE payload->>'resource_id'=$1")
+            .bind(id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let observation: citadel_alerts::AlertObservation = serde_json::from_value(payload).unwrap();
     assert_eq!(observation.alert_type, "WebhookGitRepoSyncFailed");
     assert_eq!(observation.resource_id, id);
     assert_eq!(observation.info["Reason"], "webhook execution failed");

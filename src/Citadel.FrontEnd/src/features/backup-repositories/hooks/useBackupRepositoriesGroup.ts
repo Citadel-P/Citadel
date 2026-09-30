@@ -1,4 +1,4 @@
-import { BackupRepositoryView, ResourceCapabilities } from '@/api/generated/api.types';
+import { BackupRepositoryView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export const useBackupRepositoriesGroup = () => {
   const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories');
   const [repositories, setRepositories] = useState<BackupRepositoryView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilities | undefined>();
+  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
   const lastFetchedRef = useRef<BackupRepositoryView[]>([]);
 
   useEffect(() => {

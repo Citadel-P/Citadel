@@ -2,7 +2,11 @@ import { RegistryView } from '@/api/generated/api.types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Link } from 'lucide-react';
 
-export function RegistryDisplay({ registry }: { registry: RegistryView | undefined }) {
+export function RegistryDisplay({
+  registry,
+}: {
+  registry: Pick<RegistryView, 'name' | 'registryHost' | 'type'> | undefined;
+}) {
   if (!registry) return <></>;
   return (
     <div className="flex flex-wrap gap-2">

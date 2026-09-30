@@ -13,9 +13,10 @@ use citadel_stacks::{
     CreateStack, ImportComposeProject, ResourceBindingSnapshot, StackDeletionClaim, StackDetails,
     StackDriftPolicy, StackError, StackFilter, StackImportClaim, StackOperationClaim,
     StackReleaseDetails, StackReleaseSource, StackReleaseStatus, StackRepository,
-    StackRuntimeResult, StackSource, StackSpec, StackStateClaim, StackUpdateState, TagSummary,
-    UpdateStack, normalize_project_name,
+    StackRuntimeResult, StackSource, StackSpec, StackStateClaim, StackUpdateState, UpdateStack,
+    normalize_project_name,
 };
+use citadel_tags::TagSummary;
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sqlx::postgres::PgRow;

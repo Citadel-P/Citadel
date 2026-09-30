@@ -278,11 +278,22 @@ const StackLatestActivity = ({
   if (latestActivity?.info.$type === 'StackGitUpdateAvailable') {
     return null;
   }
+  if (
+    stack.status === StackReleaseStatus.Healthy &&
+    latestActivity.status === ActivityStatus.Failure &&
+    (latestActivity.info.$type === 'StackApplied' || latestActivity.info.$type === 'StackRollback')
+  ) {
+    return (
+      <AlertMessage title="Previous stack operation failed" date={latestActivity.createdAt} type="warning">
+        The stack is currently healthy. The last operation failed; see Activities for details.
+      </AlertMessage>
+    );
+  }
   return (
     <ActivityAlertZone
       info={latestActivity?.info as any}
       activity={latestActivity as any}
-      title="Error"
+      title={latestActivity.status === ActivityStatus.Failure ? 'Last operation failed' : 'Last operation warning'}
       date={latestActivity?.createdAt}
     />
   );

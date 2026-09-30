@@ -1,12 +1,10 @@
+import type { DeploymentImageInfo } from '@/api/generated/api.types';
 import { useFormDraftKey } from '@/lib/form-drafts';
 import {
   CreateDeploymentInput,
   PlatformView,
   ImageView,
-  DeploymentImageInfoBuildImage,
-  DeploymentImageInfoExternalImage,
-  DeploymentImageInfoLocalImage,
-  DockerNetworkResultView,
+  NetworkView,
   ContainerRestartPolicy,
   StopSignal,
   UpdateBehavior,
@@ -17,7 +15,7 @@ import {
   LicenseCapability,
   AdoptionIssueSeverity,
   AdoptContainerInput,
-  type ContainerAdoptionIssueView,
+  type AdoptionIssue,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -128,7 +126,7 @@ const stop_signals = {
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
-const EMPTY_ADOPTION_ISSUES: ContainerAdoptionIssueView[] = [];
+const EMPTY_ADOPTION_ISSUES: AdoptionIssue[] = [];
 export const DeploymentForm = ({
   mode,
   metadataChanged,
@@ -364,7 +362,7 @@ export const DeploymentForm = ({
           description: createPayload.description,
           spec: createPayload.spec,
           previewFingerprint,
-          tagIds: createPayload.tagIds,
+          tagIds: createPayload.tagIds ?? undefined,
           importSensitiveEnvironmentAsSecrets,
         };
         return adoptContainer({ id: adoptFrom, data: adoptionPayload }).then(async (response) => {
@@ -395,7 +393,6 @@ export const DeploymentForm = ({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal identifier for this workload.',
@@ -410,7 +407,6 @@ export const DeploymentForm = ({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description of this workload.',
@@ -509,8 +505,8 @@ export const DeploymentForm = ({
                                     spec: {
                                       ...prev.spec!,
                                       image: {
-                                        $type: 'External',
                                         ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                        $type: 'External',
                                         registryId: v?.id ?? '',
                                       } satisfies DeploymentImageInfoExternalImage,
                                     },
@@ -536,8 +532,8 @@ export const DeploymentForm = ({
                                     spec: {
                                       ...prev.spec!,
                                       image: {
-                                        $type: 'External',
                                         ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                        $type: 'External',
                                         imageTag: v,
                                       } satisfies DeploymentImageInfoExternalImage,
                                     },
@@ -585,8 +581,8 @@ export const DeploymentForm = ({
                                     spec: {
                                       ...prev.spec!,
                                       image: {
-                                        $type: 'Build',
                                         ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
+                                        $type: 'Build',
                                         buildProjectId,
                                       } satisfies DeploymentImageInfoBuildImage,
                                       updateBehavior: UpdateBehavior.Disabled,
@@ -638,8 +634,8 @@ export const DeploymentForm = ({
                                 spec: {
                                   ...prev.spec!,
                                   image: {
-                                    $type: 'Build',
                                     ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
+                                    $type: 'Build',
                                     redeployOnBuild,
                                   } satisfies DeploymentImageInfoBuildImage,
                                   updateBehavior: UpdateBehavior.Disabled,
@@ -671,8 +667,8 @@ export const DeploymentForm = ({
                                 spec: {
                                   ...prev.spec!,
                                   image: {
-                                    $type: 'Local',
                                     ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
+                                    $type: 'Local',
                                     imageId: selectedImageId,
                                   } satisfies DeploymentImageInfoLocalImage,
                                   ports: adoptFrom ? prev.spec?.ports : [],
@@ -704,7 +700,7 @@ export const DeploymentForm = ({
                     platformId={currentPlatformId}
                     queryEnabled={!!currentPlatformId}
                     selected={value ?? []}
-                    onSelect={(v: DockerNetworkResultView[] | undefined) =>
+                    onSelect={(v: NetworkView[] | undefined) =>
                       set((prev) => ({
                         spec: {
                           ...prev.spec!,
@@ -1113,3 +1109,7 @@ export const DeploymentForm = ({
     </div>
   );
 };
+
+type DeploymentImageInfoBuildImage = Extract<DeploymentImageInfo, { $type: 'Build' }>;
+type DeploymentImageInfoExternalImage = Extract<DeploymentImageInfo, { $type: 'External' }>;
+type DeploymentImageInfoLocalImage = Extract<DeploymentImageInfo, { $type: 'Local' }>;

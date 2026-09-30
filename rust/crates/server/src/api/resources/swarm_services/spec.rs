@@ -1,10 +1,14 @@
+use crate::api::resources::{
+    common::{AutoUpdateStatus, DuplicateSourceInput},
+    git_repositories::webhook::{WebhookAuthScheme, WebhookProvider},
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = swarm_services::model::UpdateBehavior)]
+#[schema(as = UpdateBehavior)]
 pub enum UpdateBehavior {
     #[default]
     Disabled,
@@ -538,23 +542,27 @@ impl From<SwarmServiceUpdatePolicy> for citadel_swarm_services::SwarmServiceUpda
 pub struct SwarmServiceWebhookConfig {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default = "github_provider")]
-    pub provider: String,
-    #[serde(default = "github_hmac_sha256")]
-    pub auth_scheme: String,
+    #[serde(default)]
+    pub provider: WebhookProvider,
+    #[serde(default)]
+    pub auth_scheme: WebhookAuthScheme,
     pub secret: Option<String>,
     pub branch_filter: Option<String>,
 }
 
-impl From<citadel_swarm_services::SwarmServiceWebhookConfig> for SwarmServiceWebhookConfig {
-    fn from(value: citadel_swarm_services::SwarmServiceWebhookConfig) -> Self {
-        Self {
+impl TryFrom<citadel_swarm_services::SwarmServiceWebhookConfig> for SwarmServiceWebhookConfig {
+    type Error = serde_json::Error;
+
+    fn try_from(
+        value: citadel_swarm_services::SwarmServiceWebhookConfig,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             enabled: value.enabled,
-            provider: value.provider,
-            auth_scheme: value.auth_scheme,
+            provider: serde_json::from_value(value.provider.into())?,
+            auth_scheme: serde_json::from_value(value.auth_scheme.into())?,
             secret: value.secret,
             branch_filter: value.branch_filter,
-        }
+        })
     }
 }
 
@@ -562,8 +570,14 @@ impl From<SwarmServiceWebhookConfig> for citadel_swarm_services::SwarmServiceWeb
     fn from(value: SwarmServiceWebhookConfig) -> Self {
         Self {
             enabled: value.enabled,
-            provider: value.provider,
-            auth_scheme: value.auth_scheme,
+            provider: citadel_git::repositories::webhooks::WebhookProvider::from(value.provider)
+                .as_str()
+                .to_owned(),
+            auth_scheme: citadel_git::repositories::webhooks::WebhookAuthScheme::from(
+                value.auth_scheme,
+            )
+            .as_str()
+            .to_owned(),
             secret: value.secret,
             branch_filter: value.branch_filter,
         }
@@ -610,9 +624,11 @@ pub struct SwarmServiceSpec {
     pub webhook: Option<SwarmServiceWebhookConfig>,
 }
 
-impl From<citadel_swarm_services::SwarmServiceSpec> for SwarmServiceSpec {
-    fn from(value: citadel_swarm_services::SwarmServiceSpec) -> Self {
-        Self {
+impl TryFrom<citadel_swarm_services::SwarmServiceSpec> for SwarmServiceSpec {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_swarm_services::SwarmServiceSpec) -> Result<Self, Self::Error> {
+        Ok(Self {
             image: value.image.into(),
             update_behavior: value.update_behavior.into(),
             scheduling_mode: value.scheduling_mode.into(),
@@ -634,8 +650,8 @@ impl From<citadel_swarm_services::SwarmServiceSpec> for SwarmServiceSpec {
             placement_constraints: value.placement_constraints,
             restart_policy: value.restart_policy.map(|item| item.into()),
             update_policy: value.update_policy.map(|item| item.into()),
-            webhook: value.webhook.map(|item| item.into()),
-        }
+            webhook: value.webhook.map(TryInto::try_into).transpose()?,
+        })
     }
 }
 
@@ -668,29 +684,25 @@ impl From<SwarmServiceSpec> for citadel_swarm_services::SwarmServiceSpec {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SwarmServiceDuplicateSource {
-    pub resource_id: Uuid,
-    pub resource_type: String,
-    pub resource_name: String,
-}
+impl TryFrom<citadel_swarm_services::SwarmServiceDuplicateSource> for DuplicateSourceInput {
+    type Error = serde_json::Error;
 
-impl From<citadel_swarm_services::SwarmServiceDuplicateSource> for SwarmServiceDuplicateSource {
-    fn from(value: citadel_swarm_services::SwarmServiceDuplicateSource) -> Self {
-        Self {
+    fn try_from(
+        value: citadel_swarm_services::SwarmServiceDuplicateSource,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
             resource_id: value.resource_id,
-            resource_type: value.resource_type,
+            resource_type: serde_json::from_value(value.resource_type.into())?,
             resource_name: value.resource_name,
-        }
+        })
     }
 }
 
-impl From<SwarmServiceDuplicateSource> for citadel_swarm_services::SwarmServiceDuplicateSource {
-    fn from(value: SwarmServiceDuplicateSource) -> Self {
+impl From<DuplicateSourceInput> for citadel_swarm_services::SwarmServiceDuplicateSource {
+    fn from(value: DuplicateSourceInput) -> Self {
         Self {
             resource_id: value.resource_id,
-            resource_type: value.resource_type,
+            resource_type: value.resource_type.as_database_str().to_owned(),
             resource_name: value.resource_name,
         }
     }
@@ -701,21 +713,26 @@ impl From<SwarmServiceDuplicateSource> for citadel_swarm_services::SwarmServiceD
 #[serde(rename_all = "camelCase")]
 pub struct AutoUpdateState {
     pub last_checked_at: DateTime<Utc>,
-    pub status: String,
+    pub status: AutoUpdateStatus,
+    #[schema(required = true)]
     pub current_digest: Option<String>,
+    #[schema(required = true)]
     pub remote_digest: Option<String>,
+    #[schema(required = true)]
     pub last_error: Option<String>,
 }
 
-impl From<citadel_swarm_services::AutoUpdateState> for AutoUpdateState {
-    fn from(value: citadel_swarm_services::AutoUpdateState) -> Self {
-        Self {
+impl TryFrom<citadel_swarm_services::AutoUpdateState> for AutoUpdateState {
+    type Error = serde_json::Error;
+
+    fn try_from(value: citadel_swarm_services::AutoUpdateState) -> Result<Self, Self::Error> {
+        Ok(Self {
             last_checked_at: value.last_checked_at,
-            status: value.status,
+            status: serde_json::from_value(value.status.into())?,
             current_digest: value.current_digest,
             remote_digest: value.remote_digest,
             last_error: value.last_error,
-        }
+        })
     }
 }
 
@@ -723,7 +740,7 @@ impl From<AutoUpdateState> for citadel_swarm_services::AutoUpdateState {
     fn from(value: AutoUpdateState) -> Self {
         Self {
             last_checked_at: value.last_checked_at,
-            status: value.status,
+            status: value.status.as_str().to_owned(),
             current_digest: value.current_digest,
             remote_digest: value.remote_digest,
             last_error: value.last_error,
@@ -731,45 +748,8 @@ impl From<AutoUpdateState> for citadel_swarm_services::AutoUpdateState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = swarm_services::model::TagSummary)]
-#[serde(rename_all = "camelCase")]
-pub struct TagSummary {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-}
-
-impl From<citadel_swarm_services::TagSummary> for TagSummary {
-    fn from(value: citadel_swarm_services::TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
-        }
-    }
-}
-
-impl From<TagSummary> for citadel_swarm_services::TagSummary {
-    fn from(value: TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
-        }
-    }
-}
-
 fn tcp() -> String {
     "tcp".to_owned()
-}
-
-fn github_provider() -> String {
-    "GitHub".to_owned()
-}
-
-fn github_hmac_sha256() -> String {
-    "GitHubHmacSha256".to_owned()
 }
 
 const fn one() -> i32 {

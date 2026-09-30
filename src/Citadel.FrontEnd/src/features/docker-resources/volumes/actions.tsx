@@ -1,11 +1,11 @@
-import { DockerVolumeResultView } from '@/api/generated/api.types';
+import { VolumeView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { VolumeBrowseDropdownAction, VolumeBrowseGroupAction } from './volume-browser-sheet';
 
-const volumeActions = createActionsBuilder<DockerVolumeResultView>()
+const volumeActions = createActionsBuilder<VolumeView>()
   .addAction({
     key: 'inspect',
     type: 'command',
@@ -24,9 +24,7 @@ const volumeActions = createActionsBuilder<DockerVolumeResultView>()
         isPending: false,
         run: () => {
           if (!canExecute || !selected) return;
-          const nodeQuery = selected.dockerNodeId
-            ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
-            : '';
+          const nodeQuery = selected.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}` : '';
           navigate(`/platforms/${currentPlatform?.id}/volumes/${selected.id}/${nodeQuery}`);
         },
       };
@@ -38,7 +36,7 @@ const volumeActions = createActionsBuilder<DockerVolumeResultView>()
     icon: Trash,
     mutateKey: 'deleteVolumes',
     canExecute: (r) => {
-      const can = (x: DockerVolumeResultView) => x.inUse === false && !x.dockerNodeId;
+      const can = (x: VolumeView) => x.inUse === false && !x.dockerNodeId;
       return Array.isArray(r) ? r.every(can) : can(r);
     },
     separatorBefore: true,

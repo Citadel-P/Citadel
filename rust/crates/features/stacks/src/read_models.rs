@@ -21,12 +21,6 @@ impl std::ops::Deref for StackReleaseDetails {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TagSummary {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-}
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackDetails {
     pub stack: Stack,
@@ -39,7 +33,7 @@ pub struct StackDetails {
     pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
     pub platform_status: String,
     pub platform_name: Option<String>,
-    pub tags: Vec<TagSummary>,
+    pub tags: Vec<citadel_tags::TagSummary>,
     pub latest_activity: Option<Value>,
     pub effective_permission: citadel_primitives::EffectivePermission,
 }

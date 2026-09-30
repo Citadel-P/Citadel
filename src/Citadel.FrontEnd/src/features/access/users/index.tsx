@@ -1,4 +1,4 @@
-import { PagedResultViewOfUserView, UserView } from '@/api/generated/api.types';
+import { PagedResultUserView, UserView } from '@/api/generated/api.types';
 import { PagedDataTable } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
 import { useSelectedResources, useUserQuery } from '@/lib/atoms';
@@ -15,7 +15,7 @@ export const Users = ({
   actions,
   isLoading,
 }: {
-  items: PagedResultViewOfUserView;
+  items: PagedResultUserView;
   actions: Record<string, DropdownActionComponent>;
   isLoading: boolean;
 }) => <UsersTable pagedResult={items} isLoading={isLoading} actions={actions} />;
@@ -27,7 +27,7 @@ export const UsersTable = ({
   actions,
   isLoading,
 }: {
-  pagedResult: PagedResultViewOfUserView | undefined;
+  pagedResult: PagedResultUserView | undefined;
   isLoading: boolean;
   actions: Record<
     string,

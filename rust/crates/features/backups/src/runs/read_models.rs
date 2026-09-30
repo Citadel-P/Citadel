@@ -15,3 +15,16 @@ pub struct PlatformBackupSummary {
     pub last_run_status: Option<String>,
     pub last_run_at: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Clone)]
+pub struct VolumeBackupCoverage {
+    pub platform_id: Uuid,
+    pub volume_name: String,
+    pub docker_node_id: Option<String>,
+    pub status: String,
+    pub policy_count: i32,
+    pub last_run_id: Option<Uuid>,
+    pub last_run_status: Option<String>,
+    pub last_run_at: Option<DateTime<Utc>>,
+    pub last_successful_run_at: Option<DateTime<Utc>>,
+}

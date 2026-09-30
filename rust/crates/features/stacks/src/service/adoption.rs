@@ -8,6 +8,79 @@ impl StackService {
         analyze_swarm_compatibility(compose_files, bindings)
     }
 
+    pub async fn preflight_swarm_source(
+        &self,
+        platform_id: Uuid,
+        name: &str,
+        stack_source: crate::StackSource,
+        spec: &StackSpec,
+        drift_policy: Option<&crate::StackDriftPolicy>,
+    ) -> Result<crate::SwarmStackCompatibilityReport, StackError> {
+        if spec.source() != stack_source {
+            return Err(validation(
+                "Stack source and specification type must match.",
+            ));
+        }
+        spec.validate()?;
+        let source = self
+            .materialize_import_source(
+                platform_id,
+                "swarm-preflight",
+                name,
+                spec,
+                crate::StackImportKind::SwarmStack,
+            )
+            .await?;
+        let mut report = analyze_swarm_compatibility(
+            &source.compose_contents()?,
+            &spec.common().build_image_bindings,
+        )?;
+        let common = spec.common();
+        for (invalid, code, field, message) in [
+            (
+                common.destroy_before_deploy,
+                "stack.destroy_before_deploy",
+                "spec.destroyBeforeDeploy",
+                "Destroy before deploy is only available for Docker Standalone Stacks.",
+            ),
+            (
+                common
+                    .pre_deploy
+                    .as_ref()
+                    .is_some_and(|c| c.commands.iter().any(|c| !c.trim().is_empty())),
+                "stack.pre_deploy",
+                "spec.preDeploy",
+                "Pre-deploy commands are only available for Docker Standalone Stacks.",
+            ),
+            (
+                common
+                    .post_deploy
+                    .as_ref()
+                    .is_some_and(|c| c.commands.iter().any(|c| !c.trim().is_empty())),
+                "stack.post_deploy",
+                "spec.postDeploy",
+                "Post-deploy commands are only available for Docker Standalone Stacks.",
+            ),
+            (
+                drift_policy.is_some_and(|p| p.mode != crate::StackDriftMode::Disabled),
+                "stack.container_drift",
+                "driftPolicy.mode",
+                "Container drift management is only available for Docker Standalone Stacks.",
+            ),
+        ] {
+            if invalid {
+                report.is_compatible = false;
+                report.issues.push(crate::SwarmStackCompatibilityIssue {
+                    severity: crate::SwarmStackCompatibilitySeverity::Error,
+                    code: code.into(),
+                    message: message.into(),
+                    field_path: Some(field.into()),
+                });
+            }
+        }
+        Ok(report)
+    }
+
     pub async fn import_draft(
         &self,
         platform_id: Uuid,

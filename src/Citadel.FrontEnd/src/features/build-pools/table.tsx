@@ -4,7 +4,7 @@ import {
   BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
   BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
   BuildAgentPoolValidationStatus,
-  BuildAgentPoolView,
+  AuthorizedPool,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -24,7 +24,7 @@ import { Link } from 'react-router';
 
 type ActionMap = Record<
   string,
-  React.FC<{ resource: BuildAgentPoolView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  React.FC<{ resource: AuthorizedPool; onAction?: (actionKey: string, actionData?: ActionData) => void }>
 >;
 
 export function BuildPoolsTable({
@@ -32,18 +32,18 @@ export function BuildPoolsTable({
   actions,
   isLoading,
 }: {
-  items: BuildAgentPoolView[];
+  items: AuthorizedPool[];
   isLoading: boolean;
   actions: ActionMap;
 }) {
-  const [, setSelectedResources] = useSelectedResources<BuildAgentPoolView>('BuildAgentPool');
+  const [, setSelectedResources] = useSelectedResources<AuthorizedPool>('BuildAgentPool');
   const formatDateTime = useProfileDateTimeFormatter();
   const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
 
-const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnDef<BuildAgentPoolView>[] => [
+const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnDef<AuthorizedPool>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -105,7 +105,7 @@ const BuildPoolNameRow = ({
   pool,
   formatDateTime,
 }: {
-  pool: BuildAgentPoolView;
+  pool: AuthorizedPool;
   formatDateTime: DateTimeFormatter;
 }) => (
   <div className="flex min-w-0 items-center gap-1">
@@ -121,7 +121,7 @@ const BuildPoolNameRow = ({
   </div>
 );
 
-const ProviderCell = ({ pool }: { pool: BuildAgentPoolView }) => {
+const ProviderCell = ({ pool }: { pool: AuthorizedPool }) => {
   const aws =
     pool.provider === BuildAgentPoolProvider.AwsEc2
       ? (pool.providerSpec as BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec)
@@ -153,7 +153,7 @@ const ValidationTooltip = ({
   pool,
   formatDateTime,
 }: {
-  pool: BuildAgentPoolView;
+  pool: AuthorizedPool;
   formatDateTime: DateTimeFormatter;
 }) => {
   const testedAt = pool.lastValidatedAt ? formatDateTime(pool.lastValidatedAt) : 'Not tested yet';

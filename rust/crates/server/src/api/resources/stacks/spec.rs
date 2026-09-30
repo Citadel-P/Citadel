@@ -1,3 +1,6 @@
+use crate::api::resources::bindings::spec::{
+    ResourceBindingKind, ResourceBindingScope, SecretDeliveryMode,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -693,42 +696,33 @@ impl From<ImageUpdateState> for citadel_stacks::ImageUpdateState {
 #[serde(rename_all = "camelCase")]
 pub struct ResourceBindingSnapshot {
     pub name: String,
-    pub kind: String,
-    pub scope: String,
+    pub kind: ResourceBindingKind,
+    pub scope: ResourceBindingScope,
     pub value: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub secret_delivery_mode: Option<String>,
+    pub secret_delivery_mode: Option<SecretDeliveryMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_path: Option<String>,
 }
 
-impl From<citadel_stacks::ResourceBindingSnapshot> for ResourceBindingSnapshot {
-    fn from(value: citadel_stacks::ResourceBindingSnapshot) -> Self {
-        Self {
-            name: value.name,
-            kind: value.kind,
-            scope: value.scope,
-            value: value.value,
-            secret_id: value.secret_id,
-            secret_delivery_mode: value.secret_delivery_mode,
-            target_path: value.target_path,
-        }
-    }
-}
+impl TryFrom<citadel_stacks::ResourceBindingSnapshot> for ResourceBindingSnapshot {
+    type Error = serde_json::Error;
 
-impl From<ResourceBindingSnapshot> for citadel_stacks::ResourceBindingSnapshot {
-    fn from(value: ResourceBindingSnapshot) -> Self {
-        Self {
+    fn try_from(value: citadel_stacks::ResourceBindingSnapshot) -> Result<Self, Self::Error> {
+        Ok(Self {
             name: value.name,
-            kind: value.kind,
-            scope: value.scope,
+            kind: serde_json::from_value(value.kind.into())?,
+            scope: serde_json::from_value(value.scope.into())?,
             value: value.value,
             secret_id: value.secret_id,
-            secret_delivery_mode: value.secret_delivery_mode,
+            secret_delivery_mode: value
+                .secret_delivery_mode
+                .map(|value| serde_json::from_value(value.into()))
+                .transpose()?,
             target_path: value.target_path,
-        }
+        })
     }
 }
 
@@ -792,40 +786,12 @@ impl From<StackReleaseSource> for citadel_stacks::StackReleaseSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
-#[schema(as = stacks::model::TagSummary)]
-#[serde(rename_all = "camelCase")]
-pub struct TagSummary {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-}
-
-impl From<citadel_stacks::TagSummary> for TagSummary {
-    fn from(value: citadel_stacks::TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
-        }
-    }
-}
-
-impl From<TagSummary> for citadel_stacks::TagSummary {
-    fn from(value: TagSummary) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            color: value.color,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateDraftWarning {
     pub code: String,
     pub message: String,
+    #[schema(required = true)]
     pub field_path: Option<String>,
 }
 
@@ -890,33 +856,49 @@ impl From<StackDriftReport> for citadel_stacks::StackDriftReport {
 #[serde(tag = "$type", rename_all_fields = "camelCase")]
 pub enum StackDrift {
     MissingContainer {
+        #[serde(rename = "serviceName")]
         service_name: String,
     },
     ExtraContainer {
+        #[serde(rename = "containerId")]
         container_id: String,
+        #[serde(rename = "serviceName")]
         service_name: String,
     },
     ContainerStopped {
+        #[serde(rename = "containerId")]
         container_id: String,
+        #[serde(rename = "serviceName")]
         service_name: String,
     },
     ContainerPaused {
+        #[serde(rename = "containerId")]
         container_id: String,
+        #[serde(rename = "serviceName")]
         service_name: String,
     },
     ContainerUnhealthy {
+        #[serde(rename = "containerId")]
         container_id: String,
+        #[serde(rename = "serviceName")]
         service_name: String,
+        #[serde(rename = "healthStatus")]
         health_status: Option<String>,
     },
     ImageMismatch {
+        #[serde(rename = "serviceName")]
         service_name: String,
+        #[serde(rename = "expectedImage")]
         expected_image: String,
+        #[serde(rename = "actualImage")]
         actual_image: String,
     },
     ConfigHashMismatch {
+        #[serde(rename = "serviceName")]
         service_name: String,
+        #[serde(rename = "expectedHash")]
         expected_hash: Option<String>,
+        #[serde(rename = "actualHash")]
         actual_hash: Option<String>,
     },
 }
@@ -1107,6 +1089,7 @@ pub struct StackReconciliationAction {
     pub service_name: String,
     pub action: StackReconciliationActionType,
     pub succeeded: bool,
+    #[schema(required = true)]
     pub error_message: Option<String>,
 }
 
@@ -1140,6 +1123,7 @@ pub struct StackReconciliationResult {
     pub stack_id: Uuid,
     pub status: StackReconciliationStatus,
     pub before_report: StackDriftReport,
+    #[schema(required = true)]
     pub after_report: Option<StackDriftReport>,
     pub actions: Vec<StackReconciliationAction>,
 }
@@ -1196,6 +1180,7 @@ impl From<StackImportKind> for citadel_stacks::StackImportKind {
 #[serde(rename_all = "camelCase")]
 pub struct ComposeProjectRuntimeService {
     pub name: String,
+    #[schema(required = true)]
     pub image: Option<String>,
     pub container_count: usize,
     pub states: Vec<String>,
@@ -1229,6 +1214,7 @@ pub struct StackAdoptionIssue {
     pub code: String,
     pub message: String,
     pub severity: String,
+    #[schema(required = true)]
     pub field_path: Option<String>,
 }
 
@@ -1259,8 +1245,10 @@ impl From<StackAdoptionIssue> for citadel_stacks::StackAdoptionIssue {
 pub struct ComposeProjectServiceComparison {
     pub name: String,
     pub runtime_container_count: usize,
+    #[schema(required = true)]
     pub runtime_image: Option<String>,
     pub defined_in_source: bool,
+    #[schema(required = true)]
     pub source_image: Option<String>,
 }
 

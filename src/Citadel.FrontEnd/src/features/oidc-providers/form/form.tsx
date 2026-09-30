@@ -1,4 +1,8 @@
-import { OidcProviderInput, OidcProviderView, UpdateOidcProviderInput } from '@/api/generated/api.types';
+import {
+  CreateOidcProviderRequest,
+  OidcProviderView,
+  PatchOidcProviderRequest,
+} from '@/api/generated/api.types';
 import {
   defineField,
   defineGroupField,
@@ -17,7 +21,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { toast } from 'sonner';
 
-type OidcProviderFormValue = Omit<OidcProviderInput, 'defaultRoleId'> & {
+type OidcProviderFormValue = Omit<CreateOidcProviderRequest, 'defaultRoleId'> & {
   id?: string;
   defaultRoleId: string;
   hasClientSecret?: boolean;
@@ -32,7 +36,7 @@ const emptyProvider = (): OidcProviderFormValue => ({
   clientSecret: '',
   scopes: 'openid profile email',
   enabled: true,
-  autoProvisionUsers: false,
+  autoProvisionUsers: true,
   allowEmailAutoLink: false,
   requireEmailVerified: true,
   allowedEmailDomains: '',
@@ -87,7 +91,7 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
   const schema = useMemo(
     () => ({
       Provider: defineSection<OidcProviderFormValue>({
-        title: 'Provider',
+        title: '',
         items: [
           defineGroupField<OidcProviderFormValue>({
             id: 'identity',
@@ -97,7 +101,6 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
                 ? [
                     defineField<OidcProviderFormValue, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Stable internal identifier for this provider.',
@@ -107,7 +110,6 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
                     }),
                     defineField<OidcProviderFormValue, 'description'>({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional note shown in the provider header.',
                       render: (value, set) => (
@@ -243,7 +245,8 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
               defineField<OidcProviderFormValue, 'defaultRoleId'>({
                 key: 'defaultRoleId',
                 label: 'Default Role',
-                description: 'Role assigned to new auto-provisioned users. Leave empty to create users without access.',
+                description:
+                  'Role assigned to new auto-provisioned users. Without a role, new users can sign in but have no resource access until a role is assigned.',
                 disabled: !autoProvisionUsers,
                 render: (value, set) => (
                   <div className="max-w-100">
@@ -376,21 +379,21 @@ function toFormValue(provider?: OidcProviderView): OidcProviderFormValue {
   };
 }
 
-function toCreateInput(value: OidcProviderFormValue): OidcProviderInput {
+function toCreateInput(value: OidcProviderFormValue): CreateOidcProviderRequest {
   return {
     ...normalize(value),
     clientSecret: value.clientSecret?.trim() || null,
   };
 }
 
-function toUpdateInput(value: OidcProviderFormValue): UpdateOidcProviderInput {
+function toUpdateInput(value: OidcProviderFormValue): PatchOidcProviderRequest {
   return {
     ...normalize(value),
     clientSecret: value.clientSecret?.trim() || null,
   };
 }
 
-function normalize(value: OidcProviderFormValue): Omit<OidcProviderInput, 'clientSecret'> {
+function normalize(value: OidcProviderFormValue): Omit<CreateOidcProviderRequest, 'clientSecret'> {
   return {
     name: value.name.trim(),
     description: value.description?.trim() || null,

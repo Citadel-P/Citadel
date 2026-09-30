@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { AlertRuleView } from '@/api/generated/api.types';
+import { AlertRuleListItem } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
@@ -13,21 +13,21 @@ import { useNavigate } from 'react-router';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-const EMPTY_ROWS: AlertRuleView[] = [];
+const EMPTY_ROWS: AlertRuleListItem[] = [];
 
 export const AlertRulesTable = ({
   actions,
   items,
   isLoading,
 }: {
-  items: AlertRuleView[];
+  items: AlertRuleListItem[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: AlertRuleView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<AlertRuleView>('AlertRule');
+  const [_, setSelectedResources] = useSelectedResources<AlertRuleListItem>('AlertRule');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
@@ -43,10 +43,10 @@ export const AlertRulesTable = ({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: AlertRuleView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<AlertRuleView>[] => {
-  const cols: ColumnDef<AlertRuleView>[] = [
+): ColumnDef<AlertRuleListItem>[] => {
+  const cols: ColumnDef<AlertRuleListItem>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -98,7 +98,7 @@ const columns = (
   return cols;
 };
 
-function RuleConditionCell({ rule }: { rule: AlertRuleView }) {
+function RuleConditionCell({ rule }: { rule: AlertRuleListItem }) {
   return (
     <div className="py-3">
       <div className="flex flex-col gap-1.5">
@@ -127,7 +127,7 @@ function RuleConditionCell({ rule }: { rule: AlertRuleView }) {
   );
 }
 
-function ChannelsCell({ rule }: { rule: AlertRuleView }) {
+function ChannelsCell({ rule }: { rule: AlertRuleListItem }) {
   return (
     <div className="flex -space-x-2">
       {rule.channels.map((c, i) => (
@@ -154,7 +154,7 @@ function ChannelsCell({ rule }: { rule: AlertRuleView }) {
   );
 }
 
-const RuleNameRow = ({ alertRule }: { alertRule: AlertRuleView }) => {
+const RuleNameRow = ({ alertRule }: { alertRule: AlertRuleListItem }) => {
   const navigate = useNavigate();
   function onClick() {
     navigate(`/alert-rules/edit/${alertRule.id}/`);

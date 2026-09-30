@@ -142,7 +142,6 @@ export const PlatformForm = ({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Provide a unique name for this platform.',
@@ -153,7 +152,6 @@ export const PlatformForm = ({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional description.',
@@ -353,6 +351,7 @@ export const PlatformForm = ({
                       ? [
                           defineField<PlatformFormInput, 'edgeDockerCommand'>({
                             key: 'edgeDockerCommand',
+                            persistDraft: false,
                             label: 'Docker Command',
                             description: 'Run this command on the host that should connect back to Citadel.',
                             disabled: false,

@@ -71,6 +71,16 @@ impl Fixture {
     }
 
     fn start_with_realtime(&self, bootstrap: bool, partial: bool, realtime: bool) -> Server {
+        self.start_with_policy(bootstrap, partial, realtime, 15)
+    }
+
+    fn start_with_policy(
+        &self,
+        bootstrap: bool,
+        partial: bool,
+        realtime: bool,
+        minimum: usize,
+    ) -> Server {
         // Bind ephemeral test ports, never use the running development server.
         let http = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let edge = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -85,6 +95,9 @@ impl Fixture {
             .env("DATABASE_URL", &self.database_url)
             .env("Transport__Mode", "Disabled")
             .env("EnableSwagger", "true")
+            // Lifecycle assertions below intentionally inspect structured log fields.
+            .env("LogFormat", "json")
+            .env("Passwords__MinimumLength", minimum.to_string())
             .env("CITADEL_RUST_REALTIME_ENABLED", realtime.to_string())
             .env("Transport__ApiPort", http_port.to_string())
             .env("Transport__EdgeGrpcPort", edge_port.to_string())
@@ -131,10 +144,13 @@ impl Fixture {
     async fn ready(&self, server: &mut Server) -> Value {
         tokio::time::timeout(Duration::from_secs(30), async {
             loop {
-                assert!(
-                    server.child.try_wait().unwrap().is_none(),
-                    "Core exited before serving setup status"
-                );
+                if let Some(status) = server.child.try_wait().unwrap() {
+                    let output = (&mut server.output).await.unwrap();
+                    let errors = (&mut server.errors).await.unwrap();
+                    panic!(
+                        "Core exited before serving setup status ({status}):\n{output}\n{errors}"
+                    );
+                }
                 if let Ok(response) = self
                     .client
                     .get(format!("{}/api/v1/setup/status", server.url))

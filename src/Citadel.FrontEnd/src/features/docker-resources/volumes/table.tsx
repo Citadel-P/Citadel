@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { BackupCoverageStatus, DockerVolumeResultView, PlatformType } from '@/api/generated/api.types';
+import { BackupCoverageStatus, VolumeView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,16 +23,16 @@ export const VolumesTable = ({
   actions,
   isLoading,
 }: {
-  items: DockerVolumeResultView[];
+  items: VolumeView[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: VolumeView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<DockerVolumeResultView>('Volume');
+  const [_, setSelectedResources] = useSelectedResources<VolumeView>('Volume');
   const { currentPlatform } = useAppContext();
-  const [browsingVolume, setBrowsingVolume] = useState<DockerVolumeResultView | null>(null);
+  const [browsingVolume, setBrowsingVolume] = useState<VolumeView | null>(null);
   const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
   const cols = useMemo(() => columns(actions ?? {}, setBrowsingVolume, showNode), [actions, showNode]);
 
@@ -52,11 +52,11 @@ export const VolumesTable = ({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: VolumeView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-  onBrowse: (volume: DockerVolumeResultView) => void,
+  onBrowse: (volume: VolumeView) => void,
   showNode: boolean,
-): ColumnDef<DockerVolumeResultView>[] => [
+): ColumnDef<VolumeView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -82,7 +82,7 @@ const columns = (
     cell: ({ row }) => <VolumeNameRow volume={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
-  ...(showNode ? [createNodeResourceColumn<DockerVolumeResultView>()] : []),
+  ...(showNode ? [createNodeResourceColumn<VolumeView>()] : []),
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
@@ -131,7 +131,7 @@ const columns = (
   },
 ];
 
-const backupCoverageRank = (volume: DockerVolumeResultView) => {
+const backupCoverageRank = (volume: VolumeView) => {
   switch (volume.backupCoverage?.status) {
     case BackupCoverageStatus.Failed:
       return 0;
@@ -148,7 +148,7 @@ const backupCoverageRank = (volume: DockerVolumeResultView) => {
   }
 };
 
-const BackupCoverageBadge = ({ volume }: { volume: DockerVolumeResultView }) => {
+const BackupCoverageBadge = ({ volume }: { volume: VolumeView }) => {
   const coverage = volume.backupCoverage;
   if (!coverage) {
     return <span className="text-muted-foreground text-xs">-</span>;
@@ -198,7 +198,7 @@ const coverageLabel = (status: BackupCoverageStatus) => {
   }
 };
 
-const VolumeNameRow = ({ volume }: { volume: DockerVolumeResultView }) => {
+const VolumeNameRow = ({ volume }: { volume: VolumeView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {

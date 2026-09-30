@@ -26,6 +26,7 @@ pub(super) fn map_platform(row: PgRow) -> Result<PlatformDetails, AuthorizedRead
         .map(|stat| vec![stat]);
     Ok(PlatformDetails {
         id: row.try_get("id").map_err(storage)?,
+        tags: json(row.try_get("resource_tags").map_err(storage)?)?,
         name: row.try_get("name").map_err(storage)?,
         description: row.try_get("description").map_err(storage)?,
         address: row.try_get("address").map_err(storage)?,

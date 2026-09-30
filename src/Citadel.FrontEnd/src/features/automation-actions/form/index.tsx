@@ -1,5 +1,5 @@
 import { StateBadge } from '@/components/custom/state-badge';
-import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
@@ -11,7 +11,7 @@ import { AutomationActionInfoActions } from '../actions';
 import { AutomationActionForm } from './form';
 import { AutomationActionRunsTab } from './runs';
 
-type AutomationActionFormResource = AutomationActionView & RequiredFormFields;
+type AutomationActionFormResource = AuthorizedAction & RequiredFormFields;
 
 export const AutomationActionFormComponents: RequiredFormComponents<AutomationActionFormResource> = {
   AddForm: {
@@ -25,7 +25,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
       canEditTitle: true,
       canEditDescription: true,
       Indicator: ({ resource }) => {
-        const action = resource as AutomationActionView;
+        const action = resource as AuthorizedAction;
         const status = action.latestRun?.status ?? action.enabled;
         return (
           <StateBadge
@@ -52,7 +52,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
         <ResourceHeaderTagsEditor
           resourceType="AutomationAction"
           resourceId={resource.id}
-          tags={(resource as AutomationActionView).tags}
+          tags={(resource as AuthorizedAction).tags}
           disabled={!hasCapability(resource, 'canWrite')}
         />
       ),
@@ -71,7 +71,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
       },
       {
         label: 'Runs',
-        Content: ({ resource }) => <AutomationActionRunsTab resource={resource as AutomationActionView} />,
+        Content: ({ resource }) => <AutomationActionRunsTab resource={resource as AuthorizedAction} />,
       },
       {
         label: 'Activities',

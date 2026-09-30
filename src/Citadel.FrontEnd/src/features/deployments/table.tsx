@@ -99,7 +99,11 @@ const columns = (
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => <DeploymentUpdateStatusCell deployment={row.original} />,
-    sortingFn: (rowA, rowB) => (rowA.original.autoUpdateState.status! < rowB.original.autoUpdateState.status! ? 1 : -1),
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.autoUpdateState?.status ?? AutoUpdateStatus.Unknown)! <
+      (rowB.original.autoUpdateState?.status ?? AutoUpdateStatus.Unknown)!
+        ? 1
+        : -1,
   },
   {
     accessorKey: 'platform',
@@ -160,9 +164,11 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
 };
 
 const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView }) => {
-  const status = deployment.autoUpdateState.status;
+  const state = deployment.autoUpdateState;
+  if (!state) return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
+  const status = state.status;
   const { label } = UPDATE_STATUS_UI[status];
-  if (deployment.autoUpdateState.status === AutoUpdateStatus.Unknown) {
+  if (state.status === AutoUpdateStatus.Unknown) {
     return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
   }
   const trigger = (
@@ -183,17 +189,15 @@ const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView
         <div className="flex justify-between items-start mb-4">
           <div className="space-y-1">
             <h4 className="text-sm font-medium leading-none text-foreground">{deployment.imageName}</h4>
-            <p className="text-xs text-muted-foreground">Checked {fromNow(deployment.autoUpdateState.lastCheckedAt)}</p>
+            <p className="text-xs text-muted-foreground">Checked {fromNow(state.lastCheckedAt)}</p>
           </div>
           <UpdateStatusIcon updateStatus={status} />
         </div>
 
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
           <span className="text-muted-foreground text-xs">Current</span>
-          <span
-            className="font-mono text-xs text-foreground/80 truncate"
-            title={deployment.autoUpdateState.currentDigest ?? undefined}>
-            {formatId(deployment.autoUpdateState.currentDigest ?? undefined)}
+          <span className="font-mono text-xs text-foreground/80 truncate" title={state.currentDigest ?? undefined}>
+            {formatId(state.currentDigest ?? undefined)}
           </span>
 
           {isUpdateAvailable && (
@@ -201,8 +205,8 @@ const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView
               <span className="text-muted-foreground text-xs">Available</span>
               <span
                 className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate"
-                title={deployment.autoUpdateState.remoteDigest ?? undefined}>
-                {formatId(deployment.autoUpdateState.remoteDigest ?? undefined)}
+                title={state.remoteDigest ?? undefined}>
+                {formatId(state.remoteDigest ?? undefined)}
               </span>
             </>
           )}

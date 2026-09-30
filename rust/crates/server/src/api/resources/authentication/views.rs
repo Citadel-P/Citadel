@@ -36,6 +36,7 @@ impl From<citadel_identity::LoginNextStep> for LoginNextStep {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
+    #[schema(required = true)]
     pub access_token: Option<String>,
     pub next_step: LoginNextStep,
 }
@@ -62,12 +63,16 @@ impl From<citadel_identity::LoginOutcome> for LoginResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SetupStatusView {
     pub requires_setup: bool,
+    pub password_minimum_length: usize,
+    pub password_maximum_length: usize,
 }
 
 impl From<citadel_identity::SetupStatus> for SetupStatusView {
     fn from(value: citadel_identity::SetupStatus) -> Self {
         Self {
             requires_setup: value.requires_setup,
+            password_minimum_length: value.password_minimum_length,
+            password_maximum_length: value.password_maximum_length,
         }
     }
 }

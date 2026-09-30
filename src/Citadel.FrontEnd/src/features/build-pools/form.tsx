@@ -5,7 +5,7 @@ import {
   BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
   BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
   BuildAgentPoolValidationStatus,
-  BuildAgentPoolView,
+  AuthorizedPool,
   CpuArchitecture,
   EdgeAgentEnrollmentView,
   EdgeAgentStatusView,
@@ -44,7 +44,7 @@ import { useParams } from 'react-router';
 import { BuildPoolInfoActions, invalidateBuildPoolQueries } from './actions';
 
 type BuildPoolInput = BuildAgentPoolInput | UpdateBuildAgentPoolInput;
-type BuildPoolFormResource = BuildAgentPoolView & RequiredFormFields;
+type BuildPoolFormResource = AuthorizedPool & RequiredFormFields;
 type AwsEc2ProviderSpec = BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec & { $type: 'AwsEc2' };
 type SelfManagedVmProviderSpec = BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec & {
   $type: 'SelfManagedVm';
@@ -105,7 +105,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
   },
   EditForm: {
     Header: {
-      Indicator: ({ resource }) => <BuildPoolHeaderIndicator pool={resource as BuildAgentPoolView} />,
+      Indicator: ({ resource }) => <BuildPoolHeaderIndicator pool={resource as AuthorizedPool} />,
       ActionButtons: ({ resource }) => {
         const { edit: _edit, ...actions } = BuildPoolInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
@@ -113,8 +113,8 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       Tags: ({ resource }) => (
         <ResourceHeaderTagsEditor
           resourceType="BuildAgentPool"
-          resourceId={(resource as BuildAgentPoolView).id}
-          tags={(resource as BuildAgentPoolView).tags}
+          resourceId={(resource as AuthorizedPool).id}
+          tags={(resource as AuthorizedPool).tags}
           disabled={!hasCapability(resource, 'canWrite')}
         />
       ),
@@ -125,7 +125,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
         Content: ({ resource }) => (
           <BuildPoolForm
             mode="edit"
-            resource={resource as BuildAgentPoolView}
+            resource={resource as AuthorizedPool}
             disabled={!hasCapability(resource, 'canWrite')}
           />
         ),
@@ -133,7 +133,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       {
         label: 'Activities',
         Content: ({ resource }) => (
-          <ActivitiesTab resourceId={(resource as BuildAgentPoolView).id} resourceType="BuildAgentPool" />
+          <ActivitiesTab resourceId={(resource as AuthorizedPool).id} resourceType="BuildAgentPool" />
         ),
       },
     ],
@@ -142,7 +142,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       const [pool, setPool] = useState<BuildPoolFormResource | undefined>(
         data?.data as BuildPoolFormResource | undefined,
       );
-      const lastDataRef = useRef<BuildAgentPoolView | undefined>(data?.data);
+      const lastDataRef = useRef<AuthorizedPool | undefined>(data?.data);
 
       useEffect(() => {
         if (data?.data && data.data !== lastDataRef.current) {
@@ -152,7 +152,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       }, [data?.data]);
 
       const handleBuildAgentPoolInfoUpdated = useCallback(
-        (nextPool: BuildAgentPoolView) => {
+        (nextPool: AuthorizedPool) => {
           if (nextPool.id !== id) return;
 
           setPool(nextPool as BuildPoolFormResource);
@@ -191,7 +191,7 @@ function BuildPoolForm({
   disabled,
 }: {
   mode: 'add' | 'edit';
-  resource?: BuildAgentPoolView;
+  resource?: AuthorizedPool;
   disabled?: boolean;
 }) {
   const id = useParams().id;
@@ -274,7 +274,7 @@ function BuildPoolForm({
   const schema = useMemo(
     () => ({
       General: defineSection<BuildPoolInput>({
-        title: 'General',
+        title: '',
         items: [
           ...(mode === 'add'
             ? [
@@ -284,7 +284,6 @@ function BuildPoolForm({
                   items: [
                     defineField({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Internal name used when selecting this pool from a build project.',
@@ -296,7 +295,6 @@ function BuildPoolForm({
                     }),
                     defineField({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       description: 'Optional notes about where these builders run.',
                       render: (value, set) => (
@@ -470,12 +468,13 @@ function BuildPoolForm({
   );
 }
 
-function BuildPoolHeaderIndicator({ pool }: { pool: BuildAgentPoolView }) {
+function BuildPoolHeaderIndicator({ pool }: { pool: AuthorizedPool }) {
   const title = [validationLabel(pool.lastValidationStatus), pool.lastValidationMessage].filter(Boolean).join(' - ');
 
   return (
     <span className="inline-flex items-center" title={title}>
       <StateIndicator
+        variant="badge"
         value={pool.lastValidationStatus}
         kind="buildAgentPoolValidation"
         isProcessing={pool.controlState === ResourceControlState.Processing}

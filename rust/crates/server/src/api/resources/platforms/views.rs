@@ -65,8 +65,11 @@ pub struct PlatformStatView {
     pub rx_bytes: f64,
     pub cpu_usage: f64,
     pub memory_usage: f64,
+    #[schema(required = true)]
     pub disk_used_bytes: Option<i64>,
+    #[schema(required = true)]
     pub disk_total_bytes: Option<i64>,
+    #[schema(required = true)]
     pub disk_usage: Option<f64>,
 }
 
@@ -89,7 +92,9 @@ impl From<citadel_platforms::PlatformStatSnapshot> for PlatformStatView {
 #[serde(rename_all = "camelCase")]
 pub struct PlatformView {
     pub id: Uuid,
+    pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
     pub name: String,
+    #[schema(required = true)]
     pub description: Option<String>,
     pub address: String,
     pub network_count: i32,
@@ -97,21 +102,30 @@ pub struct PlatformView {
     pub image_count: i64,
     pub cpu_count: i64,
     pub mem_total: i64,
+    #[schema(required = true)]
     pub agent_version: Option<String>,
+    #[schema(required = true)]
     pub server_version: Option<String>,
     #[serde(rename = "type")]
+    #[schema(value_type = crate::api::resources::platforms::requests::PlatformType)]
     pub platform_type: String,
+    #[schema(value_type = crate::api::resources::common::PlatformStatus)]
     pub status: String,
+    #[schema(value_type = crate::openapi::compatibility::PlatformConnectorType)]
     pub connector_type: String,
     pub deployment_count: i64,
     pub stack_count: i64,
     pub deployment_status_counts: WorkloadStatusCounts,
     pub stack_status_counts: WorkloadStatusCounts,
     pub swarm_service_status_counts: WorkloadStatusCounts,
+    #[schema(required = true)]
     pub stats: Option<Vec<PlatformStatView>>,
+    #[schema(value_type = Option<crate::openapi::compatibility::PlatformDescriptor>)]
     pub platform_descriptor: Value,
+    #[schema(required = true)]
     pub cluster_id: Option<String>,
     pub prune_historical_swarm_task_containers: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -119,6 +133,7 @@ impl From<citadel_platforms::PlatformDetails> for PlatformView {
     fn from(value: citadel_platforms::PlatformDetails) -> Self {
         Self {
             id: value.id,
+            tags: value.tags.into_iter().map(Into::into).collect(),
             name: value.name,
             description: value.description,
             address: value.address,
@@ -185,27 +200,41 @@ pub struct ContainerView {
     pub name: String,
     pub docker_image_id: String,
     pub created: i64,
+    #[schema(value_type = crate::openapi::compatibility::ContainerStateStatus)]
     pub state: String,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
     pub updated: i64,
+    #[schema(required = true)]
     pub stack: Option<String>,
     pub is_system: bool,
+    #[schema(value_type = Option<crate::openapi::compatibility::ContainerSystemRole>, required = true)]
     pub system_role: Option<String>,
     pub has_citadel_ownership_labels: bool,
     pub is_swarm_task: bool,
+    #[schema(required = true)]
     pub docker_node_id: Option<String>,
+    #[schema(required = true)]
     pub node_hostname: Option<String>,
+    #[schema(required = true)]
     pub projection_observed_at: Option<i64>,
+    #[schema(required = true)]
     pub projection_stale_since: Option<i64>,
+    #[schema(required = true)]
     pub projection_stale_reason: Option<String>,
+    #[schema(required = true)]
     pub last_stats: Option<ContainerStatView>,
+    #[schema(value_type = BTreeMap<String, Vec<crate::openapi::compatibility::HostPortBinding>>)]
     pub ports: Value,
+    #[schema(required = true)]
     pub deployment_id: Option<Uuid>,
+    #[schema(required = true)]
     pub stack_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_view: Option<ImageView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deployment_view: Option<ContainerDeploymentView>,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -250,10 +279,13 @@ pub struct ContainerDeploymentView {
     pub id: Uuid,
     pub name: String,
     pub platform_id: Uuid,
+    #[schema(value_type = crate::api::resources::deployments::spec::DeploymentStatus)]
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub created_by_actor_id: Uuid,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(value_type = crate::api::resources::common::PlatformStatus)]
     pub platform_status: String,
     pub auto_update_state: ContainerDeploymentUpdateState,
 }
@@ -276,7 +308,19 @@ impl From<citadel_platforms::ContainerDeploymentSummary> for ContainerDeployment
 
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ImageRegistryView {
+    pub id: Uuid,
+    pub name: String,
+    pub registry_host: String,
+    #[serde(rename = "type")]
+    #[schema(value_type = crate::openapi::compatibility::RegistryType)]
+    pub registry_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ImageView {
+    pub registry: Option<ImageRegistryView>,
     pub id: Uuid,
     pub tags: Vec<String>,
     pub name: String,
@@ -285,21 +329,31 @@ pub struct ImageView {
     pub is_in_use: bool,
     pub platform_id: Uuid,
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = crate::api::resources::common::ResourceControlState)]
     pub control_state: String,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub registry_id: Option<Uuid>,
+    #[schema(required = true)]
     pub repo_digests: Option<Vec<String>>,
+    #[schema(required = true)]
     pub content_identity: Option<String>,
+    #[schema(required = true)]
     pub docker_node_id: Option<String>,
+    #[schema(required = true)]
     pub node_hostname: Option<String>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub stale_reason: Option<String>,
+    #[schema(required = true)]
     pub capabilities: Option<ImageCapabilitiesView>,
 }
 
 impl From<citadel_platforms::ImageDetails> for ImageView {
     fn from(value: citadel_platforms::ImageDetails) -> Self {
         Self {
+            registry: None,
             id: value.id,
             tags: value.tags,
             name: value.name,
@@ -339,17 +393,25 @@ pub struct NetworkView {
     pub ingress: bool,
     pub config_only: bool,
     pub in_use: bool,
+    #[schema(required = true)]
     pub config_from: Option<String>,
+    #[schema(value_type = Option<crate::openapi::compatibility::IpAddressManagementConfig>, required = true)]
     pub ipam: Option<Value>,
     pub options: BTreeMap<String, String>,
     pub labels: BTreeMap<String, String>,
+    #[schema(value_type = BTreeMap<String, crate::openapi::compatibility::NetworkConnectedContainer>)]
     pub containers: BTreeMap<String, Value>,
+    #[schema(value_type = Vec<crate::openapi::compatibility::NetworkPeerInfo>)]
     pub peers: Vec<Value>,
     pub is_system: bool,
+    #[schema(required = true)]
     pub docker_node_id: Option<String>,
+    #[schema(required = true)]
     pub node_hostname: Option<String>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub stale_reason: Option<String>,
+    #[schema(required = true)]
     pub capabilities: Option<NetworkCapabilitiesView>,
 }
 
@@ -392,6 +454,7 @@ impl From<citadel_platforms::NetworkDetails> for NetworkView {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeView {
+    pub backup_coverage: Option<BackupCoverageView>,
     pub id: String,
     pub name: String,
     pub in_use: bool,
@@ -399,22 +462,30 @@ pub struct VolumeView {
     pub driver: String,
     pub mountpoint: String,
     pub created_at: String,
+    #[schema(required = true)]
     pub cluster_volume: Option<Value>,
+    #[schema(required = true)]
     pub usage_data: Option<VolumeUsageDataView>,
+    #[schema(value_type = Vec<crate::openapi::compatibility::ContainerVolumeResult>)]
     pub containers: Vec<Value>,
     pub status: BTreeMap<String, String>,
     pub labels: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
+    #[schema(required = true)]
     pub docker_node_id: Option<String>,
+    #[schema(required = true)]
     pub node_hostname: Option<String>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub stale_reason: Option<String>,
+    #[schema(required = true)]
     pub capabilities: Option<VolumeCapabilitiesView>,
 }
 
 impl From<citadel_platforms::VolumeDetails> for VolumeView {
     fn from(value: citadel_platforms::VolumeDetails) -> Self {
         Self {
+            backup_coverage: None,
             id: value.id,
             name: value.name,
             in_use: value.in_use,
@@ -465,6 +536,7 @@ pub struct SwarmNodeView {
     pub is_leader: bool,
     pub reachability: String,
     pub status: String,
+    #[schema(required = true)]
     pub status_message: Option<String>,
     pub availability: String,
     pub engine_version: String,
@@ -474,10 +546,13 @@ pub struct SwarmNodeView {
     pub labels: BTreeMap<String, String>,
     pub running_task_count: i32,
     pub desired_task_count: i32,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -520,21 +595,30 @@ pub struct SwarmServiceView {
     pub running_task_count: i32,
     pub desired_task_count: i32,
     pub update_state: String,
+    #[schema(required = true)]
     pub update_message: Option<String>,
     pub ports: Vec<String>,
     pub network_ids: Vec<String>,
     pub secret_ids: Vec<String>,
     pub config_ids: Vec<String>,
     pub labels: BTreeMap<String, String>,
+    #[schema(value_type = crate::openapi::compatibility::SwarmServiceOwnership)]
     pub ownership: String,
+    #[schema(required = true)]
     pub docker_stack_namespace: Option<String>,
+    #[schema(required = true)]
     pub ownership_diagnostic: Option<String>,
+    #[schema(required = true)]
     pub stack_id: Option<Uuid>,
+    #[schema(required = true)]
     pub swarm_service_id: Option<Uuid>,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -577,20 +661,27 @@ pub struct SwarmTaskView {
     pub name: String,
     pub service_id: String,
     pub service_name: String,
+    #[schema(required = true)]
     pub slot: Option<i32>,
     pub node_id: String,
     pub node_hostname: String,
     pub desired_state: String,
     pub state: String,
+    #[schema(required = true)]
     pub status_message: Option<String>,
+    #[schema(required = true)]
     pub error: Option<String>,
     pub image: String,
     pub ports: Vec<String>,
+    #[schema(required = true)]
     pub status_timestamp: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -637,9 +728,11 @@ pub struct SwarmNetworkView {
     pub subnets: Vec<String>,
     pub service_names: Vec<String>,
     pub labels: BTreeMap<String, String>,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -672,14 +765,18 @@ pub struct SwarmConfigView {
     pub id: String,
     pub version_index: i64,
     pub name: String,
+    #[schema(required = true)]
     pub templating_driver: Option<String>,
     pub service_names: Vec<String>,
     pub labels: BTreeMap<String, String>,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
     pub in_use: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -708,14 +805,18 @@ pub struct SwarmSecretView {
     pub id: String,
     pub version_index: i64,
     pub name: String,
+    #[schema(required = true)]
     pub driver: Option<String>,
     pub service_names: Vec<String>,
     pub labels: BTreeMap<String, String>,
+    #[schema(required = true)]
     pub created_at: Option<DateTime<Utc>>,
+    #[schema(required = true)]
     pub updated_at: Option<DateTime<Utc>>,
     pub observed_at: DateTime<Utc>,
     pub is_stale: bool,
     pub in_use: bool,
+    #[schema(required = true)]
     pub capabilities: Option<PlatformCapabilitiesView>,
 }
 
@@ -795,6 +896,7 @@ impl From<citadel_platforms::WorkloadStatusCounts> for WorkloadStatusCounts {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDeploymentUpdateState {
     pub last_checked_at: DateTime<Utc>,
+    #[schema(value_type = crate::api::resources::common::AutoUpdateStatus)]
     pub status: String,
 }
 
@@ -957,9 +1059,13 @@ impl From<citadel_platforms::prune::PrunePlatformOutcome> for PrunePlatformView 
 #[schema(as = platforms::image_pull::ImagePullProgress)]
 #[serde(rename_all = "camelCase")]
 pub struct ImagePullProgress {
+    #[schema(required = true)]
     pub units: Option<String>,
+    #[schema(required = true)]
     pub current: Option<i64>,
+    #[schema(required = true)]
     pub total: Option<i64>,
+    #[schema(required = true)]
     pub start: Option<i64>,
 }
 
@@ -994,4 +1100,18 @@ impl AgentSetupView {
         )
         .into()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupCoverageView {
+    #[schema(value_type = crate::openapi::compatibility::BackupCoverageStatus)]
+    pub status: String,
+    pub policy_count: i32,
+    pub last_run_id: Option<Uuid>,
+    #[schema(value_type = Option<crate::openapi::compatibility::BackupRunStatus>)]
+    pub last_run_status: Option<String>,
+    pub last_run_at: Option<DateTime<Utc>>,
+    pub last_successful_run_at: Option<DateTime<Utc>>,
+    pub next_run_at: Option<DateTime<Utc>>,
 }

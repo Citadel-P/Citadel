@@ -1,8 +1,8 @@
 import {
   UserResourceAccessInput,
   ResourceInfo,
-  CreateTeamInput,
-  PatchTeamInput,
+  CreateTeamRequest,
+  PatchTeamRequest,
   LicenseCapability,
   RoleType,
 } from '@/api/generated/api.types';
@@ -27,7 +27,7 @@ import { useUsersList } from '../../users/hooks/useUsersList';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { LicenseFeatureIndicator } from '@/components/custom/license-feature-indicator';
 
-type TeamInput = CreateTeamInput | PatchTeamInput;
+type TeamInput = CreateTeamRequest | PatchTeamRequest;
 
 type TeamFormResource = Partial<TeamInput> & {
   users?: ResourceInfo[] | null;
@@ -114,8 +114,8 @@ export const TeamForm = ({
     mode,
     basePath: 'access/teams',
     entityName: 'Team',
-    onCreate: (payload) => createTeam({ data: payload as CreateTeamInput }),
-    onUpdate: (payload) => updateTeam({ id: id!, data: payload as PatchTeamInput }),
+    onCreate: (payload) => createTeam({ data: payload as CreateTeamRequest }),
+    onUpdate: (payload) => updateTeam({ id: id!, data: payload as PatchTeamRequest }),
     onRefresh: refreshData,
   });
 
@@ -123,7 +123,7 @@ export const TeamForm = ({
     const sanitizedPayload = (() => {
       if (mode !== 'edit') return payload;
 
-      const next = { ...(payload as PatchTeamInput) } as Record<string, unknown>;
+      const next = { ...(payload as PatchTeamRequest) } as Record<string, unknown>;
       if (typeof next.password === 'string' && next.password.trim().length === 0) {
         delete next.password;
       }
@@ -150,7 +150,6 @@ export const TeamForm = ({
                 ? [
                     defineField<TeamInput, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Team Name',
                       description: 'Provide a unique name to identify this team.',
                       required: true,
@@ -228,7 +227,14 @@ export const TeamForm = ({
             render: (value, set) => (
               <ResourceOverridesField
                 value={(value as UserResourceAccessInput[] | null) ?? []}
-                onChange={(next) => set({ resourceAccesses: next })}
+                onChange={(next) =>
+                  set({
+                    resourceAccesses: next.map((entry) => ({
+                      ...entry,
+                      specificPermissions: entry.specificPermissions ?? [],
+                    })),
+                  })
+                }
               />
             ),
           }),

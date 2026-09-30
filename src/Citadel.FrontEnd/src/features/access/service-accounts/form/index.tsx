@@ -1,4 +1,4 @@
-import { ServiceAccountView } from '@/api/generated/api.types';
+import { ServiceAccountDetailResponse } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useRead } from '@/lib/hooks';
@@ -18,8 +18,8 @@ export const ServiceAccountFormComponents: RequiredFormComponents = {
     supportsHeaderRename: true,
     Header: {
       canEditDescription: false,
-      Indicator: ({ resource }: { resource: ServiceAccountView }) => (
-        <StateIndicator value={!resource.archivedAtUtc && resource.isEnabled} enableLabel={true} />
+      Indicator: ({ resource }: { resource: ServiceAccountDetailResponse }) => (
+        <StateIndicator variant="badge" value={!resource.archivedAtUtc && resource.isEnabled} enableLabel={true} />
       ),
       ActionButtons: ({ resource }) => (
         <GenericActionBarButtons resource={resource} actions={[ServiceAccountInfoActions.archive]} />
@@ -38,7 +38,7 @@ export const ServiceAccountFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Tokens',
-        Content: ({ resource }) => <ServiceAccountTokens resource={resource as ServiceAccountView} />,
+        Content: ({ resource }) => <ServiceAccountTokens resource={resource as ServiceAccountDetailResponse} />,
       },
       {
         label: 'Activities',

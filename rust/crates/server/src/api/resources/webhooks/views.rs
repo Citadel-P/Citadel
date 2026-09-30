@@ -7,5 +7,6 @@ pub(crate) struct WebhookResponse {
     pub(crate) accepted: bool,
     pub(crate) status: &'static str,
     pub(crate) request_id: Uuid,
+    #[schema(required = true)]
     pub(crate) reason: Option<&'static str>,
 }

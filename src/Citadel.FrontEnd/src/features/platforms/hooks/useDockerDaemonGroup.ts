@@ -2,8 +2,8 @@ import { useCallback, useRef, useEffect } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import {
   ContainerView,
-  DockerNetworkResultView,
-  DockerVolumeResultView,
+  NetworkView,
+  VolumeView,
   ImageView,
   SwarmConfigsView,
   SwarmNetworksView,
@@ -34,14 +34,14 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
   }, []);
 
   const handleVolumeEventReceived = useCallback(
-    (volume: DockerVolumeResultView, eventType: string, actorId: string) => {
+    (volume: VolumeView, eventType: string, actorId: string) => {
       listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
     },
     [],
   );
 
   const handleNetworkEventReceived = useCallback(
-    (network: DockerNetworkResultView, eventType: string, actorId: string) => {
+    (network: NetworkView, eventType: string, actorId: string) => {
       listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
     },
     [],
@@ -126,12 +126,12 @@ export interface ImageEvent extends BaseEvent {
 }
 
 export interface VolumeEvent extends BaseEvent {
-  volume: DockerVolumeResultView;
+  volume: VolumeView;
   actorId: string;
 }
 
 export interface NetworkEvent extends BaseEvent {
-  network: DockerNetworkResultView;
+  network: NetworkView;
   actorId: string;
 }
 
@@ -159,8 +159,8 @@ export type SwarmInventoryUpdate = {
 export type SwarmNodeLocalResourcesUpdate = {
   platformId: string;
   images?: ImageView[];
-  volumes?: DockerVolumeResultView[];
-  networks?: DockerNetworkResultView[];
+  volumes?: VolumeView[];
+  networks?: NetworkView[];
   nodeOnly?: boolean;
   volumeCount?: number;
 };

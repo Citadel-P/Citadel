@@ -709,3 +709,12 @@ impl From<citadel_platforms::image_pull::PullImageInput> for PullImageInput {
         }
     }
 }
+
+impl From<citadel_platforms::PlatformKind> for PlatformType {
+    fn from(value: citadel_platforms::PlatformKind) -> Self {
+        match value {
+            citadel_platforms::PlatformKind::Docker => Self::Docker,
+            citadel_platforms::PlatformKind::DockerSwarm => Self::DockerSwarm,
+        }
+    }
+}

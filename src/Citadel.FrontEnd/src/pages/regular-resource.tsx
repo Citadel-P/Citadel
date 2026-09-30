@@ -99,17 +99,20 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
         {overview && isLoading && !hasItems && showContent && (
           <ResourceOverviewSkeleton count={overview.filters.length} />
         )}
-        {overview && (!isLoading || hasItems) && showContent && (
-          <ResourceOverview
-            label={overview.label}
-            activeId={activeId}
-            onSelect={selectOverview}
-            metrics={overview.filters.map(({ matches, ...filter }) => ({
-              ...filter,
-              value: matches ? filtered.filter(matches).length : filtered.length,
-            }))}
-          />
-        )}
+        {overview &&
+          (hasItems || hasActiveUrlFilters || activeId !== 'all') &&
+          (!isLoading || hasItems) &&
+          showContent && (
+            <ResourceOverview
+              label={overview.label}
+              activeId={activeId}
+              onSelect={selectOverview}
+              metrics={overview.filters.map(({ matches, ...filter }) => ({
+                ...filter,
+                value: matches ? filtered.filter(matches).length : filtered.length,
+              }))}
+            />
+          )}
 
         {!!error && (
           <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale={hasItems && showContent} />

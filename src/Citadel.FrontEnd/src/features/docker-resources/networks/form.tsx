@@ -16,7 +16,7 @@ import {
 } from '@/components/custom/form-builder';
 import { KeyValuePairInput, KVPair } from '@/components/custom/key-value-pair-input';
 
-import { CreateNetworkInput, IPAMConfigInput, PlatformType } from '@/api/generated/api.types';
+import { CreateNetworkInput, RuntimeIpamConfig, PlatformType } from '@/api/generated/api.types';
 
 type CreateNetworkFormInput = Omit<
   CreateNetworkInput,
@@ -27,7 +27,7 @@ type CreateNetworkFormInput = Omit<
   options: KVPair[];
   ipam: {
     driver: string;
-    config: Partial<IPAMConfigInput>[];
+    config: Partial<RuntimeIpamConfig>[];
   };
 };
 
@@ -101,7 +101,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
       options: optionsObj,
       ipam: {
         driver: formValues.ipam?.driver ?? 'default',
-        config: ipamConfig as IPAMConfigInput[],
+        config: ipamConfig as RuntimeIpamConfig[],
       },
     };
 
@@ -119,7 +119,6 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
       items: [
         defineField({
           key: 'name',
-          persistDraft: true,
           label: 'Name',
           description: "The network's name.",
           required: true,

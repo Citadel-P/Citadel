@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { DockerNetworkDetailsView, DockerNetworkResultView } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView, NetworkView } from '@/api/generated/api.types';
 import { NetworkNameRow } from './table';
 import { NetworkInfoComponents } from './network-info';
 
@@ -10,7 +10,7 @@ const network = (isSystem: boolean) =>
     name: isSystem ? 'bridge' : 'application-network',
     inUse: false,
     isSystem,
-  }) as DockerNetworkResultView;
+  }) as NetworkView;
 
 describe('system networks', () => {
   it('shows a System badge for a Docker system network', () => {

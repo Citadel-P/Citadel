@@ -3,7 +3,13 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { GitRepoActions } from './actions';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { ActivityStatus, GitRepositoryView, LatestActivityView, ResourceControlState } from '@/api/generated/api.types';
+import {
+  ActivityStatus,
+  GitReposStatus,
+  AuthorizedGitRepositoryView,
+  LatestActivityView,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { useGitRepoGroup } from './hooks/useGitRepoGroup';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
@@ -29,8 +35,12 @@ export const GitRepoFormComponents: RequiredFormComponents = {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return (
           <StateIndicator
-            value={(resource as GitRepositoryView).status}
-            isProcessing={(resource as GitRepositoryView).controlState === ResourceControlState.Processing}
+            variant="badge"
+            value={(resource as AuthorizedGitRepositoryView).status}
+            isProcessing={
+              (resource as AuthorizedGitRepositoryView).controlState === ResourceControlState.Processing ||
+              (resource as AuthorizedGitRepositoryView).status === GitReposStatus.Pending
+            }
           />
         );
       },
@@ -43,7 +53,7 @@ export const GitRepoFormComponents: RequiredFormComponents = {
           />
         );
       },
-      Tags: ({ resource }: { resource: GitRepositoryView }) => (
+      Tags: ({ resource }: { resource: AuthorizedGitRepositoryView }) => (
         <ResourceHeaderTagsEditor
           resourceType="GitRepository"
           resourceId={resource.id}
@@ -52,13 +62,13 @@ export const GitRepoFormComponents: RequiredFormComponents = {
         />
       ),
     },
-    SubHeader: ({ resource }: { resource: GitRepositoryView }) => (
-      <GitRepoSubHeader latestActivity={resource.latestActivityView} />
+    SubHeader: ({ resource }: { resource: AuthorizedGitRepositoryView }) => (
+      <GitRepoSubHeader latestActivity={resource.latestActivityView} status={resource.status} />
     ),
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource, metadataChanged }: { resource: GitRepositoryView; metadataChanged?: boolean }) => {
+        Content: ({ resource, metadataChanged }: { resource: AuthorizedGitRepositoryView; metadataChanged?: boolean }) => {
           return (
             <GitRepoForm
               mode="edit"
@@ -70,7 +80,7 @@ export const GitRepoFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Activities',
-        Content: ({ resource }: { resource: GitRepositoryView }) => {
+        Content: ({ resource }: { resource: AuthorizedGitRepositoryView }) => {
           return <ActivitiesTab resourceId={resource.id} resourceType="GitRepository" />;
         },
       },
@@ -82,9 +92,17 @@ export const GitRepoFormComponents: RequiredFormComponents = {
   },
 };
 
-function GitRepoSubHeader({ latestActivity }: { latestActivity: LatestActivityView | null }) {
+function GitRepoSubHeader({
+  latestActivity,
+  status,
+}: {
+  latestActivity: LatestActivityView | null;
+  status: GitReposStatus;
+}) {
   const info = latestActivity?.info;
   if (!info || (info.$type !== 'GitRepoCloned' && info.$type !== 'GitRepoPulled')) return null;
+  // Activity history can retain an earlier failure after the repository recovers.
+  if (status === GitReposStatus.Healthy && latestActivity.status === ActivityStatus.Failure) return null;
 
   if (latestActivity.status === ActivityStatus.Success) {
     const commitSha = info.result?.commitSha;

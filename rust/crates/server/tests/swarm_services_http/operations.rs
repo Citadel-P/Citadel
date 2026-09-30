@@ -3,6 +3,7 @@ use super::*;
 pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrincipal, id: Uuid) {
     let actor = Uuid::now_v7();
     let grant = Uuid::now_v7();
+    let user = Uuid::now_v7();
     sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
         .bind(actor)
         .execute(pool)
@@ -11,7 +12,11 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,$5)")
         .bind(grant).bind(actor).bind(id).bind(citadel_primitives::ResourceType::SwarmService as i32)
         .bind(citadel_primitives::SpecificPermission::Apply as i32).execute(pool).await.unwrap();
+    sqlx::query("INSERT INTO users(id,actorid,createdbyactorid,email,name) VALUES($1,$2,$3,$4,'Swarm operation reader')")
+        .bind(user).bind(actor).bind(SYSTEM_ACTOR_ID).bind(format!("{user}@example.test"))
+        .execute(pool).await.unwrap();
     let mut reader = admin.clone();
+    reader.subject_id = user;
     reader.actor_id = ActorId::new(actor);
     reader.roles.clear();
     let denied = request(
@@ -29,11 +34,18 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
         ("scale", "Scale", Some(json!({"replicas":3}))),
     ] {
         if operation == "scale" {
-            sqlx::query("UPDATE resourceaccesses SET permissionlevel=2 WHERE id=$1")
-                .bind(grant)
-                .execute(pool)
-                .await
-                .unwrap();
+            // Use the application writer: direct SQL leaves the earlier denial cached.
+            use citadel_identity::{UserPatchMutation, UserRepository, UserResourceAccessInput};
+            use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+            citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone())
+                .patch(user, &UserPatchMutation {
+                    resource_accesses: Some(vec![UserResourceAccessInput {
+                        resource_type: ResourceType::SwarmService, resource_id: id,
+                        permission_level: PermissionLevel::Write,
+                        specific_permissions: vec![SpecificPermission::Apply],
+                    }]),
+                    ..Default::default()
+                }, admin.actor_id, chrono::Utc::now(), true).await.unwrap();
         }
         let response = request(
             app,
@@ -68,13 +80,18 @@ pub(super) async fn verify(app: &Router, pool: &sqlx::PgPool, admin: &ActorPrinc
             assert_eq!(state["spec"]["replicas"], 3);
         }
     }
-    sqlx::query("DELETE FROM resourceaccesses WHERE id=$1")
-        .bind(grant)
+    sqlx::query("DELETE FROM resourceaccesses WHERE actorid=$1")
+        .bind(actor)
         .execute(pool)
         .await
         .unwrap();
     sqlx::query("DELETE FROM activityevents WHERE createdbyactorid=$1")
         .bind(actor)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM users WHERE id=$1")
+        .bind(user)
         .execute(pool)
         .await
         .unwrap();

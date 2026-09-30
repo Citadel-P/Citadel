@@ -31,9 +31,7 @@ pub use commands::{
     UpdateSwarmService,
 };
 
-pub use read_models::{
-    SwarmServiceDetails, SwarmServiceDuplicateDraft, SwarmServiceFilter, TagSummary,
-};
+pub use read_models::{SwarmServiceDetails, SwarmServiceDuplicateDraft, SwarmServiceFilter};
 
 pub use service::{
     NoopSwarmServiceChangeNotifier, ServiceAutomationEntitlements, ServiceImageDigestPort,

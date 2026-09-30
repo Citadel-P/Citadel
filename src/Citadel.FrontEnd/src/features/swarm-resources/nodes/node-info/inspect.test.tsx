@@ -47,6 +47,6 @@ const node = {
   observedAt: '2026-08-05T08:00:00Z',
   isStale: false,
   platformId,
-  capabilities: undefined,
+  capabilities: null,
   tasks: [],
 };

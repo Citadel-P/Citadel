@@ -279,7 +279,8 @@ impl ApplicationGroupReader {
                     .list_events(actor, admin, &filter)
                     .await
                     .map_err(failure)?;
-                let events: crate::api::resources::alerts::views::AlertEventPage = events.into();
+                let events: crate::api::resources::alerts::views::AlertEventPage =
+                    events.try_into().map_err(failure)?;
                 return Ok(GroupSnapshot {
                     rows: vec![GroupRows {
                         target: "AlertEventReceived",
@@ -628,19 +629,21 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::resources::deployments::views::DeploymentView::from)
-                    .collect(),
+                    .map(crate::api::resources::deployments::views::DeploymentView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
                 RowStyle::Update,
             ),
             Topic::Deployment(..) => rows(
                 "DeploymentInfoUpdated",
                 vec![
-                    crate::api::resources::deployments::views::DeploymentView::from(
+                    crate::api::resources::deployments::views::DeploymentView::try_from(
                         self.deployments
                             .get_authorized(actor, admin, id.unwrap())
                             .await
                             .map_err(failure)?,
-                    ),
+                    )
+                    .map_err(failure)?,
                 ],
                 RowStyle::Update,
             ),
@@ -651,18 +654,22 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::resources::stacks::views::StackView::from)
-                    .collect(),
+                    .map(crate::api::resources::stacks::views::StackView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
                 RowStyle::Update,
             ),
             Topic::Stack(..) => rows(
                 "StackInfoUpdated",
-                vec![crate::api::resources::stacks::views::StackView::from(
-                    self.stacks
-                        .get_authorized(actor, admin, id.unwrap())
-                        .await
-                        .map_err(failure)?,
-                )],
+                vec![
+                    crate::api::resources::stacks::views::StackView::try_from(
+                        self.stacks
+                            .get_authorized(actor, admin, id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    )
+                    .map_err(failure)?,
+                ],
                 RowStyle::Update,
             ),
             Topic::StackInfo(..) => {
@@ -697,12 +704,12 @@ impl ApplicationGroupReader {
             Topic::SwarmService(..) => rows(
                 "SwarmServiceInfoUpdated",
                 vec![
-                    crate::api::resources::swarm_services::views::ManagedSwarmServiceView::from(
+                    crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from(
                         self.services
                             .get_authorized(actor, admin, id.unwrap())
                             .await
                             .map_err(failure)?,
-                    ),
+                    ).map_err(failure)?,
                 ],
                 RowStyle::Update,
             ),
@@ -721,9 +728,9 @@ impl ApplicationGroupReader {
                     .map_err(failure)?
                     .into_iter()
                     .map(
-                        crate::api::resources::swarm_services::views::ManagedSwarmServiceView::from,
+                        crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from,
                     )
-                    .collect(),
+                    .collect::<Result<Vec<_>, _>>().map_err(failure)?,
                 RowStyle::Update,
             ),
             Topic::GitRepositories => rows(

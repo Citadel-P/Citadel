@@ -14,7 +14,7 @@ import {
   BackupSourceType,
   LicenseCapability,
   DeploymentBackupSourcePreviewView,
-  DockerVolumeResultView,
+  VolumeView,
   LookupResourceType,
   PlatformConnectorType,
   PlatformType,
@@ -228,7 +228,6 @@ export function BackupPolicyForm({
                   items: [
                     defineField<BackupPolicyFormValue, 'name'>({
                       key: 'name',
-                      persistDraft: true,
                       label: 'Name',
                       required: true,
                       description: 'Unique name for this backup policy.',
@@ -244,7 +243,6 @@ export function BackupPolicyForm({
                     }),
                     defineField<BackupPolicyFormValue, 'description'>({
                       key: 'description',
-                      persistDraft: true,
                       label: 'Description',
                       required: false,
                       description: 'Optional notes for operators.',
@@ -794,12 +792,12 @@ function VolumeSelector({
 }: {
   value?: string;
   dockerNodeId?: string | null;
-  volumes: DockerVolumeResultView[];
+  volumes: VolumeView[];
   isLoading: boolean;
   hasPlatform: boolean;
   disabled?: boolean;
   isSwarm: boolean;
-  onChange: (volume?: DockerVolumeResultView) => void;
+  onChange: (volume?: VolumeView) => void;
 }) {
   const selectedId = volumeSelectorId(value ?? '', dockerNodeId);
   const options = useMemo(() => {
@@ -880,13 +878,13 @@ function VolumeSelector({
 type VolumeSelectorItem = {
   id: string;
   description: string;
-} & DockerVolumeResultView;
+} & VolumeView;
 
 function volumeSelectorId(volumeName: string, dockerNodeId?: string | null) {
   return dockerNodeId ? `${dockerNodeId}:${volumeName}` : volumeName;
 }
 
-function formatVolumeDescription(volume: DockerVolumeResultView) {
+function formatVolumeDescription(volume: VolumeView) {
   return [
     volume.driver || 'local',
     volume.inUse ? 'In use' : 'Not in use',

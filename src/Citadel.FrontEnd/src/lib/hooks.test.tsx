@@ -207,6 +207,8 @@ describe('useStreamProgress', () => {
                       stage: 'accepted',
                       message: 'Docker accepted the Service.',
                       isCompleted: true,
+                      isWarning: false,
+                      errorMessage: null,
                     } satisfies SwarmServiceProgressItem),
                   ),
                 );

@@ -117,6 +117,8 @@ pub(super) fn map_repository(r: sqlx::postgres::PgRow) -> Result<BackupRepositor
 
 pub(super) fn map_policy(r: sqlx::postgres::PgRow) -> Result<BackupPolicy, BackupError> {
     Ok(BackupPolicy {
+        tags: Vec::new(),
+        latest_run: None,
         id: r.try_get("id").map_err(storage)?,
         name: r.try_get("name").map_err(storage)?,
         normalized_name: r.try_get("normalizedname").map_err(storage)?,

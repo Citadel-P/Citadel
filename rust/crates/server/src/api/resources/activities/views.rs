@@ -63,3 +63,29 @@ pub(crate) fn map_activity(record: ActivityRecord) -> Result<ActivityView, ApiEr
         })?,
     })
 }
+
+/// Activity summary embedded in resource HTTP and realtime responses.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestActivityView {
+    pub id: Uuid,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityResourceTypeSchema)]
+    pub resource_type: ActivityResourceType,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityEventTypeSchema)]
+    pub event_type: ActivityEventType,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityStatusSchema)]
+    pub status: ActivityStatus,
+    // Event payloads are migrated separately from this shared envelope.
+    #[schema(value_type = crate::openapi::compatibility::ActivityEventInfo)]
+    pub info: Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl LatestActivityView {
+    pub fn from_stored(value: Value) -> Result<Self, serde_json::Error> {
+        let mut view: Self = serde_json::from_value(value)?;
+        view.info =
+            crate::api::resources::activities::presentation::public_activity_info(view.info);
+        Ok(view)
+    }
+}

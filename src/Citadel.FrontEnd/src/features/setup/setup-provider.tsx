@@ -1,5 +1,5 @@
 import { useApiClientContext } from '@/api/api-client-context';
-import { useCallback, useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { SetupContext, SetupError } from './setup-context';
 
 type SetupState =
@@ -29,6 +29,7 @@ function reducer(state: SetupState, action: SetupAction): SetupState {
 
 export function SetupProvider({ children }: { children: React.ReactNode }) {
   const { apiClient } = useApiClientContext();
+  const [passwordPolicy, setPasswordPolicy] = useState({ passwordMinimumLength: 15, passwordMaximumLength: 128 });
   const [state, dispatch] = useReducer(reducer, { status: 'loading', attempt: 0 });
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       .getSetupStatus({ signal: controller.signal })
       .then((response) => {
         if (controller.signal.aborted) return;
+        setPasswordPolicy({
+          passwordMinimumLength: response.data.passwordMinimumLength,
+          passwordMaximumLength: response.data.passwordMaximumLength,
+        });
         dispatch({ type: response.data.requiresSetup ? 'PENDING' : 'COMPLETE' });
       })
       .catch((error: unknown) => {
@@ -59,6 +64,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
   return (
     <SetupContext.Provider
       value={{
+        ...passwordPolicy,
         isSetupReady: state.status !== 'loading',
         requiresSetup: state.status === 'pending',
         error: state.status === 'error' ? state.error : undefined,

@@ -1,9 +1,5 @@
 use super::*;
 
-pub const MINIMUM_PASSWORD_CHARACTERS: usize = 15;
-
-pub const MAXIMUM_PASSWORD_CHARACTERS: usize = 128;
-
 pub const MAXIMUM_SESSIONS_PER_USER: i64 = 10;
 
 #[derive(Debug, Default)]
@@ -25,6 +21,7 @@ pub struct IdentityService {
     access_token_lifetime: Duration,
     refresh_token_lifetime: Duration,
     credential_workers: Arc<Semaphore>,
+    password_policy: PasswordPolicy,
     last_used_tracker: Arc<dyn ServiceAccountLastUsedTracker>,
 }
 
@@ -52,13 +49,26 @@ impl IdentityService {
             access_token_lifetime,
             refresh_token_lifetime,
             credential_workers: Arc::new(Semaphore::new(2)),
+            password_policy: PasswordPolicy::default(),
             last_used_tracker,
         }
+    }
+
+    #[must_use]
+    pub fn with_password_policy(mut self, policy: PasswordPolicy) -> Self {
+        self.password_policy = policy;
+        self
+    }
+
+    pub fn password_policy(&self) -> PasswordPolicy {
+        self.password_policy
     }
 
     pub async fn setup_status(&self) -> Result<SetupStatus, IdentityError> {
         Ok(SetupStatus {
             requires_setup: self.store.setup_required().await?,
+            password_minimum_length: self.password_policy.minimum_length(),
+            password_maximum_length: MAXIMUM_PASSWORD_CHARACTERS,
         })
     }
 
@@ -93,7 +103,11 @@ impl IdentityService {
     ) -> Result<UserAuthentication, IdentityError> {
         validate_name(&request.name)?;
         validate_email(&request.email)?;
-        validate_password(&request.password, Some(&request.name), Some(&request.email))?;
+        self.password_policy.validate(
+            &request.password,
+            Some(&request.name),
+            Some(&request.email),
+        )?;
         let now = self.clock.now();
         let administrator = User::new(
             request.name.trim().to_owned(),
@@ -749,44 +763,6 @@ pub fn validate_email(email: &str) -> Result<(), IdentityError> {
     Ok(())
 }
 
-pub fn validate_password(
-    password: &str,
-    user_name: Option<&str>,
-    email: Option<&str>,
-) -> Result<(), IdentityError> {
-    let count = password.chars().count();
-    if !(MINIMUM_PASSWORD_CHARACTERS..=MAXIMUM_PASSWORD_CHARACTERS).contains(&count) {
-        return Err(IdentityError::Validation(format!(
-            "Password must contain {MINIMUM_PASSWORD_CHARACTERS} to {MAXIMUM_PASSWORD_CHARACTERS} characters."
-        )));
-    }
-    const BLOCKED: [&str; 7] = [
-        "admin",
-        "admin123",
-        "password",
-        "password123",
-        "letmein",
-        "citadel",
-        "citadel123",
-    ];
-    if BLOCKED
-        .iter()
-        .any(|blocked| password.eq_ignore_ascii_case(blocked))
-        || user_name.is_some_and(|name| password.eq_ignore_ascii_case(name))
-        || email.is_some_and(|address| {
-            password.eq_ignore_ascii_case(address)
-                || address
-                    .split_once('@')
-                    .is_some_and(|(local, _)| password.eq_ignore_ascii_case(local))
-        })
-    {
-        return Err(IdentityError::Validation(
-            "Choose a less predictable password.".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
 #[must_use]
 pub fn token_digest(secret: &[u8]) -> [u8; 32] {
     Sha256::digest(secret).into()
@@ -795,20 +771,6 @@ pub fn token_digest(secret: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn password_policy_rejects_short_and_identity_values() {
-        assert!(validate_password("short", None, None).is_err());
-        assert!(
-            validate_password(
-                "owner@example.test",
-                Some("owner"),
-                Some("owner@example.test")
-            )
-            .is_err()
-        );
-        assert!(validate_password("correct-horse-battery-staple", None, None).is_ok());
-    }
 
     #[test]
     fn service_account_status_prevents_suspended_credentials() {

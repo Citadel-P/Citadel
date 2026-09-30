@@ -1,4 +1,4 @@
-import { CreateTagInput, PatchTagInput, TagView } from '@/api/generated/api.types';
+import { NewTag, TagPatch, TagView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { invalidateTagQueries } from './actions';
 import { DEFAULT_TAG_COLOR, getTagColorOption, TAG_COLOR_OPTIONS } from './tag-colors';
 
-type TagDraft = CreateTagInput;
+type TagDraft = NewTag;
 
 const emptyDraft = (): TagDraft => ({
   name: '',
@@ -61,7 +61,7 @@ export function TagFormDialog({
       await createTag.mutateAsync({ data: normalizeDraft(draft) } as any);
       toast.success('Tag created');
     } else if (tag) {
-      const payload: PatchTagInput = normalizeDraft(draft);
+      const payload: TagPatch = normalizeDraft(draft);
       await patchTag.mutateAsync({ id: tag.id, data: payload } as any);
       toast.success('Tag updated');
     }
@@ -163,7 +163,7 @@ const colorSearchFilter = (value: string, search: string) => {
   return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
 };
 
-function normalizeDraft(draft: TagDraft): CreateTagInput {
+function normalizeDraft(draft: TagDraft): NewTag {
   return {
     name: draft.name.trim(),
     color: draft.color.trim(),

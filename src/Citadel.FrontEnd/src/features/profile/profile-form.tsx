@@ -1,6 +1,7 @@
+import { useSetupContext } from '@/features/setup/setup-context';
 import {
   CurrentProfileView,
-  ProfileResourceInfoView,
+  ProfileResourceInfo,
   UserDateTimeFormat,
   UserPreferencesView,
   UserSessionSummaryView,
@@ -43,8 +44,8 @@ type ProfileFormValue = {
   email: string;
   authenticationLabel: string;
   oidcProviderName: string;
-  roles: ProfileResourceInfoView[];
-  teams: ProfileResourceInfoView[];
+  roles: ProfileResourceInfo[];
+  teams: ProfileResourceInfo[];
   timeZone: string;
   dateTimeFormat: UserDateTimeFormat;
   appearance: string;
@@ -305,7 +306,7 @@ function ReadOnlyValue({ value }: { value?: string | null }) {
   );
 }
 
-function ResourceBadges({ items, icon }: { items: ProfileResourceInfoView[]; icon: ReactNode }) {
+function ResourceBadges({ items, icon }: { items: ProfileResourceInfo[]; icon: ReactNode }) {
   if (!items.length) return <p className="text-sm text-muted-foreground">None assigned.</p>;
 
   return (
@@ -321,6 +322,7 @@ function ResourceBadges({ items, icon }: { items: ProfileResourceInfoView[]; ico
 }
 
 function PasswordCommand() {
+  const { passwordMinimumLength, passwordMaximumLength } = useSetupContext();
   const queryClient = useQueryClient();
   const changePassword = useMutate('changeCurrentPassword');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -330,10 +332,10 @@ function PasswordCommand() {
   const validationError = useMemo(() => {
     if (!newPassword || !confirmPassword) return undefined;
     const length = [...newPassword].length;
-    if (length < 15) return 'New password must be at least 15 characters.';
-    if (length > 128) return 'New password must be no more than 128 characters.';
+    if (length < passwordMinimumLength) return `New password must be at least ${passwordMinimumLength} characters.`;
+    if (length > passwordMaximumLength) return `New password must be no more than ${passwordMaximumLength} characters.`;
     return newPassword === confirmPassword ? undefined : 'New password and confirmation do not match.';
-  }, [newPassword, confirmPassword]);
+  }, [newPassword, confirmPassword, passwordMinimumLength, passwordMaximumLength]);
 
   const canSubmit = Boolean(currentPassword && newPassword && confirmPassword && !validationError);
 
@@ -378,7 +380,11 @@ function PasswordCommand() {
         autoComplete="new-password"
         onChange={(event) => setConfirmPassword(event.target.value)}
       />
-      {!validationError && <p className="text-xs text-muted-foreground">Use 15 to 128 characters.</p>}
+      {!validationError && (
+        <p className="text-xs text-muted-foreground">
+          Use {passwordMinimumLength} to {passwordMaximumLength} characters.
+        </p>
+      )}
 
       {(validationError || changePassword.validationErrors) && (
         <p className="text-sm text-destructive">{validationError ?? changePassword.validationErrors}</p>

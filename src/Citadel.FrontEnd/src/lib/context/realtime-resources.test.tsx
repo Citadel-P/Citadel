@@ -8,6 +8,13 @@ import { useNetworksGroup } from '@/features/docker-resources/networks/hooks/use
 import { useDeploymentGroup } from '@/features/deployments/form/hooks/useDeploymentGroup';
 import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
 
+import { FakeRealtimeConnection } from '@/test/fakes/realtime';
+import { useGitRepoGroup } from '@/features/git-repos/form/hooks/useGitRepoGroup';
+import { useStackGroup } from '@/features/stacks/form/hooks/useStackGroup';
+import { useRead } from '@/lib/hooks';
+import { BuildFormComponents } from '@/features/builds/form';
+import { BuildPoolFormComponents } from '@/features/build-pools/form';
+
 function connect(socket: FakeWebSocket) {
   socket.send.mockImplementation((text: string) => {
     const request = JSON.parse(text);
@@ -111,3 +118,69 @@ it('delivers Platform statistics through the existing PlatformStatsUpdated handl
   expect(read).toHaveBeenCalledTimes(1);
   rendered.unmount();
 });
+
+it.each([
+  {
+    path: 'deployments',
+    group: 'deployment',
+    event: 'DeploymentInfoUpdated',
+    useResource: (id: string) => useDeploymentGroup(id).deployment,
+  },
+  {
+    path: 'gitRepositories',
+    group: 'git-repo',
+    event: 'GitRepositoryInfoUpdated',
+    useResource: (id: string) => useGitRepoGroup(id).gitRepo,
+  },
+  {
+    path: 'buildProjects',
+    group: 'build-project',
+    event: 'BuildProjectInfoUpdated',
+    useResource: (id: string) => BuildFormComponents.EditForm!.useData(id).item,
+  },
+  {
+    path: 'buildAgentPools',
+    group: 'build-agent-pool',
+    event: 'BuildAgentPoolInfoUpdated',
+    useResource: (id: string) => BuildPoolFormComponents.EditForm!.useData(id).item,
+  },
+  {
+    path: 'stacks',
+    group: 'stack',
+    event: 'StackInfoUpdated',
+    useResource: (id: string) => useStackGroup(id).stack,
+  },
+])(
+  'refreshes $group details from the rejoined group without another GET',
+  async ({ path, group, event, useResource }) => {
+    const read = vi.fn(() => HttpResponse.json({ id: 'r1', name: 'Resource', status: 'Healthy' }));
+    const listRead = vi.fn(() => HttpResponse.json({ deployments: [] }));
+    server.use(http.get(`*/api/v1/${path}/r1`, read), http.get('*/api/v1/deployments', listRead));
+    const fake = new FakeRealtimeConnection();
+    let snapshot = { id: 'r1', name: 'Resource', status: 'Healthy' };
+    fake.invoke.mockImplementation(async (method, name) => {
+      if (method === 'JoinGroup' && name === `${group}:r1`) fake.emit(event, snapshot, 'update');
+    });
+    function Probe() {
+      const resource = useResource('r1');
+      useRead('listDeployments');
+      return <output>{resource?.name}</output>;
+    }
+    renderCitadel(<Probe />, {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    expect(await screen.findByText('Resource')).toBeVisible();
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', `${group}:r1`));
+    snapshot = { ...snapshot, name: 'Updated resource' };
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+    expect(await screen.findByText('Updated resource')).toBeVisible();
+    await waitFor(() => expect(listRead).toHaveBeenCalledTimes(2));
+    expect(read).toHaveBeenCalledOnce();
+  },
+);
