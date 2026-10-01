@@ -39,7 +39,7 @@ import {
   Rocket,
   Server,
 } from 'lucide-react';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 import {
@@ -267,7 +267,8 @@ const CpuUsageChart = ({
   windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
-  const latest = stats.at(-1);
+  // Summary values are current samples; chart history contains bucket averages.
+  const latest = platform.stats?.at(0);
   const chartConfig = useMemo(
     () =>
       ({
@@ -316,7 +317,8 @@ const MemoryUsageChart = ({
   windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
-  const latest = stats.at(-1);
+  // Summary values are current samples; chart history contains bucket averages.
+  const latest = platform.stats?.at(0);
   const chartConfig = useMemo(
     () =>
       ({
@@ -348,6 +350,14 @@ const MemoryUsageChart = ({
         label="Usage"
         value={platform.status === PlatformStatus.Online && latest ? formatPercent(latest.memoryUsage) : '-'}
       />
+      <StatsSummaryItem
+        label="Used"
+        value={
+          platform.status === PlatformStatus.Online && latest && platform.memTotal > 0
+            ? byteTransform((latest.memoryUsage / 100) * platform.memTotal, 2)
+            : '-'
+        }
+      />
       <StatsSummaryItem label="Total" value={byteTransform(platform.memTotal, 2)} />
     </StatsChartCard>
   );
@@ -366,7 +376,8 @@ const NetworkUsageChart = ({
   windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
-  const latest = stats.at(-1);
+  // Summary values are current samples; chart history contains bucket averages.
+  const latest = platform.stats?.at(0);
   const chartConfig = useMemo(
     () =>
       ({
@@ -719,32 +730,25 @@ const usePlatformStatsWindow = (platformId: string | undefined): StatsQueryState
 };
 
 const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
-  const [liveStats, setLiveStats] = useState<PlatformStatView[]>([]);
-  const latestStat = platform.stats?.at(0);
-  const lastStatRef = useRef<PlatformStatView | undefined>(latestStat);
-  const platformIdRef = useRef<string | undefined>(platform.id);
+  const latestStat = platform.status === PlatformStatus.Online ? platform.stats?.at(0) : undefined;
+  const [live, setLive] = useState(() => ({
+    platformId: platform.id,
+    latestStat,
+    stats: latestStat ? [latestStat] : [],
+  }));
 
-  useEffect(() => {
-    if (platformIdRef.current === platform.id) return;
+  if (live.platformId !== platform.id || live.latestStat !== latestStat) {
+    const previousStats = live.platformId === platform.id ? live.stats : [];
+    const next = {
+      platformId: platform.id,
+      latestStat,
+      stats: latestStat ? appendBoundedLiveStat(previousStats, latestStat) : previousStats,
+    };
+    setLive(next);
+    return next.stats;
+  }
 
-    platformIdRef.current = platform.id;
-    setLiveStats([]);
-    lastStatRef.current = latestStat;
-  }, [latestStat, platform.id]);
-
-  useEffect(() => {
-    if (platform.status !== PlatformStatus.Online || !latestStat || latestStat === lastStatRef.current) return;
-
-    lastStatRef.current = latestStat;
-    setLiveStats((prev) =>
-      appendBoundedLiveStat(prev, {
-        ...latestStat,
-        created: Number(latestStat.created) > 0 ? latestStat.created : Math.floor(Date.now() / 1000),
-      }),
-    );
-  }, [latestStat, platform.status]);
-
-  return liveStats;
+  return live.stats;
 };
 
 const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatsDatum[]) => {
