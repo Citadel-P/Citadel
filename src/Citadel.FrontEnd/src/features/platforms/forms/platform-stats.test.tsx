@@ -2,17 +2,95 @@ import { createPlatform as platformDefaults } from '@/test/factories/resources';
 import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { useRead } from '@/lib/hooks';
 import {
   DiskUsageChart,
   formatPlatformConnector,
   getCurrentDiskUsage,
   normalizePlatformStats,
   PlatformResourceSummary,
+  PlatformStatsTab,
 } from './platform-stats';
 
 vi.mock('@/features/swarm/hooks/useSwarmOverview', () => ({
   useSwarmOverview: () => ({ overview: undefined, isLoading: false, error: undefined }),
 }));
+
+vi.mock('@/lib/hooks', () => ({ useRead: vi.fn() }));
+
+// Preserve the card and summary rendering without depending on SVG layout in jsdom.
+vi.mock('@/components/ui/chart', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/chart')>()),
+  ChartContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('recharts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('recharts')>()),
+  AreaChart: ({ data }: { data: unknown[] }) => <div data-testid="chart" data-samples={JSON.stringify(data)} />,
+}));
+
+describe('platform current statistics', () => {
+  const historical = {
+    created: 60,
+    cpuUsage: 0.51,
+    memoryUsage: 4.5,
+    rxBytes: 10,
+    txBytes: 20,
+    diskUsage: null,
+    diskUsedBytes: null,
+    diskTotalBytes: null,
+  };
+  const current = { ...historical, created: 95, cpuUsage: 14.33 / 12, memoryUsage: 5 };
+  const platform = {
+    ...platformDefaults(),
+    id: 'platform-1',
+    status: PlatformStatus.Online,
+    memTotal: 16 * 1024 ** 3,
+    stats: [current],
+  };
+
+  beforeEach(() => {
+    vi.mocked(useRead).mockReturnValue({
+      data: { data: { stats: [historical] } },
+      isLoading: false,
+    } as ReturnType<typeof useRead>);
+  });
+
+  it('shows the latest CPU and memory on opening the tab, before any realtime update', () => {
+    render(<PlatformStatsTab platform={platform} />);
+
+    expect(screen.getByText('1.19%')).toBeVisible();
+    expect(screen.getByText('5.00%')).toBeVisible();
+    expect(screen.getByText('819.2 MB')).toBeVisible();
+    expect(screen.queryByText('0.51%')).not.toBeInTheDocument();
+    const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
+    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 95]);
+  });
+
+  it('updates live readings and discards the previous platform samples when switching platforms', () => {
+    const { rerender } = render(<PlatformStatsTab platform={platform} />);
+    rerender(<PlatformStatsTab platform={{ ...platform, stats: [{ ...current, created: 110, cpuUsage: 2 }] }} />);
+    expect(screen.getByText('2.00%')).toBeVisible();
+
+    rerender(
+      <PlatformStatsTab
+        platform={{ ...platform, id: 'platform-2', stats: [{ ...current, created: 120, cpuUsage: 3 }] }}
+      />,
+    );
+    expect(screen.getByText('3.00%')).toBeVisible();
+    const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
+    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 120]);
+  });
+
+  it('does not present history as a current reading when the current sample is unavailable or offline', () => {
+    const { rerender } = render(<PlatformStatsTab platform={{ ...platform, stats: [] }} />);
+    expect(screen.queryByText('0.51%')).not.toBeInTheDocument();
+    expect(screen.queryByText('4.50%')).not.toBeInTheDocument();
+
+    rerender(<PlatformStatsTab platform={{ ...platform, status: PlatformStatus.Offline }} />);
+    expect(screen.queryByText('1.19%')).not.toBeInTheDocument();
+    expect(screen.queryByText('819.2 MB')).not.toBeInTheDocument();
+  });
+});
 
 describe('platform disk statistics', () => {
   it('describes the connector without presenting a local Core version as an agent', () => {
