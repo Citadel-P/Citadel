@@ -16,3 +16,18 @@ impl PostgresActivityStore {
         tx.commit().await.map_err(storage)
     }
 }
+
+impl citadel_activities::VolumeDownloadActivitySink for PostgresActivityStore {
+    fn record_volume_download(
+        &self,
+        actor: ActorId,
+        platform: Uuid,
+        details: VolumeContentDownloaded,
+    ) -> futures_util::future::BoxFuture<'_, Result<(), citadel_activities::ActivityError>> {
+        Box::pin(async move {
+            self.record_volume_download(actor, platform, details)
+                .await
+                .map_err(|e| citadel_activities::ActivityError::Storage(e.to_string()))
+        })
+    }
+}

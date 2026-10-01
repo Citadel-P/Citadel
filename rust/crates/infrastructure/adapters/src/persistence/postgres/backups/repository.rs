@@ -65,22 +65,9 @@ impl BackupPersistence for PostgresBackupPersistence {
     fn record_repository_operation<'a>(
         &'a self,
         id: Uuid,
-        operation_id: Uuid,
-        operation: &'a str,
-        location: &'a str,
-        platform_id: Option<Uuid>,
-        succeeded: bool,
-        message: Option<&'a str>,
+        result: BackupRepositoryOperation<'a>,
     ) -> BoxFuture<'a, Result<(BackupRepository, BackupRepositoryValidation), BackupError>> {
-        self.record_repository_operation_impl(
-            id,
-            operation_id,
-            operation,
-            location,
-            platform_id,
-            succeeded,
-            message,
-        )
+        self.record_repository_operation_impl(id, result)
     }
 
     fn acquire_repository_operation(

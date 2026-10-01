@@ -1,4 +1,5 @@
 use super::spec::*;
+use crate::api::error::ApiError;
 use citadel_primitives::PatchField;
 use citadel_primitives::WebhookPatch;
 use serde::{Deserialize, Serialize};
@@ -59,4 +60,17 @@ pub struct BackupMetadataPatch {
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     #[schema(value_type = Option<String>, required = false)]
     description: PatchField<String>,
+}
+
+pub(crate) fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
+    patch: serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
+    if !patch.is_object() {
+        return Err(crate::request_validation::validation_error(
+            "Backup update must be an object.".into(),
+        ));
+    }
+    let patch: T = serde_path_to_error::deserialize(patch)
+        .map_err(|error| crate::request_validation::validation_error(error.to_string()))?;
+    serde_json::to_value(patch).map_err(ApiError::internal)
 }

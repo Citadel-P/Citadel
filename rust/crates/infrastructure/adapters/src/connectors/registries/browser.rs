@@ -279,3 +279,34 @@ fn tag_view(value: &Value) -> Value {
         last_pulled: text(value, "tag_last_pulled"),
     })
 }
+
+impl RegistryBrowsePort for RegistryBrowser {
+    fn browse<'a>(
+        &'a self,
+        configuration: &'a Value,
+        kind: RegistryBrowseKind,
+        name: Option<&'a str>,
+    ) -> futures_util::future::BoxFuture<'a, Result<Value, RegistryError>> {
+        Box::pin(self.browse(configuration, kind, name))
+    }
+}
+/// Preserve lazy client initialization while keeping concrete HTTP clients out of routes.
+#[derive(Default)]
+pub struct DefaultRegistryBrowser(std::sync::OnceLock<Result<RegistryBrowser, String>>);
+impl RegistryBrowsePort for DefaultRegistryBrowser {
+    fn browse<'a>(
+        &'a self,
+        configuration: &'a Value,
+        kind: RegistryBrowseKind,
+        name: Option<&'a str>,
+    ) -> futures_util::future::BoxFuture<'a, Result<Value, RegistryError>> {
+        Box::pin(async move {
+            let browser = self
+                .0
+                .get_or_init(|| RegistryBrowser::new().map_err(|e| e.to_string()))
+                .as_ref()
+                .map_err(|error| RegistryError::Storage(error.clone()))?;
+            browser.browse(configuration, kind, name).await
+        })
+    }
+}

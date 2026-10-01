@@ -1,13 +1,19 @@
 //! Start workers in one supervisor; application shutdown cancels and joins them.
 use crate::composition::ServerComponents;
+use citadel_adapters::persistence::postgres::identity::service_accounts::usage::ServiceAccountLastUsedWorker;
 use citadel_licensing::LicenseTransitionMonitor;
-use citadel_runtime::{ServiceAccountLastUsedWorker, TaskSupervisor};
+use citadel_runtime::TaskSupervisor;
 use citadel_server::{config::Config, license_realtime, workers};
 use std::{sync::Arc, time::Duration};
 
 /// Background-only services and worker inputs that must be started once.
 pub struct Jobs {
-    pub runtime_targets: Arc<citadel_server::runtime_targets::PlatformRuntimeRegistry>,
+    pub docker: citadel_adapters::connectors::docker::DockerClient,
+    pub agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
+    pub volume_content:
+        Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
+    pub runtime_targets:
+        Arc<citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry>,
     pub image_scanner: Arc<citadel_adapters::connectors::routing::images::scanner::ImageScanner>,
     pub alert_deliveries: Arc<citadel_alerts::AlertDeliveryService>,
     pub last_used_worker: ServiceAccountLastUsedWorker,
@@ -38,6 +44,9 @@ pub async fn spawn_all(
         ..
     } = state;
     let Jobs {
+        docker,
+        agent,
+        volume_content,
         runtime_targets,
         image_scanner,
         alert_deliveries,
@@ -64,12 +73,12 @@ pub async fn spawn_all(
         cancellation,
         workers::WorkerDependencies {
             targets: runtime_targets.clone(),
-            volume_content: platform_state.volume_content.clone(),
+            volume_content,
             containers: platform_state.containers.clone(),
-            docker: platform_state.docker.clone(),
+            docker,
             pool: pool.clone(),
             metrics: Arc::clone(metrics),
-            agent: platform_state.agent.clone(),
+            agent,
             realtime: realtime_hub.clone(),
             deployments: Arc::clone(deployments),
             swarm_services: Arc::clone(swarm_services),

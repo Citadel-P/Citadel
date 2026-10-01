@@ -32,27 +32,46 @@ async fn managed_service_logs_require_both_service_logs_and_parent_platform_acce
         send(&f, &url, Some(principal.clone())).await.status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
+    super::realtime_groups::replace_specific_permissions(
+        &f,
+        &principal,
+        vec![citadel_primitives::SpecificPermission::Logs],
     )
-    .bind(citadel_primitives::SpecificPermission::Logs as i32)
-    .bind(principal.actor_id.value())
-    .bind(id)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(
         send(&f, &url, Some(principal.clone())).await.status(),
         StatusCode::NOT_FOUND
     );
-    super::lookup::grant(
-        &f,
-        principal.actor_id.value(),
-        citadel_primitives::ResourceType::Platform,
-        f.platform_id,
-        0,
-    )
-    .await;
+    // Grant through the mutation boundary so the cached parent denial is invalidated.
+    use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+    use citadel_identity::{ResourceAccessInput, UserPatchMutation, UserRepository};
+    use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+    PostgresUserRepository::new(f.pool.clone())
+        .patch(
+            principal.subject_id,
+            &UserPatchMutation {
+                resource_accesses: Some(vec![
+                    ResourceAccessInput {
+                        resource_type: ResourceType::SwarmService,
+                        resource_id: id,
+                        permission_level: PermissionLevel::Read,
+                        specific_permissions: vec![SpecificPermission::Logs],
+                    },
+                    ResourceAccessInput {
+                        resource_type: ResourceType::Platform,
+                        resource_id: f.platform_id,
+                        permission_level: PermissionLevel::Read,
+                        specific_permissions: vec![],
+                    },
+                ]),
+                ..Default::default()
+            },
+            f.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
     let response = send(&f, &url, Some(principal.clone())).await;
     let status = response.status();
     let body = json_body(response).await;
@@ -86,14 +105,15 @@ async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
         "/api/v1/platforms/{}/swarm/tasks/task-1/logs",
         f.platform_id
     );
-    let reader = ActorPrincipal {
-        subject_id: f.actor_id,
-        actor_id: ActorId::new(f.actor_id),
-        name: "reader".into(),
-        principal_type: AuthenticatedPrincipalType::User,
-        credential_id: None,
-        roles: vec![],
-    };
+    let reader = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        reader.actor_id.value(),
+        citadel_primitives::ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
     for url in [&service, &task] {
         assert_eq!(send(&f, url, None).await.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(
@@ -113,15 +133,12 @@ async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
             );
         }
     }
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$1 WHERE actorid=$2 AND resourceid=$3",
+    super::realtime_groups::replace_specific_permissions(
+        &f,
+        &reader,
+        vec![citadel_primitives::SpecificPermission::Logs],
     )
-    .bind(citadel_primitives::SpecificPermission::Logs as i32)
-    .bind(f.actor_id)
-    .bind(f.platform_id)
-    .execute(&f.pool)
-    .await
-    .unwrap();
+    .await;
     let response = send(&f, &format!("{service}?tail=25"), Some(reader.clone())).await;
     let status = response.status();
     let value = json_body(response).await;
@@ -142,7 +159,7 @@ async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
         StatusCode::NOT_FOUND
     );
 
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

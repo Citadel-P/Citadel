@@ -1,3 +1,4 @@
+mod targets;
 use super::*;
 
 #[derive(Clone)]
@@ -13,6 +14,55 @@ impl PostgresPlatformReader {
 }
 
 impl PlatformReader for PostgresPlatformReader {
+    fn platform_kind<'a>(
+        &'a self,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<Option<citadel_platforms::PlatformKind>, AuthorizedReadError>> {
+        Box::pin(targets::platform_kind(&self.pool, id))
+    }
+
+    fn has_swarm_nodes<'a>(
+        &'a self,
+        platform: Uuid,
+    ) -> BoxFuture<'a, Result<bool, AuthorizedReadError>> {
+        Box::pin(targets::has_swarm_nodes(&self.pool, platform))
+    }
+
+    fn deployment_container_ids<'a>(
+        &'a self,
+        deployment: Uuid,
+    ) -> BoxFuture<'a, Result<Vec<Uuid>, AuthorizedReadError>> {
+        Box::pin(targets::deployment_container_ids(&self.pool, deployment))
+    }
+
+    fn stack_container_id<'a>(
+        &'a self,
+        stack: Uuid,
+        reference: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>> {
+        Box::pin(targets::stack_container_id(&self.pool, stack, reference))
+    }
+
+    fn image_identity<'a>(
+        &'a self,
+        platform: Uuid,
+        image: Uuid,
+    ) -> BoxFuture<'a, Result<Option<citadel_platforms::ImageIdentity>, AuthorizedReadError>> {
+        Box::pin(targets::image_identity(&self.pool, platform, image))
+    }
+
+    fn image_registry_id<'a>(
+        &'a self,
+        platform: Uuid,
+        docker_image: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>> {
+        Box::pin(targets::image_registry_id(
+            &self.pool,
+            platform,
+            docker_image,
+        ))
+    }
+
     fn container_identities(
         &self,
         platform: Uuid,

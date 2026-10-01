@@ -46,11 +46,11 @@ impl AuthorizationCache {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let entry = state.actor(actor.value());
             let generation = *entry.generation.borrow();
-            if let Some(scope) = &entry.loaded {
-                if scope.expires > Instant::now() {
-                    RuntimeWork::AuthorizationScopeLookup.units(1);
-                    return Ok((generation, scope.clone()));
-                }
+            if let Some(scope) = &entry.loaded
+                && scope.expires > Instant::now()
+            {
+                RuntimeWork::AuthorizationScopeLookup.units(1);
+                return Ok((generation, scope.clone()));
             }
             generation
         };
@@ -87,10 +87,10 @@ impl AuthorizationCache {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         // Capacity eviction can occur during a read; never publish under a
         // replacement generation. The commit gate fences mutation races.
-        if let Some(entry) = state.actors.get_mut(&actor.value()) {
-            if *entry.generation.borrow() == generation {
-                entry.loaded = Some(scope.clone());
-            }
+        if let Some(entry) = state.actors.get_mut(&actor.value())
+            && *entry.generation.borrow() == generation
+        {
+            entry.loaded = Some(scope.clone());
         }
         Ok((generation, scope))
     }
@@ -259,11 +259,11 @@ impl AuthorizationCache {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let entry = state.actor(actor.value());
             let generation = *entry.generation.borrow();
-            if let Some(scope) = &entry.loaded {
-                if scope.expires > Instant::now() {
-                    RuntimeWork::AuthorizationScopeLookup.units(1);
-                    return Ok((generation, scope.clone()));
-                }
+            if let Some(scope) = &entry.loaded
+                && scope.expires > Instant::now()
+            {
+                RuntimeWork::AuthorizationScopeLookup.units(1);
+                return Ok((generation, scope.clone()));
             }
             generation
         };
@@ -298,10 +298,10 @@ impl AuthorizationCache {
             expires: Instant::now() + SAFETY_TTL,
         });
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(entry) = state.actors.get_mut(&actor.value()) {
-            if *entry.generation.borrow() == generation {
-                entry.loaded = Some(scope.clone());
-            }
+        if let Some(entry) = state.actors.get_mut(&actor.value())
+            && *entry.generation.borrow() == generation
+        {
+            entry.loaded = Some(scope.clone());
         }
         Ok((generation, scope))
     }

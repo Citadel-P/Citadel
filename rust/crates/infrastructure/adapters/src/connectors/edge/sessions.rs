@@ -79,37 +79,7 @@ impl EdgeError {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct EdgeTarget {
-    pub resource_type: i32,
-    pub resource_id: Uuid,
-    pub platform_id: Uuid,
-    pub node_id: Option<String>,
-}
-impl EdgeTarget {
-    pub fn platform(id: Uuid) -> Self {
-        Self {
-            resource_type: 0,
-            resource_id: id,
-            platform_id: id,
-            node_id: None,
-        }
-    }
-    pub fn node(platform: Uuid, node_id: String) -> Self {
-        Self {
-            node_id: Some(node_id),
-            ..Self::platform(platform)
-        }
-    }
-    pub fn build_pool(id: Uuid) -> Self {
-        Self {
-            resource_type: 1,
-            resource_id: id,
-            platform_id: Uuid::nil(),
-            node_id: None,
-        }
-    }
-}
+pub use citadel_platforms::edge_management::EdgeTarget;
 
 #[derive(Clone)]
 pub struct EdgeRegistry {
@@ -579,4 +549,13 @@ fn node_command_allowed(kind: EdgeCommandKind) -> bool {
             | NetworkList
             | NetworkInspect
     )
+}
+
+impl citadel_platforms::edge_management::EdgeSessionControl for EdgeRegistry {
+    fn disconnect(&self, target: &EdgeTarget) {
+        self.disconnect(target);
+    }
+    fn disconnect_platform(&self, id: Uuid) {
+        self.disconnect_platform(id);
+    }
 }

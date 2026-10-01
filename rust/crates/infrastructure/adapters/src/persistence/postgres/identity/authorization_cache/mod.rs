@@ -115,12 +115,13 @@ impl AuthorizationCache {
 impl State {
     fn actor(&mut self, id: Uuid) -> &mut ActorEntry {
         self.clock = self.clock.wrapping_add(1);
-        if !self.actors.contains_key(&id) && self.actors.len() >= ACTOR_CAPACITY {
-            if let Some((_, oldest)) = self.actor_order.pop_first() {
-                // Closing the watch fails subscriptions closed. Eviction drops
-                // generation metadata as well as the cached scope/snapshot.
-                self.actors.remove(&oldest);
-            }
+        if !self.actors.contains_key(&id)
+            && self.actors.len() >= ACTOR_CAPACITY
+            && let Some((_, oldest)) = self.actor_order.pop_first()
+        {
+            // Closing the watch fails subscriptions closed. Eviction drops
+            // generation metadata as well as the cached scope/snapshot.
+            self.actors.remove(&oldest);
         }
         let entry = self.actors.entry(id).or_insert_with(|| ActorEntry {
             generation: watch::channel(Uuid::now_v7()).0,
@@ -151,10 +152,11 @@ impl State {
         scope_expires: Instant,
     ) {
         self.clock = self.clock.wrapping_add(1);
-        if !self.resources.contains_key(&key) && self.resources.len() >= RESOURCE_CAPACITY {
-            if let Some((_, oldest)) = self.resource_order.pop_first() {
-                self.resources.remove(&oldest);
-            }
+        if !self.resources.contains_key(&key)
+            && self.resources.len() >= RESOURCE_CAPACITY
+            && let Some((_, oldest)) = self.resource_order.pop_first()
+        {
+            self.resources.remove(&oldest);
         }
         if let Some(old) = self.resources.insert(
             key,

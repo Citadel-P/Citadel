@@ -179,14 +179,12 @@ async fn observe_events(
     };
     if let Some(refresh) =
         RuntimeRecoveryCoordinator::request(RecoveryReason::Bootstrap, platform_type)
-    {
-        if refreshes
+        && refreshes
             .send(request(refresh), cancellation)
             .await
             .is_err()
-        {
-            return Ok(());
-        }
+    {
+        return Ok(());
     }
     let safety = Duration::from_secs(6 * 3600);
     let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
@@ -383,7 +381,6 @@ fn edge_state_event(event: &citadel_adapters::connectors::agent::client::AgentDa
 }
 
 #[cfg(test)]
-#[path = "edge_event_tests.rs"]
 mod event_tests;
 
 mod reconciliation;

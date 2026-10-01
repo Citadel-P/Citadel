@@ -95,3 +95,22 @@ pub async fn volume_coverage(
         })
         .collect()
 }
+
+pub struct PostgresVolumeCoverageReader(pub PgPool);
+impl summaries::VolumeCoverageReader for PostgresVolumeCoverageReader {
+    fn volume_coverage<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        volumes: &'a [(String, Option<String>)],
+    ) -> BoxFuture<'a, Result<Vec<summaries::VolumeBackupCoverage>, BackupError>> {
+        Box::pin(volume_coverage(
+            &self.0,
+            actor,
+            administrator,
+            platform,
+            volumes,
+        ))
+    }
+}

@@ -10,6 +10,19 @@ impl PostgresRegistryRepository {
     }
 }
 impl RegistryRepository for PostgresRegistryRepository {
+    fn find_id_by_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, RegistryError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT id FROM registries WHERE lower(name)=lower($1)")
+                .bind(name)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)
+        })
+    }
+
     fn list_registries<'a>(
         &'a self,
         actor_id: ActorId,

@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "$type")]
 pub enum PlatformDescriptor {
-    Docker(DockerPlatformDescriptor),
-    DockerSwarm(DockerSwarmPlatformDescriptor),
+    Docker(Box<DockerPlatformDescriptor>),
+    DockerSwarm(Box<DockerSwarmPlatformDescriptor>),
     Kubernetes(KubernetesPlatformDescriptor),
 }
 

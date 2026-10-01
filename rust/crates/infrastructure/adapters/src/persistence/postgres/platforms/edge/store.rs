@@ -15,7 +15,7 @@ use crate::connectors::edge::EdgeTarget;
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct EdgeStatus {
+struct EdgeStatusRow {
     pub connection_status: String,
     pub last_connected_at_utc: Option<DateTime<Utc>>,
     pub last_disconnected_at_utc: Option<DateTime<Utc>>,
@@ -28,6 +28,7 @@ pub struct EdgeStatus {
     pub enrollment_expires_at_utc: Option<DateTime<Utc>>,
 }
 
+pub use citadel_platforms::edge_management::EdgeStatus;
 #[derive(Debug, thiserror::Error)]
 pub enum EdgeStoreError {
     #[error("Edge Agent resource was not found.")]
@@ -82,10 +83,21 @@ impl PostgresEdgeStore {
     pub async fn status(&self, target: &EdgeTarget) -> Result<EdgeStatus, EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
         validate_target(&mut tx, target).await?;
-        let result = sqlx::query_as("SELECT COALESCE(CASE WHEN b.revokedatutc IS NOT NULL THEN 'Revoked' WHEN b.lastheartbeatatutc < now()-interval '90 seconds' THEN 'Offline' ELSE b.connectionstatus END,'PendingEnrollment') AS connection_status, b.lastconnectedatutc AS last_connected_at_utc,b.lastdisconnectedatutc AS last_disconnected_at_utc,b.lastheartbeatatutc AS last_heartbeat_at_utc,b.lastseenversion AS last_seen_version,b.lastseenhostname AS last_seen_hostname,left(b.agentfingerprint,20) AS agent_fingerprint,b.protocolversion AS protocol_version,b.revokedatutc AS revoked_at_utc,(SELECT max(expiresatutc) FROM edgeagentenrollments WHERE resourceid=$1 AND resourcetype=$2 AND usedatutc IS NULL AND revokedatutc IS NULL AND expiresatutc>now()) AS enrollment_expires_at_utc FROM (SELECT 1) seed LEFT JOIN LATERAL (SELECT * FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype=$2 AND dockernodeid IS NULL ORDER BY createdatutc DESC LIMIT 1) b ON true")
+        let result: EdgeStatusRow = sqlx::query_as("SELECT COALESCE(CASE WHEN b.revokedatutc IS NOT NULL THEN 'Revoked' WHEN b.lastheartbeatatutc < now()-interval '90 seconds' THEN 'Offline' ELSE b.connectionstatus END,'PendingEnrollment') AS connection_status, b.lastconnectedatutc AS last_connected_at_utc,b.lastdisconnectedatutc AS last_disconnected_at_utc,b.lastheartbeatatutc AS last_heartbeat_at_utc,b.lastseenversion AS last_seen_version,b.lastseenhostname AS last_seen_hostname,left(b.agentfingerprint,20) AS agent_fingerprint,b.protocolversion AS protocol_version,b.revokedatutc AS revoked_at_utc,(SELECT max(expiresatutc) FROM edgeagentenrollments WHERE resourceid=$1 AND resourcetype=$2 AND usedatutc IS NULL AND revokedatutc IS NULL AND expiresatutc>now()) AS enrollment_expires_at_utc FROM (SELECT 1) seed LEFT JOIN LATERAL (SELECT * FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype=$2 AND dockernodeid IS NULL ORDER BY createdatutc DESC LIMIT 1) b ON true")
             .bind(target.resource_id).bind(resource_type(target)).fetch_one(&mut *tx).await?;
         tx.commit().await?;
-        Ok(result)
+        Ok(EdgeStatus {
+            connection_status: result.connection_status,
+            last_connected_at_utc: result.last_connected_at_utc,
+            last_disconnected_at_utc: result.last_disconnected_at_utc,
+            last_heartbeat_at_utc: result.last_heartbeat_at_utc,
+            last_seen_version: result.last_seen_version,
+            last_seen_hostname: result.last_seen_hostname,
+            agent_fingerprint: result.agent_fingerprint,
+            protocol_version: result.protocol_version,
+            revoked_at_utc: result.revoked_at_utc,
+            enrollment_expires_at_utc: result.enrollment_expires_at_utc,
+        })
     }
 
     pub async fn create_enrollment(
@@ -789,16 +801,18 @@ impl PostgresEdgeStore {
         } else {
             crate::persistence::postgres::platforms::status::container_event_in(
                 &mut tx,
-                session.target.platform_id,
-                session.target.node_id.as_deref(),
-                id,
-                if destroyed {
-                    None
-                } else {
-                    event.container_state.as_deref()
+                crate::persistence::postgres::platforms::status::ContainerEvent {
+                    platform: session.target.platform_id,
+                    node: session.target.node_id.as_deref(),
+                    docker_id: id,
+                    state: if destroyed {
+                        None
+                    } else {
+                        event.container_state.as_deref()
+                    },
+                    name: event.container_name.as_deref(),
+                    observed,
                 },
-                event.container_name.as_deref(),
-                observed,
                 super::super::runtime_index::hint(
                     &self.pool,
                     session.target.platform_id,
@@ -1165,6 +1179,55 @@ SELECT EXISTS (
         return Err(EdgeStoreError::Unauthorized);
     }
     Ok(())
+}
+
+impl citadel_platforms::edge_management::EdgeEnrollmentStore for PostgresEdgeStore {
+    fn status<'a>(
+        &'a self,
+        target: &'a EdgeTarget,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<EdgeStatus, citadel_platforms::edge_management::EdgeManagementError>,
+    > {
+        Box::pin(async move { self.status(target).await.map_err(management_error) })
+    }
+    fn create_enrollment<'a>(
+        &'a self,
+        target: &'a EdgeTarget,
+        actor: Uuid,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<
+            citadel_platforms::edge_management::EdgeEnrollment,
+            citadel_platforms::edge_management::EdgeManagementError,
+        >,
+    > {
+        Box::pin(async move {
+            self.create_enrollment(target, actor)
+                .await
+                .map_err(management_error)
+        })
+    }
+    fn revoke<'a>(
+        &'a self,
+        target: &'a EdgeTarget,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<(), citadel_platforms::edge_management::EdgeManagementError>,
+    > {
+        Box::pin(async move { self.revoke(target).await.map_err(management_error) })
+    }
+}
+fn management_error(
+    error: EdgeStoreError,
+) -> citadel_platforms::edge_management::EdgeManagementError {
+    use citadel_platforms::edge_management::EdgeManagementError as E;
+    match error {
+        EdgeStoreError::NotFound => E::NotFound,
+        EdgeStoreError::Unauthorized => E::Unauthorized,
+        EdgeStoreError::Invalid(m) => E::Invalid(m),
+        EdgeStoreError::Storage(e) => E::Storage(e.to_string()),
+    }
 }
 
 #[cfg(test)]

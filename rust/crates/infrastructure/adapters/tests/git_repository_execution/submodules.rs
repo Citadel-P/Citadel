@@ -131,6 +131,7 @@ async fn private_submodules_use_the_repository_account_without_leaking_to_other_
         accounts.clone(),
         Arc::new(GitCli::new(
             Arc::new(citadel_processes::SystemProcess),
+            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
             Duration::from_secs(20),
         )),
         root.join("cache"),

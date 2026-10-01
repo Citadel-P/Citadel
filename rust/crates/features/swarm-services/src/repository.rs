@@ -15,6 +15,13 @@ pub struct ServiceOperationRequest {
 }
 
 pub trait SwarmServiceRepository: Send + Sync {
+    /// Ownership is scoped by Platform because Docker IDs can repeat across daemons.
+    fn owns_runtime_service<'a>(
+        &'a self,
+        platform: Uuid,
+        docker_id: &'a str,
+    ) -> BoxFuture<'a, Result<bool, SwarmServiceError>>;
+
     fn duplicate_draft(
         &self,
         actor: ActorId,

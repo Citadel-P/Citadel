@@ -141,9 +141,19 @@ impl TryFrom<citadel_platforms::PlatformDetails> for PlatformView {
             mem_total: value.mem_total,
             agent_version: value.agent_version,
             server_version: value.server_version,
-            platform_type: value.platform_type,
+            platform_type: value.platform_type.to_string(),
             status: value.status,
-            connector_type: serde_json::from_value(Value::String(value.connector_type))?,
+            connector_type: match value.connector_type {
+                citadel_platforms::ConnectorKind::Local => {
+                    super::descriptor_views::PlatformConnectorType::Local
+                }
+                citadel_platforms::ConnectorKind::Agent => {
+                    super::descriptor_views::PlatformConnectorType::Agent
+                }
+                citadel_platforms::ConnectorKind::EdgeAgent => {
+                    super::descriptor_views::PlatformConnectorType::EdgeAgent
+                }
+            },
             deployment_count: value.deployment_count,
             stack_count: value.stack_count,
             deployment_status_counts: value.deployment_status_counts.into(),
@@ -152,7 +162,7 @@ impl TryFrom<citadel_platforms::PlatformDetails> for PlatformView {
             stats: value
                 .stats
                 .map(|items| items.into_iter().map(Into::into).collect()),
-            platform_descriptor: serde_json::from_value(value.platform_descriptor)?,
+            platform_descriptor: serde_json::from_value(value.platform_descriptor.metadata)?,
             cluster_id: value.cluster_id,
             prune_historical_swarm_task_containers: value.prune_historical_swarm_task_containers,
             capabilities: None,

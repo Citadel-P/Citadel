@@ -154,6 +154,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
             accounts,
             Arc::new(GitCli::new(
                 std::sync::Arc::new(citadel_processes::SystemProcess),
+                std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
                 Duration::from_secs(10),
             )),
             cache,
@@ -810,6 +811,7 @@ async fn invalid_credentials_and_unresolvable_remote_release_claim_without_runni
         accounts,
         Arc::new(GitCli::with_process(
             Arc::new(NoGitProcess),
+            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
             "must-not-run",
             Duration::from_secs(1),
         )),

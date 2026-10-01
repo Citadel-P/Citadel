@@ -1,6 +1,5 @@
 use super::*;
 use crate::{api::resources::platforms::views::ContainerView, realtime::topic::Topic};
-use citadel_platforms::logs::ContainerLogPort;
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
@@ -85,7 +84,7 @@ impl ApplicationGroupReader {
         }
         // Subscribe before reading the projection so changes during initialization
         // are not lost. Only new/replaced containers open a new daemon stream.
-        let mut changes = self.docker.realtime.as_ref().map(|hub| hub.subscribe());
+        let mut changes = self.realtime.as_ref().map(|hub| hub.subscribe());
         let targets = self.log_targets(p, g).await?;
         let platform_id = if matches!(g.topic(), Topic::StackLog(..)) {
             self.stacks
@@ -172,20 +171,12 @@ impl ApplicationGroupReader {
         if target.projection_stale_since.is_some() {
             return Err(failure("Container node data is stale."));
         }
-        let runtime = crate::api::routes::platforms::runtime_for_node(
-            &self.docker,
-            target.platform_id,
-            target.docker_node_id.as_deref(),
-        )
-        .await
-        .map_err(failure)?;
-        use crate::api::routes::platforms::RuntimeRef;
-        let stream = match runtime {
-            RuntimeRef::Local(r) => r.container_logs(&target.container_id, cancel).await,
-            RuntimeRef::Agent(r) => r.container_logs(&target.container_id, cancel).await,
-            RuntimeRef::Edge(r) => r.container_logs(&target.container_id, cancel).await,
-        }
-        .map_err(failure)?;
+        let stream = self
+            .runtime
+            .streams(target.platform_id, target.docker_node_id.as_deref())
+            .container_logs(&target.container_id, cancel)
+            .await
+            .map_err(failure)?;
         let mut lines = log_lines(
             stream,
             if stack {

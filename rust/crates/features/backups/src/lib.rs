@@ -22,7 +22,7 @@ pub use repositories::{
     BackupRepository, BackupRepositoryConfiguration, BackupRepositoryOperationResult,
     BackupRepositoryValidation,
 };
-pub use repository::BackupPersistence;
+pub use repository::{BackupPersistence, BackupRepositoryOperation};
 pub use restores::{BackupRestoreRequest, BackupRestoreRun, RestoreClaim, RestoreExecutionResult};
 pub use runs::{
     BackupClaim, BackupExecutionResult, BackupLog, BackupRun, BackupRunItem, BackupRunItemResult,

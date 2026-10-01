@@ -125,14 +125,17 @@ impl PostgresBackupPersistence {
     pub(super) fn record_repository_operation_impl<'a>(
         &'a self,
         id: Uuid,
-        operation_id: Uuid,
-        operation: &'a str,
-        location: &'a str,
-        platform_id: Option<Uuid>,
-        succeeded: bool,
-        message: Option<&'a str>,
+        result: BackupRepositoryOperation<'a>,
     ) -> BoxFuture<'a, Result<(BackupRepository, BackupRepositoryValidation), BackupError>> {
         Box::pin(async move {
+            let BackupRepositoryOperation {
+                operation_id,
+                operation,
+                location,
+                platform_id,
+                succeeded,
+                message,
+            } = result;
             let status = if succeeded {
                 citadel_backups::BackupRepositoryValidationStatus::Ready
             } else {

@@ -81,12 +81,12 @@ mod tests {
                 "labels":{"app":"web"}, "ports":["8080:80"], "volumes":["data:/data"],
                 "networks":["bridge"], "command":["serve"], "environmentVariables":["LOG_LEVEL=info"]
             })).unwrap();
-            let business: citadel_deployments::DeploymentSpec = wire.clone().into();
+            let business: citadel_deployments::DeploymentSpec = wire.clone();
             let stored = business.to_storage_value().unwrap();
             assert_eq!(stored["Image"]["$type"], image["$type"]);
             assert!(stored.get("image").is_none());
             let restored = citadel_deployments::DeploymentSpec::from_storage_value(stored).unwrap();
-            let roundtrip: DeploymentSpec = restored.into();
+            let roundtrip: DeploymentSpec = restored;
             assert_eq!(roundtrip, wire);
             assert_eq!(serde_json::to_value(roundtrip).unwrap()["image"], image);
         }

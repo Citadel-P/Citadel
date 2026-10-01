@@ -14,6 +14,19 @@ use uuid::Uuid;
 #[derive(Default)]
 struct Repository(AtomicUsize, Option<RegistryDetails>);
 impl RegistryRepository for Repository {
+    fn find_id_by_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, RegistryError>> {
+        Box::pin(async move {
+            Ok(self
+                .1
+                .as_ref()
+                .filter(|r| r.name.eq_ignore_ascii_case(name))
+                .map(|r| r.id))
+        })
+    }
+
     fn list_registries<'a>(
         &'a self,
         _: ActorId,

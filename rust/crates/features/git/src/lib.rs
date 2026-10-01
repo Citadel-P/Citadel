@@ -28,3 +28,5 @@ pub mod permissions;
 
 mod status;
 pub use status::{GitRepositoryRefStatus, GitRepositoryStatus};
+
+pub mod workspace;

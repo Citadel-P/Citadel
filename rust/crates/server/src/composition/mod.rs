@@ -58,6 +58,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub docker: DockerClient,
     pub pool: PgPool,
     pub cancellation: CancellationToken,
     pub dynamic_tasks: citadel_runtime::DynamicTasks,
@@ -80,7 +81,7 @@ pub struct ServerComponents {
     pub git_execution: Arc<GitRepositoryExecutionService>,
     pub agent_setup: Arc<citadel_server::api::resources::platforms::views::AgentSetupView>,
     pub agent_setup_context: platforms_http::AgentSetupContext,
-    pub edge_context: platforms_http::EdgeHttpContext,
+    pub edge_context: citadel_server::api::resources::platforms::edge::EdgeHttpContext,
     pub edge_registry: citadel_adapters::connectors::edge::EdgeRegistry,
     pub alert_store: Arc<PostgresAlertRepository>,
     pub alert_delivery: Arc<ShoutrrrAlertDelivery>,
@@ -220,6 +221,7 @@ impl ServerComponents {
         let platforms::PlatformComponents {
             platform_state,
             platform_reads,
+            volume_content,
         } = platforms::build(config, &runtime, &identity, &registries);
         let realtime = config.realtime.as_ref().map(|realtime_config| {
             RealtimeService::with_hub(
@@ -247,7 +249,9 @@ impl ServerComponents {
                     backups: Arc::clone(backups.store()),
                     activities: Arc::clone(&activities),
                     alerts: alert_store.clone(),
-                    docker: platform_state.clone(),
+                    runtime: platform_state.runtime.clone(),
+                    statistics: platform_state.statistics.clone(),
+                    realtime: platform_state.realtime.clone(),
                 },
             ))
         });
@@ -260,6 +264,9 @@ impl ServerComponents {
         });
 
         let jobs = crate::jobs::Jobs {
+            docker: docker.clone(),
+            agent,
+            volume_content,
             runtime_targets,
             image_scanner,
             alert_deliveries,
@@ -269,6 +276,7 @@ impl ServerComponents {
         };
         Ok((
             Self {
+                docker,
                 pool,
                 cancellation,
                 dynamic_tasks,

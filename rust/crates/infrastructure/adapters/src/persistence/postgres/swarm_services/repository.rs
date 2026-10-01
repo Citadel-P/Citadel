@@ -13,6 +13,17 @@ impl PostgresSwarmServiceRepository {
     }
 }
 impl SwarmServiceRepository for PostgresSwarmServiceRepository {
+    fn owns_runtime_service<'a>(
+        &'a self,
+        platform: Uuid,
+        docker_id: &'a str,
+    ) -> BoxFuture<'a, Result<bool, SwarmServiceError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmservices WHERE platformid=$1 AND dockerserviceid=$2)")
+                .bind(platform).bind(docker_id).fetch_one(&self.pool).await.map_err(storage)
+        })
+    }
+
     fn duplicate_draft(
         &self,
         actor: ActorId,

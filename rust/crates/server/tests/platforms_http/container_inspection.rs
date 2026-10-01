@@ -99,7 +99,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         }
     });
     let mut state = f.lookup_state.platforms.clone();
-    state.docker = docker;
+    refresh_runtime(&mut state, &f, docker);
     f.app = platforms_http::router(state);
     let url = format!("/api/v1/containers/{docker_id}/inspect");
     assert_eq!(
@@ -190,7 +190,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         assert!(data["containerStat"].is_null());
     }
     let deployment = Uuid::now_v7();
-    sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,spec,status) VALUES($1,$2,$3,$4,'{}','Running')")
+    sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,spec,status) VALUES($1,$2,$3,$4,'{}','Healthy')")
         .bind(deployment).bind(format!("inspection-{deployment}")).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
         .bind(id)
@@ -484,7 +484,7 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .await
         .unwrap();
     sqlx::query("UPDATE platforms SET platformdescriptor=jsonb_set(platformdescriptor::jsonb,'{nodeID}','\"other-manager\"') WHERE id=$1").bind(f.platform_id).execute(&f.pool).await.unwrap();
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut outbound) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

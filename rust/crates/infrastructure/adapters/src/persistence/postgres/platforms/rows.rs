@@ -37,20 +37,23 @@ pub(super) fn map_platform(row: PgRow) -> Result<PlatformDetails, AuthorizedRead
         mem_total: row.try_get("memtotal").map_err(storage)?,
         agent_version: row.try_get("agentversion").map_err(storage)?,
         server_version: row.try_get("serverversion").map_err(storage)?,
-        platform_type,
+        platform_type: classification::platform_kind(&platform_type).map_err(storage)?,
         status: row
             .try_get::<String, _>("status")
             .map_err(storage)?
             .parse()
             .map_err(storage)?,
-        connector_type: row.try_get("connectortype").map_err(storage)?,
+        connector_type: classification::connector_kind(
+            row.try_get("connectortype").map_err(storage)?,
+        )
+        .map_err(storage)?,
         deployment_count: row.try_get("deployment_count").map_err(storage)?,
         stack_count: row.try_get("stack_count").map_err(storage)?,
         deployment_status_counts: counts(&row, "deployment", false)?,
         stack_status_counts: counts(&row, "stack", true)?,
         swarm_service_status_counts: counts(&row, "service", false)?,
         stats,
-        platform_descriptor: descriptor,
+        platform_descriptor: super::descriptor::decode(descriptor).map_err(storage)?,
         cluster_id: row.try_get("clusterid").map_err(storage)?,
         prune_historical_swarm_task_containers: row
             .try_get("prunehistoricalswarmtaskcontainers")

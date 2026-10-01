@@ -122,6 +122,9 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
     let service = Arc::new(
         AutomationService::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+            ),
             Arc::new(automation_support::Tasks(automation_tasks.clone())),
             automation_shutdown,
             store.clone(),

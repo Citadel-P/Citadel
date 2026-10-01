@@ -27,3 +27,12 @@ pub trait ActivityQueryStore: Send + Sync {
         filter: ValidatedActivityFilter,
     ) -> BoxFuture<'a, Result<PagedActivityRecords, ActivityError>>;
 }
+
+pub trait VolumeDownloadActivitySink: Send + Sync {
+    fn record_volume_download(
+        &self,
+        actor: citadel_primitives::ActorId,
+        platform: Uuid,
+        details: crate::VolumeContentDownloaded,
+    ) -> BoxFuture<'_, Result<(), ActivityError>>;
+}

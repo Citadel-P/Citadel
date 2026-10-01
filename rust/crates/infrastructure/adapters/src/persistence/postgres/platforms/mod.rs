@@ -54,3 +54,9 @@ pub use authorized_reader::PostgresAuthorizedPlatformReader;
 pub mod classification;
 
 pub mod runtime_index;
+
+pub(crate) mod connection;
+
+pub mod descriptor;
+
+pub mod images;

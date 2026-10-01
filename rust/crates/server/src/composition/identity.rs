@@ -6,6 +6,7 @@ use citadel_adapters::persistence::postgres::identity::oidc::store::PostgresOidc
 use citadel_adapters::persistence::postgres::identity::profile::repository::PostgresProfileRepository;
 use citadel_adapters::persistence::postgres::identity::roles::repository::PostgresRoleRepository;
 use citadel_adapters::persistence::postgres::identity::service_accounts::repository::PostgresServiceAccountRepository;
+use citadel_adapters::persistence::postgres::identity::service_accounts::usage::service_account_last_used_channel;
 use citadel_adapters::persistence::postgres::identity::teams::repository::PostgresTeamRepository;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::licensing::store::PostgresLicenseEntitlementService;
@@ -20,7 +21,6 @@ use citadel_identity::{
     RoleMutationService, RoleReadService, ServiceAccountService, SystemClock, TeamMutationService,
     TeamReadService, UserReadService,
 };
-use citadel_runtime::service_account_last_used_channel;
 use citadel_server::config::Config;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -38,7 +38,7 @@ pub(super) struct IdentityComponents {
     pub roles: Arc<RoleReadService>,
     pub role_mutations: Arc<RoleMutationService>,
     pub secret_protector: Arc<AesGcmSecretProtector>,
-    pub last_used_worker: citadel_runtime::ServiceAccountLastUsedWorker,
+    pub last_used_worker: citadel_adapters::persistence::postgres::identity::service_accounts::usage::ServiceAccountLastUsedWorker,
 }
 
 pub(super) fn build(

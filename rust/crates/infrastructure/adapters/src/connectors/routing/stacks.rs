@@ -32,8 +32,7 @@ use crate::external::stacks::run_docker;
 pub struct StackRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
-    agent: Option<AgentClient>,
-    edge: crate::connectors::edge::EdgeRegistry,
+    runtime: super::platforms::runtime::PlatformRuntimeRouter,
     image_cache: std::sync::Arc<crate::connectors::registries::digest_cache::ImageDigestCache>,
 }
 
@@ -41,12 +40,24 @@ impl StackRuntimeRouter {
     #[must_use]
     pub fn new(pool: PgPool, docker: DockerClient, agent: Option<AgentClient>) -> Self {
         Self {
+            runtime: super::platforms::runtime::PlatformRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                agent,
+                Default::default(),
+            ),
             pool,
             docker,
-            agent,
-            edge: crate::connectors::edge::EdgeRegistry::default(),
             image_cache: Default::default(),
         }
+    }
+
+    pub fn with_runtime_router(
+        mut self,
+        runtime: super::platforms::runtime::PlatformRuntimeRouter,
+    ) -> Self {
+        self.runtime = runtime;
+        self
     }
 
     pub fn with_image_cache(
@@ -59,58 +70,39 @@ impl StackRuntimeRouter {
 
     #[must_use]
     pub fn with_edge(mut self, edge: crate::connectors::edge::EdgeRegistry) -> Self {
-        self.edge = edge;
+        self.runtime = self.runtime.with_edge(edge);
         self
     }
 
     async fn platform(&self, platform_id: Uuid) -> Result<PlatformTarget, StackError> {
-        let row = sqlx::query("SELECT connectortype,address,status FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(storage)?
-            .ok_or(StackError::NotFound)?;
-        if row.try_get::<String, _>("status").map_err(storage)? != "Online" {
+        let target =
+            crate::persistence::postgres::platforms::connection::load(&self.pool, platform_id)
+                .await
+                .map_err(storage)?
+                .ok_or(StackError::NotFound)?;
+        if target.status != citadel_primitives::PlatformStatus::Online {
             return Err(StackError::Conflict(
                 "The Stack Platform is offline.".to_owned(),
             ));
         }
-        Ok(PlatformTarget {
-            platform_id,
-            connector: crate::persistence::postgres::platforms::classification::connector_kind(
-                row.try_get("connectortype").map_err(storage)?,
-            )
-            .map_err(storage)?,
-            address: row.try_get("address").map_err(storage)?,
-        })
+        Ok(target)
     }
 
-    fn agent_for(
+    async fn agent_for(
         &self,
         target: &PlatformTarget,
+        cancellation: &CancellationToken,
     ) -> Result<crate::connectors::agent::execution::AgentExecutionClient, StackError> {
-        use crate::connectors::agent::execution::AgentExecutionClient;
-        use crate::connectors::edge::EdgeTarget;
-        if target.connector == citadel_platforms::ConnectorKind::EdgeAgent {
-            return self
-                .edge
-                .get(&EdgeTarget::platform(target.platform_id))
-                .map(AgentExecutionClient::Edge)
-                .map_err(|_| {
-                    StackError::Runtime("The Edge Agent is disconnected or unavailable.".into())
-                });
-        }
-        let agent = self
-            .agent
-            .as_ref()
-            .filter(|_| target.connector == citadel_platforms::ConnectorKind::Agent)
-            .ok_or_else(|| {
-                StackError::Runtime("The configured Agent transport is unavailable.".into())
-            })?;
-        let agent = agent
-            .at_address(&target.address)
-            .map_err(|error| StackError::Runtime(error.message))?;
-        Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
+        self.runtime
+            .execution_agent_for(target, cancellation)
+            .await
+            .map_err(|error| {
+                if error.kind == citadel_platforms::RuntimeErrorKind::Cancelled {
+                    StackError::Cancelled
+                } else {
+                    StackError::Runtime(error.message)
+                }
+            })
     }
 
     async fn apply_local(
@@ -281,7 +273,7 @@ impl StackRuntime for StackRuntimeRouter {
             let result = if target.connector == citadel_platforms::ConnectorKind::Local  {
                 self.apply_local(claim, source, environment, registry.as_ref(), cancellation, progress).await
             } else if matches!(target.connector, citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent) {
-                self.agent_for(&target)?.apply_stack(claim, source, environment, registry.as_ref(), cancellation, progress).await.map_err(agent_error)
+                self.agent_for(&target, cancellation).await?.apply_stack(claim, source, environment, registry.as_ref(), cancellation, progress).await.map_err(agent_error)
             } else {
                 Err(StackError::Runtime("Edge Agent Stack mutations are not available until the inbound command transport migrates.".to_owned()))
             }?;
@@ -289,7 +281,7 @@ impl StackRuntime for StackRuntimeRouter {
                 let runtime: Box<dyn PlatformInventoryPort> = if target.connector == citadel_platforms::ConnectorKind::Local {
                     Box::new(self.docker.clone())
                 } else {
-                    match self.agent_for(&target)? {
+                    match self.agent_for(&target, cancellation).await? {
                         crate::connectors::agent::execution::AgentExecutionClient::Direct(agent) => Box::new((*agent).clone()),
                         crate::connectors::agent::execution::AgentExecutionClient::Edge(session) => Box::new(crate::connectors::edge::EdgeRuntime { session }),
                     }
@@ -398,7 +390,7 @@ impl StackRuntime for StackRuntimeRouter {
                 let service_ids = self
                     .swarm_service_ids(claim.platform_id, &claim.project_name)
                     .await?;
-                let agent = self.agent_for(&target)?;
+                let agent = self.agent_for(&target, cancellation).await?;
                 for service_id in service_ids {
                     agent.delete_managed_swarm_service(
                         citadel_contracts::citadel::swarm::v1::DeleteManagedSwarmServiceRequest {
@@ -437,7 +429,7 @@ impl StackRuntime for StackRuntimeRouter {
                 })
                 .await
             } else {
-                let agent = self.agent_for(&target)?;
+                let agent = self.agent_for(&target, cancellation).await?;
                 for id in container_ids {
                     agent
                         .delete_container(&id, cancellation)
@@ -512,7 +504,8 @@ impl StackRuntime for StackRuntimeRouter {
                     StackAction::Resume => AgentContainerAction::Unpause,
                     StackAction::Restart => AgentContainerAction::Restart,
                 };
-                self.agent_for(&target)?
+                self.agent_for(&target, cancellation)
+                    .await?
                     .change_containers_state(&ids, action, cancellation)
                     .await
                     .map_err(agent_error)?;
@@ -577,7 +570,8 @@ impl StackRuntime for StackRuntimeRouter {
                                 .await
                                 .map_err(runtime_io)
                         } else {
-                            self.agent_for(&target)?
+                            self.agent_for(&target, cancellation)
+                                .await?
                                 .delete_container(container_id, cancellation)
                                 .await
                                 .map_err(agent_error)
@@ -616,7 +610,8 @@ impl StackRuntime for StackRuntimeRouter {
                             }
                         })
                     } else {
-                        self.agent_for(&target)?
+                        self.agent_for(&target, cancellation)
+                            .await?
                             .change_containers_state(
                                 std::slice::from_ref(container_id),
                                 agent_action,
@@ -871,11 +866,7 @@ fn storage(error: impl std::fmt::Display) -> StackError {
 fn agent_error(error: impl std::fmt::Display) -> StackError {
     StackError::Runtime(error.to_string())
 }
-struct PlatformTarget {
-    platform_id: Uuid,
-    connector: citadel_platforms::ConnectorKind,
-    address: String,
-}
+use crate::persistence::postgres::platforms::connection::PlatformConnection as PlatformTarget;
 
 fn reconciliation_action(
     container_id: &str,

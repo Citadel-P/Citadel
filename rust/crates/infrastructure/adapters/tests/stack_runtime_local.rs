@@ -544,7 +544,7 @@ async fn persist_manager_snapshot(
     use citadel_platforms::jobs::{ResourceInventory, ResourceSnapshot};
     let store = citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone());
     for inventory in [
-        ResourceInventory::Platform(snapshot.info.clone()),
+        ResourceInventory::Platform(Box::new(snapshot.info.clone())),
         ResourceInventory::Swarm {
             inventory: snapshot.swarm.clone().unwrap(),
             networks: snapshot.networks.clone(),

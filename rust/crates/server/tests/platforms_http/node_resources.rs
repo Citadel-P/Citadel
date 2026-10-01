@@ -66,7 +66,7 @@ async fn node_resources_are_authorized_routed_and_synchronized_without_a_manager
         "keep connected-manager Volumes in the full snapshot"
     );
 
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

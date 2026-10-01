@@ -43,12 +43,6 @@ pub struct VolumeContentAdapter {
     tasks: DynamicTasks,
 }
 
-pub struct VolumeDownload {
-    pub filename: String,
-    pub directory: bool,
-    pub stream: BoxStream<'static, Result<Vec<u8>, std::io::Error>>,
-}
-
 #[derive(Clone)]
 enum HelperRuntime {
     Local(DockerClient),
@@ -82,6 +76,11 @@ impl VolumeContentAdapter {
             slots: Arc::new(Semaphore::new(4)),
             tasks,
         }
+    }
+
+    pub fn with_runtime_router(mut self, router: ContainerRuntimeRouter) -> Self {
+        self.router = router;
+        self
     }
 
     /// Use the running Core's immutable image for local helpers. Remote Agents
@@ -138,7 +137,7 @@ impl VolumeContentAdapter {
             }
             Runtime::Agent(r) => {
                 r.inspect_volume(volume, cancellation).await?;
-                HelperRuntime::Agent(AgentExecutionClient::Direct(r))
+                HelperRuntime::Agent(AgentExecutionClient::Direct(Arc::new(r)))
             }
             Runtime::Edge(r) => {
                 r.inspect_volume(volume, cancellation).await?;
@@ -663,3 +662,26 @@ fn error(kind: RuntimeErrorKind, message: &str) -> RuntimeCapabilityError {
 
 #[cfg(test)]
 mod tests;
+
+impl VolumeContentPort for VolumeContentAdapter {
+    fn list<'a>(
+        &'a self,
+        platform: Uuid,
+        volume: &'a str,
+        path: &'a str,
+        node: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, Result<VolumeDirectory, RuntimeCapabilityError>> {
+        Box::pin(self.list(platform, volume, path, node, cancel))
+    }
+    fn download<'a>(
+        &'a self,
+        platform: Uuid,
+        volume: &'a str,
+        path: &'a str,
+        node: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, Result<VolumeDownload, RuntimeCapabilityError>> {
+        Box::pin(self.download(platform, volume, path, node, cancel))
+    }
+}

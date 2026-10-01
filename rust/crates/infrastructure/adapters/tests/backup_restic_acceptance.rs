@@ -230,7 +230,7 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
         let operation_id=Uuid::now_v7();
         assert!(store.acquire_repository_operation(repository.id, operation_id, "Initialize", Utc::now()+chrono::Duration::minutes(5)).await.unwrap());
-        store.record_repository_operation(repository.id, operation_id, "Initialize", "Platform", Some(platform), true, None).await.unwrap();
+        store.record_repository_operation(repository.id, citadel_backups::BackupRepositoryOperation { operation_id, operation: "Initialize", location: "Platform", platform_id: Some(platform), succeeded: true, message: None }).await.unwrap();
         store.release_repository_operation(repository.id, operation_id).await.unwrap();
         let mut policy = BackupPolicyConfiguration { name: format!("policy-{suffix}"), description: None,
             source: serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"volumeName":source})).unwrap(),

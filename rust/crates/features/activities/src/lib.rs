@@ -26,3 +26,5 @@ pub use read_models::{
 };
 pub use repository::{ActivityQueryStore, WebhookActivitySink};
 pub use service::ActivityService;
+
+pub use repository::VolumeDownloadActivitySink;

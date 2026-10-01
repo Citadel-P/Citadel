@@ -41,7 +41,9 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
             PostgresActivityStore::new(f.pool.clone()),
         ))),
         alerts: Arc::new(PostgresAlertRepository::new(f.pool.clone())),
-        docker: f.lookup_state.platforms.clone(),
+        runtime: f.lookup_state.platforms.runtime.clone(),
+                    statistics: f.lookup_state.platforms.statistics.clone(),
+                    realtime: f.lookup_state.platforms.realtime.clone(),
     }
 }
 pub(super) fn token(p: &ActorPrincipal) -> String {
@@ -96,7 +98,14 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
     let id: Uuid = sqlx::query_scalar("UPDATE containers SET dockernodeid=NULL,dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
     let mut reader = reader(&f);
-    reader.docker.docker = DockerClient::new(&docker_socket, StdDuration::from_secs(5)).unwrap();
+    reader.runtime = Arc::new(
+        citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(
+            f.pool.clone(),
+            DockerClient::new(&docker_socket, StdDuration::from_secs(5)).unwrap(),
+            f.agent.clone(),
+            f.edge.clone(),
+        ),
+    );
     let cancellation = CancellationToken::new();
     let _guard = cancellation.clone().drop_guard();
     let service = RealtimeService::new(
@@ -394,7 +403,7 @@ async fn container_batch_shares_one_projection_but_rechecks_each_readers_authori
     );
     let deployment = Uuid::now_v7();
     let spec: citadel_deployments::DeploymentSpec = serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
-    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("batch-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Healthy','Idle',$5)").bind(deployment).bind(format!("batch-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     let stack = Uuid::now_v7();
     let spec: citadel_stacks::StackSpec =
         serde_json::from_value(json!({"$type":"WebEditor","composeFile":"services: {}"})).unwrap();
@@ -537,8 +546,6 @@ async fn container_logs_flow_while_another_group_snapshot_is_pending() {
     .await
     .unwrap();
     let (session, mut commands) = f
-        .lookup_state
-        .platforms
         .edge
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -654,7 +661,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
             .is_err()
     );
     replace_specific_permissions(&f, &principal, vec![SpecificPermission::Terminal]).await;
-    let registry = f.lookup_state.platforms.edge.clone();
+    let registry = f.edge.clone();
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -805,7 +812,7 @@ async fn terminal_cancels_when_the_container_identity_changes_without_retargetin
     let f = fixture().await;
     let id:Uuid=sqlx::query_scalar("UPDATE containers SET dockernodeid='node-1',dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind("a4c05df3937c5d2479d48cbf6b15eb85e719c27c30205fc7c9b2f82b9b973750").fetch_one(&f.pool).await.unwrap();
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -814,7 +821,7 @@ async fn terminal_cancels_when_the_container_identity_changes_without_retargetin
         .unwrap();
     let hub = citadel_server::realtime::RealtimeHub::new(32, Arc::new(Metrics::default()));
     let mut reader = reader(&f);
-    reader.docker.realtime = Some(hub.clone());
+    reader.realtime = Some(hub.clone());
     let group = Group::parse(&format!("container-exec:{id}:identity-fence")).unwrap();
     let cancel = CancellationToken::new();
     let mut terminal = reader
@@ -887,8 +894,6 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         .await
         .unwrap();
     let (session, mut commands) = f
-        .lookup_state
-        .platforms
         .edge
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -897,7 +902,7 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         .unwrap();
     let hub = citadel_server::realtime::RealtimeHub::new(32, Arc::new(Metrics::default()));
     let mut reader = reader(&f);
-    reader.docker.realtime = Some(hub.clone());
+    reader.realtime = Some(hub.clone());
     let cancellation = CancellationToken::new();
     let group = Group::parse(&format!("stack-log:{stack}")).unwrap();
     let mut logs = reader
@@ -1000,7 +1005,7 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         commands.recv().await.unwrap().body,
         Some(core_envelope::Body::CancelCommand(_))
     ));
-    f.lookup_state.platforms.edge.remove(&session);
+    f.edge.remove(&session);
     cleanup(f).await;
 }
 
@@ -1048,7 +1053,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     reader.read(&principal, &resolved, None).await.unwrap();
     let deployment = Uuid::now_v7();
     let spec:citadel_deployments::DeploymentSpec=serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
-    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Running','Idle',$5)").bind(deployment).bind(format!("logs-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Healthy','Idle',$5)").bind(deployment).bind(format!("logs-{deployment}")).bind(f.platform_id).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     sqlx::query("UPDATE containers SET deploymentid=$1,state='Exited' WHERE id=$2")
         .bind(deployment)
         .bind(id)
@@ -1079,7 +1084,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
     )
     .await;
     replace_specific_permissions(&f, &principal, vec![SpecificPermission::Logs]).await;
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -1201,7 +1206,7 @@ async fn managed_service_group_requires_parent_platform_and_preserves_persisted_
         "image":{"$type":"External","registryId":Uuid::now_v7(),"imageTag":"redis","resolvedDigest":"sha256:applied"},
         "replicas":2
     })).unwrap();
-    sqlx::query("INSERT INTO swarmservices(id,name,dockername,platformid,createdbyactorid,desiredspechash,health,spec,synchronizationstate,updatedat,autoupdatestate_status) VALUES($1,$2,$2,$3,$4,'hash','Unknown',$5,'Unknown',now(),'Unknown')")
+    sqlx::query("INSERT INTO swarmservices(id,name,dockername,platformid,createdbyactorid,desiredspechash,health,spec,synchronizationstate,updatedat,autoupdatestate_status) VALUES($1,$2,$2,$3,$4,'hash','Unknown',$5,'NeverApplied',now(),'Unknown')")
         .bind(id).bind(format!("service-{id}")).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).bind(spec.to_storage_value().unwrap()).execute(&f.pool).await.unwrap();
     let groups = reader(&f);
     let group = Group::parse(&format!("swarm-service:{id}")).unwrap();

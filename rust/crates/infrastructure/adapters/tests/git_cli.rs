@@ -65,6 +65,7 @@ async fn browser_operations_read_immutable_git_objects() {
     let first_commit = repository.commit("initial");
     let cli = GitCli::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
+        std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
         Duration::from_secs(10),
     );
     let cancellation = CancellationToken::new();
@@ -155,6 +156,7 @@ async fn blob_reads_are_bounded_and_report_truncation() {
     let commit = repository.commit("large blob");
     let cli = GitCli::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
+        std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
         Duration::from_secs(10),
     );
     let cancellation = CancellationToken::new();

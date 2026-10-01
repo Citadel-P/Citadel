@@ -1,6 +1,6 @@
 //! Read-mostly connector snapshot and reusable channels, keyed only by persisted Platforms.
 //! No authorization data is cached. PostgreSQL and the periodic refresh are authoritative.
-use citadel_adapters::connectors::agent::client::AgentClient;
+use crate::connectors::agent::client::AgentClient;
 use sqlx::{PgPool, Row};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{RwLock, watch};
@@ -13,7 +13,7 @@ pub const INVENTORY_CONCURRENCY: usize = 2;
 pub const STATS_CONCURRENCY: usize = 8;
 
 #[derive(Clone)]
-pub(crate) struct PlatformTarget {
+pub struct PlatformTarget {
     pub id: uuid::Uuid,
     pub name: String,
     pub address: String,
@@ -25,9 +25,7 @@ pub(crate) struct PlatformTarget {
 pub struct PlatformRuntimeRegistry {
     /// Shared by Direct/Local and Edge inventory: at most two external operations.
     pub inventory_budget: citadel_runtime::IoBudget,
-    identities: Arc<
-        citadel_adapters::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex,
-    >,
+    identities: Arc<crate::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex>,
     pool: PgPool,
     base: Option<AgentClient>,
     targets: RwLock<Arc<Vec<PlatformTarget>>>,
@@ -43,7 +41,10 @@ impl PlatformRuntimeRegistry {
                 INVENTORY_CONCURRENCY.try_into().unwrap(),
                 citadel_runtime::runtime_metrics::RuntimeWork::Inventory,
             ),
-            identities: citadel_adapters::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex::attach(pool.clone()),
+            identities:
+                crate::persistence::postgres::platforms::runtime_index::RuntimeIdentityIndex::attach(
+                    pool.clone(),
+                ),
             pool,
             base,
             targets: RwLock::new(Arc::new(Vec::new())),
@@ -53,22 +54,22 @@ impl PlatformRuntimeRegistry {
         })
     }
 
-    pub(crate) async fn snapshot(&self) -> Arc<Vec<PlatformTarget>> {
+    pub async fn snapshot(&self) -> Arc<Vec<PlatformTarget>> {
         self.targets.read().await.clone()
     }
-    pub(crate) fn changes(&self) -> watch::Receiver<u64> {
+    pub fn changes(&self) -> watch::Receiver<u64> {
         self.changed.subscribe()
     }
 
-    pub(crate) fn subscription_wakes(&self) -> watch::Receiver<()> {
+    pub fn subscription_wakes(&self) -> watch::Receiver<()> {
         self.subscriptions.subscribe()
     }
 
-    pub(crate) fn ensure_subscriptions(&self) {
+    pub fn ensure_subscriptions(&self) {
         self.subscriptions.send_modify(|_| {});
     }
 
-    pub(crate) async fn refresh(&self) -> Result<(), sqlx::Error> {
+    pub async fn refresh(&self) -> Result<(), sqlx::Error> {
         let _refresh = self.refresh_lock.lock().await;
         if !self.identities.initialized() {
             self.identities.rebuild().await?;
@@ -81,7 +82,7 @@ impl PlatformRuntimeRegistry {
             let id = row.try_get("id")?;
             let address: String = row.try_get("address")?;
             let connector_type =
-                citadel_adapters::persistence::postgres::platforms::classification::connector_kind(
+                crate::persistence::postgres::platforms::classification::connector_kind(
                     row.try_get("connectortype")?,
                 )?;
             let agent = if connector_type == citadel_platforms::ConnectorKind::Agent {
@@ -114,7 +115,7 @@ impl PlatformRuntimeRegistry {
                 agent,
                 name: row.try_get("name")?,
                 platform_type:
-                    citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
+                    crate::persistence::postgres::platforms::classification::platform_kind(
                         row.try_get("platformtype")?,
                     )?,
             });
@@ -135,7 +136,7 @@ impl PlatformRuntimeRegistry {
         Ok(())
     }
 
-    pub(crate) async fn agent(&self, platform: uuid::Uuid) -> Option<AgentClient> {
+    pub async fn agent(&self, platform: uuid::Uuid) -> Option<AgentClient> {
         self.snapshot()
             .await
             .iter()
@@ -143,7 +144,7 @@ impl PlatformRuntimeRegistry {
             .and_then(|target| target.agent.as_ref().map(|agent| agent.as_ref().clone()))
     }
 
-    pub(crate) async fn reconfigured(&self, id: uuid::Uuid, address: &str) {
+    pub async fn reconfigured(&self, id: uuid::Uuid, address: &str) {
         let mut changes = self.changes();
         loop {
             let same = self.snapshot().await.iter().any(|target| {
@@ -183,7 +184,7 @@ impl PlatformRuntimeRegistry {
     }
 }
 
-impl citadel_adapters::connectors::routing::containers::PlatformAgentResolver
+impl crate::connectors::routing::platforms::runtime::PlatformAgentResolver
     for PlatformRuntimeRegistry
 {
     fn resolve_agent<'a>(
@@ -241,7 +242,7 @@ mod tests {
         let pool = PgPool::connect(&url).await.unwrap();
         let base = AgentClient::lazy(
             "http://localhost",
-            citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[42; 32]),
+            crate::connectors::agent::client::AgentRequestSigner::from_bytes(&[42; 32]),
             Duration::from_secs(1),
             true,
         )
@@ -270,7 +271,7 @@ mod tests {
             .clone()
             .unwrap();
         assert!(Arc::ptr_eq(&first, &unchanged));
-        use citadel_adapters::connectors::routing::containers::PlatformAgentResolver;
+        use crate::connectors::routing::platforms::runtime::PlatformAgentResolver;
         let command = registry
             .resolve_agent(id, "http://127.0.0.1:49151")
             .await
@@ -279,12 +280,30 @@ mod tests {
             Arc::ptr_eq(&command, &first),
             "commands reuse the worker connection owner"
         );
+        let router = super::super::runtime::PlatformRuntimeRouter::new(
+            pool.clone(),
+            crate::connectors::docker::DockerClient::new(
+                std::path::Path::new("/tmp/citadel-unused-registry.sock"),
+                Duration::from_secs(1),
+            )
+            .unwrap(),
+            None,
+            crate::connectors::edge::EdgeRegistry::default(),
+        )
+        .with_agent_resolver(registry.clone());
         sqlx::query("UPDATE platforms SET address='http://127.0.0.1:49152' WHERE id=$1")
             .bind(id)
             .execute(&pool)
             .await
             .unwrap();
-        registry.refresh().await.unwrap();
+        // A request observes the changed address before the background refresh.
+        let resolved = router
+            .resolve(id, None, false, &CancellationToken::new())
+            .await
+            .unwrap();
+        assert!(
+            matches!(resolved, super::super::runtime::Runtime::Agent(agent) if agent.address() == "http://127.0.0.1:49152")
+        );
         let changed = registry
             .snapshot()
             .await
@@ -301,6 +320,14 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+        // A deleted Platform cannot be resolved through a still-cached Agent.
+        assert!(registry.agent(id).await.is_some());
+        let removed = router
+            .resolve(id, None, false, &CancellationToken::new())
+            .await;
+        assert!(
+            matches!(removed, Err(error) if error.kind == citadel_platforms::RuntimeErrorKind::NotFound)
+        );
         // No notification: the exact same authoritative refresh used by the timer recovers it.
         registry.refresh().await.unwrap();
         assert!(registry.agent(id).await.is_none());

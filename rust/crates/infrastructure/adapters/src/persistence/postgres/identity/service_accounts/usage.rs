@@ -8,10 +8,10 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::BoundedReceiver;
-use crate::BoundedSender;
-use crate::QueueOverflowPolicy;
-use crate::bounded_channel;
+use citadel_runtime::BoundedReceiver;
+use citadel_runtime::BoundedSender;
+use citadel_runtime::QueueOverflowPolicy;
+use citadel_runtime::bounded_channel;
 
 #[derive(Debug, Clone, Copy)]
 struct UsageCandidate {
@@ -72,10 +72,16 @@ pub fn service_account_last_used_channel(
 
 impl ServiceAccountLastUsedTracker for BoundedServiceAccountLastUsedTracker {
     fn track(&self, credential_id: Uuid, used_at: DateTime<Utc>) {
-        let _ = self.sender.try_send(UsageCandidate {
-            credential_id,
-            used_at,
-        });
+        if self
+            .sender
+            .try_send(UsageCandidate {
+                credential_id,
+                used_at,
+            })
+            .is_err()
+        {
+            citadel_runtime::runtime_metrics::RuntimeWork::ServiceAccountUsageDropped.units(1);
+        }
     }
 }
 
@@ -102,6 +108,8 @@ impl ServiceAccountLastUsedWorker {
                             last_persisted: None,
                             dirty: true,
                         });
+                    } else {
+                        citadel_runtime::runtime_metrics::RuntimeWork::ServiceAccountUsageDropped.units(1);
                     }
                 }
                 _ = ticker.tick() => {
@@ -175,6 +183,50 @@ mod tests {
                 Ok(())
             })
         }
+    }
+
+    #[tokio::test]
+    async fn a_full_usage_queue_rejects_without_blocking_or_overwriting() {
+        let (tracker, mut worker) = service_account_last_used_channel(
+            Arc::new(RecordingStore::default()),
+            1,
+            StdDuration::from_secs(1),
+            StdDuration::from_secs(60),
+        );
+        let first = Uuid::now_v7();
+        tracker.track(first, Utc::now());
+        tracker.track(Uuid::now_v7(), Utc::now());
+        assert_eq!(
+            worker
+                .receiver
+                .recv(&CancellationToken::new())
+                .await
+                .unwrap()
+                .credential_id,
+            first
+        );
+        let mut metrics = String::new();
+        citadel_runtime::runtime_metrics::render_runtime_metrics(&mut metrics);
+        let dropped = metrics
+            .lines()
+            .find(|line| {
+                line.starts_with(
+                    "citadel_runtime_units_total{family=\"ServiceAccountUsageDropped\"}",
+                )
+            })
+            .unwrap();
+        assert!(
+            dropped
+                .split_whitespace()
+                .last()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+                >= 1
+        );
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        worker.run(cancel).await.unwrap();
     }
 
     #[tokio::test]

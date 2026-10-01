@@ -1,10 +1,14 @@
 //! Platforms HTTP routes, authorization and local request handling.
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
+use crate::api::resources::platforms::capabilities::{
+    permission_for, platform_capabilities, resource_capabilities,
+};
 use crate::api::resources::platforms::container_views::{
     ContainerRuntimeListView, ContainerRuntimeView, ContainerSummaryView,
 };
+use crate::api::resources::platforms::edge::EdgeHttpContext;
 use crate::api::resources::platforms::inventory_views::CreatedNetworkView;
-use crate::api::resources::platforms::runtime_mapping;
+use crate::api::resources::platforms::runtime_views::*;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -20,12 +24,11 @@ use crate::{
             },
             swarm_views,
             views::{
-                ContainerHistory, ContainerView, ContainersResponse, History,
-                ImageCapabilitiesView, ImagesResponse, NetworkCapabilitiesView, NetworkView,
-                NetworksResponse, PlatformCapabilitiesView, PlatformView, PlatformsResponse,
-                StackHistory, SwarmConfigView, SwarmItemsResponse, SwarmNetworkView, SwarmNodeView,
-                SwarmSecretView, SwarmServiceView, SwarmTaskView, TaskHistory, TaskTerminalView,
-                VolumeCapabilitiesView, VolumeView, VolumesResponse,
+                ContainerHistory, ContainerView, ContainersResponse, History, ImagesResponse,
+                NetworkView, NetworksResponse, PlatformCapabilitiesView, PlatformView,
+                PlatformsResponse, StackHistory, SwarmConfigView, SwarmItemsResponse,
+                SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView, SwarmTaskView,
+                TaskHistory, TaskTerminalView, VolumeCapabilitiesView, VolumeView, VolumesResponse,
             },
         },
     },
@@ -33,8 +36,9 @@ use crate::{
     realtime::RealtimeHub,
     request_validation::{invalid_json, invalid_path, invalid_query},
 };
-use citadel_platforms::PlatformInfoPort;
+use citadel_platforms::edge_management::EdgeTarget;
 use citadel_primitives::PatchField;
+use futures_util::StreamExt;
 
 use axum::{
     Json, Router,
@@ -46,39 +50,22 @@ use axum::{
     response::IntoResponse,
 };
 
-use citadel_adapters::{
-    connectors::{
-        agent::client::AgentClient,
-        docker::DockerClient,
-        edge::{EdgeRegistry, EdgeRuntime, EdgeTarget},
-        registries::browser::RegistryBrowser,
-        swarm::inventory::SwarmInventoryClient,
-    },
-    persistence::postgres::platforms::{
-        deletion::PostgresPlatformDeletionRepository,
-        edge::store::{EdgeStoreError, PostgresEdgeStore},
-        statistics::reader::PostgresStatisticsReader,
-    },
-};
-
-use citadel_contracts::citadel::swarm::v1::SwarmServiceMessage;
-
 use citadel_identity::{ActorPrincipal, IdentityService};
 
 use citadel_platforms::{
-    AuthorizedReadError, EffectivePlatformPermission, PlatformInventoryPort, PlatformReadService,
+    AuthorizedReadError, EffectivePlatformPermission, PlatformReadService,
     PlatformRegistrationError, PlatformRegistrationService, RuntimeCapabilityError,
     RuntimeErrorKind, RuntimeNetworkSummary, RuntimeVolumeSummary, StatisticsReader,
-    StatisticsWorkload, StatsWindow, SwarmTaskRuntimePort,
-    containers::{ContainerAction, ContainerInspectionPort},
-    deletion::{PlatformDeletionError, PlatformDeletionRepository},
-    image_pull::{ImagePullError, ImagePullPort, PullImageStreamItem},
-    images::ImageInspectionPort,
-    logs::{LogReadPort, LogResource},
-    management::{patch_input, validate_target},
+    StatisticsWorkload, StatsWindow,
+    containers::ContainerAction,
+    deletion::PlatformDeletionError,
+    image_pull::{ImagePullError, PullImageStreamItem},
+    logs::LogResource,
+    management::patch_input,
     node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions},
-    prune::PlatformPrunePort,
-    swarm_mutations::{CreateSwarmMaterialInput, manager_matches, resource_id},
+    swarm_mutations::{
+        CreateSwarmMaterialInput, SwarmResourceKind, check_node, manager_identity, resource_id,
+    },
     volume_content::normalize_path,
 };
 
@@ -88,11 +75,7 @@ use citadel_registries::registry_images::{RegistryBrowseKind, validate_browse_na
 
 use citadel_swarm_services::SwarmServiceRepository;
 
-use futures_util::StreamExt;
-
 use serde_json::json;
-
-use sqlx::{PgPool, Row};
 
 use std::{sync::Arc, time::Duration};
 
@@ -113,19 +96,27 @@ const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
 #[derive(Clone)]
 pub struct PlatformsHttpState {
+    pub node_agent_store: Arc<dyn citadel_platforms::node_agents::setup::NodeAgentSetupStore>,
+    pub node_agent_runtime: Arc<dyn citadel_platforms::node_agents::setup::NodeAgentSetupRuntime>,
+    pub node_agent_coverage: Arc<dyn citadel_platforms::node_agents::NodeAgentCoverageReader>,
+    pub deletions: Arc<citadel_platforms::deletion::PlatformDeletionService>,
+    pub management: Arc<citadel_platforms::management::PlatformManagementService>,
+    pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
+    pub projections: Arc<dyn citadel_platforms::InventoryProjectionStore>,
+    pub statistics: Arc<dyn StatisticsReader>,
+    pub services: Arc<dyn SwarmServiceRepository>,
+    pub runtime: Arc<dyn citadel_platforms::runtime_provider::PlatformRuntimeProvider>,
     pub tasks: citadel_runtime::DynamicTasks,
-    pub volume_content:
-        Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
+    pub volume_content: Arc<dyn citadel_platforms::volume_content::VolumeContentPort>,
+    pub volume_activity: Arc<dyn citadel_activities::VolumeDownloadActivitySink>,
+    pub volume_coverage: Arc<dyn citadel_backups::runs::read_models::VolumeCoverageReader>,
+    pub registry_browser: Arc<dyn citadel_registries::registry_images::RegistryBrowsePort>,
     pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
     pub identity: Arc<IdentityService>,
     pub platforms: Arc<PlatformReadService>,
     pub registrations: Arc<PlatformRegistrationService>,
-    pub pool: PgPool,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub platform_metadata: Arc<dyn citadel_platforms::PlatformMetadataRepository>,
-    pub docker: DockerClient,
-    pub agent: Option<AgentClient>,
-    pub edge: EdgeRegistry,
     pub realtime: Option<RealtimeHub>,
     pub stats_sample_max_age: std::time::Duration,
 }
@@ -611,10 +602,7 @@ async fn get_container(
     let id = match Uuid::parse_str(&reference) {
         Ok(id) => id,
         Err(_) => {
-            use citadel_platforms::StatisticsReader;
-            let store = citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(
-                state.pool.clone(),
-            );
+            let store = &state.statistics;
             match store.find_container(&reference).await {
                 Ok(target) => required(Ok(target), &headers)?.id,
                 Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -764,21 +752,16 @@ async fn list_networks(
         authorize_platform(&state, &principal, platform_id, &headers).await?;
     let capabilities = network_capabilities(platform_capabilities);
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
-    let values = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-    };
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let values = async {
+        state
+            .runtime
+            .inventory(platform_id, &cancellation)
+            .await?
+            .list_networks(&cancellation)
+            .await
+    }
+    .await;
     let values = match values {
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -829,48 +812,23 @@ pub(crate) async fn lookup_platform_resources(
     kind: citadel_discovery::LookupResourceType,
     headers: &HeaderMap,
 ) -> HttpResult {
-    let runtime = match runtime_for(state, platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, headers)),
-    };
     let cancellation = CancellationToken::new();
-    let names = if kind == citadel_discovery::LookupResourceType::Volume {
-        let result = match runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-            }
-            RuntimeRef::Agent(ref runtime) => {
-                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-            }
-            RuntimeRef::Edge(ref runtime) => {
-                citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-            }
-        };
-        result.map(|values| {
-            values
-                .into_iter()
-                .map(|value| value.name)
-                .collect::<Vec<_>>()
-        })
-    } else {
-        let result = match runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-            }
-            RuntimeRef::Agent(ref runtime) => {
-                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-            }
-            RuntimeRef::Edge(ref runtime) => {
-                citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-            }
-        };
-        result.map(|values| {
-            values
-                .into_iter()
-                .map(|value| value.name)
-                .collect::<Vec<_>>()
-        })
-    };
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let names = async {
+        let runtime = state.runtime.inventory(platform_id, &cancellation).await?;
+        if kind == citadel_discovery::LookupResourceType::Volume {
+            runtime
+                .list_volumes(&cancellation)
+                .await
+                .map(|values| values.into_iter().map(|v| v.name).collect::<Vec<_>>())
+        } else {
+            runtime
+                .list_networks(&cancellation)
+                .await
+                .map(|values| values.into_iter().map(|v| v.name).collect::<Vec<_>>())
+        }
+    }
+    .await;
     let mut names = match names {
         Ok(names) => names,
         Err(error) => return Ok(runtime_error_response(error, headers)),
@@ -919,37 +877,20 @@ async fn get_network(
         authorize_platform(&state, &principal, platform_id, &headers).await?;
     let capabilities = network_capabilities(platform_capabilities);
     let cancellation = CancellationToken::new();
-    let runtime =
-        match runtime_for_node(&state, platform_id, selector.docker_node_id.as_deref()).await {
-            Ok(runtime) => runtime,
-            Err(error) => return Ok(runtime_error_response(error, &headers)),
-        };
-    let value = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::NetworkObservationPort::inspect_network(
-                runtime,
-                &network_id,
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let value = async {
+        state
+            .runtime
+            .networks(
+                platform_id,
+                selector.docker_node_id.as_deref(),
                 &cancellation,
             )
+            .await?
+            .inspect_network(&network_id, &cancellation)
             .await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::NetworkObservationPort::inspect_network(
-                runtime,
-                &network_id,
-                &cancellation,
-            )
-            .await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::NetworkObservationPort::inspect_network(
-                runtime,
-                &network_id,
-                &cancellation,
-            )
-            .await
-        }
-    };
+    }
+    .await;
     let mut network = match value {
         Ok(network) => api_result(
             map_network(network, capabilities).map_err(ApiError::internal),
@@ -1003,33 +944,16 @@ async fn create_network(
         );
     }
     let cancellation = CancellationToken::new();
-    let result = match runtime_for(&state, input.platform_id).await {
-        Ok(RuntimeRef::Local(runtime)) => {
-            citadel_platforms::NetworkMutationPort::create_network(
-                runtime,
-                &input.network.clone().into(),
-                &cancellation,
-            )
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let result = async {
+        state
+            .runtime
+            .networks(input.platform_id, None, &cancellation)
+            .await?
+            .create_network(&input.network.into(), &cancellation)
             .await
-        }
-        Ok(RuntimeRef::Agent(ref runtime)) => {
-            citadel_platforms::NetworkMutationPort::create_network(
-                runtime,
-                &input.network.clone().into(),
-                &cancellation,
-            )
-            .await
-        }
-        Ok(RuntimeRef::Edge(ref runtime)) => {
-            citadel_platforms::NetworkMutationPort::create_network(
-                runtime,
-                &input.network.clone().into(),
-                &cancellation,
-            )
-            .await
-        }
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
+    }
+    .await;
     let created = match result {
         Ok(created) => created,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -1076,125 +1000,34 @@ async fn delete_networks(
     .await?;
     let is_swarm = api_result(platform_is_swarm(&state, input.platform_id).await, &headers)?;
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, input.platform_id).await {
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let runtime = match state
+        .runtime
+        .networks(input.platform_id, None, &cancellation)
+        .await
+    {
         Ok(runtime) => runtime,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-
-    // Inspect every target before the first irreversible operation. This avoids
-    // predictable partial batches while retaining an explicit partial result if
-    // Docker changes between preflight and deletion.
-    for id in &input.ids {
-        let inspected = match runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::NetworkObservationPort::inspect_network(
-                    runtime,
-                    id,
-                    &cancellation,
-                )
-                .await
-            }
-            RuntimeRef::Agent(ref runtime) => {
-                citadel_platforms::NetworkObservationPort::inspect_network(
-                    runtime,
-                    id,
-                    &cancellation,
-                )
-                .await
-            }
-            RuntimeRef::Edge(ref runtime) => {
-                citadel_platforms::NetworkObservationPort::inspect_network(
-                    runtime,
-                    id,
-                    &cancellation,
-                )
-                .await
-            }
-        };
-        let network = match inspected {
-            Ok(network) => network,
-            Err(error) => return Ok(runtime_error_response(error, &headers)),
-        };
-        if network
-            .labels
-            .get("com.citadel.system")
-            .is_some_and(|value| value == "true")
-        {
-            return Ok(conflict_response(
-                format!("System network '{}' cannot be deleted.", network.name),
-                &headers,
-            ));
+    match citadel_platforms::resource_mutations::delete_networks(
+        &state.platforms,
+        runtime.as_ref(),
+        input.platform_id,
+        is_swarm,
+        &input.ids,
+        &cancellation,
+        |id| publish_runtime_change(&state, input.platform_id, "network", "remove", id),
+    )
+    .await
+    {
+        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
+        Err(citadel_platforms::resource_mutations::NetworkDeletionError::Read(error)) => {
+            api_result(Err(platform_error(error)), &headers)
         }
-        if network.container_count != 0 {
-            return Ok(conflict_response(
-                format!(
-                    "Network '{}' is in use and cannot be deleted.",
-                    network.name
-                ),
-                &headers,
-            ));
-        }
-        if network.labels.contains_key("com.docker.stack.namespace")
-            || network.labels.contains_key("com.citadel.stack-id")
-        {
-            return Ok(conflict_response(
-                format!(
-                    "Stack-owned network '{}' cannot be deleted independently.",
-                    network.name
-                ),
-                &headers,
-            ));
-        }
-        if is_swarm && !network.scope.eq_ignore_ascii_case("swarm") {
-            return Ok(conflict_response(
-                "Node-local Network deletion requires an explicit Node target and is not available."
-                    .to_owned(),
-                &headers,
-            ));
-        }
-        if is_swarm && network.scope.eq_ignore_ascii_case("swarm") {
-            api_result(
-                validate_swarm_network_projection(&state, input.platform_id, id, &network.name)
-                    .await,
-                &headers,
-            )?;
+        Err(citadel_platforms::resource_mutations::NetworkDeletionError::Runtime(error)) => {
+            Ok(runtime_error_response(error, &headers))
         }
     }
-
-    let mut deleted = 0_usize;
-    for id in &input.ids {
-        let result = match runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
-                    .await
-            }
-            RuntimeRef::Agent(ref runtime) => {
-                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
-                    .await
-            }
-            RuntimeRef::Edge(ref runtime) => {
-                citadel_platforms::NetworkMutationPort::delete_network(runtime, id, &cancellation)
-                    .await
-            }
-        };
-        match result {
-            Ok(()) => deleted += 1,
-            Err(error) if error.kind == RuntimeErrorKind::NotFound => deleted += 1,
-            Err(error) if deleted == 0 => return Ok(runtime_error_response(error, &headers)),
-            Err(error) => {
-                return Ok(conflict_response(
-                    format!(
-                        "Deleted {deleted} of {} Networks before Docker rejected the operation: {}",
-                        input.ids.len(),
-                        error.message
-                    ),
-                    &headers,
-                ));
-            }
-        }
-        publish_runtime_change(&state, input.platform_id, "network", "remove", id);
-    }
-    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
 #[utoipa::path(
@@ -1236,21 +1069,16 @@ async fn list_volumes(
     )
     .await?;
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
-    let values = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-    };
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let values = async {
+        state
+            .runtime
+            .inventory(platform_id, &cancellation)
+            .await?
+            .list_volumes(&cancellation)
+            .await
+    }
+    .await;
     let values = match values {
         Ok(values) => values,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -1334,25 +1162,20 @@ async fn get_volume(
     )
     .await?;
     let cancellation = CancellationToken::new();
-    let runtime =
-        match runtime_for_node(&state, platform_id, selector.docker_node_id.as_deref()).await {
-            Ok(runtime) => runtime,
-            Err(error) => return Ok(runtime_error_response(error, &headers)),
-        };
-    let value = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
-                .await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
-                .await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::VolumeObservationPort::inspect_volume(runtime, &name, &cancellation)
-                .await
-        }
-    };
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let value = async {
+        state
+            .runtime
+            .volumes(
+                platform_id,
+                selector.docker_node_id.as_deref(),
+                &cancellation,
+            )
+            .await?
+            .inspect_volume(&name, &cancellation)
+            .await
+    }
+    .await;
     let mut volume = match value {
         Ok(volume) => api_result(
             map_volume(volume, capabilities).map_err(ApiError::internal),
@@ -1412,33 +1235,16 @@ async fn create_volume(
     )
     .await?;
     let cancellation = CancellationToken::new();
-    let result = match runtime_for(&state, input.platform_id).await {
-        Ok(RuntimeRef::Local(runtime)) => {
-            citadel_platforms::VolumeMutationPort::create_volume(
-                runtime,
-                &input.volume.clone().into(),
-                &cancellation,
-            )
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let result = async {
+        state
+            .runtime
+            .volumes(input.platform_id, None, &cancellation)
+            .await?
+            .create_volume(&input.volume.into(), &cancellation)
             .await
-        }
-        Ok(RuntimeRef::Agent(ref runtime)) => {
-            citadel_platforms::VolumeMutationPort::create_volume(
-                runtime,
-                &input.volume.clone().into(),
-                &cancellation,
-            )
-            .await
-        }
-        Ok(RuntimeRef::Edge(ref runtime)) => {
-            citadel_platforms::VolumeMutationPort::create_volume(
-                runtime,
-                &input.volume.clone().into(),
-                &cancellation,
-            )
-            .await
-        }
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
+    }
+    .await;
     let volume = match result {
         Ok(volume) => volume,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -1495,59 +1301,26 @@ async fn delete_volumes(
         ));
     }
     let cancellation = CancellationToken::new();
-    let runtime = match runtime_for(&state, input.platform_id).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
-    let mut deleted = 0_usize;
-    for name in &input.names {
-        let result = match runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::VolumeMutationPort::delete_volume(
-                    runtime,
-                    name,
-                    input.force.unwrap_or(false),
-                    &cancellation,
-                )
-                .await
-            }
-            RuntimeRef::Agent(ref runtime) => {
-                citadel_platforms::VolumeMutationPort::delete_volume(
-                    runtime,
-                    name,
-                    input.force.unwrap_or(false),
-                    &cancellation,
-                )
-                .await
-            }
-            RuntimeRef::Edge(ref runtime) => {
-                citadel_platforms::VolumeMutationPort::delete_volume(
-                    runtime,
-                    name,
-                    input.force.unwrap_or(false),
-                    &cancellation,
-                )
-                .await
-            }
-        };
-        match result {
-            Ok(()) => deleted += 1,
-            Err(error) if error.kind == RuntimeErrorKind::NotFound => deleted += 1,
-            Err(error) if deleted == 0 => return Ok(runtime_error_response(error, &headers)),
-            Err(error) => {
-                return Ok(conflict_response(
-                    format!(
-                        "Deleted {deleted} of {} Volumes before Docker rejected the operation: {}",
-                        input.names.len(),
-                        error.message
-                    ),
-                    &headers,
-                ));
-            }
-        }
-        publish_runtime_change(&state, input.platform_id, "volume", "remove", name);
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let result = async {
+        let runtime = state
+            .runtime
+            .volumes(input.platform_id, None, &cancellation)
+            .await?;
+        citadel_platforms::resource_mutations::delete_volumes(
+            runtime.as_ref(),
+            &input.names,
+            input.force.unwrap_or(false),
+            &cancellation,
+            |name| publish_runtime_change(&state, input.platform_id, "volume", "remove", name),
+        )
+        .await
     }
-    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
+    .await;
+    match result {
+        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
+        Err(error) => Ok(runtime_error_response(error, &headers)),
+    }
 }
 
 macro_rules! swarm_list_handler {
@@ -1966,33 +1739,6 @@ async fn authorize_platform_level(
     Ok(platform_capabilities(permission))
 }
 
-fn permission_for(
-    permissions: &std::collections::BTreeMap<Uuid, EffectivePlatformPermission>,
-    id: Uuid,
-    is_administrator: bool,
-) -> EffectivePlatformPermission {
-    permissions.get(&id).copied().unwrap_or_else(|| {
-        if is_administrator {
-            EffectivePlatformPermission {
-                level_mask: ALL_LEVELS,
-                specific_mask: ALL_PLATFORM_SPECIFIC,
-            }
-        } else {
-            EffectivePlatformPermission::default()
-        }
-    })
-}
-
-fn resource_capabilities(permission: EffectivePlatformPermission) -> ResourceCapabilitiesView {
-    let can_execute = permission.level_mask & PermissionLevel::Execute as i32 != 0;
-    let can_write = can_execute || permission.level_mask & PermissionLevel::Write as i32 != 0;
-    ResourceCapabilitiesView {
-        can_read: can_write || permission.level_mask & PermissionLevel::Read as i32 != 0,
-        can_write,
-        can_execute,
-    }
-}
-
 trait ResourceCapabilitiesExt {
     fn grants(self, required: PermissionLevel) -> bool;
 }
@@ -2005,44 +1751,6 @@ impl ResourceCapabilitiesExt for ResourceCapabilitiesView {
             PermissionLevel::Execute => self.can_execute,
             _ => false,
         }
-    }
-}
-
-fn platform_capabilities(permission: EffectivePlatformPermission) -> PlatformCapabilitiesView {
-    let common = resource_capabilities(permission);
-    PlatformCapabilitiesView {
-        can_read: common.can_read,
-        can_write: common.can_write,
-        can_execute: common.can_execute,
-        can_view_logs: common.can_read
-            && permission.specific_mask & SpecificPermission::Logs as i32 != 0,
-        can_inspect: common.can_read
-            && permission.specific_mask & SpecificPermission::Inspect as i32 != 0,
-        can_open_terminal: common.can_read
-            && permission.specific_mask & SpecificPermission::Terminal as i32 != 0,
-        can_pull: common.can_read
-            && permission.specific_mask & SpecificPermission::Pull as i32 != 0,
-        can_manage_node_agents: common.can_execute
-            && permission.specific_mask & SpecificPermission::ManageNodeAgents as i32 != 0,
-    }
-}
-
-fn image_capabilities(platform: PlatformCapabilitiesView) -> ImageCapabilitiesView {
-    ImageCapabilitiesView {
-        can_read: platform.can_read,
-        can_write: platform.can_write,
-        can_execute: platform.can_execute,
-        can_inspect: platform.can_inspect,
-        can_pull: platform.can_pull,
-    }
-}
-
-fn network_capabilities(platform: PlatformCapabilitiesView) -> NetworkCapabilitiesView {
-    NetworkCapabilitiesView {
-        can_read: platform.can_read,
-        can_write: platform.can_write,
-        can_execute: platform.can_execute,
-        can_inspect: platform.can_inspect,
     }
 }
 
@@ -2081,382 +1789,6 @@ async fn volume_capabilities(
         can_inspect: platform.can_inspect,
         can_browse: has_content_permission(SpecificPermission::Browse),
         can_download: has_content_permission(SpecificPermission::Download),
-    })
-}
-
-pub(crate) enum RuntimeRef<'a> {
-    Local(&'a DockerClient),
-    Agent(AgentClient),
-    Edge(EdgeRuntime),
-}
-
-mod runtime_realtime;
-pub(crate) use runtime_realtime::realtime_resource_snapshot;
-
-pub(crate) async fn realtime_daemon_snapshot(
-    state: &PlatformsHttpState,
-    principal: &ActorPrincipal,
-    id: Uuid,
-    lease: Option<&crate::realtime::AuthorizationLease>,
-) -> Result<crate::realtime_groups::GroupSnapshot, crate::realtime::RealtimeReadError> {
-    use crate::{
-        realtime::RealtimeReadError,
-        realtime_groups::{GroupRows, GroupSnapshot, RowStyle},
-    };
-    let failure = |error: RuntimeCapabilityError| RealtimeReadError::Storage(error.to_string());
-    let headers = HeaderMap::new();
-    let (platform, volume_cap) = if let Some(lease) = lease {
-        lease
-            .daemon_capabilities(&state.identity, principal, id)
-            .await?
-    } else {
-        let platform = authorize_platform(state, principal, id, &headers)
-            .await
-            .map_err(|_| RealtimeReadError::Authorization)?;
-        let volume_cap = volume_capabilities(state, principal, id, platform, &headers)
-            .await
-            .map_err(|_| RealtimeReadError::Authorization)?;
-        (platform, volume_cap)
-    };
-    let runtime = runtime_for(state, id).await.map_err(failure)?;
-    let cancellation = CancellationToken::new();
-    let networks = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::NetworkInventoryPort::list_networks(runtime, &cancellation).await
-        }
-    }
-    .map_err(failure)?;
-    let volumes = match runtime {
-        RuntimeRef::Local(runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-        RuntimeRef::Edge(ref runtime) => {
-            citadel_platforms::VolumeInventoryPort::list_volumes(runtime, &cancellation).await
-        }
-    }
-    .map_err(failure)?;
-    let serialize = |error: serde_json::Error| RealtimeReadError::Storage(error.to_string());
-    let mut events = vec![];
-    if platform_is_swarm(state, id)
-        .await
-        .map_err(|error| RealtimeReadError::Storage(error.to_string()))?
-    {
-        let failure = |error: AuthorizedReadError| RealtimeReadError::Storage(error.to_string());
-        let mut images = state
-            .platforms
-            .list_images(id)
-            .await
-            .map(|value| {
-                value
-                    .into_iter()
-                    .map(crate::api::resources::platforms::views::ImageView::from)
-                    .collect::<Vec<_>>()
-            })
-            .map_err(failure)?;
-        for image in &mut images {
-            image.capabilities = Some(image_capabilities(platform));
-        }
-        let mut all_volumes: Vec<_> = volumes
-            .iter()
-            .cloned()
-            .map(|volume| map_volume(volume, volume_cap))
-            .collect::<Result<_, _>>()
-            .map_err(serialize)?;
-        all_volumes.extend(
-            state
-                .platforms
-                .list_node_volumes(id)
-                .await
-                .map_err(failure)?
-                .into_iter()
-                .map(|volume| map_node_volume(volume, volume_cap))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(serialize)?,
-        );
-        let node_networks: Vec<_> = state
-            .platforms
-            .list_node_networks(id)
-            .await
-            .map_err(failure)?
-            .into_iter()
-            .map(|network| map_node_network(network, network_capabilities(platform)))
-            .collect::<Result<_, _>>()
-            .map_err(serialize)?;
-        events.push(crate::realtime_groups::ClientEvent::new("SwarmNodeLocalResourcesUpdated", vec![serde_json::json!({
-            "platformId": id, "images": images, "volumes": all_volumes, "networks": node_networks,
-        })]));
-    }
-    Ok(GroupSnapshot {
-        events,
-        rows: vec![
-            GroupRows {
-                target: "NetworkEventReceived",
-                style: RowStyle::Daemon,
-                rows: networks
-                    .into_iter()
-                    .map(|n| {
-                        map_network(n, network_capabilities(platform))
-                            .and_then(serde_json::to_value)
-                    })
-                    .collect::<Result<_, _>>()
-                    .map_err(serialize)?,
-            },
-            GroupRows {
-                target: "VolumeEventReceived",
-                style: RowStyle::Daemon,
-                rows: volumes
-                    .into_iter()
-                    .map(|v| map_volume(v, volume_cap).and_then(serde_json::to_value))
-                    .collect::<Result<_, _>>()
-                    .map_err(serialize)?,
-            },
-        ],
-    })
-}
-
-pub(crate) async fn runtime_for_node<'a>(
-    state: &'a PlatformsHttpState,
-    platform_id: Uuid,
-    node_id: Option<&str>,
-) -> Result<RuntimeRef<'a>, RuntimeCapabilityError> {
-    let Some(node_id) = node_id else {
-        return runtime_for(state, platform_id).await;
-    };
-    let node = state
-        .platforms
-        .get_swarm_node(platform_id, node_id)
-        .await
-        .map(|value| value.map(crate::api::resources::platforms::views::SwarmNodeView::from))
-        .map_err(|error| {
-            RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-        })?
-        .ok_or_else(|| {
-            RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Swarm Node not found.", false)
-        })?;
-    if !node.is_stale {
-        if let Ok(session) = state
-            .edge
-            .get(&EdgeTarget::node(platform_id, node_id.into()))
-        {
-            return Ok(RuntimeRef::Edge(EdgeRuntime { session }));
-        }
-        let manager: Option<String> =
-            sqlx::query_scalar("SELECT platformdescriptor->>'nodeID' FROM platforms WHERE id=$1")
-                .bind(platform_id)
-                .fetch_one(&state.pool)
-                .await
-                .map_err(|error| {
-                    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-                })?;
-        if manager.as_deref() != Some(node_id) {
-            return Err(RuntimeCapabilityError::new(
-                RuntimeErrorKind::Unavailable,
-                "The owning Node Agent is disconnected or unavailable.",
-                false,
-            ));
-        }
-        // The connected manager is eligible only when its live identity matches.
-        // Never treat a missing worker session as permission to use that daemon.
-        let runtime = runtime_for(state, platform_id).await?;
-        let cancellation = CancellationToken::new();
-        let info = match &runtime {
-            RuntimeRef::Local(runtime) => {
-                citadel_platforms::PlatformInfoPort::get_info(*runtime, &cancellation).await
-            }
-            RuntimeRef::Agent(runtime) => {
-                citadel_platforms::PlatformInfoPort::get_info(runtime, &cancellation).await
-            }
-            RuntimeRef::Edge(runtime) => {
-                citadel_platforms::PlatformInfoPort::get_info(runtime, &cancellation).await
-            }
-        }?;
-        if info.swarm.is_some_and(|swarm| {
-            swarm.node_id == node_id && swarm.local_node_state.eq_ignore_ascii_case("active")
-        }) {
-            return Ok(runtime);
-        }
-    }
-    Err(RuntimeCapabilityError::new(
-        RuntimeErrorKind::Unavailable,
-        "The owning Node Agent is disconnected or unavailable.",
-        false,
-    ))
-}
-
-async fn runtime_for(
-    state: &PlatformsHttpState,
-    platform_id: Uuid,
-) -> Result<RuntimeRef<'_>, RuntimeCapabilityError> {
-    let platform = sqlx::query_as::<_, (String, String)>(
-        "SELECT connectortype, address FROM platforms WHERE id = $1 LIMIT 1",
-    )
-    .bind(platform_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|error| {
-        RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
-    })?
-    .ok_or_else(|| {
-        RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Platform not found", false)
-    })?;
-    let (connector, address) = platform;
-    if connector.eq_ignore_ascii_case("EdgeAgent") {
-        return state
-            .edge
-            .get(&EdgeTarget::platform(platform_id))
-            .map(|session| RuntimeRef::Edge(EdgeRuntime { session }))
-            .map_err(|error| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, error.to_string(), false)
-            });
-    }
-    if connector.eq_ignore_ascii_case("Local") {
-        return Ok(RuntimeRef::Local(&state.docker));
-    }
-    if connector.eq_ignore_ascii_case("Agent") {
-        let agent = state.agent.as_ref().ok_or_else(|| {
-            RuntimeCapabilityError::new(
-                RuntimeErrorKind::Unavailable,
-                "The configured Agent transport is unavailable.",
-                true,
-            )
-        })?;
-        return agent
-            .for_address(&address, &CancellationToken::new())
-            .await
-            .map(RuntimeRef::Agent);
-    }
-    Err(RuntimeCapabilityError::new(
-        RuntimeErrorKind::Unavailable,
-        "The Edge Agent is disconnected or unavailable.",
-        true,
-    ))
-}
-
-fn map_network(
-    network: RuntimeNetworkSummary,
-    capabilities: NetworkCapabilitiesView,
-) -> Result<NetworkView, serde_json::Error> {
-    let is_system = runtime_mapping::system_network(&network.name, network.ingress);
-    Ok(NetworkView {
-        name: network.name,
-        id: network.id,
-        created: network.created,
-        driver: network.driver,
-        scope: network.scope,
-        enable_ipv4: network.enable_ipv4,
-        enable_ipv6: network.enable_ipv6,
-        internal: network.internal,
-        attachable: network.attachable,
-        ingress: network.ingress,
-        config_only: network.config_only,
-        in_use: network.container_count > 0,
-        config_from: network.config_from,
-        ipam: network
-            .ipam
-            .map(runtime_mapping::ipam)
-            .transpose()?
-            .flatten(),
-        options: network.options,
-        labels: network.labels,
-        containers: network
-            .containers
-            .into_iter()
-            .map(|(id, c)| runtime_mapping::network_container(c).map(|c| (id, c)))
-            .collect::<Result<_, _>>()?,
-        peers: network
-            .peers
-            .into_iter()
-            .map(runtime_mapping::peer)
-            .collect::<Result<_, _>>()?,
-        is_system,
-        docker_node_id: None,
-        node_hostname: None,
-        is_stale: false,
-        stale_reason: None,
-        capabilities: Some(capabilities),
-    })
-}
-
-fn map_node_network(
-    node: citadel_platforms::NodeResourceProjection<RuntimeNetworkSummary>,
-    capabilities: NetworkCapabilitiesView,
-) -> Result<NetworkView, serde_json::Error> {
-    let mut view = map_network(node.resource, capabilities)?;
-    view.docker_node_id = Some(node.docker_node_id);
-    view.node_hostname = node.node_hostname;
-    view.is_stale = node.is_stale;
-    view.stale_reason = node
-        .is_stale
-        .then(|| "Node Agent is disconnected or unavailable.".into());
-    Ok(view)
-}
-
-fn map_node_volume(
-    node: citadel_platforms::NodeResourceProjection<RuntimeVolumeSummary>,
-    capabilities: VolumeCapabilitiesView,
-) -> Result<VolumeView, serde_json::Error> {
-    let mut view = map_volume(node.resource, capabilities)?;
-    view.docker_node_id = Some(node.docker_node_id);
-    view.node_hostname = node.node_hostname;
-    view.is_stale = node.is_stale;
-    view.stale_reason = node
-        .is_stale
-        .then(|| "Node Agent is disconnected or unavailable.".into());
-    Ok(view)
-}
-
-fn map_volume(
-    volume: RuntimeVolumeSummary,
-    capabilities: VolumeCapabilitiesView,
-) -> Result<VolumeView, serde_json::Error> {
-    Ok(VolumeView {
-        backup_coverage: None,
-        id: volume.name.clone(),
-        name: volume.name,
-        in_use: volume.in_use,
-        scope: volume.scope,
-        driver: volume.driver,
-        mountpoint: volume.mountpoint,
-        created_at: volume.created_at,
-        cluster_volume: volume.cluster_volume.map(runtime_mapping::cluster_volume),
-        usage_data: volume
-            .usage_data
-            .and_then(|usage| serde_json::from_value(usage).ok()),
-        containers: volume
-            .containers
-            .into_iter()
-            .map(serde_json::from_value)
-            .collect::<Result<_, _>>()?,
-        status: volume
-            .status
-            .into_iter()
-            .map(|(key, value)| {
-                let value = if value.is_null() {
-                    String::new()
-                } else {
-                    value
-                        .as_str()
-                        .map_or_else(|| value.to_string(), str::to_owned)
-                };
-                (key, value)
-            })
-            .collect(),
-        labels: volume.labels,
-        options: volume.options,
-        docker_node_id: None,
-        node_hostname: None,
-        is_stale: false,
-        stale_reason: None,
-        capabilities: Some(capabilities),
     })
 }
 
@@ -2664,54 +1996,12 @@ async fn platform_is_swarm(
     state: &PlatformsHttpState,
     platform_id: Uuid,
 ) -> Result<bool, ApiError> {
-    let descriptor = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT platformdescriptor FROM platforms WHERE id=$1",
-    )
-    .bind(platform_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(ApiError::internal)?
-    .ok_or(ApiError::NotFound)?;
-    Ok(descriptor
-        .get("$type")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|kind| kind.eq_ignore_ascii_case("DockerSwarm")))
-}
-
-async fn validate_swarm_network_projection(
-    state: &PlatformsHttpState,
-    platform_id: Uuid,
-    network_id: &str,
-    network_name: &str,
-) -> Result<(), ApiError> {
-    let projection = sqlx::query_as::<_, (bool, serde_json::Value)>(
-        "SELECT isstale, servicenames FROM swarmnetworkprojections WHERE platformid=$1 AND dockernetworkid=$2",
-    )
-    .bind(platform_id)
-    .bind(network_id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(ApiError::internal)?;
-
-    let Some((is_stale, service_names)) = projection else {
-        return Err(ApiError::Conflict(format!(
-            "Swarm network '{network_name}' has no current inventory observation and cannot be deleted."
-        )));
-    };
-    if is_stale {
-        return Err(ApiError::Conflict(format!(
-            "Swarm network '{network_name}' has no current inventory observation and cannot be deleted."
-        )));
-    }
-    if service_names
-        .as_array()
-        .is_some_and(|services| !services.is_empty())
-    {
-        return Err(ApiError::Conflict(format!(
-            "Network '{network_name}' is used by one or more Services and cannot be deleted."
-        )));
-    }
-    Ok(())
+    state
+        .platforms
+        .platform_kind(platform_id)
+        .await
+        .map(|kind| kind == citadel_platforms::PlatformKind::DockerSwarm)
+        .map_err(platform_error)
 }
 
 fn publish_runtime_change(
@@ -2840,7 +2130,11 @@ fn validate_docker_resource_id(value: &str) -> Result<(), ApiError> {
 }
 
 fn platform_error(error: AuthorizedReadError) -> ApiError {
-    ApiError::internal(error)
+    match error {
+        AuthorizedReadError::NotFound => ApiError::NotFound,
+        AuthorizedReadError::Conflict(message) => ApiError::Conflict(message),
+        error @ AuthorizedReadError::Storage(_) => ApiError::internal(error),
+    }
 }
 
 fn platform_registration_error(error: PlatformRegistrationError) -> ApiError {
@@ -2881,7 +2175,6 @@ async fn inspect_managed_service(
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
 ) -> HttpResult {
-    use citadel_swarm_services::SwarmServiceRepository;
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
     if !principal.is_administrator() {
@@ -2895,9 +2188,7 @@ async fn inspect_managed_service(
             &headers,
         )?;
     }
-    let store = citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(
-        state.pool.clone(),
-    );
+    let store = &state.services;
     let service = api_result(
         store
             .get_authorized(principal.actor_id, principal.is_administrator(), id)
@@ -2914,13 +2205,13 @@ async fn inspect_managed_service(
     )?;
     authorize_platform(&state, &principal, service.platform_id, &headers).await?;
     swarm_platform(&state, service.platform_id, &headers).await?;
-    let runtime = match runtime_for(&state, service.platform_id).await {
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    let runtime = match state.runtime.swarm(service.platform_id, &cancel).await {
         Ok(runtime) => runtime,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let cancel = tokio_util::sync::CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let client = client(&runtime);
+    let client = &runtime;
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(30),
         client.inspect_service(docker_id, &cancel),
@@ -3102,7 +2393,7 @@ async fn read_container(
             &headers,
         );
     }
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let target = match store.find_container(&reference).await {
         Ok(target) => required(Ok(target), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -3218,31 +2509,15 @@ async fn read_deployment(
             .await
     };
     api_result(authorization, &headers)?;
-    let ids: Vec<Uuid> = api_result(sqlx::query_scalar("SELECT c.id FROM containers c JOIN deployments d ON d.id=c.deploymentid AND d.platformid=c.platformid WHERE d.id=$1 LIMIT 2")
-        .bind(id).fetch_all(&state.pool).await.map_err(ApiError::internal), &headers)?;
-    let container_id = match ids.as_slice() {
-        [id] => *id,
-        [] => return api_result(Err(ApiError::NotFound), &headers),
-        _ => return api_result(
-            Err(ApiError::Conflict(
-                "Deployment container identity is ambiguous. Refresh inventory before inspecting."
-                    .into(),
-            )),
-            &headers,
-        ),
-    };
-    let container = required(
+    let container = api_result(
         state
             .platforms
-            .get_container(container_id)
+            .deployment_container(id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::ContainerView::from))
+            .map(ContainerView::from)
             .map_err(platform_error),
         &headers,
     )?;
-    if container.deployment_id != Some(id) {
-        return api_result(Err(ApiError::NotFound), &headers);
-    }
     inspect_target(&state, container, &headers, kind, None).await
 }
 
@@ -3283,33 +2558,15 @@ async fn inspect_stack(
             &headers,
         )?;
     }
-    // Resolve within this Stack, not globally: Docker IDs can occur on multiple
-    // Platforms. A container from another Stack must never satisfy this route.
-    let id: Option<Uuid> = api_result(
-        sqlx::query_scalar(
-            "SELECT id FROM containers WHERE stackid=$1 AND (id=$2 OR dockercontainerid=$3)",
-        )
-        .bind(stack_id)
-        .bind(Uuid::parse_str(&reference).ok())
-        .bind(&reference)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(ApiError::internal),
-        &headers,
-    )?;
-    let id = required(Ok(id), &headers)?;
-    let container = required(
+    let container = api_result(
         state
             .platforms
-            .get_container(id)
+            .stack_container(stack_id, &reference)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::ContainerView::from))
+            .map(ContainerView::from)
             .map_err(platform_error),
         &headers,
     )?;
-    if container.stack_id != Some(stack_id) {
-        return api_result(Err(ApiError::NotFound), &headers);
-    }
     inspect_target(&state, container, &headers, ReadKind::Inspect, None).await
 }
 
@@ -3349,21 +2606,16 @@ async fn inspect_target(
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
     let result = tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        let runtime = runtime_for_node(
-            state,
-            container.platform_id,
-            container.docker_node_id.as_deref(),
-        )
-        .await?;
-        match runtime {
-            RuntimeRef::Local(runtime) => {
-                runtime.inspection(&container.container_id, &cancel).await
-            }
-            RuntimeRef::Agent(runtime) => {
-                runtime.inspection(&container.container_id, &cancel).await
-            }
-            RuntimeRef::Edge(runtime) => runtime.inspection(&container.container_id, &cancel).await,
-        }
+        state
+            .runtime
+            .container_inspection(
+                container.platform_id,
+                container.docker_node_id.as_deref(),
+                &cancel,
+            )
+            .await?
+            .inspection(&container.container_id, &cancel)
+            .await
     })
     .await
     .unwrap_or_else(|_| {
@@ -3728,19 +2980,17 @@ async fn delete_platforms(
         return api_result(Err(ApiError::Forbidden), &headers);
     }
     api_result(
-        PostgresPlatformDeletionRepository::new(state.pool.clone())
-            .delete(principal.actor_id, &input.ids)
+        state
+            .deletions
+            .delete(principal.actor_id, &input.ids, |id| {
+                if let Some(realtime) = &state.realtime {
+                    realtime.publish_resource_change("Platform", id, "deleted");
+                }
+            })
             .await
             .map_err(deletion_error),
         &headers,
     )?;
-    // No fallible I/O after commit, and no request cancellation interrupting cleanup.
-    for id in input.ids {
-        state.edge.disconnect_platform(id);
-        if let Some(realtime) = &state.realtime {
-            realtime.publish_resource_change("Platform", id, "deleted");
-        }
-    }
     Ok(no_store(StatusCode::OK.into_response()))
 }
 
@@ -3751,16 +3001,6 @@ fn deletion_error(error: PlatformDeletionError) -> ApiError {
         PlatformDeletionError::InUse => ApiError::Conflict(error.to_string()),
         source @ PlatformDeletionError::Storage(_) => ApiError::internal(source),
     }
-}
-
-#[derive(Clone)]
-pub struct EdgeHttpContext {
-    pub node_agent_policy: citadel_platforms::node_agents::setup::NodeAgentSetupPolicy,
-    pub store: PostgresEdgeStore,
-    pub registry: EdgeRegistry,
-    pub core_url: String,
-    pub agent_image: String,
-    pub node_agent_ca_bundle: Option<Arc<[u8]>>,
 }
 
 macro_rules! setup_handler {
@@ -3897,7 +3137,7 @@ async fn node_agent_operation(
             .map_err(platform_error),
         &headers,
     )?;
-    if platform.platform_type != "DockerSwarm" {
+    if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
         return api_result(
             Err(ApiError::Validation(
                 "Node agents require a Docker Swarm platform.".into(),
@@ -3938,19 +3178,8 @@ async fn node_agent_operation(
     };
     let cancellation = state.tasks.cancellation();
     let notify_state = state.clone();
-    let store = Arc::new(
-        citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(
-            state.pool.clone(),
-        ),
-    );
-    let runtime = Arc::new(
-        citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter {
-            pool: state.pool,
-            docker: state.docker,
-            agent: state.agent,
-            edge: state.edge,
-        },
-    );
+    let store = state.node_agent_store.clone();
+    let runtime = state.node_agent_runtime.clone();
     let changed: Arc<dyn Fn(Uuid) + Send + Sync> = Arc::new(move |id| {
         publish_runtime_change(
             &notify_state,
@@ -4004,52 +3233,12 @@ async fn initialize_swarm(
     state: &PlatformsHttpState,
     platform: &citadel_platforms::PlatformDetails,
 ) -> Result<bool, RuntimeCapabilityError> {
-    let _guard = state.platforms.inventory_guard(platform.id).await;
-    let initialized: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1)")
-            .bind(platform.id)
-            .fetch_one(&state.pool)
-            .await
-            .map_err(|error| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
-            })?;
-    if initialized {
-        return Ok(false);
-    }
-    let runtime = runtime_for(state, platform.id).await?;
-    let port: &dyn PlatformInventoryPort = match &runtime {
-        RuntimeRef::Local(port) => *port,
-        RuntimeRef::Agent(port) => port,
-        RuntimeRef::Edge(port) => port,
-    };
-    let cancellation = CancellationToken::new();
-    let _cancel_on_drop = cancellation.clone().drop_guard();
-    let target = citadel_platforms::jobs::InventoryCollectionTarget {
-        platform_id: platform.id,
-        platform_type:
-            citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
-                &platform.platform_type,
-            )
-            .map_err(|error| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-            })?,
-    };
-    let snapshot = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        citadel_platforms::jobs::collect_swarm_snapshot(port, &target, &cancellation),
+    citadel_platforms::swarm_mutations::initialize_inventory(
+        &state.platforms,
+        state.projections.as_ref(),
+        state.runtime.as_ref(),
+        platform,
     )
-    .await
-    .map_err(|_| {
-        RuntimeCapabilityError::new(
-            RuntimeErrorKind::Timeout,
-            "Swarm inventory initialization timed out.",
-            true,
-        )
-    })??;
-    citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(
-        state.pool.clone(),
-    )
-    .initialize_swarm(&snapshot)
     .await
 }
 
@@ -4085,7 +3274,7 @@ async fn node_coverage(
             .map_err(platform_error),
         &headers,
     )?;
-    if platform.platform_type != "DockerSwarm" {
+    if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
         return api_result(
             Err(ApiError::Validation(
                 "Node Agent coverage is available only for Docker Swarm platforms.".into(),
@@ -4094,13 +3283,11 @@ async fn node_coverage(
         );
     }
     let mut coverage = api_result(
-        citadel_adapters::persistence::postgres::platforms::node_agents::coverage::read(
-            &state.pool,
-            &state.edge,
-            &platform,
-        )
-        .await
-        .map_err(ApiError::internal),
+        state
+            .node_agent_coverage
+            .read(&platform)
+            .await
+            .map_err(ApiError::internal),
         &headers,
     )?;
     if coverage.total_nodes == 0 {
@@ -4121,13 +3308,11 @@ async fn node_coverage(
             &headers,
         )?;
         coverage = api_result(
-            citadel_adapters::persistence::postgres::platforms::node_agents::coverage::read(
-                &state.pool,
-                &state.edge,
-                &platform,
-            )
-            .await
-            .map_err(ApiError::internal),
+            state
+                .node_agent_coverage
+                .read(&platform)
+                .await
+                .map_err(ApiError::internal),
             &headers,
         )?;
     }
@@ -4159,12 +3344,12 @@ async fn enroll(
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
     authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
-    edge.enrollment(
-        EdgeTarget::platform(id),
-        principal.actor_id.value(),
+    let enrollment = api_result(
+        edge.enrollment(EdgeTarget::platform(id), principal.actor_id.value())
+            .await,
         &headers,
-    )
-    .await
+    )?;
+    Ok(no_store(Json(enrollment).into_response()))
 }
 
 #[utoipa::path(
@@ -4183,6 +3368,7 @@ async fn enroll(
 )]
 async fn status(
     State(state): State<PlatformsHttpState>,
+    Extension(edge): Extension<EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
@@ -4191,10 +3377,10 @@ async fn status(
     let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
     authorize_platform_level(&state, &principal, id, PermissionLevel::Read, &headers).await?;
     let status = api_result(
-        PostgresEdgeStore::new(state.pool)
+        edge.store
             .status(&EdgeTarget::platform(id))
             .await
-            .map_err(error),
+            .map_err(EdgeHttpContext::error),
         &headers,
     )?;
     Ok(no_store(
@@ -4228,106 +3414,18 @@ async fn revoke(
     let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
     authorize_platform_level(&state, &principal, id, PermissionLevel::Write, &headers).await?;
     let target = EdgeTarget::platform(id);
-    let store = PostgresEdgeStore::new(state.pool.clone());
-    api_result(store.status(&target).await.map_err(error), &headers)?;
-    api_result(store.revoke(&target).await.map_err(error), &headers)?;
-    edge.registry.disconnect(&target);
+    api_result(
+        citadel_platforms::edge_management::revoke(
+            edge.store.as_ref(),
+            edge.registry.as_ref(),
+            &target,
+        )
+        .await
+        .map_err(EdgeHttpContext::error),
+        &headers,
+    )?;
     publish_runtime_change(&state, id, "platform", "update", &id.to_string());
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-fn error(error: EdgeStoreError) -> ApiError {
-    EdgeHttpContext::error(error)
-}
-
-impl EdgeHttpContext {
-    pub(crate) async fn enrollment(
-        &self,
-        target: EdgeTarget,
-        actor_id: Uuid,
-        headers: &HeaderMap,
-    ) -> HttpResult {
-        let (enrollment, token, expires) = api_result(
-            self.store
-                .create_enrollment(&target, actor_id)
-                .await
-                .map_err(Self::error),
-            headers,
-        )?;
-        let name = if target.resource_type == 1 {
-            "edge-build-agent"
-        } else {
-            "edge-agent"
-        };
-        let volume = name.replace('-', "_") + "_data";
-        let environment = std::collections::BTreeMap::from([
-            ("CITADEL_AGENT_MODE", "edge".to_owned()),
-            ("CITADEL_CORE_URL", self.core_url.clone()),
-            ("CITADEL_EDGE_ENROLLMENT_TOKEN", token.clone()),
-            (
-                "CITADEL_EDGE_AGENT_KEY_PATH",
-                format!("/app/data/{name}.key"),
-            ),
-            (
-                "CITADEL_EDGE_IDENTITY_PATH",
-                format!("/app/data/{name}.identity.json"),
-            ),
-        ]);
-        let mut lines = vec![
-            "docker run -d".to_owned(),
-            format!("  --name {name}"),
-            "  --restart unless-stopped".into(),
-            "  -v /var/run/docker.sock:/var/run/docker.sock".into(),
-        ];
-        if target.resource_type == 0 {
-            lines.extend([
-                "  -v /:/host:ro".into(),
-                "  --label com.citadel.system=true".into(),
-                "  --label com.citadel.system-role=edge-agent".into(),
-            ]);
-        }
-        lines.push(format!("  -v {volume}:/app/data"));
-        lines.extend(
-            environment
-                .iter()
-                .map(|(key, value)| format!("  -e {}", shell_quote(&format!("{key}={value}")))),
-        );
-        lines.push(format!("  {}", shell_quote(&self.agent_image)));
-        let command = lines.join(" \\\n");
-        Ok(no_store(
-            Json(
-                crate::api::resources::platforms::operation_views::EdgeEnrollmentView {
-                    enrollment_id: enrollment,
-                    platform_id: target.platform_id,
-                    token,
-                    expires_at_utc: expires,
-                    instructions:
-                        crate::api::resources::platforms::operation_views::EdgeInstructionsView {
-                            core_url: self.core_url.clone(),
-                            environment: environment
-                                .into_iter()
-                                .map(|(key, value)| (key.to_owned(), value))
-                                .collect(),
-                            agent_image: self.agent_image.clone(),
-                            docker_run_command: command,
-                        },
-                },
-            )
-            .into_response(),
-        ))
-    }
-    pub(crate) fn error(error: EdgeStoreError) -> ApiError {
-        match error {
-            EdgeStoreError::NotFound => ApiError::NotFound,
-            EdgeStoreError::Unauthorized => ApiError::Conflict(error.to_string()),
-            EdgeStoreError::Invalid(message) => ApiError::Validation(message.into()),
-            EdgeStoreError::Storage(source) => ApiError::internal(source),
-        }
-    }
 }
 
 static PULL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -4398,12 +3496,10 @@ async fn pull(
             .map_err(|_| ApiError::Conflict("Image pull capacity is busy.".into())),
         &headers,
     )?;
-    let (image, auth) = match citadel_adapters::connectors::routing::images::pull::prepare(
-        &state.pool,
-        input.registry_id,
-        &input.image_tag,
-    )
-    .await
+    let (image, auth) = match state
+        .image_store
+        .prepare_pull(input.registry_id, &input.image_tag)
+        .await
     {
         Ok(value) => value,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -4425,26 +3521,11 @@ async fn pull(
     task.spawn(async move {
         let _permit = permit;
         let result=tokio::time::timeout(std::time::Duration::from_secs(600),async {
-            let runtime=runtime_for(&state,input.platform_id).await?;
-            let (pull,inventory):(&dyn ImagePullPort,&dyn PlatformInventoryPort)=match &runtime {
-                RuntimeRef::Local(r)=>(*r,*r),RuntimeRef::Agent(r)=>(r,r),RuntimeRef::Edge(r)=>(r,r),
-            };
-            let mut stream=pull.pull_image_stream(&image,auth.as_deref().map(String::as_str),&cancel).await?;
-            while let Some(item)=stream.next().await {
-                let item=item?;
-                if item.error_message.as_ref().is_some_and(|v|!v.is_empty()) || item.error.as_ref().and_then(|e|e.message.as_ref()).is_some_and(|v|!v.is_empty()) {
-                    return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Remote,"Image pull failed. Check the image reference and Registry credentials.",false));
-                }
-                tokio::select! {()=cancel.cancelled()=>return Err(cancelled()),result=sender.send(item)=>if result.is_err(){return Err(cancelled());}}
-            }
-            if cancel.is_cancelled(){return Err(cancelled());}
-            let images=inventory.list_images(&cancel).await?;
-            let observed=images.iter().find(|value|value.repo_tags.iter().chain(&value.repo_digests).any(|reference|same_image_reference(reference,&image))).ok_or_else(||RuntimeCapabilityError::new(RuntimeErrorKind::NotFound,"Pull completed, but Docker did not report the requested image.",false))?;
-            citadel_adapters::connectors::routing::images::pull::persist(&state.pool,input.platform_id,input.registry_id,observed).await?;
-            publish_runtime_change(&state,input.platform_id,"image","create",&observed.id);
-            publish_runtime_change(&state,input.platform_id,"platform","update",&input.platform_id.to_string());
-            let digest=observed.repo_digests.first().and_then(|v|v.split_once('@')).map(|(_,d)|d.to_owned());
-            let _=sender.send(PullImageStreamItem{docker_image_id:Some(observed.id.clone()),digest,..Default::default()}).await;
+            let runtime = state.runtime.image_mutations(input.platform_id, &cancel).await?;
+            citadel_platforms::image_mutations::pull_and_persist(
+                state.image_store.as_ref(), runtime.as_ref(), &input, &image, auth.as_deref().map(String::as_str), &sender, &cancel,
+                |kind, operation, id| publish_runtime_change(&state, input.platform_id, kind, operation, id),
+            ).await?;
             Ok::<_,RuntimeCapabilityError>(())
         }).await;
         let error = match result {
@@ -4493,21 +3574,6 @@ fn progress_body(
         yield Ok(bytes::Bytes::from_static(b"]"));
     };
     axum::body::Body::from_stream(stream)
-}
-
-fn cancelled() -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Image pull cancelled.", false)
-}
-
-fn same_image_reference(left: &str, right: &str) -> bool {
-    fn docker_hub_reference(value: &str) -> &str {
-        let value = value
-            .strip_prefix("docker.io/")
-            .or_else(|| value.strip_prefix("index.docker.io/"))
-            .unwrap_or(value);
-        value.strip_prefix("library/").unwrap_or(value)
-    }
-    docker_hub_reference(left) == docker_hub_reference(right)
 }
 
 static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -4601,23 +3667,21 @@ async fn delete_images(
     task.spawn(async move {
         let result = async move {
             let _permit = permit;
-            let runtime = runtime_for(&state, input.platform_id).await?;
-            let (mutation, inventory): (
-                &dyn citadel_platforms::images::ImageDeletionPort,
-                &dyn PlatformInventoryPort,
-            ) = match &runtime {
-                RuntimeRef::Local(runtime) => (*runtime, *runtime),
-                RuntimeRef::Agent(runtime) => (runtime, runtime),
-                RuntimeRef::Edge(runtime) => (runtime, runtime),
-            };
-            let result = citadel_adapters::connectors::routing::images::deletion::delete(
-                &state.pool,
+            // This token belongs to the tracked operation, not the HTTP body:
+            // accepted deletions still need reconciliation after disconnection.
+            let cancel = CancellationToken::new();
+            let _guard = cancel.clone().drop_guard();
+            let runtime = state
+                .runtime
+                .image_mutations(input.platform_id, &cancel)
+                .await?;
+            let result = citadel_platforms::image_mutations::delete_images(
+                state.image_store.as_ref(),
                 input.platform_id,
                 &input.ids,
                 input.force,
                 input.no_prune,
-                mutation,
-                inventory,
+                runtime.as_ref(),
             )
             .await;
             for id in &input.ids {
@@ -4684,13 +3748,18 @@ async fn exposed_ports(
     authorize_platform(&state, &principal, platform_id, &headers).await?;
     // The form passes a Citadel UUID, never a Docker content ID. Resolve it on
     // the requested Platform and retain node identity for projected Swarm images.
-    let image: Option<(String, Option<String>, bool)> = api_result(
-        sqlx::query_as("SELECT dockerimageid,NULL::text,false FROM images WHERE platformid=$1 AND id=$2 UNION ALL SELECT dockerimageid,dockernodeid,isstale FROM swarmnodeimageprojections WHERE platformid=$1 AND id=$2")
-            .bind(platform_id).bind(image_id).fetch_optional(&state.pool).await
-            .map_err(ApiError::internal),
+    let citadel_platforms::ImageIdentity {
+        docker_image_id: docker_id,
+        docker_node_id: node_id,
+        is_stale: stale,
+    } = api_result(
+        state
+            .platforms
+            .image_identity(platform_id, image_id)
+            .await
+            .map_err(platform_error),
         &headers,
     )?;
-    let (docker_id, node_id, stale) = api_result(image.ok_or(ApiError::NotFound), &headers)?;
     if stale {
         return Ok(runtime_error_response(
             RuntimeCapabilityError::new(
@@ -4701,21 +3770,17 @@ async fn exposed_ports(
             &headers,
         ));
     }
-    let runtime = match runtime_for_node(&state, platform_id, node_id.as_deref()).await {
-        Ok(runtime) => runtime,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
-    let result = match runtime {
-        RuntimeRef::Local(runtime) => {
-            ImageInspectionPort::exposed_ports(runtime, &docker_id, &cancel).await
-        }
-        RuntimeRef::Agent(ref runtime) => {
-            ImageInspectionPort::exposed_ports(runtime, &docker_id, &cancel).await
-        }
-        RuntimeRef::Edge(runtime) => runtime.exposed_ports(&docker_id, &cancel).await,
-    };
+    let result = async {
+        state
+            .runtime
+            .images(platform_id, node_id.as_deref(), &cancel)
+            .await?
+            .exposed_ports(&docker_id, &cancel)
+            .await
+    }
+    .await;
     match result {
         Ok(ports) => Ok(no_store(
             Json(crate::api::resources::platforms::operation_views::ExposedPortsView { ports })
@@ -4791,39 +3856,32 @@ async fn inspect_image(
             }
         }
     }
-    let runtime =
-        match runtime_for_node(&state, platform_id, selector.docker_node_id.as_deref()).await {
-            Ok(runtime) => runtime,
-            Err(error) => return Ok(runtime_error_response(error, &headers)),
-        };
     let cancellation = CancellationToken::new();
     let _cancel_on_drop = cancellation.clone().drop_guard();
-    let image = match &runtime {
-        RuntimeRef::Local(runtime) => {
-            ImageInspectionPort::inspect_image(*runtime, &image_id, &cancellation).await
-        }
-        RuntimeRef::Agent(runtime) => {
-            ImageInspectionPort::inspect_image(runtime, &image_id, &cancellation).await
-        }
-        RuntimeRef::Edge(runtime) => {
-            ImageInspectionPort::inspect_image(runtime, &image_id, &cancellation).await
-        }
-    };
+    let image = async {
+        state
+            .runtime
+            .images(
+                platform_id,
+                selector.docker_node_id.as_deref(),
+                &cancellation,
+            )
+            .await?
+            .inspect_image(&image_id, &cancellation)
+            .await
+    }
+    .await;
     let mut image = match image {
         Ok(image) => image,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     if selector.docker_node_id.is_none() {
         let registry_id: Option<Uuid> = api_result(
-            sqlx::query_scalar::<_, Option<Uuid>>(
-                "SELECT registryid FROM images WHERE platformid=$1 AND dockerimageid=$2",
-            )
-            .bind(platform_id)
-            .bind(&image.id)
-            .fetch_optional(&state.pool)
-            .await
-            .map(Option::flatten)
-            .map_err(ApiError::internal),
+            state
+                .platforms
+                .image_registry_id(platform_id, &image.id)
+                .await
+                .map_err(platform_error),
             &headers,
         )?;
         if let Some(id) = registry_id {
@@ -5038,9 +4096,7 @@ async fn managed_service(
     let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
     let tail = tail(query, &headers)?;
     authorize_logs(&state, &principal, ResourceType::SwarmService, id, &headers).await?;
-    let store = citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(
-        state.pool.clone(),
-    );
+    let store = &state.services;
     let service = api_result(
         store
             .get_authorized(principal.actor_id, principal.is_administrator(), id)
@@ -5115,12 +4171,16 @@ async fn task_logs(
         &headers,
     )?;
     let cancel = CancellationToken::new();
-    let live = match runtime_for(&state, platform).await {
-        Ok(RuntimeRef::Local(r)) => r.inspect_task(&id, &cancel).await,
-        Ok(RuntimeRef::Agent(r)) => r.inspect_task(&id, &cancel).await,
-        Ok(RuntimeRef::Edge(r)) => r.inspect_task(&id, &cancel).await,
-        Err(error) => Err(error),
-    };
+    let _cancel_on_drop = cancel.clone().drop_guard();
+    let live = async {
+        state
+            .runtime
+            .tasks(platform, &cancel)
+            .await?
+            .inspect_task(&id, &cancel)
+            .await
+    }
+    .await;
     let live = match live {
         Ok(live) => live,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -5149,12 +4209,16 @@ async fn read_logs(
     headers: &HeaderMap,
 ) -> HttpResult {
     let cancel = CancellationToken::new();
-    let result = match runtime_for_node(state, platform, node).await {
-        Ok(RuntimeRef::Local(r)) => r.read_logs(resource, tail, &cancel).await,
-        Ok(RuntimeRef::Agent(r)) => r.read_logs(resource, tail, &cancel).await,
-        Ok(RuntimeRef::Edge(r)) => r.read_logs(resource, tail, &cancel).await,
-        Err(error) => Err(error),
-    };
+    let _cancel_on_drop = cancel.clone().drop_guard();
+    let result = async {
+        state
+            .runtime
+            .logs(platform, node, &cancel)
+            .await?
+            .read_logs(resource, tail, &cancel)
+            .await
+    }
+    .await;
     match result {
         Ok(value) => Ok(no_store(Json(value).into_response())),
         Err(error) => Ok(runtime_error_response(error, headers)),
@@ -5205,12 +4269,12 @@ async fn prune(
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
     let operation = async {
-        let runtime = runtime_for(&state, id).await?;
-        match &runtime {
-            RuntimeRef::Local(r) => r.prune(input.resource, &cancel).await,
-            RuntimeRef::Agent(r) => r.prune(input.resource, &cancel).await,
-            RuntimeRef::Edge(r) => r.prune(input.resource, &cancel).await,
-        }
+        state
+            .runtime
+            .pruning(id, &cancel)
+            .await?
+            .prune(input.resource, &cancel)
+            .await
     };
     let outcome = tokio::time::timeout(std::time::Duration::from_secs(300), operation).await;
     // Partial failures can still delete resources. Invalidate inventory on every outcome.
@@ -5233,7 +4297,7 @@ async fn prune(
 
 #[derive(Clone)]
 pub struct AgentSetupContext {
-    pub signer: citadel_adapters::connectors::agent::client::AgentRequestSigner,
+    pub signer: Arc<dyn citadel_platforms::management::AgentSigningPort>,
     pub image: String,
     pub requires_tls: bool,
 }
@@ -5284,16 +4348,12 @@ async fn rotate_key(
         setup.ok_or_else(|| ApiError::Storage("Agent key storage is not configured.".into())),
         &headers,
     )?;
-    let signer = setup.signer.clone();
     api_result(
-        tokio::task::spawn_blocking(move || signer.rotate())
+        setup
+            .signer
+            .rotate()
             .await
-            .map_err(|_| ApiError::Storage("Agent key rotation failed.".into()))
-            .and_then(|v| {
-                v.map_err(|_| {
-                    ApiError::Storage("Agent key rotation could not be persisted.".into())
-                })
-            }),
+            .map_err(|e| ApiError::Storage(e.message)),
         &headers,
     )?;
     Ok(no_store(Json(setup.view()).into_response()))
@@ -5390,8 +4450,9 @@ async fn update(
     )?;
     // Decode partial fields only after scoped authorization, preserving PATCH omission/null semantics.
     let patch: crate::api::resources::platforms::patch::PlatformPatch = api_result(
-        serde_json::from_value(input)
-            .map_err(|error| ApiError::Validation(format!("Invalid Platform patch: {error}"))),
+        serde_path_to_error::deserialize(input).map_err(|error| {
+            crate::request_validation::validation_error(format!("Invalid Platform patch: {error}"))
+        }),
         &headers,
     )?;
     let input = api_result(
@@ -5404,73 +4465,17 @@ async fn update(
     )?;
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
-    let info = if rename {
-        None
-    } else {
-        let operation = async {
-            match input.connector_type {
-                citadel_platforms::PlatformConnectorType::Local => {
-                    state.docker.get_info(&cancel).await
-                }
-                citadel_platforms::PlatformConnectorType::Agent => {
-                    let agent = state.agent.as_ref().ok_or_else(|| {
-                        RuntimeCapabilityError::new(
-                            RuntimeErrorKind::Unavailable,
-                            "Agent transport is not configured.",
-                            false,
-                        )
-                    })?;
-                    let agent = agent
-                        .for_address(input.address.as_deref().unwrap_or_default(), &cancel)
-                        .await?;
-                    agent.get_info(&cancel).await
-                }
-                citadel_platforms::PlatformConnectorType::EdgeAgent => {
-                    let session = state.edge.get(&EdgeTarget::platform(id)).map_err(|_| {
-                        RuntimeCapabilityError::new(
-                            RuntimeErrorKind::Unavailable,
-                            "Edge Agent is disconnected.",
-                            false,
-                        )
-                    })?;
-                    EdgeRuntime { session }.get_info(&cancel).await
-                }
-                _ => unreachable!("validated connector"),
-            }
-        };
-        let info = match tokio::time::timeout(std::time::Duration::from_secs(30), operation).await {
-            Ok(Ok(info)) => info,
-            Ok(Err(error)) => return Ok(runtime_error_response(error, &headers)),
-            Err(_) => {
-                return Ok(runtime_error_response(
-                    RuntimeCapabilityError::new(
-                        RuntimeErrorKind::Timeout,
-                        "Platform validation timed out.",
-                        false,
-                    ),
-                    &headers,
-                ));
-            }
-        };
-        api_result(
-            validate_target(&current, &info).map_err(platform_registration_error),
-            &headers,
-        )?;
-        Some(info)
-    };
-    api_result(
-        citadel_adapters::persistence::postgres::platforms::management::update(
-            &state.pool,
-            &current,
-            &input,
-            info.as_ref(),
-            principal.actor_id,
-            rename,
-        )
+    match state
+        .management
+        .update(&current, &input, principal.actor_id, rename, &cancel)
         .await
-        .map_err(platform_registration_error),
-        &headers,
-    )?;
+    {
+        Ok(()) => {}
+        Err(PlatformRegistrationError::Runtime(error)) => {
+            return Ok(runtime_error_response(error, &headers));
+        }
+        Err(error) => return api_result(Err(platform_registration_error(error)), &headers),
+    }
     let updated = required(
         state
             .platforms
@@ -5488,8 +4493,6 @@ async fn update(
     Ok(no_store(Json(updated).into_response()))
 }
 
-static BROWSER: std::sync::OnceLock<Result<RegistryBrowser, String>> = std::sync::OnceLock::new();
-
 static BROWSE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
 
 macro_rules! browse_one {
@@ -5499,7 +4502,7 @@ macro_rules! browse_one {
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
             path: Result<Path<String>, PathRejection>,
-            browser: Option<Extension<RegistryBrowser>>,
+            browser: Option<Extension<Arc<dyn citadel_registries::registry_images::RegistryBrowsePort>>>,
             headers: HeaderMap,
         ) -> HttpResult {
             let principal = api_result(require_actor(principal), &headers)?;
@@ -5525,7 +4528,7 @@ macro_rules! browse_two {
             State(state): State<PlatformsHttpState>,
             principal: Option<Extension<ActorPrincipal>>,
             path: Result<Path<(String, String)>, PathRejection>,
-            browser: Option<Extension<RegistryBrowser>>,
+            browser: Option<Extension<Arc<dyn citadel_registries::registry_images::RegistryBrowsePort>>>,
             headers: HeaderMap,
         ) -> HttpResult {
             let principal = api_result(require_actor(principal), &headers)?;
@@ -5626,7 +4629,7 @@ async fn browse(
     registry: &str,
     name: Option<&str>,
     kind: RegistryBrowseKind,
-    browser: Option<Extension<RegistryBrowser>>,
+    browser: Option<Extension<Arc<dyn citadel_registries::registry_images::RegistryBrowsePort>>>,
     headers: &HeaderMap,
 ) -> HttpResult {
     api_result(
@@ -5636,12 +4639,12 @@ async fn browse(
         headers,
     )?;
     let id = api_result(
-        sqlx::query_scalar::<_, Uuid>("SELECT id FROM registries WHERE lower(name)=lower($1)")
-            .bind(registry)
-            .fetch_optional(&state.pool)
+        state
+            .registries
+            .find_id_by_name(registry)
             .await
-            .map_err(ApiError::internal)
-            .and_then(|v| v.ok_or(ApiError::NotFound)),
+            .map_err(crate::api::routes::registries::metadata_error)
+            .and_then(|id| id.ok_or(ApiError::NotFound)),
         headers,
     )?;
     api_result(
@@ -5658,33 +4661,24 @@ async fn browse(
         headers,
     )?;
     // Resolve credentials only after resource-specific authorization succeeds.
-    let row = api_result(
-        sqlx::query("SELECT configuration,status FROM registries WHERE id=$1")
-            .bind(id)
-            .fetch_optional(&state.pool)
+    let registry = api_result(
+        state
+            .registries
+            .get_registry(id)
             .await
-            .map_err(ApiError::internal)
-            .and_then(|v| v.ok_or(ApiError::NotFound)),
+            .map_err(crate::api::routes::registries::metadata_error),
         headers,
     )?;
-    if row.get::<String, _>("status") == "Disabled" {
+    if registry.status == citadel_registries::RegistryStatus::Disabled {
         return api_result(
             Err(ApiError::Validation("The Registry is disabled.".into())),
             headers,
         );
     }
-    let configuration: serde_json::Value = row.get("configuration");
-    let browser = match browser {
-        Some(Extension(browser)) => browser,
-        None => api_result(
-            BROWSER
-                .get_or_init(|| RegistryBrowser::new().map_err(|e| e.to_string()))
-                .as_ref()
-                .cloned()
-                .map_err(|m| ApiError::Storage(m.clone())),
-            headers,
-        )?,
-    };
+    let configuration = registry.configuration;
+    let browser = browser
+        .map(|Extension(browser)| browser)
+        .unwrap_or_else(|| state.registry_browser.clone());
     let _permit = api_result(
         BROWSE_SLOTS
             .try_acquire()
@@ -5741,7 +4735,6 @@ async fn task_statistics(
     query: Result<Query<Hours>, QueryRejection>,
     headers: HeaderMap,
 ) -> HttpResult {
-    use citadel_platforms::SwarmTaskRuntimePort;
     let principal = api_result(require_actor(principal), &headers)?;
     let Path((platform_id, id)) = api_result(path.map_err(invalid_path), &headers)?;
     let window = window(query, &headers)?;
@@ -5786,12 +4779,16 @@ async fn task_statistics(
         &headers,
     )?;
     let cancellation = CancellationToken::new();
-    let live = match runtime_for(&state, platform_id).await {
-        Ok(RuntimeRef::Local(runtime)) => runtime.inspect_task(&id, &cancellation).await,
-        Ok(RuntimeRef::Agent(runtime)) => runtime.inspect_task(&id, &cancellation).await,
-        Ok(RuntimeRef::Edge(runtime)) => runtime.inspect_task(&id, &cancellation).await,
-        Err(error) => Err(error),
-    };
+    let _cancel_on_drop = cancellation.clone().drop_guard();
+    let live = async {
+        state
+            .runtime
+            .tasks(platform_id, &cancellation)
+            .await?
+            .inspect_task(&id, &cancellation)
+            .await
+    }
+    .await;
     let live = match live {
         Ok(live) => live,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -5800,7 +4797,7 @@ async fn task_statistics(
         Ok(id) => id,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let target = match store
         .task_container(platform_id, &live.node_id, docker_id)
         .await
@@ -5889,7 +4886,7 @@ async fn service_statistics(
             .map_err(platform_error),
         &headers,
     )?;
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let now = chrono::Utc::now().timestamp();
     let tasks = match store.service_current_tasks(platform_id, &id, now).await {
         Ok(tasks) => tasks,
@@ -5957,7 +4954,7 @@ async fn container(
         },
         &headers,
     )?;
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let target = match store.find_container(&reference).await {
         Ok(target) => required(Ok(target), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -6012,7 +5009,7 @@ async fn platform(
             }),
         &headers,
     )?;
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let stats = api_result(
         store
             .platform(id, window, chrono::Utc::now().timestamp())
@@ -6117,7 +5114,7 @@ async fn workload(
         )?,
         StatisticsWorkload::Stack => {}
     }
-    let store = PostgresStatisticsReader::new(state.pool.clone());
+    let store = &state.statistics;
     let containers = match store.workload_containers(workload, id).await {
         Ok(containers) => required(Ok(containers), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -6155,14 +5152,6 @@ async fn workload(
         })
         .collect();
     Ok(no_store(Json(StackHistory { containers }).into_response()))
-}
-
-pub(crate) fn client<'a>(runtime: &'a RuntimeRef<'_>) -> SwarmInventoryClient<'a> {
-    match runtime {
-        RuntimeRef::Local(r) => SwarmInventoryClient::Local(r),
-        RuntimeRef::Agent(r) => SwarmInventoryClient::Agent(r),
-        RuntimeRef::Edge(r) => SwarmInventoryClient::Edge(r),
-    }
 }
 
 fn validation(value: Result<(), &'static str>) -> Result<(), ApiError> {
@@ -6215,82 +5204,6 @@ async fn context(
     )
 }
 
-async fn manager_identity(
-    runtime: &RuntimeRef<'_>,
-    platform: &citadel_platforms::PlatformDetails,
-    cancel: &CancellationToken,
-) -> Result<(), RuntimeCapabilityError> {
-    let info = match runtime {
-        RuntimeRef::Local(r) => r.get_info(cancel).await,
-        RuntimeRef::Agent(r) => r.get_info(cancel).await,
-        RuntimeRef::Edge(r) => r.get_info(cancel).await,
-    }?;
-    if !manager_matches(
-        &info,
-        platform.cluster_id.as_deref(),
-        &platform.platform_descriptor,
-    ) {
-        return Err(RuntimeCapabilityError::new(
-            RuntimeErrorKind::Conflict,
-            "The connected Docker manager no longer belongs to this Swarm platform.",
-            false,
-        ));
-    }
-    Ok(())
-}
-
-async fn refresh(
-    state: &PlatformsHttpState,
-    platform: &citadel_platforms::PlatformDetails,
-) -> Result<(), RuntimeCapabilityError> {
-    let runtime = runtime_for(state, platform.id).await?;
-    let port: &dyn PlatformInventoryPort = match &runtime {
-        RuntimeRef::Local(r) => *r,
-        RuntimeRef::Agent(r) => r,
-        RuntimeRef::Edge(r) => r,
-    };
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let snapshot = tokio::time::timeout(
-        Duration::from_secs(30),
-        citadel_platforms::jobs::collect_swarm_snapshot(
-            port,
-            &citadel_platforms::jobs::InventoryCollectionTarget {
-                platform_id: platform.id,
-                platform_type:
-                    citadel_adapters::persistence::postgres::platforms::classification::platform_kind(
-                        &platform.platform_type,
-                    )
-                    .map_err(|error| {
-                        RuntimeCapabilityError::new(
-                            RuntimeErrorKind::Remote,
-                            error.to_string(),
-                            false,
-                        )
-                    })?,
-            },
-            &cancel,
-        ),
-    )
-    .await
-    .map_err(|_| {
-        RuntimeCapabilityError::new(
-            RuntimeErrorKind::Timeout,
-            "Swarm inventory refresh timed out.",
-            false,
-        )
-    })??;
-    citadel_adapters::persistence::postgres::platforms::swarm::inventory::refresh(
-        &state.pool,
-        &snapshot,
-    )
-    .await?;
-    for kind in ["node", "service", "task", "secret", "config", "platform"] {
-        publish_runtime_change(state, platform.id, kind, "update", "");
-    }
-    Ok(())
-}
-
 async fn finish(
     state: &PlatformsHttpState,
     platform: &citadel_platforms::PlatformDetails,
@@ -6299,8 +5212,15 @@ async fn finish(
 ) -> HttpResult {
     // A refresh is attempted after all dispatched outcomes, including ambiguous
     // transport errors. Never report a successful refresh as a successful write.
-    let refreshed = refresh(state, platform).await;
-    match result.and(refreshed) {
+    let result = citadel_platforms::swarm_mutations::finish_mutation(
+        state.projections.as_ref(),
+        state.runtime.as_ref(),
+        platform,
+        result,
+        |kind| publish_runtime_change(state, platform.id, kind, "update", ""),
+    )
+    .await;
+    match result {
         Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
         Err(error) => Ok(runtime_error_response(error, headers)),
     }
@@ -6360,34 +5280,24 @@ async fn update_node(
             .platforms
             .get_swarm_node(pid, &id)
             .await
-            .map(|value| value.map(crate::api::resources::platforms::views::SwarmNodeView::from))
             .map_err(platform_error),
         &headers,
     )?;
-    api_result(check_node(&node, input.version_index), &headers)?;
-    let runtime = runtime_for(&state, pid).await.map_err(|e| {
-        crate::api::error::HttpError::from_parts(conflict(&e.to_string()), &headers)
-    })?;
+    api_result(
+        check_node(&node, input.version_index).map_err(platform_error),
+        &headers,
+    )?;
     let cancel = CancellationToken::new();
     let _guard = cancel.clone().drop_guard();
+    let runtime = state.runtime.swarm(pid, &cancel).await.map_err(|e| {
+        crate::api::error::HttpError::from_parts(conflict(&e.to_string()), &headers)
+    })?;
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        client(&runtime).update_node(&id, &input, &cancel).await
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        runtime.update_node(&id, &input, &cancel).await
     })
     .await;
     finish(&state, &platform, result, &headers).await
-}
-
-fn check_node(node: &SwarmNodeView, version: i64) -> Result<(), ApiError> {
-    if node.is_stale {
-        Err(conflict(
-            "Node inventory is stale. Refresh before making changes.",
-        ))
-    } else if node.version_index != version {
-        Err(conflict("Node changed. Reload it before saving."))
-    } else {
-        Ok(())
-    }
 }
 
 #[utoipa::path(
@@ -6425,72 +5335,31 @@ async fn update_availability(
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
     let input: citadel_platforms::swarm_mutations::UpdateSwarmNodesAvailabilityInput = input.into();
     api_result(validation(input.validate()), &headers)?;
-    let mut updates = Vec::with_capacity(input.nodes.len());
-    for target in input.nodes {
-        let node = required(
-            state
-                .platforms
-                .get_swarm_node(pid, &target.node_id)
-                .await
-                .map(|value| {
-                    value.map(crate::api::resources::platforms::views::SwarmNodeView::from)
-                })
-                .map_err(platform_error),
-            &headers,
-        )?;
-        api_result(check_node(&node, target.version_index), &headers)?;
-        if !node.availability.eq_ignore_ascii_case(&input.availability) {
-            updates.push((
-                node.id,
-                citadel_platforms::swarm_mutations::UpdateSwarmNodeInput {
-                    version_index: target.version_index,
-                    availability: input.availability.clone(),
-                    labels: node.labels,
-                },
-            ));
-        }
-    }
+    let updates = api_result(
+        citadel_platforms::swarm_mutations::availability_updates(&state.platforms, pid, input)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
     if updates.is_empty() {
         return Ok(no_store(StatusCode::NO_CONTENT.into_response()));
     }
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        for (index, (id, input)) in updates.iter().enumerate() {
-            if let Err(error) = client(&runtime).update_node(id, input, &cancel).await {
-                return Err(partial(error, index, updates.len(), "Updated"));
-            }
-        }
-        Ok(())
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        citadel_platforms::swarm_mutations::update_nodes(runtime.as_ref(), &updates, &cancel).await
     })
     .await;
     finish(&state, &platform, result, &headers).await
-}
-
-fn partial(
-    error: RuntimeCapabilityError,
-    completed: usize,
-    total: usize,
-    verb: &str,
-) -> RuntimeCapabilityError {
-    if completed == 0 {
-        error
-    } else {
-        RuntimeCapabilityError::new(
-            RuntimeErrorKind::Conflict,
-            format!(
-                "{verb} {completed} of {total} resources before Docker rejected the operation: {error}"
-            ),
-            false,
-        )
-    }
 }
 
 async fn service_guard(
@@ -6499,38 +5368,17 @@ async fn service_guard(
     id: &str,
     headers: &HeaderMap,
 ) -> HttpResult<()> {
-    let service = required(
-        state
-            .platforms
-            .get_swarm_service(pid, id)
-            .await
-            .map(|value| value.map(crate::api::resources::platforms::views::SwarmServiceView::from))
-            .map_err(platform_error),
-        headers,
-    )?;
-    if service.is_stale {
-        return api_result(Err(conflict("Service inventory is stale.")), headers);
-    }
-    let managed = api_result(
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM swarmservices WHERE platformid=$1 AND dockerserviceid=$2)",
+    api_result(
+        citadel_platforms::swarm_mutations::service_guard(
+            &state.platforms,
+            state.services.as_ref(),
+            pid,
+            id,
         )
-        .bind(pid)
-        .bind(id)
-        .fetch_one(&state.pool)
         .await
-        .map_err(ApiError::internal),
+        .map_err(platform_error),
         headers,
-    )?;
-    if managed || service.ownership == "System" {
-        return api_result(
-            Err(conflict(
-                "This Service must be changed through its Citadel owner.",
-            )),
-            headers,
-        );
-    }
-    Ok(())
+    )
 }
 
 #[utoipa::path(
@@ -6565,17 +5413,19 @@ async fn restart_service(
     .await?;
     api_result(validation(resource_id(&id)), &headers)?;
     service_guard(&state, pid, &id, &headers).await?;
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        client(&runtime).restart_service(&id, &cancel).await
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        runtime.restart_service(&id, &cancel).await
     })
     .await;
     finish(&state, &platform, result, &headers).await
@@ -6656,19 +5506,19 @@ async fn create_material(
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
     api_result(validation(input.validate(secret)), &headers)?;
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        client(&runtime)
-            .create_material(secret, &input, &cancel)
-            .await
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        runtime.create_material(secret, &input, &cancel).await
     })
     .await;
     finish(&state, &platform, result, &headers).await
@@ -6738,46 +5588,19 @@ async fn material_guard(
     version: Option<i64>,
     headers: &HeaderMap,
 ) -> HttpResult<()> {
-    let (stale, in_use, current) = if secret {
-        let r = required(
-            state
-                .platforms
-                .get_swarm_secret(pid, id)
-                .await
-                .map(|value| {
-                    value.map(crate::api::resources::platforms::views::SwarmSecretView::from)
-                })
-                .map_err(platform_error),
-            headers,
-        )?;
-        (r.is_stale, r.in_use, r.version_index)
-    } else {
-        let r = required(
-            state
-                .platforms
-                .get_swarm_config(pid, id)
-                .await
-                .map(|value| {
-                    value.map(crate::api::resources::platforms::views::SwarmConfigView::from)
-                })
-                .map_err(platform_error),
-            headers,
-        )?;
-        (r.is_stale, r.in_use, r.version_index)
-    };
-    if stale || (deleting && in_use) || version.is_some_and(|v| v != current) {
-        return api_result(
-            Err(conflict(if stale {
-                "Resource inventory is stale."
-            } else if in_use && deleting {
-                "Resource is in use and cannot be deleted."
-            } else {
-                "Resource changed. Reload it before saving."
-            })),
-            headers,
-        );
-    }
-    Ok(())
+    api_result(
+        citadel_platforms::swarm_mutations::material_guard(
+            &state.platforms,
+            pid,
+            id,
+            secret,
+            deleting,
+            version,
+        )
+        .await
+        .map_err(platform_error),
+        headers,
+    )
 }
 
 async fn update_labels(
@@ -6811,19 +5634,19 @@ async fn update_labels(
         &headers,
     )
     .await?;
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        client(&runtime)
-            .update_labels(secret, &id, &input, &cancel)
-            .await
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        runtime.update_labels(secret, &id, &input, &cancel).await
     })
     .await;
     finish(&state, &platform, result, &headers).await
@@ -6861,7 +5684,7 @@ delete_resources!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     delete_services,
-    "service"
+    SwarmResourceKind::Service
 );
 
 delete_resources!(
@@ -6881,7 +5704,7 @@ delete_resources!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     delete_secrets,
-    "secret"
+    SwarmResourceKind::Secret
 );
 
 delete_resources!(
@@ -6901,7 +5724,7 @@ delete_resources!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     delete_configs,
-    "config"
+    SwarmResourceKind::Config
 );
 
 async fn delete_swarm_resources(
@@ -6910,14 +5733,14 @@ async fn delete_swarm_resources(
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
     body: Result<Json<DeleteSwarmResourcesInput>, JsonRejection>,
-    kind: &str,
+    kind: SwarmResourceKind,
 ) -> HttpResult {
     let Path(pid) = api_result(path.map_err(invalid_path), &headers)?;
     let platform = context(
         &state,
         principal,
         pid,
-        if kind == "service" {
+        if kind == SwarmResourceKind::Service {
             PermissionLevel::Execute
         } else {
             PermissionLevel::Write
@@ -6930,70 +5753,67 @@ async fn delete_swarm_resources(
     let mut input: citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput = input.into();
     api_result(validation(input.validate()), &headers)?;
     for id in &input.ids {
-        if kind == "service" {
+        if kind == SwarmResourceKind::Service {
             service_guard(&state, pid, id, &headers).await?;
         } else {
-            material_guard(&state, pid, id, kind == "secret", true, None, &headers).await?;
+            material_guard(
+                &state,
+                pid,
+                id,
+                kind == SwarmResourceKind::Secret,
+                true,
+                None,
+                &headers,
+            )
+            .await?;
         }
     }
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let mut removed = Vec::new();
     let result = bounded(async {
-        manager_identity(&runtime, &platform, &cancel).await?;
-        for (index, id) in input.ids.iter().enumerate() {
-            let result = if kind == "service" {
-                client(&runtime).delete_service(id, &cancel).await
-            } else {
-                client(&runtime)
-                    .delete_material(kind == "secret", id, &cancel)
-                    .await
-            };
-            match result {
-                Ok(()) => {}
-                Err(error) if error.kind == RuntimeErrorKind::NotFound => {}
-                Err(error) => return Err(partial(error, index, input.ids.len(), "Deleted")),
-            }
-            removed.push(id.clone());
-        }
-        Ok(())
+        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
+        citadel_platforms::swarm_mutations::delete_resources(
+            runtime.as_ref(),
+            &input.ids,
+            kind,
+            &cancel,
+            &mut removed,
+        )
+        .await
     })
     .await;
-    let response = finish(&state, &platform, result, &headers).await;
-    // Confirmed removals must not remain as a stale, selectable row. Ambiguous
-    // failures remain visible for reconciliation; successful siblings are removed.
-    let sql = match kind {
-        "service" => {
-            "DELETE FROM swarmserviceprojections WHERE platformid=$1 AND dockerserviceid=ANY($2)"
+    let result = citadel_platforms::swarm_mutations::finish_deletion(
+        state.projections.as_ref(),
+        state.runtime.as_ref(),
+        &platform,
+        result,
+        kind,
+        &removed,
+        |kind, operation, id| publish_runtime_change(&state, pid, kind, operation, id),
+    )
+    .await;
+    match result {
+        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
+        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Runtime(error)) => {
+            Ok(runtime_error_response(error, &headers))
         }
-        "secret" => {
-            "DELETE FROM swarmsecretprojections WHERE platformid=$1 AND dockersecretid=ANY($2)"
+        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Projection(error)) => {
+            api_result(Err(ApiError::internal(error)), &headers)
         }
-        _ => "DELETE FROM swarmconfigprojections WHERE platformid=$1 AND dockerconfigid=ANY($2)",
-    };
-    api_result(
-        sqlx::query(sql)
-            .bind(pid)
-            .bind(&removed)
-            .execute(&state.pool)
-            .await
-            .map_err(ApiError::internal),
-        &headers,
-    )?;
-    for id in removed {
-        publish_runtime_change(&state, pid, kind, "remove", &id);
     }
-    response
 }
 
 pub(crate) fn inspect_service_view(
-    value: SwarmServiceMessage,
+    value: citadel_platforms::swarm_mutations::SwarmServiceInspection,
 ) -> crate::api::resources::platforms::operation_views::ServiceInspectionView {
     crate::api::resources::platforms::operation_views::ServiceInspectionView {
         id: value.id,
@@ -7004,18 +5824,14 @@ pub(crate) fn inspect_service_view(
         running_task_count: value.running_task_count,
         desired_task_count: value.desired_task_count,
         update_state: value.update_state,
-        update_message: (!value.update_message.is_empty()).then_some(value.update_message),
+        update_message: value.update_message,
         ports: value.ports,
         network_ids: value.network_ids,
         secret_ids: value.secret_ids,
         config_ids: value.config_ids,
-        labels: value.labels.into_iter().collect(),
-        created_at: value
-            .created_at
-            .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)),
-        updated_at: value
-            .updated_at
-            .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)),
+        labels: value.labels,
+        created_at: value.created_at,
+        updated_at: value.updated_at,
     }
 }
 
@@ -7149,18 +5965,20 @@ async fn read_swarm_resource(
             )?;
         }
     }
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
     let runtime = api_result(
-        runtime_for(&state, pid)
+        state
+            .runtime
+            .swarm(pid, &cancel)
             .await
             .map_err(|e| conflict(&e.to_string())),
         &headers,
     )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
     let result = bounded(async {
-        let client = client(&runtime);
+        let client = &runtime;
         if kind == "config" {
-            manager_identity(&runtime, &platform, &cancel).await?;
+            manager_identity(runtime.as_ref(), &platform, &cancel).await?;
         }
         match kind {
             "service" => {
@@ -7257,7 +6075,7 @@ async fn get(
             .map_err(platform_error),
         &headers,
     )?;
-    if platform.platform_type != "DockerSwarm" {
+    if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
         return api_result(
             Err(ApiError::Validation(
                 "Platform must be Docker Swarm.".into(),
@@ -7296,16 +6114,9 @@ async fn get(
             &headers,
         )?;
     }
-    let descriptor = &platform.platform_descriptor;
-    let control = descriptor
-        .get("controlAvailable")
-        .or_else(|| descriptor.get("ControlAvailable"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let error = descriptor
-        .get("error")
-        .or_else(|| descriptor.get("Error"))
-        .and_then(serde_json::Value::as_str);
+    let descriptor = &platform.platform_descriptor.routing;
+    let control = descriptor.control_available;
+    let error = descriptor.error.as_deref();
     Ok(no_store(
         Json(crate::api::routes::platforms::swarm_views::overview(
             summary,
@@ -7422,11 +6233,12 @@ async fn read_task_runtime(
     let _guard = cancel.clone().drop_guard();
     // Bound both manager inspection and the node-local read with one deadline.
     let result = tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        let live = match runtime_for(&state, platform).await? {
-            RuntimeRef::Local(r) => r.inspect_task(&id, &cancel).await,
-            RuntimeRef::Agent(r) => r.inspect_task(&id, &cancel).await,
-            RuntimeRef::Edge(r) => r.inspect_task(&id, &cancel).await,
-        }?;
+        let live = state
+            .runtime
+            .tasks(platform, &cancel)
+            .await?
+            .inspect_task(&id, &cancel)
+            .await?;
         let docker_id = citadel_platforms::validate_running_task(&projection, &live)?;
         if specific == SpecificPermission::Terminal {
             return Ok(Json(TaskTerminalView {
@@ -7435,11 +6247,12 @@ async fn read_task_runtime(
             .into_response());
         }
         // Use the existing redacted Container inspection contract, not raw Task JSON.
-        let inspection = match runtime_for_node(&state, platform, Some(&live.node_id)).await? {
-            RuntimeRef::Local(r) => r.inspection(docker_id, &cancel).await,
-            RuntimeRef::Agent(r) => r.inspection(docker_id, &cancel).await,
-            RuntimeRef::Edge(r) => r.inspection(docker_id, &cancel).await,
-        }?;
+        let inspection = state
+            .runtime
+            .container_inspection(platform, Some(&live.node_id), &cancel)
+            .await?
+            .inspection(docker_id, &cancel)
+            .await?;
         let inspection = serde_json::from_value::<
             crate::api::resources::platforms::descriptor_views::ContainerInspectionView,
         >(inspection)
@@ -7611,7 +6424,7 @@ async fn download(
         Box::pin(async_stream::try_stream! {
             let _guard = guard;
             while let Some(chunk) = input.next().await { yield chunk?; }
-            let activity = citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(state.pool.clone());
+            let activity = state.volume_activity.clone();
             let details = citadel_activities::VolumeContentDownloaded { volume_name: name, path, is_directory: directory, file_name: filename };
             if !matches!(tokio::time::timeout(std::time::Duration::from_secs(5), activity.record_volume_download(principal.actor_id, platform, details)).await, Ok(Ok(()))) {
                 tracing::warn!("Could not record completed Volume download activity.");
@@ -7868,24 +6681,6 @@ mod tests {
 mod image_pull_tests {
     use crate::api::routes::platforms::*;
 
-    #[test]
-    fn pulled_image_lookup_accepts_hub_aliases_without_changing_tags_or_private_registries() {
-        assert!(same_image_reference(
-            "docker.io/library/nginx:ReleaseA",
-            "nginx:ReleaseA"
-        ));
-        assert!(same_image_reference(
-            "index.docker.io/team/image:Tag",
-            "team/image:Tag"
-        ));
-        assert!(!same_image_reference("nginx:ReleaseA", "nginx:releasea"));
-        assert!(!same_image_reference(
-            "private.example/library/nginx:Tag",
-            "nginx:Tag"
-        ));
-        assert!(!same_image_reference("other/nginx:Tag", "nginx:Tag"));
-    }
-
     #[tokio::test]
     async fn terminal_error_does_not_wait_for_space_in_a_stalled_progress_queue() {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
@@ -7934,15 +6729,16 @@ async fn attach_volume_coverage(
         .map(|v| (v.name.clone(), v.docker_node_id.clone()))
         .collect::<Vec<_>>();
     let coverage = api_result(
-        citadel_adapters::persistence::postgres::backups::coverage::volume_coverage(
-            &state.pool,
-            principal.actor_id,
-            principal.is_administrator(),
-            platform_id,
-            &keys,
-        )
-        .await
-        .map_err(|error| ApiError::internal(error)),
+        state
+            .volume_coverage
+            .volume_coverage(
+                principal.actor_id,
+                principal.is_administrator(),
+                platform_id,
+                &keys,
+            )
+            .await
+            .map_err(ApiError::internal),
         headers,
     )?;
     let mut coverage = coverage

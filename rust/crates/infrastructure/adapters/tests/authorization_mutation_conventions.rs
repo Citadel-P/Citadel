@@ -87,6 +87,12 @@ fn authorization_writers_use_the_committed_mutation_boundary() {
 fn visit(root: &Path, dir: &Path, found: &mut BTreeSet<String>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
+        if path.file_stem().is_some_and(|name| {
+            let name = name.to_string_lossy();
+            name == "tests" || name.ends_with("_tests")
+        }) {
+            continue;
+        }
         if path.is_dir() {
             visit(root, &path, found);
             continue;

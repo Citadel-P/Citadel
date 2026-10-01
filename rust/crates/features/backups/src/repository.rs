@@ -1,5 +1,14 @@
 use crate::*;
 
+pub struct BackupRepositoryOperation<'a> {
+    pub operation_id: Uuid,
+    pub operation: &'a str,
+    pub location: &'a str,
+    pub platform_id: Option<Uuid>,
+    pub succeeded: bool,
+    pub message: Option<&'a str>,
+}
+
 pub trait BackupPersistence: Send + Sync {
     fn create_repository<'a>(
         &'a self,
@@ -21,12 +30,7 @@ pub trait BackupPersistence: Send + Sync {
     fn record_repository_operation<'a>(
         &'a self,
         id: Uuid,
-        operation_id: Uuid,
-        operation: &'a str,
-        location: &'a str,
-        platform_id: Option<Uuid>,
-        succeeded: bool,
-        message: Option<&'a str>,
+        result: BackupRepositoryOperation<'a>,
     ) -> BoxFuture<'a, Result<(BackupRepository, BackupRepositoryValidation), BackupError>>;
     fn acquire_repository_operation(
         &self,

@@ -43,6 +43,33 @@ pub trait PlatformDeletionRepository: Send + Sync {
     ) -> BoxFuture<'a, Result<(), PlatformDeletionError>>;
 }
 
+pub struct PlatformDeletionService {
+    store: std::sync::Arc<dyn PlatformDeletionRepository>,
+    sessions: std::sync::Arc<dyn crate::edge_management::EdgeSessionControl>,
+}
+impl PlatformDeletionService {
+    pub fn new(
+        store: std::sync::Arc<dyn PlatformDeletionRepository>,
+        sessions: std::sync::Arc<dyn crate::edge_management::EdgeSessionControl>,
+    ) -> Self {
+        Self { store, sessions }
+    }
+    pub async fn delete(
+        &self,
+        actor: ActorId,
+        ids: &[Uuid],
+        removed: impl Fn(Uuid),
+    ) -> Result<(), PlatformDeletionError> {
+        self.store.delete(actor, ids).await?;
+        // No fallible I/O or cancellation point after the committed deletion.
+        for id in ids {
+            self.sessions.disconnect_platform(*id);
+            removed(*id);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

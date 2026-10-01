@@ -54,3 +54,63 @@ pub(crate) fn validate_resource_accesses(
     }
     Ok(accesses)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stack_interactive_permissions_can_be_granted_but_not_to_other_resources() {
+        for permission in [SpecificPermission::Terminal, SpecificPermission::Pull] {
+            let access = ResourceAccessInput {
+                resource_type: ResourceType::Stack,
+                resource_id: Uuid::now_v7(),
+                permission_level: PermissionLevel::Read,
+                specific_permissions: vec![permission],
+            };
+            assert!(validate_resource_accesses("User", vec![access.clone()]).is_ok());
+            assert!(
+                validate_resource_accesses(
+                    "Team",
+                    vec![ResourceAccessInput {
+                        permission_level: PermissionLevel::None,
+                        ..access.clone()
+                    }]
+                )
+                .is_err()
+            );
+            assert!(
+                validate_resource_accesses(
+                    "User",
+                    vec![ResourceAccessInput {
+                        resource_type: ResourceType::Tag,
+                        ..access
+                    }]
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn capability_grants_keep_their_existing_minimum_for_combined_role_assignments() {
+        for (resource_type, permission) in [
+            (ResourceType::Stack, SpecificPermission::Apply),
+            (ResourceType::BackupPolicy, SpecificPermission::Restore),
+            (ResourceType::Build, SpecificPermission::Apply),
+        ] {
+            assert!(
+                validate_resource_accesses(
+                    "User",
+                    vec![ResourceAccessInput {
+                        resource_type,
+                        resource_id: Uuid::now_v7(),
+                        permission_level: PermissionLevel::Read,
+                        specific_permissions: vec![permission],
+                    }]
+                )
+                .is_ok()
+            );
+        }
+    }
+}

@@ -1,7 +1,7 @@
 use super::*;
 use axum::http::Method;
 use citadel_adapters::connectors::edge::EdgeRegistry;
-use citadel_server::api::routes::platforms::EdgeHttpContext;
+use citadel_server::api::resources::platforms::edge::EdgeHttpContext;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
@@ -9,11 +9,12 @@ async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_an
     let fixture = fixture().await;
     let app = fixture.app.clone().layer(axum::Extension(EdgeHttpContext {
         node_agent_policy: Default::default(),
-        store:
+        store: std::sync::Arc::new(
             citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
                 fixture.pool.clone(),
             ),
-        registry: EdgeRegistry::default(),
+        ),
+        registry: std::sync::Arc::new(EdgeRegistry::default()),
         core_url: "https://core.example.test".into(),
         agent_image: "ghcr.io/citadel-p/citadel.agent:latest".into(),
         node_agent_ca_bundle: None,
@@ -159,7 +160,7 @@ async fn edge_network_and_volume_endpoints_use_the_bound_session_and_enforce_per
         .execute(&fixture.pool)
         .await
         .unwrap();
-    let registry = &fixture.lookup_state.platforms.edge;
+    let registry = &fixture.edge;
     let target = EdgeTarget::platform(platform);
     let (session, mut receiver) = registry.register(target.clone(), Uuid::now_v7()).unwrap();
     let mut denied = fixture.administrator.clone();

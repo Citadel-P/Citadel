@@ -91,12 +91,7 @@ async fn exercise_adoption(external: bool) {
     )
     .with_adoption(Arc::new(PostgresContainerAdoption::new(
         f.pool.clone(),
-        ContainerRuntimeRouter::new(
-            f.pool.clone(),
-            docker,
-            None,
-            f.lookup_state.platforms.edge.clone(),
-        ),
+        ContainerRuntimeRouter::new(f.pool.clone(), docker, None, f.edge.clone()),
         protector.clone(),
         &[11; 32],
     )));

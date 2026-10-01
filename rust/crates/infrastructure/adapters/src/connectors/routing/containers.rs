@@ -1,8 +1,8 @@
-use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort};
+use citadel_platforms::ContainerInventoryPort;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, containers::*};
 use citadel_runtime::runtime_metrics::RuntimeWork;
 use futures_util::{StreamExt, future::BoxFuture};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -10,32 +10,16 @@ use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::client::AgentContainerAction;
 use crate::connectors::docker::DockerClient;
 use crate::connectors::edge::EdgeRegistry;
-use crate::connectors::edge::EdgeRuntime;
-use crate::connectors::edge::EdgeTarget;
 
-/// Hosting supplies its existing connection owner; adapters never depend on Server.
-pub trait PlatformAgentResolver: Send + Sync {
-    fn resolve_agent<'a>(
-        &'a self,
-        platform: uuid::Uuid,
-        address: &'a str,
-    ) -> BoxFuture<'a, Result<Arc<AgentClient>, RuntimeCapabilityError>>;
-}
+use super::platforms::runtime::PlatformAgentResolver;
+use super::platforms::runtime::PlatformRuntimeRouter;
+pub(crate) use super::platforms::runtime::Runtime;
 
 #[derive(Clone)]
 pub struct ContainerRuntimeRouter {
     pool: PgPool,
-    docker: DockerClient,
-    agent: Option<AgentClient>,
-    edge: EdgeRegistry,
+    runtime: PlatformRuntimeRouter,
     local_calls: Arc<tokio::sync::Semaphore>,
-    resolver: Option<Arc<dyn PlatformAgentResolver>>,
-}
-
-pub(crate) enum Runtime<'a> {
-    Local(&'a DockerClient),
-    Agent(Arc<AgentClient>),
-    Edge(EdgeRuntime),
 }
 
 impl ContainerRuntimeRouter {
@@ -46,18 +30,19 @@ impl ContainerRuntimeRouter {
         edge: EdgeRegistry,
     ) -> Self {
         Self {
+            runtime: PlatformRuntimeRouter::new(pool.clone(), docker, agent, edge),
             pool,
-            docker,
-            agent,
-            edge,
-            resolver: None,
             local_calls: Arc::new(tokio::sync::Semaphore::new(CONTAINER_IO_CONCURRENCY)),
         }
     }
 
     pub fn with_agent_resolver(mut self, resolver: Arc<dyn PlatformAgentResolver>) -> Self {
-        self.resolver = Some(resolver);
+        self.runtime = self.runtime.with_agent_resolver(resolver);
         self
+    }
+
+    pub fn runtime_router(&self) -> PlatformRuntimeRouter {
+        self.runtime.clone()
     }
 
     pub fn into_service(
@@ -81,67 +66,14 @@ impl ContainerRuntimeRouter {
         cancellation: &CancellationToken,
     ) -> Result<Runtime<'_>, RuntimeCapabilityError> {
         let _resolve = RuntimeWork::ContainerRuntimeResolve.start();
-        let row = sqlx::query("SELECT connectortype,address,status,platformdescriptor->>'nodeID' nodeid FROM platforms WHERE id=$1")
-            .bind(target.platform_id).fetch_optional(&self.pool).await.map_err(storage)?.ok_or_else(unavailable)?;
-        if row.get::<String, _>("status") != "Online" {
-            return Err(unavailable());
-        }
-        if let Some(node) = &target.node_id {
-            let stale: Option<bool> = sqlx::query_scalar(
-                "SELECT isstale FROM swarmnodeprojections WHERE platformid=$1 AND dockernodeid=$2",
+        self.runtime
+            .resolve(
+                target.platform_id,
+                target.node_id.as_deref(),
+                true,
+                cancellation,
             )
-            .bind(target.platform_id)
-            .bind(node)
-            .fetch_optional(&self.pool)
             .await
-            .map_err(storage)?;
-            if stale != Some(false) {
-                return Err(unavailable());
-            }
-            if let Ok(session) = self
-                .edge
-                .get(&EdgeTarget::node(target.platform_id, node.clone()))
-            {
-                return Ok(Runtime::Edge(EdgeRuntime { session }));
-            }
-            if row.get::<Option<String>, _>("nodeid").as_ref() != Some(node) {
-                return Err(unavailable());
-            }
-        }
-        let connector: String = row.get("connectortype");
-        let address: String = row.get("address");
-        let runtime = match connector.as_str() {
-            "Local" => Runtime::Local(&self.docker),
-            "Agent" => Runtime::Agent(match &self.resolver {
-                Some(resolver) => resolver.resolve_agent(target.platform_id, &address).await?,
-                None => Arc::new(
-                    self.agent
-                        .as_ref()
-                        .ok_or_else(unavailable)?
-                        .at_address(&address)?,
-                ),
-            }),
-            "EdgeAgent" => Runtime::Edge(EdgeRuntime {
-                session: self
-                    .edge
-                    .get(&EdgeTarget::platform(target.platform_id))
-                    .map_err(|_| unavailable())?,
-            }),
-            _ => return Err(unavailable()),
-        };
-        if let Some(node) = &target.node_id {
-            let info = match &runtime {
-                Runtime::Local(r) => r.get_info(cancellation).await,
-                Runtime::Agent(r) => r.get_info(cancellation).await,
-                Runtime::Edge(r) => r.get_info(cancellation).await,
-            }?;
-            if !info.swarm.is_some_and(|s| {
-                s.node_id == *node && s.local_node_state.eq_ignore_ascii_case("active")
-            }) {
-                return Err(unavailable());
-            }
-        }
-        Ok(runtime)
     }
 }
 
@@ -434,20 +366,10 @@ fn agent_state(
     })?;
     Ok((response.id, state.as_str_name().to_owned()))
 }
-fn unavailable() -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(
-        RuntimeErrorKind::Unavailable,
-        "The owning Container runtime is disconnected or unavailable.",
-        false,
-    )
-}
 fn cancelled() -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(
         RuntimeErrorKind::Cancelled,
         "Container operation cancelled.",
         false,
     )
-}
-fn storage(error: sqlx::Error) -> RuntimeCapabilityError {
-    RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
 }

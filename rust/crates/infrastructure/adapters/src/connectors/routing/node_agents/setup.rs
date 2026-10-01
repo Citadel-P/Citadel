@@ -12,7 +12,7 @@ impl NodeAgentRuntimeRouter {
         claim: &NodeAgentRemovalClaim,
         cancel: &CancellationToken,
     ) -> Result<Target, RuntimeCapabilityError> {
-        let target = self.target(claim.platform_id).await?;
+        let target = self.target(claim.platform_id, cancel).await?;
         validate_identity(&target.inventory().get_info(cancel).await?, claim)?;
         Ok(target)
     }
@@ -42,7 +42,7 @@ impl NodeAgentSetupRuntime for NodeAgentRuntimeRouter {
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeInventorySnapshot, RuntimeCapabilityError>> {
         Box::pin(async move {
-            let target = self.target(claim.platform_id).await?;
+            let target = self.target(claim.platform_id, cancel).await?;
             let snapshot = citadel_platforms::jobs::collect_swarm_snapshot(
                 target.inventory(),
                 &citadel_platforms::jobs::InventoryCollectionTarget {

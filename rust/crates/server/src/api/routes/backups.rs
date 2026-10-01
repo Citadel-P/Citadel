@@ -1,4 +1,5 @@
 //! Backups HTTP routes, authorization and local request handling.
+use crate::api::resources::backups::patch::typed_patch;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -1295,20 +1296,13 @@ async fn enqueue_restore(
     h: &HeaderMap,
 ) -> HttpResult<citadel_backups::BackupRestoreRun> {
     let source = result(s.backups.store().get_run(id).await, h)?;
-    let permission = auth(
-        s,
-        p,
-        ResourceType::BackupPolicy,
-        PermissionLevel::Execute,
-        Some(source.backup_policy_id),
-        h,
-    )
-    .await?;
     api_result(
-        permission
-            .has_specific(citadel_primitives::SpecificPermission::Restore)
-            .then_some(())
-            .ok_or(ApiError::Forbidden),
+        s.identity
+            .require_resource::<citadel_backups::permissions::RestoreBackupPolicy>(
+                p,
+                source.backup_policy_id,
+            )
+            .await,
         h,
     )?;
     auth(
@@ -1648,7 +1642,7 @@ async fn enqueue_backup(
     let run = result(
         s.backups
             .store()
-            .enqueue_backup(p.actor_id, id, &trigger)
+            .enqueue_backup(p.actor_id, id, trigger)
             .await,
         h,
     )?;
@@ -1981,7 +1975,7 @@ fn response(
                 }
             };
             let authorized=state.identity.permission_for_resource(&principal,ResourceType::BackupPolicy,policy_id).await;
-            if !authorized.ok().flatten().is_some_and(|p|p.level.grants(PermissionLevel::Execute) && (!restore || p.has_specific(citadel_primitives::SpecificPermission::Restore))) {break;}
+            if !authorized.ok().flatten().is_some_and(|p|p.allows(if restore { citadel_backups::permissions::RestoreBackupPolicy::REQUIREMENT } else { citadel_backups::permissions::ExecuteBackupPolicy::REQUIREMENT })) {break;}
             if let Some(item)=update && !is_terminal(item.status.as_deref().unwrap_or("Running")) {
                 received_output |= item.status.is_none();
                 yield encode((*item).clone(),restore,true);
@@ -2052,17 +2046,4 @@ fn encode(
         )?;
     }
     Ok(bytes.into())
-}
-
-fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
-    patch: serde_json::Value,
-) -> Result<serde_json::Value, ApiError> {
-    if !patch.is_object() {
-        return Err(crate::request_validation::validation_error(
-            "Backup update must be an object.".into(),
-        ));
-    }
-    let patch: T = serde_path_to_error::deserialize(patch)
-        .map_err(|error| crate::request_validation::validation_error(error.to_string()))?;
-    serde_json::to_value(patch).map_err(ApiError::internal)
 }

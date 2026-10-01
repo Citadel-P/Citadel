@@ -1,12 +1,6 @@
 use super::*;
-use crate::{
-    api::{
-        resources::platforms::views::ContainerView,
-        routes::platforms::{RuntimeRef, runtime_for_node},
-    },
-    realtime::topic::Topic,
-};
-use citadel_platforms::{StatisticsReader, SwarmTaskRuntimePort, terminal::*};
+use crate::{api::resources::platforms::views::ContainerView, realtime::topic::Topic};
+use citadel_platforms::terminal::*;
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
@@ -49,21 +43,18 @@ impl ApplicationGroupReader {
                 .map_err(failure)?
                 .ok_or(RealtimeReadError::Authorization)?;
             let cancel = CancellationToken::new();
-            let runtime = runtime_for_node(&self.docker, platform, None)
+            let live = self
+                .runtime
+                .tasks(platform, &cancel)
+                .await
+                .map_err(failure)?
+                .inspect_task(task, &cancel)
                 .await
                 .map_err(failure)?;
-            let live = match runtime {
-                RuntimeRef::Local(r) => r.inspect_task(task, &cancel).await,
-                RuntimeRef::Agent(r) => r.inspect_task(task, &cancel).await,
-                RuntimeRef::Edge(r) => r.inspect_task(task, &cancel).await,
-            }
-            .map_err(failure)?;
             let docker_id =
                 citadel_platforms::validate_running_task(&projection, &live).map_err(failure)?;
-            let store = citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(
-                self.docker.pool.clone(),
-            );
-            let target = store
+            let target = self
+                .statistics
                 .task_container(platform, &live.node_id, docker_id)
                 .await
                 .map_err(failure)?
@@ -129,30 +120,14 @@ impl ApplicationGroupReader {
             .map_err(|_| failure("Terminal capacity exceeded."))?;
         // Subscribe before resolving the target. A session must never silently move
         // to a replacement container or continue using a stale node projection.
-        let mut changes = self.docker.realtime.as_ref().map(|hub| hub.subscribe());
+        let mut changes = self.realtime.as_ref().map(|hub| hub.subscribe());
         let target = self.terminal_target(p, g).await?;
-        let runtime = runtime_for_node(
-            &self.docker,
-            target.platform_id,
-            target.docker_node_id.as_deref(),
-        )
-        .await
-        .map_err(failure)?;
-        let TerminalSession { input, mut output } = match runtime {
-            RuntimeRef::Local(r) => {
-                r.container_terminal(&target.container_id, shell, cancel)
-                    .await
-            }
-            RuntimeRef::Agent(r) => {
-                r.container_terminal(&target.container_id, shell, cancel)
-                    .await
-            }
-            RuntimeRef::Edge(r) => {
-                r.container_terminal(&target.container_id, shell, cancel)
-                    .await
-            }
-        }
-        .map_err(failure)?;
+        let TerminalSession { input, mut output } = self
+            .runtime
+            .streams(target.platform_id, target.docker_node_id.as_deref())
+            .container_terminal(&target.container_id, shell, cancel)
+            .await
+            .map_err(failure)?;
         let reader = self.clone();
         let principal = p.clone();
         let group = g.clone();

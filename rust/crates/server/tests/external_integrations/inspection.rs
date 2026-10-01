@@ -65,8 +65,27 @@ pub async fn verify(
     let (id, docker_id) = &rows[0];
     let edge = EdgeRegistry::default();
     let app = platforms_http::router(PlatformsHttpState {
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+    node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone()),edge:edge.clone()}),
+    node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge.clone()}),
+    deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
+        Arc::new(citadel_adapters::persistence::postgres::platforms::deletion::PostgresPlatformDeletionRepository::new(pool.clone())),
+        Arc::new(edge.clone()),
+    )),
+    management: Arc::new(citadel_platforms::management::PlatformManagementService::new(
+            Arc::new(citadel_adapters::persistence::postgres::platforms::management::PostgresPlatformManagementRepository(pool.clone())),
+            Arc::new(citadel_adapters::connectors::routing::platforms::management::PlatformManagementRuntimeAdapter {local:docker.clone(),agent:None,edge:edge.clone()}),
+        )),
+    image_store: Arc::new(citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(pool.clone())),
+    projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())),
+        statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
+        services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
+        runtime: Arc::new(citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone())),
         tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
-        volume_content: Arc::new(VolumeContentAdapter::new(
+        volume_activity: Arc::new(citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(pool.clone())),
+    volume_coverage: Arc::new(citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(pool.clone())),
+    registry_browser: Arc::new(citadel_adapters::connectors::registries::browser::DefaultRegistryBrowser::default()),
+    volume_content: Arc::new(VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
@@ -86,7 +105,6 @@ pub async fn verify(
             Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
             Arc::new(PlatformRegistrationRuntimeRouter::new(docker.clone(), None)),
         )),
-        pool: pool.clone(),
         registries: Arc::new(
             citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
@@ -95,9 +113,6 @@ pub async fn verify(
                 pool.clone(),
             ),
         ),
-        docker: docker.clone(),
-        agent: None,
-        edge,
         realtime: None,
         stats_sample_max_age: Duration::from_secs(30),
     })

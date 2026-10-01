@@ -17,7 +17,7 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
     let f = fixture().await;
     let reader = super::lookup::subject(&f).await;
     let base = format!("/api/v1/platforms/{}/volumes/data/files", f.platform_id);
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

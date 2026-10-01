@@ -164,7 +164,7 @@ async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initial
     // Replace the router's transport with the fixture using the same persisted
     // identity/permission services as the other Platform HTTP scenarios.
     let mut state = fixture.lookup_state.platforms.clone();
-    state.docker = docker;
+    refresh_runtime(&mut state, &fixture, docker);
     let app = platforms_http::router(state);
     sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&fixture.pool).await.unwrap();
     sqlx::query("DELETE FROM swarmnodeprojections WHERE platformid=$1")

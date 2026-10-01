@@ -261,6 +261,16 @@ impl SwarmNodeAgentCoverage {
     }
 }
 
+pub trait NodeAgentCoverageReader: Send + Sync {
+    fn read<'a>(
+        &'a self,
+        platform: &'a crate::PlatformDetails,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<SwarmNodeAgentCoverage, crate::AuthorizedReadError>,
+    >;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

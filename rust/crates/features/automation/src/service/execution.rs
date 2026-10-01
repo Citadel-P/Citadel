@@ -97,43 +97,22 @@ impl AutomationService {
             }
         };
         let directory = self.work_root.join(claim.run.id.to_string());
-        if let Some(cache) = &self.cache_directory
-            && let Err(error) = tokio::fs::create_dir_all(cache).await
-        {
-            return AutomationRunResult::failed(
-                None,
-                format!("Could not prepare Deno cache: {error}"),
-            );
-        }
-        if let Err(error) = tokio::fs::create_dir_all(&directory).await {
-            return AutomationRunResult::failed(None, format!("Could not prepare run: {error}"));
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            // The script contains a short-lived credential. Restrict the run
-            // directory before writing it, regardless of the process umask.
-            if let Err(error) =
-                tokio::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).await
-            {
-                let _ = tokio::fs::remove_dir(&directory).await;
-                return AutomationRunResult::failed(
-                    None,
-                    format!("Could not secure run directory: {error}"),
-                );
-            }
-        }
-        let script = directory.join("action.ts");
         let source = automation_source(
             &self.internal_base_url,
             &token,
             &claim.run,
             &self.endpoint_catalog_json,
         );
-        if let Err(error) = tokio::fs::write(&script, source.as_bytes()).await {
-            let _ = tokio::fs::remove_dir_all(&directory).await;
-            return AutomationRunResult::failed(None, format!("Could not write action: {error}"));
-        }
+        let mut workspace = match self
+            .workspace
+            .prepare(&directory, self.cache_directory.as_deref(), &source)
+            .await
+        {
+            Ok(workspace) => workspace,
+            Err(error) => return AutomationRunResult::failed(None, error),
+        };
+        let directory = workspace.directory();
+        let script = workspace.script();
         let mut args = vec![
             OsString::from("run"),
             OsString::from("--no-prompt"),
@@ -152,7 +131,7 @@ impl AutomationService {
         args.push(script.as_os_str().to_owned());
         let mut request = ProcessRequest::new(self.deno_path.clone())
             .args(args)
-            .current_dir(&directory)
+            .current_dir(directory)
             .env("NO_COLOR", "1")
             .env("CITADEL_ACTION_ARGS", &claim.run.args_json)
             .limits(ProcessLimits {
@@ -217,7 +196,7 @@ impl AutomationService {
         } else {
             self.process.run(request, cancellation).await
         };
-        let _ = tokio::fs::remove_dir_all(&directory).await;
+        let _ = workspace.cleanup().await;
         match output {
             Ok(output) => {
                 let logs = redact_run_logs(

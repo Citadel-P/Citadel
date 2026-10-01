@@ -64,7 +64,7 @@ async fn task_inspection_and_terminal_preserve_permissions_node_identity_and_red
             .status(),
         StatusCode::FORBIDDEN
     );
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

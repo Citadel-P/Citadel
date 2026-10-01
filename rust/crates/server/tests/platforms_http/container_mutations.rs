@@ -92,7 +92,7 @@ async fn six_container_http_selection_sends_one_edge_mutation_then_verifies_each
         matches!(store.claim(f.administrator.actor_id, true, &resolved, ContainerAction::Start).await,
         Err(error) if error.kind == RuntimeErrorKind::NotFound)
     );
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -889,7 +889,7 @@ async fn container_commands_use_the_owning_edge_node_and_confirm_deletion_withou
         .execute(&f.pool)
         .await
         .unwrap();
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),
@@ -1104,7 +1104,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
             f.pool.clone(),
             DockerClient::new(&path, StdDuration::from_secs(2)).unwrap(),
             None,
-            f.lookup_state.platforms.edge.clone(),
+            f.edge.clone(),
         );
         let service = Arc::new(runtime.into_service(Arc::new(
             citadel_server::tasks::platforms::TrackedContainerTasks::new(

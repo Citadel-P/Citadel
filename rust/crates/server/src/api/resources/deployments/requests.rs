@@ -143,16 +143,10 @@ mod tests {
             }
         })).unwrap();
         assert_eq!(input.spec.update_behavior, UpdateBehavior::Disabled);
-        assert!(
-            citadel_deployments::DeploymentSpec::from(input.spec.clone())
-                .validate()
-                .is_ok()
-        );
+        assert!(input.spec.clone().validate().is_ok());
         assert_eq!(input.spec.networks, Some(vec!["bridge".into()]));
         assert_eq!(
-            citadel_deployments::DeploymentSpec::from(input.spec.clone())
-                .to_storage_value()
-                .unwrap()["UpdateBehavior"],
+            input.spec.clone().to_storage_value().unwrap()["UpdateBehavior"],
             "Disabled"
         );
     }

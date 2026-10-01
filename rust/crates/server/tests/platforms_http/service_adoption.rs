@@ -13,11 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
     let (mut f, runtime) = super::swarm_inventory::fixture_swarm().await;
-    let router = SwarmServiceRuntimeRouter::new(
-        f.pool.clone(),
-        f.lookup_state.platforms.docker.clone(),
-        None,
-    );
+    let router = SwarmServiceRuntimeRouter::new(f.pool.clone(), f.docker.clone(), None);
     let services = SwarmServiceService::new(
         Arc::new(
             citadel_server::tasks::swarm_services::TrackedSwarmServiceTasks::new(

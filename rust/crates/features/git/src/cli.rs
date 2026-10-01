@@ -1,7 +1,7 @@
 pub use citadel_execution::ProcessRunner as GitProcessPort;
 use std::ffi::{OsStr, OsString};
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use std::sync::Arc;
 
@@ -16,6 +16,7 @@ use futures_util::future::BoxFuture;
 
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
 use uuid::Uuid;
 
 const GIT_STDOUT_LIMIT: usize = 64 * 1024;
@@ -103,6 +104,7 @@ pub enum GitError {
 
 pub struct GitCli {
     process: Arc<dyn GitProcessPort>,
+    pub(crate) workspace: Arc<dyn crate::workspace::GitWorkspacePort>,
     executable: OsString,
     timeout: Duration,
 }
@@ -147,18 +149,24 @@ impl GitCli {
     }
 
     #[must_use]
-    pub fn new(process: Arc<dyn GitProcessPort>, timeout: Duration) -> Self {
-        Self::with_process(process, "git", timeout)
+    pub fn new(
+        process: Arc<dyn GitProcessPort>,
+        workspace: Arc<dyn crate::workspace::GitWorkspacePort>,
+        timeout: Duration,
+    ) -> Self {
+        Self::with_process(process, workspace, "git", timeout)
     }
 
     #[must_use]
     pub fn with_process(
         process: Arc<dyn GitProcessPort>,
+        workspace: Arc<dyn crate::workspace::GitWorkspacePort>,
         executable: impl Into<OsString>,
         timeout: Duration,
     ) -> Self {
         Self {
             process,
+            workspace,
             executable: executable.into(),
             timeout,
         }
@@ -238,12 +246,12 @@ impl GitCli {
         validate_remote(url)?;
         validate_branch(branch)?;
         let git_directory = target.join(".git");
-        let cloned = if tokio::fs::try_exists(&git_directory).await? {
+        let cloned = if self.workspace.exists(&git_directory).await? {
             self.fetch_and_reset(url, target, branch, environment, cancellation)
                 .await?;
             false
         } else {
-            if tokio::fs::try_exists(target).await? {
+            if self.workspace.exists(target).await? {
                 return Err(GitError::Validation(
                     "Repository cache exists but is not a Git worktree.".to_owned(),
                 ));
@@ -579,11 +587,7 @@ impl GitCli {
         environment: &[(OsString, OsString)],
         cancellation: &CancellationToken,
     ) -> Result<(), GitError> {
-        let parent = target.parent().ok_or_else(|| {
-            GitError::Validation("Repository cache path must have a parent directory.".to_owned())
-        })?;
-        tokio::fs::create_dir_all(parent).await?;
-        let staging = staging_path(target);
+        let mut staging = self.workspace.stage(target).await?;
         let result = self
             .success(
                 self.remote_request_os(
@@ -594,7 +598,7 @@ impl GitCli {
                         OsStr::new(branch),
                         OsStr::new("--"),
                         OsStr::new(url),
-                        staging.as_os_str(),
+                        staging.path().as_os_str(),
                     ],
                     environment,
                 ),
@@ -602,11 +606,11 @@ impl GitCli {
             )
             .await;
         if let Err(error) = result {
-            remove_directory_if_present(&staging).await;
+            let _ = staging.cleanup().await;
             return Err(error);
         }
-        if let Err(error) = tokio::fs::rename(&staging, target).await {
-            remove_directory_if_present(&staging).await;
+        if let Err(error) = staging.publish(target).await {
+            let _ = staging.cleanup().await;
             return Err(GitError::Io(error));
         }
         Ok(())
@@ -954,27 +958,30 @@ fn is_object_id(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn staging_path(target: &Path) -> PathBuf {
-    let name = target
-        .file_name()
-        .and_then(OsStr::to_str)
-        .unwrap_or("repository");
-    target.with_file_name(format!(".{name}.citadel-{}", Uuid::now_v7().simple()))
-}
-
-async fn remove_directory_if_present(path: &Path) {
-    match tokio::fs::remove_dir_all(path).await {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => {
-            tracing::warn!(path = %path.display(), %error, "failed to clean Git staging directory")
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct TestWorkspace;
+    impl crate::workspace::GitWorkspacePort for TestWorkspace {
+        fn exists<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, std::io::Result<bool>> {
+            Box::pin(tokio::fs::try_exists(path))
+        }
+        fn stage<'a>(
+            &'a self,
+            _: &'a Path,
+        ) -> BoxFuture<'a, std::io::Result<Box<dyn crate::workspace::GitStagingDirectory>>>
+        {
+            Box::pin(async { panic!("unexpected clone") })
+        }
+        fn credential<'a>(
+            &'a self,
+            _: &'a Path,
+            _: &'a str,
+        ) -> BoxFuture<'a, std::io::Result<Box<dyn crate::workspace::GitCredentialFile>>> {
+            Box::pin(async { panic!("unexpected credential") })
+        }
+    }
+
     use std::collections::VecDeque;
     use std::sync::Mutex;
 
@@ -1020,7 +1027,12 @@ mod tests {
         let process = Arc::new(FakeProcess::with_outputs(vec![output(
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/heads/zeta\ninvalid\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/main\n",
         )]));
-        let cli = GitCli::with_process(process, "git", Duration::from_secs(1));
+        let cli = GitCli::with_process(
+            process,
+            Arc::new(TestWorkspace),
+            "git",
+            Duration::from_secs(1),
+        );
 
         let branches = cli
             .list_remote_branches("https://example.test/repo.git", &CancellationToken::new())
@@ -1034,7 +1046,12 @@ mod tests {
     #[tokio::test]
     async fn remote_starting_with_an_option_is_rejected_without_execution() {
         let process = Arc::new(FakeProcess::default());
-        let cli = GitCli::with_process(process.clone(), "git", Duration::from_secs(1));
+        let cli = GitCli::with_process(
+            process.clone(),
+            Arc::new(TestWorkspace),
+            "git",
+            Duration::from_secs(1),
+        );
 
         let error = cli
             .test_connection("--upload-pack=malicious", &CancellationToken::new())
@@ -1059,7 +1076,12 @@ mod tests {
             output(""),
             output(commit),
         ]));
-        let cli = GitCli::with_process(process.clone(), "git", Duration::from_secs(1));
+        let cli = GitCli::with_process(
+            process.clone(),
+            Arc::new(TestWorkspace),
+            "git",
+            Duration::from_secs(1),
+        );
 
         let result = cli
             .synchronize(

@@ -131,7 +131,9 @@ async fn manager_inventory_pins_cluster_and_rejects_identity_changes() {
                 &citadel_platforms::jobs::ResourceSnapshot {
                     platform_id: snapshot.platform_id,
                     observed_at: chrono::Utc::now(),
-                    inventory: citadel_platforms::jobs::ResourceInventory::Platform(wrong),
+                    inventory: citadel_platforms::jobs::ResourceInventory::Platform(Box::new(
+                        wrong
+                    )),
                 }
             )
             .await
@@ -803,9 +805,9 @@ async fn verify_node_local_resources(
             &citadel_platforms::jobs::ResourceSnapshot {
                 platform_id: platform,
                 observed_at: started,
-                inventory: citadel_platforms::jobs::ResourceInventory::Platform(
+                inventory: citadel_platforms::jobs::ResourceInventory::Platform(Box::new(
                     snapshot.info.clone(),
-                ),
+                )),
             },
         )
         .await

@@ -49,10 +49,7 @@ impl BackupService {
                     }
                     Err(error) => {
                         let mut message = error.to_string();
-                        if let Some(directory) = plan.local_directory.as_deref()
-                            && let Err(cleanup) = tokio::fs::remove_dir_all(directory).await
-                            && cleanup.kind() != std::io::ErrorKind::NotFound
-                        {
+                        if let Err(cleanup) = self.planner.cleanup_staging(&plan).await {
                             message.push_str(&format!(
                                 "; recovery staging cleanup also failed: {cleanup}"
                             ));

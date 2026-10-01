@@ -13,6 +13,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 use std::sync::Arc;
 
 mod logs;
+mod runtime;
 mod terminal;
 #[cfg(test)]
 mod tests;
@@ -33,7 +34,9 @@ pub struct ApplicationGroupReader {
     pub backups: Arc<dyn BackupPersistence>,
     pub activities: Arc<ActivityService>,
     pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
-    pub docker: crate::api::routes::platforms::PlatformsHttpState,
+    pub runtime: Arc<dyn citadel_platforms::runtime_provider::PlatformRuntimeProvider>,
+    pub statistics: Arc<dyn citadel_platforms::StatisticsReader>,
+    pub realtime: Option<crate::realtime::RealtimeHub>,
 }
 
 fn failure(error: impl std::fmt::Display) -> RealtimeReadError {
@@ -552,8 +555,8 @@ impl ApplicationGroupReader {
                 }
                 if let Some(event) = e
                     && let Some(snapshot) =
-                        crate::api::routes::platforms::realtime_resource_snapshot(
-                            &self.docker,
+                        runtime::realtime_resource_snapshot(
+                            self,
                             p,
                             id.unwrap(),
                             lease,
@@ -563,8 +566,8 @@ impl ApplicationGroupReader {
                 {
                     return Ok(snapshot);
                 }
-                let mut result = crate::api::routes::platforms::realtime_daemon_snapshot(
-                    &self.docker,
+                let mut result = runtime::realtime_daemon_snapshot(
+                    self,
                     p,
                     id.unwrap(),
                     lease,
@@ -606,7 +609,7 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?
                     .is_some_and(|platform| {
-                        matches!(platform.platform_type.as_str(), "DockerSwarm" | "Swarm")
+                        platform.platform_type == citadel_platforms::PlatformKind::DockerSwarm
                     })
                 {
                     result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
@@ -760,7 +763,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationActions => rows(
                 "AutomationActionInfoUpdated",
-                crate::api::routes::automation::authorized_actions(
+                crate::api::resources::automation::authorized::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     self.automation.list(actor, admin).await.map_err(failure)?,
@@ -771,7 +774,7 @@ impl ApplicationGroupReader {
             ),
             Topic::AutomationAction(..) => rows(
                 "AutomationActionInfoUpdated",
-                crate::api::routes::automation::authorized_actions(
+                crate::api::resources::automation::authorized::authorized_actions(
                     self.automation.as_ref(),
                     p,
                     vec![self.automation.get(id.unwrap()).await.map_err(failure)?],
@@ -869,7 +872,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
-                crate::api::routes::builds::authorized_projects(
+                crate::api::resources::builds::authorized::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     self.builds.list(actor, admin).await.map_err(failure)?,
@@ -880,7 +883,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildProject(..) => rows(
                 "BuildProjectInfoUpdated",
-                crate::api::routes::builds::authorized_projects(
+                crate::api::resources::builds::authorized::authorized_projects(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
@@ -891,7 +894,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPools => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::api::routes::builds::authorized_pools(
+                crate::api::resources::builds::authorized::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     self.builds
@@ -905,7 +908,7 @@ impl ApplicationGroupReader {
             ),
             Topic::BuildAgentPool(..) => rows(
                 "BuildAgentPoolInfoUpdated",
-                crate::api::routes::builds::authorized_pools(
+                crate::api::resources::builds::authorized::authorized_pools(
                     self.builds.as_ref(),
                     p,
                     vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
@@ -1061,7 +1064,7 @@ impl ApplicationGroupReader {
         let records = self
             .activities
             .list(
-                &crate::api::routes::activities::activity_access(p),
+                &crate::api::resources::activities::authorized::activity_access(p),
                 ActivityFilter {
                     resource_id: g.id(),
                     resource_type: Some(kind),

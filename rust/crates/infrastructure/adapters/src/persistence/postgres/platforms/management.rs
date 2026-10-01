@@ -14,7 +14,7 @@ pub async fn update(
     rename: bool,
 ) -> Result<(), PlatformRegistrationError> {
     let address = if input.connector_type == citadel_platforms::PlatformConnectorType::Local {
-        if current.connector_type == "Local" {
+        if current.connector_type == citadel_platforms::ConnectorKind::Local {
             current.address.as_str()
         } else {
             citadel_platforms::LOCAL_DOCKER_ADDRESS
@@ -43,7 +43,9 @@ pub async fn update(
         || (!rename
             && (row.get::<String, _>("address") != current.address
                 || row.get::<Option<String>, _>("description") != current.description
-                || row.get::<String, _>("connectortype") != current.connector_type
+                || super::classification::connector_kind(row.get("connectortype"))
+                    .map_err(storage)?
+                    != current.connector_type
                 || row.get::<Option<String>, _>("clusterid") != current.cluster_id
                 || row.get::<bool, _>("prunehistoricalswarmtaskcontainers")
                     != current.prune_historical_swarm_task_containers))
@@ -114,4 +116,20 @@ pub async fn update(
 
 fn storage(error: sqlx::Error) -> PlatformRegistrationError {
     PlatformRegistrationError::Storage(error.to_string())
+}
+
+pub struct PostgresPlatformManagementRepository(pub PgPool);
+impl citadel_platforms::management::PlatformManagementRepository
+    for PostgresPlatformManagementRepository
+{
+    fn update<'a>(
+        &'a self,
+        current: &'a PlatformDetails,
+        input: &'a CreatePlatformInput,
+        info: Option<&'a RuntimePlatformInfo>,
+        actor: ActorId,
+        rename: bool,
+    ) -> futures_util::future::BoxFuture<'a, Result<(), PlatformRegistrationError>> {
+        Box::pin(update(&self.0, current, input, info, actor, rename))
+    }
 }

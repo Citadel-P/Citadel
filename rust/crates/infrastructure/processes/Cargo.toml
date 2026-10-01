@@ -9,9 +9,6 @@ citadel-execution = { path = "../../features/execution" }
 futures-util.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-[dev-dependencies]
-citadel-git = { path = "../../features/git" }
-uuid.workspace = true
 
 [lints]
 workspace = true

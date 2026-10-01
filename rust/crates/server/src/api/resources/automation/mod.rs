@@ -5,3 +5,5 @@ pub mod spec;
 #[cfg(test)]
 mod tests;
 pub mod views;
+
+pub(crate) mod authorized;

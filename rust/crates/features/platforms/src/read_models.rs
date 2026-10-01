@@ -55,16 +55,16 @@ pub struct PlatformDetails {
     pub agent_version: Option<String>,
     pub server_version: Option<String>,
     #[serde(rename = "type")]
-    pub platform_type: String,
+    pub platform_type: crate::PlatformKind,
     pub status: citadel_primitives::PlatformStatus,
-    pub connector_type: String,
+    pub connector_type: crate::ConnectorKind,
     pub deployment_count: i64,
     pub stack_count: i64,
     pub deployment_status_counts: WorkloadStatusCounts,
     pub stack_status_counts: WorkloadStatusCounts,
     pub swarm_service_status_counts: WorkloadStatusCounts,
     pub stats: Option<Vec<PlatformStatSnapshot>>,
-    pub platform_descriptor: Value,
+    pub platform_descriptor: crate::PlatformDescriptor,
     pub cluster_id: Option<String>,
     pub prune_historical_swarm_task_containers: bool,
 }
@@ -373,4 +373,12 @@ pub struct PlatformTelemetryContext {
     pub volume_count: i32,
     pub image_count: i64,
     pub descriptor: Value,
+}
+
+/// A persisted image selection retains the node that owns its Docker content ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageIdentity {
+    pub docker_image_id: String,
+    pub docker_node_id: Option<String>,
+    pub is_stale: bool,
 }

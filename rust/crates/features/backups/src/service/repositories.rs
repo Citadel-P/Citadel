@@ -48,12 +48,14 @@ impl BackupService {
             .store
             .record_repository_operation(
                 id,
-                operation_id,
-                operation,
-                location,
-                platform_id,
-                result.is_ok(),
-                error_message.as_deref(),
+                BackupRepositoryOperation {
+                    operation_id,
+                    operation,
+                    location,
+                    platform_id,
+                    succeeded: result.is_ok(),
+                    message: error_message.as_deref(),
+                },
             )
             .await;
         let released = self

@@ -291,14 +291,16 @@ pub trait ContainerTaskSpawner: Send + Sync {
     fn shutdown_token(&self) -> CancellationToken;
 }
 
+type ContainerMutationCallback =
+    dyn Fn(&ContainerClaim, ContainerMutationNotice, &[ContainerStatePatch]) + Send + Sync;
+
 #[derive(Clone)]
 pub struct ContainerMutationService {
     store: Arc<dyn ContainerRepository>,
     runtime: Arc<dyn ContainerMutationRuntime>,
     operations: Arc<Semaphore>,
     tasks: Arc<dyn ContainerTaskSpawner>,
-    changed:
-        Arc<dyn Fn(&ContainerClaim, ContainerMutationNotice, &[ContainerStatePatch]) + Send + Sync>,
+    changed: Arc<ContainerMutationCallback>,
     coordinator: Arc<ContainerOperationCoordinator>,
 }
 
@@ -546,14 +548,14 @@ impl ContainerMutationService {
             let mut stamps = std::collections::BTreeMap::new();
             for target in &missing {
                 let key = (target.platform_id, target.node_id.clone());
-                if !stamps.contains_key(&key) {
+                if let std::collections::btree_map::Entry::Vacant(e) = stamps.entry(key) {
                     let stamp = crate::jobs::SnapshotGeneration::capture(
                         target.platform_id,
                         target.node_id.as_deref(),
                         crate::jobs::ProjectionKind::Containers,
                     )
                     .await;
-                    stamps.insert(key, Arc::new(stamp));
+                    e.insert(Arc::new(stamp));
                 }
             }
             let mut observations = self.runtime.observe_batch(&missing, cancellation).await;
