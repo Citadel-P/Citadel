@@ -551,12 +551,10 @@ pub(super) async fn apply_container_event(
         } else {
             citadel_adapters::persistence::postgres::platforms::status::container_event_committed_at(
                 pool,
-                target.id,
-                None,
-                id,
-                state.as_deref(),
-                name.as_deref(),
-                observed_at,
+                citadel_adapters::persistence::postgres::platforms::status::ContainerEvent {
+                    platform: target.id, node: None, docker_id: id,
+                    state: state.as_deref(), name: name.as_deref(), observed: observed_at,
+                },
                 event.event_time_millis.and_then(|time| i64::try_from(time).ok())
                     .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
             )

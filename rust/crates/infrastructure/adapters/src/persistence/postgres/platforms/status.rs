@@ -49,6 +49,17 @@ pub(crate) async fn removed_bindings(
     Ok(removed)
 }
 
+/// One daemon observation, shared by local and Edge projection writes.
+#[derive(Clone, Copy)]
+pub struct ContainerEvent<'a> {
+    pub platform: Uuid,
+    pub node: Option<&'a str>,
+    pub docker_id: &'a str,
+    pub state: Option<&'a str>,
+    pub name: Option<&'a str>,
+    pub observed: i64,
+}
+
 /// Apply an observed state to one persisted runtime identity. No full inventory scan.
 /// `None` represents a confirmed daemon deletion, never a failed inspection.
 pub async fn container_event(
@@ -77,12 +88,14 @@ pub async fn container_event_committed(
 ) -> Result<ProjectionChange> {
     container_event_committed_at(
         pool,
-        platform,
-        node,
-        docker_id,
-        state,
-        name,
-        observed,
+        ContainerEvent {
+            platform,
+            node,
+            docker_id,
+            state,
+            name,
+            observed,
+        },
         observed.saturating_mul(1000),
     )
     .await
@@ -90,24 +103,21 @@ pub async fn container_event_committed(
 
 pub async fn container_event_committed_at(
     pool: &PgPool,
-    platform: Uuid,
-    node: Option<&str>,
-    docker_id: &str,
-    state: Option<&str>,
-    name: Option<&str>,
-    observed: i64,
+    event: ContainerEvent<'_>,
     observed_millis: i64,
 ) -> Result<ProjectionChange> {
-    let write = ProjectionWrite::begin(platform, node, ProjectionKind::Containers).await;
-    let mut tx = pool.begin().await?;
-    let changed = container_event_in(
-        &mut tx,
+    let ContainerEvent {
         platform,
         node,
         docker_id,
         state,
-        name,
-        observed,
+        ..
+    } = event;
+    let write = ProjectionWrite::begin(platform, node, ProjectionKind::Containers).await;
+    let mut tx = pool.begin().await?;
+    let changed = container_event_in(
+        &mut tx,
+        event,
         super::runtime_index::hint(pool, platform, node, docker_id),
     )
     .await?;
@@ -154,14 +164,17 @@ pub async fn container_event_committed_at(
 }
 pub(crate) async fn container_event_in(
     tx: &mut Transaction<'_, Postgres>,
-    platform: Uuid,
-    node: Option<&str>,
-    docker_id: &str,
-    state: Option<&str>,
-    name: Option<&str>,
-    observed: i64,
+    event: ContainerEvent<'_>,
     hint: Option<Uuid>,
 ) -> Result<ContainerEventChange> {
+    let ContainerEvent {
+        platform,
+        node,
+        docker_id,
+        state,
+        name,
+        observed,
+    } = event;
     // Use the same lock order as inventory and health synchronization.
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
         .bind(platform)

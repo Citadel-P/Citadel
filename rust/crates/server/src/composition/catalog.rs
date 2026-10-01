@@ -64,6 +64,7 @@ pub(super) fn build(
             Arc::clone(&git_accounts),
             Arc::new(GitCli::new(
                 std::sync::Arc::new(citadel_processes::SystemProcess),
+                std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
                 Duration::from_secs(120),
             )),
             data_root.join("git-repositories"),

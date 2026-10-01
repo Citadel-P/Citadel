@@ -23,7 +23,7 @@ pub struct PlatformSummary {
     pub name: String,
     pub address: String,
     pub status: citadel_primitives::PlatformStatus,
-    pub connector_type: String,
+    pub connector_type: crate::ConnectorKind,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -111,6 +111,10 @@ pub struct RuntimePlatformStats {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthorizedReadError {
+    #[error("The requested resource was not found.")]
+    NotFound,
+    #[error("{0}")]
+    Conflict(String),
     #[error("authorized read failed: {0}")]
     Storage(String),
 }

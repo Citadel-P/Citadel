@@ -117,12 +117,14 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         store
             .record_repository_operation(
                 repository.id,
-                expired_operation,
-                "Validate",
-                "Core",
-                None,
-                false,
-                Some("stale result")
+                citadel_backups::BackupRepositoryOperation {
+                    operation_id: expired_operation,
+                    operation: "Validate",
+                    location: "Core",
+                    platform_id: None,
+                    succeeded: false,
+                    message: Some("stale result"),
+                }
             )
             .await,
         Err(citadel_backups::BackupError::Conflict(_))
@@ -138,12 +140,14 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let (_, validation) = store
         .record_repository_operation(
             repository.id,
-            operation_id,
-            "Validate",
-            "Core",
-            None,
-            true,
-            None,
+            citadel_backups::BackupRepositoryOperation {
+                operation_id,
+                operation: "Validate",
+                location: "Core",
+                platform_id: None,
+                succeeded: true,
+                message: None,
+            },
         )
         .await
         .unwrap();

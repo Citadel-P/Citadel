@@ -42,7 +42,8 @@ async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing
     let address = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, mock).await.unwrap() });
     f.app = platforms_http::router(f.lookup_state.platforms.clone()).layer(axum::Extension(
-        RegistryBrowser::with_endpoints(&address, &address).unwrap(),
+        Arc::new(RegistryBrowser::with_endpoints(&address, &address).unwrap())
+            as Arc<dyn citadel_registries::registry_images::RegistryBrowsePort>,
     ));
     let docker = Uuid::now_v7();
     let github = Uuid::now_v7();
@@ -101,6 +102,43 @@ async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing
         0,
     )
     .await;
+    // SQL fixture grants must invalidate the earlier cached denial.
+    super::realtime_groups::replace_specific_permissions(&f, &reader, vec![]).await;
+    let uppercase = paths[0].replace(&docker_name, &docker_name.to_uppercase());
+    assert_eq!(
+        send(&f, &uppercase, Some(reader.clone())).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(
+            &f,
+            "/api/v1/images/nonexistent-registry/repositories",
+            Some(reader.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    sqlx::query("UPDATE registries SET status='Disabled' WHERE id=$1")
+        .bind(docker)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let before = calls.lock().await.len();
+    assert_eq!(
+        send(&f, &paths[0], Some(reader.clone())).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        calls.lock().await.len(),
+        before,
+        "Disabled registries must not use credentials"
+    );
+    sqlx::query("UPDATE registries SET status='Active' WHERE id=$1")
+        .bind(docker)
+        .execute(&f.pool)
+        .await
+        .unwrap();
     let external = json_body(send(&f, &paths[0], Some(reader.clone())).await).await;
     assert_eq!(external[0]["$type"], "DockerHub");
     assert_eq!(external[0]["pullCount"], 42);

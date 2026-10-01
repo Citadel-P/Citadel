@@ -31,7 +31,7 @@ impl ServiceImageDigestPort for SwarmServiceRuntimeRouter {
                 if self.connector(platform).await? == citadel_platforms::ConnectorKind::Local {
                     None
                 } else {
-                    Some(self.agent_for(platform).await?)
+                    Some(self.agent_for(platform, cancel).await?)
                 };
             crate::connectors::registries::digest::inspect(
                 &self.pool,

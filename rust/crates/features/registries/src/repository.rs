@@ -14,6 +14,12 @@ pub enum RegistryMutationKind {
     Rename,
 }
 pub trait RegistryRepository: Send + Sync {
+    /// Resolve only identity; callers authorize before loading credentials.
+    fn find_id_by_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, RegistryError>>;
+
     fn list_registries<'a>(
         &'a self,
         actor_id: ActorId,

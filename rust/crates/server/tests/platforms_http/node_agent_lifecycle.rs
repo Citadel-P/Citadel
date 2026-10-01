@@ -45,12 +45,12 @@ async fn removal_routes_to_exact_edge_manager_and_checks_ownership_before_each_d
         ca_config_id: None,
         secret_ids: vec![],
     };
-    let runtime = NodeAgentRuntimeRouter {
-        pool: fixture.pool.clone(),
-        docker: fixture.lookup_state.platforms.docker.clone(),
-        agent: None,
-        edge: registry.clone(),
-    };
+    let runtime = NodeAgentRuntimeRouter::new(
+        fixture.pool.clone(),
+        fixture.docker.clone(),
+        None,
+        registry.clone(),
+    );
     let peer = tokio::spawn(async move {
         let mut received = Vec::new();
         let labels = std::collections::HashMap::from([
@@ -193,34 +193,19 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
         fixture.app.clone().oneshot(req).await.unwrap()
     };
     assert_eq!(send(None).await.status(), StatusCode::UNAUTHORIZED);
-    let mut reader = fixture.administrator.clone();
-    reader.actor_id = ActorId::new(fixture.actor_id);
-    reader.roles.clear();
+    let reader = super::lookup::subject(&fixture).await;
     assert_eq!(
         send(Some(reader.clone())).await.status(),
         StatusCode::FORBIDDEN
     );
-    sqlx::query("UPDATE resourceaccesses SET permissionlevel=4 WHERE resourceid=$1 AND actorid=$2")
-        .bind(id)
-        .bind(fixture.actor_id)
-        .execute(&fixture.pool)
-        .await
-        .unwrap();
+    set_node_agent_access(&fixture, &reader, false).await;
     assert_eq!(
         send(Some(reader.clone())).await.status(),
         StatusCode::FORBIDDEN,
         "Execute alone cannot manage node agents"
     );
-    sqlx::query(
-        "UPDATE resourceaccesses SET specificpermissions=$3 WHERE resourceid=$1 AND actorid=$2",
-    )
-    .bind(id)
-    .bind(fixture.actor_id)
-    .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
-    .execute(&fixture.pool)
-    .await
-    .unwrap();
-    let response = send(Some(reader)).await;
+    set_node_agent_access(&fixture, &reader, true).await;
+    let response = send(Some(reader.clone())).await;
     assert_eq!(response.status(), StatusCode::OK);
     let progress = json_body(response).await;
     assert!(
@@ -306,7 +291,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     assert!(groups.read(&denied, &group, Some(&change)).await.is_err());
     // CAS prevents both a competing operation and a delayed prior completion.
     let info = citadel_platforms::PlatformInfoPort::get_info(
-        &fixture.lookup_state.platforms.docker,
+        &fixture.docker,
         &tokio_util::sync::CancellationToken::new(),
     )
     .await
@@ -333,7 +318,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
         .unwrap();
     let coverage = citadel_adapters::persistence::postgres::platforms::node_agents::coverage::read(
         &fixture.pool,
-        &fixture.lookup_state.platforms.edge,
+        &fixture.edge,
         &platform,
     )
     .await
@@ -381,4 +366,32 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     .unwrap();
     assert_eq!(after, current.operation_id);
     fixture.docker_server.abort();
+}
+
+pub(super) async fn set_node_agent_access(f: &Fixture, actor: &ActorPrincipal, enabled: bool) {
+    use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+    use citadel_identity::{ResourceAccessInput, UserPatchMutation, UserRepository};
+    use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+    PostgresUserRepository::new(f.pool.clone())
+        .patch(
+            actor.subject_id,
+            &UserPatchMutation {
+                resource_accesses: Some(vec![ResourceAccessInput {
+                    resource_type: ResourceType::Platform,
+                    resource_id: f.platform_id,
+                    permission_level: PermissionLevel::Execute,
+                    specific_permissions: if enabled {
+                        vec![SpecificPermission::ManageNodeAgents]
+                    } else {
+                        vec![]
+                    },
+                }]),
+                ..Default::default()
+            },
+            f.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
 }

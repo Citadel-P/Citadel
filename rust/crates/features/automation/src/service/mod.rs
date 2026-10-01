@@ -47,6 +47,7 @@ use crate::*;
 
 pub struct AutomationService {
     process: Arc<dyn ProcessRunner>,
+    workspace: Arc<dyn crate::workspace::AutomationWorkspacePort>,
     tasks: Arc<dyn AutomationTaskSpawner>,
     shutdown: CancellationToken,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -85,6 +86,7 @@ impl AutomationService {
 impl AutomationService {
     pub fn new(
         process: Arc<dyn ProcessRunner>,
+        workspace: Arc<dyn crate::workspace::AutomationWorkspacePort>,
         tasks: Arc<dyn AutomationTaskSpawner>,
         shutdown: CancellationToken,
         store: Arc<dyn AutomationRepository>,
@@ -93,6 +95,7 @@ impl AutomationService {
     ) -> Self {
         Self {
             process,
+            workspace,
             tasks,
             shutdown,
             store,

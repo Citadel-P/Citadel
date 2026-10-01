@@ -9,6 +9,16 @@ pub struct PermissionGrant {
 
 impl PermissionGrant {
     #[must_use]
+    pub fn allows(self, requirement: citadel_primitives::PermissionRequirement) -> bool {
+        self.resource_type == requirement.resource_type
+            && citadel_primitives::EffectivePermission::Granted {
+                level: self.level,
+                specifics: self.specifics,
+            }
+            .allows(requirement)
+    }
+
+    #[must_use]
     pub const fn has_specific(self, permission: SpecificPermission) -> bool {
         self.specifics.contains(permission)
     }
@@ -79,6 +89,8 @@ const SWARM_SERVICE: &[(SpecificPermission, PermissionLevel)] = &[
 
 const STACK: &[(SpecificPermission, PermissionLevel)] = &[
     (SpecificPermission::Apply, PermissionLevel::Read),
+    (SpecificPermission::Terminal, PermissionLevel::Read),
+    (SpecificPermission::Pull, PermissionLevel::Read),
     (SpecificPermission::ResourceBindings, PermissionLevel::Read),
     (SpecificPermission::Releases, PermissionLevel::Read),
     (SpecificPermission::Logs, PermissionLevel::Read),

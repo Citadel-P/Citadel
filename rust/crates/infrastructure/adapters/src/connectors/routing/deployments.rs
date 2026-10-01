@@ -28,8 +28,7 @@ const MANAGED_LABEL: &str = "com.citadel.managed";
 pub struct DeploymentRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
-    agent: Option<AgentClient>,
-    edge: crate::connectors::edge::EdgeRegistry,
+    runtime: super::platforms::runtime::PlatformRuntimeRouter,
     image_cache: std::sync::Arc<crate::connectors::registries::digest_cache::ImageDigestCache>,
 }
 
@@ -37,12 +36,24 @@ impl DeploymentRuntimeRouter {
     #[must_use]
     pub fn new(pool: PgPool, docker: DockerClient, agent: Option<AgentClient>) -> Self {
         Self {
+            runtime: super::platforms::runtime::PlatformRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                agent,
+                Default::default(),
+            ),
             pool,
             docker,
-            agent,
-            edge: crate::connectors::edge::EdgeRegistry::default(),
             image_cache: Default::default(),
         }
+    }
+
+    pub fn with_runtime_router(
+        mut self,
+        runtime: super::platforms::runtime::PlatformRuntimeRouter,
+    ) -> Self {
+        self.runtime = runtime;
+        self
     }
 
     pub fn with_image_cache(
@@ -55,61 +66,39 @@ impl DeploymentRuntimeRouter {
 
     #[must_use]
     pub fn with_edge(mut self, edge: crate::connectors::edge::EdgeRegistry) -> Self {
-        self.edge = edge;
+        self.runtime = self.runtime.with_edge(edge);
         self
     }
 
     async fn platform(&self, platform_id: Uuid) -> Result<PlatformTarget, DeploymentError> {
-        let row = sqlx::query("SELECT connectortype,address,status FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(storage)?
-            .ok_or(DeploymentError::NotFound)?;
-        let status: String = row.try_get("status").map_err(storage)?;
-        if status != "Online" {
+        let target =
+            crate::persistence::postgres::platforms::connection::load(&self.pool, platform_id)
+                .await
+                .map_err(storage)?
+                .ok_or(DeploymentError::NotFound)?;
+        if target.status != citadel_primitives::PlatformStatus::Online {
             return Err(DeploymentError::Runtime(
                 "Platform not found or disconnected.".to_owned(),
             ));
         }
-        Ok(PlatformTarget {
-            platform_id,
-            connector: crate::persistence::postgres::platforms::classification::connector_kind(
-                row.try_get("connectortype").map_err(storage)?,
-            )
-            .map_err(storage)?,
-            address: row.try_get("address").map_err(storage)?,
-        })
+        Ok(target)
     }
 
-    fn agent_for(
+    async fn agent_for(
         &self,
         target: &PlatformTarget,
+        cancellation: &CancellationToken,
     ) -> Result<crate::connectors::agent::execution::AgentExecutionClient, DeploymentError> {
-        use crate::connectors::agent::execution::AgentExecutionClient;
-        use crate::connectors::edge::EdgeTarget;
-        if target.connector == citadel_platforms::ConnectorKind::EdgeAgent {
-            return self
-                .edge
-                .get(&EdgeTarget::platform(target.platform_id))
-                .map(AgentExecutionClient::Edge)
-                .map_err(|_| {
-                    DeploymentError::Runtime(
-                        "The Edge Agent is disconnected or unavailable.".into(),
-                    )
-                });
-        }
-        let agent = self
-            .agent
-            .as_ref()
-            .filter(|_| target.connector == citadel_platforms::ConnectorKind::Agent)
-            .ok_or_else(|| {
-                DeploymentError::Runtime("The configured Agent transport is unavailable.".into())
-            })?;
-        let agent = agent
-            .at_address(&target.address)
-            .map_err(|error| DeploymentError::Runtime(error.message))?;
-        Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
+        self.runtime
+            .execution_agent_for(target, cancellation)
+            .await
+            .map_err(|error| {
+                if error.kind == citadel_platforms::RuntimeErrorKind::Cancelled {
+                    DeploymentError::Cancelled
+                } else {
+                    DeploymentError::Runtime(error.message)
+                }
+            })
     }
 
     async fn prepare_local_image(
@@ -277,7 +266,7 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
             target.connector,
             citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent
         ) {
-            let agent = self.agent_for(&target)?;
+            let agent = self.agent_for(&target, cancellation).await?;
             agent
                 .pull_deployment_image(
                     &pull.image,
@@ -346,7 +335,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
             let agent = if target.connector == citadel_platforms::ConnectorKind::Local {
                 None
             } else {
-                Some(self.agent_for(&target)?)
+                Some(self.agent_for(&target, cancel).await?)
             };
             crate::connectors::registries::digest::inspect(
                 &self.pool,
@@ -417,7 +406,8 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
                 normalize_resource_limits(&mut normalized);
                 add_ownership_labels(&mut normalized);
                 return self
-                    .agent_for(&target)?
+                    .agent_for(&target, cancellation)
+                    .await?
                     .apply_deployment(&normalized, cancellation)
                     .await
                     .map_err(agent_runtime);
@@ -476,7 +466,8 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
                     | citadel_platforms::ConnectorKind::EdgeAgent
             ) {
                 let containers = self
-                    .agent_for(&target)?
+                    .agent_for(&target, cancellation)
+                    .await?
                     .list_containers(cancellation)
                     .await
                     .map_err(agent_runtime)?;
@@ -530,7 +521,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
             }
             if matches!(target.connector, citadel_platforms::ConnectorKind::Agent | citadel_platforms::ConnectorKind::EdgeAgent) {
                 return match self
-                    .agent_for(&target)?
+                    .agent_for(&target, cancellation).await?
                     .delete_container(docker_container_id, cancellation)
                     .await
                 {
@@ -548,11 +539,7 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
     }
 }
 
-struct PlatformTarget {
-    platform_id: Uuid,
-    connector: citadel_platforms::ConnectorKind,
-    address: String,
-}
+use crate::persistence::postgres::platforms::connection::PlatformConnection as PlatformTarget;
 
 struct RegistryPull {
     image: String,

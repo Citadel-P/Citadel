@@ -223,11 +223,11 @@ async fn phase7_resource_endpoints_authorize_validate_and_persist_lifecycles() {
     })))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
-        citadel_server::api::routes::platforms::EdgeHttpContext {
+        citadel_server::api::resources::platforms::edge::EdgeHttpContext {
         node_agent_policy: Default::default(),
             node_agent_ca_bundle: None,
-            store: citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()),
-            registry: edge.clone(),
+            store: std::sync::Arc::new(citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone())),
+            registry: std::sync::Arc::new(edge.clone()),
             core_url: "https://core.example.test:8001".into(),
             agent_image: "citadel-agent:test".into(),
         },
@@ -1352,6 +1352,16 @@ struct FakeBackupPlanner {
 }
 struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
+    fn cleanup_staging<'a>(
+        &'a self,
+        plan: &'a citadel_backups::BackupSourcePlan,
+    ) -> BoxFuture<'a, Result<(), citadel_backups::BackupError>> {
+        Box::pin(async move {
+            assert!(plan.local_directory.is_none());
+            Ok(())
+        })
+    }
+
     fn preview<'a>(
         &'a self,
         _: citadel_backups::policies::read_models::BackupPreviewKind,

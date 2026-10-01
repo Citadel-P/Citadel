@@ -97,6 +97,4 @@ mod tests {
 
 pub(crate) mod token_safety;
 
-pub mod runtime_targets;
-
 pub mod tasks;

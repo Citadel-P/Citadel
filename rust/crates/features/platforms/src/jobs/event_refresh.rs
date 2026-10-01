@@ -14,7 +14,7 @@ pub enum EventRefresh {
 
 #[derive(Debug, Clone)]
 pub enum ResourceInventory {
-    Platform(RuntimePlatformInfo),
+    Platform(Box<RuntimePlatformInfo>),
     Containers(Vec<RuntimeContainerSummary>),
     Images(Vec<RuntimeImageSummary>),
     Networks(Vec<RuntimeNetworkSummary>),
@@ -69,9 +69,9 @@ pub async fn collect_event_scope(
 ) -> Result<ResourceSnapshot, RuntimeCapabilityError> {
     let observed_at = Utc::now();
     let inventory = match source {
-        ResourceCollector::Platform(runtime) => ResourceInventory::Platform(
+        ResourceCollector::Platform(runtime) => ResourceInventory::Platform(Box::new(
             super::PlatformReconciler::collect(runtime, cancellation).await?,
-        ),
+        )),
         ResourceCollector::Containers(runtime) => ResourceInventory::Containers(
             super::ContainerReconciler::collect(runtime, cancellation).await?,
         ),

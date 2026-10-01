@@ -83,6 +83,10 @@ pub trait BackupExecutor: Send + Sync {
 }
 
 pub trait BackupSourcePlanner: Send + Sync {
+    fn cleanup_staging<'a>(
+        &'a self,
+        plan: &'a BackupSourcePlan,
+    ) -> BoxFuture<'a, Result<(), BackupError>>;
     fn preview<'a>(
         &'a self,
         kind: policies::read_models::BackupPreviewKind,

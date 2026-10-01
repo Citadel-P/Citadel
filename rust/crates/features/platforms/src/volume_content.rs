@@ -57,3 +57,27 @@ pub struct VolumeDirectory {
     pub entries: Vec<VolumeFileEntry>,
     pub is_truncated: bool,
 }
+
+pub struct VolumeDownload {
+    pub filename: String,
+    pub directory: bool,
+    pub stream: futures_util::stream::BoxStream<'static, Result<Vec<u8>, std::io::Error>>,
+}
+pub trait VolumeContentPort: Send + Sync {
+    fn list<'a>(
+        &'a self,
+        platform: Uuid,
+        volume: &'a str,
+        path: &'a str,
+        node: Option<&'a str>,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, Result<VolumeDirectory, RuntimeCapabilityError>>;
+    fn download<'a>(
+        &'a self,
+        platform: Uuid,
+        volume: &'a str,
+        path: &'a str,
+        node: Option<&'a str>,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, Result<VolumeDownload, RuntimeCapabilityError>>;
+}

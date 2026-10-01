@@ -195,8 +195,8 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     assert_eq!(platforms.len(), 1);
     assert_eq!(platforms[0].server_version.as_deref(), Some("28.0.0"));
     assert_eq!(platforms[0].image_count, 2);
-    assert_eq!(platforms[0].platform_descriptor["nodes"], 1);
-    assert_eq!(platforms[0].platform_descriptor["serviceCount"], 1);
+    assert_eq!(platforms[0].platform_descriptor.metadata["nodes"], 1);
+    assert_eq!(platforms[0].platform_descriptor.metadata["serviceCount"], 1);
     assert!(
         platforms[0]
             .stats
@@ -2295,7 +2295,7 @@ async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity
         .persist_resource(&ResourceSnapshot {
             platform_id: platform,
             observed_at: Utc::now(),
-            inventory: ResourceInventory::Platform(info.clone()),
+            inventory: ResourceInventory::Platform(Box::new(info.clone())),
         })
         .await
         .unwrap();
@@ -2313,7 +2313,7 @@ async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity
             .persist_resource(&ResourceSnapshot {
                 platform_id: platform,
                 observed_at: Utc::now(),
-                inventory: ResourceInventory::Platform(info)
+                inventory: ResourceInventory::Platform(Box::new(info))
             })
             .await
             .is_err()

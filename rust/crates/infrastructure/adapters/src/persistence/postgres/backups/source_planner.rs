@@ -450,6 +450,22 @@ impl PostgresBackupSourcePlanner {
 }
 
 impl BackupSourcePlanner for PostgresBackupSourcePlanner {
+    fn cleanup_staging<'a>(
+        &'a self,
+        plan: &'a BackupSourcePlan,
+    ) -> BoxFuture<'a, Result<(), BackupError>> {
+        Box::pin(async move {
+            if let Some(directory) = &plan.local_directory {
+                match tokio::fs::remove_dir_all(directory).await {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(BackupError::Storage(e.to_string())),
+                }
+            }
+            Ok(())
+        })
+    }
+
     fn preview<'a>(
         &'a self,
         kind: citadel_backups::policies::read_models::BackupPreviewKind,

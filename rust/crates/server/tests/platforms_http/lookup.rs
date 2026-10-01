@@ -28,7 +28,40 @@ pub(super) async fn subject(f: &Fixture) -> ActorPrincipal {
 }
 
 pub(super) async fn grant(f: &Fixture, actor: Uuid, kind: ResourceType, id: Uuid, specific: i32) {
-    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourcetype,resourceid,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,1,$5)").bind(Uuid::now_v7()).bind(actor).bind(kind as i32).bind(id).bind(specific).execute(&f.pool).await.unwrap();
+    use citadel_adapters::persistence::postgres::identity::{
+        teams::repository::PostgresTeamRepository, users::repository::PostgresUserRepository,
+    };
+    use citadel_identity::{ResourceAccessInput, TeamRepository, UserRepository};
+    let access = ResourceAccessInput {
+        resource_type: kind,
+        resource_id: id,
+        permission_level: citadel_primitives::PermissionLevel::Read,
+        specific_permissions: SpecificPermission::ALL
+            .into_iter()
+            .filter(|p| specific & (*p as i32) != 0)
+            .collect(),
+    };
+    let user: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE actorid=$1")
+        .bind(actor)
+        .fetch_optional(&f.pool)
+        .await
+        .unwrap();
+    if let Some(user) = user {
+        PostgresUserRepository::new(f.pool.clone())
+            .add_resource_access(user, &access, f.administrator.actor_id, Utc::now(), true)
+            .await
+            .unwrap();
+    } else {
+        let team: Uuid = sqlx::query_scalar("SELECT id FROM teams WHERE actorid=$1")
+            .bind(actor)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+        PostgresTeamRepository::new(f.pool.clone())
+            .add_resource_access(team, &access, f.administrator.actor_id, Utc::now(), true)
+            .await
+            .unwrap();
+    }
 }
 
 async fn lookup(f: &Fixture, principal: &ActorPrincipal, query: &str) -> Value {

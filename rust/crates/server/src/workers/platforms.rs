@@ -50,7 +50,7 @@ use futures_util::StreamExt;
 use sqlx::{PgPool, Row};
 use tokio_util::sync::CancellationToken;
 
-use crate::runtime_targets::{
+use citadel_adapters::connectors::routing::platforms::registry::{
     HEALTH_CONCURRENCY, PlatformRuntimeRegistry, PlatformTarget as ReconciliationTarget,
     STATS_CONCURRENCY,
 };

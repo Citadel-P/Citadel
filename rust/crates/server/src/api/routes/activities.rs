@@ -1,4 +1,5 @@
 //! Activities HTTP routes, authorization and local request handling.
+use crate::api::resources::activities::authorized::activity_access;
 use crate::{
     api::{
         error::{ApiError, error_response, no_store},
@@ -134,13 +135,6 @@ fn map_activities(records: PagedActivityRecords) -> Result<ActivitiesView, ApiEr
             page_size: records.page_size,
         },
     })
-}
-
-pub(crate) fn activity_access(principal: &ActorPrincipal) -> citadel_activities::ActivityAccess {
-    citadel_activities::ActivityAccess {
-        actor_id: principal.actor_id,
-        administrator: principal.is_administrator(),
-    }
 }
 
 impl From<ActivityError> for ApiError {

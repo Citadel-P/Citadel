@@ -16,6 +16,7 @@ use std::sync::Arc;
 pub(super) struct PlatformComponents {
     pub platform_state: platforms_http::PlatformsHttpState,
     pub platform_reads: Arc<PlatformReadService>,
+    pub volume_content: Arc<VolumeContentAdapter>,
 }
 
 pub(super) fn build(
@@ -128,23 +129,39 @@ pub(super) fn build(
         volume_content =
             volume_content.with_core_container(config.execution.core_container_hostname.clone());
     }
+    let volume_content = Arc::new(volume_content.with_runtime_router(container_runtime.clone()));
     let platform_state = platforms_http::PlatformsHttpState {
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+    node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:container_runtime.runtime_router(),edge:edge_registry.clone()}),
+    node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge_registry.clone()}),
+    deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
+        Arc::new(citadel_adapters::persistence::postgres::platforms::deletion::PostgresPlatformDeletionRepository::new(pool.clone())),
+        Arc::new(edge_registry.clone()),
+    )),
+    management: Arc::new(citadel_platforms::management::PlatformManagementService::new(
+            Arc::new(citadel_adapters::persistence::postgres::platforms::management::PostgresPlatformManagementRepository(pool.clone())),
+            Arc::new(citadel_adapters::connectors::routing::platforms::management::PlatformManagementRuntimeAdapter {local:docker.clone(),agent:agent.clone(),edge:edge_registry.clone()}),
+        )),
+    image_store: Arc::new(citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(pool.clone())),
+    projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())),
+        statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
+        services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
+        runtime: Arc::new(container_runtime.runtime_router()),
         tasks: runtime.dynamic_tasks.clone(),
-        volume_content: Arc::new(volume_content),
+        volume_activity: Arc::new(citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(pool.clone())),
+    volume_coverage: Arc::new(citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(pool.clone())),
+    registry_browser: Arc::new(citadel_adapters::connectors::registries::browser::DefaultRegistryBrowser::default()),
+    volume_content: volume_content.clone(),
         containers: container_mutations.clone(),
         identity: Arc::clone(identity),
         platforms: Arc::clone(&platform_reads),
         registrations: platform_registrations,
-        pool: pool.clone(),
         registries: Arc::clone(registries),
         platform_metadata: Arc::new(
             citadel_adapters::persistence::postgres::platforms::PostgresPlatformMetadataRepository::new(
                 pool.clone(),
             ),
         ),
-        docker: docker.clone(),
-        agent: agent.clone(),
-        edge: edge_registry.clone(),
         realtime: realtime_hub.clone(),
         stats_sample_max_age: config
             .probe_interval
@@ -154,5 +171,6 @@ pub(super) fn build(
     PlatformComponents {
         platform_state,
         platform_reads,
+        volume_content,
     }
 }

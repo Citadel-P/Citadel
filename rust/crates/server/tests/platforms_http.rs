@@ -55,6 +55,8 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/resource_mutations.rs"]
+mod resource_mutations;
 #[path = "platforms_http/service_adoption.rs"]
 mod service_adoption;
 #[path = "platforms_http/swarm_inventory.rs"]
@@ -106,6 +108,9 @@ mod tags;
 mod volume_content;
 
 struct Fixture {
+    docker: DockerClient,
+    edge: citadel_adapters::connectors::edge::EdgeRegistry,
+    agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
     app: Router,
     pool: PgPool,
     platform_id: Uuid,
@@ -567,8 +572,27 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     ));
     let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let platform_state = PlatformsHttpState {
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+    node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone()),edge:edge.clone()}),
+    node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge.clone()}),
+    deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
+        Arc::new(citadel_adapters::persistence::postgres::platforms::deletion::PostgresPlatformDeletionRepository::new(pool.clone())),
+        Arc::new(edge.clone()),
+    )),
+    management: Arc::new(citadel_platforms::management::PlatformManagementService::new(
+            Arc::new(citadel_adapters::persistence::postgres::platforms::management::PostgresPlatformManagementRepository(pool.clone())),
+            Arc::new(citadel_adapters::connectors::routing::platforms::management::PlatformManagementRuntimeAdapter {local:docker.clone(),agent:None,edge:edge.clone()}),
+        )),
+    image_store: Arc::new(citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(pool.clone())),
+    projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())),
+        statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
+        services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
+        runtime: Arc::new(citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone())),
         tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
-        volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
+        volume_activity: Arc::new(citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(pool.clone())),
+    volume_coverage: Arc::new(citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(pool.clone())),
+    registry_browser: Arc::new(citadel_adapters::connectors::registries::browser::DefaultRegistryBrowser::default()),
+    volume_content: Arc::new(citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter::new(
             pool.clone(),
             docker.clone(),
             None,
@@ -588,7 +612,6 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         identity,
         platforms,
         registrations,
-        pool: pool.clone(),
         registries: Arc::new(
             citadel_adapters::persistence::postgres::registries::PostgresRegistryRepository::new(pool.clone()),
         ),
@@ -597,9 +620,6 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
                 pool.clone(),
             ),
         ),
-        docker,
-        agent: None,
-        edge,
         realtime: None,
         stats_sample_max_age: StdDuration::from_secs(30),
     };
@@ -616,6 +636,9 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         citadel_server::api::routes::lookup::router(lookup_state.clone()),
     );
     Fixture {
+        docker,
+        edge,
+        agent: None,
         app,
         pool,
         platform_id,
@@ -923,4 +946,30 @@ async fn json_body(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
     serde_json::from_slice(&body).unwrap()
+}
+
+fn refresh_runtime(state: &mut PlatformsHttpState, fixture: &Fixture, docker: DockerClient) {
+    let pool = &fixture.pool;
+    let edge = &fixture.edge;
+    let agent = fixture.agent.clone();
+    let runtime =
+        citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(
+            pool.clone(),
+            docker.clone(),
+            agent.clone(),
+            edge.clone(),
+        );
+    state.deletions=Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
+        Arc::new(citadel_adapters::persistence::postgres::platforms::deletion::PostgresPlatformDeletionRepository::new(pool.clone())),Arc::new(edge.clone())));
+    state.management=Arc::new(citadel_platforms::management::PlatformManagementService::new(
+        Arc::new(citadel_adapters::persistence::postgres::platforms::management::PostgresPlatformManagementRepository(pool.clone())),
+        Arc::new(citadel_adapters::connectors::routing::platforms::management::PlatformManagementRuntimeAdapter {local:docker,agent,edge:edge.clone()}),
+    ));
+    state.node_agent_runtime = Arc::new(
+        citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter {
+            runtime: runtime.clone(),
+            edge: edge.clone(),
+        },
+    );
+    state.runtime = Arc::new(runtime);
 }

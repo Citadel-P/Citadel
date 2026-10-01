@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PlatformReadService {
-    store: Arc<dyn PlatformReader>,
+    pub(super) store: Arc<dyn PlatformReader>,
     inventory_reads: Arc<std::sync::Mutex<BTreeMap<Uuid, std::sync::Weak<tokio::sync::Mutex<()>>>>>,
 }
 

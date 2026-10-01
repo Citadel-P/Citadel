@@ -21,7 +21,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "container_service.proto",
             include_str!("../proto/container_service.proto"),
-            "79b84dfb6c760b4d60eabcfc20a9cb8111103364d72f9528b22821b08656587d",
+            "e318e05cd105ce7fa83d10473e65df7d0be896a53680a7b630b3def5f881fb66",
         ),
         (
             "deployment_service.proto",
@@ -66,4 +66,29 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         );
     }
     assert_eq!(citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION, 2);
+}
+
+// The accepted additions use new field numbers and preserve old-peer defaults.
+#[test]
+fn container_metadata_and_capture_time_are_additive_wire_fields() {
+    use citadel_contracts::citadel::containers::v1::{
+        ContainersStatsResponse, ListContainersRequest,
+    };
+    use prost::Message;
+
+    let old_request = ListContainersRequest::decode(&[][..]).unwrap();
+    assert!(!old_request.metadata_only);
+    let request = ListContainersRequest {
+        metadata_only: true,
+        ..Default::default()
+    };
+    assert_eq!(request.encode_to_vec(), [0x28, 1]); // field 5, bool
+
+    let old_stats = ContainersStatsResponse::decode(&[][..]).unwrap();
+    assert_eq!(old_stats.captured_at, None);
+    let stats = ContainersStatsResponse {
+        captured_at: Some(42),
+        ..Default::default()
+    };
+    assert_eq!(stats.encode_to_vec(), [0x10, 42]); // field 2, int64
 }

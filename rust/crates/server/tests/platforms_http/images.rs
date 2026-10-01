@@ -75,8 +75,8 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
         }
     });
     let mut state = f.lookup_state.platforms.clone();
-    state.docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
-    let docker = state.docker.clone();
+    let docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
+    refresh_runtime(&mut state, &f, docker.clone());
     let mut f = f;
     f.app = platforms_http::router(state);
     let body = json!({"platformId":f.platform_id,"ids":[first,second],"force":true,"noPrune":true});
@@ -227,7 +227,7 @@ async fn image_inspect_authorizes_and_uses_the_exact_node_with_existing_ui_shape
     .await;
     // Refresh the permission cache after the fixture grants access directly in SQL.
     super::realtime_groups::replace_specific_permissions(&f, &principal, vec![]).await;
-    let registry = &f.lookup_state.platforms.edge;
+    let registry = &f.edge;
     let (session, mut commands) = registry
         .register(
             EdgeTarget::node(f.platform_id, "node-1".into()),

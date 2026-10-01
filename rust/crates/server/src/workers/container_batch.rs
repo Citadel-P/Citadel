@@ -117,5 +117,4 @@ pub(super) async fn refresh(
 }
 
 #[cfg(test)]
-#[path = "container_batch_tests.rs"]
 mod tests;

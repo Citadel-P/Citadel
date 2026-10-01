@@ -111,8 +111,10 @@ pub(super) async fn fixture_swarm() -> (Fixture, Arc<Mutex<DockerState>>) {
             });
         }
     });
-    f.lookup_state.platforms.docker =
-        DockerClient::new(&f.docker_socket, StdDuration::from_secs(2)).unwrap();
+    f.docker = DockerClient::new(&f.docker_socket, StdDuration::from_secs(2)).unwrap();
+    let mut http_state = f.lookup_state.platforms.clone();
+    refresh_runtime(&mut http_state, &f, f.docker.clone());
+    f.lookup_state.platforms = http_state;
     f.app = platforms_http::router(f.lookup_state.platforms.clone());
     (f, state)
 }
@@ -708,5 +710,136 @@ async fn native_swarm_partial_delete_reconciles_successful_siblings_and_never_re
         StatusCode::NOT_FOUND,
     )
     .await;
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn network_deletion_precondition_requires_current_unused_platform_projection() {
+    use citadel_platforms::AuthorizedReadError;
+
+    let f = fixture().await;
+    let reads = &f.lookup_state.platforms.platforms;
+    assert!(matches!(
+        reads
+            .validate_swarm_network_deletion(f.platform_id, "overlay", "app")
+            .await,
+        Err(AuthorizedReadError::Conflict(_))
+    ));
+    sqlx::query("INSERT INTO swarmnetworkprojections(platformid,dockernetworkid,driver,enableipv6,isattachable,isencrypted,isingress,isinternal,labels,name,observedat,scope,servicenames,subnets) VALUES($1,'overlay','overlay',false,false,false,false,false,'{}','app',now(),'swarm','[]','[]')")
+        .bind(f.platform_id).execute(&f.pool).await.unwrap();
+    reads
+        .validate_swarm_network_deletion(f.platform_id, "overlay", "app")
+        .await
+        .unwrap();
+    // A projection on one Platform cannot authorize deletion on another.
+    assert!(matches!(
+        reads
+            .validate_swarm_network_deletion(Uuid::now_v7(), "overlay", "app")
+            .await,
+        Err(AuthorizedReadError::Conflict(_))
+    ));
+    sqlx::query(
+        "UPDATE swarmnetworkprojections SET servicenames='[\"service\"]' WHERE platformid=$1",
+    )
+    .bind(f.platform_id)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        reads.validate_swarm_network_deletion(f.platform_id, "overlay", "app").await,
+        Err(AuthorizedReadError::Conflict(message)) if message.contains("used by")
+    ));
+    sqlx::query(
+        "UPDATE swarmnetworkprojections SET servicenames='[]',isstale=true WHERE platformid=$1",
+    )
+    .bind(f.platform_id)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        reads.validate_swarm_network_deletion(f.platform_id, "overlay", "app").await,
+        Err(AuthorizedReadError::Conflict(message)) if message.contains("no current inventory")
+    ));
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn persisted_service_ownership_and_confirmed_removals_are_platform_scoped() {
+    use citadel_platforms::swarm_mutations::SwarmResourceKind;
+    let (f, runtime) = fixture_swarm().await;
+    sqlx::query("INSERT INTO swarmservices(id,name,dockername,platformid,dockerserviceid,createdbyactorid,desiredspechash,health,synchronizationstate,spec,updatedat) VALUES($1,$2,$2,$3,'service-1',$4,'hash','Unknown','NeverApplied','{}',now())")
+        .bind(Uuid::now_v7()).bind(format!("managed-{}",Uuid::now_v7())).bind(f.platform_id).bind(SYSTEM_ACTOR_ID)
+        .execute(&f.pool).await.unwrap();
+    let services = &f.lookup_state.platforms.services;
+    assert!(
+        services
+            .owns_runtime_service(f.platform_id, "service-1")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !services
+            .owns_runtime_service(Uuid::now_v7(), "service-1")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !services
+            .owns_runtime_service(f.platform_id, "other-service")
+            .await
+            .unwrap()
+    );
+    for (method, suffix, body) in [
+        (Method::POST, "services/service-1/restart", Value::Null),
+        (Method::DELETE, "services", json!({"ids":["service-1"]})),
+    ] {
+        assert_status(
+            send_json(&f, method, &url(&f, suffix), f.administrator.clone(), body).await,
+            StatusCode::CONFLICT,
+        )
+        .await;
+    }
+    assert!(runtime.lock().await.mutations.is_empty());
+    // Deletion updates are limited to the specified resource kind and Platform.
+    let store = &f.lookup_state.platforms.projections;
+    for (kind, id, suffix) in [
+        (
+            SwarmResourceKind::Service,
+            "service-1",
+            "services/service-1",
+        ),
+        (SwarmResourceKind::Secret, "secret-1", "secrets/secret-1"),
+        (SwarmResourceKind::Config, "config-1", "configs/config-1"),
+    ] {
+        assert_status(
+            send(&f, &url(&f, suffix), Some(f.administrator.clone())).await,
+            StatusCode::OK,
+        )
+        .await;
+        store
+            .remove_swarm_resources(Uuid::now_v7(), kind, &[id.into()])
+            .await
+            .unwrap();
+        store
+            .remove_swarm_resources(f.platform_id, kind, &[])
+            .await
+            .unwrap();
+        assert_status(
+            send(&f, &url(&f, suffix), Some(f.administrator.clone())).await,
+            StatusCode::OK,
+        )
+        .await;
+        store
+            .remove_swarm_resources(f.platform_id, kind, &[id.into()])
+            .await
+            .unwrap();
+        assert_status(
+            send(&f, &url(&f, suffix), Some(f.administrator.clone())).await,
+            StatusCode::NOT_FOUND,
+        )
+        .await;
+    }
     cleanup(f).await;
 }

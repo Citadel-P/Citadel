@@ -862,11 +862,9 @@ name = "citadel-processes"
 version = "0.0.0"
 dependencies = [
  "citadel-execution",
- "citadel-git",
  "futures-util",
  "tokio",
  "tokio-util",
- "uuid",
 ]
 
 [[package]]
@@ -886,14 +884,10 @@ dependencies = [
 name = "citadel-runtime"
 version = "0.0.0"
 dependencies = [
- "chrono",
- "citadel-identity",
- "futures-util",
  "thiserror",
  "tokio",
  "tokio-util",
  "tracing",
- "uuid",
 ]
 
 [[package]]

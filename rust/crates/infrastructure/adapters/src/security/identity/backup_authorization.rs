@@ -106,14 +106,18 @@ impl BackupRunAuthorizer for IdentityBackupRunAuthorizer {
                         "The Restore identity is unavailable or disabled.".to_owned(),
                     )
                 })?;
-            self.authorize_resource(
-                &principal,
-                ResourceType::BackupPolicy,
-                claim.source.backup_policy_id,
-                PermissionLevel::Execute,
-                Some(SpecificPermission::Restore),
-            )
-            .await?;
+            self.identity
+                .require_resource::<citadel_backups::permissions::RestoreBackupPolicy>(
+                    &principal,
+                    claim.source.backup_policy_id,
+                )
+                .await
+                .map_err(|_| {
+                    BackupError::Validation(
+                        "The Backup run-as identity is no longer authorized for this operation."
+                            .to_owned(),
+                    )
+                })?;
             self.authorize_resource(
                 &principal,
                 ResourceType::Platform,

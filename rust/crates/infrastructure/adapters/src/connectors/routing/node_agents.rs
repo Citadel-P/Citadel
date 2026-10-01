@@ -14,9 +14,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub struct NodeAgentRuntimeRouter {
-    pub pool: PgPool,
-    pub docker: DockerClient,
-    pub agent: Option<AgentClient>,
+    pub runtime: super::platforms::runtime::PlatformRuntimeRouter,
     pub edge: EdgeRegistry,
 }
 mod setup;
@@ -35,29 +33,44 @@ impl Target {
     }
 }
 impl NodeAgentRuntimeRouter {
-    async fn target(&self, id: Uuid) -> Result<Target, RuntimeCapabilityError> {
-        let (kind, address): (String, String) =
-            sqlx::query_as("SELECT connectortype,address FROM platforms WHERE id=$1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or_else(|| failure("Platform not found."))?;
-        match kind.as_str() {
-            "Local" => Ok(Target::Local(self.docker.clone())),
-            "Agent" => self
-                .agent
-                .as_ref()
-                .ok_or_else(|| failure("The configured Agent is unavailable."))?
-                .at_address(&address)
-                .map(|agent| Target::Agent(Arc::new(agent))),
-            "EdgeAgent" => self
-                .edge
-                .get(&EdgeTarget::platform(id))
-                .map(|session| Target::Edge(EdgeRuntime { session }))
-                .map_err(|_| failure("The bound Edge manager is unavailable.")),
-            _ => Err(failure("Unsupported manager connector.")),
+    pub fn new(
+        pool: PgPool,
+        docker: DockerClient,
+        agent: Option<AgentClient>,
+        edge: EdgeRegistry,
+    ) -> Self {
+        Self {
+            runtime: super::platforms::runtime::PlatformRuntimeRouter::new(
+                pool,
+                docker,
+                agent,
+                edge.clone(),
+            ),
+            edge,
         }
+    }
+
+    async fn target(
+        &self,
+        id: Uuid,
+        cancel: &CancellationToken,
+    ) -> Result<Target, RuntimeCapabilityError> {
+        use super::platforms::runtime::Runtime;
+        let runtime = self
+            .runtime
+            .resolve(id, None, false, cancel)
+            .await
+            .map_err(|error| match error.kind {
+                RuntimeErrorKind::Remote => storage(error),
+                RuntimeErrorKind::NotFound => failure("Platform not found."),
+                RuntimeErrorKind::Cancelled => error,
+                _ => failure("The configured manager is unavailable."),
+            })?;
+        Ok(match runtime {
+            Runtime::Local(docker) => Target::Local(docker.clone()),
+            Runtime::Agent(agent) => Target::Agent(Arc::new(agent)),
+            Runtime::Edge(edge) => Target::Edge(edge),
+        })
     }
 }
 impl NodeAgentLifecycleRuntime for NodeAgentRuntimeRouter {
@@ -66,7 +79,13 @@ impl NodeAgentLifecycleRuntime for NodeAgentRuntimeRouter {
         id: Uuid,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimePlatformInfo, RuntimeCapabilityError>> {
-        Box::pin(async move { self.target(id).await?.inventory().get_info(cancel).await })
+        Box::pin(async move {
+            self.target(id, cancel)
+                .await?
+                .inventory()
+                .get_info(cancel)
+                .await
+        })
     }
     fn delete_owned<'a>(
         &'a self,
@@ -76,7 +95,7 @@ impl NodeAgentLifecycleRuntime for NodeAgentRuntimeRouter {
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let target = self.target(claim.platform_id).await?;
+            let target = self.target(claim.platform_id, cancel).await?;
             let info = target.inventory().get_info(cancel).await?;
             if info.daemon_id != claim.manager_daemon_id
                 || !info.swarm.as_ref().is_some_and(|s| {

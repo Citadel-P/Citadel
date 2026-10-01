@@ -28,3 +28,13 @@ pub struct VolumeBackupCoverage {
     pub last_run_at: Option<DateTime<Utc>>,
     pub last_successful_run_at: Option<DateTime<Utc>>,
 }
+
+pub trait VolumeCoverageReader: Send + Sync {
+    fn volume_coverage<'a>(
+        &'a self,
+        actor: citadel_primitives::ActorId,
+        administrator: bool,
+        platform: Uuid,
+        volumes: &'a [(String, Option<String>)],
+    ) -> futures_util::future::BoxFuture<'a, Result<Vec<VolumeBackupCoverage>, crate::BackupError>>;
+}

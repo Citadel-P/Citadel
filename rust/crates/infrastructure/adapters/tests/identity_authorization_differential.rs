@@ -96,7 +96,17 @@ fn rust_permission_matrix_matches_the_shared_dotnet_contract() {
     let actual = permission_matrix();
     assert_eq!(actual.len(), expected.permission_matrix.len());
 
-    for (resource_type, expected_capability) in expected.permission_matrix {
+    for (resource_type, mut expected_capability) in expected.permission_matrix {
+        // Rust exposes the existing Stack Terminal/Pull operations in its catalog.
+        // Keep the .NET reference unchanged and assert only these reviewed additions.
+        if resource_type == ResourceType::Stack {
+            expected_capability
+                .specifics
+                .insert(SpecificPermission::Terminal, PermissionLevel::Read);
+            expected_capability
+                .specifics
+                .insert(SpecificPermission::Pull, PermissionLevel::Read);
+        }
         let capability = actual
             .get(&resource_type)
             .unwrap_or_else(|| panic!("missing {resource_type:?}"));

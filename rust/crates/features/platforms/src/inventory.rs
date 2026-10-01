@@ -306,6 +306,23 @@ pub trait ContainerStatsStore: Send + Sync {
 }
 
 pub trait InventoryProjectionStore: Send + Sync {
+    fn initialize_swarm<'a>(
+        &'a self,
+        snapshot: &'a RuntimeInventorySnapshot,
+    ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>>;
+    fn refresh_swarm<'a>(
+        &'a self,
+        snapshot: &'a RuntimeInventorySnapshot,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
+
+    /// Remove only daemon-confirmed deletions, including successful batch siblings.
+    fn remove_swarm_resources<'a>(
+        &'a self,
+        platform: Uuid,
+        kind: crate::swarm_mutations::SwarmResourceKind,
+        ids: &'a [String],
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
+
     fn persist<'a>(
         &'a self,
         snapshot: &'a RuntimeInventorySnapshot,

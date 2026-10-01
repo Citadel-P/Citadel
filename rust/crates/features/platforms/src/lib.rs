@@ -1,6 +1,10 @@
 #![forbid(unsafe_code)]
 mod capabilities;
-pub use capabilities::*;
+pub use capabilities::{
+    ContainerInventoryPort, ContainerStatsPort, ImageInventoryPort, NetworkInventoryPort,
+    NetworkMutationPort, NetworkObservationPort, PlatformInfoPort, PlatformStatsPort,
+    SwarmInventoryPort, VolumeInventoryPort, VolumeMutationPort, VolumeObservationPort,
+};
 pub mod model;
 pub use model::{ConnectorKind, PlatformKind};
 pub mod agent_setup;
@@ -38,7 +42,7 @@ pub use mutations::{
 pub use read_models::{
     ContainerDeploymentSummary, ContainerDeploymentUpdateState, ContainerDetails,
     ContainerIdentity, ContainerStatSnapshot, EffectivePlatformPermission, ImageDetails,
-    NetworkDetails, NodeResourceProjection, PlatformDetails, PlatformStatSnapshot,
+    ImageIdentity, NetworkDetails, NodeResourceProjection, PlatformDetails, PlatformStatSnapshot,
     PlatformTelemetryContext, SwarmConfigSummary, SwarmNetworkSummary, SwarmNodeSummary,
     SwarmSecretSummary, SwarmServiceSummary, SwarmTaskSummary, VolumeDetails,
     VolumeUsageDataSummary, WorkloadStatusCounts,
@@ -66,3 +70,14 @@ mod metadata;
 pub use metadata::{PlatformMetadataError, PlatformMetadataRepository};
 
 pub mod stats_ingestion;
+
+mod descriptor;
+pub use descriptor::{PlatformDescriptor, PlatformRoutingMetadata};
+
+pub mod resource_mutations;
+
+pub mod edge_management;
+
+pub mod image_mutations;
+
+pub mod runtime_provider;

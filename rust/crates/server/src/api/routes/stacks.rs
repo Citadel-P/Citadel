@@ -390,7 +390,7 @@ async fn preflight(
     .ok_or_else(|| {
         crate::api::error::HttpError::from_parts(crate::api::error::ApiError::NotFound, &headers)
     })?;
-    if platform.platform_type != "DockerSwarm" {
+    if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
         return Err(crate::api::error::HttpError::from_parts(
             crate::api::error::ApiError::Validation(
                 "Swarm preflight requires a Docker Swarm platform.".into(),
@@ -412,7 +412,7 @@ async fn preflight(
             .map_err(stack_error),
         &headers,
     )?;
-    let descriptor = &platform.platform_descriptor;
+    let descriptor = &platform.platform_descriptor.routing;
     for (invalid, code, message) in [
         (
             platform.status != citadel_primitives::PlatformStatus::Online,
@@ -420,13 +420,10 @@ async fn preflight(
             "The selected Swarm platform is offline.",
         ),
         (
-            !descriptor
-                .get("controlAvailable")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
+            !descriptor.control_available
                 || !descriptor
-                    .get("localNodeState")
-                    .and_then(Value::as_str)
+                    .local_node_state
+                    .as_deref()
                     .is_some_and(|s| s.eq_ignore_ascii_case("active")),
             "platform.manager_required",
             "The selected connector must target an active Swarm manager.",

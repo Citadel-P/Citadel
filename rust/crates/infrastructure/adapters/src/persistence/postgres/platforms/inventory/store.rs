@@ -131,6 +131,55 @@ impl PostgresInventoryProjectionStore {
 }
 
 impl InventoryProjectionStore for PostgresInventoryProjectionStore {
+    fn initialize_swarm<'a>(
+        &'a self,
+        snapshot: &'a RuntimeInventorySnapshot,
+    ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>> {
+        Box::pin(self.initialize_swarm(snapshot))
+    }
+    fn refresh_swarm<'a>(
+        &'a self,
+        snapshot: &'a RuntimeInventorySnapshot,
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(
+            crate::persistence::postgres::platforms::swarm::inventory::refresh(
+                &self.pool, snapshot,
+            ),
+        )
+    }
+
+    fn remove_swarm_resources<'a>(
+        &'a self,
+        platform: uuid::Uuid,
+        kind: citadel_platforms::swarm_mutations::SwarmResourceKind,
+        ids: &'a [String],
+    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            if ids.is_empty() {
+                return Ok(());
+            }
+            use citadel_platforms::swarm_mutations::SwarmResourceKind;
+            let sql = match kind {
+                SwarmResourceKind::Service => {
+                    "DELETE FROM swarmserviceprojections WHERE platformid=$1 AND dockerserviceid=ANY($2)"
+                }
+                SwarmResourceKind::Secret => {
+                    "DELETE FROM swarmsecretprojections WHERE platformid=$1 AND dockersecretid=ANY($2)"
+                }
+                SwarmResourceKind::Config => {
+                    "DELETE FROM swarmconfigprojections WHERE platformid=$1 AND dockerconfigid=ANY($2)"
+                }
+            };
+            sqlx::query(sql)
+                .bind(platform)
+                .bind(ids)
+                .execute(&self.pool)
+                .await
+                .map_err(storage)?;
+            Ok(())
+        })
+    }
+
     fn persist<'a>(
         &'a self,
         snapshot: &'a RuntimeInventorySnapshot,

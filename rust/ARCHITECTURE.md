@@ -73,6 +73,246 @@ batch the state projection:
 See [the review](reports/architecture-runtime-review-2026-09-27.md) and
 [implementation validation](reports/architecture-runtime-implementation-2026-09-27.md).
 
+## Architecture consolidation (2026-10-01)
+
+The consolidation retains the enriched Deployment, Stack, SwarmService and Platform
+resource strategy. Related data is hydrated by repositories; no entity/detail split
+or new public resource family is introduced.
+
+The shared routing and permission foundations are:
+
+- `adapters/connectors/routing/platforms/registry.rs` owns the existing direct Agent
+  channel cache and target refresh lifecycle. Server composition creates one registry
+  and shares it with workers and command routing; Edge retains its separate session
+  registry. Registration still validates previously unregistered addresses directly.
+- `PlatformRuntimeRouter` selects the persisted Platform or exact Swarm node. Its
+  persistence reader returns typed connector/status fields and owns routing SQL.
+  HTTP capability resolution, container commands, volume helpers, workload Agent calls and
+  node-agent lifecycle operations delegate to this resolver. Workload metadata reads
+  are reused for execution resolution, avoiding an additional lookup per command.
+- Resolution checks persisted identity before using a cached channel. Address changes
+  refresh the existing registry; deletion prevents resolution even while a cached
+  channel remains. Node freshness and live manager identity checks are preserved.
+- Platform read models expose `PlatformKind` and `ConnectorKind`; the API maps these
+  explicitly to its transport vocabulary. Registration inputs still represent
+  unsupported boundary values so existing validation responses remain possible.
+- Persistence decodes routing-relevant descriptor fields into `PlatformRoutingMetadata`.
+  Stored casing aliases remain in the adapter; the complete original JSON is retained
+  for API metadata and lossless round trips. Manager checks use typed identities.
+- Realtime no longer imports HTTP routes or Platform HTTP state. Log and terminal
+  streams resolve through existing feature capability ports. Snapshot DTO mappings
+  and authorized Automation/Build reads are shared at the transport mapping boundary;
+  no SQL or connector dispatch moved into those shared helpers. Existing permission
+  leases, shared event reads, stream bounds and cancellation remain intact.
+- Stack Terminal and Pull are configurable permissions. Build queue/cancel and
+  Backup restore use named requirements. Catalog grant minimums remain distinct
+  from operation requirements: independently assigned grants can combine, and
+  existing Read + Apply/Restore assignments are neither promoted nor rewritten.
+- Identity service-account usage tracking lives in the Identity persistence adapter,
+  using runtime's generic bounded queue. It remains best effort and coalesced;
+  rejected observations increment `ServiceAccountUsageDropped`. Generic runtime
+  has no dependency on Identity.
+
+Verified against branch `feat--migrate-to-rust`, revision
+`b13f5e122545ccc3b8e9bdec6e6674daee159366`, before this uncommitted pass:
+
+| Finding | Verification and disposition |
+| --- | --- |
+| Independent direct-Agent channel construction | Confirmed; registered consumers now share the existing registry. Registration still validates unregistered addresses. |
+| Realtime importing HTTP routes/state | Confirmed; removed, including Automation, Builds and Activities helper imports. |
+| String Platform/Connector classifications and JSON routing probes | Confirmed; read models and routing metadata now use domain types with persistence-owned parsing. |
+| Missing Stack Terminal/Pull catalog entries | Confirmed; added without changing operation authorization levels. |
+| Read + Apply/Restore catalog minima | Not a defect: grants combine across assignments. Existing catalog semantics retained. |
+| Identity tracker in generic runtime | Confirmed; moved to Identity persistence and exposed best-effort drops. |
+| Enriched resource models | Intentional; retained. |
+| Platform HTTP SQL/orchestration and sensitive workspace I/O | Confirmed; moved behind feature ports and infrastructure implementations in the completion pass below. |
+
+The next stage moves narrow HTTP persistence reads behind `PlatformReader` and
+`PlatformReadService`: Platform classification, Swarm initialization detection,
+Deployment/Stack container selection, image identity/node selection and image
+registry association. Deployment selection stays bounded to two rows and rejects
+ambiguity; Stack selection stays scoped to the requested Stack. Both recheck
+ownership after loading the container. Swarm network deletion preconditions reuse
+the existing scoped projection read and reject missing, stale or in-use networks.
+HTTP maps feature NotFound/Conflict errors without changing the public contract.
+
+Platform HTTP receives `StatisticsReader` and `SwarmServiceRepository` from
+composition instead of constructing PostgreSQL repositories per request. HTTP and
+realtime share the injected statistics reader. Runtime mutation orchestration and
+transport dispatch are still separate follow-up work; the HTTP state still owns
+infrastructure dependencies needed by those unmigrated paths.
+
+Validation of this read-boundary stage: Server/test compilation, all 60 Platform
+unit tests and eight isolated PostgreSQL/API regressions passed. The regressions
+cover Deployment/Stack inspection, image node routing, concurrent inventory
+initialization, Platform/Service/workload statistics authorization, managed-Service
+realtime reads and network deletion preconditions.
+Formatting and OpenAPI drift checks passed (404 full / 305 public operations);
+the generated API and frontend schemas remain unchanged.
+
+The direct-SQL stage removes the remaining SQL execution from Platform HTTP.
+Registry browsing resolves an ID through `RegistryRepository`, authorizes that
+resource, then loads the registry through the same repository. Managed Swarm
+service ownership uses a Platform-scoped repository query. Confirmed daemon
+deletions use the injected `InventoryProjectionStore` with a closed
+`SwarmResourceKind`; unsuccessful batch siblings remain visible for reconciliation.
+The HTTP architecture guard rejects direct SQL execution in these routes.
+This stage passed Server/adapter test compilation, five architecture checks and
+five isolated PostgreSQL/API regressions covering registry authorization and
+status, native Swarm preflight, partial deletion, and Platform-scoped ownership
+and projection removal. Both registry creation/credential checks also passed.
+Formatting and OpenAPI checks passed; the 404 full / 305 public operations and
+frontend schema remain unchanged.
+
+Finite container/image inspection, image exposed-port reads, manager Task reads
+(including statistics identity checks), and finite log reads now use the existing
+feature capability ports exposed by `PlatformRuntimeRouter`. Transport dispatch
+lives in the adapter; HTTP retains authorization and response mapping. Resolution
+and execution share the request cancellation token, with a drop guard on every
+migrated path. Existing deadlines, redaction, stale-projection validation and
+exact-node routing are retained. Architecture tests prevent those handlers from
+switching transports again; mutation operations remain for the next stage.
+This stage passed Server/adapter test compilation, six isolated PostgreSQL/API
+regressions, six architecture checks and the early-cancellation regression for all
+read capability factories. Log fixtures now grant permissions through the user
+mutation boundary (with real users), preserving cache invalidation. Formatting
+and OpenAPI verification passed with no API or frontend schema changes.
+
+Network and volume listing, lookup, inspection, creation and deletion now use
+feature capabilities on the shared router. The Platform feature owns network
+batch preflight and sequential network/volume deletion. HTTP still validates
+requests, authorizes access and publishes each confirmed removal. Unsupported
+Swarm node-local mutation targets remain rejected. Preflight rejects protected/in-use/Stack
+networks and stale or missing Swarm observations before deleting any target.
+NotFound on deletion counts as confirmed absence; other failures stop the batch,
+preserve successful notifications and retain the existing partial-result message.
+No retry or full inventory scan was introduced.
+
+This stage passed Server/adapter test compilation, five isolated PostgreSQL/API
+regressions, six architecture checks and the early-cancellation test extended to
+network and volume capabilities. The regressions cover authorization, Edge and
+exact-node routing, lookup behavior, full network preflight, and notifications
+and partial results after a deletion failure. The temporary database and role
+were removed after testing. Formatting and OpenAPI verification passed: 404 full
+and 305 public operations, with no API or frontend schema changes.
+
+Image pull/deletion and Platform prune now resolve feature capability ports through
+the shared router without HTTP transport switches. Pull progress validation and
+matching the requested image against fresh inventory belong to the Platform
+feature. Cancellation interrupts a stalled pull stream or progress queue before
+inventory observation. HTTP retains admission limits, the tracked task/body
+lifetime, deadlines and notifications. Image deletion retains its independent
+tracked task so reconciliation runs after caller disconnection; its existing
+claims, generation fence, partial-failure observation and no-retry behavior are
+unchanged. The deletion adapter now requires only `ImageInventoryPort` for its
+post-operation observation. Registry preparation and image persistence/claim
+helpers remain infrastructure-owned and are still called by HTTP; moving that
+orchestration behind a feature service remains a separate boundary step.
+
+Focused image-stage validation passed the three Platform pull tests (reference
+matching, error sanitization and stalled-progress cancellation), the early
+cancellation router test, six architecture checks, and three isolated HTTP/SQL
+regressions for partial image deletion and Local/Edge pull/prune. The local pull
+fixture now supplies the container inventory required by image usage calculation.
+The stalled-client response-body regression also passed (14 focused tests total).
+Formatting and OpenAPI checks passed with unchanged 404 full / 305 public
+operations and frontend schema. The temporary database and role were removed
+after testing.
+
+The completion pass removes concrete clients, PostgreSQL stores and the database
+pool from Platform HTTP state. Composition owns their construction; worker and
+diagnostics dependencies are wired independently. `PlatformRuntimeProvider`
+returns existing narrow capability interfaces through the shared resolver, without
+another channel cache or a universal Docker execution interface. Realtime uses the
+same provider. Flat route files and enriched resource models are retained.
+
+- Native Swarm preflight, manager checks, version/ownership validation, batch
+  mutation and refresh completion live in the Platform feature. Confirmed removals
+  are persisted and notified even when a later sibling or the refresh fails.
+  Platform uses the Swarm Service repository only to identify managed service
+  ownership before native mutations; managed service commands remain in their
+  own feature. This is an intentional, acyclic read dependency.
+  Persistence failures keep their HTTP error classification. Network topology
+  forwards its lightweight capability instead of falling back to usage collection.
+- Platform management validates proposed addresses before persistence through a
+  candidate-validation port. Registration and updates intentionally bypass the
+  persisted-address cache for uncommitted candidates. Platform deletion commits
+  first, then disconnects sessions and publishes removals without another await.
+- Node Agent setup, removal and coverage use injected lifecycle/runtime/read ports.
+  Edge enrollment/status/revocation use feature-owned target and session interfaces;
+  Builds and Platforms share HTTP presentation outside the route modules.
+- Image pull preparation and claims use `ImageMutationStore`; SQL lives in Platform
+  persistence. The feature coordinates observed-image persistence, completion
+  notifications and deletion reconciliation. Tracked task ownership, deadlines,
+  claims, generation fencing and bounded progress remain intact.
+- Registry browsing, volume content, backup coverage and download audit records use
+  injected feature ports. Download completion still controls audit recording.
+- Git credentials and clone staging use `GitWorkspacePort`; Automation uses a
+  private script workspace lease. Implementations live in
+  `adapters/filesystem`; the process runner remains independent of these features.
+  They remove credential-bearing files on completion or
+  abandoned futures, preserve atomic clone publication, and restrict filesystem
+  permissions. Automation refuses an existing run-directory symlink. Backup
+  staging cleanup is delegated to its existing source planner adapter.
+
+Architecture guards reject concrete transport/persistence dependencies in Platform
+HTTP and sensitive filesystem operations in these feature workflows. Release/CI
+changes, .NET removal and event-system redesign remain outside this consolidation.
+
+Completion validation:
+
+- Workspace/all-target compilation passed. The seven consolidation architecture
+  checks pass, including capability ownership and sensitive filesystem boundaries.
+- All 77 Platform HTTP cases and 13 Platform creation/deletion cases passed across
+  the complete isolated run and corrective reruns. Fixtures that changed grants
+  after a cached denial now use User/Team mutation repositories. Assertions and
+  production authorization were not weakened. Malformed Platform PATCH fields
+  now retain their field name in the structured validation envelope.
+- Six Git execution and one Automation execution PostgreSQL tests passed, as did
+  the direct-channel reuse/address-change/deletion regression. Every database and
+  test role was isolated from the running application and removed afterwards.
+- Four workspace lifecycle/security tests, two real Git CLI tests, and the reviewed
+  Stack permission-catalog differential test pass. Git workspace integration tests
+  now live with their filesystem adapter, leaving the generic process crate free
+  of Git/Automation dependencies.
+- A disposable image containing the rebuilt Agent passed authenticated finite logs,
+  redaction, interactive terminal and cancellation acceptance. Its containers,
+  network and image were removed. This exercised the debug Agent executable on
+  the existing Agent runtime image.
+- OpenAPI verification passed: 404 full and 305 public operations, with no changes
+  to generated API/frontend schemas. Formatting and diff whitespace checks pass.
+
+The validation follow-up corrects the failures discovered by the first full run:
+
+- ACL and feature architecture scans exclude dedicated test files and test
+  directories. Alert configuration fixtures live in their own test module; the
+  reviewed production ACL owner list is unchanged.
+- The container protocol fingerprint includes the existing additive fields
+  `ListContainersRequest.metadata_only = 5` and
+  `ContainersStatsResponse.captured_at = 2`. Removing precisely those additions
+  reproduces the former fingerprint. Wire tests pin their numbers and defaults.
+- Build and Backup PATCH serialization lives with the API resource inputs.
+  Container batch and Edge worker tests use conventional module paths without
+  `#[path]` overrides. Edge enrollment presentation returns a view; routes own
+  response headers and rendering.
+- Complex callback/cache types have names; related backup-operation and container
+  observation arguments travel together. Large platform enum payloads are boxed.
+  Redundant conversions, borrows, map lookups and nested conditions are removed
+  without adding lint suppressions or changing public wire contracts.
+- The Stack differential assertion explicitly accounts for the two reviewed
+  Terminal/Pull catalog additions without altering the .NET reference contract.
+
+Follow-up validation: the full workspace suite passes (1,075 passed, zero failed,
+308 ignored external/integration cases). Twelve selected ignored database cases
+also pass in isolated databases: alert configuration caching, backup operation
+leases, container state deltas, Edge identity/replay, Platform and Build Pool
+HTTP enrollment contracts, and authorization cache invalidation. The temporary
+database and role were removed after the run. OpenAPI verification also passes
+with unchanged 404 full / 305 public operations and frontend schemas. Final
+workspace/all-target Clippy passes with `-D warnings`; formatting and diff
+whitespace checks also pass.
+
+
 ## Workspace groups
 
 The workspace separates executable hosts from feature and infrastructure crates:

@@ -1,11 +1,9 @@
 #![forbid(unsafe_code)]
 mod bounded_queue;
-mod service_account_last_used;
 mod supervisor;
 pub use bounded_queue::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,
 };
-pub use service_account_last_used::*;
 pub use supervisor::{SupervisedTaskError, TaskSupervisor};
 mod polling;
 pub use polling::worker_poll_delay;

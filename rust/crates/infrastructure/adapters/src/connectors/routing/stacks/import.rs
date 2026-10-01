@@ -44,7 +44,7 @@ impl StackRuntimeRouter {
         let containers = if target.connector == citadel_platforms::ConnectorKind::Local {
             citadel_platforms::ContainerInventoryPort::list_containers(&self.docker, cancel).await
         } else {
-            match self.agent_for(&target)? {
+            match self.agent_for(&target, cancel).await? {
                 crate::connectors::agent::execution::AgentExecutionClient::Direct(agent) => {
                     agent.list_containers(cancel).await
                 }

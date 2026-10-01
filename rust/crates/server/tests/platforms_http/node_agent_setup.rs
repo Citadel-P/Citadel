@@ -10,7 +10,7 @@ use citadel_platforms::node_agents::{
     lifecycle::NodeAgentLifecycleStore,
     setup::{NodeAgentSetupStore, SetupKind},
 };
-use citadel_server::api::routes::platforms::EdgeHttpContext;
+use citadel_server::api::resources::platforms::edge::EdgeHttpContext;
 
 // Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair/upgrade
 // permission theory through actual HTTP handlers and PostgreSQL transactions.
@@ -23,20 +23,18 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
     f.docker_server.abort();
     let (docker, server, socket) = docker_fixture_for_cluster(Some(100), cluster.clone()).await;
     let mut state = f.lookup_state.platforms.clone();
-    state.docker = docker;
+    refresh_runtime(&mut state, &f, docker);
     let app = platforms_http::router(state).layer(axum::Extension(EdgeHttpContext {
         node_agent_policy: Default::default(),
-        store: PostgresEdgeStore::new(f.pool.clone()),
-        registry: EdgeRegistry::default(),
+        store: std::sync::Arc::new(PostgresEdgeStore::new(f.pool.clone())),
+        registry: std::sync::Arc::new(EdgeRegistry::default()),
         core_url: "https://core.example.test".into(),
         agent_image: "agent:latest".into(),
         node_agent_ca_bundle: None,
     }));
     sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\",\"daemonId\":\"daemon-test\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
     sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,clusterid,managerdockernodeid,managerdockerdaemonid,dockerservicename,agentimagereference,agentimagedigest,desiredstate) VALUES($1,$2,'node-1','daemon-test','fixture','','','Removed')").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
-    let mut reader = f.administrator.clone();
-    reader.actor_id = ActorId::new(f.actor_id);
-    reader.roles.clear();
+    let reader = super::lookup::subject(&f).await;
     for action in ["install", "repair", "upgrade"] {
         let path = format!("/api/v1/platforms/{id}/node-agents/{action}");
         let send = |principal: Option<ActorPrincipal>| {
@@ -55,21 +53,13 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
             }
         };
         assert_eq!(send(None).await.status(), StatusCode::UNAUTHORIZED);
-        sqlx::query("UPDATE resourceaccesses SET permissionlevel=4,specificpermissions=0 WHERE resourceid=$1 AND actorid=$2").bind(id).bind(f.actor_id).execute(&f.pool).await.unwrap();
+        super::node_agent_lifecycle::set_node_agent_access(&f, &reader, false).await;
         assert_eq!(
             send(Some(reader.clone())).await.status(),
             StatusCode::FORBIDDEN,
             "Execute alone is insufficient"
         );
-        sqlx::query(
-            "UPDATE resourceaccesses SET specificpermissions=$3 WHERE resourceid=$1 AND actorid=$2",
-        )
-        .bind(id)
-        .bind(f.actor_id)
-        .bind(citadel_primitives::SpecificPermission::ManageNodeAgents as i32)
-        .execute(&f.pool)
-        .await
-        .unwrap();
+        super::node_agent_lifecycle::set_node_agent_access(&f, &reader, true).await;
         let response = send(Some(reader.clone())).await;
         assert_eq!(response.status(), StatusCode::OK);
         let progress = json_body(response).await;
@@ -115,8 +105,6 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
     sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\",\"daemonId\":\"daemon-test\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
     let store = PostgresNodeAgentLifecycleStore(f.pool.clone());
     let info = f
-        .lookup_state
-        .platforms
         .docker
         .get_info(&tokio_util::sync::CancellationToken::new())
         .await
@@ -350,12 +338,8 @@ async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
         }
         calls
     });
-    let runtime = NodeAgentRuntimeRouter {
-        pool: f.pool.clone(),
-        docker: f.lookup_state.platforms.docker.clone(),
-        agent: None,
-        edge: registry.clone(),
-    };
+    let runtime =
+        NodeAgentRuntimeRouter::new(f.pool.clone(), f.docker.clone(), None, registry.clone());
     let cancel = tokio_util::sync::CancellationToken::new();
     runtime
         .distribution(&c, "agent:latest", &cancel)

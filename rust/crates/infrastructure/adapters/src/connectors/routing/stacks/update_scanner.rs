@@ -136,7 +136,7 @@ impl StackUpdateRuntime {
             let peer = if target.connector == citadel_platforms::ConnectorKind::Local {
                 None
             } else {
-                Some(self.runtime.agent_for(&target)?)
+                Some(self.runtime.agent_for(&target, cancel).await?)
             };
             let (containers, images) = match &peer {
                 Some(peer) => (

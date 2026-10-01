@@ -43,7 +43,10 @@ impl AuthorizedPlatformReader for PostgresAuthorizedPlatformReader {
                         name: row.name,
                         address: row.address,
                         status: row.status.parse().map_err(AuthorizedReadError::Storage)?,
-                        connector_type: row.connectortype,
+                        connector_type: super::classification::connector_kind(&row.connectortype)
+                            .map_err(|error| {
+                            AuthorizedReadError::Storage(error.to_string())
+                        })?,
                     })
                 })
                 .collect()

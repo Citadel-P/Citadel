@@ -1,4 +1,5 @@
 use super::spec::*;
+use crate::api::error::ApiError;
 use citadel_primitives::WebhookPatch;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -108,4 +109,17 @@ pub struct BuildMetadataPatch {
     #[serde(default, skip_serializing_if = "FieldUpdate::is_missing")]
     #[schema(value_type = Option<String>, required = false)]
     description: FieldUpdate<Option<String>>,
+}
+
+pub(crate) fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
+    patch: serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
+    if !patch.is_object() {
+        return Err(ApiError::Validation(
+            "Build update must be an object.".into(),
+        ));
+    }
+    let patch: T =
+        serde_json::from_value(patch).map_err(|error| ApiError::Validation(error.to_string()))?;
+    serde_json::to_value(patch).map_err(ApiError::internal)
 }

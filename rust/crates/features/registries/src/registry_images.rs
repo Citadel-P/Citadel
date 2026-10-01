@@ -107,3 +107,12 @@ pub struct DockerHubTagImage {
     pub status: RegistryTagStatus,
     pub last_pulled: Option<String>,
 }
+
+pub trait RegistryBrowsePort: Send + Sync {
+    fn browse<'a>(
+        &'a self,
+        configuration: &'a serde_json::Value,
+        kind: RegistryBrowseKind,
+        name: Option<&'a str>,
+    ) -> futures_util::future::BoxFuture<'a, Result<serde_json::Value, crate::RegistryError>>;
+}

@@ -64,14 +64,14 @@ async fn platform_header_config_and_key_rotation_preserve_authorization_and_stat
         else {(200,json!({"ID":daemon_id,"NCPU":2,"MemTotal":1048576,"OSType":"linux","Swarm":{"NodeID":"node-1","LocalNodeState":"active","ControlAvailable":true,"Nodes":1,"Managers":1,"Cluster":{"ID":cluster}}}).to_string())}
     }).await;
     let mut state = f.lookup_state.platforms.clone();
-    state.docker = docker;
+    refresh_runtime(&mut state, &f, docker);
     let dir = std::env::temp_dir().join(format!("agent-rotation-{}", Uuid::now_v7()));
     let key = dir.join("signing-key");
     let signer = AgentRequestSigner::load_or_create(&key).unwrap();
     let clone = signer.clone();
     let old = signer.public_key_base64();
     let context = AgentSetupContext {
-        signer,
+        signer: Arc::new(signer),
         image: "agent:test".into(),
         requires_tls: true,
     };
@@ -209,6 +209,7 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
         seen.lock().unwrap().push(line.to_owned());
         if line.starts_with("POST /v1.49/images/create") {assert!(line.contains("fromImage=nginx%3Alatest"));(200,"{\"status\":\"Pulling\",\"id\":\"layer\"}\n{\"status\":\"Done\"}\n".into())}
         else if line.starts_with("GET /v1.49/images/json") {(200,json!([{"Id":image_id,"RepoTags":["nginx:latest"],"RepoDigests":[format!("nginx@{image_id}")],"Created":1700000000,"Size":2048,"Containers":0}]).to_string())}
+        else if line.starts_with("GET /v1.49/containers/json") {(200,"[]".into())}
         else if line.contains("/volumes/prune") {(200,json!({"VolumesDeleted":["unused"],"SpaceReclaimed":10}).to_string())}
         else if line.contains("/networks/prune") {(200,json!({"NetworksDeleted":["unused-net"]}).to_string())}
         else if line.contains("/images/prune") {assert!(line.contains("false"));(200,json!({"ImagesDeleted":[{"Deleted":"old-image"},{"Untagged":"old:tag"}],"SpaceReclaimed":20}).to_string())}
@@ -216,7 +217,7 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
         else {panic!("unexpected {line}")}
     }).await;
     let mut state = f.lookup_state.platforms.clone();
-    state.docker = docker;
+    refresh_runtime(&mut state, &f, docker);
     f.app = platforms_http::router(state);
     let path = format!("/api/v1/platforms/{}/prune", f.platform_id);
     let reader = super::lookup::subject(&f).await;
@@ -323,8 +324,6 @@ async fn edge_platform_prune_and_pull_stream_route_and_persist_without_local_fal
         .await
         .unwrap();
     let (session, mut commands) = f
-        .lookup_state
-        .platforms
         .edge
         .register(EdgeTarget::platform(f.platform_id), Uuid::now_v7())
         .unwrap();

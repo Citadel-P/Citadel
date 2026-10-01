@@ -6,3 +6,5 @@ pub mod views;
 pub mod patch;
 #[cfg(test)]
 mod tests;
+
+pub(crate) mod authorized;

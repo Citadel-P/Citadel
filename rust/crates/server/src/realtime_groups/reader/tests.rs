@@ -145,7 +145,7 @@ fn committed_container_state_patches_skip_full_reads_for_container_groups() {
     };
     let hub = crate::realtime::RealtimeHub::new(8, Arc::new(crate::metrics::Metrics::default()));
     let mut receiver = hub.subscribe();
-    hub.publish_container_state_patches(platform, &[patch.clone()]);
+    hub.publish_container_state_patches(platform, std::slice::from_ref(&patch));
     let event = receiver.try_recv().unwrap();
 
     for name in [

@@ -1,6 +1,6 @@
 //! Closed classifications used by inventory collection and runtime routing.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum ConnectorKind {
     Local,
     Agent,

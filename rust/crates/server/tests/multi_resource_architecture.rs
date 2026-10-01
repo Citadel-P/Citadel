@@ -4,6 +4,12 @@ fn sources(path: &Path) -> Vec<PathBuf> {
         .unwrap()
         .flat_map(|entry| {
             let path = entry.unwrap().path();
+            if path.file_stem().is_some_and(|name| {
+                let name = name.to_string_lossy();
+                name == "tests" || name.ends_with("_tests")
+            }) {
+                return vec![];
+            }
             if path.is_dir() {
                 sources(&path)
             } else if path.extension().is_some_and(|e| e == "rs") {

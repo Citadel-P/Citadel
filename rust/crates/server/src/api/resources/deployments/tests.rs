@@ -21,8 +21,7 @@ fn details() -> AuthorizedResource<citadel_deployments::Deployment> {
             spec: serde_json::from_value::<DeploymentSpec>(json!({
                 "image": {"$type": "Local", "imageId": "sha256:local"}
             }))
-            .unwrap()
-            .into(),
+            .unwrap(),
 
             audit: citadel_primitives::AuditMetadata {
                 created_at: Utc::now(),

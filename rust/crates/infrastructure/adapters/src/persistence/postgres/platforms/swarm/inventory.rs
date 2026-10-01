@@ -32,7 +32,9 @@ pub async fn refresh(
     if !citadel_platforms::swarm_mutations::manager_matches(
         &snapshot.info,
         saved.0.as_deref(),
-        &saved.1,
+        &super::super::descriptor::decode(saved.1)
+            .map_err(storage)?
+            .routing,
     ) {
         return Err(RuntimeCapabilityError::new(
             RuntimeErrorKind::Conflict,

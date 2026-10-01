@@ -164,9 +164,23 @@ async fn delete_validates_input_and_requires_execute_permission() {
     assert!(exists(&harness, id).await);
     assert_eq!(deleted_activities(&harness, id).await, 0);
     // Resource-scoped Execute grants work without an Administrator role.
-    sqlx::query("INSERT INTO resourceaccesses (id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)")
-        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(citadel_primitives::PermissionLevel::Execute as i32)
-        .bind(id).bind(citadel_primitives::ResourceType::Platform as i32).execute(&harness.pool).await.unwrap();
+    use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+    use citadel_identity::{ResourceAccessInput, UserRepository};
+    PostgresUserRepository::new(harness.pool.clone())
+        .add_resource_access(
+            reader.subject_id,
+            &ResourceAccessInput {
+                resource_type: citadel_primitives::ResourceType::Platform,
+                resource_id: id,
+                permission_level: citadel_primitives::PermissionLevel::Execute,
+                specific_permissions: vec![],
+            },
+            harness.administrator.actor_id,
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
     assert_eq!(
         delete(&harness.app, Some(reader), json!({"ids":[id]}))
             .await

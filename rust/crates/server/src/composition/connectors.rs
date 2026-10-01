@@ -10,9 +10,10 @@ pub(super) struct ConnectorComponents {
     pub agent: Option<AgentClient>,
     pub agent_setup: Arc<citadel_server::api::resources::platforms::views::AgentSetupView>,
     pub agent_setup_context: platforms_http::AgentSetupContext,
-    pub edge_context: platforms_http::EdgeHttpContext,
+    pub edge_context: citadel_server::api::resources::platforms::edge::EdgeHttpContext,
     pub edge_registry: citadel_adapters::connectors::edge::EdgeRegistry,
-    pub runtime_targets: Arc<citadel_server::runtime_targets::PlatformRuntimeRegistry>,
+    pub runtime_targets:
+        Arc<citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry>,
     pub container_runtime:
         citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter,
 }
@@ -56,7 +57,10 @@ pub(super) fn build(
         .with_ca_certificate(config.execution.edge_agent.ca_certificate.clone())?,
     );
     let runtime_targets =
-        citadel_server::runtime_targets::PlatformRuntimeRegistry::new(pool.clone(), agent.clone());
+        citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry::new(
+            pool.clone(),
+            agent.clone(),
+        );
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let container_runtime =
         citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
@@ -67,18 +71,19 @@ pub(super) fn build(
         )
         .with_agent_resolver(runtime_targets.clone());
     let agent_setup_context = platforms_http::AgentSetupContext {
-        signer: agent_signer,
+        signer: Arc::new(agent_signer),
         image: agent_image.clone(),
         requires_tls: !config.execution.edge_agent.allow_insecure,
     };
-    let edge_context = platforms_http::EdgeHttpContext {
+    let edge_context = citadel_server::api::resources::platforms::edge::EdgeHttpContext {
         node_agent_policy: config.execution.edge_agent.setup_policy.clone(),
         node_agent_ca_bundle: config.execution.edge_agent.node_agent_ca_bundle.clone(),
-        store:
+        store: std::sync::Arc::new(
             citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
                 pool.clone(),
             ),
-        registry: edge_registry.clone(),
+        ),
+        registry: std::sync::Arc::new(edge_registry.clone()),
         core_url: config
             .transport
             .edge_agent_public_url

@@ -35,12 +35,8 @@ pub struct EdgeStatusView {
     pub revoked_at_utc: Option<DateTime<Utc>>,
     pub enrollment_expires_at_utc: Option<DateTime<Utc>>,
 }
-impl From<citadel_adapters::persistence::postgres::platforms::edge::store::EdgeStatus>
-    for EdgeStatusView
-{
-    fn from(
-        value: citadel_adapters::persistence::postgres::platforms::edge::store::EdgeStatus,
-    ) -> Self {
+impl From<citadel_platforms::edge_management::EdgeStatus> for EdgeStatusView {
+    fn from(value: citadel_platforms::edge_management::EdgeStatus) -> Self {
         Self {
             connection_status: value.connection_status,
             last_connected_at_utc: value.last_connected_at_utc,

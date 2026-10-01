@@ -57,16 +57,19 @@ pub(super) fn build(
     );
     let swarm_runtime = SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
         .with_image_cache(image_cache.clone())
-        .with_edge(edge_registry.clone());
+        .with_edge(edge_registry.clone())
+        .with_runtime_router(container_runtime.runtime_router());
     let stack_runtime = StackRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
         .with_image_cache(image_cache.clone())
-        .with_edge(edge_registry.clone());
+        .with_edge(edge_registry.clone())
+        .with_runtime_router(container_runtime.runtime_router());
     let image_scanner = Arc::new(
         citadel_adapters::connectors::routing::images::scanner::ImageScanner::new(
             pool.clone(),
             Arc::new(
                 DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
-                    .with_edge(edge_registry.clone()),
+                    .with_edge(edge_registry.clone())
+                    .with_runtime_router(container_runtime.runtime_router()),
             ),
             image_cache.clone(),
         ),
@@ -82,7 +85,8 @@ pub(super) fn build(
             Arc::new(
                 DeploymentRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
                     .with_image_cache(image_cache.clone())
-                    .with_edge(edge_registry.clone()),
+                    .with_edge(edge_registry.clone())
+                    .with_runtime_router(container_runtime.runtime_router()),
             ),
             entitlements.clone(),
             cancellation.clone(),

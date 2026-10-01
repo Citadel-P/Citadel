@@ -6,6 +6,32 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub trait PlatformReader: Send + Sync {
+    fn platform_kind(
+        &self,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<PlatformKind>, AuthorizedReadError>>;
+    fn has_swarm_nodes(&self, platform: Uuid) -> BoxFuture<'_, Result<bool, AuthorizedReadError>>;
+    /// At most two matches: callers must reject ambiguous deployment identity.
+    fn deployment_container_ids(
+        &self,
+        deployment: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, AuthorizedReadError>>;
+    fn stack_container_id<'a>(
+        &'a self,
+        stack: Uuid,
+        reference: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>>;
+    fn image_identity(
+        &self,
+        platform: Uuid,
+        image: Uuid,
+    ) -> BoxFuture<'_, Result<Option<ImageIdentity>, AuthorizedReadError>>;
+    fn image_registry_id<'a>(
+        &'a self,
+        platform: Uuid,
+        docker_image: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>>;
+
     fn container_identities(
         &self,
         platform: Uuid,
@@ -40,7 +66,7 @@ pub trait PlatformReader: Send + Sync {
                     network_count: p.network_count,
                     volume_count: p.volume_count,
                     image_count: p.image_count,
-                    descriptor: p.platform_descriptor,
+                    descriptor: p.platform_descriptor.metadata,
                 }))
         })
     }

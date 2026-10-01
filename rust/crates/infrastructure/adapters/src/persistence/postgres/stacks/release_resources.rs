@@ -106,7 +106,11 @@ pub(crate) async fn capture(
         row.try_get::<Option<String>, _>("clusterid")
             .map_err(runtime_error)?
             .as_deref(),
-        &row.try_get("platformdescriptor").map_err(runtime_error)?,
+        &crate::persistence::postgres::platforms::descriptor::decode(
+            row.try_get("platformdescriptor").map_err(runtime_error)?,
+        )
+        .map_err(runtime_error)?
+        .routing,
     ) {
         return Err(runtime_error(
             "The connected Swarm manager identity changed.",

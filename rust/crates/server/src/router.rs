@@ -29,6 +29,7 @@ pub fn router(
     config: &Config,
 ) -> Result<Routers, Box<dyn std::error::Error>> {
     let ServerComponents {
+        docker,
         pool,
         cancellation,
         readiness,
@@ -80,7 +81,7 @@ pub fn router(
             readiness: Arc::clone(&readiness),
             metrics,
             pool: pool.clone(),
-            docker: platform_state.docker.clone(),
+            docker,
         },
     )
     .merge(identity_http::router(identity_http::IdentityHttpState {

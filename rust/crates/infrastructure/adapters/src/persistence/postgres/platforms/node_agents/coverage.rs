@@ -53,11 +53,7 @@ WHERE n.platformid=$1 ORDER BY n.dockernodeid LIMIT 10001
             "Node-agent coverage exceeds the 10000-node limit.".into(),
         ));
     }
-    let manager = platform
-        .platform_descriptor
-        .get("nodeID")
-        .or_else(|| platform.platform_descriptor.get("NodeID"))
-        .and_then(Value::as_str);
+    let manager = platform.platform_descriptor.routing.node_id.as_deref();
     let now = Utc::now();
     let mut observed = None;
     let mut nodes = Vec::with_capacity(rows.len());
@@ -182,4 +178,24 @@ WHERE n.platformid=$1 ORDER BY n.dockernodeid LIMIT 10001
     result.enrollment_expires_at_utc = sqlx::query_scalar("SELECT max(expiresatutc) FROM swarmnodeagentbootstraps WHERE platformid=$1 AND revokedatutc IS NULL AND expiresatutc>now()").bind(id).fetch_one(&mut *tx).await?;
     tx.commit().await?;
     Ok(result)
+}
+
+pub struct PostgresNodeAgentCoverageReader {
+    pub pool: PgPool,
+    pub sessions: EdgeRegistry,
+}
+impl citadel_platforms::node_agents::NodeAgentCoverageReader for PostgresNodeAgentCoverageReader {
+    fn read<'a>(
+        &'a self,
+        platform: &'a PlatformDetails,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<SwarmNodeAgentCoverage, citadel_platforms::AuthorizedReadError>,
+    > {
+        Box::pin(async move {
+            read(&self.pool, &self.sessions, platform)
+                .await
+                .map_err(|e| citadel_platforms::AuthorizedReadError::Storage(e.to_string()))
+        })
+    }
 }

@@ -114,6 +114,7 @@ pub enum RuntimeWork {
     StatsCommittedSamples,
     StatsRetry,
     StatsRejected,
+    ServiceAccountUsageDropped,
     StatsRetentionDrop,
     PlatformStatsIngress,
     PlatformStatsFlush,
@@ -244,6 +245,7 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::StatsCommittedSamples,
     RuntimeWork::StatsRetry,
     RuntimeWork::StatsRejected,
+    RuntimeWork::ServiceAccountUsageDropped,
     RuntimeWork::StatsRetentionDrop,
     RuntimeWork::PlatformStatsIngress,
     RuntimeWork::PlatformStatsFlush,
@@ -466,6 +468,6 @@ mod tests {
                 rendered.contains(&format!("citadel_runtime_units_total{{family=\"{name}\"}}"))
             );
         }
-        assert_eq!(rendered.lines().count(), FAMILIES.len() * 11);
+        assert_eq!(rendered.lines().count(), FAMILIES.len() * 12);
     }
 }

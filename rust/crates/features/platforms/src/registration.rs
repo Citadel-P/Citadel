@@ -21,6 +21,15 @@ pub enum PlatformType {
     Kubernetes,
 }
 
+impl From<crate::PlatformKind> for PlatformType {
+    fn from(kind: crate::PlatformKind) -> Self {
+        match kind {
+            crate::PlatformKind::Docker => Self::Docker,
+            crate::PlatformKind::DockerSwarm => Self::DockerSwarm,
+        }
+    }
+}
+
 impl PlatformType {
     #[must_use]
     pub const fn as_str(self) -> &'static str {

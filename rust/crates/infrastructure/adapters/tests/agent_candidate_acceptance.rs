@@ -58,6 +58,8 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
             &agent,
             "--network",
             &network,
+            "--publish",
+            "127.0.0.1::9000",
             "--mount",
             "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock",
             "--env",
@@ -84,7 +86,12 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
         ])
         .await;
         let id = String::from_utf8(id).unwrap().trim().to_owned();
-        let address = format!("http://{agent}:9000");
+        let address = if std::env::var_os("CITADEL_PHASE7_AGENT_FROM_HOST").is_some() {
+            let binding = docker(&["port", &agent, "9000/tcp"]).await;
+            format!("http://{}", String::from_utf8(binding).unwrap().trim())
+        } else {
+            format!("http://{agent}:9000")
+        };
         let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
         let client = loop {
             if let Ok(client) =

@@ -43,7 +43,7 @@ impl GitRepositoryExecutionService {
                     ));
                 }
                 remote
-                    .add_ssh_key(&self.cache_root, account_id, &private_key)
+                    .add_ssh_key(self.cli.workspace.as_ref(), &self.cache_root, &private_key)
                     .await?;
             }
         }
@@ -54,7 +54,7 @@ impl GitRepositoryExecutionService {
 pub(super) struct PreparedRemote {
     pub(super) url: String,
     pub(super) environment: Vec<(OsString, OsString)>,
-    pub(super) credential_file: Option<PathBuf>,
+    pub(super) credential_file: Option<Box<dyn crate::workspace::GitCredentialFile>>,
 }
 
 impl PreparedRemote {
@@ -96,37 +96,21 @@ impl PreparedRemote {
 
     async fn add_ssh_key(
         &mut self,
+        workspace: &dyn crate::workspace::GitWorkspacePort,
         cache_root: &Path,
-        account_id: Uuid,
         private_key: &str,
     ) -> Result<(), GitRepositoryExecutionError> {
-        let directory = cache_root.join(".credentials");
-        tokio::fs::create_dir_all(&directory)
-            .await
-            .map_err(storage_error)?;
-        let path = directory.join(format!(
-            "{}-{}.key",
-            account_id.simple(),
-            Uuid::now_v7().simple()
-        ));
-        if path.to_string_lossy().contains(['\"', '\r', '\n']) {
-            return Err(GitRepositoryExecutionError::Credential);
-        }
-        let mut options = tokio::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            options.mode(0o600);
-        }
-        let mut file = options.open(&path).await.map_err(storage_error)?;
-        self.credential_file = Some(path.clone());
-        use tokio::io::AsyncWriteExt;
-        file.write_all(private_key.trim_end().as_bytes())
-            .await
-            .map_err(storage_error)?;
-        file.write_all(b"\n").await.map_err(storage_error)?;
-        file.flush().await.map_err(storage_error)?;
-        drop(file);
+        self.credential_file = Some(
+            workspace
+                .credential(cache_root, private_key)
+                .await
+                .map_err(storage_error)?,
+        );
+        let path = self
+            .credential_file
+            .as_ref()
+            .expect("credential created")
+            .path();
         let command = format!(
             "ssh -i \"{}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes",
             path.display()
@@ -134,17 +118,6 @@ impl PreparedRemote {
         self.environment
             .push((OsString::from("GIT_SSH_COMMAND"), OsString::from(command)));
         Ok(())
-    }
-}
-
-impl Drop for PreparedRemote {
-    fn drop(&mut self) {
-        if let Some(path) = self.credential_file.take()
-            && let Err(error) = std::fs::remove_file(&path)
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            tracing::warn!(path = %path.display(), %error, "failed to delete temporary Git SSH key");
-        }
     }
 }
 

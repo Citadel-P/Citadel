@@ -16,7 +16,7 @@ use futures_util::future::BoxFuture;
 
 use serde_json::{Map, Value, json};
 
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
 use tokio_util::sync::CancellationToken;
 
@@ -39,8 +39,7 @@ const OPERATION_LABEL: &str = "com.citadel.operation-id";
 pub struct SwarmServiceRuntimeRouter {
     pool: PgPool,
     docker: DockerClient,
-    agent: Option<AgentClient>,
-    edge: crate::connectors::edge::EdgeRegistry,
+    runtime: super::platforms::runtime::PlatformRuntimeRouter,
     image_cache: std::sync::Arc<crate::connectors::registries::digest_cache::ImageDigestCache>,
 }
 
@@ -59,11 +58,13 @@ impl SwarmServiceRuntimeRouter {
                     .await
                     .map_err(storage)?
                     .ok_or(SwarmServiceError::NotFound)?;
+            let descriptor = crate::persistence::postgres::platforms::descriptor::decode(pinned.1)
+                .map_err(storage)?;
             let check = |info: &citadel_platforms::RuntimePlatformInfo| {
                 if citadel_platforms::swarm_mutations::manager_matches(
                     info,
                     pinned.0.as_deref(),
-                    &pinned.1,
+                    &descriptor.routing,
                 ) {
                     Ok(())
                 } else {
@@ -86,7 +87,7 @@ impl SwarmServiceRuntimeRouter {
                     .await
                     .map_err(inspection_error)
             } else {
-                let agent = self.agent_for(platform).await?;
+                let agent = self.agent_for(platform, cancel).await?;
                 let info = match &agent {
                     crate::connectors::agent::execution::AgentExecutionClient::Direct(client) => {
                         client.get_info(cancel).await
@@ -116,12 +117,24 @@ impl SwarmServiceRuntimeRouter {
     #[must_use]
     pub fn new(pool: PgPool, docker: DockerClient, agent: Option<AgentClient>) -> Self {
         Self {
+            runtime: super::platforms::runtime::PlatformRuntimeRouter::new(
+                pool.clone(),
+                docker.clone(),
+                agent,
+                Default::default(),
+            ),
             pool,
             docker,
-            agent,
-            edge: crate::connectors::edge::EdgeRegistry::default(),
             image_cache: Default::default(),
         }
+    }
+
+    pub fn with_runtime_router(
+        mut self,
+        runtime: super::platforms::runtime::PlatformRuntimeRouter,
+    ) -> Self {
+        self.runtime = runtime;
+        self
     }
 
     pub fn with_image_cache(
@@ -134,70 +147,42 @@ impl SwarmServiceRuntimeRouter {
 
     #[must_use]
     pub fn with_edge(mut self, edge: crate::connectors::edge::EdgeRegistry) -> Self {
-        self.edge = edge;
+        self.runtime = self.runtime.with_edge(edge);
         self
     }
 
     async fn agent_for(
         &self,
         platform_id: Uuid,
+        cancellation: &CancellationToken,
     ) -> Result<crate::connectors::agent::execution::AgentExecutionClient, SwarmServiceError> {
-        use crate::connectors::agent::execution::AgentExecutionClient;
-        use crate::connectors::edge::EdgeTarget;
-        let row = sqlx::query("SELECT connectortype,address FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(&self.pool)
+        self.runtime
+            .execution_agent(platform_id, cancellation)
             .await
-            .map_err(storage)?
-            .ok_or(SwarmServiceError::NotFound)?;
-        let connector = crate::persistence::postgres::platforms::classification::connector_kind(
-            row.try_get("connectortype").map_err(storage)?,
-        )
-        .map_err(storage)?;
-        let address: String = row.try_get("address").map_err(storage)?;
-        if connector == citadel_platforms::ConnectorKind::EdgeAgent {
-            return self
-                .edge
-                .get(&EdgeTarget::platform(platform_id))
-                .map(AgentExecutionClient::Edge)
-                .map_err(|_| {
-                    SwarmServiceError::Runtime(
-                        "The Edge Agent is disconnected or unavailable.".into(),
-                    )
-                });
-        }
-        let agent = self
-            .agent
-            .as_ref()
-            .filter(|_| connector == citadel_platforms::ConnectorKind::Agent)
-            .ok_or_else(|| {
-                SwarmServiceError::Runtime("The configured Agent transport is unavailable.".into())
-            })?;
-        let agent = agent
-            .at_address(&address)
-            .map_err(|error| SwarmServiceError::Runtime(error.message))?;
-        Ok(AgentExecutionClient::Direct(std::sync::Arc::new(agent)))
+            .map_err(|error| {
+                if error.kind == citadel_platforms::RuntimeErrorKind::Cancelled {
+                    SwarmServiceError::Cancelled
+                } else {
+                    SwarmServiceError::Runtime(error.message)
+                }
+            })
     }
 
     async fn connector(
         &self,
         platform_id: Uuid,
     ) -> Result<citadel_platforms::ConnectorKind, SwarmServiceError> {
-        let row = sqlx::query("SELECT connectortype,status FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(storage)?
-            .ok_or(SwarmServiceError::NotFound)?;
-        if row.try_get::<String, _>("status").map_err(storage)? != "Online" {
+        let target =
+            crate::persistence::postgres::platforms::connection::load(&self.pool, platform_id)
+                .await
+                .map_err(storage)?
+                .ok_or(SwarmServiceError::NotFound)?;
+        if target.status != citadel_primitives::PlatformStatus::Online {
             return Err(SwarmServiceError::Conflict(
                 "The Docker Swarm manager is not available.".to_owned(),
             ));
         }
-        crate::persistence::postgres::platforms::classification::connector_kind(
-            row.try_get("connectortype").map_err(storage)?,
-        )
-        .map_err(storage)
+        Ok(target.connector)
     }
 
     async fn record_target(
@@ -281,7 +266,7 @@ impl SwarmServiceRuntimeRouter {
         force_increment: i32,
         cancellation: &CancellationToken,
     ) -> Result<RuntimeServiceResult, SwarmServiceError> {
-        let agent = self.agent_for(claim.platform_id).await?;
+        let agent = self.agent_for(claim.platform_id, cancellation).await?;
         let image = claim.spec.image.source_reference().ok_or_else(|| {
             SwarmServiceError::Validation("The Service image has not been resolved.".to_owned())
         })?;
@@ -429,7 +414,7 @@ impl SwarmServiceRuntime for SwarmServiceRuntimeRouter {
                 }
                 citadel_platforms::ConnectorKind::Agent
                 | citadel_platforms::ConnectorKind::EdgeAgent => {
-                    let agent = self.agent_for(platform_id).await?;
+                    let agent = self.agent_for(platform_id, cancellation).await?;
                     agent
                         .delete_managed_swarm_service(
                             DeleteManagedSwarmServiceRequest {

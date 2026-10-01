@@ -5,6 +5,12 @@ fn rust_files(path: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(path).unwrap() {
         let path = entry.unwrap().path();
+        if path.file_stem().is_some_and(|name| {
+            let name = name.to_string_lossy();
+            name == "tests" || name.ends_with("_tests")
+        }) {
+            continue;
+        }
         if path.is_dir() {
             files.extend(rust_files(&path));
         } else if path.extension().is_some_and(|extension| extension == "rs") {

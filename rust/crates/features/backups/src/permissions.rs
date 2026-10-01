@@ -30,3 +30,10 @@ permission_policy!(
     ResourceType::BackupPolicy,
     PermissionLevel::Execute
 );
+
+permission_policy!(
+    RestoreBackupPolicy,
+    ResourceType::BackupPolicy,
+    PermissionLevel::Execute,
+    citadel_primitives::SpecificPermission::Restore
+);

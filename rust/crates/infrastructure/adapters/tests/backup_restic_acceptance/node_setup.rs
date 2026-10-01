@@ -21,12 +21,12 @@ pub(super) async fn verify(
     cluster.node(0, &["push", &first], None).await;
     let service = NodeAgentSetupService {
         store: Arc::new(PostgresNodeAgentLifecycleStore(pool.clone())),
-        runtime: Arc::new(NodeAgentRuntimeRouter {
-            pool: pool.clone(),
-            docker: DockerClient::new("/no-core-daemon.sock", Duration::from_secs(2)).unwrap(),
-            agent: Some(agent.clone()),
-            edge: registry.clone(),
-        }),
+        runtime: Arc::new(NodeAgentRuntimeRouter::new(
+            pool.clone(),
+            DockerClient::new("/no-core-daemon.sock", Duration::from_secs(2)).unwrap(),
+            Some(agent.clone()),
+            registry.clone(),
+        )),
         changed: Arc::new(|_| {}),
     };
     let mut original_service = None;

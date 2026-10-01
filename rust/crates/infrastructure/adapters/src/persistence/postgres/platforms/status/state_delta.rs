@@ -162,20 +162,18 @@ pub(crate) async fn container_state_deltas_in(
             if owned || (stack.is_none() && deployment.is_none()) {
                 RuntimeWork::ContainerParentReconcileSkipped.units(1);
             }
-            if !owned {
-                if let Some(stack) = stack {
-                    if matches!(
-                        delta.state,
-                        citadel_platforms::jobs::ContainerLifecycleState::Exited
-                            | citadel_platforms::jobs::ContainerLifecycleState::Paused
-                    ) {
-                        drift.insert(stack);
-                    }
-                    if !swarm {
-                        stacks.insert(stack);
-                        if row.get::<String, _>("controlstate") == "Processing" {
-                            degraded_stacks.insert(stack);
-                        }
+            if !owned && let Some(stack) = stack {
+                if matches!(
+                    delta.state,
+                    citadel_platforms::jobs::ContainerLifecycleState::Exited
+                        | citadel_platforms::jobs::ContainerLifecycleState::Paused
+                ) {
+                    drift.insert(stack);
+                }
+                if !swarm {
+                    stacks.insert(stack);
+                    if row.get::<String, _>("controlstate") == "Processing" {
+                        degraded_stacks.insert(stack);
                     }
                 }
             }

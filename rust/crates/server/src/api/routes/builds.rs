@@ -1,4 +1,6 @@
 //! Builds HTTP routes, authorization and local request handling.
+use crate::api::resources::builds::authorized::{authorized_pools, authorized_projects};
+use crate::api::resources::builds::patch::typed_patch;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -585,38 +587,6 @@ async fn save_pool(
     pool_response(state, &principal, pool, headers).await
 }
 
-pub(crate) async fn authorized_pools(
-    store: &dyn citadel_builds::BuildRepository,
-    principal: &ActorPrincipal,
-    values: Vec<citadel_builds::BuildAgentPool>,
-) -> Result<Vec<AuthorizedPool>, BuildError> {
-    let permissions = if principal.is_administrator() || values.is_empty() {
-        Default::default()
-    } else {
-        let ids = values.iter().map(|pool| pool.id).collect::<Vec<_>>();
-        store.pool_permissions(principal.actor_id, &ids).await?
-    };
-    values
-        .into_iter()
-        .map(|pool| {
-            Ok(AuthorizedPool {
-                capabilities: pool_capabilities(if principal.is_administrator() {
-                    EffectivePermission::Administrator
-                } else {
-                    granted(
-                        permissions
-                            .get(&pool.id)
-                            .copied()
-                            .unwrap_or(PermissionLevel::None),
-                    )
-                }),
-                pool: BuildAgentPoolView::try_from(pool)
-                    .map_err(|e| BuildError::Storage(e.to_string()))?,
-            })
-        })
-        .collect()
-}
-
 async fn pool_permissions(
     state: &BuildsHttpState,
     principal: &ActorPrincipal,
@@ -722,7 +692,7 @@ async fn archive_pool(
 )]
 async fn enroll_pool(
     State(state): State<BuildsHttpState>,
-    Extension(edge): Extension<crate::api::routes::platforms::EdgeHttpContext>,
+    Extension(edge): Extension<crate::api::resources::platforms::edge::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
@@ -737,12 +707,15 @@ async fn enroll_pool(
         &headers,
     )
     .await?;
-    edge.enrollment(
-        citadel_adapters::connectors::edge::EdgeTarget::build_pool(id),
-        principal.actor_id.value(),
+    let enrollment = api_result(
+        edge.enrollment(
+            citadel_platforms::edge_management::EdgeTarget::build_pool(id),
+            principal.actor_id.value(),
+        )
+        .await,
         &headers,
-    )
-    .await
+    )?;
+    Ok(no_store(Json(enrollment).into_response()))
 }
 
 #[utoipa::path(
@@ -761,7 +734,7 @@ async fn enroll_pool(
 )]
 async fn pool_edge_status(
     State(state): State<BuildsHttpState>,
-    Extension(edge): Extension<crate::api::routes::platforms::EdgeHttpContext>,
+    Extension(edge): Extension<crate::api::resources::platforms::edge::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
@@ -778,11 +751,11 @@ async fn pool_edge_status(
     .await?;
     let status = api_result(
         edge.store
-            .status(&citadel_adapters::connectors::edge::EdgeTarget::build_pool(
+            .status(&citadel_platforms::edge_management::EdgeTarget::build_pool(
                 id,
             ))
             .await
-            .map_err(crate::api::routes::platforms::EdgeHttpContext::error),
+            .map_err(crate::api::resources::platforms::edge::EdgeHttpContext::error),
         &headers,
     )?;
     Ok(no_store(
@@ -807,7 +780,7 @@ async fn pool_edge_status(
 )]
 async fn revoke_pool_edge(
     State(state): State<BuildsHttpState>,
-    Extension(edge): Extension<crate::api::routes::platforms::EdgeHttpContext>,
+    Extension(edge): Extension<crate::api::resources::platforms::edge::EdgeHttpContext>,
     principal: Option<Extension<ActorPrincipal>>,
     ApiPath(id): ApiPath<Uuid>,
     headers: HeaderMap,
@@ -822,56 +795,18 @@ async fn revoke_pool_edge(
         &headers,
     )
     .await?;
-    let target = citadel_adapters::connectors::edge::EdgeTarget::build_pool(id);
+    let target = citadel_platforms::edge_management::EdgeTarget::build_pool(id);
     api_result(
-        edge.store
-            .status(&target)
-            .await
-            .map_err(crate::api::routes::platforms::EdgeHttpContext::error),
+        citadel_platforms::edge_management::revoke(
+            edge.store.as_ref(),
+            edge.registry.as_ref(),
+            &target,
+        )
+        .await
+        .map_err(crate::api::resources::platforms::edge::EdgeHttpContext::error),
         &headers,
     )?;
-    api_result(
-        edge.store
-            .revoke(&target)
-            .await
-            .map_err(crate::api::routes::platforms::EdgeHttpContext::error),
-        &headers,
-    )?;
-    edge.registry.disconnect(&target);
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
-}
-
-pub(crate) async fn authorized_projects(
-    store: &dyn citadel_builds::BuildRepository,
-    principal: &ActorPrincipal,
-    projects: Vec<citadel_builds::BuildProject>,
-) -> Result<Vec<AuthorizedProject>, BuildError> {
-    let ids: Vec<_> = projects.iter().map(|project| project.id).collect();
-    let permissions = if principal.is_administrator() {
-        Default::default()
-    } else {
-        store.project_permissions(principal.actor_id, &ids).await?
-    };
-    projects
-        .into_iter()
-        .map(|project| {
-            let level = if principal.is_administrator() {
-                EffectivePermission::Administrator
-            } else {
-                granted(
-                    permissions
-                        .get(&project.id)
-                        .copied()
-                        .unwrap_or(PermissionLevel::None),
-                )
-            };
-            Ok(AuthorizedProject {
-                project: BuildProjectView::try_from(project)
-                    .map_err(|e| BuildError::Storage(e.to_string()))?,
-                capabilities: project_capabilities(level),
-            })
-        })
-        .collect()
 }
 
 async fn project_response(
@@ -1339,13 +1274,7 @@ async fn queue_run(
     api_result(
         state
             .identity
-            .authorize_resource(
-                &principal,
-                ResourceType::Build,
-                id,
-                PermissionLevel::Read,
-                Some(citadel_primitives::SpecificPermission::Apply),
-            )
+            .require_resource::<citadel_builds::permissions::QueueBuildRun>(&principal, id)
             .await,
         &headers,
     )?;
@@ -1551,29 +1480,13 @@ async fn cancel_run(
     api_result(
         state
             .identity
-            .authorize_resource(
+            .require_resource::<citadel_builds::permissions::CancelBuildRun>(
                 &principal,
-                ResourceType::Build,
                 run.build_project_id,
-                PermissionLevel::Read,
-                Some(citadel_primitives::SpecificPermission::Apply),
             )
             .await,
         &headers,
     )?;
     api_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
     Ok(StatusCode::NO_CONTENT.into_response())
-}
-
-fn typed_patch<T: serde::de::DeserializeOwned + serde::Serialize>(
-    patch: serde_json::Value,
-) -> Result<serde_json::Value, ApiError> {
-    if !patch.is_object() {
-        return Err(ApiError::Validation(
-            "Build update must be an object.".into(),
-        ));
-    }
-    let patch: T =
-        serde_json::from_value(patch).map_err(|error| ApiError::Validation(error.to_string()))?;
-    serde_json::to_value(patch).map_err(ApiError::internal)
 }

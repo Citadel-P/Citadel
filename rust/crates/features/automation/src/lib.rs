@@ -27,3 +27,5 @@ mod tests;
 
 mod status;
 pub use status::AutomationRunStatus;
+
+pub mod workspace;
