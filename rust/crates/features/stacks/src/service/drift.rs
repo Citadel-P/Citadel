@@ -24,28 +24,31 @@ impl StackService {
             failures: Vec::new(),
             next_cursor: None,
         };
-        if !self.operational_guardrails_enabled().await? {
-            return Ok(result);
-        }
         let candidates = self.store.drift_monitor_candidates(after, limit).await?;
+        // Detection stays available after a license expires; only repairs are gated.
+        let can_auto_fix = candidates
+            .iter()
+            .any(|stack| stack.drift_policy.mode == crate::StackDriftMode::AutoFix)
+            && self.operational_guardrails_enabled().await?;
         let system = ActorId::new(Uuid::from_u128(1));
         for stack in candidates {
             if self.shutdown.is_cancelled() {
                 break;
             }
             result.next_cursor = Some(stack.id);
-            let outcome = if stack.drift_policy.mode == crate::StackDriftMode::AutoFix {
-                self.reconcile_drift(system, true, stack.id)
-                    .await
-                    .map(|reconciliation| {
-                        result.reconciled += usize::from(!reconciliation.actions.is_empty());
-                        reconciliation
-                            .after_report
-                            .unwrap_or(reconciliation.before_report)
-                    })
-            } else {
-                self.drift(system, true, stack.id).await
-            };
+            let outcome =
+                if stack.drift_policy.mode == crate::StackDriftMode::AutoFix && can_auto_fix {
+                    self.reconcile_drift_with_mode(system, true, stack.id, false)
+                        .await
+                        .map(|reconciliation| {
+                            result.reconciled += usize::from(!reconciliation.actions.is_empty());
+                            reconciliation
+                                .after_report
+                                .unwrap_or(reconciliation.before_report)
+                        })
+                } else {
+                    self.drift(system, true, stack.id).await
+                };
             let outcome = match outcome {
                 Ok(report) => {
                     if let Some((status, info)) = drift_status_update(&stack, &report) {
@@ -92,7 +95,23 @@ impl StackService {
                 &self.shutdown.child_token(),
             )
             .await?;
-        let report = calculate_drift(&stack, &runtime)?;
+        let report = if matches!(stack.spec, Some(StackSpec::Git { .. }))
+            && stack.drift_policy.mode != crate::StackDriftMode::Disabled
+            && !matches!(
+                stack.status,
+                StackReleaseStatus::Stopped | StackReleaseStatus::Paused
+            ) {
+            let claim = drift_source_claim(&stack, actor)?;
+            let source = self.source_materializer.as_ref().ok_or_else(|| {
+                StackError::Runtime("Git Stack source reading is unavailable.".into())
+            })?;
+            let files = source
+                .compose_contents(&claim, &self.shutdown.child_token())
+                .await?;
+            calculate_drift_from_compose(&stack, &runtime, &files)?
+        } else {
+            calculate_drift(&stack, &runtime)?
+        };
         if stack.drift_policy.alert_on_drift
             && let Some(alerts) = &self.alerts
         {
@@ -136,7 +155,21 @@ impl StackService {
         administrator: bool,
         id: Uuid,
     ) -> Result<crate::StackReconciliationResult, StackError> {
+        self.reconcile_drift_with_mode(actor, administrator, id, true)
+            .await
+    }
+
+    pub(super) async fn reconcile_drift_with_mode(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        id: Uuid,
+        manual: bool,
+    ) -> Result<crate::StackReconciliationResult, StackError> {
         let stack = self.store.get_authorized(actor, administrator, id).await?;
+        if !self.operational_guardrails_enabled().await? {
+            return Err(StackError::LicenseRequired("OperationalGuardrails"));
+        }
         if stack.control_state == citadel_primitives::ResourceControlState::Processing
             || matches!(
                 stack.status,
@@ -147,7 +180,10 @@ impl StackService {
                 "The Stack is currently applying and cannot be reconciled.".to_owned(),
             ));
         }
-        if stack.drift_policy.mode != crate::StackDriftMode::AutoFix {
+        if stack.drift_policy.mode == crate::StackDriftMode::Disabled {
+            return Err(validation("Stack drift detection is disabled."));
+        }
+        if !manual && stack.drift_policy.mode != crate::StackDriftMode::AutoFix {
             return Err(validation("Stack drift auto-fix is not enabled."));
         }
         let before = self.drift(actor, administrator, id).await?;
@@ -160,12 +196,28 @@ impl StackService {
                 actions: Vec::new(),
             });
         }
+        if before.has_structural_drift {
+            return Ok(crate::StackReconciliationResult {
+                stack_id: id,
+                status: crate::StackReconciliationStatus::RequiresReapply,
+                before_report: before,
+                after_report: None,
+                actions: Vec::new(),
+            });
+        }
+        // Explicit manual repair does not change the saved automatic policy.
+        // Destructive cleanup always remains opt-in.
+        let mut policy = stack.drift_policy.clone();
+        if manual {
+            policy.auto_start_stopped_containers = true;
+            policy.auto_resume_paused_containers = true;
+        }
         let actions = self
             .runtime
             .reconcile(
                 stack.platform_id.ok_or(StackError::NotFound)?,
                 &before.drifts,
-                &stack.drift_policy,
+                &policy,
                 &self.shutdown.child_token(),
             )
             .await?;
@@ -282,7 +334,7 @@ pub(super) fn stack_drift_observation(
 }
 
 pub(super) fn event_drift_eligible(stack: &crate::Stack) -> bool {
-    stack.drift_policy.mode == crate::StackDriftMode::AutoFix
+    stack.drift_policy.mode != crate::StackDriftMode::Disabled
         && stack.control_state == citadel_primitives::ResourceControlState::Idle
         && matches!(
             stack.status,
@@ -371,7 +423,15 @@ pub fn calculate_drift(
     let compose = spec
         .compose_file()
         .ok_or_else(|| validation("Git Stack drift requires materialized source."))?;
-    let desired = parse_compose(&[compose.to_owned()])?;
+    calculate_drift_from_compose(stack, runtime, &[compose.to_owned()])
+}
+
+pub(super) fn calculate_drift_from_compose(
+    stack: &crate::Stack,
+    runtime: &StackRuntimeSnapshot,
+    files: &[String],
+) -> Result<StackDriftReport, StackError> {
+    let desired = parse_compose(files)?;
     let desired_names = desired
         .services
         .iter()
@@ -452,5 +512,32 @@ pub fn calculate_drift(
         has_auto_fixable_drift: has_auto,
         has_structural_drift: has_structural,
         drifts,
+    })
+}
+
+/// Never compare a deployed release against a moving branch or an unapplied pin.
+pub(super) fn drift_source_claim(
+    stack: &crate::Stack,
+    actor: ActorId,
+) -> Result<StackOperationClaim, StackError> {
+    let mut spec = stack.spec.clone().ok_or(StackError::NotFound)?;
+    let source = stack.source.as_ref().filter(|source| !source.resolved_commit_sha.trim().is_empty())
+        .ok_or_else(|| StackError::Conflict("The deployed Git commit is unavailable. Reapply the Stack to establish its drift baseline.".into()))?;
+    let StackSpec::Git { commit_sha, .. } = &mut spec else {
+        return Err(validation("A Git Stack is required."));
+    };
+    *commit_sha = Some(source.resolved_commit_sha.clone());
+    Ok(StackOperationClaim {
+        stack_id: stack.id,
+        release_id: stack.current_stack_release_id,
+        platform_id: stack.platform_id.ok_or(StackError::NotFound)?,
+        name: stack.name.clone(),
+        project_name: project_name(stack)?,
+        platform_type: stack.platform_type,
+        spec,
+        row_version: stack.row_version,
+        actor_id: actor.value(),
+        operation: "Drift".into(),
+        service_names: Vec::new(),
     })
 }

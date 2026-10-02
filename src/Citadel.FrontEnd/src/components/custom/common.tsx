@@ -794,6 +794,7 @@ export const UpdateAvailableNotice = ({
   currentTitle,
   nextTitle,
   dismissible = true,
+  actions,
 }: {
   title?: string;
   actionLabel: string;
@@ -805,6 +806,7 @@ export const UpdateAvailableNotice = ({
   currentTitle?: string | null;
   nextTitle?: string | null;
   dismissible?: boolean;
+  actions?: ReactNode;
 }) => {
   const [dismissed, setDismissed] = useState(false);
 
@@ -843,14 +845,17 @@ export const UpdateAvailableNotice = ({
         </div>
       </div>
 
-      {dismissible ? (
-        <button
-          onClick={() => setDismissed(true)}
-          className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
-          aria-label="Dismiss">
-          <X className="h-4 w-4" />
-        </button>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+        {dismissible ? (
+          <button
+            onClick={() => setDismissed(true)}
+            className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
+            aria-label="Dismiss">
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 };

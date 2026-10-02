@@ -6,6 +6,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { normalizeDockerId } from '@/lib/utils';
+import type { ContainerStatePatch } from '@/features/docker-resources/containers/hooks/container-order';
 
 export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
   const { data, isLoading } = useRead('getContainersData', { stackId });
@@ -30,7 +31,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
     });
 
     Object.entries(liveContainers).forEach(([id, container]) => {
-      if (!merged.has(id) && container.id) {
+      if (!merged.has(id) && container.id && !removedContainerIds.has(id)) {
         merged.set(id, container as ContainerRuntimeView);
       }
     });
@@ -88,6 +89,7 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
         if (!id) return;
 
         next[id] = {
+          ...container,
           ...next[id],
           containerStat: container.containerStat,
         };
@@ -139,7 +141,36 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
     [mergeContainers, stackId],
   );
 
-  useDockerDaemonGroup(platformId, { onContainerEvent });
+  const onContainerStateChange = useCallback(
+    (patches: ContainerStatePatch[]) => {
+      setLiveContainers((current) => {
+        let next = current;
+        for (const patch of patches) {
+          const id = normalizeDockerId(patch.containerId);
+          if (!id) continue;
+          const known = next[id] ?? containerData.find((container) => normalizeDockerId(container.id) === id);
+          if (!known || (patch.dockerNodeId ?? null) !== (known.dockerNodeId ?? null)) continue;
+          if (
+            (patch.state === undefined || patch.state === known.state) &&
+            (patch.controlState === undefined || patch.controlState === known.controlState)
+          ) {
+            continue;
+          }
+          if (next === current) next = { ...current };
+          next[id] = {
+            ...known,
+            ...next[id],
+            ...(patch.state !== undefined ? { state: patch.state } : {}),
+            ...(patch.controlState !== undefined ? { controlState: patch.controlState } : {}),
+          };
+        }
+        return next;
+      });
+    },
+    [containerData],
+  );
+
+  useDockerDaemonGroup(platformId, { onContainerEvent, onContainerStateChange });
 
   const handleStackContainersInfoUpdated = useCallback(
     (payload: ContainerRuntimeView[] | { containers?: ContainerRuntimeView[] }) => {

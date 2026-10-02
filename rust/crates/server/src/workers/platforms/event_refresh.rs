@@ -14,7 +14,7 @@ pub(super) struct EventRefreshWorker {
     pub docker: DockerClient,
     pub pool: PgPool,
     pub realtime: Option<RealtimeHub>,
-    pub node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub retry_delay: Duration,
     pub swarm_interval: Duration,
 }

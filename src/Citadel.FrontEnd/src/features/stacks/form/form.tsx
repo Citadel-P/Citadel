@@ -97,14 +97,7 @@ const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
 const EMPTY_BUILD_PROJECTS: AuthorizedProject[] = [];
 
-const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
-  mode: StackDriftMode.Disabled,
-  alertOnDrift: false,
-  markDegraded: false,
-  autoStartStoppedContainers: false,
-  autoResumePausedContainers: false,
-  removeExtraContainers: false,
-};
+const DEFAULT_DRIFT_POLICY = getDriftModePreset(StackDriftMode.DetectOnly);
 
 const drift_modes = {
   [StackDriftMode.Disabled]: {
@@ -962,8 +955,6 @@ export const StackForm = ({
       [StackDriftMode.DetectOnly]: {
         ...drift_modes[StackDriftMode.DetectOnly],
         label: 'Detect only',
-        disabled: !operationalGuardrailsEnabled,
-        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
       },
       [StackDriftMode.AutoFix]: {
         ...drift_modes[StackDriftMode.AutoFix],
@@ -1013,7 +1004,7 @@ export const StackForm = ({
             projectName: importProject,
             destroyBeforeDeploy: false,
           } as StackSpec,
-          driftPolicy: DEFAULT_DRIFT_POLICY,
+          driftPolicy: getDriftModePreset(StackDriftMode.Disabled),
         };
       });
     },
@@ -1244,7 +1235,7 @@ export const StackForm = ({
                       platformId: platform?.id,
                       ...(platform?.type === PlatformType.DockerSwarm
                         ? {
-                            driftPolicy: DEFAULT_DRIFT_POLICY,
+                            driftPolicy: getDriftModePreset(StackDriftMode.Disabled),
                             spec: {
                               ...previous.spec,
                               destroyBeforeDeploy: false,
@@ -1797,12 +1788,13 @@ export const StackForm = ({
                           defineField<StackInput, 'driftPolicy.mode'>({
                             key: 'driftPolicy.mode',
                             label: 'Mode',
-                            description: 'Choose how this stack handles drift checks.',
+                            description:
+                              'Detect only reports drift for manual reconciliation. Auto-fix also applies the configured repairs automatically.',
                             disabled: isComposeImport,
                             render: (value, set) => (
                               <ItemSelector
                                 collection={licensedDriftModes}
-                                value={value ?? StackDriftMode.Disabled}
+                                value={value ?? currentDriftPolicy.mode}
                                 disabled={disabled}
                                 onChange={(mode: StackDriftMode) =>
                                   set((prev) => patchDriftPolicy(prev, getDriftModePreset(mode)))

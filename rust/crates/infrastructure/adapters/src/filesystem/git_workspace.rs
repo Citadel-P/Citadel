@@ -7,7 +7,15 @@ use std::{
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-pub struct LocalGitWorkspace;
+pub struct LocalGitWorkspace {
+    tasks: citadel_runtime::DynamicTasks,
+}
+impl LocalGitWorkspace {
+    pub fn new(tasks: citadel_runtime::DynamicTasks) -> Self {
+        Self { tasks }
+    }
+}
+use super::cleanup::DirectoryCleanup;
 struct Credential(PathBuf);
 impl GitCredentialFile for Credential {
     fn path(&self) -> &Path {
@@ -23,42 +31,20 @@ impl Drop for Credential {
         }
     }
 }
-struct Staging(Option<PathBuf>);
+struct Staging(DirectoryCleanup);
 impl GitStagingDirectory for Staging {
     fn path(&self) -> &Path {
-        self.0.as_deref().expect("unpublished staging directory")
+        self.0.path()
     }
     fn publish<'a>(&'a mut self, target: &'a Path) -> BoxFuture<'a, io::Result<()>> {
         Box::pin(async move {
             tokio::fs::rename(self.path(), target).await?;
-            self.0 = None;
+            self.0.disarm();
             Ok(())
         })
     }
     fn cleanup(&mut self) -> BoxFuture<'_, io::Result<()>> {
-        Box::pin(async move {
-            if let Some(path) = &self.0 {
-                match tokio::fs::remove_dir_all(path).await {
-                    Ok(()) => {}
-                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                    Err(e) => return Err(e),
-                }
-            }
-            self.0 = None;
-            Ok(())
-        })
-    }
-}
-impl Drop for Staging {
-    fn drop(&mut self) {
-        if let Some(path) = self.0.take() {
-            // Exceptional cancellation cleanup; ordinary completion uses async cleanup.
-            if let Err(error) = std::fs::remove_dir_all(path)
-                && error.kind() != io::ErrorKind::NotFound
-            {
-                tracing::warn!(%error, "failed to delete Git staging directory");
-            }
-        }
+        Box::pin(self.0.cleanup())
     }
 }
 impl GitWorkspacePort for LocalGitWorkspace {
@@ -70,6 +56,7 @@ impl GitWorkspacePort for LocalGitWorkspace {
         target: &'a Path,
     ) -> BoxFuture<'a, io::Result<Box<dyn GitStagingDirectory>>> {
         Box::pin(async move {
+            let reservation = DirectoryCleanup::reserve(&self.tasks)?;
             let parent = target.parent().ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -78,8 +65,9 @@ impl GitWorkspacePort for LocalGitWorkspace {
             })?;
             tokio::fs::create_dir_all(parent).await?;
             let name = target.file_name().unwrap_or_default().to_string_lossy();
-            Ok(Box::new(Staging(Some(
+            Ok(Box::new(Staging(DirectoryCleanup::new(
                 parent.join(format!(".{name}.clone-{}", Uuid::now_v7())),
+                reservation,
             ))) as Box<dyn GitStagingDirectory>)
         })
     }

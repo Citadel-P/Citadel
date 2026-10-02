@@ -141,43 +141,28 @@ impl StackRuntimeRouter {
         platform_id: Uuid,
         project: &str,
         orchestration: StackOrchestrationMode,
+        cancellation: &CancellationToken,
     ) -> Result<StackRuntimeSnapshot, StackError> {
         match orchestration {
             StackOrchestrationMode::DockerCompose => {
-                // Local drift needs current Docker state and Compose service labels;
-                // the inventory projection can lag immediately after an apply.
-                if self.platform(platform_id).await?.connector
-                    == citadel_platforms::ConnectorKind::Local
-                {
-                    let containers = self
-                        .docker
+                // Read live state: inventory may lag immediately after an apply.
+                let target = self.platform(platform_id).await?;
+                let containers = if target.connector == citadel_platforms::ConnectorKind::Local {
+                    self.docker
                         .list_containers(true)
                         .await
-                        .map_err(runtime_io)?;
-                    return Ok(local_compose_snapshot(containers, project));
-                }
-                let rows = sqlx::query("SELECT dockercontainerid,name,state FROM containers WHERE platformid=$1 AND stack=$2 AND NOT isswarmtask ORDER BY dockercontainerid")
-                    .bind(platform_id).bind(project).fetch_all(&self.pool).await.map_err(storage)?;
-                Ok(StackRuntimeSnapshot {
-                    containers: rows
+                        .map_err(runtime_io)?
                         .into_iter()
-                        .map(|row| {
-                            Ok(StackRuntimeContainer {
-                                docker_container_id: row
-                                    .try_get("dockercontainerid")
-                                    .map_err(storage)?,
-                                service_name: row
-                                    .try_get::<String, _>("name")
-                                    .map_err(storage)?
-                                    .trim_start_matches('/')
-                                    .to_owned(),
-                                state: row.try_get("state").map_err(storage)?,
-                                health: None,
-                            })
-                        })
-                        .collect::<Result<_, StackError>>()?,
-                    services: Vec::new(),
-                })
+                        .map(crate::connectors::docker::runtime::map_container)
+                        .collect()
+                } else {
+                    self.agent_for(&target, cancellation)
+                        .await?
+                        .list_containers(cancellation)
+                        .await
+                        .map_err(agent_error)?
+                };
+                Ok(compose_snapshot(containers, project))
             }
             StackOrchestrationMode::DockerSwarm => {
                 let rows = sqlx::query("SELECT dockerserviceid,name,versionindex,desiredtaskcount,runningtaskcount,updatestate,updatemessage FROM swarmserviceprojections WHERE platformid=$1 AND dockerstacknamespace=$2 AND NOT isstale ORDER BY dockerserviceid")
@@ -296,7 +281,7 @@ impl StackRuntime for StackRuntimeRouter {
     fn observe<'a>(
         &'a self,
         claim: &'a StackOperationClaim,
-        _cancellation: &'a CancellationToken,
+        cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Option<StackRuntimeResult>, StackError>> {
         async move {
             let snapshot = self
@@ -304,6 +289,7 @@ impl StackRuntime for StackRuntimeRouter {
                     claim.platform_id,
                     &claim.project_name,
                     orchestration(&claim.platform_type),
+                    cancellation,
                 )
                 .await?;
             let status = if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
@@ -520,10 +506,10 @@ impl StackRuntime for StackRuntimeRouter {
         platform_id: Uuid,
         project_name: &'a str,
         orchestration: StackOrchestrationMode,
-        _cancellation: &'a CancellationToken,
+        cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeSnapshot, StackError>> {
         async move {
-            self.snapshot(platform_id, project_name, orchestration)
+            self.snapshot(platform_id, project_name, orchestration, cancellation)
                 .await
         }
         .boxed()
@@ -797,8 +783,8 @@ fn validate_stack_execution(claim: &StackOperationClaim) -> Result<(), StackErro
     Ok(())
 }
 
-fn local_compose_snapshot(
-    containers: Vec<crate::connectors::docker::projection::ContainerSummary>,
+fn compose_snapshot(
+    containers: Vec<citadel_platforms::RuntimeContainerSummary>,
     project: &str,
 ) -> StackRuntimeSnapshot {
     let mut containers = containers
@@ -819,13 +805,7 @@ fn local_compose_snapshot(
                 .labels
                 .get("com.docker.compose.service")
                 .cloned()
-                .unwrap_or_else(|| {
-                    container
-                        .names
-                        .first()
-                        .map(|name| name.trim_start_matches('/').to_owned())
-                        .unwrap_or_default()
-                }),
+                .unwrap_or_else(|| container.name.trim_start_matches('/').to_owned()),
             docker_container_id: container.id,
             state: container.state,
             health: container
@@ -1115,7 +1095,7 @@ mod tests {
     }
 
     #[test]
-    fn local_drift_uses_compose_service_labels_and_current_state() {
+    fn compose_snapshot_selects_project_services_and_current_state() {
         let container = |project: &str, service: &str, state: &str| {
             crate::connectors::docker::projection::ContainerSummary {
                 id: service.into(),
@@ -1129,17 +1109,73 @@ mod tests {
                 ..Default::default()
             }
         };
-        let snapshot = local_compose_snapshot(
+        let mut oneoff = container("beszel", "job", "running");
+        oneoff
+            .labels
+            .insert("com.docker.compose.oneoff".into(), "True".into());
+        let mut swarm_task = container("beszel", "task", "running");
+        swarm_task
+            .labels
+            .insert("com.docker.swarm.task.id".into(), "task-id".into());
+        let snapshot = compose_snapshot(
             vec![
                 container("beszel", "agent", "running"),
                 container("other", "other", "running"),
                 container("beszel", "web", "exited"),
-            ],
+                oneoff,
+                swarm_task,
+            ]
+            .into_iter()
+            .map(crate::connectors::docker::runtime::map_container)
+            .collect(),
             "beszel",
         );
         assert_eq!(snapshot.containers.len(), 2);
         assert_eq!(snapshot.containers[1].service_name, "web");
         assert_eq!(snapshot.containers[1].state, "exited");
+    }
+
+    #[test]
+    fn agent_compose_snapshot_preserves_services_and_stopped_containers() {
+        use citadel_contracts::citadel::shared_models::v1::{ContainerMessage, ContainerStateType};
+        use prost::Message;
+
+        let containers = [
+            ("beszel", ContainerStateType::Running),
+            ("beszel-agent", ContainerStateType::Exited),
+        ]
+        .into_iter()
+        .map(|(service, state)| {
+            let wire = ContainerMessage {
+                id: format!("{service}-id"),
+                name: format!("/custom-{service}-name"),
+                stack: Some("monitoring".into()),
+                state: state as i32,
+                labels: [
+                    ("com.docker.compose.project".into(), "monitoring".into()),
+                    ("com.docker.compose.service".into(), service.into()),
+                ]
+                .into(),
+                ..Default::default()
+            };
+            let decoded = ContainerMessage::decode(wire.encode_to_vec().as_slice()).unwrap();
+            crate::connectors::agent::client::map_container(decoded)
+        })
+        .collect();
+        let snapshot = compose_snapshot(containers, "monitoring");
+        assert_eq!(snapshot.containers.len(), 2);
+        let agent = snapshot
+            .containers
+            .iter()
+            .find(|c| c.service_name == "beszel-agent")
+            .unwrap();
+        assert_eq!(agent.state, "exited");
+        assert!(
+            snapshot
+                .containers
+                .iter()
+                .any(|c| c.service_name == "beszel" && c.state == "running")
+        );
     }
 
     #[test]

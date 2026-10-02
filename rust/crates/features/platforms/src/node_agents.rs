@@ -271,6 +271,19 @@ pub trait NodeAgentCoverageReader: Send + Sync {
     >;
 }
 
+#[derive(Clone, Debug)]
+pub struct NodeAgentReconciliationPolicy {
+    pub removal_grace: std::time::Duration,
+    pub supported_architectures: Vec<String>,
+}
+impl Default for NodeAgentReconciliationPolicy {
+    fn default() -> Self {
+        Self {
+            removal_grace: std::time::Duration::from_secs(600),
+            supported_architectures: vec!["amd64".into(), "arm64".into()],
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,4 +1,82 @@
 use super::*;
+
+async fn applied_container_ids(
+    runtime: &dyn StackRuntime,
+    claim: &StackOperationClaim,
+    cancellation: &CancellationToken,
+) -> Option<Vec<String>> {
+    if claim.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
+        return None;
+    }
+    let cancel = cancellation.child_token();
+    let _guard = cancel.clone().drop_guard();
+    match tokio::time::timeout(
+        Duration::from_secs(10),
+        runtime.runtime_snapshot(
+            claim.platform_id,
+            &claim.project_name,
+            orchestration(&claim.platform_type),
+            &cancel,
+        ),
+    )
+    .await
+    {
+        Ok(Ok(snapshot)) => {
+            let mut ids: Vec<_> = snapshot
+                .containers
+                .into_iter()
+                .map(|container| container.docker_container_id)
+                .filter(|id| !id.is_empty())
+                .collect();
+            ids.sort_unstable();
+            ids.dedup();
+            Some(ids)
+        }
+        _ => {
+            tracing::warn!(stack_id=%claim.stack_id, "Stack applied, but its container IDs could not be read for the activity");
+            None
+        }
+    }
+}
+
+// Runtime output has already been redacted before this summary is persisted.
+pub(super) fn apply_failure_message(result: &StackRuntimeResult) -> String {
+    let exit_code = result
+        .messages
+        .iter()
+        .rev()
+        .find_map(|item| item.exit_code.filter(|code| *code != 0));
+    let header = exit_code.map_or_else(
+        || "Stack deployment failed.".to_owned(),
+        |code| format!("Stack deployment failed (exit code {code})."),
+    );
+    let detail = result
+        .messages
+        .iter()
+        .rev()
+        .find_map(StackProgressItem::error_detail)
+        .or_else(|| {
+            result
+                .messages
+                .iter()
+                .rev()
+                .filter(|item| item.event_type != StackApplyEventType::CommandCompleted)
+                .filter_map(|item| item.message.as_deref())
+                .map(str::trim)
+                .find(|text| !text.is_empty())
+        });
+    let Some(details) = detail else {
+        return header;
+    };
+    // Keep the tail where Docker normally emits the failure, after redaction.
+    let start = details
+        .char_indices()
+        .rev()
+        .nth(4095)
+        .map_or(0, |(offset, _)| offset);
+    format!("{header}\n{}", &details[start..])
+}
+
 impl StackService {
     pub async fn apply(
         &self,
@@ -168,8 +246,10 @@ impl StackService {
             .await;
             match result {
                 Ok(Ok(Some(result))) if result.status == StackReleaseStatus::Healthy => {
+                    let container_ids =
+                        applied_container_ids(self.runtime.as_ref(), &claim, &self.shutdown).await;
                     self.store
-                        .complete_apply(actor, &claim, &result, &[], None)
+                        .complete_apply(actor, &claim, &result, &[], None, container_ids.as_deref())
                         .await?;
                     self.notifier.changed(claim.stack_id, "reconciled");
                     count += 1;
@@ -535,7 +615,14 @@ pub(super) async fn execute_apply(
     {
         Ok(Ok(mut result)) => {
             redact_runtime_messages(&mut result, &redactions);
+            let outcome_message = if result.status == StackReleaseStatus::Healthy {
+                "Stack deployment completed.".to_owned()
+            } else {
+                apply_failure_message(&result)
+            };
             let persistence = if result.status == StackReleaseStatus::Healthy {
+                let container_ids =
+                    applied_container_ids(runtime.as_ref(), &claim, &cancellation).await;
                 let applied_at = chrono::Utc::now();
                 for binding in &mut claim.spec.common_mut().build_image_bindings {
                     if !claim.service_names.is_empty()
@@ -563,7 +650,14 @@ pub(super) async fn execute_apply(
                 // bindings and build provenance of the successful Docker run.
                 for attempt in 0..3 {
                     match store
-                        .complete_apply(actor, &claim, &result, &snapshots, release_source.as_ref())
+                        .complete_apply(
+                            actor,
+                            &claim,
+                            &result,
+                            &snapshots,
+                            release_source.as_ref(),
+                            container_ids.as_deref(),
+                        )
                         .await
                     {
                         Ok(()) => break,
@@ -583,28 +677,21 @@ pub(super) async fn execute_apply(
                 notifier.changed(claim.stack_id, "applied");
                 Ok(())
             } else {
-                let message = result
-                    .messages
-                    .last()
-                    .and_then(|item| item.message.as_deref())
-                    .unwrap_or("Stack deployment failed.");
-                let persistence = store.fail_apply(actor, &claim, message, false).await;
+                let persistence = store
+                    .fail_apply(actor, &claim, &outcome_message, false)
+                    .await;
                 notifier.changed(claim.stack_id, "failed");
                 persistence
             };
             let _ = sender
                 .send(StackProgressItem::completed(
                     result.status,
-                    if result.status == StackReleaseStatus::Healthy {
-                        "Stack deployment completed."
-                    } else {
-                        "Stack deployment failed."
-                    },
+                    outcome_message.lines().next().unwrap_or(&outcome_message),
                 ))
                 .await;
             persistence?;
             if result.status != StackReleaseStatus::Healthy {
-                return Err(StackError::Runtime("Stack deployment failed.".to_owned()));
+                return Err(StackError::Runtime(outcome_message));
             }
         }
         Ok(Err(error)) => {

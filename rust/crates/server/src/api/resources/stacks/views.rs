@@ -240,6 +240,10 @@ pub struct StackStreamItem {
 
 impl From<citadel_stacks::StackProgressItem> for StackStreamItem {
     fn from(value: citadel_stacks::StackProgressItem) -> Self {
+        let severity = value
+            .severity
+            .clone()
+            .or_else(|| value.error_detail().map(|_| "error".to_owned()));
         let (message, progress_message) = if value.exit_code.is_some_and(|code| code != 0) {
             (value.message, None)
         } else {
@@ -251,7 +255,7 @@ impl From<citadel_stacks::StackProgressItem> for StackStreamItem {
             progress_message,
             exit_code: value.exit_code,
             stack_status: value.stack_status,
-            severity: value.severity,
+            severity,
         }
     }
 }

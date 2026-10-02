@@ -54,6 +54,19 @@ pub trait StackRuntime: Send + Sync {
 }
 
 pub trait StackSourceMaterializerPort: Send + Sync {
+    /// Read just the Compose inputs of an immutable release for drift evaluation.
+    fn compose_contents<'a>(
+        &'a self,
+        claim: &'a StackOperationClaim,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, StackError>> {
+        Box::pin(async move {
+            self.materialize(claim, cancellation)
+                .await?
+                .compose_contents()
+        })
+    }
+
     fn materialize<'a>(
         &'a self,
         claim: &'a StackOperationClaim,

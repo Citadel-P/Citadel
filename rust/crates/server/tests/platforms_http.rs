@@ -572,7 +572,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     ));
     let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let platform_state = PlatformsHttpState {
-        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), Default::default())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone()),edge:edge.clone()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge.clone()}),
     deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(

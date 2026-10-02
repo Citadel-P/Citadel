@@ -1,3 +1,4 @@
+import { requestErrorMessage } from '@/lib/request-error';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { StackForm } from './form';
@@ -20,7 +21,9 @@ import {
   ActorType,
   ResourceBindingScope,
   PlatformType,
+  LicenseCapability,
 } from '@/api/generated/api.types';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -70,6 +73,7 @@ import { useTaskSheet } from '@/lib/atoms';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { MonacoDiff } from '@/lib/monaco';
+import { GitRepositoryCompareAction } from '@/features/git-repos/browser/compare-dialog';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
@@ -201,23 +205,32 @@ const StackUpdateNotice = ({ stack }: { stack: StackView }) => {
   const updateState = stack.stackUpdateState;
   const gitState =
     updateState && 'recreateStackOnNewCommitState' in updateState ? updateState.recreateStackOnNewCommitState : null;
+  const deployedCommit = stack.source?.resolvedCommitSha || gitState?.currentCommitSha;
 
-  if (
-    gitState?.remoteCommitSha &&
-    gitState.currentCommitSha &&
-    gitState.remoteCommitSha !== gitState.currentCommitSha
-  ) {
+  if (gitState?.remoteCommitSha && deployedCommit && gitState.remoteCommitSha !== deployedCommit) {
     return (
       <UpdateAvailableNotice
         title="Git update available:"
-        actionLabel="Deploy"
+        actionLabel="Redeploy"
         targetLabel="stack"
         sourceLabel={`${stack.source?.gitRepositoryName ?? 'Repository'}${stack.source?.branch ? `/${stack.source.branch}` : ''}`}
         sourceTitle={stack.source?.gitRepositoryName ?? undefined}
-        currentLabel={formatId(gitState.currentCommitSha)}
+        currentLabel={formatId(deployedCommit)}
         nextLabel={formatId(gitState.remoteCommitSha)}
-        currentTitle={gitState.currentCommitSha}
+        currentTitle={deployedCommit}
         nextTitle={gitState.remoteCommitSha}
+        actions={
+          stack.source?.gitRepositoryId && (
+            <GitRepositoryCompareAction
+              key={`${stack.source.gitRepositoryId}:${deployedCommit}:${gitState.remoteCommitSha}`}
+              repositoryId={stack.source.gitRepositoryId}
+              repositoryName={stack.source.gitRepositoryName}
+              baseCommitSha={deployedCommit}
+              headCommitSha={gitState.remoteCommitSha}
+              watchPaths={stack.source.watchPaths}
+            />
+          )
+        }
       />
     );
   }
@@ -765,6 +778,7 @@ const SourceBadge = ({ value, title }: { value: string; title?: string }) => (
 const isRollbackCandidateRelease = (release: StackReleaseView) => release.status === StackReleaseStatus.Healthy;
 
 const StackDriftPanel = ({ stack }: { stack: StackView }) => {
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const isSwarmStack = stack.platformType === PlatformType.DockerSwarm;
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
   const driftEligibleStatus =
@@ -788,7 +802,7 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   if (error) {
     return (
       <AlertMessage type="warning" title="Drift check failed" className="my-0">
-        {(error as any)?.error?.detail ?? 'Unable to check stack drift.'}
+        {requestErrorMessage(error)}
       </AlertMessage>
     );
   }
@@ -807,8 +821,11 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
         <span className="min-w-0">{details}</span>
         <div className="flex shrink-0 items-center gap-2">
           {report.hasStructuralDrift && <span className="text-xs">Reapply required</span>}
-          {report.hasAutoFixableDrift && !actionable && (
-            <span className="text-xs">Enable safe auto-fix in Config to reconcile</span>
+          {!report.hasStructuralDrift && actionable && !hasLicenseCapability(LicenseCapability.OperationalGuardrails) && (
+            <span className="text-xs">Activate Operational Guardrails to reconcile</span>
+          )}
+          {!report.hasStructuralDrift && !actionable && report.drifts.some((drift) => drift.$type === 'ExtraContainer') && (
+            <span className="text-xs">Extra-container removal requires opt-in in Config</span>
           )}
         </div>
       </div>

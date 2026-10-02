@@ -260,6 +260,24 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
         .status(),
         StatusCode::BAD_REQUEST
     );
+    let before = calls.lock().unwrap().len();
+    let invalid = send_json(&f, Method::POST, "/api/v1/images/pull", f.administrator.clone(),
+        json!({"platformId":f.platform_id,"registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx bad"})).await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    let bytes = to_bytes(invalid.into_body(), 1024 * 1024).await.unwrap();
+    let problem: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        problem["type"]
+            .as_str()
+            .unwrap()
+            .ends_with("validation_error")
+    );
+    assert_eq!(problem["detail"], "A valid image reference is required.");
+    assert_eq!(
+        calls.lock().unwrap().len(),
+        before,
+        "invalid references never dispatch Docker calls"
+    );
     let body = json!({"platformId":f.platform_id,"registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"});
     assert_eq!(
         send_json(

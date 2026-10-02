@@ -8,6 +8,7 @@ use sqlx::PgPool;
 pub async fn refresh(
     pool: &PgPool,
     snapshot: &RuntimeInventorySnapshot,
+    policy: &citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 ) -> Result<(), RuntimeCapabilityError> {
     let storage = |error: sqlx::Error| {
         RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
@@ -43,9 +44,7 @@ pub async fn refresh(
         ));
     }
     crate::persistence::postgres::platforms::inventory::resource::persist_swarm_snapshot(
-        &mut tx,
-        snapshot,
-        &Default::default(),
+        &mut tx, snapshot, policy,
     )
     .await?;
     tx.commit().await.map_err(storage)?;

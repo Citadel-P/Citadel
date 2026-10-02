@@ -73,3 +73,27 @@ export function sanitizeDraft<T>(update: Partial<T>, excludedPaths: readonly str
   }
   return (visit(update, '') ?? {}) as Partial<T>;
 }
+
+/** Presentation only: never submit the masked object as a form value. */
+export function maskFormSecrets(value: unknown, excludedPaths: readonly string[] = []): unknown {
+  function visit(entry: unknown, path: string, sensitive = false): unknown {
+    if (entry === null || entry === undefined || typeof entry === 'boolean') return entry;
+    if (sensitive || excludedPaths.includes(path)) return entry === '' ? '' : '******';
+    if (typeof entry === 'string') return containsCredential(entry) ? '******' : entry;
+    if (Array.isArray(entry)) return entry.map((item, index) => visit(item, `${path}.${index}`));
+    if (typeof entry !== 'object') return entry;
+    const record = entry as Record<string, unknown>;
+    const name = typeof record.key === 'string' ? record.key : record.name;
+    return Object.fromEntries(
+      Object.entries(record).map(([key, item]) => [
+        key,
+        visit(
+          item,
+          path ? `${path}.${key}` : key,
+          isSensitiveKey(key) || (key === 'value' && typeof name === 'string' && isSensitiveKey(name)),
+        ),
+      ]),
+    );
+  }
+  return visit(value, '');
+}

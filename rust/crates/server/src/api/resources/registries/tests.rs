@@ -124,7 +124,7 @@ fn registry_schema_uses_native_configuration_and_partial_updates() {
     );
     assert_eq!(
         schemas["RegistryConfigResponse"]["properties"]["configuration"]["$ref"],
-        "#/components/schemas/RegistrySpec"
+        "#/components/schemas/RegistryConfigurationView"
     );
     assert_eq!(
         schemas["RegistryView"]["properties"]["type"]["$ref"],
@@ -139,5 +139,39 @@ fn registry_schema_uses_native_configuration_and_partial_updates() {
         schemas["RegistryPatch"]["properties"]["configuration"]
             .to_string()
             .contains("#/components/schemas/RegistryConfigurationPatch")
+    );
+}
+
+#[test]
+fn every_registry_provider_exposes_presence_without_secrets() {
+    for payload in [
+        examples::custom(),
+        examples::dockerhub(),
+        examples::azure(),
+        examples::aws(),
+        examples::gitlab(),
+        examples::github(),
+    ] {
+        let config: RegistrySpec =
+            serde_json::from_value(payload["configuration"].clone()).unwrap();
+        let wire =
+            serde_json::to_value(super::spec::RegistryConfigurationView::from(config)).unwrap();
+        for (secret, flag) in [
+            ("password", "hasPassword"),
+            ("pat", "hasPat"),
+            ("secretAccessKey", "hasSecretAccessKey"),
+        ] {
+            assert!(wire.get(secret).is_none());
+            if let Some(value) = payload["configuration"].get(secret) {
+                assert_eq!(wire[flag], !value.as_str().unwrap().is_empty());
+                assert!(!wire.to_string().contains(value.as_str().unwrap()));
+            }
+        }
+        assert_eq!(wire["$type"], payload["configuration"]["$type"]);
+    }
+    let public: RegistrySpec = serde_json::from_value(json!({"$type":"DockerHub"})).unwrap();
+    assert_eq!(
+        serde_json::to_value(super::spec::RegistryConfigurationView::from(public)).unwrap(),
+        json!({"$type":"DockerHub","hasPat":false})
     );
 }

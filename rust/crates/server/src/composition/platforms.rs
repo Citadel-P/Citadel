@@ -131,7 +131,7 @@ pub(super) fn build(
     }
     let volume_content = Arc::new(volume_content.with_runtime_router(container_runtime.clone()));
     let platform_state = platforms_http::PlatformsHttpState {
-        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), config.node_agent_policy.clone())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:container_runtime.runtime_router(),edge:edge_registry.clone()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge_registry.clone()}),
     deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
@@ -143,7 +143,7 @@ pub(super) fn build(
             Arc::new(citadel_adapters::connectors::routing::platforms::management::PlatformManagementRuntimeAdapter {local:docker.clone(),agent:agent.clone(),edge:edge_registry.clone()}),
         )),
     image_store: Arc::new(citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(pool.clone())),
-    projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())),
+    projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone()).with_node_policy(config.node_agent_policy.clone())),
         statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
         services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
         runtime: Arc::new(container_runtime.runtime_router()),

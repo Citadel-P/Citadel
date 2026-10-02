@@ -1,4 +1,4 @@
-import { sanitizeDraft, scopedDraftKey } from './form-drafts';
+import { maskFormSecrets, sanitizeDraft, scopedDraftKey } from './form-drafts';
 
 const token = (sub: string) => `header.${btoa(JSON.stringify({ sub, iss: 'citadel' }))}.signature`;
 
@@ -90,5 +90,36 @@ describe('safe form drafts', () => {
     expect(key).not.toContain(token('alice'));
     expect(scopedDraftKey('platform:one', 'invalid', 'server-a')).toBeUndefined();
     expect(scopedDraftKey('platform:one', undefined, 'server-a')).toBeUndefined();
+  });
+});
+
+describe('form diff secret masking', () => {
+  it('masks stored and newly entered credentials without mutating the request', () => {
+    const value = {
+      configuration: {
+        userName: 'operator',
+        pat: 'new-token',
+        password: 'new-password',
+        secretAccessKey: 'aws-secret',
+      },
+      hasClientSecret: true,
+      clientSecret: 'oidc-secret',
+      privateKey: 'ssh-secret',
+      environment: [{ key: 'API_KEY', value: 'env-secret' }],
+      opaque: 'custom-secret',
+      script: 'TOKEN=embedded-secret',
+      retries: 2,
+    };
+    expect(maskFormSecrets(value, ['opaque'])).toEqual({
+      configuration: { userName: 'operator', pat: '******', password: '******', secretAccessKey: '******' },
+      hasClientSecret: true,
+      clientSecret: '******',
+      privateKey: '******',
+      environment: [{ key: 'API_KEY', value: '******' }],
+      opaque: '******',
+      script: '******',
+      retries: 2,
+    });
+    expect(value.configuration.pat).toBe('new-token');
   });
 });

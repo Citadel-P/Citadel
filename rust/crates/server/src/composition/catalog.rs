@@ -31,6 +31,7 @@ pub(super) fn build(
     pool: &PgPool,
     secret_protector: &Arc<AesGcmSecretProtector>,
     realtime_hub: &Option<RealtimeHub>,
+    tasks: &citadel_runtime::DynamicTasks,
 ) -> Result<CatalogComponents, Box<dyn std::error::Error>> {
     let activities = Arc::new(ActivityService::new(Arc::new(PostgresActivityStore::new(
         pool.clone(),
@@ -62,11 +63,18 @@ pub(super) fn build(
         GitRepositoryExecutionService::new(
             Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
             Arc::clone(&git_accounts),
-            Arc::new(GitCli::new(
-                std::sync::Arc::new(citadel_processes::SystemProcess),
-                std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
-                Duration::from_secs(120),
-            )),
+            Arc::new(
+                GitCli::new(
+                    std::sync::Arc::new(citadel_processes::SystemProcess),
+                    std::sync::Arc::new(
+                        citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                            tasks.clone(),
+                        ),
+                    ),
+                    Duration::from_secs(120),
+                )
+                .with_known_hosts(config.execution.git_known_hosts.clone()),
+            ),
             data_root.join("git-repositories"),
             Duration::from_secs(10 * 60),
         )

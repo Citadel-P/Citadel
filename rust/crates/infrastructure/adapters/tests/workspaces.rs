@@ -3,7 +3,9 @@ use citadel_adapters::filesystem::{
 };
 use citadel_automation::workspace::AutomationWorkspacePort;
 use citadel_git::workspace::GitWorkspacePort;
-use std::path::PathBuf;
+use citadel_runtime::DynamicTasks;
+use std::{path::PathBuf, time::Duration};
+use tokio_util::sync::CancellationToken;
 
 struct Root(PathBuf);
 impl Root {
@@ -19,8 +21,9 @@ impl Drop for Root {
 
 #[tokio::test]
 async fn git_credentials_are_private_and_removed_on_drop() {
+    let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
-    let credential = LocalGitWorkspace
+    let credential = LocalGitWorkspace::new(tasks.clone())
         .credential(&root.0, "private-key\n\n")
         .await
         .unwrap();
@@ -43,9 +46,13 @@ async fn git_credentials_are_private_and_removed_on_drop() {
 
 #[tokio::test]
 async fn git_staging_publishes_atomically_and_cleans_abandoned_clones() {
+    let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
     let target = root.0.join("repo");
-    let mut staging = LocalGitWorkspace.stage(&target).await.unwrap();
+    let mut staging = LocalGitWorkspace::new(tasks.clone())
+        .stage(&target)
+        .await
+        .unwrap();
     let staging_path = staging.path().to_owned();
     tokio::fs::create_dir(&staging_path).await.unwrap();
     tokio::fs::write(staging_path.join("file"), "committed")
@@ -60,19 +67,24 @@ async fn git_staging_publishes_atomically_and_cleans_abandoned_clones() {
             .unwrap(),
         "committed"
     );
-    let abandoned = LocalGitWorkspace.stage(&target).await.unwrap();
+    let abandoned = LocalGitWorkspace::new(tasks.clone())
+        .stage(&target)
+        .await
+        .unwrap();
     let path = abandoned.path().to_owned();
     tokio::fs::create_dir(&path).await.unwrap();
     drop(abandoned);
+    tasks.drain(Duration::from_secs(5)).await.unwrap();
     assert!(!path.exists());
     assert!(target.exists());
 }
 
 #[tokio::test]
 async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
+    let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
     let run = root.0.join("run");
-    let workspace = LocalAutomationWorkspace
+    let workspace = LocalAutomationWorkspace::new(tasks.clone())
         .prepare(&run, None, "short-lived credential")
         .await
         .unwrap();
@@ -89,25 +101,27 @@ async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
         );
     }
     assert!(
-        LocalAutomationWorkspace
+        LocalAutomationWorkspace::new(tasks.clone())
             .prepare(&run, None, "replacement")
             .await
             .is_err()
     );
     drop(workspace);
+    tasks.drain(Duration::from_secs(5)).await.unwrap();
     assert!(!run.exists());
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn automation_does_not_follow_an_existing_workspace_symlink() {
+    let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
     let external = root.0.join("external");
     tokio::fs::create_dir_all(&external).await.unwrap();
     let run = root.0.join("run");
     std::os::unix::fs::symlink(&external, &run).unwrap();
     assert!(
-        LocalAutomationWorkspace
+        LocalAutomationWorkspace::new(tasks.clone())
             .prepare(&run, None, "secret")
             .await
             .is_err()

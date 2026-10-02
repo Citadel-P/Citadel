@@ -40,7 +40,11 @@ pub(crate) async fn realtime_resource_snapshot(
             crate::realtime::shared_reads::images(&state.platforms, id, Some(event))
                 .await?
                 .into_iter()
-                .map(crate::api::resources::platforms::views::ImageView::from)
+                .map(|image| {
+                    let mut view = crate::api::resources::platforms::views::ImageView::from(image);
+                    view.capabilities = Some(image_capabilities(platform));
+                    view
+                })
                 .map(serde_json::to_value)
                 .collect::<Result<_, _>>()
                 .map_err(failure)?;
@@ -110,76 +114,83 @@ pub(crate) async fn realtime_resource_snapshot(
         .map(|v| serde_json::from_value::<ResourceDelta>(v.clone()))
         .transpose()
         .map_err(failure)?;
-    let (style, networks, volumes) = match delta {
-        Some(ResourceDelta::Network { id, value }) => (
-            RowStyle::DaemonPatch(id),
-            value.into_iter().collect(),
-            vec![],
-        ),
-        Some(ResourceDelta::Volume { id, value }) => (
-            RowStyle::DaemonPatch(id),
-            vec![],
-            value.into_iter().collect(),
-        ),
-        _ if event.payload.get("resourceSnapshot").is_some() => (
-            RowStyle::Daemon,
-            serde_json::from_value(
-                event.payload["resourceSnapshot"]
-                    .get("networks")
-                    .cloned()
-                    .unwrap_or_else(|| serde_json::json!([])),
-            )
-            .map_err(failure)?,
-            serde_json::from_value(
-                event.payload["resourceSnapshot"]
-                    .get("volumes")
-                    .cloned()
-                    .unwrap_or_else(|| serde_json::json!([])),
-            )
-            .map_err(failure)?,
-        ),
-        _ => {
-            // Coarse API mutation notifications have no observation. Share only
-            // the relevant live read across authorized subscribers of this event.
-            let cancel = CancellationToken::new();
-            let runtime = state
-                .runtime
-                .inventory(id, &cancel)
-                .await
-                .map_err(|error| RealtimeReadError::Storage(error.to_string()))?;
-            let networks = if kind == "network" {
-                event
-                    .reads
-                    .networks
-                    .get_or_try_init(|| async {
-                        runtime
-                            .list_networks(&cancel)
-                            .await
-                            .map_err(|e| RealtimeReadError::Storage(e.to_string()))
-                    })
-                    .await?
-                    .clone()
-            } else {
-                vec![]
-            };
-            let volumes = if kind == "volume" {
-                event
-                    .reads
-                    .volumes
-                    .get_or_try_init(|| async {
-                        runtime
-                            .list_volumes(&cancel)
-                            .await
-                            .map_err(|e| RealtimeReadError::Storage(e.to_string()))
-                    })
-                    .await?
-                    .clone()
-            } else {
-                vec![]
-            };
-            (RowStyle::Daemon, networks, volumes)
-        }
-    };
+    let (style, networks, volumes) =
+        match delta {
+            Some(ResourceDelta::Network { id, value }) => (
+                RowStyle::DaemonPatch(id),
+                value.into_iter().collect(),
+                vec![],
+            ),
+            Some(ResourceDelta::Volume { id, value }) => (
+                RowStyle::DaemonPatch(id),
+                vec![],
+                value.into_iter().collect(),
+            ),
+            _ if event.payload.get("resourceSnapshot").is_some() => (
+                RowStyle::Daemon,
+                serde_json::from_value(
+                    event.payload["resourceSnapshot"]
+                        .get("networks")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([])),
+                )
+                .map_err(failure)?,
+                serde_json::from_value(
+                    event.payload["resourceSnapshot"]
+                        .get("volumes")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([])),
+                )
+                .map_err(failure)?,
+            ),
+            _ => {
+                // Coarse API mutation notifications have no observation. Share only
+                // the relevant live read across authorized subscribers of this event.
+                let networks =
+                    if kind == "network" {
+                        event
+                            .reads
+                            .networks
+                            .get_or_try_init(|| async {
+                                let cancel = CancellationToken::new();
+                                let _guard = cancel.clone().drop_guard();
+                                let runtime = state.runtime.inventory(id, &cancel).await.map_err(
+                                    |error| RealtimeReadError::Storage(error.to_string()),
+                                )?;
+                                runtime
+                                    .list_networks(&cancel)
+                                    .await
+                                    .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+                            })
+                            .await?
+                            .clone()
+                    } else {
+                        vec![]
+                    };
+                let volumes =
+                    if kind == "volume" {
+                        event
+                            .reads
+                            .volumes
+                            .get_or_try_init(|| async {
+                                let cancel = CancellationToken::new();
+                                let _guard = cancel.clone().drop_guard();
+                                let runtime = state.runtime.inventory(id, &cancel).await.map_err(
+                                    |error| RealtimeReadError::Storage(error.to_string()),
+                                )?;
+                                runtime
+                                    .list_volumes(&cancel)
+                                    .await
+                                    .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+                            })
+                            .await?
+                            .clone()
+                    } else {
+                        vec![]
+                    };
+                (RowStyle::Daemon, networks, volumes)
+            }
+        };
     let (target, rows) = if kind == "network" {
         (
             "NetworkEventReceived",

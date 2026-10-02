@@ -14704,7 +14704,7 @@
       "RegistryConfigResponse": {
         "properties": {
           "configuration": {
-            "$ref": "#/components/schemas/RegistrySpec"
+            "$ref": "#/components/schemas/RegistryConfigurationView"
           },
           "description": {
             "type": "string"
@@ -14822,6 +14822,175 @@
           }
         },
         "type": "object"
+      },
+      "RegistryConfigurationView": {
+        "description": "Public settings and credential presence; secret values are write-only.",
+        "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "Custom"
+                ],
+                "type": "string"
+              },
+              "authEnabled": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "hasPassword": {
+                "type": "boolean"
+              },
+              "userName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "hasPassword",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DockerHub"
+                ],
+                "type": "string"
+              },
+              "hasPat": {
+                "type": "boolean"
+              },
+              "userName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "hasPat",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "Azure"
+                ],
+                "type": "string"
+              },
+              "hasPassword": {
+                "type": "boolean"
+              },
+              "userName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "userName",
+              "hasPassword",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "AWS"
+                ],
+                "type": "string"
+              },
+              "accessKey": {
+                "type": "string"
+              },
+              "authenticationRequired": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "hasSecretAccessKey": {
+                "type": "boolean"
+              },
+              "region": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "accessKey",
+              "hasSecretAccessKey",
+              "region",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "Gitlab"
+                ],
+                "type": "string"
+              },
+              "hasPat": {
+                "type": "boolean"
+              },
+              "instanceUrl": {
+                "type": "string"
+              },
+              "userName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "userName",
+              "hasPat",
+              "instanceUrl",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "GitHub"
+                ],
+                "type": "string"
+              },
+              "ghcrAuthEnabled": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "hasPat": {
+                "type": "boolean"
+              },
+              "nameSpace": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "hasPat",
+              "$type"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "RegistryKind": {
         "enum": [

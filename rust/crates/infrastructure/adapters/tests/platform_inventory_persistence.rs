@@ -2322,9 +2322,13 @@ async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity
     narrow.containers.clear();
     narrow.images.clear();
     narrow.volumes.clear();
-    citadel_adapters::persistence::postgres::platforms::swarm::inventory::refresh(&pool, &narrow)
-        .await
-        .unwrap();
+    citadel_adapters::persistence::postgres::platforms::swarm::inventory::refresh(
+        &pool,
+        &narrow,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(read_counts().await, (1, 2, 1));
     let cpu: i32 = sqlx::query_scalar("SELECT cpucount FROM platforms WHERE id=$1")
         .bind(platform)
@@ -2898,5 +2902,189 @@ async fn six_container_verification_is_sequential_and_keeps_every_authoritative_
     assert_eq!(peak.load(Ordering::SeqCst), 1);
     cancel.cancel();
     server.await.unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
+    use citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore;
+    use citadel_platforms::{
+        image_mutations::{ImageDeletionObservation, ImageMutationStore},
+        jobs::{ProjectionKind, SnapshotGeneration},
+    };
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let store = PostgresImageMutationStore(pool.clone());
+    let registry = Uuid::from_u128(0x100);
+    let mut image = RuntimeImageSummary {
+        id: "same-id".into(),
+        repo_tags: vec!["app:old".into()],
+        ..Default::default()
+    };
+    store
+        .persist_pull(platform, registry, &image)
+        .await
+        .unwrap();
+    let ids = vec![image.id.clone()];
+    for cross_process in [false, true] {
+        let claim = store.claim_deletion(platform, &ids).await.unwrap();
+        let observation = ImageDeletionObservation {
+            generation: SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await,
+            images: vec![],
+        };
+        image.repo_tags = vec!["app:new".into()];
+        if cross_process {
+            // A different process changes SQL state without our in-memory generation.
+            sqlx::query("UPDATE images SET rowversion=rowversion+1,tags='[\"app:new\"]' WHERE platformid=$1")
+                .bind(platform).execute(&pool).await.unwrap();
+        } else {
+            store
+                .persist_pull(platform, registry, &image)
+                .await
+                .unwrap();
+        }
+        store
+            .complete_deletion(platform, &claim, Some(&observation))
+            .await
+            .unwrap();
+        let row: (serde_json::Value, String, Option<i64>) = sqlx::query_as(
+            "SELECT tags,controlstate,controlstartedat FROM images WHERE platformid=$1",
+        )
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row, (json!(["app:new"]), "Idle".into(), None));
+    }
+    // A fresh absence can still remove the row and repair the count.
+    let claim = store.claim_deletion(platform, &ids).await.unwrap();
+    let observation = ImageDeletionObservation {
+        generation: SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await,
+        images: vec![],
+    };
+    store
+        .complete_deletion(platform, &claim, Some(&observation))
+        .await
+        .unwrap();
+    let count: i32 = sqlx::query_scalar("SELECT imagecount FROM platforms WHERE id=$1")
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn configured_node_policy_is_preserved_by_initialization_and_http_refresh() {
+    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    seed_platform(&pool, platform, actor, Uuid::now_v7()).await;
+    let mut snapshot = snapshot(platform, true);
+    let cluster = snapshot
+        .info
+        .swarm
+        .as_ref()
+        .unwrap()
+        .cluster_id
+        .clone()
+        .unwrap();
+    snapshot
+        .swarm
+        .as_mut()
+        .unwrap()
+        .nodes
+        .push(RuntimeSwarmNode {
+            id: "worker".into(),
+            status: "ready".into(),
+            availability: "active".into(),
+            operating_system: "linux".into(),
+            architecture: "s390x".into(),
+            ..Default::default()
+        });
+    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerserviceid,dockerservicename,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:agent','agent:latest',$2,'Installed','missing-agent-service','citadel-agent','daemon','node-1')")
+        .bind(platform).bind(&cluster).execute(&pool).await.unwrap();
+    let bootstrap = Uuid::now_v7();
+    sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,'test-hash',1)")
+        .bind(bootstrap).bind(&cluster).bind(actor).bind(platform).execute(&pool).await.unwrap();
+    for (node, profile, recent) in [
+        ("worker", "SwarmNode", false),
+        ("absent", "SwarmNode", false),
+        ("recent", "SwarmNode", true),
+        ("ordinary", "Ordinary", false),
+    ] {
+        sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,profile,dockernodeid,updatedatutc,lastheartbeatatutc) VALUES($1,$1::text,$2,'fixture','Disconnected',$3,$3,$4,$5,now()-interval '20 minutes',CASE WHEN $6 THEN now() ELSE now()-interval '20 minutes' END)")
+            .bind(Uuid::now_v7()).bind(Uuid::now_v7()).bind(platform).bind(profile).bind(node).bind(recent).execute(&pool).await.unwrap();
+    }
+    let policy = citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
+        removal_grace: std::time::Duration::from_secs(1800),
+        supported_architectures: vec!["amd64".into()],
+    };
+    let store =
+        PostgresInventoryProjectionStore::new(pool.clone()).with_node_policy(policy.clone());
+    sqlx::query("UPDATE platforms SET clusterid=$2 WHERE id=$1")
+        .bind(platform)
+        .bind(&cluster)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(store.initialize_swarm(&snapshot).await.unwrap());
+    store.persist(&snapshot).await.unwrap();
+    snapshot.observed_at += chrono::Duration::seconds(1);
+    store.refresh_swarm(&snapshot).await.unwrap();
+    let revoked: bool = sqlx::query_scalar(
+        "SELECT revokedatutc IS NOT NULL FROM swarmnodeagentbootstraps WHERE id=$1",
+    )
+    .bind(bootstrap)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !revoked,
+        "unsupported workers must not revoke bootstrap credentials"
+    );
+    let revoked:Vec<String>=sqlx::query_scalar("SELECT dockernodeid FROM edgeagentbindings WHERE platformid=$1 AND revokedatutc IS NOT NULL ORDER BY dockernodeid").bind(platform).fetch_all(&pool).await.unwrap();
+    assert!(
+        revoked.is_empty(),
+        "configured thirty-minute grace must survive HTTP refresh"
+    );
+    let store = PostgresInventoryProjectionStore::new(pool.clone()).with_node_policy(
+        citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
+            supported_architectures: vec!["s390x".into()],
+            ..policy
+        },
+    );
+    snapshot.observed_at += chrono::Duration::minutes(11);
+    store.refresh_swarm(&snapshot).await.unwrap();
+    let revoked: Vec<String> = sqlx::query_scalar("SELECT dockernodeid FROM edgeagentbindings WHERE platformid=$1 AND revokedatutc IS NOT NULL ORDER BY dockernodeid")
+        .bind(platform).fetch_all(&pool).await.unwrap();
+    assert_eq!(revoked, ["absent"]);
+    let revoked: bool = sqlx::query_scalar(
+        "SELECT revokedatutc IS NOT NULL FROM swarmnodeagentbootstraps WHERE id=$1",
+    )
+    .bind(bootstrap)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        revoked,
+        "configured supported architecture participates in reconciliation"
+    );
     pool.close().await;
 }

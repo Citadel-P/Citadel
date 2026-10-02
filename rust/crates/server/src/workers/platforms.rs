@@ -61,8 +61,7 @@ use crate::metrics::Metrics;
 use crate::realtime::RealtimeHub;
 
 pub struct WorkerSettings {
-    pub node_agent_policy:
-        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,

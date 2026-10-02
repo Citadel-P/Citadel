@@ -219,6 +219,7 @@ impl PostgresStackRepository {
         result: &'a StackRuntimeResult,
         bindings: &'a [ResourceBindingSnapshot],
         source: Option<&'a StackReleaseSource>,
+        container_ids: Option<&'a [String]>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(async move {
             let source = source.filter(|_| claim.service_names.is_empty());
@@ -284,7 +285,7 @@ impl PostgresStackRepository {
                     old_stack: None,
                     new_stack: Some(snapshot),
                     result: StackResultActivitySnapshot {
-                        container_ids: None,
+                        container_ids: container_ids.map(<[String]>::to_vec),
                         message: Some("Stack rollback completed.".to_owned()),
                         resource_bindings: serde_json::to_value(bindings).ok(),
                     },
@@ -293,7 +294,7 @@ impl PostgresStackRepository {
                 ActivityEventInfo::StackApplied {
                     stack: Some(snapshot),
                     result: StackResultActivitySnapshot {
-                        container_ids: None,
+                        container_ids: container_ids.map(<[String]>::to_vec),
                         message: Some("Stack deployment completed.".to_owned()),
                         resource_bindings: serde_json::to_value(bindings).ok(),
                     },
@@ -327,10 +328,9 @@ impl PostgresStackRepository {
             let status = if unknown { "Applying" } else { "Failed" };
             let control = if unknown { "Processing" } else { "Idle" };
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            if sqlx::query_scalar::<_, Uuid>("SELECT id FROM stacks WHERE id=$1 AND currentstackreleaseid=$2 AND rowversion=$3 AND controlstate='Processing' FOR NO KEY UPDATE")
-                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?.is_none() {
-                return Err(StackError::Conflict("The Stack operation was superseded.".into()));
-            }
+            let row = sqlx::query("SELECT s.description,s.stacksource,s.driftpolicy,r.version FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1 AND r.id=$2 AND s.rowversion=$3 AND s.controlstate='Processing' FOR NO KEY UPDATE OF s")
+                .bind(claim.stack_id).bind(claim.release_id).bind(claim.row_version).fetch_optional(&mut *tx).await.map_err(storage)?
+                .ok_or_else(|| StackError::Conflict("The Stack operation was superseded.".into()))?;
             let release_changed=sqlx::query("UPDATE stackreleases SET status=$3 WHERE id=$1 AND stackid=$2 AND status='Applying'").bind(claim.release_id).bind(claim.stack_id).bind(status).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             let stack_changed=sqlx::query("UPDATE stacks SET controlstate=$3,controlstartedat=CASE WHEN $4 THEN controlstartedat ELSE NULL END,controltriggeredby=CASE WHEN $4 THEN controltriggeredby ELSE NULL END,applyservices=CASE WHEN $4 THEN applyservices ELSE '{}'::text[] END,rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
                 .bind(claim.stack_id).bind(claim.release_id).bind(control).bind(unknown).execute(&mut *tx).await.map_err(storage)?.rows_affected();
@@ -341,13 +341,35 @@ impl PostgresStackRepository {
             }
             if !unknown {
                 webhooks::settle(&mut tx, claim, Some("Stack webhook Apply failed.")).await?;
-                let info = ActivityEventInfo::StackApplied {
-                    stack: None,
-                    result: StackResultActivitySnapshot {
-                        container_ids: None,
-                        message: Some(message.to_owned()),
-                        resource_bindings: None,
-                    },
+                let snapshot = stack_snapshot(
+                    claim.stack_id,
+                    &claim.name,
+                    row.try_get("description").map_err(storage)?,
+                    parse_stack_source(row.try_get("stacksource").map_err(storage)?)?,
+                    StackDriftPolicy::from_storage_value(
+                        row.try_get("driftpolicy").map_err(storage)?,
+                    )?,
+                    claim.platform_id,
+                    &claim.spec,
+                    actor,
+                    row.try_get("version").map_err(storage)?,
+                );
+                let result = StackResultActivitySnapshot {
+                    container_ids: None,
+                    message: Some(message.to_owned()),
+                    resource_bindings: None,
+                };
+                let info = if claim.operation == "Rollback" {
+                    ActivityEventInfo::StackRollback {
+                        old_stack: None,
+                        new_stack: Some(snapshot),
+                        result,
+                    }
+                } else {
+                    ActivityEventInfo::StackApplied {
+                        stack: Some(snapshot),
+                        result,
+                    }
                 };
                 insert_stack_activity(
                     &mut tx,

@@ -114,6 +114,47 @@ pub(super) async fn verify(
     let calls = runtime.reconcile_calls.load(Ordering::Relaxed);
     stacks.monitor_container_event(id).await.unwrap();
     assert_eq!(runtime.reconcile_calls.load(Ordering::Relaxed), calls);
+    // DetectOnly allows an explicit licensed repair without enabling automatic actions.
+    let response = request(
+        app,
+        Method::POST,
+        &format!("/api/v1/stacks/{id}/reconcile"),
+        Some(admin.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let manual_policy = runtime
+        .reconcile_policies
+        .lock()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert!(manual_policy.auto_start_stopped_containers);
+    assert!(manual_policy.auto_resume_paused_containers);
+    assert!(!manual_policy.remove_extra_containers);
+    assert_eq!(
+        store
+            .get_authorized(admin.actor_id, true, id)
+            .await
+            .unwrap()
+            .drift_policy,
+        recovered.drift_policy,
+        "manual reconciliation must not change the saved policy"
+    );
+    let calls = runtime.reconcile_calls.load(Ordering::Relaxed);
+    runtime.runtime_state.store(0, Ordering::Relaxed);
+    let structural = stacks
+        .reconcile_drift(admin.actor_id, true, id)
+        .await
+        .unwrap();
+    assert_eq!(
+        structural.status,
+        citadel_stacks::StackReconciliationStatus::RequiresReapply
+    );
+    assert_eq!(runtime.reconcile_calls.load(Ordering::Relaxed), calls);
+    runtime.runtime_state.store(1, Ordering::Relaxed);
     let mut policy = recovered.drift_policy.clone();
     policy.mode = citadel_stacks::StackDriftMode::AutoFix;
     stacks
@@ -121,6 +162,8 @@ pub(super) async fn verify(
         .await
         .unwrap();
     let denied_runtime = Arc::new(CompletingStackRuntime::default());
+    denied_runtime.runtime_state.store(1, Ordering::Relaxed);
+    let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let unlicensed = StackService::new(
         Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
@@ -131,16 +174,33 @@ pub(super) async fn verify(
         Arc::new(NoopStackChangeNotifier),
         CancellationToken::new(),
     )
-    .with_entitlements(Arc::new(Entitlements(false)));
+    .with_entitlements(Arc::new(Entitlements(false)))
+    .with_alerts(alerts.clone());
     unlicensed.monitor_container_event(id).await.unwrap();
     assert_eq!(
         unlicensed.monitor_drift(None, 100).await.unwrap().checked,
-        0
+        1
     );
+    assert_eq!(denied_runtime.reconcile_calls.load(Ordering::Relaxed), 0);
+    assert!(matches!(
+        unlicensed.reconcile_drift(admin.actor_id, true, id).await,
+        Err(StackError::LicenseRequired("OperationalGuardrails"))
+    ));
     assert_eq!(denied_runtime.reconcile_calls.load(Ordering::Relaxed), 0);
     assert_eq!(runtime.reconcile_calls.load(Ordering::Relaxed), calls);
     stacks.monitor_container_event(id).await.unwrap();
     assert_eq!(runtime.reconcile_calls.load(Ordering::Relaxed), calls + 1);
+    let automatic_policy = runtime
+        .reconcile_policies
+        .lock()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert_eq!(
+        automatic_policy, policy,
+        "automatic repair must respect configured options"
+    );
     for status in ["Stopped", "Paused", "Created"] {
         sqlx::query("UPDATE stackreleases SET status=$2 WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
             .bind(id).bind(status).execute(pool).await.unwrap();
@@ -157,6 +217,54 @@ pub(super) async fn verify(
         .update_drift_policy(admin.actor_id, true, id, recovered.resource.drift_policy)
         .await
         .unwrap();
+    // Free DetectOnly still observes, marks drift and recovers without any repair calls.
+    denied_runtime.runtime_state.store(2, Ordering::Relaxed);
+    unlicensed.monitor_container_event(id).await.unwrap();
+    assert_eq!(
+        store
+            .get_authorized(admin.actor_id, true, id)
+            .await
+            .unwrap()
+            .status,
+        StackReleaseStatus::Healthy
+    );
+    denied_runtime.runtime_state.store(1, Ordering::Relaxed);
+    unlicensed.monitor_container_event(id).await.unwrap();
+    assert_eq!(
+        store
+            .get_authorized(admin.actor_id, true, id)
+            .await
+            .unwrap()
+            .status,
+        StackReleaseStatus::Degraded
+    );
+    assert_eq!(denied_runtime.reconcile_calls.load(Ordering::Relaxed), 0);
+    let free_detection = unlicensed.monitor_drift(None, 100).await.unwrap();
+    assert_eq!(free_detection.checked, 1);
+    assert!(free_detection.failures.is_empty());
+    assert!(
+        alerts
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(
+                |observation| observation.alert_type == "StackDriftDetected" && observation.matched
+            )
+    );
+    assert!(
+        alerts
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|observation| observation.alert_type == "StackDriftDetected"
+                && !observation.matched)
+    );
+    assert!(matches!(
+        unlicensed.reconcile_drift(admin.actor_id, true, id).await,
+        Err(StackError::LicenseRequired("OperationalGuardrails"))
+    ));
     let exhausted = stacks
         .monitor_drift(Some(Uuid::from_u128(u128::MAX)), 1)
         .await

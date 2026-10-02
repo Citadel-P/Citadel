@@ -296,7 +296,7 @@ async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities(
     )
     .await
     .unwrap();
-    let store = PostgresNodeAgentLifecycleStore(fixture.pool.clone());
+    let store = PostgresNodeAgentLifecycleStore::new(fixture.pool.clone(), Default::default());
     let old = store
         .claim_remove(ActorId::new(SYSTEM_ACTOR_ID), id, info.clone())
         .await

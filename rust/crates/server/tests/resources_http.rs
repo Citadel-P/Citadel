@@ -98,7 +98,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Arc::clone(&git_accounts),
         Arc::new(GitCli::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             std::time::Duration::from_secs(5),
         )),
         git_cache.clone(),
@@ -111,7 +115,9 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let automation = Arc::new(AutomationService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         std::sync::Arc::new(
-            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
         ),
         Arc::new(
             citadel_server::tasks::automation::TrackedAutomationTasks::new(

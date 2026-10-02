@@ -19,7 +19,9 @@ import {
   StackSource,
   StackView,
   PlatformType,
+  LicenseCapability,
 } from '@/api/generated/api.types';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import {
   getStackUpdateCheckDisabledReason,
   getStackGitUpdateState,
@@ -127,16 +129,28 @@ export const syncAction: ActionConfig<StackView, any> = {
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
     const canCheck = !!selected && !multiSelect && canCheckDrift(selected);
-    const { isFetching, refetch } = useRead('getStackDrift', { stackId: selected?.id ?? '' }, { enabled: false });
+    // Observe the report loaded by the stack page without issuing extra checks per table row.
+    const { data, error, isFetching, refetch } = useRead('getStackDrift', { stackId: selected?.id ?? '' }, { enabled: false });
     const { mutateAsync, isPending } = useMutate('reconcileStack');
+    const { hasCapability } = useLicenseEntitlements();
+    const licensed = hasCapability(LicenseCapability.OperationalGuardrails);
 
-    const canExecute = !!selected && canCheck && !isProcessing(selected) && !isFetching;
+    const canExecute =
+      !!selected &&
+      canCheck &&
+      !isProcessing(selected) &&
+      !isFetching &&
+      !isPending &&
+      !error &&
+      licensed &&
+      hasActionableStackDrift(selected, data?.data);
 
     return {
       canExecute,
+      disabledReason: !licensed ? 'An active Operational Guardrails license is required.' : undefined,
       isPending: isPending || isFetching,
       run: async () => {
-        if (!selected || multiSelect || !canCheck || isProcessing(selected) || isFetching) return;
+        if (!canExecute) return;
 
         const driftResult = await refetch();
         if (driftResult.error) {
@@ -315,13 +329,12 @@ export const { dropdown: StackDropdownActions, group: StackGroupActions } = crea
   .build();
 
 const canApplyStackDrift = (policy: StackDriftPolicy | null | undefined, drift: StackDrift): boolean => {
-  if (!policy || policy.mode !== StackDriftMode.AutoFix) return false;
+  if (!policy || policy.mode === StackDriftMode.Disabled) return false;
 
   switch (drift.$type) {
     case 'ContainerStopped':
-      return policy.autoStartStoppedContainers;
     case 'ContainerPaused':
-      return policy.autoResumePausedContainers;
+      return true;
     case 'ExtraContainer':
       return policy.removeExtraContainers;
     default:
@@ -367,8 +380,8 @@ export const getStackReconciliationToast = (
   if (result.actions.length === 0 && result.beforeReport.hasAutoFixableDrift) {
     return {
       kind: 'warning',
-      title: 'No safe auto-fix action is enabled',
-      description: 'Enable the matching safe auto-fix option in Config, then sync again.',
+      title: 'No permitted repair is available',
+      description: 'Extra-container removal requires explicit opt-in in Config.',
     };
   }
 

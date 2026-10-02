@@ -71,7 +71,9 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         AutomationService::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
             std::sync::Arc::new(
-                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
             ),
             Arc::new(
                 citadel_server::tasks::automation::TrackedAutomationTasks::new(

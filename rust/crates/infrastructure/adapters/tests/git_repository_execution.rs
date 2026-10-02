@@ -154,7 +154,13 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
             accounts,
             Arc::new(GitCli::new(
                 std::sync::Arc::new(citadel_processes::SystemProcess),
-                std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+                std::sync::Arc::new(
+                    citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                        citadel_runtime::DynamicTasks::new(
+                            tokio_util::sync::CancellationToken::new(),
+                        ),
+                    ),
+                ),
                 Duration::from_secs(10),
             )),
             cache,
@@ -224,37 +230,55 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         ["compose.yaml", "config/app.conf"]
     );
     assert_eq!(snapshot.files[1].content, b"mode=production\n");
-    let source = GitStackSourceMaterializer::new(Arc::clone(&service))
-        .materialize(
-            &StackOperationClaim {
-                stack_id: Uuid::now_v7(),
-                release_id: Uuid::now_v7(),
-                platform_id: Uuid::now_v7(),
-                name: "git-stack".to_owned(),
-                project_name: "git-stack".to_owned(),
-                platform_type: citadel_platforms::PlatformKind::Docker,
-                spec: StackSpec::Git {
-                    git_repo_id: repository_id,
-                    branch: "main".to_owned(),
-                    commit_sha: Some(expected.trim().to_owned()),
-                    update_behavior: StackUpdateBehavior::Disabled,
-                    webhook: None,
-                    compose_paths: vec!["compose.yaml".to_owned()],
-                    working_directory: None,
-                    compose_env_files_from_repo: Vec::new(),
-                    watch_paths: Vec::new(),
-                    additional_env_file_from_repo: Vec::new(),
-                    common: StackSpecCommon::default(),
-                },
-                row_version: 1,
-                actor_id: actor,
-                operation: "Apply".to_owned(),
-                service_names: Vec::new(),
-            },
+    let selected = service
+        .stack_snapshot_files(
+            repository_id,
+            Some(expected.trim()),
+            Some(&["compose.yaml".into()]),
             &CancellationToken::new(),
         )
         .await
         .unwrap();
+    assert_eq!(selected.resolved_commit_sha, expected.trim());
+    assert_eq!(selected.files.len(), 1);
+    assert_eq!(selected.files[0].relative_path, "compose.yaml");
+    assert_eq!(selected.files[0].content, snapshot.files[0].content);
+
+    let claim = StackOperationClaim {
+        stack_id: Uuid::now_v7(),
+        release_id: Uuid::now_v7(),
+        platform_id: Uuid::now_v7(),
+        name: "git-stack".to_owned(),
+        project_name: "git-stack".to_owned(),
+        platform_type: citadel_platforms::PlatformKind::Docker,
+        spec: StackSpec::Git {
+            git_repo_id: repository_id,
+            branch: "main".to_owned(),
+            commit_sha: Some(expected.trim().to_owned()),
+            update_behavior: StackUpdateBehavior::Disabled,
+            webhook: None,
+            compose_paths: vec!["compose.yaml".to_owned()],
+            working_directory: None,
+            compose_env_files_from_repo: Vec::new(),
+            watch_paths: Vec::new(),
+            additional_env_file_from_repo: Vec::new(),
+            common: StackSpecCommon::default(),
+        },
+        row_version: 1,
+        actor_id: actor,
+        operation: "Apply".to_owned(),
+        service_names: Vec::new(),
+    };
+    let materializer = GitStackSourceMaterializer::new(Arc::clone(&service));
+    let source = materializer
+        .materialize(&claim, &CancellationToken::new())
+        .await
+        .unwrap();
+    let compose = materializer
+        .compose_contents(&claim, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(compose, source.compose_contents().unwrap());
     assert_eq!(source.compose_paths, ["compose.yaml"]);
     assert_eq!(source.working_directory, ".");
     assert_eq!(source.resolved_commit_sha.as_deref(), Some(expected.trim()));
@@ -811,7 +835,11 @@ async fn invalid_credentials_and_unresolvable_remote_release_claim_without_runni
         accounts,
         Arc::new(GitCli::with_process(
             Arc::new(NoGitProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             "must-not-run",
             Duration::from_secs(1),
         )),

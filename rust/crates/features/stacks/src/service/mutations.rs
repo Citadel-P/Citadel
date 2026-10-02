@@ -7,16 +7,21 @@ impl StackService {
     /// The daemon-event fast path shares the same reconciliation and persisted
     /// drift state as the sweep, but never reverses an intentional stop/pause.
     pub async fn monitor_container_event(&self, id: Uuid) -> Result<(), StackError> {
-        if !self.operational_guardrails_enabled().await? {
-            return Ok(());
-        }
         let actor = ActorId::new(Uuid::from_u128(1));
         let stack = self.store.get_authorized(actor, true, id).await?;
         if !event_drift_eligible(&stack) {
             return Ok(());
         }
-        let result = self.reconcile_drift(actor, true, id).await?;
-        let report = result.after_report.unwrap_or(result.before_report);
+        let report = if stack.drift_policy.mode == crate::StackDriftMode::AutoFix
+            && self.operational_guardrails_enabled().await?
+        {
+            let result = self
+                .reconcile_drift_with_mode(actor, true, id, false)
+                .await?;
+            result.after_report.unwrap_or(result.before_report)
+        } else {
+            self.drift(actor, true, id).await?
+        };
         if let Some((status, info)) = drift_status_update(&stack, &report)
             && self.store.record_drift(&stack, status, info).await?
         {

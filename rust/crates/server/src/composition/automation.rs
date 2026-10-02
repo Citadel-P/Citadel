@@ -30,7 +30,9 @@ pub(super) fn build(
         AutomationService::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
             std::sync::Arc::new(
-                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+                    dynamic_tasks.clone(),
+                ),
             ),
             Arc::new(
                 citadel_server::tasks::automation::TrackedAutomationTasks::new(

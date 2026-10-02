@@ -30,6 +30,29 @@ function StackContainersProbe() {
   );
 }
 
+function renderProbe(fake: FakeRealtimeConnection) {
+  renderCitadel(
+    <AppContext.Provider
+      value={{
+        isLoading: false,
+        currentPlatform: undefined,
+        platforms: undefined,
+        applicationInfo: undefined,
+        unresolvedAlertCount: 0,
+        liveAlertEvents: {},
+        receivedAlertEventIds: [],
+      }}>
+      <StackContainersProbe />
+    </AppContext.Provider>,
+    {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    },
+  );
+}
+
 describe('useStackInfoGroup', () => {
   it('keeps a Docker lifecycle event when a stale stats snapshot follows it', async () => {
     const fake = new FakeRealtimeConnection();
@@ -38,26 +61,7 @@ describe('useStackInfoGroup', () => {
       http.get(`http://localhost/api/v1/stacks/${stackId}/data`, () => HttpResponse.json({ containers: [initial] })),
     );
 
-    renderCitadel(
-      <AppContext.Provider
-        value={{
-          isLoading: false,
-          currentPlatform: undefined,
-          platforms: undefined,
-          applicationInfo: undefined,
-          unresolvedAlertCount: 0,
-          liveAlertEvents: {},
-          receivedAlertEventIds: [],
-        }}>
-        <StackContainersProbe />
-      </AppContext.Provider>,
-      {
-        groups: {
-          connectionFactory: () => fake.asRealtimeConnection(),
-          startConnection: (connection) => connection.start(),
-        },
-      },
-    );
+    renderProbe(fake);
 
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running));
     await waitFor(() => {
@@ -106,6 +110,53 @@ describe('useStackInfoGroup', () => {
     expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
     expect(screen.getByTestId('cpu')).toHaveTextContent('42');
     expect(screen.getByTestId('swarm-task')).toHaveTextContent('true');
+
+    // Start/stop now arrives as a compact patch rather than a full Docker event.
+    act(() => {
+      fake.emit('ContainerStateChanged', [
+        {
+          id: 'database-id',
+          containerId,
+          dockerNodeId: 'worker-1',
+          state: ContainerStateStatus.Running,
+        },
+      ]);
+    });
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running);
+    act(() => {
+      fake.emit('ContainerStateChanged', [
+        { id: 'other', containerId: 'another-container', state: ContainerStateStatus.Exited },
+        { id: 'other-node', containerId, dockerNodeId: 'worker-2', state: ContainerStateStatus.Exited },
+      ]);
+      fake.emit('ReceiveStackContainersInfo', [{ ...initial, state: ContainerStateStatus.Exited }]);
+    });
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running);
+  });
+
+  it('retains complete runtime metadata from a realtime snapshot and does not resurrect destroyed containers', async () => {
+    const fake = new FakeRealtimeConnection();
+    server.use(http.get(`http://localhost/api/v1/stacks/${stackId}/data`, () => HttpResponse.json({ containers: [] })));
+    renderProbe(fake);
+    await waitFor(() => expect(fake.listenerCount('ReceiveStackContainersInfo')).toBe(1));
+
+    const running = createContainer(ContainerStateStatus.Running);
+    act(() => fake.emit('ReceiveStackContainersInfo', [running]));
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running);
+    act(() =>
+      fake.emit('ContainerStateChanged', [
+        {
+          id: 'database-id',
+          containerId,
+          state: ContainerStateStatus.Exited,
+        },
+      ]),
+    );
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
+    act(() => {
+      fake.emit('ContainerEventReceived', { containerId, stackId }, 'destroy');
+      fake.emit('ReceiveStackContainersInfo', [running]);
+    });
+    expect(screen.getByTestId('state')).toBeEmptyDOMElement();
   });
 });
 

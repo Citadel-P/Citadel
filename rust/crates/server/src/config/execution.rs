@@ -46,6 +46,7 @@ pub struct BackupExecutionConfig {
 
 #[derive(Debug, Clone)]
 pub struct ExecutionConfig {
+    pub git_known_hosts: PathBuf,
     pub backups: BackupExecutionConfig,
     pub paths: PathsConfig,
     pub tools: ExternalToolsConfig,
@@ -183,6 +184,7 @@ impl ExecutionConfig {
             source_lease_seconds: bounded("Backups__SourceLeaseSeconds", 300, 30, 604800)? as i32,
         };
         Ok(Self {
+            git_known_hosts: absolute("Git__KnownHostsPath", data_root.join("git-known-hosts"))?,
             backups,
             tools: ExternalToolsConfig {
                 docker: get("CITADEL_DOCKER_PATH").unwrap_or_else(|| "docker".into()),

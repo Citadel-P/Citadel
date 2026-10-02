@@ -153,6 +153,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 compose_env_files_from_repo: None,
                 compose_digest: Some("sha256:fixture".to_owned()),
             }),
+            None,
         )
         .await
         .unwrap();
@@ -225,6 +226,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             },
             &[],
             None,
+            None,
         )
         .await
         .unwrap();
@@ -252,9 +254,22 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             },
             &[],
             None,
+            Some(&["rollback-container".to_owned()]),
         )
         .await
         .unwrap();
+
+    let rollback_info: serde_json::Value = sqlx::query_scalar(
+        "SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='StackRollback' ORDER BY createdat DESC LIMIT 1",
+    )
+    .bind(created.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        rollback_info["Result"]["ContainerIds"],
+        json!(["rollback-container"])
+    );
 
     let state_claims = store.claim_state(actor, true, &[created.id]).await.unwrap();
     assert_eq!(state_claims[0].previous_status, StackReleaseStatus::Healthy);
@@ -692,6 +707,7 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 compose_env_files_from_repo: Some(Vec::new()),
                 compose_digest: Some("sha256:git-fixture".to_owned()),
             }),
+            None,
         )
         .await
         .unwrap();
@@ -872,14 +888,14 @@ async fn stack_completion_allows_inventory_and_is_idempotent() {
         .bind(Uuid::now_v7()).bind(format!("container-{}", stack.id)).bind(claim.platform_id).bind(stack.id).execute(&mut *inventory).await.unwrap();
     tokio::time::timeout(
         Duration::from_secs(5),
-        store.complete_apply(actor, &claim, &result, &[], None),
+        store.complete_apply(actor, &claim, &result, &[], None, None),
     )
     .await
     .unwrap()
     .unwrap();
     inventory.commit().await.unwrap();
     store
-        .complete_apply(actor, &claim, &result, &[], None)
+        .complete_apply(actor, &claim, &result, &[], None, None)
         .await
         .unwrap();
     let count: i64 = sqlx::query_scalar(
@@ -902,12 +918,12 @@ async fn stack_completion_allows_inventory_and_is_idempotent() {
         .unwrap();
     assert!(matches!(
         store
-            .complete_apply(actor, &claim, &result, &[], None)
+            .complete_apply(actor, &claim, &result, &[], None, None)
             .await,
         Err(citadel_stacks::StackError::Conflict(_))
     ));
     store
-        .complete_apply(actor, &next, &result, &[], None)
+        .complete_apply(actor, &next, &result, &[], None, None)
         .await
         .unwrap();
     pool.close().await;

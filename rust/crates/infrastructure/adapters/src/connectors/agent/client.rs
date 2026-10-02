@@ -2469,7 +2469,7 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
             })
             .collect(),
     );
-    let mut labels = std::collections::BTreeMap::new();
+    let mut labels: std::collections::BTreeMap<_, _> = value.labels.into_iter().collect();
     if let Ok(id) = uuid::Uuid::parse_str(&value.stack_id)
         && !id.is_nil()
     {

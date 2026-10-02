@@ -1,4 +1,5 @@
 //! Platforms HTTP routes, authorization and local request handling.
+use crate::api::error::runtime_error_response;
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::platforms::capabilities::{
     permission_for, platform_capabilities, resource_capabilities,
@@ -63,9 +64,7 @@ use citadel_platforms::{
     logs::LogResource,
     management::patch_input,
     node_agents::setup::{NodeAgentSetupService, SetupKind, SetupOptions},
-    swarm_mutations::{
-        CreateSwarmMaterialInput, SwarmResourceKind, check_node, manager_identity, resource_id,
-    },
+    swarm_mutations::{CreateSwarmMaterialInput, SwarmResourceKind, manager_identity, resource_id},
     volume_content::normalize_path,
 };
 
@@ -77,7 +76,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 
 use serde_json::json;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
@@ -2023,69 +2022,6 @@ fn conflict_response(detail: String, headers: &HeaderMap) -> axum::response::Res
     )
 }
 
-fn runtime_error_response(
-    error: RuntimeCapabilityError,
-    headers: &HeaderMap,
-) -> axum::response::Response {
-    let (status, problem_type, title) = match error.kind {
-        RuntimeErrorKind::Cancelled | RuntimeErrorKind::Timeout | RuntimeErrorKind::Unavailable => {
-            (
-                StatusCode::CONFLICT,
-                "platform_unavailable",
-                "Platform unavailable",
-            )
-        }
-        RuntimeErrorKind::Authentication => (
-            StatusCode::UNAUTHORIZED,
-            "authentication_required",
-            "Authentication required",
-        ),
-        RuntimeErrorKind::PermissionDenied => (StatusCode::FORBIDDEN, "forbidden", "Forbidden"),
-        RuntimeErrorKind::InvalidRequest => (
-            StatusCode::BAD_REQUEST,
-            "validation_error",
-            "Validation failed",
-        ),
-        RuntimeErrorKind::NotFound => (StatusCode::NOT_FOUND, "not_found", "Not found"),
-        RuntimeErrorKind::Conflict => (StatusCode::CONFLICT, "conflict", "Conflict"),
-        RuntimeErrorKind::ResourceExhausted => (
-            StatusCode::TOO_MANY_REQUESTS,
-            "capacity_exhausted",
-            "Capacity exhausted",
-        ),
-        RuntimeErrorKind::Remote => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "internal_error",
-            "Internal server error",
-        ),
-    };
-    let request_id = headers
-        .get("x-request-id")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    let detail = if status.is_server_error() && error.kind == RuntimeErrorKind::Remote {
-        "An unexpected error occurred.".to_owned()
-    } else {
-        error.message
-    };
-    let mut response = (
-        status,
-        Json(serde_json::json!({
-            "type": format!("https://citadel.dev/problems/{problem_type}"),
-            "title": title,
-            "status": status.as_u16(),
-            "detail": detail,
-            "requestId": request_id,
-        })),
-    )
-        .into_response();
-    response.headers_mut().insert(
-        axum::http::header::CONTENT_TYPE,
-        axum::http::HeaderValue::from_static("application/problem+json"),
-    );
-    no_store(response)
-}
-
 fn require_actor(principal: Option<Extension<ActorPrincipal>>) -> Result<ActorPrincipal, ApiError> {
     principal
         .map(|Extension(principal)| principal)
@@ -3669,12 +3605,14 @@ async fn delete_images(
             let _permit = permit;
             // This token belongs to the tracked operation, not the HTTP body:
             // accepted deletions still need reconciliation after disconnection.
-            let cancel = CancellationToken::new();
+            let cancel = state.tasks.cancellation();
             let _guard = cancel.clone().drop_guard();
-            let runtime = state
-                .runtime
-                .image_mutations(input.platform_id, &cancel)
-                .await?;
+            let runtime = tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(RuntimeCapabilityError::new(
+                    RuntimeErrorKind::Cancelled, "Image deletion interrupted by shutdown.", false)),
+                runtime = state.runtime.image_mutations(input.platform_id, &cancel) => runtime?,
+            };
             let result = citadel_platforms::image_mutations::delete_images(
                 state.image_store.as_ref(),
                 input.platform_id,
@@ -3682,6 +3620,7 @@ async fn delete_images(
                 input.force,
                 input.no_prune,
                 runtime.as_ref(),
+                &cancel,
             )
             .await;
             for id in &input.ids {
@@ -5158,10 +5097,6 @@ fn validation(value: Result<(), &'static str>) -> Result<(), ApiError> {
     value.map_err(|message| ApiError::Validation(message.into()))
 }
 
-fn conflict(message: &str) -> ApiError {
-    ApiError::Conflict(message.into())
-}
-
 async fn context(
     state: &PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -5204,40 +5139,34 @@ async fn context(
     )
 }
 
-async fn finish(
+async fn execute_swarm(
     state: &PlatformsHttpState,
     platform: &citadel_platforms::PlatformDetails,
-    result: Result<(), RuntimeCapabilityError>,
+    operation: citadel_platforms::swarm_mutations::SwarmOperation,
     headers: &HeaderMap,
 ) -> HttpResult {
-    // A refresh is attempted after all dispatched outcomes, including ambiguous
-    // transport errors. Never report a successful refresh as a successful write.
-    let result = citadel_platforms::swarm_mutations::finish_mutation(
-        state.projections.as_ref(),
-        state.runtime.as_ref(),
-        platform,
-        result,
-        |kind| publish_runtime_change(state, platform.id, kind, "update", ""),
-    )
-    .await;
-    match result {
-        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
-        Err(error) => Ok(runtime_error_response(error, headers)),
-    }
-}
-
-async fn bounded<T>(
-    future: impl std::future::Future<Output = Result<T, RuntimeCapabilityError>>,
-) -> Result<T, RuntimeCapabilityError> {
-    tokio::time::timeout(Duration::from_secs(30), future)
+    let changed = |kind: &str, action: &str, id: &str| {
+        publish_runtime_change(state, platform.id, kind, action, id)
+    };
+    let service = citadel_platforms::swarm_mutations::SwarmOperations {
+        reads: &state.platforms,
+        services: state.services.as_ref(),
+        runtime: state.runtime.as_ref(),
+        projections: state.projections.as_ref(),
+        changed: &changed,
+    };
+    match service
+        .execute(platform, operation, &state.tasks.cancellation())
         .await
-        .unwrap_or_else(|_| {
-            Err(RuntimeCapabilityError::new(
-                RuntimeErrorKind::Timeout,
-                "Swarm operation timed out; inventory will be reconciled.",
-                false,
-            ))
-        })
+    {
+        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
+        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Runtime(error)) => {
+            Ok(runtime_error_response(error, headers))
+        }
+        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Projection(error)) => {
+            api_result(Err(ApiError::internal(error)), headers)
+        }
+    }
 }
 
 #[utoipa::path(
@@ -5274,30 +5203,13 @@ async fn update_node(
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
     let input: citadel_platforms::swarm_mutations::UpdateSwarmNodeInput = input.into();
-    api_result(validation(resource_id(&id).and(input.validate())), &headers)?;
-    let node = required(
-        state
-            .platforms
-            .get_swarm_node(pid, &id)
-            .await
-            .map_err(platform_error),
+    execute_swarm(
+        &state,
+        &platform,
+        citadel_platforms::swarm_mutations::SwarmOperation::UpdateNode { id, input },
         &headers,
-    )?;
-    api_result(
-        check_node(&node, input.version_index).map_err(platform_error),
-        &headers,
-    )?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = state.runtime.swarm(pid, &cancel).await.map_err(|e| {
-        crate::api::error::HttpError::from_parts(conflict(&e.to_string()), &headers)
-    })?;
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        runtime.update_node(&id, &input, &cancel).await
-    })
-    .await;
-    finish(&state, &platform, result, &headers).await
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -5334,51 +5246,13 @@ async fn update_availability(
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
     let input: citadel_platforms::swarm_mutations::UpdateSwarmNodesAvailabilityInput = input.into();
-    api_result(validation(input.validate()), &headers)?;
-    let updates = api_result(
-        citadel_platforms::swarm_mutations::availability_updates(&state.platforms, pid, input)
-            .await
-            .map_err(platform_error),
+    execute_swarm(
+        &state,
+        &platform,
+        citadel_platforms::swarm_mutations::SwarmOperation::UpdateAvailability(input),
         &headers,
-    )?;
-    if updates.is_empty() {
-        return Ok(no_store(StatusCode::NO_CONTENT.into_response()));
-    }
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = api_result(
-        state
-            .runtime
-            .swarm(pid, &cancel)
-            .await
-            .map_err(|e| conflict(&e.to_string())),
-        &headers,
-    )?;
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        citadel_platforms::swarm_mutations::update_nodes(runtime.as_ref(), &updates, &cancel).await
-    })
-    .await;
-    finish(&state, &platform, result, &headers).await
-}
-
-async fn service_guard(
-    state: &PlatformsHttpState,
-    pid: Uuid,
-    id: &str,
-    headers: &HeaderMap,
-) -> HttpResult<()> {
-    api_result(
-        citadel_platforms::swarm_mutations::service_guard(
-            &state.platforms,
-            state.services.as_ref(),
-            pid,
-            id,
-        )
-        .await
-        .map_err(platform_error),
-        headers,
     )
+    .await
 }
 
 #[utoipa::path(
@@ -5411,24 +5285,13 @@ async fn restart_service(
         &headers,
     )
     .await?;
-    api_result(validation(resource_id(&id)), &headers)?;
-    service_guard(&state, pid, &id, &headers).await?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = api_result(
-        state
-            .runtime
-            .swarm(pid, &cancel)
-            .await
-            .map_err(|e| conflict(&e.to_string())),
+    execute_swarm(
+        &state,
+        &platform,
+        citadel_platforms::swarm_mutations::SwarmOperation::RestartService(id),
         &headers,
-    )?;
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        runtime.restart_service(&id, &cancel).await
-    })
-    .await;
-    finish(&state, &platform, result, &headers).await
+    )
+    .await
 }
 
 macro_rules! material_create {
@@ -5505,23 +5368,13 @@ async fn create_material(
     )
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
-    api_result(validation(input.validate(secret)), &headers)?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = api_result(
-        state
-            .runtime
-            .swarm(pid, &cancel)
-            .await
-            .map_err(|e| conflict(&e.to_string())),
+    execute_swarm(
+        &state,
+        &platform,
+        citadel_platforms::swarm_mutations::SwarmOperation::CreateMaterial { secret, input },
         &headers,
-    )?;
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        runtime.create_material(secret, &input, &cancel).await
-    })
-    .await;
-    finish(&state, &platform, result, &headers).await
+    )
+    .await
 }
 
 macro_rules! material_labels {
@@ -5579,30 +5432,6 @@ material_labels!(
     false
 );
 
-async fn material_guard(
-    state: &PlatformsHttpState,
-    pid: Uuid,
-    id: &str,
-    secret: bool,
-    deleting: bool,
-    version: Option<i64>,
-    headers: &HeaderMap,
-) -> HttpResult<()> {
-    api_result(
-        citadel_platforms::swarm_mutations::material_guard(
-            &state.platforms,
-            pid,
-            id,
-            secret,
-            deleting,
-            version,
-        )
-        .await
-        .map_err(platform_error),
-        headers,
-    )
-}
-
 async fn update_labels(
     state: PlatformsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
@@ -5623,33 +5452,13 @@ async fn update_labels(
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
     let input: citadel_platforms::swarm_mutations::UpdateSwarmResourceLabelsInput = input.into();
-    api_result(validation(resource_id(&id).and(input.validate())), &headers)?;
-    material_guard(
+    execute_swarm(
         &state,
-        pid,
-        &id,
-        secret,
-        false,
-        Some(input.version_index),
+        &platform,
+        citadel_platforms::swarm_mutations::SwarmOperation::UpdateLabels { secret, id, input },
         &headers,
     )
-    .await?;
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = api_result(
-        state
-            .runtime
-            .swarm(pid, &cancel)
-            .await
-            .map_err(|e| conflict(&e.to_string())),
-        &headers,
-    )?;
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        runtime.update_labels(secret, &id, &input, &cancel).await
-    })
-    .await;
-    finish(&state, &platform, result, &headers).await
+    .await
 }
 
 macro_rules! delete_resources {
@@ -5750,66 +5559,14 @@ async fn delete_swarm_resources(
     )
     .await?;
     let Json(input) = api_result(body.map_err(invalid_json), &headers)?;
-    let mut input: citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput = input.into();
-    api_result(validation(input.validate()), &headers)?;
-    for id in &input.ids {
-        if kind == SwarmResourceKind::Service {
-            service_guard(&state, pid, id, &headers).await?;
-        } else {
-            material_guard(
-                &state,
-                pid,
-                id,
-                kind == SwarmResourceKind::Secret,
-                true,
-                None,
-                &headers,
-            )
-            .await?;
-        }
-    }
-    let cancel = CancellationToken::new();
-    let _guard = cancel.clone().drop_guard();
-    let runtime = api_result(
-        state
-            .runtime
-            .swarm(pid, &cancel)
-            .await
-            .map_err(|e| conflict(&e.to_string())),
-        &headers,
-    )?;
-    let mut removed = Vec::new();
-    let result = bounded(async {
-        manager_identity(runtime.as_ref(), &platform, &cancel).await?;
-        citadel_platforms::swarm_mutations::delete_resources(
-            runtime.as_ref(),
-            &input.ids,
-            kind,
-            &cancel,
-            &mut removed,
-        )
-        .await
-    })
-    .await;
-    let result = citadel_platforms::swarm_mutations::finish_deletion(
-        state.projections.as_ref(),
-        state.runtime.as_ref(),
+    let input: citadel_platforms::swarm_mutations::DeleteSwarmResourcesInput = input.into();
+    execute_swarm(
+        &state,
         &platform,
-        result,
-        kind,
-        &removed,
-        |kind, operation, id| publish_runtime_change(&state, pid, kind, operation, id),
+        citadel_platforms::swarm_mutations::SwarmOperation::Delete { kind, input },
+        &headers,
     )
-    .await;
-    match result {
-        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
-        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Runtime(error)) => {
-            Ok(runtime_error_response(error, &headers))
-        }
-        Err(citadel_platforms::swarm_mutations::SwarmCompletionError::Projection(error)) => {
-            api_result(Err(ApiError::internal(error)), &headers)
-        }
-    }
+    .await
 }
 
 pub(crate) fn inspect_service_view(
@@ -5972,10 +5729,10 @@ async fn read_swarm_resource(
             .runtime
             .swarm(pid, &cancel)
             .await
-            .map_err(|e| conflict(&e.to_string())),
+            .map_err(ApiError::from),
         &headers,
     )?;
-    let result = bounded(async {
+    let result = citadel_platforms::swarm_mutations::bounded(async {
         let client = &runtime;
         if kind == "config" {
             manager_identity(runtime.as_ref(), &platform, &cancel).await?;

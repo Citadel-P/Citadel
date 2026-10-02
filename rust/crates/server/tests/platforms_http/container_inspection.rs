@@ -300,7 +300,8 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("UPDATE containers SET stackid=$2 WHERE id=$1")
+    // An empty optional Docker system-role label must not break Stack data or realtime.
+    sqlx::query("UPDATE containers SET stackid=$2, issystem=true, systemrole='' WHERE id=$1")
         .bind(id)
         .bind(stack)
         .execute(&f.pool)
@@ -341,6 +342,8 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
     assert_eq!(data["containers"].as_array().unwrap().len(), 1);
     assert_eq!(data["containers"][0]["id"], docker_id);
     assert_eq!(data["containers"][0]["stackId"], stack.to_string());
+    assert_eq!(data["containers"][0]["isSystem"], true);
+    assert!(data["containers"][0]["systemRole"].is_null());
     let realtime = super::realtime_groups::reader(&f);
     let stack_snapshot = realtime
         .read(

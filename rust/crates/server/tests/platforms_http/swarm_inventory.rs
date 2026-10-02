@@ -14,6 +14,7 @@ pub(super) struct DockerState {
     configs: BTreeMap<String, Value>,
     pub(super) mutations: Vec<(String, Value)>,
     rejected_delete: Option<String>,
+    fail_after_update: bool,
     cluster: String,
 }
 pub(super) async fn fixture_swarm() -> (Fixture, Arc<Mutex<DockerState>>) {
@@ -198,7 +199,11 @@ fn reply(state: &mut DockerState, method: &str, path: &str, body: Value) -> (u16
         }
         value["Spec"] = body;
         value["Version"]["Index"] = json!(value["Version"]["Index"].as_u64().unwrap() + 1);
-        return (200, json!({}));
+        return if state.fail_after_update {
+            (500, json!({"message":"ambiguous accepted update"}))
+        } else {
+            (200, json!({}))
+        };
     }
     (200, value.clone())
 }
@@ -841,5 +846,186 @@ async fn persisted_service_ownership_and_confirmed_removals_are_platform_scoped(
         )
         .await;
     }
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+async fn feature_swarm_operations_enforce_preflight_identity_and_partial_completion() {
+    use citadel_platforms::swarm_mutations::{
+        DeleteSwarmResourcesInput, SwarmOperation as Op, SwarmOperations, SwarmResourceKind,
+        UpdateSwarmNodeInput,
+    };
+    let (f, runtime) = fixture_swarm().await;
+    let state = &f.lookup_state.platforms;
+    let platform = state
+        .platforms
+        .get_platform(f.platform_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let changes = std::sync::Mutex::new(Vec::new());
+    let changed = |kind: &str, action: &str, id: &str| {
+        changes
+            .lock()
+            .unwrap()
+            .push((kind.to_owned(), action.to_owned(), id.to_owned()))
+    };
+    let operations = SwarmOperations {
+        reads: &state.platforms,
+        services: state.services.as_ref(),
+        runtime: state.runtime.as_ref(),
+        projections: state.projections.as_ref(),
+        changed: &changed,
+    };
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let update = |version_index| Op::UpdateNode {
+        id: "node-1".into(),
+        input: UpdateSwarmNodeInput {
+            version_index,
+            availability: "Drain".into(),
+            labels: BTreeMap::new(),
+        },
+    };
+    assert!(
+        operations
+            .execute(&platform, update(99), &cancel)
+            .await
+            .is_err()
+    );
+    assert!(runtime.lock().await.mutations.is_empty());
+    let cluster = runtime.lock().await.cluster.clone();
+    runtime.lock().await.cluster = "wrong-cluster".into();
+    assert!(
+        operations
+            .execute(&platform, update(1), &cancel)
+            .await
+            .is_err()
+    );
+    assert!(runtime.lock().await.mutations.is_empty());
+    runtime.lock().await.cluster = cluster;
+    operations
+        .execute(&platform, update(1), &cancel)
+        .await
+        .unwrap();
+    assert_eq!(
+        state
+            .platforms
+            .get_swarm_node(f.platform_id, "node-1")
+            .await
+            .unwrap()
+            .unwrap()
+            .availability,
+        "Drain"
+    );
+    sqlx::query("INSERT INTO swarmservices(id,name,dockername,platformid,dockerserviceid,createdbyactorid,desiredspechash,health,synchronizationstate,spec,updatedat) VALUES($1,$2,$2,$3,'service-1',$4,'hash','Unknown','NeverApplied','{}',now())")
+        .bind(Uuid::now_v7()).bind(format!("managed-{}",Uuid::now_v7())).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let count = runtime.lock().await.mutations.len();
+    assert!(
+        operations
+            .execute(&platform, Op::RestartService("service-1".into()), &cancel)
+            .await
+            .is_err()
+    );
+    assert_eq!(runtime.lock().await.mutations.len(), count);
+    // Second sibling fails. The first confirmed removal must still be projected.
+    let mut secret = runtime.lock().await.secrets["secret-1"].clone();
+    secret["ID"] = json!("secret-2");
+    runtime
+        .lock()
+        .await
+        .secrets
+        .insert("secret-2".into(), secret);
+    operations
+        .execute(&platform, update(2), &cancel)
+        .await
+        .unwrap();
+    runtime.lock().await.rejected_delete = Some("secret-2".into());
+    assert!(
+        operations
+            .execute(
+                &platform,
+                Op::Delete {
+                    kind: SwarmResourceKind::Secret,
+                    input: DeleteSwarmResourcesInput {
+                        ids: vec!["secret-1".into(), "secret-2".into()]
+                    }
+                },
+                &cancel
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        state
+            .platforms
+            .get_swarm_secret(f.platform_id, "secret-1")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        state
+            .platforms
+            .get_swarm_secret(f.platform_id, "secret-2")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        changes
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, action, id)| action == "remove" && id == "secret-1")
+    );
+    let closed = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused@localhost/unused")
+        .unwrap();
+    closed.close().await;
+    let failing_store = PostgresInventoryProjectionStore::new(closed);
+    let failing = SwarmOperations {
+        projections: &failing_store,
+        ..operations
+    };
+    let error = failing
+        .execute(&platform, update(3), &cancel)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, citadel_platforms::swarm_mutations::SwarmCompletionError::Runtime(error)
+        if error.kind == citadel_platforms::RuntimeErrorKind::Remote)
+    );
+    assert_eq!(runtime.lock().await.nodes["node-1"]["Version"]["Index"], 4);
+    citadel_platforms::swarm_mutations::refresh_inventory(
+        state.projections.as_ref(),
+        state.runtime.as_ref(),
+        &platform,
+        |_| {},
+    )
+    .await
+    .unwrap();
+    let operations = SwarmOperations {
+        projections: state.projections.as_ref(),
+        ..failing
+    };
+    runtime.lock().await.fail_after_update = true;
+    assert!(
+        operations
+            .execute(&platform, update(4), &cancel)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        state
+            .platforms
+            .get_swarm_node(f.platform_id, "node-1")
+            .await
+            .unwrap()
+            .unwrap()
+            .version_index,
+        5,
+        "ambiguous writes still refresh the committed projection without replay"
+    );
     cleanup(f).await;
 }

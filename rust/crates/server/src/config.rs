@@ -67,8 +67,7 @@ pub struct Config {
     pub transport: TransportConfig,
     pub identity: IdentityConfig,
     pub automation: citadel_automation::AutomationOptions,
-    pub node_agent_policy:
-        citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,
@@ -316,25 +315,23 @@ impl Config {
             transport,
             identity,
             automation: automation_options()?,
-            node_agent_policy:
-                citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy {
-                    removal_grace: Duration::from_secs(
-                        positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
-                    ),
-                    supported_architectures: {
-                        let configured: Vec<_> = (0..32)
-                            .filter_map(|index| {
-                                env::var(format!("EdgeAgent__SupportedNodeArchitectures__{index}"))
-                                    .ok()
-                            })
-                            .collect();
-                        if configured.is_empty() {
-                            vec!["amd64".into(), "arm64".into()]
-                        } else {
-                            configured
-                        }
-                    },
+            node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
+                removal_grace: Duration::from_secs(
+                    positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
+                ),
+                supported_architectures: {
+                    let configured: Vec<_> = (0..32)
+                        .filter_map(|index| {
+                            env::var(format!("EdgeAgent__SupportedNodeArchitectures__{index}")).ok()
+                        })
+                        .collect();
+                    if configured.is_empty() {
+                        vec!["amd64".into(), "arm64".into()]
+                    } else {
+                        configured
+                    }
                 },
+            },
             retention_interval: Duration::from_secs(nonzero_seconds(
                 "CITADEL_RUST_RETENTION_INTERVAL_SECONDS",
                 900,
@@ -346,7 +343,14 @@ impl Config {
             stats_batch_size: positive_usize("JobConfiguration__BatchSize", 500)?,
             build_parallel_runs: positive_usize("Builds__MaxParallelRuns", 4)?,
             build_retention_days: if parse_env("Builds__RunCleanupEnabled", true)? {
-                Some(i32::try_from(positive_usize("Builds__RunRetentionDays", 90)?).map_err(|_| ConfigError::Invalid { name: "Builds__RunRetentionDays", message: "must fit a positive 32-bit integer".into() })?)
+                Some(
+                    i32::try_from(positive_usize("Builds__RunRetentionDays", 90)?).map_err(
+                        |_| ConfigError::Invalid {
+                            name: "Builds__RunRetentionDays",
+                            message: "must fit a positive 32-bit integer".into(),
+                        },
+                    )?,
+                )
             } else {
                 None
             },

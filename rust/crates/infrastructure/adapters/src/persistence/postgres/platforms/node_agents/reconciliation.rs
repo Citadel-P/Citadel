@@ -2,19 +2,7 @@
 use citadel_platforms::{RuntimeInventorySnapshot, RuntimeSwarmInventory};
 use sqlx::{Postgres, Row, Transaction};
 
-#[derive(Clone, Debug)]
-pub struct NodeAgentReconciliationPolicy {
-    pub removal_grace: std::time::Duration,
-    pub supported_architectures: Vec<String>,
-}
-impl Default for NodeAgentReconciliationPolicy {
-    fn default() -> Self {
-        Self {
-            removal_grace: std::time::Duration::from_secs(600),
-            supported_architectures: vec!["amd64".into(), "arm64".into()],
-        }
-    }
-}
+use citadel_platforms::node_agents::NodeAgentReconciliationPolicy;
 fn architecture(value: &str) -> &str {
     match value {
         "x86_64" => "amd64",

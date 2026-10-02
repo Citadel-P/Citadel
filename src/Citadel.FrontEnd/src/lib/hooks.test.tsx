@@ -11,7 +11,7 @@ import {
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
-import { useResourceParamType, useStreamProgress, useMutate, useSaveResource } from './hooks';
+import { useResourceParamType, useStreamProgress, useMutate, useSaveResource, useHTTPErrorHandler } from './hooks';
 
 const dockerConflict = 'Error response from daemon: Conflict. The container name is already in use.';
 const stackRequest: ApplyStackInput = {
@@ -62,6 +62,53 @@ function SwarmServiceProgressProbe() {
 }
 
 describe('useStreamProgress', () => {
+  it('does not toast a connection failure when Strict Mode restarts a successful stack stream', async () => {
+    const notice = vi.spyOn(toast, 'error').mockImplementation(() => 'unused');
+    server.use(
+      http.post('http://localhost/api/v1/stacks/apply', () =>
+        HttpResponse.json([{ type: 'CommandCompleted', progressMessage: 'Stack deployment completed.', exitCode: 0 }]),
+      ),
+    );
+    function Errors() {
+      useHTTPErrorHandler();
+      return null;
+    }
+    const view = renderCitadel(
+      <>
+        <Errors />
+        <StackProgressProbe />
+      </>,
+      { reactStrictMode: true },
+    );
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('success'));
+    expect(
+      view.queryClient
+        .getMutationCache()
+        .getAll()
+        .some((mutation) => mutation.state.error?.name === 'AbortError'),
+    ).toBe(true);
+    expect(notice).not.toHaveBeenCalled();
+  });
+
+  it('still reports an actual connection failure while starting a stack stream', async () => {
+    const notice = vi.spyOn(toast, 'error').mockImplementation(() => 'unused');
+    server.use(http.post('http://localhost/api/v1/stacks/apply', () => HttpResponse.error()));
+    function Errors() {
+      useHTTPErrorHandler();
+      return null;
+    }
+    const view = renderCitadel(
+      <>
+        <Errors />
+        <StackProgressProbe />
+      </>,
+    );
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('error'));
+    expect(notice).toHaveBeenCalledWith('Request failed', {
+      description: 'The request could not be completed. Check your connection and try again.',
+    });
+  });
+
   it('clears completed Compose activity from a single batch and recognizes Image prefixes', async () => {
     server.use(
       http.post('http://localhost/api/v1/stacks/apply', () =>
@@ -158,6 +205,27 @@ describe('useStreamProgress', () => {
     expect(view.getByText('Resolving Stack variables and secrets...')).toHaveAttribute('data-severity', 'info');
     expect(view.getByText('Stack deployment completed.')).toHaveAttribute('data-severity', 'success');
     expect(view.container.querySelector('[data-severity="error"]')).toBeNull();
+  });
+
+  it('colors Compose errors without replaying normal progress in the terminal failure', async () => {
+    const failure = 'Stack deployment failed (exit code 1).';
+    server.use(
+      http.post('http://localhost/api/v1/stacks/apply', () =>
+        HttpResponse.json([
+          { type: 'StdErr', progressMessage: 'beszel Pulled' },
+          { type: 'StdErr', progressMessage: 'Network beszel-copy_default Created' },
+          { type: 'StdErr', progressMessage: dockerConflict, severity: 'error' },
+          { type: 'CommandCompleted', message: failure, exitCode: 1, severity: 'error' },
+        ]),
+      ),
+    );
+    const view = renderCitadel(<StackProgressProbe />);
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('error'));
+    expect(view.getByText('Pulled image beszel.')).toHaveAttribute('data-severity', 'info');
+    expect(view.getByText('Created network beszel-copy_default.')).toHaveAttribute('data-severity', 'info');
+    expect(view.getAllByText(dockerConflict)).toHaveLength(1);
+    expect(view.getByText(dockerConflict)).toHaveAttribute('data-severity', 'error');
+    expect(view.getByText(failure)).toHaveAttribute('data-severity', 'error');
   });
 
   it('preserves a terminal stack error that immediately follows another stream item', async () => {
