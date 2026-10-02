@@ -162,7 +162,13 @@ impl ServerComponents {
             actors,
             lookup,
             audit,
-        } = catalog::build(config, &pool, &secret_protector, &realtime_hub)?;
+        } = catalog::build(
+            config,
+            &pool,
+            &secret_protector,
+            &realtime_hub,
+            &dynamic_tasks,
+        )?;
         let connectors::ConnectorComponents {
             agent,
             agent_setup,

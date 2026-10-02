@@ -355,7 +355,11 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         )),
         Arc::new(GitCli::new(
             Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             std::time::Duration::from_secs(10),
         )),
         std::env::temp_dir().join(Uuid::now_v7().to_string()),

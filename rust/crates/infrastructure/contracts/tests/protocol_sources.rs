@@ -11,7 +11,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "11868d2c8c738f552a3ec8fb0789f4b32909234f6aa8200bb48960d556bf8e5a",
+            "f0a50b503c286a27c3f31b3b2c108720d6f7ac33ea4a995c53496d0e23910abc",
         ),
         (
             "platform_service.proto",

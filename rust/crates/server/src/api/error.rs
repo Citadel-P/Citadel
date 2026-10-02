@@ -13,6 +13,8 @@ const REQUEST_ID: &str = "x-request-id";
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ApiError {
+    #[error(transparent)]
+    Runtime(citadel_platforms::RuntimeCapabilityError),
     #[error("invalid credentials")]
     InvalidCredentials,
     #[error("authentication is required")]
@@ -94,12 +96,17 @@ pub(crate) fn error_response(error: impl Into<ApiError>, headers: &HeaderMap) ->
 }
 
 fn render_error(error: ApiError, request_id: String) -> Response {
+    let error = match error {
+        ApiError::Runtime(error) => return render_runtime_error(error, request_id),
+        other => other,
+    };
     if let ApiError::Storage(_) | ApiError::Internal(_) | ApiError::Credential = &error {
         tracing::error!(error = %error, source_chain = ?error, %request_id, "API operation failed");
     }
     let mut errors = None;
     let mut resource_problem = false;
     let (status, problem_type, title, detail) = match error {
+        ApiError::Runtime(_) => unreachable!("runtime errors rendered above"),
         ApiError::FieldValidation(fields) => {
             errors = Some(fields);
             resource_problem = true;
@@ -303,10 +310,113 @@ fn render_problem(status: StatusCode, details: ProblemDetails) -> Response {
     no_store(response)
 }
 
+impl From<citadel_platforms::RuntimeCapabilityError> for ApiError {
+    fn from(error: citadel_platforms::RuntimeCapabilityError) -> Self {
+        Self::Runtime(error)
+    }
+}
+pub(crate) fn runtime_error_response(
+    error: citadel_platforms::RuntimeCapabilityError,
+    headers: &HeaderMap,
+) -> Response {
+    render_runtime_error(error, request_id(headers))
+}
+fn render_runtime_error(
+    error: citadel_platforms::RuntimeCapabilityError,
+    request_id: String,
+) -> Response {
+    use citadel_platforms::RuntimeErrorKind;
+    if error.kind == RuntimeErrorKind::Remote {
+        return render_error(ApiError::internal(error), request_id);
+    }
+    let (status, problem_type, title) = match error.kind {
+        RuntimeErrorKind::Cancelled | RuntimeErrorKind::Timeout | RuntimeErrorKind::Unavailable => {
+            (
+                StatusCode::CONFLICT,
+                "platform_unavailable",
+                "Platform unavailable",
+            )
+        }
+        RuntimeErrorKind::Authentication => (
+            StatusCode::UNAUTHORIZED,
+            "authentication_required",
+            "Authentication required",
+        ),
+        RuntimeErrorKind::PermissionDenied => (StatusCode::FORBIDDEN, "forbidden", "Forbidden"),
+        RuntimeErrorKind::InvalidRequest => (
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "Validation failed",
+        ),
+        RuntimeErrorKind::NotFound => (StatusCode::NOT_FOUND, "not_found", "Not found"),
+        RuntimeErrorKind::Conflict => (StatusCode::CONFLICT, "conflict", "Conflict"),
+        RuntimeErrorKind::ResourceExhausted => (
+            StatusCode::TOO_MANY_REQUESTS,
+            "capacity_exhausted",
+            "Capacity exhausted",
+        ),
+        RuntimeErrorKind::Remote => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "Internal server error",
+        ),
+    };
+    let detail = if status.is_server_error() && error.kind == RuntimeErrorKind::Remote {
+        "An unexpected error occurred.".to_owned()
+    } else {
+        error.message
+    };
+    let mut response = (
+        status,
+        Json(serde_json::json!({
+            "type": format!("https://citadel.dev/problems/{problem_type}"),
+            "title": title,
+            "status": status.as_u16(),
+            "detail": detail,
+            "requestId": request_id,
+        })),
+    )
+        .into_response();
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/problem+json"),
+    );
+    no_store(response)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::error::Error;
+
+    #[tokio::test]
+    async fn typed_runtime_errors_keep_public_classes_and_hide_internal_diagnostics() {
+        use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind as Kind};
+        for (kind, status) in [
+            (Kind::Remote, 500),
+            (Kind::Conflict, 409),
+            (Kind::Unavailable, 409),
+            (Kind::NotFound, 404),
+            (Kind::InvalidRequest, 400),
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert("x-request-id", HeaderValue::from_static("runtime-test"));
+            let response = error_response(
+                RuntimeCapabilityError::new(kind, "distinctive driver diagnostic", false),
+                &headers,
+            );
+            assert_eq!(response.status().as_u16(), status);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(value["requestId"], "runtime-test");
+            assert_eq!(
+                value["detail"] == "distinctive driver diagnostic",
+                kind != Kind::Remote
+            );
+        }
+    }
 
     #[tokio::test]
     async fn internal_sources_survive_mapping_but_never_reach_the_response() {

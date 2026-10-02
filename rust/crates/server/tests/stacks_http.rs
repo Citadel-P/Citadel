@@ -44,6 +44,8 @@ mod alert_sink;
 mod capabilities;
 #[path = "stacks_http/drift.rs"]
 mod drift;
+#[path = "stacks_http/failures.rs"]
+mod failures;
 #[path = "stacks_http/preflight.rs"]
 mod preflight;
 #[path = "stacks_http/releases.rs"]
@@ -68,6 +70,7 @@ struct CompletingStackRuntime {
     hold_apply: AtomicU8,
     runtime_state: AtomicU8,
     reconcile_calls: AtomicU8,
+    reconcile_policies: Mutex<Vec<citadel_stacks::StackDriftPolicy>>,
     release_apply: tokio::sync::Notify,
 }
 
@@ -81,6 +84,40 @@ impl StackRuntime for CompletingStackRuntime {
         progress: Option<&'a citadel_stacks::StackProgress>,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         Box::pin(async move {
+            if self.apply_failure.load(Ordering::Relaxed) == 2 {
+                let mut error = citadel_stacks::StackProgressItem::system(
+                    "Error response from daemon: port 8080 is already allocated; token=fixture-secret-value",
+                );
+                error.event_type = citadel_stacks::StackApplyEventType::StdErr;
+                let mut pulled = citadel_stacks::StackProgressItem::system("beszel Pulled");
+                pulled.event_type = citadel_stacks::StackApplyEventType::StdErr;
+                let mut prefixed = error.clone();
+                prefixed.message = error
+                    .message
+                    .as_ref()
+                    .map(|text| format!("Container beszel-agent  {text}"));
+                let result = StackRuntimeResult {
+                    status: StackReleaseStatus::Failed,
+                    messages: vec![
+                        pulled,
+                        prefixed,
+                        error,
+                        citadel_stacks::StackProgressItem {
+                            event_type: citadel_stacks::StackApplyEventType::CommandCompleted,
+                            message: None,
+                            exit_code: Some(1),
+                            stack_status: None,
+                            severity: None,
+                        },
+                    ],
+                };
+                if let Some(progress) = progress {
+                    for item in &result.messages {
+                        progress.send(item.clone()).await;
+                    }
+                }
+                return Ok(result);
+            }
             if self.apply_failure.load(Ordering::Relaxed) != 0 {
                 return Err(StackError::RuntimeRejected("private-runtime-error".into()));
             }
@@ -189,11 +226,12 @@ impl StackRuntime for CompletingStackRuntime {
         &'a self,
         _platform_id: Uuid,
         _drifts: &'a [citadel_stacks::StackDrift],
-        _policy: &'a citadel_stacks::StackDriftPolicy,
+        policy: &'a citadel_stacks::StackDriftPolicy,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<citadel_stacks::StackReconciliationAction>, StackError>> {
         Box::pin(async move {
             self.reconcile_calls.fetch_add(1, Ordering::Relaxed);
+            self.reconcile_policies.lock().unwrap().push(policy.clone());
             Ok(Vec::new())
         })
     }
@@ -399,6 +437,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     assert_eq!(cleared["description"], Value::Null);
     contracts::verify(&app, &admin, id).await;
 
+    runtime.runtime_state.store(2, Ordering::Relaxed);
     runtime.hold_apply.store(1, Ordering::Relaxed);
     let apply = request(
         &app,
@@ -464,6 +503,12 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     assert_eq!(
         progress.as_array().unwrap().last().unwrap()["stackStatus"],
         "Healthy"
+    );
+    let applied_info: Value = sqlx::query_scalar("SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='StackApplied' ORDER BY createdat DESC LIMIT 1")
+        .bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        applied_info["Result"]["ContainerIds"],
+        json!(["docker-web"])
     );
     {
         let calls = runtime.apply_calls.lock().unwrap();
@@ -900,6 +945,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
 
     releases::verify(&app, &pool, &admin, platform_id, &runtime).await;
     task_ownership::verify(&pool, admin.actor_id, platform_id).await;
+    failures::verify(&app, &pool, &admin, platform_id, &runtime).await;
 
     assert_eq!(
         request(

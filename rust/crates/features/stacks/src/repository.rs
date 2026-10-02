@@ -135,6 +135,7 @@ pub trait StackRepository: Send + Sync {
         result: &'a StackRuntimeResult,
         bindings: &'a [crate::ResourceBindingSnapshot],
         source: Option<&'a crate::StackReleaseSource>,
+        container_ids: Option<&'a [String]>,
     ) -> BoxFuture<'a, Result<(), StackError>>;
     fn fail_apply<'a>(
         &'a self,

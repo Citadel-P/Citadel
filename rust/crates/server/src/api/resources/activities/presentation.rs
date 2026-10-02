@@ -1,7 +1,7 @@
 /// Convert persisted activity property names to the public HTTP/realtime contract.
 pub fn public_activity_info(value: serde_json::Value) -> serde_json::Value {
     use citadel_primitives::json_keys::{PropertyCase, map_property_keys};
-    map_property_keys(
+    let mut public = map_property_keys(
         value,
         PropertyCase::Camel,
         &[
@@ -10,7 +10,21 @@ pub fn public_activity_info(value: serde_json::Value) -> serde_json::Value {
             "buildArguments",
             "buildArgs",
         ],
-    )
+    );
+    if matches!(
+        public["$type"].as_str(),
+        Some("RegistryCreated" | "RegistryUpdated" | "RegistryDeleted")
+    ) {
+        for key in ["registry", "oldRegistry", "newRegistry"] {
+            if let Some(configuration) = public
+                .get_mut(key)
+                .and_then(|snapshot| snapshot.get_mut("configuration"))
+            {
+                citadel_registries::mask_registry_credentials(configuration);
+            }
+        }
+    }
+    public
 }
 
 /// Resource details embed the same activity info as the activity endpoints.
@@ -76,6 +90,29 @@ mod public_activity_tests {
             assert_eq!(public["errorMessage"], "Process failed");
             assert_eq!(public["spec"]["labels"]["Owner"], "OPS");
             assert_eq!(public["spec"]["environmentVariables"]["PATH"], "/bin");
+        }
+    }
+}
+
+#[cfg(test)]
+mod registry_redaction_tests {
+    use super::public_activity_info;
+    use serde_json::json;
+    #[test]
+    fn existing_registry_activity_snapshots_do_not_expose_tokens() {
+        for (event, keys) in [
+            ("RegistryCreated", vec!["Registry"]),
+            ("RegistryUpdated", vec!["OldRegistry", "NewRegistry"]),
+            ("RegistryDeleted", vec!["Registry"]),
+        ] {
+            let mut info = json!({"$type":event});
+            for key in keys {
+                info[key] = json!({"Configuration":{"$type":"DockerHub","pat":"stored-secret","userName":"operator"}});
+            }
+            let public = public_activity_info(info);
+            assert!(!public.to_string().contains("stored-secret"));
+            assert!(public.to_string().contains("******"));
+            assert!(public.to_string().contains("operator"));
         }
     }
 }

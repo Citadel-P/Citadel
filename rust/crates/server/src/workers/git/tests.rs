@@ -118,7 +118,11 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
         accounts,
         Arc::new(GitCli::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             Duration::from_secs(300),
         )),
         std::env::temp_dir(),
@@ -160,7 +164,11 @@ async fn idle_git_waits_for_committed_signals_with_a_bounded_fallback() {
         accounts,
         Arc::new(GitCli::new(
             Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             Duration::from_secs(300),
         )),
         std::env::temp_dir(),

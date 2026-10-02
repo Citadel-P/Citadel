@@ -1,14 +1,22 @@
+use super::cleanup::DirectoryCleanup;
 use citadel_automation::workspace::{AutomationWorkspaceLease, AutomationWorkspacePort};
 use futures_util::future::BoxFuture;
 use std::{
     io,
     path::{Path, PathBuf},
 };
-pub struct LocalAutomationWorkspace;
+pub struct LocalAutomationWorkspace {
+    tasks: citadel_runtime::DynamicTasks,
+}
+impl LocalAutomationWorkspace {
+    pub fn new(tasks: citadel_runtime::DynamicTasks) -> Self {
+        Self { tasks }
+    }
+}
 struct Workspace {
     directory: PathBuf,
     script: PathBuf,
-    cleaned: bool,
+    cleanup: DirectoryCleanup,
 }
 impl AutomationWorkspaceLease for Workspace {
     fn directory(&self) -> &Path {
@@ -18,25 +26,7 @@ impl AutomationWorkspaceLease for Workspace {
         &self.script
     }
     fn cleanup(&mut self) -> BoxFuture<'_, Result<(), String>> {
-        Box::pin(async move {
-            match tokio::fs::remove_dir_all(&self.directory).await {
-                Ok(()) => {}
-                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e.to_string()),
-            }
-            self.cleaned = true;
-            Ok(())
-        })
-    }
-}
-impl Drop for Workspace {
-    fn drop(&mut self) {
-        if !self.cleaned
-            && let Err(error) = std::fs::remove_dir_all(&self.directory)
-            && error.kind() != io::ErrorKind::NotFound
-        {
-            tracing::warn!(%error, "failed to remove Automation workspace");
-        }
+        Box::pin(async move { self.cleanup.cleanup().await.map_err(|e| e.to_string()) })
     }
 }
 impl AutomationWorkspacePort for LocalAutomationWorkspace {
@@ -47,6 +37,7 @@ impl AutomationWorkspacePort for LocalAutomationWorkspace {
         source: &'a str,
     ) -> BoxFuture<'a, Result<Box<dyn AutomationWorkspaceLease>, String>> {
         Box::pin(async move {
+            let reservation = DirectoryCleanup::reserve(&self.tasks).map_err(|e| e.to_string())?;
             if let Some(cache) = cache {
                 tokio::fs::create_dir_all(cache)
                     .await
@@ -59,17 +50,24 @@ impl AutomationWorkspacePort for LocalAutomationWorkspace {
                 .await
                 .map_err(|e| format!("Could not prepare run: {e}"))?;
             // Create exclusively and privately: never follow an existing run-directory symlink.
-            let mut builder = tokio::fs::DirBuilder::new();
-            #[cfg(unix)]
-            builder.mode(0o700);
-            builder
-                .create(directory)
-                .await
-                .map_err(|e| format!("Could not prepare run: {e}"))?;
+            let path = directory.to_owned();
+            let cleanup = tokio::task::spawn_blocking(move || {
+                let mut builder = std::fs::DirBuilder::new();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::DirBuilderExt;
+                    builder.mode(0o700);
+                }
+                builder.create(&path)?;
+                Ok::<_, io::Error>(DirectoryCleanup::new(path, reservation))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("Could not prepare run: {e}"))?;
             let workspace = Workspace {
                 directory: directory.into(),
                 script: directory.join("action.ts"),
-                cleaned: false,
+                cleanup,
             };
             tokio::fs::write(&workspace.script, source.as_bytes())
                 .await

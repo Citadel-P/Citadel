@@ -31,7 +31,11 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
         )),
         Arc::new(GitCli::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             Duration::from_secs(5),
         )),
         std::env::temp_dir().join(format!("citadel-webhook-test-{}", Uuid::now_v7())),

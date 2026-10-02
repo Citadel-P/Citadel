@@ -116,6 +116,36 @@ fn drift_reports_missing_extra_stopped_and_paused_containers() {
 }
 
 #[test]
+fn one_stopped_service_is_not_reported_as_two_missing_services() {
+    let stack = stack(StackReleaseStatus::Healthy, StackDriftPolicy::default());
+    let runtime = StackRuntimeSnapshot {
+        containers: [("beszel", "running"), ("beszel-agent", "exited")]
+            .into_iter()
+            .map(|(name, state)| crate::StackRuntimeContainer {
+                docker_container_id: format!("{name}-id"),
+                service_name: name.into(),
+                state: state.into(),
+                health: None,
+            })
+            .collect(),
+        services: Vec::new(),
+    };
+    let report = calculate_drift_from_compose(
+        &stack,
+        &runtime,
+        &[
+            "services:\n  beszel:\n    image: beszel\n  beszel-agent:\n    image: beszel-agent\n"
+                .into(),
+        ],
+    )
+    .unwrap();
+    assert!(!report.has_structural_drift);
+    assert!(
+        matches!(report.drifts.as_slice(), [StackDrift::ContainerStopped { service_name, .. }] if service_name == "beszel-agent")
+    );
+}
+
+#[test]
 fn drift_recognizes_projected_container_states_and_serializes_frontend_fields() {
     for (state, kind) in [
         ("Exited", "ContainerStopped"),
@@ -151,7 +181,7 @@ fn drift_recognizes_projected_container_states_and_serializes_frontend_fields() 
 
 // Port: StackDriftMonitorJobTests die on AutoFix vs intentional stop.
 #[test]
-fn daemon_drift_repair_only_targets_idle_healthy_or_degraded_auto_fix_stacks() {
+fn daemon_drift_detection_targets_idle_active_stacks_with_an_enabled_policy() {
     let mut policy = StackDriftPolicy {
         mode: crate::StackDriftMode::AutoFix,
         ..Default::default()
@@ -171,6 +201,11 @@ fn daemon_drift_repair_only_targets_idle_healthy_or_degraded_auto_fix_stacks() {
         assert!(!event_drift_eligible(&stack(status, policy.clone())));
     }
     policy.mode = crate::StackDriftMode::DetectOnly;
+    assert!(event_drift_eligible(&stack(
+        StackReleaseStatus::Healthy,
+        policy.clone()
+    )));
+    policy.mode = crate::StackDriftMode::Disabled;
     assert!(!event_drift_eligible(&stack(
         StackReleaseStatus::Healthy,
         policy
@@ -333,5 +368,132 @@ fn build_image_override_quotes_service_names_and_uses_resolved_images() {
     assert_eq!(
         output,
         "services:\n  \"api-worker\":\n    image: \"registry.test:5000/team/api@sha256:abc\"\n"
+    );
+}
+
+#[test]
+fn git_drift_is_pinned_to_the_deployed_commit_and_requires_a_baseline() {
+    let mut stack = stack(StackReleaseStatus::Healthy, StackDriftPolicy::default());
+    stack.stack_source = StackSource::Git;
+    stack.spec = Some(serde_json::from_value(serde_json::json!({"$type":"Git", "gitRepoId":Uuid::now_v7(), "branch":"main", "commitSha":"unapplied", "composePaths":["compose.yml","override.yml"]})).unwrap());
+    assert!(matches!(
+        drift_source_claim(&stack, stack.audit.created_by_actor_id),
+        Err(StackError::Conflict(_))
+    ));
+    stack.source = Some(
+        serde_json::from_value(
+            serde_json::json!({"sourceType":"Git", "resolvedCommitSha":"abc123"}),
+        )
+        .unwrap(),
+    );
+    let claim = drift_source_claim(&stack, stack.audit.created_by_actor_id).unwrap();
+    let StackSpec::Git {
+        commit_sha,
+        compose_paths,
+        ..
+    } = claim.spec
+    else {
+        panic!("Git spec expected")
+    };
+    assert_eq!(commit_sha.as_deref(), Some("abc123"));
+    assert_eq!(compose_paths, ["compose.yml", "override.yml"]);
+    assert_eq!(claim.release_id, stack.current_stack_release_id);
+    assert_eq!(claim.operation, "Drift");
+}
+
+#[test]
+fn git_drift_compares_all_compose_files_and_still_detects_real_drift() {
+    let stack = stack(StackReleaseStatus::Healthy, StackDriftPolicy::default());
+    let files = vec![
+        "services:\n  api:\n    image: nginx\n".into(),
+        "services:\n  worker:\n    image: alpine\n".into(),
+    ];
+    let mut runtime = StackRuntimeSnapshot {
+        containers: vec![],
+        services: vec![],
+    };
+    for name in ["api", "worker"] {
+        runtime.containers.push(crate::StackRuntimeContainer {
+            docker_container_id: name.into(),
+            service_name: name.into(),
+            state: "Running".into(),
+            health: None,
+        });
+    }
+    assert!(
+        !calculate_drift_from_compose(&stack, &runtime, &files)
+            .unwrap()
+            .has_drift
+    );
+    runtime.containers.pop();
+    let report = calculate_drift_from_compose(&stack, &runtime, &files).unwrap();
+    assert!(report.has_structural_drift);
+    assert!(
+        matches!(&report.drifts[0], StackDrift::MissingContainer { service_name } if service_name == "worker")
+    );
+}
+
+#[test]
+fn failed_apply_summary_keeps_redacted_error_before_empty_completion() {
+    let mut error = StackProgressItem::system(
+        "Error response from daemon: port 8080 is already allocated; secret=private-value",
+    );
+    error.event_type = StackApplyEventType::StdErr;
+    let mut completed =
+        StackProgressItem::completed(StackReleaseStatus::Failed, "Stack deployment failed.");
+    completed.message = None;
+    let mut result = StackRuntimeResult {
+        status: StackReleaseStatus::Failed,
+        messages: vec![error, completed],
+    };
+    redact_runtime_messages(&mut result, &["private-value".into()]);
+    let message = super::apply::apply_failure_message(&result);
+    assert!(message.contains("exit code 1"));
+    assert!(message.contains("port 8080 is already allocated"));
+    assert!(message.contains("********"));
+    assert!(!message.contains("private-value"));
+    result.messages[0].event_type = StackApplyEventType::StdOut;
+    assert!(super::apply::apply_failure_message(&result).contains("port 8080"));
+    result.messages.remove(0);
+    assert_eq!(
+        super::apply::apply_failure_message(&result),
+        "Stack deployment failed (exit code 1)."
+    );
+}
+
+#[test]
+fn compose_failure_summary_does_not_replay_progress_or_duplicate_errors() {
+    let error = "Error response from daemon: Conflict. The container name is already in use.";
+    let mut messages: Vec<_> = [
+        "beszel Pulled",
+        "beszel-agent Pulled",
+        "Network beszel-copy_default Created",
+        "Container beszel Creating",
+        &format!("Container beszel-agent {error}"),
+        error,
+    ]
+    .into_iter()
+    .map(|text| {
+        let mut item = StackProgressItem::system(text);
+        item.event_type = StackApplyEventType::StdErr;
+        item
+    })
+    .collect();
+    for item in &messages[..4] {
+        assert!(item.error_detail().is_none());
+    }
+    assert_eq!(messages[4].error_detail(), Some(error));
+    assert_eq!(messages[5].error_detail(), Some(error));
+    messages.push(StackProgressItem::completed(
+        StackReleaseStatus::Failed,
+        "Stack deployment failed.",
+    ));
+    let result = StackRuntimeResult {
+        status: StackReleaseStatus::Failed,
+        messages,
+    };
+    assert_eq!(
+        super::apply::apply_failure_message(&result),
+        format!("Stack deployment failed (exit code 1).\n{error}")
     );
 }

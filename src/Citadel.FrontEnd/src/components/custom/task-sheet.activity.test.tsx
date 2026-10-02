@@ -42,7 +42,12 @@ vi.mock('@/lib/hooks', () => ({
 
 vi.mock('@/lib/monaco', () => ({
   MonacoDiff: () => <div data-testid="monaco-diff" />,
-  MonacoEditor: () => <div data-testid="monaco-editor" />,
+  MonacoEditor: ({ title, value }: { title: string; value: string }) => (
+    <div data-testid="monaco-editor">
+      <h3>{title}</h3>
+      <pre>{value}</pre>
+    </div>
+  ),
 }));
 
 describe('TaskSheet activity details', () => {
@@ -103,5 +108,78 @@ describe('TaskSheet activity details', () => {
     expect(screen.getByText('1250 ms')).toBeVisible();
     expect(screen.getByText('Backup repository unavailable.')).toBeVisible();
     expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+  });
+});
+
+describe('Stack activity container IDs', () => {
+  it.each(['StackApplied', 'StackRollback'] as const)('hides missing IDs and displays captured IDs for %s', (type) => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Stack',
+      eventType: type,
+      status: 'Success',
+      info:
+        type === 'StackApplied'
+          ? { $type: type, stack: null, result: { containerIds: null } }
+          : { $type: type, oldStack: null, newStack: null, result: { containerIds: null } },
+    } as ActivityView;
+    const { unmount } = renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.queryByText(/^Container IDs?$/)).not.toBeInTheDocument();
+    mocks.activity = {
+      ...mocks.activity,
+      info:
+        type === 'StackApplied'
+          ? { $type: type, stack: null, result: { containerIds: ['docker-web', 'docker-worker'] } }
+          : { $type: type, oldStack: null, newStack: null, result: { containerIds: ['docker-web', 'docker-worker'] } },
+    };
+    unmount();
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByText('Container IDs')).toBeVisible();
+    expect(screen.getByText('docker-web')).toBeVisible();
+    expect(screen.getByText('docker-worker')).toBeVisible();
+  });
+});
+
+describe('Failed stack activity context', () => {
+  it.each(['StackApplied', 'StackRollback'] as const)('shows the attempted configuration and error for %s', (type) => {
+    const snapshot = {
+      id: 'stack',
+      name: 'web-stack',
+      stackSource: 'WebEditor',
+      stackRelease: { spec: { composeFile: 'services: web' } },
+    };
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Stack',
+      eventType: type,
+      status: 'Failure',
+      info:
+        type === 'StackApplied'
+          ? { $type: type, stack: snapshot, result: { message: 'Docker: port 8080 is already allocated' } }
+          : {
+              $type: type,
+              oldStack: null,
+              newStack: snapshot,
+              result: { message: 'Docker: port 8080 is already allocated' },
+            },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(
+      screen.getByText(type === 'StackApplied' ? 'Attempted configuration' : 'Attempted rollback configuration'),
+    ).toBeVisible();
+    expect(screen.getByTestId('monaco-editor')).toHaveTextContent('services: web');
+    expect(screen.getByText('Docker: port 8080 is already allocated')).toBeVisible();
+    expect(screen.queryByText('Applied configuration')).not.toBeInTheDocument();
+  });
+  it('does not render a null configuration for an older failure', () => {
+    mocks.activity = {
+      ...mocks.activity,
+      eventType: 'StackApplied',
+      status: 'Failure',
+      info: { $type: 'StackApplied', stack: null, result: { message: 'Stack deployment failed.' } },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+    expect(screen.getByText('Stack deployment failed.')).toBeVisible();
   });
 });

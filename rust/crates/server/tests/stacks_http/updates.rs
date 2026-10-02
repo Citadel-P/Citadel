@@ -192,10 +192,16 @@ struct GitSource;
 impl citadel_stacks::StackSourceMaterializerPort for GitSource {
     fn materialize<'a>(
         &'a self,
-        _: &'a StackOperationClaim,
+        claim: &'a StackOperationClaim,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackApplySource, StackError>> {
-        Box::pin(async {
+        Box::pin(async move {
+            if claim.operation == "Drift" {
+                let citadel_stacks::StackSpec::Git { commit_sha, .. } = &claim.spec else {
+                    panic!("expected Git")
+                };
+                assert_eq!(commit_sha.as_deref(), Some("c".repeat(40).as_str()));
+            }
             Ok(StackApplySource {
                 files: vec![citadel_stacks::StackSourceFile {
                     relative_path: "compose.yml".into(),
@@ -273,6 +279,16 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
             .get_authorized(admin.actor_id, true, stack.id)
             .await
             .unwrap();
+        if kind == "StackGitAutoUpdated" {
+            runtime.runtime_state.store(2, Ordering::Relaxed);
+            assert!(
+                !service
+                    .drift(admin.actor_id, true, stack.id)
+                    .await
+                    .unwrap()
+                    .has_drift
+            );
+        }
         let observations = alerts.0.lock().unwrap();
         let observation = observations
             .iter()
@@ -472,7 +488,7 @@ async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: 
         .unwrap();
     assert!(
         store
-            .complete_apply(admin.actor_id, &claim, &healthy(), &[], None)
+            .complete_apply(admin.actor_id, &claim, &healthy(), &[], None, None)
             .await
             .is_err(),
         "a completion with an old operation version cannot win recovery"
@@ -487,7 +503,7 @@ async fn verify_selected_apply(pool: &sqlx::PgPool, admin: &ActorPrincipal, id: 
         .1;
     assert_eq!(recovery.service_names, vec!["web"]);
     store
-        .complete_apply(admin.actor_id, &recovery, &healthy(), &[], None)
+        .complete_apply(admin.actor_id, &recovery, &healthy(), &[], None, None)
         .await
         .unwrap();
     assert!(

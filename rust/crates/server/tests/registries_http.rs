@@ -96,9 +96,52 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
             expected
         );
     }
+    let reader = actor(&db, false).await;
+    sqlx::query("INSERT INTO resourceaccesses (id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)")
+        .bind(Uuid::now_v7()).bind(reader.actor_id.value())
+        .bind(citadel_primitives::PermissionLevel::Read as i32)
+        .bind(Uuid::parse_str(id).unwrap()).bind(citadel_primitives::ResourceType::Registry as i32)
+        .execute(&db).await.unwrap();
+    let read_response = request(&app, Method::GET, &cfg_path, Some(reader.clone()), None).await;
+    assert_eq!(read_response.status(), StatusCode::OK);
+    let public = response_json(read_response).await;
+    assert!(public["configuration"].get("password").is_none());
+    assert_eq!(public["configuration"]["hasPassword"], true);
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &path,
+            Some(reader),
+            Some(json!({"configuration":{"password":"blocked-secret"}}))
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
     let cfg =
         response_json(request(&app, Method::GET, &cfg_path, Some(admin.clone()), None).await).await;
-    assert_eq!(cfg["configuration"]["password"], "original-secret");
+    assert!(cfg["configuration"].get("password").is_none());
+    assert_eq!(cfg["configuration"]["hasPassword"], true);
+    // Editing public settings must preserve the server-side credential.
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &path,
+            Some(admin.clone()),
+            Some(json!({"configuration":{"userName":"operator"}}))
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let stored: Value = sqlx::query_scalar("SELECT configuration FROM registries WHERE id=$1")
+        .bind(Uuid::parse_str(id).unwrap())
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(stored["password"], "original-secret");
     assert_eq!(
         request(
             &app,
@@ -115,8 +158,14 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
         response_json(request(&app, Method::GET, &cfg_path, Some(admin.clone()), None).await).await;
     assert_eq!(
         cfg["configuration"],
-        json!({"$type":"Custom","authEnabled":true,"userName":"operator","password":"rotated-secret"})
+        json!({"$type":"Custom","authEnabled":true,"userName":"operator","hasPassword":true})
     );
+    let stored: Value = sqlx::query_scalar("SELECT configuration FROM registries WHERE id=$1")
+        .bind(Uuid::parse_str(id).unwrap())
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(stored["password"], "rotated-secret");
     for invalid in [
         json!({"configuration":{"authEnabled":"yes"}}),
         json!({"configuration":{"$type":"Unknown"}}),
@@ -164,6 +213,7 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
     let cfg =
         response_json(request(&app, Method::GET, &cfg_path, Some(admin.clone()), None).await).await;
     assert_eq!(cfg["status"], "Deprecated");
+    assert_eq!(cfg["configuration"]["hasPassword"], false);
     assert_eq!(cfg["configuration"]["userName"], "operator");
     assert!(cfg["configuration"].get("password").is_none());
     let list = response_json(

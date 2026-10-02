@@ -394,6 +394,7 @@ pub(super) fn summary(
         system_role: Some(c.system_role.unwrap_or_default()),
         has_citadel_ownership_labels: c.has_citadel_ownership_labels,
         is_swarm_task: c.is_swarm_task,
+        labels: c.labels.into_iter().collect(),
     })
 }
 fn stat(s: citadel_platforms::RuntimeContainerStat) -> ContainerStatMessage {
@@ -404,5 +405,37 @@ fn stat(s: citadel_platforms::RuntimeContainerStat) -> ContainerStatMessage {
         memory_limit: s.memory_limit,
         rx_bytes: s.rx_bytes,
         tx_bytes: s.tx_bytes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn container_summary_preserves_compose_identity_and_stopped_state() {
+        let labels: std::collections::HashMap<String, String> = [
+            (
+                "com.docker.compose.project".to_owned(),
+                "monitoring".to_owned(),
+            ),
+            (
+                "com.docker.compose.service".to_owned(),
+                "beszel-agent".to_owned(),
+            ),
+            ("com.docker.compose.oneoff".to_owned(), "False".to_owned()),
+        ]
+        .into_iter()
+        .collect();
+        let model = serde_json::from_value(serde_json::json!({
+            "Id": "agent-container", "Names": ["/custom-agent-name"],
+            "State": "exited", "Labels": labels,
+        }))
+        .unwrap();
+        let wire = super::summary(model).unwrap();
+        assert_eq!(wire.labels, labels);
+        assert_eq!(wire.stack.as_deref(), Some("monitoring"));
+        assert_eq!(
+            wire.state(),
+            citadel_contracts::citadel::shared_models::v1::ContainerStateType::Exited
+        );
     }
 }

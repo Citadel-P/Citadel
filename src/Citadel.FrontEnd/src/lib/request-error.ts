@@ -27,6 +27,8 @@ export function requestErrorMessage(error: unknown): string {
 // Report the same rejection once without swallowing it or closing the dialog.
 const reported = new WeakSet<object>();
 export function notifyRequestError(error: unknown) {
+  // Effect cleanup and navigation cancel requests deliberately; they are not connection failures.
+  if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') return;
   if (typeof error === 'object' && error !== null) {
     if (reported.has(error)) return;
     reported.add(error);

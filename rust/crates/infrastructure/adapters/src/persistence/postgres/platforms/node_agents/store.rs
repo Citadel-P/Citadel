@@ -9,7 +9,18 @@ use serde_json::Value;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-pub struct PostgresNodeAgentLifecycleStore(pub PgPool);
+pub struct PostgresNodeAgentLifecycleStore {
+    pool: PgPool,
+    node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
+}
+impl PostgresNodeAgentLifecycleStore {
+    pub fn new(
+        pool: PgPool,
+        node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
+    ) -> Self {
+        Self { pool, node_policy }
+    }
+}
 mod setup;
 impl PostgresNodeAgentLifecycleStore {
     async fn claim_operation(
@@ -19,7 +30,7 @@ impl PostgresNodeAgentLifecycleStore {
         info: RuntimePlatformInfo,
         kind: &'static str,
     ) -> Result<NodeAgentRemovalClaim, RuntimeCapabilityError> {
-        let mut tx = self.0.begin().await.map_err(storage)?;
+        let mut tx = self.pool.begin().await.map_err(storage)?;
         let row = sqlx::query(
             "SELECT name,clusterid,platformdescriptor,status FROM platforms WHERE id=$1 FOR UPDATE",
         )
@@ -113,7 +124,7 @@ impl NodeAgentLifecycleStore for PostgresNodeAgentLifecycleStore {
         claim: &'a NodeAgentRemovalClaim,
     ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             sqlx::query("UPDATE swarmnodeagentbootstraps SET revokedatutc=COALESCE(revokedatutc,now()),updatedatutc=now() WHERE platformid=$1")
                 .bind(claim.platform_id).execute(&mut *tx).await.map_err(storage)?;
@@ -145,7 +156,7 @@ impl NodeAgentLifecycleStore for PostgresNodeAgentLifecycleStore {
         error: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             sqlx::query("UPDATE swarmnodeagentinstallations SET operationstate=$3,operationerror=$4,updatedatutc=now(),desiredstate=CASE WHEN $4::text IS NULL THEN 'Removed' ELSE desiredstate END,dockerserviceid=CASE WHEN $4::text IS NULL THEN NULL ELSE dockerserviceid END,dockercaconfigid=CASE WHEN $4::text IS NULL THEN NULL ELSE dockercaconfigid END,dockercaconfigname=CASE WHEN $4::text IS NULL THEN NULL ELSE dockercaconfigname END WHERE platformid=$1 AND operationid=$2")
                 .bind(claim.platform_id).bind(claim.operation_id).bind(if error.is_some(){"Failed"}else{"Completed"}).bind(error)

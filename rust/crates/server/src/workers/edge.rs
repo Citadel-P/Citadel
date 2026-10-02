@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct InventorySettings {
-    pub node_policy: citadel_adapters::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub reconciliation_interval: Duration,
     pub monitoring_interval: Duration,
 }

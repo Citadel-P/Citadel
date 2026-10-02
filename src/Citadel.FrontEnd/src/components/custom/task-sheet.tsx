@@ -511,13 +511,15 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
     return (
       <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-        <SpecViewer
-          spec={stripStackReleaseSource(info.stack)}
-          resourceId={activity.resourceId}
-          title="Applied configuration"
-        />
-        {activity.status === ActivityStatus.Success && (
-          <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
+        {info.stack && (
+          <SpecViewer
+            spec={stripStackReleaseSource(info.stack)}
+            resourceId={activity.resourceId}
+            title={activity.status === ActivityStatus.Failure ? 'Attempted configuration' : 'Applied configuration'}
+          />
+        )}
+        {activity.status === ActivityStatus.Success && containerIds.length > 0 && (
+          <KeyValueBlock label={label} value={containerIds} />
         )}
         <ActivityAlertZone info={info} activity={activity} />
       </div>
@@ -528,14 +530,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
     return (
       <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-        <MonacoDiff
-          original={stripStackReleaseSource(info.oldStack)}
-          modified={stripStackReleaseSource(info.newStack)}
-          format="yaml"
-          title="Rollback configuration changes"
-        />
-        {activity.status === ActivityStatus.Success && (
-          <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
+        {info.oldStack && info.newStack ? (
+          <MonacoDiff
+            original={stripStackReleaseSource(info.oldStack)}
+            modified={stripStackReleaseSource(info.newStack)}
+            format="yaml"
+            title="Rollback configuration changes"
+          />
+        ) : info.newStack ? (
+          <SpecViewer
+            spec={stripStackReleaseSource(info.newStack)}
+            resourceId={activity.resourceId}
+            title={
+              activity.status === ActivityStatus.Failure ? 'Attempted rollback configuration' : 'Rollback configuration'
+            }
+          />
+        ) : null}
+        {activity.status === ActivityStatus.Success && containerIds.length > 0 && (
+          <KeyValueBlock label={label} value={containerIds} />
         )}
         <ActivityAlertZone info={info} activity={activity} />
       </div>
@@ -820,7 +832,7 @@ export function ActivityAlertZone({
   if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return null;
   return (
     <AlertMessage title={title} date={date} type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
-      {info.result?.message}
+      <span className="whitespace-pre-wrap break-words">{info.result?.message}</span>
     </AlertMessage>
   );
 }

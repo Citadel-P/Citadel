@@ -10,13 +10,14 @@ import {
   StackDriftMode,
   StackReleaseStatus,
   StackView,
+  StackSource,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { StackFormComponents } from '.';
 
 const { useReadMock, useServicesGroupMock, useStackInfoGroupMock } = vi.hoisted(() => ({
-  useReadMock: vi.fn(() => ({ data: undefined, error: undefined })),
+  useReadMock: vi.fn((): { data: undefined; error: unknown } => ({ data: undefined, error: undefined })),
   useServicesGroupMock: vi.fn(() => ({
     items: [] as Array<{
       id: string;
@@ -75,6 +76,11 @@ vi.mock('@/lib/monaco', () => ({
   MonacoEditor: () => null,
   MonacoToArrayEditor: () => null,
 }));
+vi.mock('@/features/git-repos/browser/compare-dialog', () => ({
+  GitRepositoryCompareAction: ({ repositoryId, baseCommitSha, headCommitSha }: {
+    repositoryId: string; baseCommitSha: string; headCommitSha: string;
+  }) => <button data-repository={repositoryId} data-base={baseCommitSha} data-head={headCommitSha}>View changes</button>,
+}));
 vi.mock('@/features/docker-resources/containers/container-info/container-logs', () => ({
   StackLogs: ({ containers }: { containers: string[] }) => <div>Logs for {containers.join(', ')}</div>,
 }));
@@ -93,6 +99,25 @@ const stack = (platformType: PlatformType): StackView =>
 
 describe('Stack subheader', () => {
   beforeEach(() => useReadMock.mockClear());
+
+  it('compares the deployed source commit with the available update', () => {
+    const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+    const resource: StackView = {
+      ...stack(PlatformType.Docker),
+      source: { sourceType: StackSource.Git, gitRepositoryId: 'repo', resolvedCommitSha: 'deployed' },
+      stackUpdateState: {
+        $type: 'Git', recreateStackOnNewImageState: {},
+        recreateStackOnNewCommitState: { currentCommitSha: 'old-check', remoteCommitSha: 'available', lastCheckedAt: '' },
+      },
+    };
+    const { rerender } = renderCitadel(<SubHeader resource={resource} />);
+    const button = screen.getByRole('button', { name: 'View changes' });
+    expect(button).toHaveAttribute('data-repository', 'repo');
+    expect(button).toHaveAttribute('data-base', 'deployed');
+    expect(button).toHaveAttribute('data-head', 'available');
+    rerender(<SubHeader resource={{ ...resource, source: { ...resource.source!, resolvedCommitSha: 'available' } }} />);
+    expect(screen.queryByRole('button', { name: 'View changes' })).not.toBeInTheDocument();
+  });
 
   const failedApply: LatestActivityView = {
     id: 'failed-apply',
@@ -182,6 +207,32 @@ describe('Stack subheader', () => {
       { stackId: '019f0000-0000-7000-8000-000000000001' },
       { enabled: false },
     );
+  });
+
+  it('shows the server validation message when a drift check fails', () => {
+    useReadMock.mockReturnValue({
+      data: undefined,
+      error: {
+        status: 400,
+        error: {
+          status: 400,
+          errors: { $: ['Git Stack drift requires materialized source.'] },
+        },
+      },
+    });
+    const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+    renderCitadel(
+      <SubHeader
+        resource={{
+          ...stack(PlatformType.Docker),
+          status: StackReleaseStatus.Healthy,
+          driftPolicy: { mode: StackDriftMode.DetectOnly },
+        }}
+      />,
+    );
+    expect(screen.getByText('Git Stack drift requires materialized source.')).toBeInTheDocument();
+    expect(screen.queryByText('Unable to check stack drift.')).not.toBeInTheDocument();
+    useReadMock.mockReturnValue({ data: undefined, error: undefined });
   });
 
   it('keeps the drift guidance for a Standalone Stack', () => {

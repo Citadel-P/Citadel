@@ -14,7 +14,7 @@ const STALE_RETENTION_HOURS: i32 = 24;
 pub struct PostgresInventoryProjectionStore {
     health_owned: bool,
     pub(super) pool: PgPool,
-    pub(super) node_policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    pub(super) node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 }
 
 impl PostgresInventoryProjectionStore {
@@ -34,7 +34,7 @@ impl PostgresInventoryProjectionStore {
 
     pub fn with_node_policy(
         mut self,
-        policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+        policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     ) -> Self {
         self.node_policy = policy;
         self
@@ -143,7 +143,9 @@ impl InventoryProjectionStore for PostgresInventoryProjectionStore {
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(
             crate::persistence::postgres::platforms::swarm::inventory::refresh(
-                &self.pool, snapshot,
+                &self.pool,
+                snapshot,
+                &self.node_policy,
             ),
         )
     }
@@ -355,7 +357,7 @@ fn validate_identity(
 pub(crate) async fn persist_snapshot(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
-    node_policy: Option<&crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy>,
+    node_policy: Option<&citadel_platforms::node_agents::NodeAgentReconciliationPolicy>,
 ) -> Result<(), RuntimeCapabilityError> {
     persist_snapshot_with_health(transaction, snapshot, node_policy, true).await
 }
@@ -363,7 +365,7 @@ pub(crate) async fn persist_snapshot(
 async fn persist_snapshot_with_health(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
-    node_policy: Option<&crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy>,
+    node_policy: Option<&citadel_platforms::node_agents::NodeAgentReconciliationPolicy>,
     update_health: bool,
 ) -> Result<(), RuntimeCapabilityError> {
     if snapshot.swarm.is_some() {

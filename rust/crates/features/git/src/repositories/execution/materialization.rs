@@ -41,6 +41,18 @@ impl GitRepositoryExecutionService {
         revision: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<GitSnapshot, GitRepositoryExecutionError> {
+        self.stack_snapshot_files(id, revision, None, cancellation)
+            .await
+    }
+
+    /// A bounded local snapshot, optionally restricted to selected repository files.
+    pub async fn stack_snapshot_files(
+        &self,
+        id: Uuid,
+        revision: Option<&str>,
+        paths: Option<&[String]>,
+        cancellation: &CancellationToken,
+    ) -> Result<GitSnapshot, GitRepositoryExecutionError> {
         let commit = self.resolve_commit(id, revision, cancellation).await?;
         let listing = self
             .cli
@@ -56,6 +68,13 @@ impl GitRepositoryExecutionService {
             return Err(GitRepositoryExecutionError::Validation(format!(
                 "Git Stack source contains more than {MAX_STACK_SOURCE_FILES} files."
             )));
+        }
+        let mut listing = listing;
+        if let Some(paths) = paths {
+            for path in paths {
+                validate_repository_path(path, true)?;
+            }
+            listing.entries.retain(|entry| paths.contains(&entry.path));
         }
         let total = listing
             .entries

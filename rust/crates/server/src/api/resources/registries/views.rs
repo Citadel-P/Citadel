@@ -1,4 +1,4 @@
-use super::spec::{RegistryKind, RegistrySpec};
+use super::spec::{RegistryConfigurationView, RegistryKind};
 use crate::api::resources::{capabilities::ResourceCapabilitiesView, tags::views::TagSummary};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -30,7 +30,7 @@ pub(crate) struct RegistryConfigResponse {
     #[schema(value_type = crate::api::resources::schema_models::registries::RegistryStatusSchema)]
     pub(crate) status: crate::api::resources::registries::views::RegistryStatus,
     pub(crate) description: String,
-    pub(crate) configuration: RegistrySpec,
+    pub(crate) configuration: RegistryConfigurationView,
     pub(crate) tags: Vec<crate::api::resources::tags::views::TagSummary>,
 }
 

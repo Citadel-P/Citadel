@@ -5172,7 +5172,8 @@ export interface RegistryActivitySnapshot {
 }
 
 export interface RegistryConfigResponse {
-  configuration: RegistrySpec;
+  /** Public settings and credential presence; secret values are write-only. */
+  configuration: RegistryConfigurationView;
   description: string;
   /** @format uuid */
   id: string;
@@ -5197,6 +5198,44 @@ export interface RegistryConfigurationPatch {
   secretAccessKey?: string | null;
   userName?: string | null;
 }
+
+/** Public settings and credential presence; secret values are write-only. */
+export type RegistryConfigurationView =
+  | {
+      $type: "Custom";
+      authEnabled?: boolean | null;
+      hasPassword: boolean;
+      userName?: string | null;
+    }
+  | {
+      $type: "DockerHub";
+      hasPat: boolean;
+      userName?: string | null;
+    }
+  | {
+      $type: "Azure";
+      hasPassword: boolean;
+      userName: string;
+    }
+  | {
+      $type: "AWS";
+      accessKey: string;
+      authenticationRequired?: boolean | null;
+      hasSecretAccessKey: boolean;
+      region: string;
+    }
+  | {
+      $type: "Gitlab";
+      hasPat: boolean;
+      instanceUrl: string;
+      userName: string;
+    }
+  | {
+      $type: "GitHub";
+      ghcrAuthEnabled?: boolean | null;
+      hasPat: boolean;
+      nameSpace?: string | null;
+    };
 
 export interface RegistryPatch {
   configuration?: null | RegistryConfigurationPatch;

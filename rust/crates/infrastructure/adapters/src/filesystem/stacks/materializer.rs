@@ -22,6 +22,52 @@ impl GitStackSourceMaterializer {
 }
 
 impl StackSourceMaterializerPort for GitStackSourceMaterializer {
+    fn compose_contents<'a>(
+        &'a self,
+        claim: &'a StackOperationClaim,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, StackError>> {
+        Box::pin(async move {
+            let StackSpec::Git {
+                git_repo_id,
+                commit_sha: Some(commit),
+                compose_paths,
+                ..
+            } = &claim.spec
+            else {
+                return Err(StackError::Validation(
+                    "Git drift requires a pinned release commit.".into(),
+                ));
+            };
+            let snapshot = self
+                .git
+                .stack_snapshot_files(
+                    *git_repo_id,
+                    Some(commit),
+                    Some(compose_paths),
+                    cancellation,
+                )
+                .await
+                .map_err(|error| StackError::Runtime(error.to_string()))?;
+            StackApplySource {
+                files: snapshot
+                    .files
+                    .into_iter()
+                    .map(|file| StackSourceFile {
+                        relative_path: file.relative_path,
+                        content: file.content,
+                    })
+                    .collect(),
+                compose_paths: compose_paths.clone(),
+                env_file_paths: Vec::new(),
+                working_directory: ".".into(),
+                labels_override_path: None,
+                resolved_commit_sha: Some(snapshot.resolved_commit_sha),
+            }
+            .compose_contents()
+        })
+    }
+
     fn materialize<'a>(
         &'a self,
         claim: &'a StackOperationClaim,

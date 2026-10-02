@@ -1,7 +1,9 @@
 //! Native Swarm inventory inputs. These operations do not create Citadel workloads.
+mod operations;
 use crate::{RuntimeCapabilityError, RuntimeErrorKind, RuntimeSwarmNode};
 use chrono::{DateTime, Utc};
 use futures_util::future::BoxFuture;
+pub use operations::{SwarmOperation, SwarmOperations, bounded};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use tokio_util::sync::CancellationToken;
@@ -467,10 +469,10 @@ pub async fn refresh_inventory(
 pub async fn availability_updates(
     reads: &crate::PlatformReadService,
     pid: uuid::Uuid,
-    input: UpdateSwarmNodesAvailabilityInput,
+    input: &UpdateSwarmNodesAvailabilityInput,
 ) -> Result<Vec<(String, UpdateSwarmNodeInput)>, crate::AuthorizedReadError> {
     let mut updates = Vec::with_capacity(input.nodes.len());
-    for target in input.nodes {
+    for target in &input.nodes {
         let node = reads
             .get_swarm_node(pid, &target.node_id)
             .await?

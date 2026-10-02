@@ -103,7 +103,7 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
     let f = fixture_for_cluster(cluster.clone()).await;
     let id = f.platform_id;
     sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\",\"daemonId\":\"daemon-test\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
-    let store = PostgresNodeAgentLifecycleStore(f.pool.clone());
+    let store = PostgresNodeAgentLifecycleStore::new(f.pool.clone(), Default::default());
     let info = f
         .docker
         .get_info(&tokio_util::sync::CancellationToken::new())

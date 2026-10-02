@@ -20,6 +20,19 @@ pub enum ContainerSystemRole {
     EdgeAgent,
 }
 
+impl ContainerSystemRole {
+    fn from_label(role: &str) -> Option<Self> {
+        // Docker labels are optional external metadata, not serialized enum values.
+        match role.trim().to_ascii_lowercase().as_str() {
+            "core" => Some(Self::Core),
+            "database" => Some(Self::Database),
+            "agent" => Some(Self::Agent),
+            "edgeagent" | "edge-agent" => Some(Self::EdgeAgent),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerRuntimeView {
@@ -74,9 +87,9 @@ impl ContainerView {
             is_system: self.is_system,
             system_role: self
                 .system_role
-                .as_ref()
-                .map(|role| serde_json::from_value(Value::String(role.clone())))
-                .transpose()?,
+                .as_deref()
+                .filter(|_| self.is_system)
+                .and_then(ContainerSystemRole::from_label),
             has_citadel_ownership_labels: self.has_citadel_ownership_labels,
             is_swarm_task: self.is_swarm_task,
             docker_node_id: self.docker_node_id.clone(),
@@ -250,6 +263,44 @@ mod tests {
         container.state = "Running".into();
         container.ports = json!({"80/tcp":42});
         assert!(container.runtime_data().is_err());
+    }
+
+    #[test]
+    fn runtime_projection_tolerates_missing_and_unknown_system_roles() {
+        let mut container = container();
+        for role in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("unknown-role"),
+            Some("swarm-node-agent"),
+        ] {
+            container.system_role = role.map(str::to_owned);
+            let value = serde_json::to_value(container.runtime_data().unwrap()).unwrap();
+            assert_eq!(value["isSystem"], true);
+            assert_eq!(value["systemRole"], Value::Null, "role: {role:?}");
+        }
+    }
+
+    #[test]
+    fn runtime_projection_maps_system_role_labels_case_insensitively() {
+        let mut container = container();
+        for (label, expected) in [
+            ("core", ContainerSystemRole::Core),
+            ("Database", ContainerSystemRole::Database),
+            ("AGENT", ContainerSystemRole::Agent),
+            ("EdgeAgent", ContainerSystemRole::EdgeAgent),
+            ("edge-agent", ContainerSystemRole::EdgeAgent),
+            (" EDGE-AGENT ", ContainerSystemRole::EdgeAgent),
+        ] {
+            container.system_role = Some(label.into());
+            assert_eq!(
+                container.runtime_data().unwrap().system_role,
+                Some(expected)
+            );
+        }
+        container.is_system = false;
+        assert_eq!(container.runtime_data().unwrap().system_role, None);
     }
 
     #[test]

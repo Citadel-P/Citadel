@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { sanitizeDraft, useFormDraftKey } from '@/lib/form-drafts';
+import { maskFormSecrets, sanitizeDraft, useFormDraftKey } from '@/lib/form-drafts';
 import { notifyRequestError } from '@/lib/request-error';
 import React, { useMemo, useState, useCallback, useRef, memo, Ref, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -1591,7 +1591,11 @@ export function FormShell<T>({
             <DialogTitle>Configuration changes</DialogTitle>
           </DialogHeader>
 
-          <MonacoDiff original={effectiveOriginal} modified={merged} format="yaml" />
+          <MonacoDiff
+            original={maskFormSecrets(effectiveOriginal, JSON.parse(excludedDraftPaths))}
+            modified={maskFormSecrets(merged, JSON.parse(excludedDraftPaths))}
+            format="yaml"
+          />
         </DialogContent>
       </Dialog>
     </div>

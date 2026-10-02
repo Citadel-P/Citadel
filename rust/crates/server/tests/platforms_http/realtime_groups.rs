@@ -1606,3 +1606,6 @@ async fn committed_resource_notifications_do_not_reopen_docker_or_cross_authoriz
     }
     cleanup(f).await;
 }
+
+#[path = "realtime_review.rs"]
+mod review;

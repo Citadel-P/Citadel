@@ -203,8 +203,8 @@ feature. Cancellation interrupts a stalled pull stream or progress queue before
 inventory observation. HTTP retains admission limits, the tracked task/body
 lifetime, deadlines and notifications. Image deletion retains its independent
 tracked task so reconciliation runs after caller disconnection; its existing
-claims, generation fence, partial-failure observation and no-retry behavior are
-unchanged. The deletion adapter now requires only `ImageInventoryPort` for its
+claims, partial-failure observation and no-retry behavior remain. The review
+follow-up below adds missing generation and row-version fencing to deletion completion. The deletion adapter now requires only `ImageInventoryPort` for its
 post-operation observation. Registry preparation and image persistence/claim
 helpers remain infrastructure-owned and are still called by HTTP; moving that
 orchestration behind a feature service remains a separate boundary step.
@@ -250,10 +250,49 @@ same provider. Flat route files and enriched resource models are retained.
 - Git credentials and clone staging use `GitWorkspacePort`; Automation uses a
   private script workspace lease. Implementations live in
   `adapters/filesystem`; the process runner remains independent of these features.
-  They remove credential-bearing files on completion or
-  abandoned futures, preserve atomic clone publication, and restrict filesystem
-  permissions. Automation refuses an existing run-directory symlink. Backup
+  Explicit cleanup removes credential-bearing files; abandoned futures transfer
+  recursive removal to tracked blocking work. Cleanup admission is reserved before
+  acquisition and retained through shutdown drain. Atomic clone publication and
+  private filesystem permissions are preserved. Automation refuses an existing run-directory symlink. Backup
   staging cleanup is delegated to its existing source planner adapter.
+
+The 2026-10-01 consolidation review follow-up tightens these guarantees:
+
+- Runtime errors retain their kind through HTTP. Internal routing and image SQL
+  failures use the common logging/sanitization boundary; safe conflicts,
+  availability failures and invalid image references retain their public classes.
+- Node Agent reconciliation policy is feature-owned and injected into HTTP
+  initialization/refresh, lifecycle inventory writes and background reconciliation.
+- Image deletion captures a generation before observing inventory and checks both
+  that generation and claimed SQL row versions before removing projections. A
+  newer pull cannot be deleted by an older absence. Claims are released and counts
+  repaired even when an observation is rejected.
+- Image deletion remains independent of browser disconnection, but resolution and
+  daemon calls observe process cancellation. Shutdown skips network repair and
+  allows at most two seconds for claim completion; interrupted cleanup leaves an
+  expiring durable claim rather than replaying destructive commands.
+- `SwarmOperations` owns native preflight, whole-selection validation, runtime
+  resolution, manager verification, dispatch deadlines and refresh/partial-removal
+  completion. HTTP owns extraction, actor authorization and response presentation.
+- Each coarse realtime network/volume event shares runtime resolution together
+  with inventory collection. Authorization and capability projection remain per
+  actor. Swarm image replacement payloads preserve image capabilities; the frontend
+  requires explicit image capabilities instead of allowing absent values.
+- Git SSH uses strict host verification and shell-safe client-key arguments.
+  `Git__KnownHostsPath` identifies the operator-provisioned trust file (default
+  `<CITADEL_DATA_ROOT>/git-known-hosts`); unknown/changed keys fail closed, including
+  recursive submodule requests. No automatic trust enrollment is performed.
+
+Review follow-up validation passed 1,080 workspace tests (314 environment-dependent
+cases ignored by the default runner), strict workspace Clippy, formatting, 19
+focused PostgreSQL/HTTP regressions using isolated databases, a live SSH
+trusted/unknown/changed-key test, three frontend capability tests, TypeScript
+checking and linting of the changed frontend files. The focused database runs
+include Node Agent setup/lifecycle, nondefault reconciliation policy, stale image
+deletions, direct Swarm operations and per-subscriber realtime capabilities.
+Temporary databases, roles, SSH server and test keys were removed after testing.
+OpenAPI verification passed with unchanged 404 full and 305 public operations;
+no generated frontend contract changes were needed.
 
 Architecture guards reject concrete transport/persistence dependencies in Platform
 HTTP and sensitive filesystem operations in these feature workflows. Release/CI

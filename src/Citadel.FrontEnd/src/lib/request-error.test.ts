@@ -2,6 +2,16 @@ import { toast } from 'sonner';
 import { canShowCachedResource, notifyRequestError, requestErrorMessage } from './request-error';
 
 describe('request failure feedback', () => {
+  it('ignores deliberate cancellation without hiding timeouts or network failures', () => {
+    const notice = vi.spyOn(toast, 'error');
+    notifyRequestError(new DOMException('Request cancelled', 'AbortError'));
+    notifyRequestError({ name: 'AbortError', message: 'Cross-realm cancellation' });
+    expect(notice).not.toHaveBeenCalled();
+    notifyRequestError(new DOMException('Request timed out', 'TimeoutError'));
+    notifyRequestError(new TypeError('Failed to fetch'));
+    expect(notice).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps field validation details and provides a network fallback', () => {
     expect(requestErrorMessage({ status: 400, error: { errors: { name: ['Name is required.'] } } })).toBe(
       'Name is required.',

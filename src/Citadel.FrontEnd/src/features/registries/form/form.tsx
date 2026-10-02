@@ -1,4 +1,5 @@
 import {
+  RegistryConfigResponse,
   RegistryKind,
   RegistryConfigurationPatch,
   RegistryStatus,
@@ -26,6 +27,7 @@ import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResourceTagSelector } from '@/features/tags/components';
+import { registrySettings, registryUpdate } from './values';
 
 const registryInfo = {
   DockerHub: {
@@ -110,7 +112,7 @@ export const RegistryForm = ({
   disabled,
 }: {
   mode: 'add' | 'edit';
-  resource?: RegistryInput;
+  resource?: RegistryConfigResponse;
   disabled?: boolean;
 }) => {
   const id = useParams().id;
@@ -125,14 +127,28 @@ export const RegistryForm = ({
     basePath: 'registries',
     entityName: 'Registry',
     onCreate: (payload) => createRegistry({ data: payload as NewRegistry }),
-    onUpdate: (payload) => updateRegistry({ id: id!, data: payload as RegistryPatch }),
+    onUpdate: (payload) => updateRegistry({ id: id!, data: registryUpdate(payload as RegistryPatch) }),
     onRefresh: () => {
       localStorage.removeItem(`Registry:${id ?? 'new'}`);
       queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
     },
   });
 
-  const original = resource ?? ({} as RegistryInput);
+  const original: RegistryInput = useMemo(
+    () =>
+      resource
+        ? {
+            name: resource.name,
+            description: resource.description,
+            registryHost: resource.registryHost,
+            status: resource.status,
+            configuration: registrySettings(resource.configuration),
+          }
+        : {},
+    [resource],
+  );
+  const hasPat = !!resource && 'hasPat' in resource.configuration && resource.configuration.hasPat;
+  const hasPassword = !!resource && 'hasPassword' in resource.configuration && resource.configuration.hasPassword;
   const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryKind.DockerHub;
   const isCustomAuthEnabled =
     ((update.configuration as RegistryConfigurationPatch)?.authEnabled ??
@@ -288,8 +304,9 @@ export const RegistryForm = ({
                       defineField<RegistryInput, 'configuration.pat'>({
                         key: 'configuration.pat',
                         label: 'PAT',
-                        required: true,
-                        validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
+                        required: !hasPat,
+                        validate: (v) =>
+                          !v && hasPat ? null : !v || v.length < 10 ? 'PAT must be at least 10 chars' : null,
                         description: (
                           <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
                             Provide a Personal Access Token with the <Badge variant="secondary">read:packages</Badge>{' '}
@@ -303,6 +320,7 @@ export const RegistryForm = ({
                         render: (value, set) => (
                           <FieldInput
                             type="password"
+                            placeholder={hasPat ? '****** — leave unchanged to keep' : 'Personal access token'}
                             value={value ?? ''}
                             onChange={(v) =>
                               set((prev) => ({
@@ -352,8 +370,8 @@ export const RegistryForm = ({
                 defineField({
                   key: 'configuration.pat',
                   label: 'PAT',
-                  required: true,
-                  validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
+                  required: !hasPat,
+                  validate: (v) => (!v && hasPat ? null : !v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
                   description: (
                     <div className="flex flex-row text-sm text-muted-foreground gap-1">
                       To create a DockerHub personal access token, follow the{' '}
@@ -366,6 +384,7 @@ export const RegistryForm = ({
                   render: (value, set) => (
                     <FieldInput
                       type="password"
+                      placeholder={hasPat ? '****** — leave unchanged to keep' : 'Personal access token'}
                       value={value ?? ''}
                       onChange={(v) =>
                         set((prev) => ({
@@ -468,13 +487,14 @@ export const RegistryForm = ({
                           defineField({
                             key: 'configuration.password',
                             label: 'Password',
-                            required: true,
-                            validate: (v) => (!v || v.length < 4 ? 'Password too short' : null),
+                            required: !hasPassword,
+                            validate: (v) =>
+                              !v && hasPassword ? null : !v || v.length < 4 ? 'Password too short' : null,
                             render: (value, set) => (
                               <FieldInput
                                 type="password"
                                 value={value ?? ''}
-                                placeholder="password"
+                                placeholder={hasPassword ? '****** — leave unchanged to keep' : 'Password'}
                                 onChange={(v) =>
                                   set((prev) => ({
                                     configuration: {
@@ -496,7 +516,7 @@ export const RegistryForm = ({
           }
         : {}),
     }),
-    [mode, provider, isGhcrAuthEnabled, isCustomAuthEnabled, disabled],
+    [mode, provider, isGhcrAuthEnabled, isCustomAuthEnabled, disabled, hasPat, hasPassword],
   );
 
   return (

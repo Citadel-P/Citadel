@@ -123,7 +123,9 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         AutomationService::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
             std::sync::Arc::new(
-                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+                citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
             ),
             Arc::new(automation_support::Tasks(automation_tasks.clone())),
             automation_shutdown,

@@ -21,3 +21,6 @@ pub use repository::RegistryMutationKind;
 mod patch;
 pub mod registry_images;
 use citadel_primitives::PatchField;
+
+mod credentials;
+pub use credentials::mask_registry_credentials;

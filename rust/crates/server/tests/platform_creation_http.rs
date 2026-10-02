@@ -195,7 +195,7 @@ async fn create_platform_enforces_authorization_and_commits_metadata_before_inve
         ),
     );
     let app = platforms_http::router(PlatformsHttpState {
-        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), Default::default())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(), None, citadel_adapters::connectors::edge::EdgeRegistry::default()),edge:citadel_adapters::connectors::edge::EdgeRegistry::default()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:citadel_adapters::connectors::edge::EdgeRegistry::default()}),
     deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(
@@ -870,7 +870,7 @@ async fn harness(inventory: StaticInfo) -> TestHarness {
     let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let socket = std::env::temp_dir().join(format!("unused-{}.sock", Uuid::now_v7()));
     let app = platforms_http::router(PlatformsHttpState {
-        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore(pool.clone())),
+        node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), Default::default())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), DockerClient::new(&socket, StdDuration::from_secs(1)).unwrap(), None, edge.clone()),edge:edge.clone()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge.clone()}),
     deletions: Arc::new(citadel_platforms::deletion::PlatformDeletionService::new(

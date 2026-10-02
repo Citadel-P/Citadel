@@ -247,7 +247,11 @@ async fn get_registry_config(
             status: value.status,
             description: value.description.unwrap_or_default(),
             configuration: api_result(
-                serde_json::from_value(value.configuration).map_err(ApiError::internal),
+                serde_json::from_value::<crate::api::resources::registries::spec::RegistrySpec>(
+                    value.configuration,
+                )
+                .map(Into::into)
+                .map_err(ApiError::internal),
                 &headers,
             )?,
             tags: value.tags,

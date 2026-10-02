@@ -24,6 +24,8 @@ message ContainerMessage {
     google.protobuf.StringValue systemRole = 16;
     bool hasCitadelOwnershipLabels = 17;
     bool isSwarmTask = 18;
+    // Preserve Compose project/service identity across Direct and Edge transport.
+    map<string, string> labels = 19;
 }
 
 message HostPortBindingList {

@@ -164,6 +164,15 @@ cleanup takes longer. Development builds retain full debug information for
 Citadel crates; dependencies omit it, and tests use line-level backtraces without
 incremental artifacts. No production build settings are changed.
 
+Git over SSH verifies the server key against an operator-managed OpenSSH
+`known_hosts` file. Set `Git__KnownHostsPath` (default
+`<CITADEL_DATA_ROOT>/git-known-hosts`) and mount that file read-only or provision it
+in the persistent data volume. Verify server fingerprints through your Git
+provider or administrator before adding keys. Unknown and changed keys fail;
+Citadel never automatically trusts `ssh-keyscan` output or disables verification.
+SSH submodules follow the same trust policy. Private client keys remain temporary
+and are removed when execution ends.
+
 Runtime files (including Git repository caches and Automation runs) use the
 `citadel-data` volume at `/home/vscode/.local/share/citadel`, configured through
 `CITADEL_DATA_ROOT`. Container initialization makes this private directory

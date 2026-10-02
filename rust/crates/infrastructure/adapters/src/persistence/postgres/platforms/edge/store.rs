@@ -63,7 +63,7 @@ struct NodeReconnect {
 #[derive(Clone)]
 pub struct PostgresEdgeStore {
     pool: PgPool,
-    node_policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 }
 impl PostgresEdgeStore {
     pub fn new(pool: PgPool) -> Self {
@@ -74,7 +74,7 @@ impl PostgresEdgeStore {
     }
     pub fn with_node_policy(
         mut self,
-        policy: crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+        policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     ) -> Self {
         self.node_policy = policy;
         self

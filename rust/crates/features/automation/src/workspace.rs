@@ -1,7 +1,7 @@
 use futures_util::future::BoxFuture;
 use std::path::Path;
 
-/// A private, temporary script directory. Dropping it removes credential-bearing source.
+/// A private, temporary script directory. Dropping it transfers removal of credential-bearing source to tracked cleanup.
 pub trait AutomationWorkspaceLease: Send + Sync {
     fn directory(&self) -> &Path;
     fn script(&self) -> &Path;

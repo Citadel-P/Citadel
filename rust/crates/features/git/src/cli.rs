@@ -107,6 +107,7 @@ pub struct GitCli {
     pub(crate) workspace: Arc<dyn crate::workspace::GitWorkspacePort>,
     executable: OsString,
     timeout: Duration,
+    known_hosts: Option<std::path::PathBuf>,
 }
 
 impl GitCli {
@@ -169,7 +170,37 @@ impl GitCli {
             workspace,
             executable: executable.into(),
             timeout,
+            known_hosts: None,
         }
+    }
+
+    /// Trust is managed by the operator, never learned from an unverified connection.
+    pub fn with_known_hosts(mut self, path: std::path::PathBuf) -> Self {
+        self.known_hosts = Some(path);
+        self
+    }
+    pub(crate) fn ssh_command(&self, key: Option<&Path>) -> String {
+        let quote = |value: &str| format!("'{}'", value.replace('\'', "'\"'\"'"));
+        let mut command =
+            String::from("ssh -F /dev/null -o StrictHostKeyChecking=yes -o BatchMode=yes");
+        if let Some(path) = &self.known_hosts {
+            command.push_str(&format!(
+                " -o UserKnownHostsFile={} -o GlobalKnownHostsFile=/dev/null",
+                quote(&format!(
+                    "\"{}\"",
+                    path.to_string_lossy()
+                        .replace('\\', "\\\\")
+                        .replace('"', "\\\"")
+                ))
+            ));
+        }
+        if let Some(key) = key {
+            command.push_str(&format!(
+                " -i {} -o IdentitiesOnly=yes",
+                quote(&key.to_string_lossy())
+            ));
+        }
+        command
     }
 
     pub async fn test_connection(
@@ -687,7 +718,7 @@ impl GitCli {
         ProcessRequest::new(self.executable.clone())
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_ASKPASS", "echo")
-            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+            .env("GIT_SSH_COMMAND", self.ssh_command(None))
             .env("GIT_LITERAL_PATHSPECS", "1")
             .env("LC_ALL", "C")
             .limits(ProcessLimits {
@@ -961,6 +992,67 @@ fn is_object_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn ssh_arguments_keep_strict_trust_and_quote_shell_metacharacters() {
+        let path = Path::new("/tmp/key ' $(touch SHOULD_NOT_EXIST) `id` ; spaced");
+        let cli = GitCli::new(
+            Arc::new(FakeProcess::default()),
+            Arc::new(TestWorkspace),
+            Duration::from_secs(1),
+        )
+        .with_known_hosts(Path::new("/tmp/trusted hosts").into());
+        let command = cli.ssh_command(Some(path));
+        // Shell function captures the exact argv OpenSSH receives without network I/O.
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("ssh() {{ printf '%s\\n' \"$@\"; }}; {command}"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let args = String::from_utf8(output.stdout).unwrap();
+        assert!(args.lines().any(|s| s == path.to_str().unwrap()), "{args}");
+        assert!(args.contains("StrictHostKeyChecking=yes"));
+        assert!(args.contains("UserKnownHostsFile=\"/tmp/trusted hosts\""));
+        assert!(cli.ssh_command(None).contains("StrictHostKeyChecking=yes"));
+    }
+
+    #[test]
+    #[ignore = "requires CITADEL_SSH_TEST_ROOT and CITADEL_SSH_TEST_URL (disposable SSH Git server)"]
+    fn ssh_trust_accepts_pinned_server_and_rejects_unknown_or_changed_host() {
+        let root = std::path::PathBuf::from(std::env::var("CITADEL_SSH_TEST_ROOT").unwrap());
+        let url = std::env::var("CITADEL_SSH_TEST_URL").unwrap();
+        for (hosts, expected) in [("trusted", true), ("unknown", false), ("mismatched", false)] {
+            let cli = GitCli::new(
+                Arc::new(FakeProcess::default()),
+                Arc::new(TestWorkspace),
+                Duration::from_secs(5),
+            )
+            .with_known_hosts(root.join(hosts));
+            let output = std::process::Command::new("git")
+                .args(["ls-remote", "--", &url])
+                .env(
+                    "GIT_SSH_COMMAND",
+                    cli.ssh_command(Some(&root.join("client key ' $literal"))),
+                )
+                .env("GIT_TERMINAL_PROMPT", "0")
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.success(),
+                expected,
+                "{hosts}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if !expected {
+                assert!(
+                    String::from_utf8_lossy(&output.stderr)
+                        .contains("Host key verification failed")
+                );
+            }
+        }
+    }
+
     struct TestWorkspace;
     impl crate::workspace::GitWorkspacePort for TestWorkspace {
         fn exists<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, std::io::Result<bool>> {

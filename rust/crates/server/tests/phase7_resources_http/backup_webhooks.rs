@@ -37,7 +37,11 @@ pub fn router(
         )),
         Arc::new(citadel_git::GitCli::new(
             std::sync::Arc::new(citadel_processes::SystemProcess),
-            std::sync::Arc::new(citadel_adapters::filesystem::git_workspace::LocalGitWorkspace),
+            std::sync::Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+                ),
+            ),
             std::time::Duration::from_secs(5),
         )),
         std::env::temp_dir().join(format!("webhook-git-{}", Uuid::now_v7())),
@@ -49,7 +53,9 @@ pub fn router(
     let automation = Arc::new(citadel_automation::AutomationService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         std::sync::Arc::new(
-            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace,
+            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+            ),
         ),
         Arc::new(
             citadel_server::tasks::automation::TrackedAutomationTasks::new(

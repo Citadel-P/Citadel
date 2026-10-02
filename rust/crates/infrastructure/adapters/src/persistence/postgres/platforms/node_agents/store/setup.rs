@@ -22,7 +22,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         lifetime: std::time::Duration,
     ) -> BoxFuture<'a, Result<Bootstrap, RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             let mut bytes = Zeroizing::new([0u8; 32]);
             getrandom::fill(bytes.as_mut()).map_err(storage)?;
@@ -53,7 +53,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         secret: &'a str,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             let count=sqlx::query("UPDATE swarmnodeagentbootstraps SET dockersecretid=$3,updatedatutc=now() WHERE id=$1 AND platformid=$2 AND revokedatutc IS NULL").bind(bootstrap).bind(claim.platform_id).bind(secret).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if count != 1 {
@@ -71,7 +71,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         digest: &'a str,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             sqlx::query("UPDATE swarmnodeagentinstallations SET dockerserviceid=$3,dockerservicename=$4,agentimagereference=$5,agentimagedigest=$6,dockercaconfigid=$7,dockercaconfigname=$8,updatedatutc=now() WHERE platformid=$1 AND operationid=$2")
                 .bind(claim.platform_id).bind(claim.operation_id).bind(id).bind(&spec.name).bind(reference).bind(digest).bind(&spec.ca_config_id).bind(&spec.ca_config_name).execute(&mut *tx).await.map_err(storage)?;
@@ -85,7 +85,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         error: Option<&'a str>,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             sqlx::query("UPDATE swarmnodeagentbootstraps SET revokedatutc=COALESCE(revokedatutc,now()),updatedatutc=now() WHERE platformid=$1").bind(claim.platform_id).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("UPDATE swarmnodeagentinstallations SET operationstate=$3,operationerror=$4,updatedatutc=now() WHERE platformid=$1 AND operationid=$2").bind(claim.platform_id).bind(claim.operation_id).bind(if error.is_some(){"Failed"}else{"Completed"}).bind(error).execute(&mut *tx).await.map_err(storage)?;
@@ -109,7 +109,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         snapshot: RuntimeInventorySnapshot,
     ) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            crate::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(self.0.clone())
+            crate::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(self.pool.clone()).with_node_policy(self.node_policy.clone())
                 .persist(&snapshot)
                 .await
                 .map(|_| ())
@@ -121,7 +121,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         claim: &'a NodeAgentRemovalClaim,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            let mut tx = self.0.begin().await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
             fence(&mut tx, claim).await?;
             sqlx::query("UPDATE edgeagentbindings SET revokedatutc=now(),connectionstatus='Revoked',updatedatutc=now() WHERE platformid=$1 AND dockernodeid=$2 AND profile='SwarmNode' AND revokedatutc IS NULL").bind(claim.platform_id).bind(&claim.manager_node_id).execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)
@@ -135,7 +135,7 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         Box::pin(async move {
             sqlx::query_as("SELECT dockernodeid,lastobservedtaskid FROM edgeagentbindings WHERE platformid=$1 AND clusterid=$2 AND lastobservedserviceid=$3 AND profile='SwarmNode' AND revokedatutc IS NULL AND dockernodeid IS NOT NULL AND lastobservedtaskid IS NOT NULL")
                 .bind(claim.platform_id).bind(&claim.cluster_id).bind(service)
-                .fetch_all(&self.0).await.map_err(storage)
+                .fetch_all(&self.pool).await.map_err(storage)
         })
     }
 }

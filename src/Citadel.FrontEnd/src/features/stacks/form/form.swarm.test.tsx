@@ -13,6 +13,7 @@ import { StackForm } from './form';
 const swarmPlatformId = '019f0000-0000-7000-8000-000000000010';
 const standalonePlatformId = '019f0000-0000-7000-8000-000000000011';
 const preflight = vi.fn().mockResolvedValue({ data: { isCompatible: true, issues: [] } });
+const license = vi.hoisted(() => ({ enabled: true }));
 
 const duplicateDraft = {
   draft: {
@@ -77,7 +78,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
 });
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
-  useLicenseEntitlements: () => ({ hasCapability: () => true }),
+  useLicenseEntitlements: () => ({ hasCapability: () => license.enabled }),
 }));
 
 vi.mock('@/components/custom/common', () => ({
@@ -112,13 +113,35 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
 
   return {
     ...actual,
-    FormShell: ({ schema, confirmSave }: { schema: any; confirmSave?: (payload: any) => Promise<boolean> }) => {
+    FormShell: ({
+      schema,
+      confirmSave,
+      setUpdate,
+    }: {
+      schema: any;
+      confirmSave?: (payload: any) => Promise<boolean>;
+      setUpdate: (value: any) => void;
+    }) => {
       const platform = findField(schema, 'platformId');
+      const driftControl = findField(schema, 'driftPolicy.mode')?.render(undefined, vi.fn());
       return (
         <div>
+          <button onClick={() => setUpdate({ platformId: standalonePlatformId, stackSource: StackSource.WebEditor })}>
+            Choose Standalone
+          </button>
           {platform?.render(swarmPlatformId, vi.fn())}
           {findField(schema, 'spec.composeFile')?.render(duplicateDraft.draft.spec.composeFile, vi.fn())}
           <span>{findField(schema, 'driftPolicy.mode') ? 'Drift shown' : 'Drift hidden'}</span>
+          {driftControl && (
+            <span
+              data-testid="drift-options"
+              data-default={driftControl.props.value}
+              data-detect-disabled={!!driftControl.props.collection.DetectOnly.disabled}
+              data-detect-license={driftControl.props.collection.DetectOnly.requiredLicense ?? ''}
+              data-auto-disabled={!!driftControl.props.collection.AutoFix.disabled}
+              data-auto-license={driftControl.props.collection.AutoFix.requiredLicense ?? ''}
+            />
+          )}
           <span>{findField(schema, 'spec.preDeploy.path') ? 'Pre-deploy shown' : 'Pre-deploy hidden'}</span>
           <span>{findField(schema, 'spec.destroyBeforeDeploy') ? 'Destroy shown' : 'Destroy hidden'}</span>
           <button
@@ -136,7 +159,22 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
 });
 
 describe('Swarm Stack form', () => {
-  beforeEach(() => preflight.mockClear());
+  beforeEach(() => {
+    preflight.mockClear();
+    license.enabled = true;
+  });
+
+  it('defaults new Standalone stacks to free detection while keeping AutoFix licensed', async () => {
+    license.enabled = false;
+    const { user } = renderCitadel(<StackForm mode="add" />, { route: '/stacks/add' });
+    await user.click(screen.getByRole('button', { name: 'Choose Standalone' }));
+    const options = await screen.findByTestId('drift-options');
+    expect(options).toHaveAttribute('data-default', StackDriftMode.DetectOnly);
+    expect(options).toHaveAttribute('data-detect-disabled', 'false');
+    expect(options).toHaveAttribute('data-detect-license', '');
+    expect(options).toHaveAttribute('data-auto-disabled', 'true');
+    expect(options).toHaveAttribute('data-auto-license', 'Team');
+  });
 
   it('adapts Standalone-only settings and runs compatibility preflight before save', async () => {
     preflight.mockResolvedValue({ data: { isCompatible: true, issues: [] } });

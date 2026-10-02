@@ -31,6 +31,25 @@ pub enum StackApplyEventType {
 }
 
 impl StackProgressItem {
+    /// Compose writes progress to stderr too. Only explicit error text identifies
+    /// an error before the process exit status is known.
+    pub fn error_detail(&self) -> Option<&str> {
+        if self.event_type == StackApplyEventType::CommandCompleted {
+            return None;
+        }
+        let message = self.message.as_deref()?.trim();
+        if message.is_empty() {
+            return None;
+        }
+        let lower = message.to_ascii_lowercase();
+        for marker in ["error response from daemon:", "error:", "failed to "] {
+            if let Some(start) = lower.find(marker) {
+                return Some(&message[start..]);
+            }
+        }
+        (self.severity.as_deref() == Some("error")).then_some(message)
+    }
+
     #[must_use]
     pub fn system(message: impl Into<String>) -> Self {
         Self {

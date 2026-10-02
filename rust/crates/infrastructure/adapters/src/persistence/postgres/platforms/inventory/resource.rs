@@ -80,7 +80,7 @@ pub(crate) async fn persist_resource(
     tx: &mut Transaction<'_, Postgres>,
     snapshot: &ResourceSnapshot,
     node: Option<&str>,
-    policy: &crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    policy: &citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 ) -> Result<bool, RuntimeCapabilityError> {
     use crate::persistence::postgres::platforms::nodes::store as nodes;
     let platform = snapshot.platform_id;
@@ -263,7 +263,7 @@ async fn persist_metadata(
 pub(crate) async fn persist_swarm_snapshot(
     tx: &mut Transaction<'_, Postgres>,
     snapshot: &citadel_platforms::RuntimeInventorySnapshot,
-    policy: &crate::persistence::postgres::platforms::node_agents::reconciliation::NodeAgentReconciliationPolicy,
+    policy: &citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 ) -> Result<(), RuntimeCapabilityError> {
     let inventory = snapshot
         .swarm

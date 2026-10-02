@@ -43,7 +43,7 @@ impl GitRepositoryExecutionService {
                     ));
                 }
                 remote
-                    .add_ssh_key(self.cli.workspace.as_ref(), &self.cache_root, &private_key)
+                    .add_ssh_key(&self.cli, &self.cache_root, &private_key)
                     .await?;
             }
         }
@@ -96,12 +96,12 @@ impl PreparedRemote {
 
     async fn add_ssh_key(
         &mut self,
-        workspace: &dyn crate::workspace::GitWorkspacePort,
+        cli: &crate::GitCli,
         cache_root: &Path,
         private_key: &str,
     ) -> Result<(), GitRepositoryExecutionError> {
         self.credential_file = Some(
-            workspace
+            cli.workspace
                 .credential(cache_root, private_key)
                 .await
                 .map_err(storage_error)?,
@@ -111,10 +111,7 @@ impl PreparedRemote {
             .as_ref()
             .expect("credential created")
             .path();
-        let command = format!(
-            "ssh -i \"{}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes",
-            path.display()
-        );
+        let command = cli.ssh_command(Some(path));
         self.environment
             .push((OsString::from("GIT_SSH_COMMAND"), OsString::from(command)));
         Ok(())

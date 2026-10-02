@@ -15,7 +15,7 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
       const navigate = useNavigate();
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources[0] : resources;
-      let canExecute = !!selected;
+      let canExecute = selected?.capabilities?.canInspect === true;
       if (Array.isArray(resources)) {
         canExecute &&= resources.length === 1;
       }
@@ -39,7 +39,7 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
     mutateKey: 'deleteImages',
     canExecute: (resources) => {
       const selected = Array.isArray(resources) ? resources : [resources];
-      return selected.every((resource) => !resource.dockerNodeId);
+      return selected.every((resource) => !resource.dockerNodeId && resource.capabilities?.canExecute === true);
     },
     separatorBefore: true,
     confirm: true,

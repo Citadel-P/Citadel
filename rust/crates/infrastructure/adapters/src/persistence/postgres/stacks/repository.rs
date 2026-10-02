@@ -187,8 +187,9 @@ impl StackRepository for PostgresStackRepository {
         result: &'a StackRuntimeResult,
         bindings: &'a [ResourceBindingSnapshot],
         source: Option<&'a StackReleaseSource>,
+        container_ids: Option<&'a [String]>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
-        self.complete_apply_impl(actor, claim, result, bindings, source)
+        self.complete_apply_impl(actor, claim, result, bindings, source, container_ids)
     }
 
     fn fail_apply<'a>(

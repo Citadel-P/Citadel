@@ -28,34 +28,6 @@ pub(super) fn registry_snapshot(
 
 pub(super) fn masked_registry_configuration(value: &Value) -> Result<Value, RegistryError> {
     let mut masked = value.clone();
-    let kind = registry_type(&masked)?;
-    let keys: &[&str] = match kind.as_str() {
-        "Gitlab" | "GitHub" | "DockerHub" => &["PAT"],
-        "Custom" | "Azure" => &["Password"],
-        "AWS" => &["AccessKey", "SecretAccessKey"],
-        _ => &[],
-    };
-    if let Some(object) = masked.as_object_mut() {
-        for key in keys {
-            mask_property(object, key);
-        }
-    }
+    citadel_registries::mask_registry_credentials(&mut masked);
     Ok(masked)
-}
-
-pub(super) fn mask_property(object: &mut serde_json::Map<String, Value>, pascal_name: &str) {
-    let camel_name = format!(
-        "{}{}",
-        pascal_name[..1].to_ascii_lowercase(),
-        &pascal_name[1..]
-    );
-    for key in [pascal_name, camel_name.as_str()] {
-        if let Some(value) = object.get_mut(key) {
-            *value = if value.as_str().is_some_and(|value| !value.is_empty()) {
-                Value::String("****************".to_owned())
-            } else {
-                Value::Null
-            };
-        }
-    }
 }
