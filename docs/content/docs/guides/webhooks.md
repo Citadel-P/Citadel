@@ -61,7 +61,7 @@ Examples:
 ```text
 https://citadel.example.com/listener/github/repo/019f0000-0000-7000-9000-000000000001/pull
 https://citadel.example.com/listener/github/stack/019f0000-0000-7000-9000-000000000002/deploy
-https://citadel.example.com/listener/github/build/019f0000-0000-7000-9000-000000000003/run
+https://citadel.example.com/listener/github/src/tools/build/019f0000-0000-7000-9000-000000000003/run
 https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000004/run
 https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000005/run
 https://citadel.example.com/listener/generic/swarm-service/019f0000-0000-7000-9000-000000000006/update

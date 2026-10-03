@@ -5,7 +5,7 @@
       "label": "Citadel: Prepare development environment",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "prepare"],
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "prepare"],
       "problemMatcher": []
     },
     {
@@ -28,14 +28,14 @@
     },
     {
       "label": "Citadel: Run release (Compose)",
-      "detail": "Builds the release image with the bundled UI and starts Core and PostgreSQL in the citadel Compose project using rust/.env.",
+      "detail": "Builds the release image with the bundled UI and starts Core and PostgreSQL in the citadel Compose project using deploy/.env.",
       "type": "process",
       "command": "docker",
       "args": [
         "compose",
         "--project-name", "citadel",
-        "--env-file", "${workspaceFolder}/rust/.env",
-        "-f", "${workspaceFolder}/rust/docker-compose.yml",
+        "--env-file", "${workspaceFolder}/deploy/.env",
+        "-f", "${workspaceFolder}/deploy/docker-compose.yml",
         "up", "--detach", "--build", "--wait", "--wait-timeout", "120"
       ],
       "options": { "cwd": "${workspaceFolder}" },
@@ -48,8 +48,8 @@
       "detail": "Builds Core using the local Cargo cache and starts the citadel-wsl Compose project.",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "compose-up"],
-      "options": { "cwd": "${workspaceFolder}/rust" },
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "compose-up"],
+      "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": ["$rustc"],
       "presentation": { "reveal": "always", "panel": "dedicated", "group": "citadel-api" },
       "runOptions": { "instanceLimit": 1 }
@@ -59,13 +59,13 @@
       "detail": "Stops the Compose services, preserving database and runtime data. Terminate the Vite task separately.",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "compose-stop"],
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "compose-stop"],
       "problemMatcher": []
     },
     {
       "label": "Citadel: Initialize development dependencies",
       "type": "shell",
-      "command": "cargo fetch --locked --manifest-path rust/Cargo.toml && npm --prefix src/Citadel.FrontEnd ci",
+      "command": "cargo fetch --locked --manifest-path Cargo.toml && npm --prefix src/frontend ci",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -76,9 +76,9 @@
       "detail": "Builds the Rust API and exports its OpenAPI documents to schema/.",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/build.sh"],
+      "args": ["${workspaceFolder}/src/tools/build/build.sh"],
       "options": {
-        "cwd": "${workspaceFolder}/rust"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"]
     },
@@ -93,9 +93,9 @@
       "dependsOn": "Citadel: Prepare Rust API",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "cargo", "run", "--locked", "-p", "citadel-server", "--", "serve"],
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "exec", "cargo", "run", "--locked", "-p", "citadel-server", "--", "serve"],
       "options": {
-        "cwd": "${workspaceFolder}/rust"
+        "cwd": "${workspaceFolder}"
       },
       "isBackground": true,
       "problemMatcher": {
@@ -124,9 +124,9 @@
       "detail": "Starts Vite without the API; use the Debug application launch configuration instead for breakpoints.",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "exec", "npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
       "options": {
-        "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+        "cwd": "${workspaceFolder}/src/frontend"
       },
       "problemMatcher": [],
       "presentation": {
@@ -143,9 +143,9 @@
       "dependsOn": "Citadel: Prepare development environment",
       "type": "process",
       "command": "bash",
-      "args": ["${workspaceFolder}/rust/scripts/dev.sh", "exec", "bash", "-c", "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast"],
+      "args": ["${workspaceFolder}/src/tools/dev/dev.sh", "exec", "bash", "-c", "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --no-fail-fast"],
       "options": {
-        "cwd": "${workspaceFolder}/rust"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"]
     },
@@ -156,7 +156,7 @@
       "command": "cargo",
       "args": ["run", "--locked", "-p", "xtask", "--", "openapi"],
       "options": {
-        "cwd": "${workspaceFolder}/rust",
+        "cwd": "${workspaceFolder}",
         "env": {
           "SQLX_OFFLINE": "true"
         }
@@ -170,7 +170,7 @@
       "command": "cargo",
       "args": ["run", "--locked", "-p", "xtask", "--", "openapi", "--check"],
       "options": {
-        "cwd": "${workspaceFolder}/rust",
+        "cwd": "${workspaceFolder}",
         "env": {
           "SQLX_OFFLINE": "true"
         }
@@ -182,7 +182,7 @@
       "type": "shell",
       "command": "npm run lint && npm run test:run",
       "options": {
-        "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+        "cwd": "${workspaceFolder}/src/frontend"
       },
       "problemMatcher": []
     }

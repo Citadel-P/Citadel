@@ -13,7 +13,7 @@ sudo chown -R "$(id -u):$(id -g)" \
   /usr/local/cargo/git \
   /home/vscode/.cache/citadel-target \
   /home/vscode/.npm \
-  /workspace/src/Citadel.FrontEnd/node_modules
+  /workspace/src/frontend/node_modules
 
-cargo fetch --locked --manifest-path /workspace/rust/Cargo.toml
-npm --prefix /workspace/src/Citadel.FrontEnd ci
+cargo fetch --locked --manifest-path /workspace/Cargo.toml
+npm --prefix /workspace/src/frontend ci

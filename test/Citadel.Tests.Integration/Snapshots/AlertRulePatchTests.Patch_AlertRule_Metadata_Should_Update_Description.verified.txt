@@ -1,9 +1,0 @@
-{
-  id: Guid_1,
-  name: Test Rule,
-  description: Updated description,
-  type: PlatformUnreachable,
-  severity: Warning,
-  cooldownSeconds: 300,
-  status: Enabled
-}

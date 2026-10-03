@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: citadel
+      POSTGRES_PASSWORD: citadel-e2e
+      POSTGRES_DB: citadel
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U citadel -d citadel']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - citadel-e2e
+
+  docker:
+    image: docker:27.5.1-dind
+    privileged: true
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DOCKER_TLS_CERTDIR: ''
+    healthcheck:
+      test: ['CMD', 'docker', 'info']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - docker-socket:/var/run
+      - docker-data:/var/lib/docker
+    networks:
+      - citadel-e2e
+
+  citadel:
+    image: ${CITADEL_E2E_IMAGE:-citadel-e2e:local}
+    init: true
+    environment:
+      Transport__Mode: Disabled
+      Transport__PublicUrl: http://127.0.0.1:18000
+      EdgeAgent__PublicGrpcUrl: http://citadel:8001
+      AgentTransport__AllowInsecure: 'true'
+      DATABASE_URL: postgres://citadel:citadel-e2e@postgres:5432/citadel
+      Jwt__Issuer: http://127.0.0.1:18000
+      Jwt__Audience: http://127.0.0.1:18000
+      Jwt__Key: citadel-e2e-only-signing-key-00000000000000000000000000000000
+      Secrets__EncryptionKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DOCKER_HOST: unix:///var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/citadel-entrypoint', 'healthcheck']
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
+    ports:
+      - '${CITADEL_E2E_PORT:-18000}:8000'
+    volumes:
+      - citadel-data:/app/data
+      - docker-socket:/var/run
+    networks:
+      - citadel-e2e
+
+  keycloak:
+    profiles: ['oidc']
+    image: quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=18080
+      - --hostname=http://keycloak:18080
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: citadel-e2e-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: citadel-e2e-admin-password
+      KC_HEALTH_ENABLED: 'true'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    ports:
+      - '18080:18080'
+    volumes:
+      - ./fixtures/keycloak/citadel-e2e-realm.json:/opt/keycloak/data/import/citadel-e2e-realm.json:ro
+    networks:
+      - citadel-e2e
+
+  vault:
+    profiles: ['vault']
+    image: hashicorp/vault@sha256:3fd53308acccd9e4e83fde3e6c6cf5b15e0f7fac1ff7510780b8b23f5e4c3de7
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=citadel-vault-acceptance-root-token
+      - -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      SKIP_SETCAP: 'true'
+    healthcheck:
+      test: ['CMD', 'vault', 'status', '-address=http://127.0.0.1:8200']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    networks:
+      - citadel-e2e
+
+networks:
+  citadel-e2e:
+    name: ${COMPOSE_PROJECT_NAME:-citadel-e2e}-network
+
+volumes:
+  citadel-data:
+  docker-data:
+  docker-socket:
+  postgres-data:

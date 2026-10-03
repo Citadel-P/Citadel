@@ -1,9 +1,0 @@
-{
-  id: Guid_1,
-  name: Test Rule,
-  description: Original description,
-  type: PlatformUnreachable,
-  severity: Critical,
-  cooldownSeconds: 600,
-  status: Disabled
-}

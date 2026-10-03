@@ -40,7 +40,6 @@ reverse-proxy setup:
 | `Transport__Mode` | Production transport mode |
 | `Transport__PublicUrl` | Browser and API origin |
 | `EdgeAgent__PublicGrpcUrl` | Public Edge Agent gRPC origin |
-| `AllowedHosts` | Hosts accepted by ASP.NET Core; keep `localhost` for health checks and internal automation calls |
 | `Transport__ForwardedHeaders__KnownProxies` | Immediate reverse-proxy address |
 | `Jwt__Issuer` | JWT issuer, normally the public Citadel origin |
 | `Jwt__Audience` | JWT audience, normally the public Citadel origin |

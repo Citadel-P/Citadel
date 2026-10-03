@@ -1,4 +1,0 @@
-﻿{
-  UserName: null,
-  PAT: fake-pat-1
-}

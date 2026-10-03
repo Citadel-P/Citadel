@@ -1,0 +1,7 @@
+[build]
+# Keep interactive development responsive; override with --jobs when needed.
+jobs = 2
+
+[env]
+# Resolve offline query metadata from the workspace, including in Docker builds.
+SQLX_OFFLINE_DIR = { value = "src/.sqlx", relative = true }

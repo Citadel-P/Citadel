@@ -6,7 +6,7 @@ const docsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const output = path.join(docsRoot, 'api-out');
 await mkdir(output, { recursive: true });
 await copyFile(
-  path.resolve(docsRoot, '..', 'src', 'schema', 'Citadel.WebApi_public.json'),
+  path.resolve(docsRoot, '..', 'schema', 'public-v1.json'),
   path.join(output, 'public-openapi.json'),
 );
 

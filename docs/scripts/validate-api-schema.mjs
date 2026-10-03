@@ -3,15 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const docsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const schemaPath = path.resolve(docsRoot, '..', 'src', 'schema', 'Citadel.WebApi_public.json');
+const schemaPath = path.resolve(docsRoot, '..', 'schema', 'public-v1.json');
 const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
 const errors = [];
 const operations = [];
 const operationIds = new Set();
 
 if (!schema.openapi?.startsWith('3.1.')) errors.push(`expected OpenAPI 3.1, found ${schema.openapi}`);
-if (schema.info?.title !== 'Citadel API Preview') errors.push('missing API Preview title');
-if (!schema.components?.securitySchemes?.CitadelBearer) errors.push('missing CitadelBearer security scheme');
+if (schema.info?.title !== 'Citadel Public API') errors.push('missing public API title');
+if (!schema.components?.securitySchemes?.Bearer) errors.push('missing Bearer security scheme');
 
 for (const [route, pathItem] of Object.entries(schema.paths ?? {})) {
   for (const method of ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']) {
@@ -23,8 +23,9 @@ for (const [route, pathItem] of Object.entries(schema.paths ?? {})) {
     else operationIds.add(operation.operationId);
     if (!operation.summary) errors.push(`${method.toUpperCase()} ${route}: missing summary`);
     if (!Array.isArray(operation.tags) || operation.tags.length === 0) errors.push(`${method.toUpperCase()} ${route}: missing tag`);
-    if (!operation.security?.some((requirement) => 'CitadelBearer' in requirement)) errors.push(`${method.toUpperCase()} ${route}: missing bearer security requirement`);
-    if (!operation.responses?.['401'] || !operation.responses?.['403']) errors.push(`${method.toUpperCase()} ${route}: missing authorization responses`);
+    const anonymous = route === '/health' && method === 'get';
+    if (!anonymous && !operation.security?.some((requirement) => 'Bearer' in requirement)) errors.push(`${method.toUpperCase()} ${route}: missing bearer security requirement`);
+    if (!anonymous && (!operation.responses?.['401'] || !operation.responses?.['403'])) errors.push(`${method.toUpperCase()} ${route}: missing authorization responses`);
   }
 }
 
