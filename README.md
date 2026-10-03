@@ -15,8 +15,6 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 
 ![Citadel Platforms page with an online standalone Docker host and an online Swarm host](docs/public/screenshots/platforms.png)
 
-![Citadel platform statistics showing live CPU and memory history](docs/public/screenshots/platform-stats.png)
-
 ![Citadel Docker platform with five running containers and live CPU and memory usage](docs/public/screenshots/platform-containers.png)
 
 </details>
@@ -34,8 +32,6 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 <summary>Dark mode</summary>
 
 ![Citadel dark-mode Platforms page showing Docker and Swarm hosts](docs/public/screenshots/platforms-dark.png)
-
-![Citadel dark-mode platform statistics with CPU and memory charts](docs/public/screenshots/platform-stats-dark.png)
 
 </details>
 
