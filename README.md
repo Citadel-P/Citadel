@@ -8,6 +8,15 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 
 [Documentation](docs/content/docs/index.mdx) · [API Preview](docs/content/docs/reference/api.mdx) · [OpenAPI schema](schema/public-v1.json) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
 
+![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
+
+<details>
+<summary>Docker host and container overview</summary>
+
+![Citadel Docker platform with five running containers and live CPU and memory usage](docs/public/screenshots/platform-containers.png)
+
+</details>
+
 ## What you can do
 
 - **Deploy applications** — manage containers and Compose stacks, deploy from Git, roll back releases, and check configuration drift.
