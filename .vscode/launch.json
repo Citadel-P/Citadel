@@ -11,7 +11,7 @@
           "build",
           "--locked",
           "--manifest-path",
-          "${workspaceFolder}/rust/Cargo.toml",
+          "${workspaceFolder}/Cargo.toml",
           "-p",
           "citadel-server"
         ],
@@ -21,8 +21,8 @@
         }
       },
       "args": ["serve"],
-      "envFile": "${workspaceFolder}/rust/.env.development",
-      "cwd": "${workspaceFolder}/rust",
+      "envFile": "${workspaceFolder}/deploy/.env.development",
+      "cwd": "${workspaceFolder}",
       "sourceLanguages": ["rust"]
     },
     {
@@ -30,8 +30,8 @@
       "type": "node-terminal",
       "request": "launch",
       "preLaunchTask": "Citadel: Prepare development environment",
-      "command": "bash \"${workspaceFolder}/rust/scripts/dev.sh\" exec npm run dev -- --host 0.0.0.0 --port 5173 --strictPort",
-      "cwd": "${workspaceFolder}/src/Citadel.FrontEnd"
+      "command": "bash \"${workspaceFolder}/src/tools/dev/dev.sh\" exec npm run dev -- --host 0.0.0.0 --port 5173 --strictPort",
+      "cwd": "${workspaceFolder}/src/frontend"
     }
   ],
   "compounds": [

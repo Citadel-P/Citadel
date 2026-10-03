@@ -41,9 +41,9 @@ npm run test:api --prefix docs
 npm run start:api --prefix docs
 ```
 
-`build:api` regenerates the canonical
-`src/schema/Citadel.WebApi_public.json` through the Web API project before
-rendering ReDoc. Do not copy or edit that schema by hand. The API output
+`build:api` validates and renders the committed `schema/public-v1.json` generated
+by Rust. After changing API contracts, run `cargo run --locked -p xtask -- openapi`
+from the repository root to regenerate both schemas and the frontend client. Do not copy or edit that schema by hand. The API output
 contains a downloadable copy named `public-openapi.json`.
 
 Edit pages under `content/docs`. Keep `docs-audit.md` outside that directory so

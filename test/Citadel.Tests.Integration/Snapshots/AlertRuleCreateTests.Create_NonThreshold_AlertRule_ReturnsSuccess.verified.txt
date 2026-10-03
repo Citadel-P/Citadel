@@ -1,9 +1,0 @@
-{
-  id: Guid_1,
-  name: PlatformUnreachable,
-  description: Test description,
-  type: PlatformUnreachable,
-  severity: Critical,
-  cooldownSeconds: 300,
-  status: Enabled
-}

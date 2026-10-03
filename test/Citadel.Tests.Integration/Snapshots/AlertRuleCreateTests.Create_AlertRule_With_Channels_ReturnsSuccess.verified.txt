@@ -1,8 +1,0 @@
-{
-  id: Guid_1,
-  name: PlatformUnreachable,
-  type: PlatformUnreachable,
-  severity: Critical,
-  cooldownSeconds: 120,
-  status: Enabled
-}

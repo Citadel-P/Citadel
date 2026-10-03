@@ -1,7 +1,0 @@
-﻿{
-  type: https://tools.ietf.org/html/rfc9110#section-15.5.4,
-  title: Forbidden,
-  status: 403,
-  detail: Missing permission [Write] on [Platform],
-  traceId: {Scrubbed}
-}

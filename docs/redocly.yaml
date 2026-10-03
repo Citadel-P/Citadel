@@ -3,7 +3,7 @@ extends:
 
 apis:
   citadel@preview:
-    root: ../src/schema/Citadel.WebApi_public.json
+    root: ../schema/public-v1.json
 
 rules:
   info-license: off
@@ -11,7 +11,12 @@ rules:
   operation-4xx-response: warn
   tag-description: off
   no-server-example.com: off
+  # Self-hosted deployments supply their own API origin.
+  no-empty-servers: off
+  # Current Rust handlers use id/deploymentId and id/stackId for different
+  # methods on the same URL. Keep the warning visible without blocking docs.
+  no-identical-paths: warn
   no-unused-components: error
-  # ASP.NET route constraints keep /alertRules/{id:guid}/_cfg distinct from
-  # /alertRules/channels/{id}, but OpenAPI cannot encode route constraints.
+  # Static channel routes take precedence over resource ID routes; OpenAPI
+  # cannot express the UUID validation used at the request boundary.
   no-ambiguous-paths: off

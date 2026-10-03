@@ -10,7 +10,6 @@ operations. A complete Citadel control-plane backup contains:
 - the JWT signing key;
 - the local secret-encryption key;
 - the Core-to-Agent Ed25519 key pair;
-- ASP.NET Core data-protection keys;
 - a manifest entry for each equivalent key supplied through external
   configuration.
 

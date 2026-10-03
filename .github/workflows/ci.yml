@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        working-directory: rust
+        working-directory: .
     env:
       SQLX_OFFLINE: "true"
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -38,13 +38,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev ripgrep
 
       - name: Verify Rust source ownership
-        run: bash scripts/check-source-ownership.sh
+        run: bash test/scripts/check-source-ownership.sh
 
       - name: Verify Docker build context isolation
         run: |
           set -euo pipefail
-          tar --exclude=rust/target --exclude=rust/artifacts -C .. -c rust version.json \
-            | docker build --file rust/Dockerfile --target rust-source -
+          tar -c Cargo.toml Cargo.lock rust-toolchain.toml .cargo src/.sqlx src/server src/agent src/features src/infrastructure src/tools/build src/tools/xtask version.json Dockerfile \
+            | docker build --file Dockerfile --target rust-source -
 
       - name: Install pinned Rust toolchain
         run: |
@@ -111,40 +111,6 @@ jobs:
           cargo test --locked -p citadel-server --test platforms_http node_coverage -- --ignored --test-threads=1
           cargo test --locked -p citadel-adapters --test edge_transport -- --ignored --test-threads=1
 
-  backend-tests:
-    name: Backend unit and integration tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-          token: ${{ secrets.ACCESS_TOKEN || github.token }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.100-preview.7.26381.103
-
-      - name: Restore tests
-        run: |
-          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
-          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
-
-      - name: Build tests
-        run: |
-          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release -p:OpenApiGenerateDocumentsOnBuild=false
-          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release -p:OpenApiGenerateDocumentsOnBuild=false
-
-      - name: Run backend unit tests
-        run: dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
-
-      - name: Run backend integration tests
-        run: dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
-
   frontend-tests:
     name: Frontend unit tests
     runs-on: ubuntu-latest
@@ -152,7 +118,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: src/Citadel.FrontEnd
+        working-directory: src/frontend
 
     steps:
       - name: Checkout repository
@@ -163,7 +129,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: src/Citadel.FrontEnd/package-lock.json
+          cache-dependency-path: src/frontend/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
@@ -180,7 +146,7 @@ jobs:
   release-image:
     name: Publish release image
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [backend-tests, frontend-tests, rust-openapi]
+    needs: [frontend-tests, rust-openapi]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -192,14 +158,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN || github.token }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.100-preview.7.26381.103
 
       - name: Validate release tag
         id: version
@@ -211,27 +172,13 @@ jobs:
             exit 1
           fi
 
-          dotnet tool restore
-          version="$(dotnet nbgv get-version -v NuGetPackageVersion)"
-          simple_version="$(dotnet nbgv get-version -v SimpleVersion)"
-          assembly_version="$(dotnet nbgv get-version -v AssemblyVersion)"
-          file_version="$(dotnet nbgv get-version -v AssemblyFileVersion)"
-          public_release="$(dotnet nbgv get-version -v PublicRelease)"
-
-          if [[ "${GITHUB_REF_NAME}" != "v${simple_version}" ]]; then
-            echo "Release tag '${GITHUB_REF_NAME}' does not match version.json ('v${simple_version}')." >&2
+          version="$(python3 -c 'import json; print(json.load(open("version.json"))["version"])')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' does not match version.json ('v${version}')." >&2
             exit 1
           fi
-          if [[ "${public_release}" != "True" ]]; then
-            echo "Release tag '${GITHUB_REF_NAME}' is not recognized as a public release." >&2
-            exit 1
-          fi
-
-          {
-            echo "version=${version}"
-            echo "assembly-version=${assembly_version}"
-            echo "file-version=${file_version}"
-          } >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Validate Docker Hub configuration
         shell: bash
@@ -279,14 +226,12 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: src/Citadel.WebApi/Dockerfile
+          file: Dockerfile
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            ASSEMBLY_VERSION=${{ steps.version.outputs.assembly-version }}
-            FILE_VERSION=${{ steps.version.outputs.file-version }}
             INFORMATIONAL_VERSION=${{ steps.version.outputs.version }}
 
       - name: Verify published image aliases
@@ -337,7 +282,7 @@ jobs:
       - name: Checkout release commit
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN || github.token }}
 
@@ -347,20 +292,12 @@ jobs:
           [[ -n "${NEXT_PUBLIC_DOCS_URL}" ]] || { echo "DOCS_SITE_URL is not configured." >&2; exit 1; }
           [[ -n "${NEXT_PUBLIC_API_DOCS_URL}" ]] || { echo "API_DOCS_URL is not configured." >&2; exit 1; }
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.100-preview.7.26381.103
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: docs/package-lock.json
-
-      - name: Restore backend
-        run: dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
 
       - name: Install documentation dependencies
         run: npm ci --prefix docs
@@ -376,7 +313,7 @@ jobs:
       - name: Build API Preview
         run: |
           npm run build:api --prefix docs
-          git diff --exit-code -- src/schema
+          git diff --exit-code -- schema
           npm run test:api --prefix docs
 
       - name: Upload product documentation for GitHub Pages

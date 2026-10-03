@@ -1,0 +1,13 @@
+# docker compose --env-file deploy/.env -f deploy/docker-compose.yml -f deploy/compose.direct-tls.yml up -d --build
+# Configure HTTPS public origins and certificate/key paths in deploy/.env.
+services:
+  server:
+    environment:
+      Transport__Mode: Direct
+    volumes:
+      - type: bind
+        source: ${CITADEL_TLS_HOST_DIRECTORY:-./tls}
+        target: /etc/citadel/tls
+        read_only: true
+        bind:
+          create_host_path: false

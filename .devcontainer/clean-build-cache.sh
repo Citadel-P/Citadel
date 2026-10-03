@@ -29,6 +29,6 @@ printf 'Clearing Citadel compiler output (%s KiB); source and runtime data are u
 # Test output shares dev's debug directory. Use the validated configured target;
 # --target-dir rejects older Docker-created caches without CACHEDIR.TAG.
 for profile in dev release; do
-  CARGO_TARGET_DIR="$cache_dir" cargo clean --manifest-path /workspace/rust/Cargo.toml --profile "$profile"
+  CARGO_TARGET_DIR="$cache_dir" cargo clean --manifest-path /workspace/Cargo.toml --profile "$profile"
 done
-CARGO_TARGET_DIR="$cache_dir" cargo clean --manifest-path /workspace/rust/Cargo.toml --doc
+CARGO_TARGET_DIR="$cache_dir" cargo clean --manifest-path /workspace/Cargo.toml --doc

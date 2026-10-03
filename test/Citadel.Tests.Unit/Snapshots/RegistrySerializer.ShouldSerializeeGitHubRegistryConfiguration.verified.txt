@@ -1,6 +1,0 @@
-﻿{
-  $type: GitHub,
-  NameSpace: citadel-p,
-  GhcrAuthEnabled: true,
-  PAT: fake-pat-1
-}

@@ -1,0 +1,9 @@
+{
+  "schema_path": "src/infrastructure/docker-api/codegen/v1.49.yaml",
+  "schema_reference": "Docker Engine API v1.49",
+  "schema_sha256": "e64db3c537e92b8ebe72f8a8afdde54989f3a8d5fa32f44433fe3387e6dcac15",
+  "api_version": "1.49",
+  "generator_version": "7.25.0",
+  "generator_url": "https://repo.maven.apache.org/maven2/org/openapitools/openapi-generator-cli/7.25.0/openapi-generator-cli-7.25.0.jar",
+  "generator_sha256": "41ce4f6b07f196676439d710759fa1ced7a08066d06ff1bf314681470289efae"
+}

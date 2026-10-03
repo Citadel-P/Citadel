@@ -1,6 +1,0 @@
-[submodule "Citadel.Contracts"]
-    path = Citadel.Contracts
-    url = https://github.com/Citadel-P/Citadel.Contracts
-[submodule "src/Citadel.Contracts"]
-	path = src/Citadel.Contracts
-	url = https://github.com/Citadel-P/Citadel.Contracts

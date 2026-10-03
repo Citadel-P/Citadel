@@ -6,23 +6,13 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'src/schema/**'
-      - 'src/Citadel.WebApi/OpenApi/**'
-      - 'src/Citadel.WebApi/Routes/**'
-      - 'src/Citadel.WebApi/WebApiModule.cs'
-      - 'src/Citadel.Contracts/src/Citadel.Hosting/OpenApi/**'
-      - 'Directory.Packages.props'
+      - 'schema/**'
       - '.github/workflows/docs.yml'
   push:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'src/schema/**'
-      - 'src/Citadel.WebApi/OpenApi/**'
-      - 'src/Citadel.WebApi/Routes/**'
-      - 'src/Citadel.WebApi/WebApiModule.cs'
-      - 'src/Citadel.Contracts/src/Citadel.Hosting/OpenApi/**'
-      - 'Directory.Packages.props'
+      - 'schema/**'
       - '.github/workflows/docs.yml'
 
 concurrency:
@@ -44,7 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
 
       - name: Validate documentation URLs
@@ -59,14 +49,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: docs/package-lock.json
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.100-preview.7.26381.103
-
-      - name: Restore backend
-        run: dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
 
       - name: Install dependencies
         run: npm ci --prefix docs
@@ -90,7 +72,7 @@ jobs:
         run: npm run build:api --prefix docs
 
       - name: Verify generated schema is committed
-        run: git diff --exit-code -- src/schema
+        run: git diff --exit-code -- schema
 
       - name: Smoke-test API Preview
         run: npm run test:api --prefix docs

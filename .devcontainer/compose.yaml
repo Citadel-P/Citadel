@@ -36,7 +36,7 @@ services:
       - citadel-data:/home/vscode/.local/share/citadel
       - type: volume
         source: frontend-node-modules
-        target: /workspace/src/Citadel.FrontEnd/node_modules
+        target: /workspace/src/frontend/node_modules
         volume:
           nocopy: true
     # Docker Desktop's host socket is owned by group 0. Keep vscode non-root

@@ -6,13 +6,23 @@ on:
     branches: [main]
     tags: ['v*.*.*']
     paths:
-      - 'rust/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'Dockerfile*'
       - 'version.json'
       - '.github/workflows/agent.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'rust/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'Dockerfile*'
       - 'version.json'
       - '.github/workflows/agent.yml'
 
@@ -96,10 +106,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev ripgrep
-          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
           rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
       - name: Validate Agent, contracts and volume helper
-        working-directory: rust
+        working-directory: .
         run: |
           cargo fmt -p citadel-agent -p citadel-contracts -p citadel-volume-helper -- --check
           cargo clippy --locked -p citadel-agent -p citadel-contracts -p citadel-volume-helper --all-targets -- -D warnings
@@ -110,16 +120,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash rust/scripts/check-source-ownership.sh
+          bash test/scripts/check-source-ownership.sh
           mkdir "$RUNNER_TEMP/agent-context"
-          tar --exclude=rust/target --exclude=rust/artifacts -c rust version.json \
+          tar -c Cargo.toml Cargo.lock rust-toolchain.toml .cargo src/.sqlx src/server src/agent src/features src/infrastructure src/tools/build src/tools/xtask version.json Dockerfile.agent \
             | tar -x -C "$RUNNER_TEMP/agent-context"
       - uses: docker/setup-buildx-action@v3
       - name: Build release Agent and helper
         uses: docker/build-push-action@v6
         with:
           context: ${{ runner.temp }}/agent-context
-          file: ${{ runner.temp }}/agent-context/rust/Dockerfile.agent
+          file: ${{ runner.temp }}/agent-context/Dockerfile.agent
           platforms: linux/${{ matrix.arch }}
           load: true
           tags: citadel-agent:ci
@@ -136,14 +146,14 @@ jobs:
       - name: Smoke-test packaged Agent and runtime tools
         env:
           EXPECTED_VERSION: ${{ needs.version.outputs.informational }}
-        run: bash rust/scripts/test-agent-image.sh citadel-agent:ci "$EXPECTED_VERSION"
+        run: bash test/scripts/test-agent-image.sh citadel-agent:ci "$EXPECTED_VERSION"
       - name: Test Direct, Edge, live Docker and intake against isolated services
-        run: bash rust/scripts/test-agent-compatibility.sh citadel-agent:ci
+        run: bash test/scripts/test-agent-compatibility.sh citadel-agent:ci
       - name: Build Core acceptance image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: rust/Dockerfile
+          file: Dockerfile
           platforms: linux/${{ matrix.arch }}
           load: true
           tags: citadel-core:acceptance
@@ -168,10 +178,10 @@ jobs:
           if [[ -n "$BASELINE_IMAGE" ]]; then
             [[ "$BASELINE_IMAGE" =~ @sha256:[a-f0-9]{64}$ ]]
             docker pull "$BASELINE_IMAGE"
-            bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci "$BASELINE_IMAGE"
+            bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci "$BASELINE_IMAGE"
             printf 'Tested rollback Agent: `%s`\n' "$BASELINE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
           else
-            bash rust/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci
+            bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:ci
             echo 'Mixed-version gate pending: CITADEL_AGENT_ROLLBACK_IMAGE is not configured.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Login to GHCR for tested architecture images
