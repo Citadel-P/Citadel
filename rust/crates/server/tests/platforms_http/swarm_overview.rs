@@ -3,7 +3,7 @@ use super::*;
 // Ports SwarmEndpointTests overview authorization/aggregation and the quorum
 // cases: an online socket does not imply a healthy manager quorum.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn overview_reports_persisted_quorum_workloads_and_stale_inventory() {
     let f = fixture().await;
     let uri = format!("/api/v1/platforms/{}/swarm", f.platform_id);

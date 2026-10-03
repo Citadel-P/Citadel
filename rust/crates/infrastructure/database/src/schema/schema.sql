@@ -1,5 +1,4 @@
 -- Citadel Rust declarative schema authority.
--- Imported once from: src/Citadel.Infrastructure/Scripts/script0001.sql
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -1115,7 +1114,8 @@ CREATE TABLE buildprojects (
     name text NOT NULL,
     normalizedname text NOT NULL,
     platformid uuid,
-    registryid uuid NOT NULL,
+    pushtoregistry boolean NOT NULL DEFAULT TRUE,
+    registryid uuid,
     retentionruncount integer NOT NULL DEFAULT 20,
     rowversion bigint NOT NULL DEFAULT 0,
     tagtemplates jsonb NOT NULL DEFAULT ('["{branch}-{shortSha}"]'::jsonb),
@@ -1903,7 +1903,8 @@ CREATE UNIQUE INDEX ix_edgeagentbindings_activeagentfingerprint ON edgeagentbind
 
 CREATE UNIQUE INDEX ix_edgeagentbindings_activeagentid ON edgeagentbindings (agentid) WHERE revokedatutc IS NULL;
 
-CREATE UNIQUE INDEX ix_edgeagentbindings_activedaemon ON edgeagentbindings (dockerdaemonid) WHERE dockerdaemonid IS NOT NULL AND revokedatutc IS NULL;
+-- Platform monitoring and build execution may share a daemon, with one active binding per role.
+CREATE UNIQUE INDEX ix_edgeagentbindings_activedaemon ON edgeagentbindings (resourcetype, dockerdaemonid) WHERE dockerdaemonid IS NOT NULL AND revokedatutc IS NULL;
 
 CREATE UNIQUE INDEX ix_edgeagentbindings_activenode ON edgeagentbindings (resourcetype, resourceid, dockernodeid) WHERE dockernodeid IS NOT NULL AND revokedatutc IS NULL;
 

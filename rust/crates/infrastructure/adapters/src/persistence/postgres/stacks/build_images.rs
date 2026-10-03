@@ -33,6 +33,7 @@ LEFT JOIN LATERAL (
     FROM buildruns candidate
     WHERE candidate.buildprojectid=project.id
       AND candidate.status='Succeeded'
+      AND candidate.registrysnapshot <> 'null'::jsonb
       AND ($2::uuid IS NULL OR candidate.id=$2)
     ORDER BY candidate.completedat DESC NULLS LAST,candidate.id DESC
     LIMIT 1
@@ -62,13 +63,17 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
                 };
                 let reference = match retained {
                     Some(reference) => reference.to_owned(),
-                    None => first_reference(row.try_get("imagereferences").map_err(storage)?)
-                        .ok_or_else(|| {
-                            StackError::Validation(format!(
-                                "Service '{}': Build has no successful deployable image.",
-                                binding.service_name
-                            ))
-                        })?,
+                    None => first_reference(
+                        row.try_get::<Option<Value>, _>("imagereferences")
+                            .map_err(storage)?
+                            .unwrap_or(Value::Null),
+                    )
+                    .ok_or_else(|| {
+                        StackError::Validation(format!(
+                            "Service '{}': Build has no successful deployable image.",
+                            binding.service_name
+                        ))
+                    })?,
                 };
                 resolved.push(ResolvedStackBuildImageBinding {
                     service_name: binding.service_name.clone(),

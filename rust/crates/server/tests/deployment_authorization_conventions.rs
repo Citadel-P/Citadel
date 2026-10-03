@@ -1,4 +1,4 @@
-//! Guard the migrated family; other resources adopt policies in their own phases.
+//! Guard deployment authorization conventions.
 use std::path::Path;
 
 #[test]
@@ -10,8 +10,7 @@ fn deployment_handlers_use_named_policies() {
 #[test]
 fn shared_entry_points_use_deployment_policies() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    // Scope shared modules to Deployment paths: their other resource families
-    // and container-owner fallback checks migrate in later phases.
+    // Scope this guard to Deployment policies within shared resource modules.
     for (file, marker, policies) in [
         (
             "api/routes/platforms.rs",

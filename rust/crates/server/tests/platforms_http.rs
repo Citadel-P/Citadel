@@ -125,7 +125,7 @@ struct Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     let fixture = fixture().await;
 
@@ -483,8 +483,8 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
-        .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
+        .expect("CITADEL_PLATFORM_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -501,8 +501,8 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     let tag_id = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,'Local',0,0,0,$3,0,'{\"$type\":\"DockerSwarm\"}','Online',0)")
         .bind(platform_id)
-        .bind(format!("unix:///phase4-http/{platform_id}.sock"))
-        .bind(format!("phase4-http-{platform_id}"))
+        .bind(format!("unix:///platform-http/{platform_id}.sock"))
+        .bind(format!("platform-http-{platform_id}"))
         .execute(&pool)
         .await
         .unwrap();
@@ -529,7 +529,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     ));
     let administrator_actor_id = Uuid::now_v7();
     let administrator_user_id = Uuid::now_v7();
-    let administrator_name = format!("phase4-admin-{}", administrator_user_id.simple());
+    let administrator_name = format!("platform-admin-{}", administrator_user_id.simple());
     let mut transaction = pool.begin().await.unwrap();
     sqlx::query("INSERT INTO actors (id, isenabled, type) VALUES ($1, TRUE, 'User')")
         .bind(administrator_actor_id)
@@ -657,7 +657,8 @@ async fn docker_fixture_for_cluster(
     request_limit: Option<usize>,
     cluster: String,
 ) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
-    let socket = std::env::temp_dir().join(format!("citadel-phase4-http-{}.sock", Uuid::now_v7()));
+    let socket =
+        std::env::temp_dir().join(format!("citadel-platform-http-{}.sock", Uuid::now_v7()));
     let listener = UnixListener::bind(&socket).unwrap();
     let server = tokio::spawn(async move {
         for _ in 0..request_limit.unwrap_or(usize::MAX) {
@@ -761,8 +762,8 @@ async fn seed_reader_access(pool: &PgPool, platform_id: Uuid, actor_id: Uuid, ta
     sqlx::query("INSERT INTO tags (id,color,createdbyactorid,name,normalizedname) VALUES ($1,'blue',$2,$3,$4)")
         .bind(tag_id)
         .bind(actor_id)
-        .bind(format!("phase4-http-{marker}"))
-        .bind(format!("PHASE4-HTTP-{marker}"))
+        .bind(format!("platform-http-{marker}"))
+        .bind(format!("PLATFORM-HTTP-{marker}"))
         .execute(pool)
         .await
         .unwrap();

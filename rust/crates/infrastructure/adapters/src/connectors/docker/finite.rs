@@ -163,7 +163,7 @@ impl DockerClient {
             return Ok(None);
         };
         if container.image_id.as_deref().is_none_or(str::is_empty) {
-            // Match the .NET compatibility fallback for incomplete summaries.
+            // Fall back when Docker returns an incomplete summary.
             let _inspect = RuntimeWork::ContainerEventInspect.start();
             return Ok(Some(super::container_observation(
                 self.inspect_container_document(id).await?,
@@ -328,7 +328,7 @@ impl DockerClient {
     }
 
     /// Docker's image-list Containers field can be -1 (not calculated). Inventory
-    /// needs actual references, including stopped containers, as in the .NET list.
+    /// needs actual references, including stopped containers.
     /// Keep this separate from raw lists used only to count images in telemetry.
     pub async fn list_image_models_with_usage(
         &self,

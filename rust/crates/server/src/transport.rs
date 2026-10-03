@@ -356,8 +356,7 @@ fn setup_gated(path: &str) -> bool {
         && !path.starts_with("/api/v1/setup")
         && (path.starts_with("/api/v1")
             || path.starts_with("/hubs")
-            || path.starts_with("/listener")
-            || path == "/phase0/realtime")
+            || path.starts_with("/listener"))
 }
 
 fn problem(

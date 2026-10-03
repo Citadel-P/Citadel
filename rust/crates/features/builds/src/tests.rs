@@ -13,7 +13,8 @@ fn input() -> BuildProjectConfiguration {
         build_args: None,
         build_secrets: None,
         platform_id: Some(Uuid::now_v7()),
-        registry_id: Uuid::now_v7(),
+        push_to_registry: true,
+        registry_id: Some(Uuid::now_v7()),
         image_repository: " team/demo ".into(),
         tag_templates: None,
         webhook: None,
@@ -92,4 +93,29 @@ fn rejects_invalid_duplicate_or_unbound_build_secrets() {
         secret_id: Uuid::nil(),
     }]);
     assert!(unbound.validate().is_err());
+}
+
+#[test]
+fn local_builds_do_not_require_or_retain_registry_configuration() {
+    let mut value = input();
+    value.push_to_registry = false;
+    value.validate().unwrap();
+    assert!(value.registry_id.is_none());
+    assert!(value.image_repository.is_empty());
+    value.validate().unwrap();
+    value.push_to_registry = true;
+    assert!(value.validate().is_err());
+    value.registry_id = Some(Uuid::now_v7());
+    assert!(value.validate().is_err());
+    value.image_repository = "team/app".into();
+    value.validate().unwrap();
+}
+
+#[test]
+fn pushing_defaults_to_enabled_when_omitted() {
+    let mut json = serde_json::to_value(input()).unwrap();
+    json.as_object_mut().unwrap().remove("pushToRegistry");
+    let mut value: BuildProjectConfiguration = serde_json::from_value(json).unwrap();
+    assert!(value.push_to_registry);
+    value.validate().unwrap();
 }

@@ -12,7 +12,7 @@ use prost::Message;
 // Ports SwarmNodeLocalResourceEndpointTests: node-scoped lists, exact-node
 // inspection, permission checks, and the existing frontend snapshot contract.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn node_resources_are_authorized_routed_and_synchronized_without_a_manager_fallback() {
     let f = fixture().await;
     let network = RuntimeNetworkSummary {

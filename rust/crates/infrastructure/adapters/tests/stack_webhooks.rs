@@ -9,9 +9,9 @@ use uuid::Uuid;
 // Ports StackWebhookDeployQueueRepositoryTests and StackWebhookDeployJobTests:
 // coalescing, atomic claim, configuration fencing, bounded retries and recovery.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(4)

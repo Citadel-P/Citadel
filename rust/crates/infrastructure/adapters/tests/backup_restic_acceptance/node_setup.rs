@@ -15,7 +15,7 @@ pub(super) async fn verify(
     core_url: &str,
     image_registry: &str,
 ) {
-    let candidate = std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
+    let candidate = std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
     let first = format!("{image_registry}/citadel-agent:initial");
     cluster.node(0, &["tag", &candidate, &first], None).await;
     cluster.node(0, &["push", &first], None).await;

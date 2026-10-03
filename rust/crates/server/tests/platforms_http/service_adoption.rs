@@ -45,7 +45,7 @@ fn url(f: &Fixture, suffix: &str) -> String {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_adoption_rejects_a_different_manager_identity() {
     let (f, runtime) = setup().await;
     sqlx::query("UPDATE platforms SET platformdescriptor=jsonb_set(platformdescriptor::jsonb,'{daemonId}','\"different-daemon\"') WHERE id=$1")
@@ -66,7 +66,7 @@ async fn service_adoption_rejects_a_different_manager_identity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_adoption_requires_access_to_the_selected_registry() {
     use citadel_primitives::{ResourceType, SpecificPermission};
     let (f, runtime) = setup().await;
@@ -146,7 +146,7 @@ fn input(draft: &Value) -> Value {
 // ManagedSwarmServiceEndpointTests: AdoptEndpoints_ShouldClaimUnmanagedServiceWithoutMutatingDocker,
 // DuplicateDraft_ShouldCreateServiceWithoutImageProvenance_AndRecordDuplicateActivity.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_adoption_and_duplication_are_atomic_and_do_not_mutate_docker() {
     let (f, runtime) = setup().await;
     runtime.lock().await.services.get_mut("service-1").unwrap()["Spec"]["Mode"]["Replicated"]["Replicas"] =
@@ -258,7 +258,7 @@ async fn service_adoption_and_duplication_are_atomic_and_do_not_mutate_docker() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_adoption_rejects_unauthorized_stale_tampered_and_conflicting_sources() {
     let (f, runtime) = setup().await;
     status(

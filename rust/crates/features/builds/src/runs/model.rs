@@ -13,7 +13,7 @@ pub struct BuildRun {
     pub context_path: String,
     pub dockerfile_path: String,
     pub target: Option<String>,
-    pub registry_id: Uuid,
+    pub registry_id: Option<Uuid>,
     pub registry_host: String,
     pub image_repository: String,
     pub image_references: Vec<String>,

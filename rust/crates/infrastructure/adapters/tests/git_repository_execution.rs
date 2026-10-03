@@ -29,10 +29,10 @@ mod git_stack_updates;
 mod submodules;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL and Git"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL and Git"]
 async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
-    let database_url = std::env::var("CITADEL_PHASE7_DATABASE_URL")
-        .expect("CITADEL_PHASE7_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL")
+        .expect("CITADEL_EXECUTION_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -120,7 +120,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         "a revoked webhook cannot queue after authenticating against an old snapshot"
     );
 
-    let root = std::env::temp_dir().join(format!("citadel-phase7-git-{}", Uuid::now_v7()));
+    let root = std::env::temp_dir().join(format!("citadel-execution-git-{}", Uuid::now_v7()));
     let remote = root.join("remote");
     let cache = root.join("cache");
     std::fs::create_dir_all(&remote).unwrap();
@@ -428,9 +428,9 @@ fn command_output(directory: &std::path::Path, arguments: &[&str]) -> String {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -807,9 +807,9 @@ impl citadel_git::GitProcessPort for NoGitProcess {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn invalid_credentials_and_unresolvable_remote_release_claim_without_running_git() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -898,9 +898,9 @@ async fn invalid_credentials_and_unresolvable_remote_release_claim_without_runni
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn completion_waits_for_enqueue_before_locking_the_branch() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -987,9 +987,9 @@ async fn completion_waits_for_enqueue_before_locking_the_branch() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn committed_git_enqueue_notifies_and_idle_claims_throttle_stale_recovery() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

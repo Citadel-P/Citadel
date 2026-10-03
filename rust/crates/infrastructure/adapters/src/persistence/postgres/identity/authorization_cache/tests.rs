@@ -80,10 +80,10 @@ async fn authorization_read_fence_blocks_acl_mutation_until_claim_finishes() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
     use citadel_primitives::ActorId;
-    let url = std::env::var("CITADEL_PHASE3_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(4)
         .connect(&url)

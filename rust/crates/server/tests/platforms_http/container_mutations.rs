@@ -50,7 +50,7 @@ use tokio_util::sync::CancellationToken;
 type RuntimeCall = (Uuid, String, Option<String>, ContainerAction);
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn six_container_http_selection_sends_one_edge_mutation_then_verifies_each_target() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
@@ -171,7 +171,7 @@ async fn six_container_http_selection_sends_one_edge_mutation_then_verifies_each
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_mutation_transactions_lock_platform_before_inventory_children() {
     let f = fixture().await;
     let store = PostgresContainerRepository::new(f.pool.clone());
@@ -360,7 +360,7 @@ impl ContainerMutationRuntime for Runtime {
 // Ports ContainerCommandEndpointTests: the existing public IDs, five actions,
 // persisted observed state, and direct Swarm Task protection.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_actions_preserve_ids_permissions_and_persist_observed_state() {
     let mut f = fixture().await;
     let runtime = Arc::new(Runtime::default());
@@ -568,7 +568,7 @@ async fn container_actions_preserve_ids_permissions_and_persist_observed_state()
 
 // Ports ContainerCommandCompletionTests and ContainerProcessingConsistencyTests:
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claims() {
     let mut f = fixture().await;
     let runtime = Arc::new(Runtime::default());
@@ -709,7 +709,7 @@ async fn deployment_state_routes_use_deployment_grants_and_preserve_atomic_claim
 // all-or-nothing parent claims, inventory writes during commands, and a late
 // completion from the same actor must not release a newer operation.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_claims_are_atomic_parent_aware_and_recovered_without_replaying_commands() {
     let f = fixture().await;
     let store = Arc::new(PostgresContainerRepository::new(f.pool.clone()));
@@ -866,7 +866,7 @@ async fn container_claims_are_atomic_parent_aware_and_recovered_without_replayin
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_commands_use_the_owning_edge_node_and_confirm_deletion_without_a_manager_fallback()
  {
     use citadel_adapters::connectors::edge::EdgeTarget;
@@ -1019,7 +1019,7 @@ async fn container_commands_use_the_owning_edge_node_and_confirm_deletion_withou
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_replay_or_sync() {
     use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1211,7 +1211,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_generation() {
     use citadel_platforms::jobs::{ProjectionKind, ProjectionWrite, SnapshotGeneration};
     let f = fixture().await;
@@ -1245,8 +1245,8 @@ async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_gener
         .await
         .unwrap();
     let stamp = SnapshotGeneration::capture(f.platform_id, None, ProjectionKind::Containers).await;
-    sqlx::query("CREATE FUNCTION phase7_reject_observation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name='reject-batch' AND NEW.state='Exited' THEN RAISE EXCEPTION 'deliberate batch failure'; END IF; RETURN NEW; END $$").execute(&f.pool).await.unwrap();
-    sqlx::query("CREATE TRIGGER phase7_reject_observation BEFORE UPDATE ON containers FOR EACH ROW EXECUTE FUNCTION phase7_reject_observation()").execute(&f.pool).await.unwrap();
+    sqlx::query("CREATE FUNCTION reject_batch_observation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name='reject-batch' AND NEW.state='Exited' THEN RAISE EXCEPTION 'deliberate batch failure'; END IF; RETURN NEW; END $$").execute(&f.pool).await.unwrap();
+    sqlx::query("CREATE TRIGGER reject_batch_observation BEFORE UPDATE ON containers FOR EACH ROW EXECUTE FUNCTION reject_batch_observation()").execute(&f.pool).await.unwrap();
     let observations: Vec<_> = claim
         .targets
         .iter()
@@ -1274,11 +1274,11 @@ async fn observation_batch_rolls_back_all_targets_and_does_not_advance_the_gener
             .await
             .unwrap();
     assert_eq!(running, 2);
-    sqlx::query("DROP TRIGGER phase7_reject_observation ON containers")
+    sqlx::query("DROP TRIGGER reject_batch_observation ON containers")
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("DROP FUNCTION phase7_reject_observation()")
+    sqlx::query("DROP FUNCTION reject_batch_observation()")
         .execute(&f.pool)
         .await
         .unwrap();

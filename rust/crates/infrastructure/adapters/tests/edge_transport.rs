@@ -23,7 +23,8 @@ const CAPABILITIES: &str =
     r#"{"commands":["platform.checkHealth","containers.list","containers.logs"]}"#;
 
 async fn setup() -> (PgPool, PostgresEdgeStore, EdgeTarget) {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").expect("CITADEL_PHASE7_DATABASE_URL");
+    let url =
+        std::env::var("CITADEL_EXECUTION_DATABASE_URL").expect("CITADEL_EXECUTION_DATABASE_URL");
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -53,7 +54,7 @@ fn envelope(body: agent_envelope::Body) -> AgentEnvelope {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn manager_inventory_pins_cluster_and_rejects_identity_changes() {
     use citadel_platforms::{
         RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmInfo, RuntimeSwarmInventory,
@@ -152,7 +153,57 @@ async fn manager_inventory_pins_cluster_and_rejects_identity_changes() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
+async fn platform_and_build_pool_can_share_a_daemon_in_either_enrollment_order() {
+    for builder_first in [false, true] {
+        let (pool, store, platform) = setup().await;
+        let builder = EdgeTarget::build_pool(Uuid::now_v7());
+        sqlx::query("INSERT INTO buildagentpools(id,name,normalizedname,createdbyactorid,provider,providerspec) VALUES($1,$2,$2,$3,'SelfManagedVm','{\"$type\":\"SelfManagedVm\",\"connectionMode\":\"EdgeAgent\"}')")
+            .bind(builder.resource_id).bind(builder.resource_id.to_string()).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
+        let daemon = Uuid::now_v7().to_string();
+        let targets = if builder_first {
+            [&builder, &platform]
+        } else {
+            [&platform, &builder]
+        };
+        let registry = EdgeRegistry::default();
+        for target in targets {
+            let (_, token, _) = store
+                .create_enrollment(target, SYSTEM_ACTOR_ID)
+                .await
+                .unwrap();
+            let mut bytes = [0; 32];
+            getrandom::fill(&mut bytes).unwrap();
+            let key = SigningKey::from_bytes(&bytes);
+            let mut request = enrollment(token, &key, daemon.clone());
+            request.capabilities_json = serde_json::json!({"commands":["platform.checkHealth","containers.list","containers.logs","images.build","images.push","images.checkBuildHost"]}).to_string();
+            let binding = store.enroll(&request).await.unwrap();
+            assert_eq!(&binding.target, target);
+            let (session, _receiver) = registry.register(target.clone(), binding.agent_id).unwrap();
+            store
+                .connected(&binding, session.connected_at)
+                .await
+                .unwrap();
+        }
+        let active: i64 = sqlx::query_scalar("SELECT count(*) FROM edgeagentbindings WHERE dockerdaemonid=$1 AND revokedatutc IS NULL AND connectionstatus='Connected'")
+            .bind(&daemon).fetch_one(&pool).await.unwrap();
+        assert_eq!(active, 2);
+        // Retain daemon uniqueness within a role, including at the database boundary.
+        let other = Uuid::now_v7();
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'EdgeAgent',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Offline',0)")
+            .bind(other).bind(other.to_string()).execute(&pool).await.unwrap();
+        let duplicate = sqlx::query("INSERT INTO edgeagentbindings SELECT (jsonb_populate_record(NULL::edgeagentbindings, to_jsonb(b) || jsonb_build_object('id', $1::uuid, 'resourceid', $2::uuid, 'platformid', $2::uuid, 'agentid', $3::uuid, 'agentfingerprint', $4::text))).* FROM edgeagentbindings b WHERE dockerdaemonid=$5 AND resourcetype='Platform'")
+            .bind(Uuid::now_v7()).bind(other).bind(Uuid::now_v7()).bind(Uuid::now_v7().to_string()).bind(&daemon).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            duplicate.as_database_error().unwrap().constraint(),
+            Some("ix_edgeagentbindings_activedaemon")
+        );
+        pool.close().await;
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn build_pool_enrollment_requires_build_capabilities_and_preserves_pool_identity() {
     let (pool, store, _) = setup().await;
     let target = EdgeTarget::build_pool(Uuid::now_v7());
@@ -207,7 +258,7 @@ async fn build_pool_enrollment_requires_build_capabilities_and_preserves_pool_id
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn node_enrollment_requires_manager_verified_installation_and_exact_task_identity() {
     let (pool, store, target) = setup().await;
     let platform = target.platform_id;
@@ -846,7 +897,7 @@ async fn verify_node_local_resources(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn persisted_edge_platform_routes_deployment_apply_without_using_local_docker() {
     use citadel_adapters::connectors::docker::DockerClient;
     use citadel_adapters::connectors::routing::deployments::DeploymentRuntimeRouter;
@@ -918,7 +969,7 @@ async fn persisted_edge_platform_routes_deployment_apply_without_using_local_doc
 // Ports EdgeAgentTests enrollment lifecycle and EdgeAgentRepositoryTests
 // one-time consumption using PostgreSQL rather than an in-memory substitute.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn enrollment_is_hashed_atomic_expiring_and_revocable() {
     let (pool, store, target) = setup().await;
     let (id, token, _) = store
@@ -989,7 +1040,7 @@ async fn enrollment_is_hashed_atomic_expiring_and_revocable() {
 // Exercise a real HTTP/2 bidirectional RPC with a protocol client,
 // including Ed25519's little-endian timestamp + nonce challenge payload.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
     let (pool, store, target) = setup().await;
     let registry = EdgeRegistry::default();
@@ -1287,7 +1338,7 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() {
     use citadel_platforms::jobs::ProjectionChange;
     let (pool, store, target) = setup().await;

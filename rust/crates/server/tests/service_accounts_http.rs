@@ -40,7 +40,7 @@ struct Fixture {
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn usages_resolve_the_account_actor_and_include_inactive_execution_dependencies() {
     let f = fixture(true).await;
     let account = create_account(&f, &format!("usage-{}", Uuid::now_v7()), true).await;
@@ -120,7 +120,7 @@ async fn usages_resolve_the_account_actor_and_include_inactive_execution_depende
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn lifecycle_routes_persist_assignments_archive_and_safe_activities() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -217,7 +217,7 @@ async fn lifecycle_routes_persist_assignments_archive_and_safe_activities() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn token_is_returned_once_persisted_as_digest_and_revocation_is_idempotent() {
     let fixture = fixture(true).await;
     let account_id = create_account(
@@ -296,7 +296,7 @@ async fn token_is_returned_once_persisted_as_digest_and_revocation_is_idempotent
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn token_validation_applies_default_never_and_maximum_lifetimes() {
     let fixture = fixture(true).await;
     let account_id = create_account(
@@ -362,7 +362,7 @@ async fn token_validation_applies_default_never_and_maximum_lifetimes() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn license_human_and_enabled_account_boundaries_are_enforced() {
     let unlicensed = fixture(false).await;
     let denied = send_json(
@@ -408,7 +408,7 @@ async fn license_human_and_enabled_account_boundaries_are_enforced() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_names_are_case_sensitive_and_exact_duplicates_conflict() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -456,8 +456,8 @@ async fn fixture_with_limits(
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(6)
@@ -660,7 +660,7 @@ async fn json(response: Response<Body>) -> Value {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn custom_limits_are_advertised_and_enforced_when_issuing_tokens() {
     let f = fixture_with_limits(
         true,

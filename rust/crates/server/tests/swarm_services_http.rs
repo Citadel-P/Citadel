@@ -107,10 +107,10 @@ fn completed(claim: &ServiceOperationClaim) -> RuntimeServiceResult {
 mod task_ownership;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

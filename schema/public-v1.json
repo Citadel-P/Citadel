@@ -4110,9 +4110,15 @@
               "null"
             ]
           },
+          "pushToRegistry": {
+            "type": "boolean"
+          },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "retentionRunCount": {
             "format": "int32",
@@ -4154,7 +4160,7 @@
           "contextPath",
           "dockerfilePath",
           "builderKind",
-          "registryId",
+          "pushToRegistry",
           "imageRepository",
           "tagTemplates",
           "timeoutSeconds",
@@ -4244,9 +4250,15 @@
               "null"
             ]
           },
+          "pushToRegistry": {
+            "type": "boolean"
+          },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "retentionRunCount": {
             "format": "int32",
@@ -4298,9 +4310,7 @@
         "required": [
           "name",
           "enabled",
-          "gitRepositoryId",
-          "registryId",
-          "imageRepository"
+          "gitRepositoryId"
         ],
         "type": "object"
       },
@@ -4412,9 +4422,15 @@
               "null"
             ]
           },
+          "pushToRegistry": {
+            "type": "boolean"
+          },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "retentionRunCount": {
             "format": "int32",
@@ -4479,7 +4495,7 @@
           "builderKind",
           "platformId",
           "buildAgentPoolId",
-          "registryId",
+          "pushToRegistry",
           "imageRepository",
           "tagTemplates",
           "webhook",
@@ -4602,7 +4618,10 @@
           },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "resolvedCommitSha": {
             "type": [
@@ -4650,7 +4669,6 @@
           "contextPath",
           "dockerfilePath",
           "target",
-          "registryId",
           "registryHost",
           "imageRepository",
           "imageReferences",
@@ -21005,9 +21023,15 @@
               "null"
             ]
           },
+          "pushToRegistry": {
+            "type": "boolean"
+          },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "retentionRunCount": {
             "format": "int32",

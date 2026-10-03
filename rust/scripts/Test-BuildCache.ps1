@@ -55,7 +55,7 @@ foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1') {
     $ast = [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
     Assert ($parseErrors.Count -eq 0) "PowerShell syntax error in $($file.Name): $parseErrors"
     $content = Get-Content -LiteralPath $file.FullName -Raw
-    if ($file.Name -like 'Test-Phase*' -and $content.Contains('New-CitadelBuildCacheName')) {
+    if ($file.FullName -ne $PSCommandPath -and $file.Name -like 'Test-*' -and $content.Contains('New-CitadelBuildCacheName')) {
         Assert (-not $content.Contains("'citadel-rust-target:")) "Shared target remains in $($file.Name)"
         $finalizers = $ast.FindAll({ param($node)
             $node -is [Management.Automation.Language.TryStatementAst] -and

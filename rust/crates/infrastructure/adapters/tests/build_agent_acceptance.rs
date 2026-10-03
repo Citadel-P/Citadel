@@ -77,9 +77,9 @@ async fn nested(daemon: &str, args: &[&str]) -> Vec<u8> {
 }
 
 #[tokio::test]
-#[ignore = "requires Test-Phase7AgentBuild.ps1 with a published Agent candidate"]
+#[ignore = "requires Test-AgentBuild.ps1 with a published Agent candidate"]
 async fn signed_agent_builds_committed_source_pushes_digest_and_persists_progress() {
-    let database = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&database)
         .await
         .unwrap();
@@ -88,9 +88,9 @@ async fn signed_agent_builds_committed_source_pushes_digest_and_persists_progres
         .connect(&database)
         .await
         .unwrap();
-    let network = std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
-    let image = std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
-    let use_edge = std::env::var("CITADEL_PHASE7_BUILD_EDGE").as_deref() == Ok("1");
+    let network = std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
+    let image = std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
+    let use_edge = std::env::var("CITADEL_TEST_BUILD_EDGE").as_deref() == Ok("1");
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let edge_cancel = CancellationToken::new();
     let mut edge_server = None;
@@ -136,7 +136,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
                 tonic::transport::Server::builder().add_service(EdgeAgentServiceServer::new(intake))
                     .serve_with_incoming_shutdown(incoming, shutdown.cancelled_owned()).await.unwrap();
             }));
-            let core = std::env::var("CITADEL_PHASE7_AGENT_HOST").unwrap();
+            let core = std::env::var("CITADEL_TEST_AGENT_HOST").unwrap();
             command("docker", &["run", "--detach", "--name", &agent_name, "--network", &network, "--volume", &mount,
                 "--env", "CITADEL_AGENT_MODE=edge", "--env", &format!("CITADEL_CORE_URL=http://{core}:{port}"),
                 "--env", &format!("CITADEL_EDGE_ENROLLMENT_TOKEN={token}"), &image]).await;

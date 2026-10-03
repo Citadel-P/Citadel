@@ -41,9 +41,9 @@ mod patches;
 mod webhooks;
 
 #[tokio::test]
-#[ignore = "requires disposable CITADEL_PHASE7_DATABASE_URL and CITADEL_DENO_PATH"]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL and CITADEL_DENO_PATH"]
 async fn automation_http_streams_executes_cancels_and_persists_real_process_results() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let db = PgPoolOptions::new()
         .max_connections(5)

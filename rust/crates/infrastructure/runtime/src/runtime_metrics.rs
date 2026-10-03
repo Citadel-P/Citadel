@@ -56,7 +56,7 @@ pub enum RuntimeWork {
     ContainerEventIgnored,
     ContainerEventInspect,
     ContainerEventApply,
-    // Since CPU refactor Phase 5, units count committed semantic changes (Local/Direct).
+    // Units count committed semantic changes (Local/Direct).
     ContainerEventProjection,
     ContainerStateDeltaInput,
     ContainerStateDeltaBatch,

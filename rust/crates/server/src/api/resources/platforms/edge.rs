@@ -36,6 +36,7 @@ impl EdgeHttpContext {
         let volume = name.replace('-', "_") + "_data";
         let environment = std::collections::BTreeMap::from([
             ("CITADEL_AGENT_MODE", "edge".to_owned()),
+            ("CITADEL_EDGE_AGENT_PROFILE", name.to_owned()),
             ("CITADEL_CORE_URL", self.core_url.clone()),
             ("CITADEL_EDGE_ENROLLMENT_TOKEN", token.clone()),
             (

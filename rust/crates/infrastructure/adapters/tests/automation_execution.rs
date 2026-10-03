@@ -11,10 +11,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
-    let database_url = std::env::var("CITADEL_PHASE7_DATABASE_URL")
-        .expect("CITADEL_PHASE7_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL")
+        .expect("CITADEL_EXECUTION_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -29,7 +29,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .unwrap();
     let store = PostgresAutomationRepository::new(pool.clone());
     let mut input = AutomationActionConfiguration {
-        name: format!("phase7-{}", Uuid::now_v7().simple()),
+        name: format!("execution-{}", Uuid::now_v7().simple()),
         description: None,
         code: "console.log('ok')".to_owned(),
         default_args_json: Some("{}".to_owned()),

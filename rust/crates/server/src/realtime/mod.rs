@@ -106,7 +106,6 @@ impl RealtimeService {
     pub fn router(self) -> Router {
         Router::new()
             .route("/api/v1/realtime", get(upgrade))
-            .route("/phase0/realtime", get(upgrade))
             .with_state(self)
     }
 }

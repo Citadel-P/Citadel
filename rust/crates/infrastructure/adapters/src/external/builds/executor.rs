@@ -324,11 +324,14 @@ impl AgentDockerBuildExecutor {
                 .await?;
         let dockerfile_path =
             dockerfile_in_context(&claim.run.context_path, &claim.run.dockerfile_path)?;
-        let credentials = self
-            .registries
-            .resolve(claim.run.registry_id)
-            .await
-            .map_err(|error| BuildFailure::Validation(error.to_string()))?;
+        let credentials = match claim.run.registry_id {
+            Some(id) => self
+                .registries
+                .resolve(id)
+                .await
+                .map_err(|error| BuildFailure::Validation(error.to_string()))?,
+            None => None,
+        };
         let registry_auth = credentials
             .as_ref()
             .map(|credentials| encode_registry_auth(credentials, &claim.run.registry_host))
@@ -388,15 +391,20 @@ impl AgentDockerBuildExecutor {
             client
                 .build_image(
                     AgentBuildCommand {
+                        push_to_registry: claim.run.registry_id.is_some(),
                         context_archive,
                         dockerfile_path,
                         tags: references.clone(),
                         build_args,
                         target: claim.run.target.clone(),
                         registry_auth: registry_auth.clone(),
-                        registry_host: Some(
-                            normalize_registry_host(&claim.run.registry_host)?.to_owned(),
-                        ),
+                        registry_host: claim
+                            .run
+                            .registry_id
+                            .map(|_| {
+                                normalize_registry_host(&claim.run.registry_host).map(str::to_owned)
+                            })
+                            .transpose()?,
                         timeout_seconds: claim.run.timeout_seconds,
                         maximum_log_bytes: self.maximum_log_bytes,
                         secrets,
@@ -532,11 +540,14 @@ impl LocalDockerBuildExecutor {
             )
             .await?;
         let outcome = async {
-            let credentials = self
-                .registries
-                .resolve(claim.run.registry_id)
-                .await
-                .map_err(|error| BuildFailure::Validation(error.to_string()))?;
+            let credentials = match claim.run.registry_id {
+                Some(id) => self
+                    .registries
+                    .resolve(id)
+                    .await
+                    .map_err(|error| BuildFailure::Validation(error.to_string()))?,
+                None => None,
+            };
             let session = DockerBuildSession::open(
                 self.docker.clone(),
                 self.endpoint.clone(),
@@ -577,8 +588,10 @@ impl LocalDockerBuildExecutor {
                 )
                 .await?;
             let mut digest = None;
-            for reference in &references {
-                digest = digest.or(session.push(reference, progress, cancellation).await?);
+            if claim.run.registry_id.is_some() {
+                for reference in &references {
+                    digest = digest.or(session.push(reference, progress, cancellation).await?);
+                }
             }
             Ok(BuildExecutionResult {
                 status: citadel_builds::BuildRunStatus::Succeeded,
@@ -904,8 +917,12 @@ fn image_references(claim: &BuildClaim, commit: &str) -> Result<Vec<String>, Bui
                 "Build tag template produced an invalid tag.".to_owned(),
             ));
         }
-        let host = normalize_registry_host(&claim.run.registry_host)?;
-        references.push(format!("{host}/{}:{tag}", claim.run.image_repository));
+        if claim.run.registry_id.is_some() {
+            let host = normalize_registry_host(&claim.run.registry_host)?;
+            references.push(format!("{host}/{}:{tag}", claim.run.image_repository));
+        } else {
+            references.push(format!("{}:{tag}", claim.run.image_repository));
+        }
     }
     Ok(references)
 }

@@ -322,6 +322,8 @@ export const { dropdown: StackDropdownActions, group: StackGroupActions } = crea
     canExecute: () => true,
     separatorBefore: true,
     confirm: true,
+    confirmationDescription:
+      'Deletes the selected stacks. On offline platforms, containers, services and networks remain and must be removed manually.',
     destructive: true,
     resourceType: 'Stack',
     useVariables,

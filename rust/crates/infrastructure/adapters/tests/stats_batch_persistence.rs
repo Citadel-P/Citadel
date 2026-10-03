@@ -4,7 +4,7 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 async fn fixture() -> PgPool {
-    let url = std::env::var("CITADEL_PHASE9_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -66,7 +66,7 @@ fn host(scope: &StatsScope, created: i64, count: i64) -> PlatformStatsSample {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn cross_platform_batches_filter_stale_identity_and_deduplicate_retry_keys() {
     let pool = fixture().await;
     let a = platform(&pool).await;
@@ -119,7 +119,7 @@ async fn cross_platform_batches_filter_stale_identity_and_deduplicate_retry_keys
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn locked_platform_times_out_retryably_and_healthy_partition_can_commit() {
     let pool = fixture().await;
     let a = platform(&pool).await;
@@ -163,7 +163,7 @@ async fn locked_platform_times_out_retryably_and_healthy_partition_can_commit() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn platform_batch_updates_latest_metadata_preserves_missing_disk_and_retry_alert_revision() {
     let pool = fixture().await;
     let a = platform(&pool).await;
@@ -211,7 +211,7 @@ async fn platform_batch_updates_latest_metadata_preserves_missing_disk_and_retry
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE9_DATABASE_URL"]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn edge_node_samples_are_fenced_by_binding_session_and_never_write_manager_totals() {
     let pool = fixture().await;
     let mut node = platform(&pool).await;

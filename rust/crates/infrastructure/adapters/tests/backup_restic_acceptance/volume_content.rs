@@ -18,7 +18,7 @@ pub(super) async fn verify(
         DockerClient::new("/unusable-core-daemon.sock", Duration::from_secs(2)).unwrap(),
         Some(agent.clone()),
         registry.clone(),
-        std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap(),
+        std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap(),
         citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
     );
     let cancel = CancellationToken::new();
@@ -254,7 +254,7 @@ async fn verify_local(pool: &sqlx::PgPool) {
             DockerClient::new("/var/run/docker-host.sock", Duration::from_secs(10)).unwrap(),
             None,
             EdgeRegistry::default(),
-            std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap(),
+            std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap(),
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         );
         let cancel = CancellationToken::new();

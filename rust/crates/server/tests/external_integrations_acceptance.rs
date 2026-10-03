@@ -133,9 +133,9 @@ async fn assert_runtime(docker: &DockerClient, stack: Uuid, version: &str) {
 }
 
 #[tokio::test]
-#[ignore = "requires Test-Phase7Integrations.ps1: real Forgejo, Vault, PostgreSQL and Docker"]
+#[ignore = "requires Test-Integrations.ps1: real Forgejo, Vault, PostgreSQL and Docker"]
 async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
-    let database = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&database)
         .await
         .unwrap();
@@ -144,9 +144,9 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         .connect(&database)
         .await
         .unwrap();
-    let forgejo = std::env::var("CITADEL_PHASE7_FORGEJO_URL").unwrap();
-    let vault = std::env::var("CITADEL_PHASE7_VAULT_URL").unwrap();
-    let callback = std::env::var("CITADEL_PHASE7_CALLBACK_HOST").unwrap();
+    let forgejo = std::env::var("CITADEL_TEST_FORGEJO_URL").unwrap();
+    let vault = std::env::var("CITADEL_TEST_VAULT_URL").unwrap();
+    let callback = std::env::var("CITADEL_TEST_CALLBACK_HOST").unwrap();
     let docker = DockerClient::new("/var/run/docker-host.sock", Duration::from_secs(30)).unwrap();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))

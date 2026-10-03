@@ -26,7 +26,7 @@ impl TemporaryGitRepository {
             .current_dir(&self.path)
             .args(arguments)
             .output()
-            .expect("Git must be installed for the Phase 7 gate");
+            .expect("Git must be installed for the execution gate");
         assert!(
             output.status.success(),
             "{}",

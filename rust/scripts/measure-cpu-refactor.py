@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Capture the CPU refactor Phase 0 on disposable PostgreSQL and Docker-in-Docker.
+"""Capture the CPU refactor measurement on disposable PostgreSQL and Docker-in-Docker.
 
-See reports/cpu-refactor-phase0.md for pinned image setup. Only the named nested
+Use an isolated fixture with pinned image versions. Only the named nested
 daemon receives workload mutations. Uses stdlib only; never records API tokens.
 """
 import argparse
@@ -22,8 +22,8 @@ import urllib.request
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-POSTGRES = "citadel-cpu-phase0-postgres"
-ENGINE = "citadel-cpu-phase0-docker"
+POSTGRES = "citadel-cpu-measurement-postgres"
+ENGINE = "citadel-cpu-measurement-docker"
 IMAGE = "alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0"
 
 
@@ -203,7 +203,7 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
         env = {"PATH": os.environ["PATH"], "LANG": "C.UTF-8",
                "DATABASE_URL": f"postgres://citadel_cpu:citadel_cpu_fixture@127.0.0.1:55449/{database}",
                "Transport__Mode": "Disabled", "Transport__ApiPort": "58049",
-               "Jwt__Key": "cpu-phase0-disposable-signing-key-32bytes",
+               "Jwt__Key": "cpu-measurement-disposable-signing-key-32bytes",
                "Secrets__EncryptionKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
                "CITADEL_DATA_ROOT": str(Path(temp) / "state"),
                "CITADEL_RUST_DOCKER_SOCKET": str(sock),

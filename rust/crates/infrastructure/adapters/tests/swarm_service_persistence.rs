@@ -13,10 +13,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -289,14 +289,14 @@ fn spec(registry_id: Uuid, replicas: i32) -> SwarmServiceSpec {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
     use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
     use citadel_platforms::{
         InventoryProjectionStore, RuntimeInventorySnapshot, RuntimePlatformInfo, RuntimeSwarmInfo,
         RuntimeSwarmInventory, RuntimeSwarmService,
     };
-    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -465,7 +465,7 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_workloads() {
     use citadel_adapters::connectors::registries::digest_cache::ImageDigestCache;
     use citadel_adapters::connectors::routing::images::scanner::ImageScanRuntime;
@@ -487,7 +487,7 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
             Box::pin(async { Ok("sha256:remote".into()) })
         }
     }
-    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn get_container_ports_the_complete_dotnet_summary_snapshot_without_deployment_secrets() {
     let f = fixture().await;
     let id = Uuid::now_v7();
@@ -86,7 +86,7 @@ fn omit_empty(value: &mut Value) {
 // Ports GetContainerTests.Get_Container_ReturnsSuccess and
 // Get_Container_ByPersistedId_ReturnsSuccess using persisted PostgreSQL rows.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn get_container_by_docker_and_persisted_id_returns_the_same_resource() {
     let f = fixture().await;
     let id = Uuid::now_v7();

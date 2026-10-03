@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL, CITADEL_PHASE6_RUNTIME_IMAGE, Docker CLI, Compose, and a Unix socket"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL, CITADEL_RUNTIME_IMAGE, Docker CLI, Compose, and a Unix socket"]
 async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
     let fixture = Fixture::new("Docker").await;
     let source = fixture.source();
@@ -90,7 +90,7 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
 }
 
 #[tokio::test]
-#[ignore = "requires the Phase 6 fixture and a Docker daemon already initialized as a Swarm manager"]
+#[ignore = "requires the workload fixture and a Docker daemon already initialized as a Swarm manager"]
 async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
     let fixture = Fixture::new("DockerSwarm").await;
     let source = fixture.source();
@@ -149,6 +149,7 @@ async fn local_swarm_stack_apply_and_delete_use_the_native_stack_lifecycle() {
             &StackDeletionClaim {
                 stack_id: fixture.stack_id,
                 platform_id: fixture.platform_id,
+                platform_offline: false,
                 project_name: fixture.project_name.clone(),
                 platform_type: citadel_platforms::PlatformKind::DockerSwarm,
             },
@@ -174,10 +175,10 @@ struct Fixture {
 
 impl Fixture {
     async fn new(platform_type: &'static str) -> Self {
-        let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-            .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
-        let image = std::env::var("CITADEL_PHASE6_RUNTIME_IMAGE")
-            .expect("CITADEL_PHASE6_RUNTIME_IMAGE is required for this fixture");
+        let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+            .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
+        let image = std::env::var("CITADEL_RUNTIME_IMAGE")
+            .expect("CITADEL_RUNTIME_IMAGE is required for this fixture");
         MigrationRunner::migrate(&database_url).await.unwrap();
         let pool = PgPoolOptions::new()
             .max_connections(2)
@@ -195,13 +196,13 @@ impl Fixture {
                       json_build_object('$type',$3),'Online',0)"#,
         )
         .bind(platform_id)
-        .bind(format!("phase6-stack-{}", platform_id.simple()))
+        .bind(format!("workload-stack-{}", platform_id.simple()))
         .bind(platform_type)
         .execute(&pool)
         .await
         .unwrap();
         let docker = DockerClient::new(
-            std::env::var("CITADEL_PHASE6_DOCKER_SOCKET")
+            std::env::var("CITADEL_RUNTIME_DOCKER_SOCKET")
                 .unwrap_or_else(|_| "/var/run/docker.sock".into()),
             Duration::from_secs(15),
         )
@@ -322,7 +323,7 @@ impl Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires an isolated two-node Swarm, CITADEL_PHASE6_DOCKER_SOCKET and disposable CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires an isolated two-node Swarm, CITADEL_RUNTIME_DOCKER_SOCKET and disposable CITADEL_WORKLOAD_DATABASE_URL"]
 async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recovers_interrupted_release()
  {
     let f = Fixture::new("DockerSwarm").await;
@@ -452,7 +453,7 @@ async fn swarm_material_capture_preserves_mounts_fences_late_results_and_recover
     assert_eq!(status, "Healthy");
     // Stop only the explicitly supplied, labelled disposable outer DinD worker.
     // No event is delivered to Core here: periodic reconciliation must repair it.
-    let worker = std::env::var("CITADEL_PHASE6_SWARM_WORKER").expect("disposable worker required");
+    let worker = std::env::var("CITADEL_RUNTIME_SWARM_WORKER").expect("disposable worker required");
     let label = tokio::process::Command::new("docker")
         .env_remove("DOCKER_HOST")
         .args([

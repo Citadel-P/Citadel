@@ -3,7 +3,7 @@ use citadel_adapters::persistence::postgres::tags::PostgresTagRepository;
 use citadel_server::api::routes::tags::{TagsHttpState, router};
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_tags_survive_fresh_detail_list_and_realtime_reads() {
     let mut fixture = fixture().await;
     fixture.app = fixture.app.clone().merge(router(TagsHttpState {
@@ -67,7 +67,7 @@ async fn platform_tags_survive_fresh_detail_list_and_realtime_reads() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags() {
     let fixture = fixture().await;
     sqlx::query("UPDATE tags SET name='Prod & Europe', normalizedname='PROD & EUROPE' WHERE id=$1")

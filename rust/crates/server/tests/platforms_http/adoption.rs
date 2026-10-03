@@ -13,13 +13,13 @@ use tokio_util::sync::CancellationToken;
 // Ports ContainerAdoptionDraftFactoryTests + adoption endpoint persistence,
 // secret redaction, permission, stale-preview and concurrent ownership scenarios.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn adoption_is_authorized_non_mutating_and_atomically_links_secrets_and_activity() {
     exercise_adoption(false).await;
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn external_image_adoption_preserves_the_existing_ui_contract() {
     exercise_adoption(true).await;
 }

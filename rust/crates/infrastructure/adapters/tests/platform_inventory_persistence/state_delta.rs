@@ -9,9 +9,9 @@ use citadel_platforms::jobs::{
 use sqlx::Row;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lifecycle_deltas_preserve_metadata_ordering_scope_and_skip_parent_tables() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -197,9 +197,9 @@ fn iterations(family: &str) -> u64 {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1 for process counters"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1 for process counters"]
 async fn six_deltas_reconcile_unique_external_parents_and_defer_owned_effects() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -374,7 +374,7 @@ async fn six_deltas_reconcile_unique_external_parents_and_defer_owned_effects() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1"]
 async fn operation_finish_and_stale_recovery_create_parent_activities_once() {
     use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
     use citadel_platforms::containers::{
@@ -416,7 +416,7 @@ async fn operation_finish_and_stale_recovery_create_parent_activities_once() {
         }
     }
 
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -520,7 +520,7 @@ async fn operation_finish_and_stale_recovery_create_parent_activities_once() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_command_admission_uses_uuid_index_and_cached_authorization() {
     use citadel_adapters::persistence::postgres::platforms::{
         containers::repository::PostgresContainerRepository, runtime_index::RuntimeIdentityIndex,
@@ -530,7 +530,7 @@ async fn container_command_admission_uses_uuid_index_and_cached_authorization() 
     };
     use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -667,11 +667,11 @@ async fn container_command_admission_uses_uuid_index_and_cached_authorization() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inspection_fence_and_standalone_finish_avoid_stale_state_and_parent_tables() {
     use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
     use citadel_platforms::containers::*;
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

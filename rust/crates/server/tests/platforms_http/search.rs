@@ -5,7 +5,7 @@ use citadel_primitives::ResourceType;
 // Ports all GlobalSearchTests scenarios: ranking, literal LIKE characters,
 // per-resource grants, parent redaction, Swarm Services, role/team grants and validation.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn global_search_preserves_ranking_permissions_parent_redaction_and_bounds() {
     let mut f = fixture().await;
     f.app = citadel_server::api::routes::search::router(Arc::new(PostgresGlobalSearchStore::new(

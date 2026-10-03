@@ -80,6 +80,7 @@ pub(super) fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProject, Bu
         builder_kind: row.try_get("builderkind").map_err(storage)?,
         platform_id: row.try_get("platformid").map_err(storage)?,
         build_agent_pool_id: row.try_get("buildagentpoolid").map_err(storage)?,
+        push_to_registry: row.try_get("pushtoregistry").map_err(storage)?,
         registry_id: row.try_get("registryid").map_err(storage)?,
         image_repository: row.try_get("imagerepository").map_err(storage)?,
         tag_templates: serde_json::from_value(row.try_get("tagtemplates").map_err(storage)?)
@@ -163,17 +164,24 @@ pub(super) fn map_pool(row: sqlx::postgres::PgRow) -> Result<BuildAgentPool, Bui
 
 pub(super) fn map_run(row: sqlx::postgres::PgRow) -> Result<BuildRun, BuildError> {
     let registry_snapshot: serde_json::Value = row.try_get("registrysnapshot").map_err(storage)?;
-    let registry_id = registry_snapshot
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok())
-        .ok_or_else(|| BuildError::Storage("Build Run Registry snapshot is invalid.".to_owned()))?;
-    let registry_host = registry_snapshot
-        .get("registryHost")
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| BuildError::Storage("Build Run Registry host is missing.".to_owned()))?
-        .to_owned();
+    let (registry_id, registry_host) = if registry_snapshot.is_null() {
+        (None, String::new())
+    } else {
+        let registry_id = registry_snapshot
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(|| {
+                BuildError::Storage("Build Run Registry snapshot is invalid.".to_owned())
+            })?;
+        let registry_host = registry_snapshot
+            .get("registryHost")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| BuildError::Storage("Build Run Registry host is missing.".to_owned()))?
+            .to_owned();
+        (Some(registry_id), registry_host)
+    };
     Ok(BuildRun {
         id: row.try_get("id").map_err(storage)?,
         build_project_id: row.try_get("buildprojectid").map_err(storage)?,

@@ -42,7 +42,7 @@ struct Fixture {
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn list_and_get_return_persisted_roles_permissions_and_capabilities() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -85,7 +85,7 @@ async fn list_and_get_return_persisted_roles_permissions_and_capabilities() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_is_transactional_and_writes_a_safe_activity() {
     let fixture = fixture(true).await;
     let name = format!("operator-{}", Uuid::now_v7().simple());
@@ -189,7 +189,7 @@ async fn create_is_transactional_and_writes_a_safe_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_replaces_permissions_and_license_downgrade_allows_only_reduction() {
     let licensed = fixture(true).await;
     let role_id = seed_role(
@@ -281,7 +281,7 @@ async fn patch_replaces_permissions_and_license_downgrade_allows_only_reduction(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn system_roles_are_immutable_but_custom_roles_can_be_renamed_and_deleted() {
     let fixture = fixture(true).await;
     let system_id = seed_role(
@@ -355,7 +355,7 @@ async fn system_roles_are_immutable_but_custom_roles_can_be_renamed_and_deleted(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn license_authorization_and_request_bounds_are_enforced() {
     let fixture = fixture(false).await;
     let denied = send_json(
@@ -402,7 +402,7 @@ async fn license_authorization_and_request_bounds_are_enforced() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn permission_matrix_is_anonymous_keyed_and_matches_known_capabilities() {
     let fixture = fixture(false).await;
     let response =
@@ -422,7 +422,7 @@ async fn permission_matrix_is_anonymous_keyed_and_matches_known_capabilities() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_same_name_creates_are_serialized() {
     let fixture = fixture(true).await;
     let name = format!("concurrent-{}", Uuid::now_v7().simple());
@@ -461,8 +461,8 @@ async fn fixture(custom_access: bool) -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

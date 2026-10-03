@@ -28,7 +28,7 @@ fn counter(family: &str, units: bool) -> u64 {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1 for process counters"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1 for process counters"]
 async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor() {
     let f = fixture().await;
     let alice = super::lookup::subject(&f).await;
@@ -115,7 +115,7 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
     );
     assert_eq!(counter("RealtimeSharedRead", false) - reads, 100);
     println!(
-        "phase15 burst: connections=4 events=100 deliveries=400 authentication=0 permission_misses=0 ACL_SQL=0 shared_reads=100"
+        "realtime burst: connections=4 events=100 deliveries=400 authentication=0 permission_misses=0 ACL_SQL=0 shared_reads=100"
     );
     users
         .remove_resource_access(
@@ -146,7 +146,7 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
         0
     );
     println!(
-        "phase15 revocation: Alice connections closed=2; Bob deliveries=2 authentication=0 permission_misses=0"
+        "realtime revocation: Alice connections closed=2; Bob deliveries=2 authentication=0 permission_misses=0"
     );
     // A newly opened connection cannot rejoin using the now-removed ACL.
     let (mut denied, _) =
@@ -166,7 +166,7 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1 for process counters"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1 for process counters"]
 async fn committed_platform_and_image_rows_are_shared_only_for_the_event() {
     use citadel_server::realtime_groups::{Group, GroupReadPort};
     let f = fixture().await;

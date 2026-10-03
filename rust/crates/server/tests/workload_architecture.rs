@@ -1,4 +1,4 @@
-//! Phase 7 guards for the migrated workload resource boundary.
+//! Guards for workload resource ownership boundaries.
 use std::path::{Path, PathBuf};
 
 fn rust_files(path: &Path) -> Vec<PathBuf> {

@@ -12,7 +12,7 @@ impl PostgresBuildRepository {
     ) -> BoxFuture<'a, Result<BuildRun, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let project = sqlx::query("SELECT project.*,repo.name AS gitrepositoryname,platform.name AS platformname,platform.address AS platformaddress,registry.name AS registryname,registry.registryhost AS registryhost FROM buildprojects project JOIN gitrepositories repo ON repo.id=project.gitrepositoryid LEFT JOIN platforms platform ON platform.id=project.platformid JOIN registries registry ON registry.id=project.registryid WHERE project.id=$1 AND project.archivedat IS NULL FOR UPDATE OF project")
+            let project = sqlx::query("SELECT project.*,repo.name AS gitrepositoryname,platform.name AS platformname,platform.address AS platformaddress,registry.name AS registryname,registry.registryhost AS registryhost FROM buildprojects project JOIN gitrepositories repo ON repo.id=project.gitrepositoryid LEFT JOIN platforms platform ON platform.id=project.platformid LEFT JOIN registries registry ON registry.id=project.registryid WHERE project.id=$1 AND project.archivedat IS NULL FOR UPDATE OF project")
                 .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BuildError::NotFound)?;
             if expected_version.is_some_and(|version| {
                 project.try_get::<i64, _>("rowversion").ok() != Some(version)
@@ -40,7 +40,21 @@ impl PostgresBuildRepository {
             }
             let run_id = Uuid::now_v7();
             let platform = serde_json::json!({"id":project.try_get::<Option<Uuid>,_>("platformid").map_err(storage)?,"name":project.try_get::<Option<String>,_>("platformname").map_err(storage)?,"address":project.try_get::<Option<String>,_>("platformaddress").map_err(storage)?,"builderKind":project.try_get::<String,_>("builderkind").map_err(storage)?,"buildAgentPoolId":project.try_get::<Option<Uuid>,_>("buildagentpoolid").map_err(storage)?});
-            let registry = serde_json::json!({"id":project.try_get::<Uuid,_>("registryid").map_err(storage)?,"name":project.try_get::<String,_>("registryname").map_err(storage)?,"registryHost":project.try_get::<String,_>("registryhost").map_err(storage)?});
+            let registry = if project
+                .try_get::<bool, _>("pushtoregistry")
+                .map_err(storage)?
+            {
+                serde_json::json!({"id":project.try_get::<Uuid,_>("registryid").map_err(storage)?,"name":project.try_get::<String,_>("registryname").map_err(storage)?,"registryHost":project.try_get::<String,_>("registryhost").map_err(storage)?})
+            } else {
+                serde_json::Value::Null
+            };
+            let image_repository = if registry.is_null() {
+                format!("citadel/build-{id}")
+            } else {
+                project
+                    .try_get::<String, _>("imagerepository")
+                    .map_err(storage)?
+            };
             let build_secrets: serde_json::Value =
                 project.try_get("buildsecrets").map_err(storage)?;
             let secret_ids = build_secrets
@@ -57,7 +71,7 @@ impl PostgresBuildRepository {
                 .bind(project.try_get::<String,_>("gitrepositoryname").map_err(storage)?).bind(branch)
                 .bind(project.try_get::<String,_>("contextpath").map_err(storage)?).bind(project.try_get::<String,_>("dockerfilepath").map_err(storage)?)
                 .bind(project.try_get::<Option<String>,_>("target").map_err(storage)?).bind(project.try_get::<serde_json::Value,_>("buildargs").map_err(storage)?)
-                .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(project.try_get::<String,_>("imagerepository").map_err(storage)?)
+                .bind(serde_json::to_value(secret_ids).map_err(storage)?).bind(platform).bind(registry).bind(image_repository)
                 .bind(project.try_get::<serde_json::Value,_>("tagtemplates").map_err(storage)?).bind(trigger).bind(project.try_get::<i32,_>("timeoutseconds").map_err(storage)?).bind(actor.value()).bind(commit)
                 .execute(&mut *tx).await.map_err(database)?;
             sqlx::query("SELECT pg_notify('citadel_build_work','')")
@@ -167,6 +181,9 @@ impl PostgresBuildRepository {
                 serde_json::from_value(row.try_get("tagtemplatessnapshot").map_err(storage)?)
                     .map_err(storage)?;
             let run = map_run(row)?;
+            project.push_to_registry = run.registry_id.is_some();
+            project.registry_id = run.registry_id;
+            project.image_repository = run.image_repository.clone();
             tx.commit().await.map_err(storage)?;
             Ok(Some(BuildClaim { project, run }))
         })
@@ -185,6 +202,7 @@ impl PostgresBuildRepository {
                 .bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(result.image_digest.as_deref()).bind(serde_json::to_value(&result.image_references).map_err(storage)?).bind(result.error_code.as_deref()).bind(result.error_message.as_deref()).bind(result.resolved_commit_sha.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
                 if result.status == citadel_builds::BuildRunStatus::Succeeded
+                    && claim.run.registry_id.is_some()
                     && result
                         .image_references
                         .first()

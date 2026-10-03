@@ -137,13 +137,14 @@ impl DeploymentRuntimeRouter {
         cancellation: &CancellationToken,
     ) -> Result<PreparedDeploymentImage, DeploymentError> {
         let row = sqlx::query(
-            r#"SELECT project.registryid,run.id,run.imagereferences,run.imagedigest
+            r#"SELECT (run.registrysnapshot->>'id')::uuid AS registryid,run.id,run.imagereferences,run.imagedigest
 FROM buildprojects project
 JOIN LATERAL (
-    SELECT candidate.id,candidate.imagereferences,candidate.imagedigest
+    SELECT candidate.id,candidate.imagereferences,candidate.imagedigest,candidate.registrysnapshot
     FROM buildruns candidate
     WHERE candidate.buildprojectid=project.id
       AND candidate.status='Succeeded'
+      AND candidate.registrysnapshot <> 'null'::jsonb
       AND ($2::uuid IS NULL OR candidate.id=$2)
     ORDER BY candidate.completedat DESC NULLS LAST,candidate.id DESC
     LIMIT 1

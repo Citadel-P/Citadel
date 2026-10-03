@@ -6,9 +6,9 @@ use std::sync::{
 };
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stop_and_network_noise_never_read_metadata_even_when_docker_observation_would_fail() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -183,9 +183,9 @@ fn daemon_action_cannot_forge_a_stream_recovery_signal() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn hundred_swarm_events_collect_one_projection_and_no_standalone_inventory() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

@@ -57,9 +57,9 @@ impl PlatformService for RejectingAgent {
     }
 }
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_worker() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -187,9 +187,9 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
 
 // Port: PlatformHealthMonitorJobTests Edge enrollment/revocation cases.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_health_suppresses_unenrolled_and_revoked_bindings() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

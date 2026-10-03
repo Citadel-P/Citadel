@@ -17,7 +17,10 @@ pub struct BuildProjectInput {
     pub build_args: Option<Vec<BuildArgSpec>>,
     pub build_secrets: Option<Vec<BuildSecretSpec>>,
     pub platform_id: Option<Uuid>,
-    pub registry_id: Uuid,
+    #[serde(default = "default_push_to_registry")]
+    pub push_to_registry: bool,
+    pub registry_id: Option<Uuid>,
+    #[serde(default)]
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
     #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
@@ -50,6 +53,7 @@ impl TryFrom<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
                 .build_secrets
                 .map(|value| value.into_iter().map(|value| value.into()).collect()),
             platform_id: value.platform_id,
+            push_to_registry: value.push_to_registry,
             registry_id: value.registry_id,
             image_repository: value.image_repository,
             tag_templates: value.tag_templates,
@@ -81,6 +85,7 @@ impl From<BuildProjectInput> for citadel_builds::BuildProjectConfiguration {
                 .build_secrets
                 .map(|value| value.into_iter().map(|value| value.into()).collect()),
             platform_id: value.platform_id,
+            push_to_registry: value.push_to_registry,
             registry_id: value.registry_id,
             image_repository: value.image_repository,
             tag_templates: value.tag_templates,
@@ -189,4 +194,8 @@ impl QueueBuildTrigger {
             Self::Dependency => "Dependency",
         }
     }
+}
+
+fn default_push_to_registry() -> bool {
+    true
 }

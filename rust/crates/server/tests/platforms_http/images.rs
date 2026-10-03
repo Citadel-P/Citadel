@@ -10,7 +10,7 @@ use prost::Message;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn delete_images_preserves_authorization_and_reconciles_partial_failure() {
     let f = fixture().await;
     sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
@@ -201,7 +201,7 @@ async fn delete_images_preserves_authorization_and_reconciles_partial_failure() 
 // Ports ImageEndpointTests and SwarmNodeLocalResourceEndpointTests' inspect
 // contract, adding a wrong-node/no-fallback regression at the real HTTP boundary.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn image_inspect_authorizes_and_uses_the_exact_node_with_existing_ui_shape() {
     let f = fixture().await;
     let url = format!(

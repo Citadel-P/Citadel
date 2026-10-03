@@ -6,9 +6,9 @@ use tokio::sync::Semaphore;
 // Executes the actual worker loop: burst coalescing and one follow-up when an
 // event arrives during Docker I/O. A closed realtime receiver cannot stale a commit.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

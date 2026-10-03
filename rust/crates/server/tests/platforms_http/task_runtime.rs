@@ -11,7 +11,7 @@ use prost::Message;
 // Ports SwarmEndpointTests' Task runtime authorization, exact identity and
 // redaction cases through HTTP + PostgreSQL + the real Edge command protocol.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn task_inspection_and_terminal_preserve_permissions_node_identity_and_redaction() {
     let f = fixture().await;
     let base = format!("/api/v1/platforms/{}/swarm/tasks/task-1", f.platform_id);

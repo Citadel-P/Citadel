@@ -30,7 +30,8 @@ pub struct BuildProjectView {
     pub platform_id: Option<Uuid>,
     #[schema(required = true)]
     pub build_agent_pool_id: Option<Uuid>,
-    pub registry_id: Uuid,
+    pub push_to_registry: bool,
+    pub registry_id: Option<Uuid>,
     pub image_repository: String,
     pub tag_templates: Vec<String>,
     #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
@@ -80,6 +81,7 @@ impl TryFrom<citadel_builds::BuildProject> for BuildProjectView {
             builder_kind: serde_json::from_value(value.builder_kind.into())?,
             platform_id: value.platform_id,
             build_agent_pool_id: value.build_agent_pool_id,
+            push_to_registry: value.push_to_registry,
             registry_id: value.registry_id,
             image_repository: value.image_repository,
             tag_templates: value.tag_templates,
@@ -114,7 +116,7 @@ pub struct BuildRunView {
     pub dockerfile_path: String,
     #[schema(required = true)]
     pub target: Option<String>,
-    pub registry_id: Uuid,
+    pub registry_id: Option<Uuid>,
     pub registry_host: String,
     pub image_repository: String,
     pub image_references: Vec<String>,

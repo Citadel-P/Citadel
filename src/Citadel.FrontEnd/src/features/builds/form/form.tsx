@@ -56,7 +56,8 @@ const defaultBuild: BuildProjectInput = {
   builderKind: BuildProjectBuilderKind.Platform,
   platformId: '',
   buildAgentPoolId: null,
-  registryId: '',
+  pushToRegistry: true,
+  registryId: null,
   imageRepository: '',
   tagTemplates: ['{branch}-{shortSha}'],
   webhook: { enabled: false },
@@ -462,6 +463,7 @@ export const BuildForm = ({
   const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
   const buildPools = useMemo(() => buildPoolsData?.data.pools ?? [], [buildPoolsData?.data.pools]);
   const secrets = useMemo(() => secretsData?.data.secrets ?? [], [secretsData?.data.secrets]);
+  const pushToRegistry = update.pushToRegistry ?? resource?.pushToRegistry ?? true;
   const currentBuilderKind = update.builderKind ?? resource?.builderKind ?? defaultBuild.builderKind;
   const currentPlatformId = update.platformId ?? resource?.platformId ?? defaultBuild.platformId;
   const fallbackPlatformId = currentPlatformId || resource?.platformId || platforms[0]?.id || '';
@@ -525,6 +527,7 @@ export const BuildForm = ({
       platformId: resource.platformId,
       builderKind: resource.builderKind ?? BuildProjectBuilderKind.Platform,
       buildAgentPoolId: resource.buildAgentPoolId ?? null,
+      pushToRegistry: resource.pushToRegistry,
       registryId: resource.registryId,
       imageRepository: resource.imageRepository,
       tagTemplates: resource.tagTemplates,
@@ -663,7 +666,7 @@ export const BuildForm = ({
         items: [
           defineGroupField<BuildInput>({
             id: 'runner',
-            label: 'Runner and Registry',
+            label: 'Runner and image output',
             items: [
               defineField({
                 key: 'builderKind',
@@ -743,32 +746,51 @@ export const BuildForm = ({
                     }),
                   ]),
               defineField({
-                key: 'registryId',
-                label: 'Registry',
-                description: 'Registry Citadel pushes the generated image tags to.',
-                required: true,
+                key: 'pushToRegistry',
+                label: 'Push to registry',
+                description: pushToRegistry
+                  ? 'Push the built image to the selected registry.'
+                  : 'The image is tagged locally on the selected builder. Other platforms cannot access it automatically, and ephemeral builders may remove it during cleanup.',
                 render: (value, set) => (
-                  <ResourceSelectorField
-                    targetType={LookupResourceType.Registry}
-                    selected={value}
-                    onSelect={(item) => set({ registryId: item?.id ?? '' })}
-                    placeholder="Select registry"
+                  <FieldSwitch
+                    id="build-push-to-registry"
+                    checked={value ?? true}
+                    disabled={disabled}
+                    onChange={(pushToRegistry) => set({ pushToRegistry })}
                   />
                 ),
               }),
-              defineField({
-                key: 'imageRepository',
-                label: 'Image repository',
-                description: 'Repository name under the selected registry, for example team/api.',
-                required: true,
-                render: (value, set) => (
-                  <FieldInput
-                    value={value ?? ''}
-                    onChange={(v) => set({ imageRepository: v })}
-                    placeholder="team/api"
-                  />
-                ),
-              }),
+              ...(pushToRegistry
+                ? [
+                    defineField<BuildInput, 'registryId'>({
+                      key: 'registryId',
+                      label: 'Registry',
+                      description: 'Registry Citadel pushes the generated image tags to.',
+                      required: true,
+                      render: (value, set) => (
+                        <ResourceSelectorField
+                          targetType={LookupResourceType.Registry}
+                          selected={value}
+                          onSelect={(item) => set({ registryId: item?.id ?? null })}
+                          placeholder="Select registry"
+                        />
+                      ),
+                    }),
+                    defineField<BuildInput, 'imageRepository'>({
+                      key: 'imageRepository',
+                      label: 'Image repository',
+                      description: 'Repository name under the selected registry, for example team/api.',
+                      required: true,
+                      render: (value, set) => (
+                        <FieldInput
+                          value={value ?? ''}
+                          onChange={(v) => set({ imageRepository: v })}
+                          placeholder="team/api"
+                        />
+                      ),
+                    }),
+                  ]
+                : []),
               defineField({
                 key: 'tagTemplates',
                 label: 'Tags',
@@ -893,6 +915,7 @@ export const BuildForm = ({
     [
       currentGitRepositoryId,
       currentBuilderKind,
+      pushToRegistry,
       automatedOperationsEnabled,
       elasticBuildExecutionEnabled,
       fallbackPlatformId,
@@ -943,6 +966,9 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
     ...payload,
     description: payload.description ?? null,
     builderKind,
+    pushToRegistry: payload.pushToRegistry ?? true,
+    registryId: payload.pushToRegistry === false ? null : payload.registryId,
+    imageRepository: payload.pushToRegistry === false ? '' : payload.imageRepository,
     platformId: builderKind === BuildProjectBuilderKind.Platform ? payload.platformId : null,
     buildAgentPoolId: builderKind === BuildProjectBuilderKind.BuildAgentPool ? payload.buildAgentPoolId : null,
     branch: payload.branch || 'main',

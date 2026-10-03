@@ -57,12 +57,12 @@ async fn wait_session(
 }
 
 #[tokio::test]
-#[ignore = "requires production CITADEL_PHASE7_AGENT_IMAGE, AGENT_NETWORK, AGENT_HOST and isolated CITADEL_PHASE6_SWARM_MANAGER / DOCKER_SOCKET"]
+#[ignore = "requires production CITADEL_TEST_AGENT_IMAGE, AGENT_NETWORK, AGENT_HOST and isolated CITADEL_RUNTIME_SWARM_MANAGER / DOCKER_SOCKET"]
 async fn production_edge_agent_reconnects_streams_events_and_fences_stale_writers() {
-    let image = std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
-    let network = std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
-    let host = std::env::var("CITADEL_PHASE7_AGENT_HOST").unwrap();
-    let manager = std::env::var("CITADEL_PHASE6_SWARM_MANAGER").unwrap();
+    let image = std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
+    let network = std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
+    let host = std::env::var("CITADEL_TEST_AGENT_HOST").unwrap();
+    let manager = std::env::var("CITADEL_RUNTIME_SWARM_MANAGER").unwrap();
     assert_eq!(
         docker(&[
             "inspect",
@@ -73,8 +73,8 @@ async fn production_edge_agent_reconnects_streams_events_and_fences_stale_writer
         .await,
         "jobs-live"
     );
-    let socket = std::env::var("CITADEL_PHASE6_DOCKER_SOCKET").unwrap();
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let socket = std::env::var("CITADEL_RUNTIME_DOCKER_SOCKET").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

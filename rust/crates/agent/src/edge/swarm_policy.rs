@@ -309,7 +309,7 @@ mod tests {
     fn allowlist_matches_every_reviewed_protocol_operation() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../reports/agent-parity.md"
+            "/../../docs/agent-protocol.md"
         ));
         let mut count = 0;
         for row in source.lines().filter(|v| v.starts_with("| citadel.")) {

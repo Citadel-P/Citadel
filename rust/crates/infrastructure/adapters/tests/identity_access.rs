@@ -29,10 +29,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(8)
@@ -956,7 +956,7 @@ VALUES
 }
 
 fn metadata() -> SessionMetadata {
-    metadata_for(Some("phase3-test"))
+    metadata_for(Some("identity-test"))
 }
 
 fn metadata_for(user_agent: Option<&str>) -> SessionMetadata {

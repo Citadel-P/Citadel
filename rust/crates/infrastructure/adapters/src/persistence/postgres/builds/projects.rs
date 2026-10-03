@@ -31,7 +31,7 @@ impl PostgresBuildRepository {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("INSERT INTO buildprojects(id,name,normalizedname,description,enabled,gitrepositoryid,branch,contextpath,dockerfilepath,target,buildargs,buildsecrets,builderkind,platformid,buildagentpoolid,registryid,imagerepository,tagtemplates,webhook,timeoutseconds,retentionruncount,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)")
+            sqlx::query("INSERT INTO buildprojects(id,name,normalizedname,description,enabled,gitrepositoryid,branch,contextpath,dockerfilepath,target,buildargs,buildsecrets,builderkind,platformid,buildagentpoolid,registryid,imagerepository,tagtemplates,webhook,timeoutseconds,retentionruncount,createdbyactorid,pushtoregistry) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)")
                 .bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(input.description.as_deref()).bind(input.enabled)
                 .bind(input.git_repository_id).bind(input.branch.as_deref().unwrap_or("main")).bind(input.context_path.as_deref().unwrap_or("."))
                 .bind(input.dockerfile_path.as_deref().unwrap_or("Dockerfile")).bind(input.target.as_deref())
@@ -39,7 +39,7 @@ impl PostgresBuildRepository {
                 .bind(serde_json::to_value(input.build_secrets.as_deref().unwrap_or(&[])).map_err(storage)?)
                 .bind(&input.builder_kind).bind(input.platform_id).bind(input.build_agent_pool_id).bind(input.registry_id)
                 .bind(&input.image_repository).bind(serde_json::to_value(input.tag_templates.as_deref().unwrap_or(&[])).map_err(storage)?)
-                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds.unwrap_or(1800)).bind(input.retention_run_count.unwrap_or(20)).bind(actor.value())
+                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds.unwrap_or(1800)).bind(input.retention_run_count.unwrap_or(20)).bind(actor.value()).bind(input.push_to_registry)
                 .execute(&mut *transaction).await.map_err(database)?;
             resource_tags::insert(&mut transaction, "Build", id, &input.tag_ids, actor.value())
                 .await
@@ -135,14 +135,14 @@ impl PostgresBuildRepository {
     ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row = sqlx::query("UPDATE buildprojects SET name=$3,normalizedname=$4,description=$5,enabled=$6,gitrepositoryid=$7,branch=$8,contextpath=$9,dockerfilepath=$10,target=$11,buildargs=$12,buildsecrets=$13,builderkind=$14,platformid=$15,buildagentpoolid=$16,registryid=$17,imagerepository=$18,tagtemplates=$19,webhook=$20,timeoutseconds=$21,retentionruncount=$22,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
+            let row = sqlx::query("UPDATE buildprojects SET name=$3,normalizedname=$4,description=$5,enabled=$6,gitrepositoryid=$7,branch=$8,contextpath=$9,dockerfilepath=$10,target=$11,buildargs=$12,buildsecrets=$13,builderkind=$14,platformid=$15,buildagentpoolid=$16,registryid=$17,imagerepository=$18,tagtemplates=$19,webhook=$20,timeoutseconds=$21,retentionruncount=$22,pushtoregistry=$23,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
                 .bind(current.id).bind(current.row_version).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(input.enabled)
                 .bind(input.git_repository_id).bind(&input.branch).bind(&input.context_path).bind(&input.dockerfile_path).bind(&input.target)
                 .bind(serde_json::to_value(input.build_args.as_deref().unwrap_or(&[])).map_err(storage)?)
                 .bind(serde_json::to_value(input.build_secrets.as_deref().unwrap_or(&[])).map_err(storage)?)
                 .bind(&input.builder_kind).bind(input.platform_id).bind(input.build_agent_pool_id).bind(input.registry_id).bind(&input.image_repository)
                 .bind(serde_json::to_value(input.tag_templates.as_deref().unwrap_or(&[])).map_err(storage)?)
-                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds).bind(input.retention_run_count)
+                .bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.timeout_seconds).bind(input.retention_run_count).bind(input.push_to_registry)
                 .fetch_optional(&mut *tx).await.map_err(database)?.ok_or_else(|| BuildError::Conflict("Build was changed, archived or is processing. Reload before saving.".into()))?;
             let project = map_project(row)?;
             if !metadata_only {

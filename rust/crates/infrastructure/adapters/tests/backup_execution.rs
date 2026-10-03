@@ -27,9 +27,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrite_recovery() {
-    let database_url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(6)

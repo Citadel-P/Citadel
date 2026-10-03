@@ -2020,7 +2020,8 @@ schema_model! {
         pub builder_kind: String,
         pub platform_id: Option<Uuid>,
         pub build_agent_pool_id: Option<Uuid>,
-        pub registry_id: Uuid,
+        pub push_to_registry: bool,
+        pub registry_id: Option<Uuid>,
         pub image_repository: String,
         pub tag_templates: Vec<String>,
         #[schema(value_type = Option < crate::api::resources::schema_models::primitives::WebhookConfigSchema >)]

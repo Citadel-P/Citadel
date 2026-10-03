@@ -5,10 +5,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE0_DATABASE_URL"]
+#[ignore = "requires CITADEL_AUTHORIZED_READ_DATABASE_URL"]
 async fn actor_authorized_platform_read_preserves_direct_and_team_scope() {
-    let database_url = std::env::var("CITADEL_PHASE0_DATABASE_URL")
-        .expect("CITADEL_PHASE0_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_AUTHORIZED_READ_DATABASE_URL")
+        .expect("CITADEL_AUTHORIZED_READ_DATABASE_URL is required for this fixture");
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&database_url)

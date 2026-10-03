@@ -123,10 +123,10 @@ impl DeploymentRuntime for RecordingRuntime {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -195,7 +195,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .unwrap();
     sqlx::query("INSERT INTO users(id,actorid,createdat,createdbyactorid,email,name) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4,$5)")
         .bind(user_id).bind(actor_id).bind(SYSTEM_ACTOR_ID)
-        .bind(format!("phase6-{suffix}@example.test")).bind(format!("phase6-{suffix}"))
+        .bind(format!("workload-{suffix}@example.test")).bind(format!("workload-{suffix}"))
         .execute(&mut *tx).await.unwrap();
     sqlx::query("INSERT INTO actorroles(actorid,roleid) VALUES($1,$2)")
         .bind(actor_id)
@@ -207,13 +207,13 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         r#"INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
            VALUES($1,'local','Local',1,0,1,$2,0,'{"$type":"Docker"}'::json,'Online',0)"#,
     )
-    .bind(platform_id).bind(format!("phase6-platform-{suffix}"))
+    .bind(platform_id).bind(format!("workload-platform-{suffix}"))
     .execute(&mut *tx).await.unwrap();
     tx.commit().await.unwrap();
     let admin = ActorPrincipal {
         subject_id: user_id,
         actor_id: ActorId::new(actor_id),
-        name: format!("phase6-{suffix}"),
+        name: format!("workload-{suffix}"),
         principal_type: AuthenticatedPrincipalType::User,
         credential_id: None,
         roles: vec!["Admin".to_owned()],

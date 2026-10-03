@@ -39,7 +39,7 @@ struct Fixture {
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn list_search_and_get_preserve_the_team_projection() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -104,7 +104,7 @@ async fn list_search_and_get_preserve_the_team_projection() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_with_assignments_is_atomic_and_writes_safe_activity() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -148,7 +148,7 @@ async fn create_with_assignments_is_atomic_and_writes_safe_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_conflicts_and_missing_assignments_leave_no_partial_rows() {
     let fixture = fixture(true).await;
     let name = format!("rollback-{}", Uuid::now_v7().simple());
@@ -194,7 +194,7 @@ async fn create_conflicts_and_missing_assignments_leave_no_partial_rows() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_replaces_and_clears_assignments_without_removing_service_accounts() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -263,7 +263,7 @@ async fn patch_replaces_and_clears_assignments_without_removing_service_accounts
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn incremental_member_role_and_resource_access_routes_persist_and_remove() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -326,7 +326,7 @@ async fn incremental_member_role_and_resource_access_routes_persist_and_remove()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn custom_access_expansion_and_service_account_membership_require_the_license() {
     let fixture = fixture(false).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -359,7 +359,7 @@ async fn custom_access_expansion_and_service_account_membership_require_the_lice
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn last_administrator_guard_rolls_back_team_member_removal() {
     let fixture = fixture(true).await;
     let (team_id, team_actor_id) = seed_team(
@@ -415,7 +415,7 @@ async fn last_administrator_guard_rolls_back_team_member_removal() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_team_deletes_keep_one_enabled_administrator() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -491,7 +491,7 @@ async fn concurrent_team_deletes_keep_one_enabled_administrator() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn rename_and_delete_persist_lifecycle_activity_without_ghost_rows() {
     let fixture = fixture(true).await;
     let (team_id, _) = seed_team(
@@ -538,7 +538,7 @@ async fn rename_and_delete_persist_lifecycle_activity_without_ghost_rows() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn team_routes_require_a_human_administrator_and_validate_bounds() {
     let fixture = fixture(true).await;
     let unauthenticated = send_without_principal(&fixture, Method::GET, "/api/v1/teams").await;
@@ -576,8 +576,8 @@ async fn fixture(custom_access: bool) -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

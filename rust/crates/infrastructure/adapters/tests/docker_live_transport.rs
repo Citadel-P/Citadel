@@ -32,7 +32,7 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
     let network = client
         .create_network(
             &serde_json::from_value(
-                serde_json::json!({"Name":"citadel-phase4-network","Driver":"bridge"}),
+                serde_json::json!({"Name":"citadel-platform-network","Driver":"bridge"}),
             )
             .unwrap(),
         )
@@ -43,7 +43,7 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
     let volume = client
         .create_volume(
             &serde_json::from_value(
-                serde_json::json!({"Name":"citadel-phase4-volume","Driver":"local"}),
+                serde_json::json!({"Name":"citadel-platform-volume","Driver":"local"}),
             )
             .unwrap(),
         )
@@ -52,7 +52,7 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
     client.inspect_volume(&volume.name).await.unwrap();
     client.list_volumes().await.unwrap();
     let mut events = client.events(None, None).await.unwrap();
-    let id=client.create_container("citadel-phase4-container",&serde_json::json!({"Image":image,"Cmd":["sh","-c","echo fixture; sleep 60"],"HostConfig":{"Binds":["citadel-phase4-volume:/data"]}})).await.unwrap();
+    let id=client.create_container("citadel-platform-container",&serde_json::json!({"Image":image,"Cmd":["sh","-c","echo fixture; sleep 60"],"HostConfig":{"Binds":["citadel-platform-volume:/data"]}})).await.unwrap();
     client.start_container(&id).await.unwrap();
     client.inspect_container(&id).await.unwrap();
     client.inspect_container_document(&id).await.unwrap();
@@ -85,14 +85,14 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
     let secret = client
         .create_swarm_material(
             true,
-            &serde_json::json!({"Name":"citadel-phase4-secret","Data":"c2VjcmV0"}),
+            &serde_json::json!({"Name":"citadel-platform-secret","Data":"c2VjcmV0"}),
         )
         .await
         .unwrap();
     let config = client
         .create_swarm_material(
             false,
-            &serde_json::json!({"Name":"citadel-phase4-config","Data":"Y29uZmln"}),
+            &serde_json::json!({"Name":"citadel-platform-config","Data":"Y29uZmln"}),
         )
         .await
         .unwrap();
@@ -110,7 +110,7 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
         .unwrap();
     client.list_swarm_secrets().await.unwrap();
     client.list_swarm_configs().await.unwrap();
-    let created=client.create_swarm_service(&serde_json::json!({"Name":"citadel-phase4-service","TaskTemplate":{"ContainerSpec":{"Image":image}},"Mode":{"Replicated":{"Replicas":0}}})).await.unwrap();
+    let created=client.create_swarm_service(&serde_json::json!({"Name":"citadel-platform-service","TaskTemplate":{"ContainerSpec":{"Image":image}},"Mode":{"Replicated":{"Replicas":0}}})).await.unwrap();
     let id = created["ID"].as_str().unwrap();
     let service = client.inspect_swarm_service(id).await.unwrap();
     client

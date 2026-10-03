@@ -12,13 +12,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires dedicated CITADEL_PHASE7_RECOVERY_SOURCE_DATABASE_URL and CITADEL_PHASE7_RECOVERY_TARGET_DATABASE_URL databases plus pg_dump and pg_restore"]
+#[ignore = "requires dedicated CITADEL_RECOVERY_SOURCE_DATABASE_URL and CITADEL_RECOVERY_TARGET_DATABASE_URL databases plus pg_dump and pg_restore"]
 async fn system_bundle_restores_state_into_a_clean_database() {
     // ControlPlaneRecoveryTests.Candidate_ShouldRestoreControlPlaneAndOperateInCleanEnvironment:
     // database/instance/encrypted-state assertions. Packaged process + HTTP work
     // remain a separate acceptance boundary, not implied by this adapter test.
-    let source_url = std::env::var("CITADEL_PHASE7_RECOVERY_SOURCE_DATABASE_URL").unwrap();
-    let target_url = std::env::var("CITADEL_PHASE7_RECOVERY_TARGET_DATABASE_URL").unwrap();
+    let source_url = std::env::var("CITADEL_RECOVERY_SOURCE_DATABASE_URL").unwrap();
+    let target_url = std::env::var("CITADEL_RECOVERY_TARGET_DATABASE_URL").unwrap();
     assert_ne!(
         database_identity(&source_url),
         database_identity(&target_url),
@@ -33,7 +33,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .await
         .unwrap();
     let marker_id = Uuid::now_v7();
-    let marker_name = format!("phase7-recovery-{}", marker_id.simple());
+    let marker_name = format!("execution-recovery-{}", marker_id.simple());
     sqlx::query(
         "INSERT INTO tags(id,name,normalizedname,color,createdbyactorid) VALUES($1,$2,lower($2),'#334455',$3)",
     )
@@ -57,7 +57,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .unwrap();
 
     let staging = std::env::temp_dir().join(format!(
-        "citadel-phase7-recovery-{}",
+        "citadel-execution-recovery-{}",
         Uuid::now_v7().simple()
     ));
     let cancellation = CancellationToken::new();

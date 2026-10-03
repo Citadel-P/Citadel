@@ -22,9 +22,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn build_runs_claim_once_persist_results_cancel_and_recover() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -64,7 +64,8 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         build_args: None,
         build_secrets: None,
         platform_id: Some(platform),
-        registry_id: registry,
+        push_to_registry: true,
+        registry_id: Some(registry),
         image_repository: "citadel/test".into(),
         tag_templates: None,
         webhook: None,
@@ -259,6 +260,86 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .await
             .unwrap();
     assert_eq!(retained, 2);
+    // Local-only configuration survives create/update and is snapshotted per run.
+    let mut local_input = BuildProjectConfiguration::from(&project);
+    local_input.name = format!("local-build-{}", Uuid::now_v7());
+    local_input.push_to_registry = false;
+    local_input.validate().unwrap();
+    let local = store.create(actor, &local_input).await.unwrap();
+    assert!(!local.push_to_registry);
+    assert!(local.registry_id.is_none());
+    let queued_local = store.enqueue(actor, local.id, "Manual").await.unwrap();
+    let snapshot: serde_json::Value =
+        sqlx::query_scalar("SELECT registrysnapshot FROM buildruns WHERE id=$1")
+            .bind(queued_local.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(snapshot.is_null());
+    assert!(queued_local.registry_id.is_none());
+    assert_eq!(
+        queued_local.image_repository,
+        format!("citadel/build-{}", local.id)
+    );
+    // Even an out-of-band project edit must not turn a queued local build into a push.
+    sqlx::query("UPDATE buildprojects SET pushtoregistry=true,registryid=$2,imagerepository='changed/image' WHERE id=$1")
+        .bind(local.id).bind(registry).execute(&pool).await.unwrap();
+    let local_claim = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(local_claim.run.id, queued_local.id);
+    assert!(!local_claim.project.push_to_registry);
+    assert!(local_claim.project.registry_id.is_none());
+    assert_eq!(
+        local_claim.project.image_repository,
+        queued_local.image_repository
+    );
+    #[cfg(unix)]
+    assert_local_build_skips_registry(&pool, &local_claim).await;
+    store
+        .finish(&local_claim, &success_result('e'))
+        .await
+        .unwrap();
+    let result = PostgresStackBuildImageResolver::new(pool.clone())
+        .resolve(&[StackBuildImageBinding {
+            service_name: "local".into(),
+            build_project_id: local.id,
+            redeploy_on_build: false,
+            resolved_image_reference: None,
+            resolved_digest: None,
+            resolved_build_run_id: None,
+            applied_image_reference: None,
+            applied_digest: None,
+            applied_build_run_id: None,
+            applied_at: None,
+        }])
+        .await;
+    assert!(
+        matches!(result, Err(citadel_stacks::StackError::Validation(message)) if message.contains("no successful deployable image"))
+    );
+    let current = store.get(local.id).await.unwrap();
+    let mut patched = current
+        .apply_patch(serde_json::json!({"pushToRegistry": false}), false)
+        .unwrap();
+    patched.validate().unwrap();
+    let updated = store
+        .update(&current, &patched, actor, false)
+        .await
+        .unwrap();
+    assert!(!updated.push_to_registry);
+    assert!(updated.registry_id.is_none());
+    sqlx::query("DELETE FROM buildruns WHERE buildprojectid=$1")
+        .bind(local.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM buildprojects WHERE id=$1")
+        .bind(local.id)
+        .execute(&pool)
+        .await
+        .unwrap();
     // Build queue parity: different Projects cannot race past a Pool's limit.
     let mut pool_input: citadel_builds::BuildAgentPoolConfiguration = serde_json::from_value(serde_json::json!({
         "name":format!("pool-{}",Uuid::now_v7()),"enabled":true,
@@ -450,9 +531,9 @@ fn success_result(marker: char) -> BuildExecutionResult {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn build_secret_resolver_decrypts_internal_values_without_persisting_plaintext() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(2)
@@ -497,9 +578,9 @@ async fn build_secret_resolver_decrypts_internal_values_without_persisting_plain
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn build_registry_credentials_are_loaded_only_for_authenticated_registries() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(2)
@@ -549,4 +630,101 @@ async fn build_registry_credentials_are_loaded_only_for_authenticated_registries
         .execute(&pool)
         .await
         .unwrap();
+}
+
+// Run the actual local executor with a committed Git fixture and a Docker CLI
+// stub that accepts only build. Any login or push makes the test fail.
+#[cfg(unix)]
+async fn assert_local_build_skips_registry(
+    pool: &sqlx::PgPool,
+    claim: &citadel_builds::BuildClaim,
+) {
+    use std::os::unix::fs::PermissionsExt;
+    let root = std::env::temp_dir().join(format!("citadel-local-build-{}", Uuid::now_v7()));
+    let checkout = root.join(claim.run.git_repository_id.to_string());
+    std::fs::create_dir_all(&checkout).unwrap();
+    std::fs::write(checkout.join("Dockerfile"), "FROM scratch\n").unwrap();
+    for args in [
+        vec!["init", "-b", "main"],
+        vec!["add", "Dockerfile"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.test",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&checkout)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let docker = root.join("docker-stub");
+    std::fs::write(
+        &docker,
+        "#!/bin/sh\n[ \"$1\" = build ] || exit 97\nprintf '%s\\n' \"$@\" > \"$0.args\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let protector = Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap());
+    let git = Arc::new(GitRepositoryExecutionService::new(
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
+        Arc::new(GitAccountService::new(
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
+            protector.clone(),
+        )),
+        Arc::new(GitCli::new(
+            Arc::new(citadel_processes::SystemProcess),
+            Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(CancellationToken::new()),
+                ),
+            ),
+            std::time::Duration::from_secs(10),
+        )),
+        root.clone(),
+        std::time::Duration::from_secs(60),
+    ));
+    let executor = LocalDockerBuildExecutor::new(
+        git,
+        citadel_adapters::connectors::docker::DockerEndpoint::Unix("/unused.sock".into()),
+        docker.as_os_str(),
+        Arc::new(PostgresBuildSecretResolver::new(pool.clone(), protector).unwrap()),
+        Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),
+        4096,
+        pool.clone(),
+    );
+    let result = executor
+        .execute(
+            claim,
+            &citadel_builds::NoopBuildLogSink,
+            &CancellationToken::new(),
+        )
+        .await;
+    assert_eq!(
+        result.status,
+        citadel_builds::BuildRunStatus::Succeeded,
+        "{:?}",
+        result.error_message
+    );
+    assert!(result.image_digest.is_none());
+    assert_eq!(result.image_references.len(), 1);
+    assert!(
+        result.image_references[0]
+            .starts_with(&format!("citadel/build-{}:main-", claim.project.id))
+    );
+    let args = std::fs::read_to_string(root.join("docker-stub.args")).unwrap();
+    assert!(args.contains(&result.image_references[0]));
+    std::fs::remove_dir_all(root).unwrap();
 }

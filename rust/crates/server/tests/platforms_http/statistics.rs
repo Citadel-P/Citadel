@@ -2,7 +2,7 @@ use super::*;
 
 // Verify requested windows and batched Platform/Container history through HTTP.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples() {
     let f = fixture().await;
     let container: Uuid =
@@ -68,7 +68,7 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_history_survives_task_replacement_without_double_counting_or_crossing_nodes() {
     use citadel_adapters::connectors::edge::EdgeRegistry;
     use citadel_adapters::connectors::edge::EdgeTarget;
@@ -289,7 +289,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
     let f = fixture().await;
     let path = format!(
@@ -370,7 +370,7 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn workload_history_requires_its_own_permission_and_preserves_stack_grouping() {
     use citadel_primitives::ResourceType;
     let f = fixture().await;
@@ -446,7 +446,7 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn task_history_checks_live_docker_identity_and_node_before_returning_samples() {
     let f = fixture().await;
     let path = format!(
@@ -527,7 +527,7 @@ async fn task_history_checks_live_docker_identity_and_node_before_returning_samp
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguity() {
     let f = fixture().await;
     let container: Uuid =
@@ -589,7 +589,7 @@ async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguit
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_sample_tables() {
     use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
@@ -682,7 +682,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn connected_manager_history_uses_reported_node_identity_without_replacing_container_ids() {
     use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat, RuntimeSwarmInfo};

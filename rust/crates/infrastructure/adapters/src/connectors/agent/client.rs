@@ -432,6 +432,7 @@ pub struct AgentClient {
 }
 
 pub(crate) struct AgentBuildCommand {
+    pub push_to_registry: bool,
     pub output: Option<tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
     pub context_archive: Vec<u8>,
     pub dockerfile_path: String,
@@ -1028,7 +1029,11 @@ impl AgentClient {
             cancellation,
         )
         .await?;
-        for reference in command.tags {
+        for reference in command
+            .tags
+            .into_iter()
+            .filter(|_| command.push_to_registry)
+        {
             let request = self.signer.sign(
                 PushImageRequest {
                     image_reference: reference,

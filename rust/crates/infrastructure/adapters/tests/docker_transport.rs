@@ -806,7 +806,7 @@ fn response_for(path: &str) -> Vec<u8> {
 }
 
 fn temp_socket() -> PathBuf {
-    std::env::temp_dir().join(format!("citadel-phase0-{}.sock", Uuid::now_v7()))
+    std::env::temp_dir().join(format!("citadel-measurement-{}.sock", Uuid::now_v7()))
 }
 
 #[tokio::test]

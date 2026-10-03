@@ -35,7 +35,7 @@ impl BuildExecutor for BlockingExecutor {
 
 // Port of BuildRunWorkerJobTests.Worker_ShouldExecuteQueuedRunsConcurrently.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
     let (pool, actor, store, mut input) = fixture().await;
     let mut runs = Vec::new();
@@ -89,7 +89,7 @@ async fn fixture() -> (
     Arc<PostgresBuildRepository>,
     BuildProjectConfiguration,
 ) {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -131,7 +131,8 @@ async fn fixture() -> (
         build_args: None,
         build_secrets: None,
         platform_id: Some(platform),
-        registry_id: registry,
+        push_to_registry: true,
+        registry_id: Some(registry),
         image_repository: "citadel/test".into(),
         tag_templates: None,
         webhook: None,
@@ -148,7 +149,7 @@ async fn fixture() -> (
 // Port: BuildRunCleanupServiceTests retention/disabled paths. Rust additionally
 // protects builds referenced by deployment/stack specifications.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn retention_obeys_configuration_and_preserves_referenced_builds() {
     let (pool, actor, store, mut input) = fixture().await;
     input.retention_run_count = Some(10);
@@ -241,7 +242,7 @@ impl BuildExecutor for FailedExecutor {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn project_retention_preserves_both_json_contracts_and_notifies_after_commit() {
     let (pool, actor, store, mut input) = fixture().await;
     input.retention_run_count = Some(2);
