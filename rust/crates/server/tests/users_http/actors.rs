@@ -5,7 +5,7 @@ use citadel_identity::ActorRepository;
 // Ports ActorEndpointTests.ActorEndpoints_ShouldReadAndPersistEnabledState and
 // extends the AdministratorGuard concurrency/last-administrator scenarios.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn actors_read_and_patch_use_actor_ids_and_preserve_administrator_access() {
     let mut f = fixture().await;
     f.app = citadel_server::api::routes::actors::router(Arc::new(PostgresActorRepository::new(
@@ -122,7 +122,7 @@ async fn actors_read_and_patch_use_actor_ids_and_preserve_administrator_access()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_actor_disables_cannot_remove_both_administrators() {
     let f = fixture().await;
     let (_, actor) =

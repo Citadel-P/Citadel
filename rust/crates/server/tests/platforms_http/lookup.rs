@@ -106,7 +106,7 @@ async fn close(f: Fixture) {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lookup_validation_admin_precedence_and_all_add_targets_match_dotnet() {
     let f = fixture().await;
     let reader = subject(&f).await;
@@ -243,7 +243,7 @@ async fn deployment(f: &Fixture, registry_id: Uuid) -> Uuid {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lookup_preserves_linked_targets_without_granting_unrelated_resource_access() {
     let f = fixture().await;
     let reader = subject(&f).await;
@@ -344,7 +344,7 @@ async fn lookup_preserves_linked_targets_without_granting_unrelated_resource_acc
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lookup_stack_links_and_effective_bindings_match_dotnet_without_secret_values() {
     let f = fixture().await;
     let reader = subject(&f).await;
@@ -409,7 +409,7 @@ async fn lookup_stack_links_and_effective_bindings_match_dotnet_without_secret_v
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn run_as_lookup_requires_use_permission_and_license_and_returns_actor_ids() {
     let mut f = fixture().await;
     let reader = subject(&f).await;
@@ -466,7 +466,7 @@ async fn run_as_lookup_requires_use_permission_and_license_and_returns_actor_ids
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lookup_honors_team_roles_and_locks_platform_orchestration_type() {
     let f = fixture().await;
     let reader = subject(&f).await;
@@ -583,7 +583,7 @@ async fn lookup_honors_team_roles_and_locks_platform_orchestration_type() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lookup_deployment_and_swarm_service_bindings_are_scoped_and_read_authorized() {
     let f = fixture().await;
     let reader = subject(&f).await;

@@ -112,7 +112,7 @@ struct Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics() {
     let fixture = fixture().await;
 
@@ -618,8 +618,8 @@ async fn fixture() -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(8)

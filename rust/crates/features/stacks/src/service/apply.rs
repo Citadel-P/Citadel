@@ -306,6 +306,14 @@ impl StackService {
         }
         if remaining > 0 {
             for (actor, claim) in self.store.stale_delete_claims(cutoff, remaining).await? {
+                if claim.platform_offline {
+                    self.store
+                        .complete_delete(actor, std::slice::from_ref(&claim))
+                        .await?;
+                    self.notifier.changed(claim.stack_id, "deleted");
+                    count += 1;
+                    continue;
+                }
                 let orchestration = orchestration(&claim.platform_type);
                 let snapshot = self
                     .runtime

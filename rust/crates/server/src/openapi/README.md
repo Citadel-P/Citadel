@@ -18,7 +18,7 @@ custom serializers/deserializers. In particular, PATCH wrappers describe an
 optional nullable value, not their internal missing/null/value enum.
 
 Reusable Problem Details responses live in `errors.rs`. The small router
-adapter normalizes Axum capture names while retaining .NET's documented names;
+adapter normalizes Axum capture names while retaining documented parameter names;
 without it, equivalent `{id}` and `{resourceId}` paths conflict in Axum.
 
 `x-citadel-public` selects operations in the public document.
@@ -44,20 +44,17 @@ Generated files are `schema/v1.json`,
 The frontend needs the full document, including internal authentication and setup
 operations. Its generation script always copies the Rust document before producing
 the TypeScript client and resource map.
-The .NET reference documents in `src/schema/` remain separate. CI verifies
-freshness without regenerating first, so stale committed specs fail the check.
+CI verifies freshness without regenerating first, so stale committed specs fail the check.
 
 From `rust/`:
 
 ```sh
 SQLX_OFFLINE=true cargo run --locked -p xtask -- openapi
 SQLX_OFFLINE=true cargo run --locked -p xtask -- openapi --check
-SQLX_OFFLINE=true cargo run --locked -p xtask -- parity
 ```
 
 These export full/public documents and the operation catalog, verify artifact
-freshness and references, and compare .NET operation IDs, methods, paths and
-public exposure. The frontend check compares routes, parameter names and
+freshness, references and operation metadata. The frontend check compares routes, parameter names and
 requiredness, and error status coverage. It does not claim field-level parity:
 the former check only compared matching `$ref` names and missed field drift.
 Serialization and HTTP tests cover request/response behavior.
@@ -80,7 +77,7 @@ PATCH DTOs preserve missing/null/value semantics with `MetadataPatch`; existing 
 validation and authorization remain authoritative. Collection responses document their
 actual arrays and envelopes. Incremental JSON progress streams document their serialized
 item arrays, and raw webhook bodies remain bytes for signature verification. Deliberately
-extensible Docker and worker payloads are JSON, not fictional closed .NET contracts.
+extensible Docker and worker payloads retain their JSON contracts.
 
 Activity schemas derive from the feature's closed `ActivityEventInfo` enum and its
 snapshot types. The public schema applies the same property-casing projection as the
@@ -93,13 +90,12 @@ and duplicate rules; ordinary `Query<T>` does not implement those semantics. Sha
 webhook configuration uses `citadel_resources::RepoWebhookConfig`; signature verification
 continues to consume the unmodified request body.
 
-## .NET OpenAPI transformer parity
+## Operation metadata and Swagger UI
 
 Cookie parameters, actual `Set-Cookie` response headers and named registry examples
 live in the handler annotations. Shared examples use Rust wire casing and are tested
-against the request DTOs and registry validation. The compatibility gate includes
-cookie parameters, example names for each media type and response headers. Legacy
-.NET cookie-name headers are checked against real `Set-Cookie` documentation.
+against the request DTOs and registry validation. The contract gate checks cookie parameters, example names for each media type
+and response headers.
 Bearer documentation describes both User JWTs and Service Account tokens; shared
 error responses document 429 using `application/problem+json`.
 
@@ -110,7 +106,7 @@ the request origin after transport Host/proxy validation and return `no-store`;
 static exports remain independent of the build machine's hostname. The existing
 transport mode supplies the HTTP/HTTPS fallback for direct connections.
 
-Endpoint tags match the .NET resource groups and are declared on each handler.
+Endpoint tags identify resource groups and are declared on each handler.
 The frontend compatibility gate checks tags and exact PATCH request media types.
 Merge-patch operations advertise both `application/merge-patch+json` and
 `application/json`; command-style PATCH operations retain their JSON contract.

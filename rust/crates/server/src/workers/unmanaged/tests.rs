@@ -34,9 +34,9 @@ fn duplicate_creation_extends_grace_and_platforms_remain_independent() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

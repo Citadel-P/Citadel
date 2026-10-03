@@ -975,15 +975,17 @@ async fn authorize_build_dependencies(
         headers,
     )
     .await?;
-    authorize_for(
-        state,
-        principal,
-        ResourceType::Registry,
-        input.registry_id,
-        PermissionLevel::Read,
-        headers,
-    )
-    .await?;
+    if let Some(registry_id) = input.registry_id {
+        authorize_for(
+            state,
+            principal,
+            ResourceType::Registry,
+            registry_id,
+            PermissionLevel::Read,
+            headers,
+        )
+        .await?;
+    }
     if let Some(platform_id) = input.platform_id {
         authorize_for(
             state,

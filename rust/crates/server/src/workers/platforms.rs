@@ -101,7 +101,7 @@ pub async fn register(
     dependencies: WorkerDependencies,
     settings: WorkerSettings,
 ) -> Result<super::statistics::StatsIngress, sqlx::Error> {
-    // Subscribe before starting inventory/event producers, so initial discovery
+    // Subscribe before starting inventory/event producers, so committed changes
     // cannot race past the alert/drift/pruning consumers.
     let unmanaged_listener =
         super::listener(&dependencies.pool, "citadel_container_created").await?;
@@ -682,9 +682,9 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+    #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
     async fn agent_container_event_uses_the_bound_platform_without_scanning_local_docker() {
-        let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+        let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
         citadel_database::MigrationRunner::migrate(&url)
             .await
             .unwrap();

@@ -404,7 +404,11 @@ impl AgentExecutionClient {
             cancellation,
         )
         .await?;
-        for reference in command.tags {
+        for reference in command
+            .tags
+            .into_iter()
+            .filter(|_| command.push_to_registry)
+        {
             let request = PushImageRequest {
                 image_reference: reference,
                 registry_auth: command.registry_auth.clone(),

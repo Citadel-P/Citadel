@@ -141,7 +141,7 @@ impl PlatformRuntimeProvider for CountedProvider {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn coarse_events_share_resolution_and_reads_but_keep_actor_capabilities() {
     let f = fixture().await;
     let mut groups = reader(&f);
@@ -184,7 +184,7 @@ async fn coarse_events_share_resolution_and_reads_but_keep_actor_capabilities() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn swarm_image_replacements_keep_per_actor_inspect_capabilities() {
     let (f, _) = super::super::swarm_inventory::fixture_swarm().await;
     let groups = reader(&f);

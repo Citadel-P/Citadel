@@ -1,10 +1,8 @@
 # Citadel Rust architecture
 
-This describes the architecture of the incremental Rust refactor. Deployments is the
-implemented reference resource as of Phase 6. Stacks and Swarm Services follow it
-in Phase 7; Builds, Git, and Backups apply it recursively in Phase 8, followed by
-Automation and Alerts in Phase 9, then Platforms, Identity and shared Resources in
-Phase 10.
+This describes the Rust architecture and ownership boundaries for Deployments,
+Stacks, Swarm Services, Builds, Git, Backups, Automation, Alerts, Platforms,
+Identity and shared resources.
 
 ## Container hot-path alignment (2026-09-27)
 batch the state projection:
@@ -69,9 +67,6 @@ batch the state projection:
 - Job alert observations are durable snapshots, with per-rule evaluation receipts;
   PostgreSQL notifications are wakeups. Container detail patches are scoped to
   canonical identity, including across navigation and late callbacks.
-
-See [the review](reports/architecture-runtime-review-2026-09-27.md) and
-[implementation validation](reports/architecture-runtime-implementation-2026-09-27.md).
 
 ## Architecture consolidation (2026-10-01)
 
@@ -296,7 +291,7 @@ no generated frontend contract changes were needed.
 
 Architecture guards reject concrete transport/persistence dependencies in Platform
 HTTP and sensitive filesystem operations in these feature workflows. Release/CI
-changes, .NET removal and event-system redesign remain outside this consolidation.
+changes and event-system redesign remain separate concerns.
 
 Completion validation:
 
@@ -339,7 +334,7 @@ The validation follow-up corrects the failures discovered by the first full run:
   Redundant conversions, borrows, map lookups and nested conditions are removed
   without adding lint suppressions or changing public wire contracts.
 - The Stack differential assertion explicitly accounts for the two reviewed
-  Terminal/Pull catalog additions without altering the .NET reference contract.
+  Terminal/Pull catalog additions while preserving the documented wire contract.
 
 Follow-up validation: the full workspace suite passes (1,075 passed, zero failed,
 308 ignored external/integration cases). Twelve selected ignored database cases
@@ -390,12 +385,12 @@ Real subprocess/Git integration tests live with Infrastructure; feature unit tes
 use injected process doubles. Runtime utilities have moved out of application services,
 and no Feature depends on the concrete process or hosting runtime crates.
 
-This grouping establishes crate dependency direction. Phase 11 distributed the
-activity/license services to their feature owners and their presentation types to Server.
+This grouping establishes crate dependency direction. Activity and licensing
+services live with their feature owners; their presentation types live in Server.
 Remaining source-level cleanup includes existing SQL in HTTP handlers and feature
 filesystem operations; the folder move does not claim those have been eliminated.
-Historical reports retain the paths recorded at their audit dates. Generators,
-build inputs, development instructions and active architecture checks use current paths.
+Generators, build inputs, development instructions and architecture checks use
+the current source paths.
 
 ## Agent protocol ownership
 
@@ -407,14 +402,12 @@ Docker API generation similarly consumes the Rust-owned
 `infrastructure/docker-api/codegen/v1.49.yaml` schema.
 
 CI checks Rust without submodules and runs `scripts/check-source-ownership.sh`
-before generation, workspace checks and tests. Historical migration inventories
-are reference evidence, not build inputs.
+before generation, workspace checks and tests.
 
-The Agent migration baseline is in [reports/agent-parity.md](reports/agent-parity.md).
-`contracts/tests/agent_parity.rs` checks its operation inventory against generated
-protobuf descriptors and checks the four Agent environment templates. These
-checks establish coverage of the migration plan; Agent runtime parity remains
-subject to the implementation and interoperability phases.
+The [Agent protocol inventory](docs/agent-protocol.md) documents operations and
+Swarm-node restrictions. `contracts/tests/agent_protocol.rs` checks it against
+compiled protobuf descriptors and validates the four Agent environment templates.
+Runtime behavior is covered by the Agent integration and compatibility suites.
 
 `citadel-agent` owns configuration, TLS validation, unsigned process health,
 bounded signal-driven shutdown and all 68 Direct RPCs across eight services.
@@ -509,7 +502,7 @@ server ───────────> feature crates ───> tiny primiti
 
 Features must not depend on server, adapters, Axum, HTTP presentation, or generated
 Docker models. A cross-feature edge requires its consumed contract, rationale and
-owning phase in the dependency inventory; it must not create a cycle. Prefer a
+owner in the dependency inventory; it must not create a cycle. Prefer a
 consumer-owned port or an existing coordinator for workflows spanning features.
 Do not create common/shared junk drawers, a generic service locator, or an authorization
 framework. `citadel-domain` has been removed: actor/permission/redaction primitives,
@@ -589,7 +582,7 @@ configuration snapshots, duplicate/adoption drafts, and supporting filters. Thes
 are application data types consumed by services and mapped to HTTP views by the
 server. Read operation implementations live in `service/read.rs`; PostgreSQL SQL
 queries live in `adapters/postgres/<resource>/queries.rs`. Use `read_models` for
-feature data types, including future resource migrations.
+feature data types, when adding or refactoring resources.
 
 Adoption resolves runtime ownership labels against the current database. An
 unassigned standalone container may be adopted when its labeled Deployment no
@@ -771,10 +764,18 @@ they do not record a Docker failure or recreate the container. An unavailable ru
 during recovery leaves the claim pending for another observation.
 
 The established runtime router remains in place; moving unrelated Docker/Agent
-adapters is outside this resource migration. Boundary tests enforce the Deployment
+adapters has separate ownership. Boundary tests enforce the Deployment
 feature/persistence separation without a legacy exemption.
 
 ## Implemented multi-resource anatomy: Builds
+
+Build projects default to `pushToRegistry: true`. Disabling it clears the registry
+selection and builds a local `citadel/build-<project-id>:<tag>` image on the chosen
+runner. Runs retain this choice in their immutable registry snapshot (`null` for
+local-only output); local, direct Agent and Edge execution skip registry credentials
+and push calls. Local-only results do not enter deployment completion queues or
+published-image resolution. They remain on the builder and may be removed when an
+ephemeral builder is cleaned up.
 
 ```text
 crates/features/builds/src/
@@ -856,9 +857,6 @@ System backup/recovery remains active: `external/backups/system_recovery.rs` own
 including the existing recovery and parity tests. Its former name/location was not
 evidence of dead code. No public API, database or backup format change is intended.
 
-This is the adapter organization portion of Phase 12, brought forward by the user.
-Phase 11 separately completes activity/license ownership. Remaining Phase 12 work
-includes server/bootstrap/configuration/error-boundary and dependency cleanup.
 Existing runtime routers and external executors still perform some PostgreSQL-backed
 target selection; this move does not claim complete separation of all SQL from
 transport orchestration or introduce new feature ports just to rearrange files.
@@ -888,8 +886,7 @@ Citadel domain model library. It must not depend on Citadel features or contain
 business behavior. `adapters::connectors::docker` translates feature models/ports to generated
 DTOs and back, and owns transport, daemon compatibility, streaming and semantic error
 translation. Do not expose generated Docker DTOs through feature ports or API Views.
-Phase 3 generates and tests the crate alongside the existing Docker implementation;
-Phase 4 owns production adapter migration. See `crates/infrastructure/docker-api/README.md` for
+See `crates/infrastructure/docker-api/README.md` for
 generation pins, compatibility patches and streaming boundaries.
 
 ## Error and runtime ownership
@@ -903,21 +900,18 @@ ports or HTTP contracts. Existing release panic policy is unchanged.
 
 Runtime/task creation has a named owner, cancellation policy, shutdown drain and
 recovery behavior. Preserve the difference between a disconnect-cancelled interactive
-operation and a durable claimed operation. The process lifecycle foundation belongs
-to Phase 5; Deployments adopts it in Phase 6. Other resources adopt it in their phases.
+operation and a durable claimed operation.
 
-## Incremental migration
+## Refactoring discipline
 
-Keep changes focused on the resource being migrated. Existing legacy layouts do not
-justify adding new ones. Preserve API schemas and persisted formats through moves;
-run workspace tests and OpenAPI verification. Authorization conventions and parity
-are documented in [AUTHORIZATION.md](AUTHORIZATION.md).
+Keep changes focused on the owning resource. Preserve API schemas and persisted formats through moves;
+run workspace tests and OpenAPI verification. Authorization changes require route
+and persistence regression tests.
 
-Other feature Views and legacy umbrella crates remain until their owning migration phases.
 Avoid mass renames, shared scaffolding and performance changes during authorization
 work. Keep diagnostics and raw measurement output outside the source changes.
 
-## Workload resources (v13 Phase 7)
+## Workload resources
 
 Stacks and Swarm Services now follow the Deployment reference. Each feature owns
 `model/`, `commands.rs`, `read_models.rs`, `repository.rs`, `runtime.rs`, `permissions.rs`,
@@ -955,13 +949,11 @@ same process tracker used by Deployments; persisted claims and reconciliation re
 the crash-recovery authority. Operation failures reach that tracker after redaction.
 
 Stack runtime, source-materialization, build-image resolution and update scanner
-adapters retain their established locations and consumer-owned ports. This phase
-moves workload persistence and inbound adapters, not the global runtime tree.
-Automation/Alerts now follow the Phase 9 resource organization below. Shared
-Platforms/Identity remain scheduled for Phase 10.
+adapters use consumer-owned ports. Automation, Alerts, Platforms and Identity
+follow the resource organization described below.
 
 
-## Implemented multi-resource contexts (Phase 8)
+## Multi-resource contexts
 
 Builds uses one `BuildRepository` for project/pool/run claims and completion. Backups
 uses one `BackupPersistence` for repositories, policies, backup items and restores.
@@ -992,10 +984,10 @@ owner before database teardown. Abnormal process failure still uses durable reco
 Git owns catalogue persistence and webhook evaluation directly. Tags owns shared tag
 projections and transactional tag-link helpers; each catalogue adapter owns its audit
 mapping. The former Resources compatibility delegates and schema facade have been
-removed. Migrated APIs own their wire schemas in server. Phase 8's architecture guards
+removed. APIs own their wire schemas in Server. Architecture guards
 continue to apply; the ownership correction adds no exemptions.
 
-The reviewed Phase 8 cross-feature contracts are:
+The cross-feature contracts are:
 
 | Importing feature → owner | Consumed contract | Reason |
 |---|---|---|
@@ -1006,7 +998,7 @@ The reviewed Phase 8 cross-feature contracts are:
 
 These are explicit consumed contracts, not exceptions permitting feature-owned HTTP Views.
 
-## Implemented Automation and Alerts contexts (Phase 9)
+## Automation and Alerts contexts
 
 Automation owns `actions/` and `runs/`; Alerts owns `channels/`, `rules/`, and
 `events/`. Their roots only declare modules and selectively export contracts.
@@ -1019,7 +1011,7 @@ metadata, run-log redaction, and cron helpers retain named semantic modules.
 `AlertRepository` keeps incident deduplication, rule state, delivery outbox claims,
 and retries under the existing transaction boundaries. PostgreSQL implementations
 live under `adapters/src/persistence/postgres/{automation,alerts}`. Shoutrrr delivery is a separate
-runtime adapter in `alert_delivery.rs`; global transport reorganization remains Phase 12.
+runtime adapter in `alert_delivery.rs`.
 
 Server owns requests, views, schemas and explicit conversions under
 `api/resources/{automation,alerts}`. Realtime uses those same response conversions. Automation
@@ -1043,7 +1035,7 @@ and worker runs remain independent of viewers and retain durable recovery.
 No new architecture exemptions are introduced for either feature. Their architecture
 guards cover resource ownership, HTTP separation, persistence projection and detached tasks.
 
-## Phase 10: Platforms, Identity and shared resource management
+## Platforms, Identity and shared resource management
 
 Platforms owns the closed `ConnectorKind` (Local, Agent, EdgeAgent) and
 `PlatformKind` (Docker, DockerSwarm) classifications used by runtime collection.
@@ -1134,10 +1126,9 @@ HTTP filters, metadata patch parsing and access helpers are server-local. Featur
 errors are typed by owner; HTTP ProblemDetails mapping preserves existing behavior.
 The broader HTTP error-boundary cleanup remains part of the later refactor.
 
-### Phase 11 — final ownership of the umbrella crates
+### Feature ownership of shared services
 
-The user requested domain ownership cleanup together with the Phase 10 structural
-correction. The domain portion of Phase 11 has therefore been brought forward:
+Shared services and vocabulary have explicit feature owners:
 
 | Former domain content | Implemented owner/path |
 |---|---|
@@ -1200,9 +1191,7 @@ unchanged. Production injects UTC clock functions; tests retain fixed-clock inje
 Activity and Licensing service errors map directly to the existing ProblemDetails
 wire shape in Server. Authentication and authorization errors remain Identity-owned.
 The private PostgreSQL audit insert helper still serves existing adapters with its
-prior error contract; broader adapter/server error cleanup remains Phase 12.
-Existing business vocabulary schema derives are also reserved for that phase's
-dependency cleanup; this phase removes all umbrella-owned request/View types.
+error contract. Request and View types belong to Server.
 
 `TaskSupervisor` retains returned error sources through a boxed `Error + Send + Sync`
 and task name, instead of stringifying them. Cancellation and drain ordering are
@@ -1210,20 +1199,18 @@ unchanged; returned errors remain supervised and `panic=abort` remains process-f
 
 `citadel-application` and `citadel-domain` are absent from workspace members and
 consumer dependencies. No compatibility crates or new architecture exemptions are
-introduced. Phase 12 still owns remaining server/bootstrap/configuration/error and
-schema/dependency cleanup, and the final process lifecycle/shutdown audit.
+introduced.
 
-The Phase 10 transport guard does not certify task ownership. Phase 12's
-lifecycle audit below tracks Container work and explicitly accepts the two bounded
-Identity password blocking boundaries; their legacy exceptions are retired.
+The transport guard checks dependency boundaries. The lifecycle rules below
+track Container work and the two bounded Identity password blocking boundaries.
 
 Stacks now consumes Platforms' `PlatformKind` in its durable-operation claims and
-read projections (Phase 10). This narrow cross-feature dependency prevents Stack
+read projections. This narrow cross-feature dependency prevents Stack
 workers from reinterpreting persisted strings; it is acyclic because Platforms
 has no dependency on Stacks. PostgreSQL owns the legacy spelling conversion.
 
 
-### Phase 12 — server organization and startup configuration
+### Server organization and startup configuration
 
 The executable constructs `composition::ServerComponents` once and consumes it in
 `router.rs`. It is not an Axum state or a clonable service locator. The former
@@ -1324,48 +1311,27 @@ boundaries. Realtime writers and worker child tasks retain their connection/work
 owners; CLI signal handling now aborts and joins its local task.
 
 Dependency audits use `cargo tree --locked -e features`, duplicate-version inspection
-and the unused-crate-dependency lint. Schema derives live with reusable native value
-contracts; HTTP services remain in Server. Primitives, Git, Deployments, Stacks and
-Swarm Services use Utoipa for their shared value contracts. Server's SHA-2,
+and the unused-crate-dependency lint. OpenAPI schema derives and HTTP presentation
+contracts belong to Server; feature models remain independent of Utoipa. Server's SHA-2,
 Bindings' Serde JSON and Runtime's futures utility dependencies are now test-only.
 Generated Docker dependencies remain aligned with workspace pins. Axum/Tower HTTP
 transport features, Reqwest TLS/JSON/stream/query, Tokio runtime/process/I/O,
 SQLx PostgreSQL/macros and Tonic client/server features have concrete consumers;
 no speculative default-feature reduction was made. Remaining duplicate major
 versions come from upstream protocol/crypto dependencies and host/build feature
-separation; this phase does not force incompatible transitive upgrades.
+separation.
 
 `unused_crate_dependencies` is not globally enabled: checking individual library,
 binary and integration-test targets reports dependencies consumed by sibling
 targets, including generated/test-only consumers. Suppressing that noise would need
 broad exemptions. The workspace retains `unsafe_code = "forbid"` and strict Clippy.
-No new temporary architecture exemption was added. The active external allowlists
-retire 101 resolved or accepted structural/task exceptions; three reviewed workload
-relationships to Alerts remain for Phase 14's final dependency-policy enforcement.
-Historical inventories are unchanged. Phase 13's profiling and memory work has not
-started.
-
-
-Phase 12 is complete. Final validation passed: `cargo fmt --all -- --check`,
-`cargo clippy --locked --workspace --all-targets -- -D warnings`, and
-`cargo test --locked --workspace` (681 passed, 239 opt-in tests ignored). An
-isolated PostgreSQL instance separately passed 147 acceptance tests, including
-all seven bootstrap/process lifecycle tests and all 62 Platform cases, plus
-Identity, Licensing, metadata and workload suites. `cargo run --locked -p xtask -- openapi --check` verified the unchanged documents and frontend types: 404 full and
-305 public operations. `git diff --check` passed. The temporary test container and
-its database volume were removed. Remaining external integration suites are still
-opt-in. No profiling or memory optimization for Phase 13 was started.
-
-
 ### API routes and resource presentation layout (2026-09-20)
 
 The user-approved layout correction separates endpoint implementation from its HTTP
 contracts throughout Server, using the convention above. All consumers, composition,
 realtime mapping, endpoint metadata and architecture guards use the new owners.
 Request/response type names, Serde attributes and explicit OpenAPI component names
-are preserved. This is a physical organization change following Phase 12, not the
-start of Phase 13 or a performance optimization. It introduces no compatibility
-module aliases or architecture exemptions.
+are preserved without compatibility module aliases or architecture exemptions.
 
 Validation for this layout: formatting and strict locked workspace/all-targets
 Clippy passed; workspace tests passed (682 passed, 239 opt-in tests ignored).

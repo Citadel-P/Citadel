@@ -175,8 +175,8 @@ fn verify_operation_metadata(
             .flatten()
             .map(|(name, _)| name)
         {
-            // .NET emitted cookie names as headers, sometimes on a synthetic 200.
-            // Rust documents real Set-Cookie headers on the actual response status.
+            // Normalize cookie response metadata to Set-Cookie headers on the
+            // response status that sets the cookie.
             let preserved = if name == "refresh_token" {
                 actual["responses"]
                     .as_object()
@@ -431,11 +431,6 @@ mod tests {
     #[test]
     fn generated_artifacts_match_handler_contracts() {
         generate(true).unwrap();
-    }
-
-    #[test]
-    fn handler_contracts_match_all_dotnet_routes() {
-        crate::parity::check().unwrap();
     }
 
     #[test]

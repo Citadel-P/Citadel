@@ -15,25 +15,25 @@ use std::sync::Mutex;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_missing_delta_and_failed_scope_read_do_not_restart_full_inventory() {
     run_scoped_edge_failure(false, false).await;
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_image_refresh_finishes_while_containers_wait_for_retry() {
     run_scoped_edge_failure(true, false).await;
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_delta_committed_during_a_read_rejects_the_old_container_set() {
     run_scoped_edge_failure(false, true).await;
 }
 
 async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -300,9 +300,9 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1"]
 async fn edge_six_lifecycle_events_share_one_commit_and_notification() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

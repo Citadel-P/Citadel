@@ -85,7 +85,7 @@ struct Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn mfa_endpoints_preserve_login_enrollment_recovery_replay_and_reset_semantics() {
     let fixture = fixture(MfaPolicy::Optional).await;
 
@@ -348,8 +348,8 @@ async fn fixture(policy: MfaPolicy) -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(6)

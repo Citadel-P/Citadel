@@ -44,7 +44,7 @@ use citadel_server::realtime_groups::{Group, GroupReadPort};
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_the_owning_node() {
     let mut f = fixture().await;
     let id = Uuid::now_v7();

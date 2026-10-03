@@ -18,32 +18,34 @@ impl StackService {
             .await?;
         let cancellation = self.shutdown.child_token();
         for (index, claim) in claims.iter().enumerate() {
-            let outcome = tokio::time::timeout(
-                self.timeout.min(Duration::from_secs(120)),
-                self.runtime.delete(claim, &cancellation),
-            )
-            .await;
-            match outcome {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    let pending = claims[index..]
-                        .iter()
-                        .map(|claim| claim.stack_id)
-                        .collect::<Vec<_>>();
-                    self.store.release_delete(&pending).await?;
-                    return Err(error);
-                }
-                Err(_) => {
-                    let unstarted = claims[index + 1..]
-                        .iter()
-                        .map(|claim| claim.stack_id)
-                        .collect::<Vec<_>>();
-                    if !unstarted.is_empty() {
-                        self.store.release_delete(&unstarted).await?;
+            if !claim.platform_offline {
+                let outcome = tokio::time::timeout(
+                    self.timeout.min(Duration::from_secs(120)),
+                    self.runtime.delete(claim, &cancellation),
+                )
+                .await;
+                match outcome {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        let pending = claims[index..]
+                            .iter()
+                            .map(|claim| claim.stack_id)
+                            .collect::<Vec<_>>();
+                        self.store.release_delete(&pending).await?;
+                        return Err(error);
                     }
-                    return Err(StackError::Runtime(
+                    Err(_) => {
+                        let unstarted = claims[index + 1..]
+                            .iter()
+                            .map(|claim| claim.stack_id)
+                            .collect::<Vec<_>>();
+                        if !unstarted.is_empty() {
+                            self.store.release_delete(&unstarted).await?;
+                        }
+                        return Err(StackError::Runtime(
                         "Timed out while removing Stack runtime resources. Citadel will reconcile the claimed deletion.".to_owned(),
                     ));
+                    }
                 }
             }
             self.store

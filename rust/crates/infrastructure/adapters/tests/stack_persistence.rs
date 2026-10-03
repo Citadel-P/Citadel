@@ -18,10 +18,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -833,7 +833,7 @@ async fn concurrency_fixture() -> (
     ActorId,
     AuthorizedResource<citadel_stacks::Stack>,
 ) {
-    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -866,7 +866,7 @@ async fn concurrency_fixture() -> (
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn stack_completion_allows_inventory_and_is_idempotent() {
     let (pool, store, actor, stack) = concurrency_fixture().await;
     let claim = store
@@ -930,7 +930,7 @@ async fn stack_completion_allows_inventory_and_is_idempotent() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn stack_deletion_waits_for_inventory_without_locking_its_parent() {
     let (pool, store, actor, stack) = concurrency_fixture().await;
     let claims = store.claim_delete(actor, true, &[stack.id]).await.unwrap();
@@ -993,7 +993,7 @@ async fn stack_deletion_waits_for_inventory_without_locking_its_parent() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn container_completion_locks_stack_before_release() {
     use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
     use citadel_platforms::containers::ContainerRepository;

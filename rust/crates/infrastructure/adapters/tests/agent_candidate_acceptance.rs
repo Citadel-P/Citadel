@@ -38,10 +38,10 @@ async fn docker(args: &[&str]) -> Vec<u8> {
 // Exercise a published Agent. The fixture creates only
 // uniquely named containers and never prunes or changes existing workloads.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_AGENT_IMAGE and CITADEL_PHASE7_AGENT_NETWORK; run Test-Phase7AgentCandidate.ps1"]
+#[ignore = "requires CITADEL_TEST_AGENT_IMAGE and CITADEL_TEST_AGENT_NETWORK; run Test-AgentCandidate.ps1"]
 async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
-    let image = std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
-    let network = std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
+    let image = std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
+    let network = std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
     let suffix = Uuid::now_v7().simple().to_string();
     let agent = format!("citadel-acceptance-agent-{suffix}");
     let workload = format!("citadel-acceptance-terminal-{suffix}");
@@ -86,7 +86,7 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
         ])
         .await;
         let id = String::from_utf8(id).unwrap().trim().to_owned();
-        let address = if std::env::var_os("CITADEL_PHASE7_AGENT_FROM_HOST").is_some() {
+        let address = if std::env::var_os("CITADEL_TEST_AGENT_FROM_HOST").is_some() {
             let binding = docker(&["port", &agent, "9000/tcp"]).await;
             format!("http://{}", String::from_utf8(binding).unwrap().trim())
         } else {

@@ -1,49 +1,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-const SOURCE_KIND: &str = "dotnet-development-baseline-evidence";
-const SOURCE_PATH: &str = "src/Citadel.Infrastructure/Scripts/script0001.sql";
-const IMPORTED_TABLES: usize = 82;
 const EXPECTED_SEED_INSERTS: usize = 92;
-const EF_HEADER: &str = r#"CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
-    "MigrationId" character varying(150) NOT NULL,
-    "ProductVersion" character varying(32) NOT NULL,
-    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
-);
-
-START TRANSACTION;
-"#;
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AcceptedContracts {
-    files: Vec<AcceptedFile>,
-}
-
-#[derive(Deserialize)]
-struct AcceptedFile {
-    kind: String,
-    path: String,
-    sha256: String,
-}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MigrationManifest<'a> {
     schema_version: u32,
-    source: MigrationSource<'a>,
     schema: SchemaEntry<'a>,
     migrations: Vec<MigrationEntry<'a>>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MigrationSource<'a> {
-    path: &'a str,
-    sha256: &'a str,
 }
 
 #[derive(Serialize)]
@@ -62,99 +30,6 @@ struct MigrationEntry<'a> {
 struct SchemaEntry<'a> {
     file: &'a str,
     sha256: &'a str,
-}
-
-pub fn import_baseline() -> Result<(), Box<dyn std::error::Error>> {
-    let rust_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask must be inside the Rust workspace");
-    let database_root = rust_root.join("crates/infrastructure/database");
-    if database_root.join("generated").exists()
-        && migration_files(&database_root.join("generated"))
-            .is_ok_and(|migrations| migrations.len() > 1)
-    {
-        return Err("the Rust database baseline already has follow-up migrations".into());
-    }
-    let repository_root = rust_root
-        .parent()
-        .expect("the Rust workspace must be inside the Citadel repository");
-    let accepted_path = rust_root.join("phase1/accepted-contracts.json");
-    let accepted: AcceptedContracts = serde_json::from_slice(&fs::read(&accepted_path)?)?;
-    let source = accepted
-        .files
-        .iter()
-        .find(|file| file.kind == SOURCE_KIND && file.path == SOURCE_PATH)
-        .ok_or("accepted database baseline contract is missing")?;
-    let source_path = repository_root.join(&source.path);
-    let source_bytes = fs::read(&source_path)?;
-    let source_hash = digest(&source_bytes);
-    if source_hash != source.sha256 {
-        return Err(format!(
-            "database baseline checksum mismatch for {}: expected {}, got {}",
-            source_path.display(),
-            source.sha256,
-            source_hash
-        )
-        .into());
-    }
-
-    let source_sql = String::from_utf8(source_bytes)?;
-    let source_sql = source_sql
-        .strip_prefix('\u{feff}')
-        .unwrap_or(&source_sql)
-        .replace("\r\n", "\n");
-    let product_sql = rust_baseline(&source_sql)?;
-    let schema = format!(
-        "-- Citadel Rust declarative schema authority.\n\
-         -- Imported once from: {SOURCE_PATH}\n\n{product_sql}"
-    );
-    let migration = format!(
-        "-- @generated pre-release baseline; do not edit.\n\
-         -- Imported once from: {SOURCE_PATH}\n\n{product_sql}"
-    );
-    validate_baseline(&schema, IMPORTED_TABLES)?;
-    let schema_hash = digest(schema.as_bytes());
-    let migration_hash = digest(migration.as_bytes());
-    let manifest = MigrationManifest {
-        schema_version: 1,
-        source: MigrationSource {
-            path: SOURCE_PATH,
-            sha256: &source.sha256,
-        },
-        schema: SchemaEntry {
-            file: "src/schema/schema.sql",
-            sha256: &schema_hash,
-        },
-        migrations: vec![MigrationEntry {
-            id: "0001",
-            name: "initial",
-            file: "0001_initial.sql",
-            sha256: &migration_hash,
-            transactional: true,
-            generated_by: "citadel-xtask-v1",
-        }],
-    };
-    let manifest = format!("{}\n", serde_json::to_string_pretty(&manifest)?);
-
-    write_generated(
-        &database_root.join("src/schema/schema.sql"),
-        schema.as_bytes(),
-    )?;
-    write_generated(
-        &database_root.join("generated/0001_initial.sql"),
-        migration.as_bytes(),
-    )?;
-    write_generated(
-        &database_root.join("generated/migrations.json"),
-        manifest.as_bytes(),
-    )?;
-    refresh_catalog()?;
-
-    println!(
-        "generated database baseline ({} tables, {} seed inserts, SHA-256 {})",
-        IMPORTED_TABLES, EXPECTED_SEED_INSERTS, migration_hash
-    );
-    Ok(())
 }
 
 pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
@@ -197,17 +72,6 @@ pub fn refresh_catalog() -> Result<(), Box<dyn std::error::Error>> {
         .expect("xtask must be inside the Rust workspace");
     let database_root = rust_root.join("crates/infrastructure/database");
     let generated_root = database_root.join("generated");
-    let existing: serde_json::Value =
-        serde_json::from_slice(&fs::read(generated_root.join("migrations.json"))?)?;
-    let source_path = existing
-        .pointer("/source/path")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("database manifest source path is missing")?;
-    let source_hash = existing
-        .pointer("/source/sha256")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("database manifest source checksum is missing")?;
-
     let schema_path = database_root.join("src/schema/schema.sql");
     let schema_hash = digest(&fs::read(&schema_path)?);
     let migration_files = migration_files(&generated_root)?;
@@ -262,10 +126,6 @@ pub fn refresh_catalog() -> Result<(), Box<dyn std::error::Error>> {
     let schema_version = u32::try_from(migrations.len())?;
     let manifest = MigrationManifest {
         schema_version,
-        source: MigrationSource {
-            path: source_path,
-            sha256: source_hash,
-        },
         schema: SchemaEntry {
             file: "src/schema/schema.sql",
             sha256: &schema_hash,
@@ -424,22 +284,6 @@ pub fn verify() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn rust_baseline(source: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let without_header = source
-        .strip_prefix(EF_HEADER)
-        .ok_or("database baseline has an unexpected EF history header")?;
-    let history_start = without_header
-        .rfind("INSERT INTO \"__EFMigrationsHistory\"")
-        .ok_or("database baseline has no final EF history insert")?;
-    let product_sql = without_header[..history_start].trim_end();
-    let trailer = &without_header[history_start..];
-    if !trailer.trim_end().ends_with("COMMIT;") || trailer.matches("INSERT INTO").count() != 1 {
-        return Err("database baseline has an unexpected EF history trailer".into());
-    }
-
-    Ok(format!("{product_sql}\n"))
-}
-
 fn product_body(contents: &[u8]) -> Result<&[u8], Box<dyn std::error::Error>> {
     contents
         .windows(2)
@@ -484,11 +328,6 @@ fn digest(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn refuses_to_strip_an_unknown_baseline_shape() {
-        assert!(rust_baseline("CREATE TABLE users (id uuid);\n").is_err());
-    }
 
     #[test]
     fn generates_a_static_embedded_catalog_without_runtime_discovery() {

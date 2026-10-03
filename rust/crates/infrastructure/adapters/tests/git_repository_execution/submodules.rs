@@ -48,9 +48,9 @@ async fn serve_repository(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL and Git"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL and Git"]
 async fn private_submodules_use_the_repository_account_without_leaking_to_other_origins() {
-    let database_url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

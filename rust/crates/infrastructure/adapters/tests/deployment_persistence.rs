@@ -10,10 +10,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -32,7 +32,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                   '{"$type":"Docker"}'::json,'Online',0)"#,
     )
     .bind(platform_id)
-    .bind(format!("phase6-{suffix}"))
+    .bind(format!("workload-{suffix}"))
     .execute(&pool)
     .await
     .unwrap();
@@ -45,7 +45,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                   '{"$type":"Docker"}'::json,'Online',0)"#,
     )
     .bind(other_platform_id)
-    .bind(format!("phase6-other-{suffix}"))
+    .bind(format!("workload-other-{suffix}"))
     .execute(&pool)
     .await
     .unwrap();
@@ -58,7 +58,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                   '{"$type":"DockerSwarm"}'::json,'Online',0)"#,
     )
     .bind(swarm_platform_id)
-    .bind(format!("phase6-swarm-{suffix}"))
+    .bind(format!("workload-swarm-{suffix}"))
     .execute(&pool)
     .await
     .unwrap();
@@ -91,7 +91,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         "INSERT INTO tags(id,name,normalizedname,color,createdbyactorid,createdat,updatedat) VALUES($1,$2,lower($2),'#112233',$3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
     )
     .bind(tag_id)
-    .bind(format!("phase6-tag-{suffix}"))
+    .bind(format!("workload-tag-{suffix}"))
     .bind(SYSTEM_ACTOR_ID)
     .execute(&pool)
     .await
@@ -399,7 +399,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
     sqlx::query("INSERT INTO teams(id,actorid,name) VALUES($1,$2,$3)")
         .bind(team_id)
         .bind(team_actor)
-        .bind(format!("phase6-team-{suffix}"))
+        .bind(format!("workload-team-{suffix}"))
         .execute(&pool)
         .await
         .unwrap();

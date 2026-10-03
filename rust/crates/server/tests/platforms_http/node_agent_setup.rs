@@ -15,7 +15,7 @@ use citadel_server::api::resources::platforms::edge::EdgeHttpContext;
 // Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair/upgrade
 // permission theory through actual HTTP handlers and PostgreSQL transactions.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation() {
     let cluster = format!("setup-{}", Uuid::now_v7());
     let f = fixture_for_cluster(cluster.clone()).await;
@@ -95,7 +95,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation() {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use sha2::{Digest, Sha256};
@@ -200,7 +200,7 @@ async fn setup_bootstrap_is_hashed_short_lived_revoked_and_fenced_by_operation()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
     use citadel_adapters::connectors::{
         edge::EdgeTarget, routing::node_agents::NodeAgentRuntimeRouter,

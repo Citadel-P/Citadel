@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Parser)]
-#[command(name = "citadel-server", about = "Citadel Rust migration server")]
+#[command(name = "citadel-server", about = "Citadel Core")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -42,7 +42,7 @@ enum Command {
     /// Print the effective non-secret configuration as JSON.
     PrintEffectiveConfig,
     /// Exercise the generated Docker subset and optional Actor-authorized read.
-    Phase0Smoke {
+    DockerSmoke {
         #[arg(long)]
         actor_id: Option<Uuid>,
     },
@@ -52,8 +52,8 @@ enum Command {
         private_key_path: std::path::PathBuf,
     },
     /// Verify signed Agent handshake, reads, streams, cancellation, and Local equivalence.
-    Phase0AgentSmoke,
-    /// Probe an already-running Phase 0A server without curl in the image.
+    AgentSmoke,
+    /// Probe an already-running server without curl in the image.
     Healthcheck {
         #[arg(long)]
         url: Option<String>,
@@ -91,7 +91,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             Ok(())
         }
-        Command::Phase0Smoke { actor_id } => phase0_smoke(Config::from_env()?, actor_id).await,
+        Command::DockerSmoke { actor_id } => docker_smoke(Config::from_env()?, actor_id).await,
         Command::AgentPublicKey { private_key_path } => {
             println!(
                 "{}",
@@ -99,7 +99,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             Ok(())
         }
-        Command::Phase0AgentSmoke => phase0_agent_smoke(Config::from_env()?).await,
+        Command::AgentSmoke => agent_smoke(Config::from_env()?).await,
         Command::Healthcheck { url } => {
             let mut client = reqwest::Client::builder().timeout(Duration::from_secs(2));
             let url = match url {
@@ -172,7 +172,7 @@ async fn migrate(config: DatabaseConfig) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-async fn phase0_smoke(
+async fn docker_smoke(
     config: Config,
     actor_id: Option<Uuid>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -231,7 +231,7 @@ async fn phase0_smoke(
     Ok(())
 }
 
-async fn phase0_agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
+async fn agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let agent_config = config
         .agent
         .as_ref()

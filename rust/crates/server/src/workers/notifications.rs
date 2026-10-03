@@ -97,7 +97,7 @@ mod postgres_tests {
         let pool = sqlx::PgPool::connect(&std::env::var("CITADEL_TEST_DATABASE_URL").unwrap())
             .await
             .unwrap();
-        let mut listener = super::super::listener(&pool, "citadel_phase8_notify_test")
+        let mut listener = super::super::listener(&pool, "citadel_notify_transaction_test")
             .await
             .unwrap();
         let hub = DatabaseNotificationHub::new();
@@ -149,7 +149,7 @@ mod postgres_tests {
         let pool = sqlx::PgPool::connect(&std::env::var("CITADEL_TEST_DATABASE_URL").unwrap())
             .await
             .unwrap();
-        let mut listener = super::super::listener(&pool, "citadel_phase5_notify_test")
+        let mut listener = super::super::listener(&pool, "citadel_notify_reconnect_test")
             .await
             .unwrap();
         listener
@@ -181,7 +181,7 @@ mod postgres_tests {
             .await
             .unwrap()
             .unwrap();
-        let disconnected: bool = sqlx::query_scalar("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND application_name='citadel_phase5_notify_test'").fetch_one(&pool).await.unwrap();
+        let disconnected: bool = sqlx::query_scalar("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND application_name='citadel_notify_reconnect_test'").fetch_one(&pool).await.unwrap();
         assert!(disconnected);
         tokio::time::timeout(Duration::from_secs(5), wake.changed())
             .await

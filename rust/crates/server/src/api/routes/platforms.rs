@@ -334,7 +334,7 @@ async fn list_platforms(
             .map_or_else(EffectivePlatformPermission::default, |permission| {
                 EffectivePlatformPermission {
                     level_mask: permission.level as i32,
-                    // Transitional Platform projection; migrate this representation in Phase 10.
+                    // Project the capability response using the Platform read model.
                     specific_mask: permission.specifics.bits() as i32,
                 }
             })

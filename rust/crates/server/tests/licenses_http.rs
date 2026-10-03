@@ -180,7 +180,7 @@ impl LicenseVerifier for FixtureVerifier {
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn community_views_are_safe_and_instance_identity_survives_service_reconstruction() {
     let fixture = fixture().await;
     let entitlements = send_as(
@@ -217,7 +217,7 @@ async fn community_views_are_safe_and_instance_identity_survives_service_reconst
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn administrator_endpoints_enforce_license_permissions_but_entitlements_do_not() {
     let fixture = fixture().await;
     let denied = send_as(
@@ -244,7 +244,7 @@ async fn administrator_endpoints_enforce_license_permissions_but_entitlements_do
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn install_persists_the_raw_source_but_never_exposes_it_and_writes_a_safe_activity() {
     let fixture = fixture().await;
     let response = send(
@@ -278,7 +278,7 @@ async fn install_persists_the_raw_source_but_never_exposes_it_and_writes_a_safe_
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn replacement_requires_the_installed_license_id_and_rejects_future_takeover() {
     let fixture = fixture().await;
     assert_eq!(
@@ -328,7 +328,7 @@ async fn replacement_requires_the_installed_license_id_and_rejects_future_takeov
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn removal_is_idempotent_and_records_only_one_activity() {
     let fixture = fixture().await;
     send(
@@ -355,7 +355,7 @@ async fn removal_is_idempotent_and_records_only_one_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_initial_installs_cannot_bypass_replacement_rules() {
     let fixture = fixture().await;
     let first = send_to(
@@ -402,7 +402,7 @@ async fn concurrent_initial_installs_cannot_bypass_replacement_rules() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_transition_checks_persist_status_and_one_system_activity_atomically() {
     let fixture = fixture().await;
     let now = Utc::now();
@@ -456,7 +456,7 @@ VALUES (1, 'transition', 'fingerprint-transition', $1, $2, $1, 'Valid', NULL)
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn realtime_transition_notification_is_authenticated_versioned_and_metadata_free() {
     let fixture = fixture().await;
     let identity = identity_service(&fixture.pool);
@@ -552,8 +552,8 @@ async fn fixture() -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

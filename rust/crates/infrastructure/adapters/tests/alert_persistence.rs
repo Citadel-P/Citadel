@@ -15,10 +15,10 @@ use std::sync::{
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure() {
     use citadel_adapters::persistence::postgres::alerts::observations::enqueue;
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -149,9 +149,9 @@ async fn durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_a
 // AlertService.ProcessAsync chooses the highest-severity matching rule before
 // applying cooldown. A suppressed winner must not fall back to a lower rule.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(3)
@@ -259,9 +259,9 @@ async fn matching_rules_choose_one_severity_winner_without_cooldown_fallback() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
-    let database_url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(3)
@@ -287,7 +287,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .create_channel(
             actor,
             &AlertChannelConfiguration {
-                name: format!("phase7-channel-{}", Uuid::now_v7().simple()),
+                name: format!("execution-channel-{}", Uuid::now_v7().simple()),
                 alert_destination: "Generic".into(),
                 url: "https://alerts.example.test/hook".into(),
                 is_active: true,
@@ -297,7 +297,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .unwrap();
 
     let input = |channel_ids| AlertRuleConfiguration {
-        name: format!("phase7-rule-{}", Uuid::now_v7().simple()),
+        name: format!("execution-rule-{}", Uuid::now_v7().simple()),
         description: None,
         alert_type: "BuildRunFailed".into(),
         severity: citadel_alerts::AlertSeverity::Critical,
@@ -325,7 +325,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         resource_id: Some(Uuid::now_v7()),
         resource_name: "build".into(),
         resource_type: "Build".into(),
-        deduplication_key: format!("phase7-incident-{}", Uuid::now_v7()),
+        deduplication_key: format!("execution-incident-{}", Uuid::now_v7()),
     };
     let mut delivery_wake = sqlx::postgres::PgListener::connect_with(&pool)
         .await
@@ -430,9 +430,9 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .create_rule(
             actor,
             &AlertRuleConfiguration {
-                name: format!("phase7-evaluated-rule-{}", Uuid::now_v7().simple()),
+                name: format!("execution-evaluated-rule-{}", Uuid::now_v7().simple()),
                 description: None,
-                alert_type: "Phase7EvaluationProbe".into(),
+                alert_type: "EvaluationProbe".into(),
                 severity: citadel_alerts::AlertSeverity::Warning,
                 cooldown_seconds: Some(60),
                 required_matches: None,
@@ -447,7 +447,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .unwrap();
     let observed_resource = Uuid::now_v7();
     let observation = AlertObservation {
-        alert_type: "Phase7EvaluationProbe".into(),
+        alert_type: "EvaluationProbe".into(),
         info: json!({"HumanMessage":"Evaluation matched."}),
         resource_id: observed_resource,
         resource_name: "probe".into(),
@@ -492,7 +492,7 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
         .create_rule(
             actor,
             &AlertRuleConfiguration {
-                name: format!("phase7-threshold-rule-{}", Uuid::now_v7().simple()),
+                name: format!("execution-threshold-rule-{}", Uuid::now_v7().simple()),
                 description: None,
                 alert_type: "PlatformCpuHigh".into(),
                 severity: citadel_alerts::AlertSeverity::Warning,
@@ -670,9 +670,9 @@ async fn alert_mutations_are_atomic_and_incidents_are_deduplicated() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_and_severity() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -790,9 +790,9 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE7_DATABASE_URL"]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn recurring_offline_observations_survive_cooldown_and_expose_responsible_actor() {
-    let url = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

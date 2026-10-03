@@ -2068,8 +2068,9 @@ export interface BuildProjectActivitySnapshot {
   name: string;
   /** @format uuid */
   platformId?: string | null;
+  pushToRegistry: boolean;
   /** @format uuid */
-  registryId: string;
+  registryId?: string | null;
   /** @format int32 */
   retentionRunCount: number;
   tagTemplates: string[];
@@ -2092,12 +2093,13 @@ export interface BuildProjectInput {
   enabled: boolean;
   /** @format uuid */
   gitRepositoryId: string;
-  imageRepository: string;
+  imageRepository?: string;
   name: string;
   /** @format uuid */
   platformId?: string | null;
+  pushToRegistry?: boolean;
   /** @format uuid */
-  registryId: string;
+  registryId?: string | null;
   /** @format int32 */
   retentionRunCount?: number | null;
   tagIds?: string[];
@@ -2140,8 +2142,9 @@ export interface BuildProjectView {
   normalizedName: string;
   /** @format uuid */
   platformId: string | null;
+  pushToRegistry: boolean;
   /** @format uuid */
-  registryId: string;
+  registryId?: string | null;
   /** @format int32 */
   retentionRunCount: number;
   /** @format int64 */
@@ -2182,7 +2185,7 @@ export interface BuildRunView {
   queuedAt: string;
   registryHost: string;
   /** @format uuid */
-  registryId: string;
+  registryId?: string | null;
   resolvedCommitSha: string | null;
   /** @format date-time */
   startedAt: string | null;
@@ -6939,8 +6942,9 @@ export interface UpdateBuildProjectInput {
   imageRepository?: string;
   /** @format uuid */
   platformId?: string | null;
+  pushToRegistry?: boolean;
   /** @format uuid */
-  registryId?: string;
+  registryId?: string | null;
   /** @format int32 */
   retentionRunCount?: number | null;
   tagTemplates?: string[] | null;

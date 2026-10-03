@@ -1,19 +1,15 @@
 {
   "schemaVersion": 1,
-  "source": {
-    "path": "src/Citadel.Infrastructure/Scripts/script0001.sql",
-    "sha256": "ee5185a5ffe026237edeb30a12e5cfa76caf508c9a51845c78492203d3c20596"
-  },
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "79698ab09bb183a814907f2493671b6d2a4de61d9842f3326d0262628b838edd"
+    "sha256": "1d98b53b82def6706bb965244dd3f7e2378ac85f0094638d25630715d074b5be"
   },
   "migrations": [
     {
       "id": "0001",
       "name": "initial",
       "file": "0001_initial.sql",
-      "sha256": "3c12fbc812956816fdbb9d9348dba22cd71cc9b6cee1df9a57593a7f9a761f2e",
+      "sha256": "be5ca6910e42425e83fffa31c9103616692f70005e35ae8ee8bead5afaef78eb",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

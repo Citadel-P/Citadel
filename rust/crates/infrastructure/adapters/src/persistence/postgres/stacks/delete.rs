@@ -6,7 +6,7 @@ impl PostgresStackRepository {
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<(ActorId, StackDeletionClaim)>, StackError>> {
         Box::pin(async move {
-            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.containeroperationid IS NULL AND s.controlstartedat <= $1 AND r.status NOT IN ('Applying','Pending') AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
+            sqlx::query("SELECT s.id,s.name,s.controltriggeredby,r.platformid,r.spec,p.platformdescriptor,(p.status='Offline') platform_offline FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.controlstate='Processing' AND s.containeroperationid IS NULL AND s.controlstartedat <= $1 AND r.status NOT IN ('Applying','Pending') AND s.controltriggeredby IS NOT NULL ORDER BY s.controlstartedat,s.id LIMIT $2")
                 .bind(started_before).bind(limit).fetch_all(&self.pool).await.map_err(storage)?.into_iter().map(|row| {
                     let id:Uuid=row.try_get("id").map_err(storage)?;
                     let spec=StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -15,6 +15,7 @@ impl PostgresStackRepository {
                     Ok((ActorId::new(row.try_get("controltriggeredby").map_err(storage)?), StackDeletionClaim {
                         stack_id:id,
                         platform_id:row.try_get("platformid").map_err(storage)?,
+                        platform_offline:row.try_get("platform_offline").map_err(storage)?,
                         project_name:spec.common().project_name.clone().unwrap_or_else(|| normalize_project_name(&name,id)),
                         platform_type:crate::persistence::postgres::platforms::classification::platform_kind(descriptor.get("$type").and_then(Value::as_str).unwrap_or("Docker")).map_err(storage)?,
                     }))
@@ -43,7 +44,7 @@ impl PostgresStackRepository {
                     policy::DeleteStack::REQUIREMENT,
                 )
                 .await?;
-                let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec,p.platformdescriptor FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR NO KEY UPDATE OF s")
+                let row=sqlx::query("SELECT s.name,s.controlstate,r.platformid,r.spec,p.platformdescriptor,(p.status='Offline') platform_offline FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE s.id=$1 FOR NO KEY UPDATE OF s")
                     .bind(id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(StackError::NotFound)?;
                 ensure_idle(&row)?;
                 let spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)?;
@@ -52,6 +53,7 @@ impl PostgresStackRepository {
                 claims.push(StackDeletionClaim {
                     stack_id: *id,
                     platform_id: row.try_get("platformid").map_err(storage)?,
+                    platform_offline: row.try_get("platform_offline").map_err(storage)?,
                     project_name: spec
                         .common()
                         .project_name

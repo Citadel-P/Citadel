@@ -15,12 +15,12 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL and a Docker Unix socket"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL and a Docker Unix socket"]
 async fn local_apply_creates_observes_and_deletes_a_real_container() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
-    let image = std::env::var("CITADEL_PHASE6_RUNTIME_IMAGE")
-        .expect("CITADEL_PHASE6_RUNTIME_IMAGE is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
+    let image = std::env::var("CITADEL_RUNTIME_IMAGE")
+        .expect("CITADEL_RUNTIME_IMAGE is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(2)
@@ -37,7 +37,7 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
                   '{"$type":"Docker"}'::json,'Online',0)"#,
     )
     .bind(platform_id)
-    .bind(format!("phase6-runtime-{}", platform_id.simple()))
+    .bind(format!("workload-runtime-{}", platform_id.simple()))
     .execute(&pool)
     .await
     .unwrap();
@@ -48,7 +48,7 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
     let cancellation = CancellationToken::new();
     let command = RuntimeDeploymentCommand {
         deployment_id,
-        name: format!("citadel-rust-phase6b-{}", deployment_id.simple()),
+        name: format!("citadel-rust-deployment-apply-{}", deployment_id.simple()),
         image_id: image,
         spec: DeploymentSpec {
             image: DeploymentImageInfo::Local {
@@ -101,7 +101,7 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
     let mut offline_command = command.clone();
     offline_command.deployment_id = Uuid::now_v7();
     offline_command.name = format!(
-        "citadel-rust-phase6b-offline-{}",
+        "citadel-rust-deployment-apply-offline-{}",
         offline_command.deployment_id.simple()
     );
     let offline_error = runtime

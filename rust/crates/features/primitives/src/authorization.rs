@@ -1,4 +1,4 @@
-//! Transport-independent authorization vocabulary. Transitional owner until Phase 11.
+//! Transport-independent authorization vocabulary.
 use crate::PermissionLevel;
 use crate::ResourceType;
 use crate::SpecificPermission;

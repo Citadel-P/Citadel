@@ -46,7 +46,7 @@ async fn daemon(
 // Ports PlatformEndpointTests rename/patch persistence, immutable orchestration/cluster,
 // and RotateAgentHubKey authentication. Actual HTTP + SQL, not a catalog-only assertion.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_header_config_and_key_rotation_preserve_authorization_and_state() {
     let mut f = fixture().await;
     let cluster = format!("cluster-{}", f.platform_id);
@@ -198,7 +198,7 @@ async fn platform_header_config_and_key_rotation_preserve_authorization_and_stat
 
 // Ports PlatformServiceTests prune dispatch and ImageEndpointTests stream + persistence.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
     let mut f = fixture().await;
     let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -324,7 +324,7 @@ async fn prune_and_pull_use_docker_and_persist_only_successful_pulls() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_platform_prune_and_pull_stream_route_and_persist_without_local_fallback() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{

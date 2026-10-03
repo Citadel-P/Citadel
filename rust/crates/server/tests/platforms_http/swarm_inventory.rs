@@ -221,7 +221,7 @@ async fn cleanup(f: Fixture) {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn native_swarm_mutations_persist_nodes_materials_and_restarted_services() {
     let (f, runtime) = fixture_swarm().await;
     let mut older_snapshot = snapshot(f.platform_id);
@@ -423,7 +423,7 @@ async fn native_swarm_mutations_persist_nodes_materials_and_restarted_services()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn native_swarm_preflights_entire_batches_permissions_usage_and_versions() {
     let (f, runtime) = fixture_swarm().await;
     let reader = super::lookup::subject(&f).await;
@@ -621,7 +621,7 @@ async fn native_swarm_preflights_entire_batches_permissions_usage_and_versions()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn native_swarm_partial_delete_reconciles_successful_siblings_and_never_retries() {
     let (f, runtime) = fixture_swarm().await;
     for name in ["first", "second"] {
@@ -719,7 +719,7 @@ async fn native_swarm_partial_delete_reconciles_successful_siblings_and_never_re
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn network_deletion_precondition_requires_current_unused_platform_projection() {
     use citadel_platforms::AuthorizedReadError;
 
@@ -770,7 +770,7 @@ async fn network_deletion_precondition_requires_current_unused_platform_projecti
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn persisted_service_ownership_and_confirmed_removals_are_platform_scoped() {
     use citadel_platforms::swarm_mutations::SwarmResourceKind;
     let (f, runtime) = fixture_swarm().await;
@@ -850,7 +850,7 @@ async fn persisted_service_ownership_and_confirmed_removals_are_platform_scoped(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn feature_swarm_operations_enforce_preflight_identity_and_partial_completion() {
     use citadel_platforms::swarm_mutations::{
         DeleteSwarmResourcesInput, SwarmOperation as Op, SwarmOperations, SwarmResourceKind,

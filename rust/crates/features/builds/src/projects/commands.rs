@@ -14,7 +14,10 @@ pub struct BuildProjectConfiguration {
     pub build_args: Option<Vec<BuildArgSpec>>,
     pub build_secrets: Option<Vec<BuildSecretSpec>>,
     pub platform_id: Option<Uuid>,
-    pub registry_id: Uuid,
+    #[serde(default = "default_push_to_registry")]
+    pub push_to_registry: bool,
+    pub registry_id: Option<Uuid>,
+    #[serde(default)]
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
     pub webhook: Option<citadel_primitives::WebhookConfig>,
@@ -55,10 +58,19 @@ impl BuildProjectConfiguration {
                 "Build Project description cannot exceed 600 characters.".to_owned(),
             ));
         }
-        if self.git_repository_id.is_nil() || self.registry_id.is_nil() {
+        if self.git_repository_id.is_nil() {
             return Err(BuildError::Validation(
-                "Git Repository and Registry are required.".to_owned(),
+                "Git Repository is required.".to_owned(),
             ));
+        }
+        if self.push_to_registry && self.registry_id.is_none_or(|id| id.is_nil()) {
+            return Err(BuildError::Validation(
+                "Registry is required when pushing is enabled.".into(),
+            ));
+        }
+        if !self.push_to_registry {
+            self.registry_id = None;
+            self.image_repository.clear();
         }
         match self.builder_kind.as_str() {
             "Platform"
@@ -87,7 +99,9 @@ impl BuildProjectConfiguration {
             .trim()
             .trim_start_matches('/')
             .to_owned();
-        if self.image_repository.is_empty() || self.image_repository.len() > 512 {
+        if self.push_to_registry
+            && (self.image_repository.is_empty() || self.image_repository.len() > 512)
+        {
             return Err(BuildError::Validation(
                 "Image repository is required and cannot exceed 512 bytes.".to_owned(),
             ));
@@ -208,6 +222,7 @@ impl From<&BuildProject> for BuildProjectConfiguration {
             build_args: Some(value.build_args.clone()),
             build_secrets: Some(value.build_secrets.clone()),
             platform_id: value.platform_id,
+            push_to_registry: value.push_to_registry,
             registry_id: value.registry_id,
             image_repository: value.image_repository.clone(),
             tag_templates: Some(value.tag_templates.clone()),
@@ -219,4 +234,8 @@ impl From<&BuildProject> for BuildProjectConfiguration {
             build_agent_pool_id: value.build_agent_pool_id,
         }
     }
+}
+
+fn default_push_to_registry() -> bool {
+    true
 }

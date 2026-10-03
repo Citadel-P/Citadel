@@ -27,10 +27,10 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE5_DATABASE_URL"]
+#[ignore = "requires CITADEL_METADATA_DATABASE_URL"]
 async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
-    let database_url = std::env::var("CITADEL_PHASE5_DATABASE_URL")
-        .expect("CITADEL_PHASE5_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_METADATA_DATABASE_URL")
+        .expect("CITADEL_METADATA_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -53,7 +53,7 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         .create_tag(
             actor,
             &NewTag {
-                name: format!("phase5-{suffix}"),
+                name: format!("metadata-{suffix}"),
                 color: "#112233".into(),
             },
         )
@@ -219,7 +219,7 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
 
     let external_secret = store
         .create_external_secret(&ExternalSecretInput {
-            name: format!("PHASE5_{suffix}").to_uppercase(),
+            name: format!("METADATA_{suffix}").to_uppercase(),
             provider_id: provider.id,
             external_path: "services/citadel".into(),
             external_key: "token".into(),
@@ -275,10 +275,10 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE5_DATABASE_URL"]
+#[ignore = "requires CITADEL_METADATA_DATABASE_URL"]
 async fn concurrent_tag_creation_keeps_one_normalized_name() {
-    let database_url = std::env::var("CITADEL_PHASE5_DATABASE_URL")
-        .expect("CITADEL_PHASE5_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_METADATA_DATABASE_URL")
+        .expect("CITADEL_METADATA_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

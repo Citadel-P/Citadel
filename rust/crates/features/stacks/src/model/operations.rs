@@ -138,6 +138,8 @@ pub struct StackDeletionClaim {
     pub stack_id: Uuid,
     pub platform_id: Uuid,
     pub project_name: String,
+    /// Offline deletion removes Citadel records without contacting the runtime.
+    pub platform_offline: bool,
     pub platform_type: citadel_platforms::PlatformKind,
 }
 

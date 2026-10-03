@@ -44,9 +44,9 @@ fn user(name: &str) -> NewUserMutation {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn committed_mutations_invalidate_only_affected_principals_and_batch_denials_are_cached() {
-    let url = std::env::var("CITADEL_PHASE3_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

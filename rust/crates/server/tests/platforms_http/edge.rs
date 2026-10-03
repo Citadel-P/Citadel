@@ -4,7 +4,7 @@ use citadel_adapters::connectors::edge::EdgeRegistry;
 use citadel_server::api::resources::platforms::edge::EdgeHttpContext;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_and_permissions() {
     let fixture = fixture().await;
     let app = fixture.app.clone().layer(axum::Extension(EdgeHttpContext {
@@ -67,6 +67,10 @@ async fn edge_platform_creation_and_enrollment_endpoints_preserve_ui_contract_an
     let result: Value =
         serde_json::from_slice(&to_bytes(result.into_body(), 1024 * 1024).await.unwrap()).unwrap();
     assert_eq!(result["platformId"], id);
+    assert_eq!(
+        result["instructions"]["environment"]["CITADEL_EDGE_AGENT_PROFILE"],
+        "edge-agent"
+    );
     assert_eq!(
         result["instructions"]["environment"]["CITADEL_EDGE_ENROLLMENT_TOKEN"],
         result["token"]
@@ -143,7 +147,7 @@ async fn request(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn edge_network_and_volume_endpoints_use_the_bound_session_and_enforce_permissions() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{

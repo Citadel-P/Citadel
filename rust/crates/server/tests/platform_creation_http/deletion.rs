@@ -50,7 +50,7 @@ async fn deleted_activities(harness: &TestHarness, id: Uuid) -> i64 {
 // Ports PlatformDeleteTests.Delete_Platform_Should_Delete_Entity_And_Add_Activity,
 // including the historical backup-item FK regression, against the real PostgreSQL schema.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn delete_platform_persists_snapshot_cascades_inventory_and_backup_items_and_notifies() {
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
@@ -113,7 +113,7 @@ async fn delete_platform_persists_snapshot_cascades_inventory_and_backup_items_a
 
 // Ports PlatformDeleteTests.Delete_Platforms_Should_Not_Partially_Delete_When_Later_Id_Does_Not_Exist.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn delete_missing_platform_rolls_back_entire_selection_without_notifications() {
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
@@ -131,7 +131,7 @@ async fn delete_missing_platform_rolls_back_entire_selection_without_notificatio
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn delete_validates_input_and_requires_execute_permission() {
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
@@ -197,7 +197,7 @@ async fn delete_validates_input_and_requires_execute_permission() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_audit() {
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
@@ -237,7 +237,7 @@ async fn referenced_platform_returns_conflict_without_deleting_any_selection_or_
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn concurrent_deletes_emit_only_one_activity_and_notification() {
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;
     let id = registered(&harness).await;
@@ -263,7 +263,7 @@ async fn concurrent_deletes_emit_only_one_activity_and_notification() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn deletion_revokes_edge_credentials_and_disconnects_sessions_only_after_commit() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     let harness = harness(StaticInfo::standalone(Uuid::now_v7().to_string())).await;

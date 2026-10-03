@@ -31,7 +31,7 @@ use tokio_tungstenite::{
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-const TOKEN: &str = "phase0c-test-token-with-at-least-32-characters";
+const TOKEN: &str = "realtime-test-token-with-at-least-32-characters";
 
 #[tokio::test]
 async fn successful_mutations_invalidate_but_reads_and_failures_do_not() {
@@ -88,7 +88,7 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     let (address, server) = start_server(service, shutdown.clone()).await;
 
     let (mut first, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     subscribe(&mut first, platform_id, 0).await;
@@ -129,7 +129,7 @@ async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     first.close(None).await.unwrap();
 
     let (mut second, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     subscribe(&mut second, platform_id, 2).await;
@@ -169,7 +169,7 @@ async fn global_subscription_receives_metadata_free_resource_invalidations() {
     let hub = service.hub();
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     socket
@@ -253,7 +253,7 @@ async fn global_platform_updates_use_authorized_aggregates_and_stop_after_revoca
     let hub = service.hub();
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     socket
@@ -294,9 +294,9 @@ async fn global_platform_updates_use_authorized_aggregates_and_stop_after_revoca
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn global_subscription_streams_committed_platform_stats_after_store_recreation() {
-    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(4)
@@ -330,7 +330,7 @@ async fn global_subscription_streams_committed_platform_stats_after_store_recrea
     for revision in 1..=2 {
         // A new writer and connection still see persisted aggregates, not connection-local history.
         let (mut socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
                 .await
                 .unwrap();
         socket
@@ -403,7 +403,7 @@ async fn invalid_token_is_rejected_before_any_snapshot() {
     );
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     socket
@@ -470,11 +470,11 @@ async fn connection_limit_rejects_excess_clients_before_allocating_a_subscriptio
     );
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut first, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
 
-    let second = tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+    let second = tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
         .await
         .unwrap_err();
     assert!(matches!(
@@ -506,7 +506,7 @@ async fn periodic_authorization_recheck_disconnects_a_revoked_actor() {
     );
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     subscribe(&mut socket, platform_id, 0).await;
@@ -965,7 +965,7 @@ async fn actor_generation_change_disconnects_without_an_event_or_periodic_rechec
     );
     let (address, server) = start_server(service, shutdown.clone()).await;
     let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://{address}/phase0/realtime"))
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
     subscribe(&mut socket, platform_id, 0).await;

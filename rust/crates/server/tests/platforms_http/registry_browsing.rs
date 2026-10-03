@@ -4,7 +4,7 @@ use citadel_adapters::connectors::registries::browser::RegistryBrowser;
 // Ports RegistryImageQueryAuthorizationTests and ImageEndpointTests for all four
 // browse routes: real authorized Registry rows and controlled external HTTP servers.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing_contracts() {
     let mut f = fixture().await;
     let calls = Arc::new(Mutex::new(Vec::new()));

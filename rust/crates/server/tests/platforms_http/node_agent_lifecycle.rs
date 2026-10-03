@@ -3,7 +3,7 @@ use citadel_adapters::persistence::postgres::platforms::node_agents::store::Post
 use citadel_platforms::node_agents::lifecycle::NodeAgentLifecycleStore;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn removal_routes_to_exact_edge_manager_and_checks_ownership_before_each_delete() {
     use citadel_adapters::connectors::edge::EdgeRegistry;
     use citadel_adapters::connectors::edge::EdgeTarget;
@@ -160,7 +160,7 @@ async fn removal_routes_to_exact_edge_manager_and_checks_ownership_before_each_d
 // Ports LifecycleEndpoints_ShouldRequirePlatformScopedManageNodeAgentsPermission
 // and Remove_ShouldRevokeNodeBindingsAndPersistRemovedDesiredState through HTTP.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn remove_node_agents_authorizes_revokes_and_commits_lifecycle_activities() {
     let cluster = format!("removal-{}", Uuid::now_v7());
     let fixture = fixture_for_cluster(cluster.clone()).await;

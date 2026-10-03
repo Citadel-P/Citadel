@@ -5,7 +5,7 @@ out = "proof-output/migrations"
 breakpoints = false
 
 [dbCredentials]
-url = { env = "PHASE1_DATABASE_URL" }
+url = { env = "CITADEL_SCHEMA_DATABASE_URL" }
 
 [introspect]
 casing = "preserve"

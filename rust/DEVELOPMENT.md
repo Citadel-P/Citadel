@@ -583,12 +583,7 @@ as the normal `vscode` user. A `permission denied` error means the Dev Container
 socket proxy was not initialized; use **Dev Containers: Rebuild Container** so
 the Docker-outside-of-Docker feature can recreate its non-root socket.
 
-## Current migration boundary
-
-The React UI contains functionality that has not yet migrated to Rust. A page
-can therefore return a deliberate missing or unsupported-operation response
-even when the API health endpoint succeeds. The migration ledger and slice
-tests remain authoritative for what is currently implemented.
+## Runtime behavior
 
 ### Container-driven resource status
 
@@ -864,11 +859,11 @@ included in a subsequent flush; acknowledged history is not replayed at startup.
 
 Required test-process environment:
 
-- `CITADEL_PHASE6_DATABASE_URL`: disposable PostgreSQL database.
-- `CITADEL_PHASE6_DOCKER_SOCKET`: isolated manager's Unix socket.
+- `CITADEL_WORKLOAD_DATABASE_URL`: disposable PostgreSQL database.
+- `CITADEL_RUNTIME_DOCKER_SOCKET`: isolated manager's Unix socket.
 - `DOCKER_HOST`: the same manager socket, for the Docker CLI.
-- `CITADEL_PHASE6_RUNTIME_IMAGE`: image present on both nodes; the fixture uses shell/sleep (tested with `alpine:3.21`).
-- `CITADEL_PHASE6_SWARM_WORKER`: outer Docker-in-Docker worker container, labelled `citadel.test=jobs-live`. The test checks this label before stopping it; outer container commands use the default Docker connection with `DOCKER_HOST` removed.
+- `CITADEL_RUNTIME_IMAGE`: image present on both nodes; the fixture uses shell/sleep (tested with `alpine:3.21`).
+- `CITADEL_RUNTIME_SWARM_WORKER`: outer Docker-in-Docker worker container, labelled `citadel.test=jobs-live`. The test checks this label before stopping it; outer container commands use the default Docker connection with `DOCKER_HOST` removed.
 - A current Docker CLI supporting `stack deploy --detach=false` on the test-process `PATH`, and a writable process-specific `TMPDIR`.
 
 For Docker-in-Docker, bind a dedicated socket directory and add a socket listener there. Do not share the entire `/var/run`: persisted containerd PID files can prevent the test worker restarting. Keep the DinD network private and clean up only the test containers, their volumes and that network afterward.
@@ -891,23 +886,22 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-adapters \
 
 Supply these environment variables:
 
-- `CITADEL_PHASE7_DATABASE_URL`: a disposable PostgreSQL database.
-- `CITADEL_PHASE7_AGENT_IMAGE`: the production Agent image built for this checkout.
-- `CITADEL_PHASE7_AGENT_NETWORK`: the isolated Docker network.
-- `CITADEL_PHASE7_AGENT_HOST`: an address the Agent container can use to reach the test process's listener (`host.docker.internal` worked with Docker Desktop/WSL).
-- `CITADEL_PHASE6_SWARM_MANAGER`: the disposable DinD container, labelled `citadel.test=jobs-live`.
-- `CITADEL_PHASE6_DOCKER_SOCKET`: that isolated daemon's socket exposed at a host bind-mount path.
+- `CITADEL_EXECUTION_DATABASE_URL`: a disposable PostgreSQL database.
+- `CITADEL_TEST_AGENT_IMAGE`: the production Agent image built for this checkout.
+- `CITADEL_TEST_AGENT_NETWORK`: the isolated Docker network.
+- `CITADEL_TEST_AGENT_HOST`: an address the Agent container can use to reach the test process's listener (`host.docker.internal` worked with Docker Desktop/WSL).
+- `CITADEL_RUNTIME_SWARM_MANAGER`: the disposable DinD container, labelled `citadel.test=jobs-live`.
+- `CITADEL_RUNTIME_DOCKER_SOCKET`: that isolated daemon's socket exposed at a host bind-mount path.
 
 The test explicitly uses the outer Docker socket `/var/run/docker.sock` for fixture management. The Agent mounts only the supplied isolated daemon socket. It creates a uniquely named Agent and workload, restarts that Agent, exercises reconnect/revocation, and removes its containers. It does not restart Core or use a development database. The fixture checks the DinD label before any runtime mutation.
 
 ## Agent development
 
-`citadel-agent` is a separate executable in the same workspace. The current
-migration stage provides startup validation, HTTP/HTTPS health, graceful shutdown
+`citadel-agent` is a separate executable in the same workspace. It provides startup validation, HTTP/HTTPS health, graceful shutdown
 and the complete Direct RPC surface. Edge profiles now enroll, reconnect and send
 heartbeats, and ordinary/Build Pool Edge profiles execute all 68 commands.
 Swarm-node profiles enforce a restricted dispatcher and validate helper operations;
-production cutover still requires the compatibility gates in the migration report.
+release verification uses the compatibility and acceptance suites below.
 
 To run the Edge connection host from `rust/`, supply a Core enrollment token and
 persistent writable state paths (the token is unnecessary after enrollment):
@@ -932,7 +926,7 @@ loading. The four `.env.*.example` Agent templates are intended for deployment
 with Docker's `--env-file`. Build Pool inbound configuration uses the same Direct
 host; Edge Build Pool selects `CITADEL_EDGE_AGENT_PROFILE=edge-build-agent`.
 Swarm-node configuration requires every injected identity field documented in
-[the parity inventory](reports/agent-parity.md).
+[the protocol inventory](docs/agent-protocol.md).
 
 The shared Docker client uses `/var/run/docker.sock` by default. `DOCKER_HOST`
 can select another Unix socket, `tcp://host:2375` or `http://host:2375`. The selected
@@ -956,7 +950,7 @@ profiles dispatch the full command protocol, including interactive terminal inpu
 resize, binary output and live progress. Commands have independent cancellation
 and deadlines, with at most 16 active commands and bounded input/output queues.
 Disconnect and shutdown drop all owned command work. Swarm-node commands must
-target the configured node and satisfy the allowlist in the parity inventory.
+target the configured node and satisfy the allowlist in the protocol inventory.
 Helper creation and binary exec validate ownership, mounts, privileges and exact
 command patterns. Restore-volume deletion requires ownership and no container
 references, including stopped containers.
@@ -1075,7 +1069,7 @@ Core as a test fixture without depending on the Core publication pipeline.
 `rust/Dockerfile` owns the Core image and contains no Agent stages.
 Its build context contains only `rust/` and `version.json`. Release tags must
 match `version.json` and belong to `main`. Publication stays disabled until the
-Phase 8 compatibility gates pass: then set the repository variable
+Agent compatibility gates pass: then set the repository variable
 `CITADEL_RUST_AGENT_RELEASE_ENABLED=true` and retire the competing Agent publisher.
 The release job promotes the tested images to
 `ghcr.io/<owner>/citadel.agent` and
@@ -1155,7 +1149,7 @@ storage outage. It also checks unary execution, command failures, live events an
 cancel/shutdown cleanup for Platform and Build Pool targets. Ordinary Agent tests
 require no database.
 
-### Authorization cache ownership (CPU Phase 14)
+### Authorization cache ownership
 
 The PostgreSQL identity adapter owns one process-local authorization cache per
 connection endpoint/database/user. `PostgresIdentityStore` retains it; mutation
@@ -1194,12 +1188,12 @@ Fixed-cardinality runtime families expose scope/resource lookups (iterations)
 and hits (units), negative hits, scope/global/resource SQL query counts, and
 resident actor invalidations. Tests are `authorization_cache`,
 `authorization_mutation_conventions` and the `authorization_cache` adapter unit
-module. Database tests require `CITADEL_PHASE3_DATABASE_URL`; the cancellation test
+module. Database tests require `CITADEL_IDENTITY_DATABASE_URL`; the cancellation test
 expects the normal migrated schema. The mutation convention test inventories ACL
 SQL owners and rejects unaudited transaction paths.
 
 Immediate invalidation covers application writes within one Core process, matching
-the existing .NET in-process cache ownership. Independent Core writers or manual
+the in-process cache ownership. Independent Core writers or manual
 SQL updates require coordinated invalidation before sharing cached authorization;
 this cache does not provide distributed consistency. Restart Core after manual
 ACL maintenance. TTL is a safety bound, not a replacement for commit publication.
@@ -1243,7 +1237,7 @@ iterations and hits in units; `RealtimeSharedRead` counts raw read executions;
 `RealtimeObservationInput` and `RealtimeRuntimeInvalidation` count input
 observations and published runtime invalidations in units. Labels never include
 actor or resource IDs. Run the `platforms_http` tests filtered by `realtime_` with
-`CITADEL_PHASE4_DATABASE_URL` and `--include-ignored --test-threads=1` for the
+`CITADEL_PLATFORM_DATABASE_URL` and `--include-ignored --test-threads=1` for the
 cross-connection counters and committed revocation gate.
 
 ## Appearance preferences
@@ -1267,8 +1261,7 @@ The OpenAPI command exports both Rust documents, copies the full `schema/v1.json
 to `src/Citadel.FrontEnd/src/api/schema/swagger.json`, and runs `npm run api:generate`
 to regenerate the TypeScript client and resource map from that same document.
 `public-v1.json` excludes internal authentication, setup, and administration routes
-and is intended for external clients. The frontend no longer reads the .NET schema
-or applies a preference overlay. Correct missing contracts in Rust's DTO descriptors
+and is intended for external clients. The frontend uses the full Rust schema without a preference overlay. Correct missing contracts in Rust's DTO descriptors
 (or the remaining dynamic JSON schemas), then regenerate; do not edit generated types.
 
 `cargo run --locked -p xtask -- openapi --check` checks the Rust schema artifacts

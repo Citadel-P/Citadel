@@ -46,6 +46,8 @@ mod capabilities;
 mod drift;
 #[path = "stacks_http/failures.rs"]
 mod failures;
+#[path = "stacks_http/offline_delete.rs"]
+mod offline_delete;
 #[path = "stacks_http/preflight.rs"]
 mod preflight;
 #[path = "stacks_http/releases.rs"]
@@ -70,6 +72,7 @@ struct CompletingStackRuntime {
     hold_apply: AtomicU8,
     runtime_state: AtomicU8,
     reconcile_calls: AtomicU8,
+    delete_calls: AtomicU8,
     reconcile_policies: Mutex<Vec<citadel_stacks::StackDriftPolicy>>,
     release_apply: tokio::sync::Notify,
 }
@@ -172,7 +175,10 @@ impl StackRuntime for CompletingStackRuntime {
         _claim: &'a StackDeletionClaim,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), StackError>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.delete_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })
     }
 
     fn change_state<'a>(
@@ -302,10 +308,10 @@ fn healthy() -> StackRuntimeResult {
 mod task_ownership;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -946,6 +952,15 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     releases::verify(&app, &pool, &admin, platform_id, &runtime).await;
     task_ownership::verify(&pool, admin.actor_id, platform_id).await;
     failures::verify(&app, &pool, &admin, platform_id, &runtime).await;
+    offline_delete::verify(
+        &app,
+        &pool,
+        &admin,
+        platform_id,
+        swarm_platform_id,
+        &runtime,
+    )
+    .await;
 
     assert_eq!(
         request(

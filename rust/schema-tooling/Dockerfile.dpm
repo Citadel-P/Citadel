@@ -1,7 +1,7 @@
 FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97
 
-RUN --mount=type=cache,id=citadel-phase1-dpm-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=citadel-phase1-dpm-target,target=/tmp/dpm-target \
+RUN --mount=type=cache,id=citadel-schema-dpm-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=citadel-schema-dpm-target,target=/tmp/dpm-target \
     CARGO_TARGET_DIR=/tmp/dpm-target \
     cargo install declarative-postgres-migrate \
         --version 0.3.2 \

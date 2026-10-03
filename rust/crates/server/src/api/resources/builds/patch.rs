@@ -46,8 +46,11 @@ pub struct UpdateBuildProjectInput {
     #[schema(value_type = Option<Uuid>, required = false)]
     build_agent_pool_id: FieldUpdate<Option<Uuid>>,
     #[serde(default, skip_serializing_if = "FieldUpdate::is_missing")]
-    #[schema(value_type = Uuid, required = false)]
-    registry_id: FieldUpdate<Uuid>,
+    #[schema(value_type = bool, required = false)]
+    push_to_registry: FieldUpdate<bool>,
+    #[serde(default, skip_serializing_if = "FieldUpdate::is_missing")]
+    #[schema(value_type = Option<Uuid>, required = false)]
+    registry_id: FieldUpdate<Option<Uuid>>,
     #[serde(default, skip_serializing_if = "FieldUpdate::is_missing")]
     #[schema(value_type = String, required = false)]
     image_repository: FieldUpdate<String>,

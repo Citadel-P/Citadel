@@ -635,11 +635,14 @@ pub(super) async fn persist_container_set(
     } else {
         Default::default()
     };
-    // Transactional notifications are delivered only after the new inventory commits.
-    // Every transport uses this projection path, including node-scoped Edge inventory.
-    sqlx::query("SELECT pg_notify('citadel_container_created', json_build_object('platform', $1::uuid, 'container', incoming, 'node', $3::text)::text) FROM unnest($2::text[]) incoming WHERE NOT EXISTS(SELECT 1 FROM containers WHERE platformid=$1 AND dockercontainerid=incoming AND dockernodeid IS NOT DISTINCT FROM $3)")
-        .bind(platform_id).bind(&incoming_ids).bind(node_id)
-        .execute(&mut **transaction).await.map_err(storage)?;
+    // Inventory discovers existing containers; it does not establish that they
+    // were just created. Only event observations schedule unmanaged alerts.
+    // PostgreSQL delivers these notifications only after the transaction commits.
+    if !complete {
+        sqlx::query("SELECT pg_notify('citadel_container_created', json_build_object('platform', $1::uuid, 'container', incoming, 'node', $3::text)::text) FROM unnest($2::text[]) incoming WHERE NOT EXISTS(SELECT 1 FROM containers WHERE platformid=$1 AND dockercontainerid=incoming AND dockernodeid IS NOT DISTINCT FROM $3)")
+            .bind(platform_id).bind(&incoming_ids).bind(node_id)
+            .execute(&mut **transaction).await.map_err(storage)?;
+    }
     let payload = json(&containers)?;
     let conflict = if node_id.is_some() {
         "(dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL"
@@ -742,6 +745,24 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     sqlx::query("UPDATE containers SET projectionobservedat=$4 WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=ANY($3) AND COALESCE(projectionobservedat,0)<$4")
         .bind(platform_id).bind(node_id).bind(&incoming_ids).bind(observed)
         .execute(&mut **transaction).await.map_err(storage)?;
+    if complete && node_id.is_none() {
+        // Publish counts with the committed manager/standalone inventory rather
+        // than waiting for a statistics sample. Read persisted rows so newer
+        // event observations retained by the projection fence are included.
+        changed |= sqlx::query(r#"
+WITH counts AS (
+    SELECT jsonb_build_object(
+        'containerCount', count(*),
+        'containersRunning', count(*) FILTER (WHERE state IN ('Running', 'Restarting')),
+        'containersPaused', count(*) FILTER (WHERE state = 'Paused'),
+        'containersStopped', count(*) FILTER (WHERE state NOT IN ('Running', 'Restarting', 'Paused'))
+    ) AS descriptor
+    FROM containers WHERE platformid=$1 AND dockernodeid IS NULL
+)
+UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || counts.descriptor)::json
+FROM counts WHERE id=$1 AND NOT platformdescriptor::jsonb @> counts.descriptor
+"#).bind(platform_id).execute(&mut **transaction).await.map_err(storage)?.rows_affected() > 0;
+    }
     // Recovery also catches up owners skipped while a command held their locks.
     if complete {
         changed |= crate::persistence::postgres::platforms::status::reconcile(

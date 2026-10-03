@@ -89,7 +89,7 @@ impl VolumeMutationPort for Runtime {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn resource_deletion_preflights_networks_and_reports_only_confirmed_removals() {
     let f = fixture().await;
     let reads = &f.lookup_state.platforms.platforms;

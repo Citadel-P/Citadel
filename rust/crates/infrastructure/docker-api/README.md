@@ -69,40 +69,15 @@ The small `lib.mustache` override preserves the upstream exports and adds
 `forbid(unsafe_code)` plus generated-code-only Clippy allowances for
 `derivable_impls`, `empty_docs`, `into_iter_on_ref`, `manual_map`, and `needless_return`.
 Upstream already allows `unused_imports` and `too_many_arguments`. These are template
-style exceptions, not temporary migration exemptions; reassess them on generator
+style exceptions; reassess them on generator
 upgrades. Handwritten tests, xtask and adapters retain normal lint rules.
 
-See [compatibility.md](codegen/compatibility.md) for the .NET workaround ledger,
-streaming boundaries and the client-shape comparison. Generator properties are
+See [compatibility.md](codegen/compatibility.md) for wire corrections, streaming boundaries and transport constraints. Generator properties are
 documented in the [official Rust generator reference](https://openapi-generator.tech/docs/generators/rust/).
 
-## Phase 3 validation
+## Adapter integration
 
-- Regeneration and `docker-api --check` pass for all 249 generated files.
-- Crate tests pass: eight wire-model tests and one Unix shared-connection test.
-- The two xtask normalization/checksum regression tests pass.
-- Workspace tests pass: **626 passed, 0 failed, 232 ignored**.
-- Strict Clippy passes for the generated crate and its handwritten tests.
-- `cargo tree -p citadel-docker-api -e features` shows Reqwest JSON/query and
-  serde_with std/alloc, with no TLS dependency; workspace duplicates were reviewed.
-- Legacy `docker --check` passes and its generated source/transport are unchanged.
-- OpenAPI verification passes: **404 full / 305 public operations**, unchanged.
-- `cargo fmt --all -- --check` still reports pre-existing formatting differences
-  outside the files changed in this phase. Phase 3 Rust files pass formatting.
-- Strict workspace Clippy stops at existing `collapsible_if` findings in
-  `crates/features/automation/src/lib.rs` (lines 166 and 508). No handwritten lint rule was
-  relaxed; the generated template exceptions are listed above.
-- A focused xtask Clippy check also finds an existing `collapsible_if` in
-  `xtask/src/openapi_gen.rs:214`. The supplemental check allowing only that lint
-  passes, including the new generator module and its tests; no source allowance
-  was added to xtask.
-
-No temporary migration allowlist was added. No legacy Docker code was removed;
-Phase 4 remains unstarted.
-
-## Adapter integration (Phase 4)
-
-`adapters/src/docker/finite.rs` calls the generated traits for the operations Citadel
+`adapters/src/connectors/docker/finite.rs` calls the generated traits for the operations Citadel
 actually uses. One version-keyed `Arc<Configuration>` reuses the DockerClient's
 Unix Reqwest pool; short-lived tag handles clone that Arc, never construct a pool.
 `mapping.rs` normalizes optional protocol values into existing adapter snapshots in

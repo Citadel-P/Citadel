@@ -51,10 +51,10 @@ use uuid::Uuid;
 mod workload_tags;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE5_DATABASE_URL"]
+#[ignore = "requires CITADEL_METADATA_DATABASE_URL"]
 async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles() {
-    let database_url = std::env::var("CITADEL_PHASE5_DATABASE_URL")
-        .expect("CITADEL_PHASE5_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_METADATA_DATABASE_URL")
+        .expect("CITADEL_METADATA_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -92,7 +92,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Arc::new(PostgresGitAccountRepository::new(pool.clone())),
         secret_protector,
     ));
-    let git_cache = std::env::temp_dir().join(format!("citadel-phase7-{}", Uuid::now_v7()));
+    let git_cache = std::env::temp_dir().join(format!("citadel-execution-{}", Uuid::now_v7()));
     let git_execution = Arc::new(GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::clone(&git_accounts),
@@ -203,7 +203,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
 
     let administrator_actor_id = Uuid::now_v7();
     let administrator_user_id = Uuid::now_v7();
-    let administrator_name = format!("phase5-admin-{}", administrator_user_id.simple());
+    let administrator_name = format!("metadata-admin-{}", administrator_user_id.simple());
     let mut transaction = pool.begin().await.unwrap();
     sqlx::query("INSERT INTO actors (id, isenabled, type) VALUES ($1, TRUE, 'User')")
         .bind(administrator_actor_id)
@@ -260,7 +260,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         "/api/v1/automation/actions",
         Some(administrator.clone()),
         Some(json!({
-            "name":format!("phase7-action-{suffix}"),
+            "name":format!("execution-action-{suffix}"),
             "description":"integration action",
             "code":"console.log(args);",
             "defaultArgsJson":"{}",
@@ -389,7 +389,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Method::POST,
         "/api/v1/automation/actions/rename",
         Some(administrator.clone()),
-        Some(json!({"id":automation_id,"name":format!("phase7-renamed-{suffix}")})),
+        Some(json!({"id":automation_id,"name":format!("execution-renamed-{suffix}")})),
     )
     .await;
     assert_eq!(renamed.status(), StatusCode::OK);
@@ -481,7 +481,10 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "ActionDeleted"
         ]
     );
-    assert_eq!(events[1].1["NewName"], format!("phase7-renamed-{suffix}"));
+    assert_eq!(
+        events[1].1["NewName"],
+        format!("execution-renamed-{suffix}")
+    );
     assert_eq!(events[2].1["NewAction"]["TimeoutSeconds"], 45);
     assert_eq!(events[4].1["RunId"], run_id);
     let malformed = request_raw(
@@ -511,7 +514,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "domain":"git.example.test",
             "transport":"Https",
             "authType":"Token",
-            "configuration":{"$type":"Token","token":"phase7-secret-token"}
+            "configuration":{"$type":"Token","token":"execution-secret-token"}
         })),
     )
     .await;
@@ -532,8 +535,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
                 "authType":"Basic",
                 "configuration":{
                     "$type":"Basic",
-                    "username":"phase7-user",
-                    "password":"phase7-password"
+                    "username":"execution-user",
+                    "password":"execution-password"
                 }
             })),
         )
@@ -556,7 +559,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
                 "configuration":{
                     "$type":"SshKey",
                     "username":"git",
-                    "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----phase7"
+                    "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----execution"
                 }
             })),
         )
@@ -571,7 +574,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "domain":"github.com",
             "transport":"Https",
             "authType":"Token",
-            "configuration":{"$type":"Token","token":"phase7-token"}
+            "configuration":{"$type":"Token","token":"execution-token"}
         }),
         json!({
             "name":format!("empty-token-{suffix}"),
@@ -588,7 +591,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             "configuration":{
                 "$type":"SshKey",
                 "username":"git",
-                "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----phase7"
+                "privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----execution"
             }
         }),
     ] {
@@ -615,7 +618,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert!(
         !persisted_configuration
             .to_string()
-            .contains("phase7-secret-token")
+            .contains("execution-secret-token")
     );
     let git_account_config = response_json(
         request(
@@ -630,7 +633,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     .await;
     assert_eq!(
         git_account_config["configuration"]["token"],
-        "phase7-secret-token"
+        "execution-secret-token"
     );
     let ssh_patch = response_json(
         request(
@@ -711,7 +714,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
                 "domain":"git.example.test",
                 "transport":"Https",
                 "authType":"Token",
-                "configuration":{"$type":"Token","token":"phase7-secret-token"}
+                "configuration":{"$type":"Token","token":"execution-secret-token"}
             })),
         )
         .await
@@ -743,7 +746,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     .await;
     assert_eq!(
         preserved_git_account_config["configuration"]["token"],
-        "phase7-secret-token"
+        "execution-secret-token"
     );
     assert_eq!(
         request(
@@ -847,7 +850,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
                 "enabled":true,
                 "provider":"Generic",
                 "authScheme":"BearerToken",
-                "secret":"phase7-shared-secret",
+                "secret":"execution-shared-secret",
                 "branchFilter":"main"
             },
             "tagIds":[tag_id]
@@ -942,7 +945,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         Method::POST,
         &format!("/listener/generic/repo/{repository_id}/pull"),
         "authorization",
-        "Bearer phase7-shared-secret",
+        "Bearer execution-shared-secret",
         Some(json!({})),
     )
     .await;
@@ -963,7 +966,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             Method::POST,
             &format!("/listener/generic/repo/{repository_id}/pull"),
             "authorization",
-            "Bearer phase7-shared-secret",
+            "Bearer execution-shared-secret",
             Some(payload),
         )
         .await;

@@ -19,9 +19,9 @@ use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn apply_completion_does_not_block_unrelated_inventory_on_the_same_platform() {
-    let url = std::env::var("CITADEL_PHASE6_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -98,10 +98,10 @@ async fn apply_completion_does_not_block_unrelated_inventory_on_the_same_platfor
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn apply_claim_completion_failure_and_recovery_are_transactional() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -119,7 +119,7 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
                   '{"$type":"Docker"}'::json,'Online',0)"#,
     )
     .bind(platform_id)
-    .bind(format!("phase6-apply-{}", platform_id.simple()))
+    .bind(format!("workload-apply-{}", platform_id.simple()))
     .execute(&pool)
     .await
     .unwrap();
@@ -344,10 +344,10 @@ async fn apply_claim_completion_failure_and_recovery_are_transactional() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE6_DATABASE_URL"]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
 async fn binding_resolution_uses_resource_precedence_and_keeps_secrets_masked() {
-    let database_url = std::env::var("CITADEL_PHASE6_DATABASE_URL")
-        .expect("CITADEL_PHASE6_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL")
+        .expect("CITADEL_WORKLOAD_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(2)
@@ -356,8 +356,8 @@ async fn binding_resolution_uses_resource_precedence_and_keeps_secrets_masked() 
         .unwrap();
     let deployment_id = Uuid::now_v7();
     let suffix = deployment_id.simple();
-    let variable_name = format!("PHASE6_TOKEN_{suffix}");
-    let secret_name = format!("PHASE6_PASSWORD_{suffix}");
+    let variable_name = format!("WORKLOAD_TOKEN_{suffix}");
+    let secret_name = format!("WORKLOAD_PASSWORD_{suffix}");
     let secret_id = Uuid::now_v7();
     let global_binding_id = Uuid::now_v7();
     let resource_binding_id = Uuid::now_v7();

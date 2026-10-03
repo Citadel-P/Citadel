@@ -43,7 +43,7 @@ mod actors;
 const VIEWER_ROLE_ID: Uuid = Uuid::from_u128(0x30000000000000000000000000000003);
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn list_users_returns_the_dotnet_paging_projection_and_capabilities() {
     let fixture = fixture().await;
     let prefix = format!("list-{}", Uuid::now_v7().simple());
@@ -79,7 +79,7 @@ async fn list_users_returns_the_dotnet_paging_projection_and_capabilities() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn search_users_matches_name_or_email_and_honors_the_limit() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -126,7 +126,7 @@ async fn search_users_matches_name_or_email_and_honors_the_limit() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn get_user_returns_enabled_state_roles_teams_and_resource_accesses() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -214,7 +214,7 @@ VALUES ($1, $2, 1, $3, 8, 1)
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn user_reads_require_a_human_administrator_even_with_user_execute_permission() {
     let fixture = fixture().await;
     let role_id = Uuid::now_v7();
@@ -294,7 +294,7 @@ async fn user_reads_require_a_human_administrator_even_with_user_execute_permiss
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn user_reads_return_compatible_problem_statuses_for_invalid_or_missing_requests() {
     let fixture = fixture().await;
     let response = send(&fixture, "/api/v1/users", None).await;
@@ -336,7 +336,7 @@ async fn user_reads_return_compatible_problem_statuses_for_invalid_or_missing_re
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn user_mutations_normalize_invalid_json_without_bypassing_authorization() {
     let fixture = fixture().await;
 
@@ -363,7 +363,7 @@ async fn user_mutations_normalize_invalid_json_without_bypassing_authorization()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn user_mutations_reject_non_administrators_and_service_accounts() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -403,7 +403,7 @@ async fn user_mutations_reject_non_administrators_and_service_accounts() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_persists_an_enabled_actor_and_safe_activity() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -443,7 +443,7 @@ async fn create_user_persists_an_enabled_actor_and_safe_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_with_assignments_persists_teams_roles_and_resource_access() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -495,7 +495,7 @@ async fn create_user_with_assignments_persists_teams_roles_and_resource_access()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_with_duplicate_name_returns_conflict() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -507,7 +507,7 @@ async fn create_user_with_duplicate_name_returns_conflict() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_with_duplicate_email_returns_conflict() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -524,7 +524,7 @@ async fn create_user_with_duplicate_email_returns_conflict() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_user_updates_email_password_enabled_state_and_revokes_sessions() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -568,7 +568,7 @@ async fn patch_user_updates_email_password_enabled_state_and_revokes_sessions() 
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_user_password_alone_revokes_refresh_sessions() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -597,7 +597,7 @@ async fn patch_user_password_alone_revokes_refresh_sessions() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_user_validates_password_against_the_persisted_identity() {
     let fixture = fixture().await;
     let name = format!("predictable-{}", Uuid::now_v7().simple());
@@ -620,7 +620,7 @@ async fn patch_user_validates_password_against_the_persisted_identity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn rename_user_updates_name_and_records_the_rename() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -644,7 +644,7 @@ async fn rename_user_updates_name_and_records_the_rename() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn add_user_role_assigns_the_role_and_audits_once() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -670,7 +670,7 @@ async fn add_user_role_assigns_the_role_and_audits_once() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn remove_user_role_unassigns_the_role() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -691,7 +691,7 @@ async fn remove_user_role_unassigns_the_role() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn add_and_remove_user_resource_access_changes_effective_authorization() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -783,7 +783,7 @@ async fn add_and_remove_user_resource_access_changes_effective_authorization() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_user_replaces_teams_roles_and_resource_accesses() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -826,7 +826,7 @@ async fn patch_user_replaces_teams_roles_and_resource_accesses() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn patch_user_with_empty_assignment_collections_clears_them() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -851,7 +851,7 @@ async fn patch_user_with_empty_assignment_collections_clears_them() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn delete_user_removes_the_user_and_sessions_but_keeps_safe_activity() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -882,7 +882,7 @@ async fn delete_user_removes_the_user_and_sessions_but_keeps_safe_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn deleting_the_last_administrator_returns_conflict_and_rolls_back() {
     let fixture = fixture().await;
     demote_other_administrators(&fixture.pool, fixture.administrator.actor_id.value()).await;
@@ -916,7 +916,7 @@ async fn deleting_the_last_administrator_returns_conflict_and_rolls_back() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn concurrent_administrator_deletes_keep_one_enabled_administrator() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -943,7 +943,7 @@ async fn concurrent_administrator_deletes_keep_one_enabled_administrator() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn duplicate_role_assignment_returns_conflict_without_a_ghost_activity() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -967,7 +967,7 @@ async fn duplicate_role_assignment_returns_conflict_without_a_ghost_activity() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_with_missing_assignment_rolls_back_every_row() {
     let fixture = fixture().await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -1009,7 +1009,7 @@ async fn create_user_with_missing_assignment_rolls_back_every_row() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE3_DATABASE_URL"]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
 async fn create_user_with_custom_access_requires_the_license_and_rolls_back() {
     let fixture = fixture_with_custom_access(false).await;
     let marker = Uuid::now_v7().simple().to_string();
@@ -1065,8 +1065,8 @@ async fn fixture_with_custom_access(custom_access_control_enabled: bool) -> Fixt
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PHASE3_DATABASE_URL")
-        .expect("CITADEL_PHASE3_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

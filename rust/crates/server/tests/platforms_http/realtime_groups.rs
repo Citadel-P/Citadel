@@ -72,7 +72,7 @@ pub(super) async fn receive(socket: &mut Socket) -> Value {
 // -> Resize -> typed-array stdin sequence. Uses a Docker socket fixture by
 // default; optional environment variables target a disposable real container.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; optional CITADEL_TERMINAL_TEST_CONTAINER/SOCKET enable live Docker"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; optional CITADEL_TERMINAL_TEST_CONTAINER/SOCKET enable live Docker"]
 async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
     let (docker_id, docker_socket, fixture_server) = match (
         std::env::var("CITADEL_TERMINAL_TEST_CONTAINER").ok(),
@@ -309,7 +309,7 @@ pub(super) async fn cleanup(f: Fixture) {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_batch_shares_one_projection_but_rechecks_each_readers_authorization() {
     let f = fixture().await;
     let mut inventory = snapshot(f.platform_id);
@@ -461,7 +461,7 @@ async fn container_batch_shares_one_projection_but_rechecks_each_readers_authori
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_changes_read_only_the_scoped_projection_without_contacting_docker() {
     let f = fixture().await;
     let reader = reader(&f);
@@ -532,7 +532,7 @@ async fn container_changes_read_only_the_scoped_projection_without_contacting_do
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_logs_flow_while_another_group_snapshot_is_pending() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::containers::v1::ContainerLogResponse;
@@ -631,7 +631,7 @@ async fn container_logs_flow_while_another_group_snapshot_is_pending() {
 
 // Ports ExecSessionManagerTests and the Terminal-specific Swarm permission contract.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
@@ -804,7 +804,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn terminal_cancels_when_the_container_identity_changes_without_retargeting() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::edge::v1::core_envelope;
@@ -866,7 +866,7 @@ async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stack_logs_follow_committed_container_replacement_without_replaying_unchanged_streams() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
@@ -1012,7 +1012,7 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
 // Ports ContainerLogStreamManagerTests' resource-ID/exact-node cases through
 // the actual WebSocket protocol, PostgreSQL projections and Edge command queue.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permission_revocation() {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
@@ -1197,7 +1197,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn managed_service_group_requires_parent_platform_and_preserves_persisted_spec() {
     let f = fixture().await;
     let principal = super::lookup::subject(&f).await;
@@ -1248,7 +1248,7 @@ async fn managed_service_group_requires_parent_platform_and_preserves_persisted_
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
     let f = fixture().await;
     let principal = super::lookup::subject(&f).await;
@@ -1321,7 +1321,7 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_without_refetch() {
     let f = fixture().await;
     let cancellation = CancellationToken::new();
@@ -1545,7 +1545,7 @@ async fn remove_platform_access(f: &Fixture, p: &ActorPrincipal) {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn committed_resource_notifications_do_not_reopen_docker_or_cross_authorization() {
     use citadel_platforms::{RuntimeNetworkSummary, RuntimeVolumeSummary, jobs::ResourceDelta};
     let f = fixture().await;

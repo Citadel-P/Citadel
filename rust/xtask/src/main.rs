@@ -7,7 +7,6 @@ use sha2::{Digest, Sha256};
 mod database_gen;
 mod docker_api_gen;
 mod openapi_gen;
-mod parity;
 
 #[derive(Parser)]
 struct Cli {
@@ -23,8 +22,6 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// Check all reference .NET HTTP operation IDs, routes, and public exposure.
-    Parity,
     /// Manage the Rust-owned database schema and migration artifacts.
     Database {
         #[command(subcommand)]
@@ -40,10 +37,8 @@ enum Command {
 
 #[derive(Subcommand)]
 enum DatabaseCommand {
-    /// Verify the Rust schema, migration catalog, and checksums without .NET inputs.
+    /// Verify the Rust schema, migration catalog, and checksums.
     Verify,
-    /// Recreate the one-time Rust-v1 baseline from the frozen accepted .NET input.
-    ImportBaseline,
     /// Regenerate the unreleased Rust baseline from the declarative schema.
     RefreshBaseline,
     /// Refresh the embedded baseline checksum and schema hash.
@@ -56,12 +51,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::DockerApi { check } => docker_api_gen::generate(check),
         Command::Database { command } => match command {
             DatabaseCommand::Verify => database_gen::verify(),
-            DatabaseCommand::ImportBaseline => database_gen::import_baseline(),
             DatabaseCommand::RefreshBaseline => database_gen::refresh_baseline(),
             DatabaseCommand::RefreshCatalog => database_gen::refresh_catalog(),
         },
         Command::Openapi { check } => openapi_gen::generate(check),
-        Command::Parity => parity::check(),
     }
 }
 

@@ -1,4 +1,4 @@
-//! Connection-local permission decisions, valid only for the bound Phase 14
+//! Connection-local permission decisions, valid only for the bound
 //! actor generation. Safety authentication clears them before revalidation.
 use super::RealtimeReadError;
 use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};

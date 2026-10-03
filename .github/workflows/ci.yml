@@ -98,10 +98,10 @@ jobs:
           docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d citadel_authorization \
             -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
           port=$(docker port "$container" 5432/tcp | cut -d: -f2)
-          export CITADEL_PHASE6_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_authorization"
-          export CITADEL_PHASE3_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
-          export CITADEL_PHASE4_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
-          export CITADEL_PHASE7_DATABASE_URL="$CITADEL_PHASE6_DATABASE_URL"
+          export CITADEL_WORKLOAD_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_authorization"
+          export CITADEL_IDENTITY_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
+          export CITADEL_PLATFORM_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
+          export CITADEL_EXECUTION_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
           export CITADEL_REQUIRE_QUERY_COUNTS=1
           cargo test --locked -p citadel-server --test deployments_http \
             deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture

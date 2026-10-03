@@ -68,9 +68,9 @@ async fn notify(State(state): State<Receiver>, body: String) -> StatusCode {
 }
 
 #[tokio::test]
-#[ignore = "requires disposable CITADEL_PHASE7_DATABASE_URL, CITADEL_DENO_PATH and CITADEL_SHOUTRRR_PATH"]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL, CITADEL_DENO_PATH and CITADEL_SHOUTRRR_PATH"]
 async fn real_automation_execution_persists_results_and_retries_failure_notifications() {
-    let database = std::env::var("CITADEL_PHASE7_DATABASE_URL").unwrap();
+    let database = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     let deno = std::env::var_os("CITADEL_DENO_PATH").expect("real Deno required");
     let shoutrrr = std::env::var_os("CITADEL_SHOUTRRR_PATH").expect("real Shoutrrr required");
     MigrationRunner::migrate(&database).await.unwrap();

@@ -594,8 +594,7 @@ async fn import(
     if input.import_sensitive_environment_as_secrets {
         return Err(crate::api::error::HttpError::from_parts(
             ApiError::Validation(
-                "Importing newly detected sensitive values requires the Phase 7 Secret execution slice."
-                    .to_owned(),
+                "Importing newly detected sensitive values as secrets is not supported.".to_owned(),
             ),
             &headers,
         ));

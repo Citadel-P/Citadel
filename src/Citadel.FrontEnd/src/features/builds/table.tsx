@@ -1,9 +1,4 @@
-import {
-  BuildProjectBuilderKind,
-  AuthorizedProject,
-  BuildRunStatus,
-  BuildRunView,
-} from '@/api/generated/api.types';
+import { BuildProjectBuilderKind, AuthorizedProject, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -110,8 +105,10 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
     cell: ({ row }) => (
       <span className="inline-flex min-w-0 max-w-80 flex-col text-sm">
-        <span className="truncate" title={row.original.imageRepository}>
-          {row.original.imageRepository}
+        <span
+          className="truncate"
+          title={row.original.pushToRegistry === false ? 'Local image' : row.original.imageRepository}>
+          {row.original.pushToRegistry === false ? 'Local image' : row.original.imageRepository}
         </span>
         <span className="truncate text-xs text-muted-foreground" title={row.original.tagTemplates.join(', ')}>
           {row.original.tagTemplates.join(', ')}

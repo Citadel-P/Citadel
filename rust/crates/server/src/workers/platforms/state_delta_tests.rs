@@ -3,9 +3,9 @@ use axum::{Json, Router, response::IntoResponse};
 use std::sync::Mutex;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();
@@ -242,9 +242,9 @@ fn batch_iterations() -> u64 {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL; run with --test-threads=1"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL; run with --test-threads=1"]
 async fn local_and_direct_bursts_commit_once_and_publish_six_ids() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

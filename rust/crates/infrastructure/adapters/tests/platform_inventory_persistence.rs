@@ -16,13 +16,16 @@ use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
+#[path = "platform_inventory_persistence/initial_inventory.rs"]
+mod initial_inventory;
+
 #[path = "platform_inventory_persistence/state_delta.rs"]
 mod state_delta;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inventory_commits_while_a_deployment_is_locked_and_reconciliation_catches_up() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -111,10 +114,10 @@ async fn inventory_commits_while_a_deployment_is_locked_and_reconciliation_catch
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn projections_stats_and_authorized_reads_survive_store_recreation() {
-    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
-        .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
+        .expect("CITADEL_PLATFORM_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -284,9 +287,9 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inventory_restores_only_platform_scoped_ownership_and_preserves_adoption() {
-    let database = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let database = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -570,16 +573,16 @@ async fn seed_platform(pool: &sqlx::PgPool, platform_id: Uuid, actor_id: Uuid, t
     .unwrap();
     sqlx::query("INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES ($1,$2,'Local',0,0,0,$3,0,'{\"$type\":\"DockerSwarm\"}','Online',0)")
         .bind(platform_id)
-        .bind(format!("unix:///phase4/{platform_id}.sock"))
-        .bind(format!("phase4-{platform_id}"))
+        .bind(format!("unix:///platform/{platform_id}.sock"))
+        .bind(format!("platform-{platform_id}"))
         .execute(pool)
         .await
         .unwrap();
     sqlx::query("INSERT INTO tags (id,color,createdbyactorid,name,normalizedname) VALUES ($1,'blue',$2,$3,$4)")
         .bind(tag_id)
         .bind(actor_id)
-        .bind(format!("phase4-{marker}"))
-        .bind(format!("PHASE4-{marker}"))
+        .bind(format!("platform-{marker}"))
+        .bind(format!("PLATFORM-{marker}"))
         .execute(pool)
         .await
         .unwrap();
@@ -593,10 +596,10 @@ async fn seed_platform(pool: &sqlx::PgPool, platform_id: Uuid, actor_id: Uuid, t
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
     use citadel_platforms::{HostDiskUsage, StatisticsReader, StatsWindow};
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -667,9 +670,9 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn deployment_status_tracks_container_inventory_without_overwriting_active_operations() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -738,11 +741,11 @@ async fn deployment_status_tracks_container_inventory_without_overwriting_active
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn removing_replaced_container_preserves_current_deployment_runtime_status() {
     use citadel_adapters::persistence::postgres::platforms::status::container_event;
 
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -847,11 +850,11 @@ async fn removing_replaced_container_preserves_current_deployment_runtime_status
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn daemon_events_and_missed_event_reconciliation_update_resources_and_activities() {
     use citadel_adapters::persistence::postgres::platforms::status::container_event;
     use citadel_adapters::persistence::postgres::platforms::status::platform_offline;
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1093,9 +1096,9 @@ async fn daemon_events_and_missed_event_reconciliation_update_resources_and_acti
 
 // Port of StackSyncJobTests, with additional empty/Created release regressions.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stack_sync_preserves_active_releases_and_recovers_stale_processing() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1170,9 +1173,9 @@ async fn stack_sync_preserves_active_releases_and_recovers_stale_processing() {
 // PlatformSyncJobTests.DockerPlatformSync_ShouldRejectChangedDaemonIdentity
 // and SwarmPlatformSync_ShouldRejectChangedPinnedManagerIdentity.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inventory_rejects_changed_pinned_runtime_identity_without_overwriting_projection() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1215,9 +1218,9 @@ async fn inventory_rejects_changed_pinned_runtime_identity_without_overwriting_p
 // ReconcilableResourceJobTests: orphan images/actions recover; active work survives.
 // CleanupJob retention additionally runs on an idle installation.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_data() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1285,9 +1288,9 @@ async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_
 // ContainerSyncJobTests.UpdatedEvent_ShouldRefreshSystemClassification and
 // ContainerEventWorkItemConsistencyTests image-reference fallback.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn container_event_refreshes_classification_and_rejects_older_metadata() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1345,9 +1348,9 @@ async fn container_event_refreshes_classification_and_rejects_older_metadata() {
 // Ports ContainerDependentResourceSynchronizerTests and both
 // ContainerDestroyedWorkItemTests processing-state scenarios.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn dependent_sync_isolates_failures_and_direct_container_operations_release_stack() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1489,9 +1492,9 @@ async fn dependent_sync_isolates_failures_and_direct_container_operations_releas
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserves_live_runs() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1551,9 +1554,9 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
 // Port: ContainerEventWorkItemConsistencyTests. A failed commit must not publish
 // work based on uncommitted inventory; successful writes publish after commit.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inventory_creation_notifications_are_transactional() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1564,17 +1567,25 @@ async fn inventory_creation_notifications_are_transactional() {
     seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
     let store = PostgresInventoryProjectionStore::new(pool.clone());
     let mut inventory = snapshot(platform, false);
-    store.persist(&inventory).await.unwrap();
     let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
     listener.listen("citadel_container_created").await.unwrap();
+    store.persist(&inventory).await.unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err(),
+        "Initial discovery must not report existing containers as newly created"
+    );
     let mut additional = inventory.containers[0].clone();
     additional.id = "uncommitted-container".into();
     additional.name = "reject-this-container".into();
-    inventory.containers.push(additional);
+
     inventory.observed_at += chrono::Duration::seconds(1);
     let constraint = format!("reject_inventory_{}", platform.simple());
     sqlx::query(sqlx::AssertSqlSafe(format!("ALTER TABLE containers ADD CONSTRAINT {constraint} CHECK (platformid<>'{platform}' OR name<>'reject-this-container')"))).execute(&pool).await.unwrap();
-    assert!(store.persist(&inventory).await.is_err());
+    assert!(citadel_adapters::persistence::postgres::platforms::status::container_observation_committed(
+        &pool, platform, None, &additional, inventory.observed_at.timestamp()
+    ).await.is_err());
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
             .await
@@ -1587,7 +1598,15 @@ async fn inventory_creation_notifications_are_transactional() {
     .execute(&pool)
     .await
     .unwrap();
-    store.persist(&inventory).await.unwrap();
+    citadel_adapters::persistence::postgres::platforms::status::container_observation_committed(
+        &pool,
+        platform,
+        None,
+        &additional,
+        inventory.observed_at.timestamp(),
+    )
+    .await
+    .unwrap();
     let event = tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
         .await
         .unwrap()
@@ -1602,9 +1621,9 @@ async fn inventory_creation_notifications_are_transactional() {
 // Port: ReconcilableResourceJobTests orphan-state matrix. Operation-specific
 // claims and active runs are covered separately; these have no owning operation.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn maintenance_releases_each_orphan_resource_kind() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1696,9 +1715,9 @@ async fn maintenance_releases_each_orphan_resource_kind() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn swarm_stack_observations_recover_complete_releases_and_preserve_incomplete_metadata() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1858,9 +1877,9 @@ async fn swarm_stack_observations_recover_complete_releases_and_preserve_incompl
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn failed_swarm_refresh_marks_previous_rows_stale_without_clobbering_a_newer_refresh() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -1909,10 +1928,10 @@ async fn failed_swarm_refresh_marks_previous_rows_stale_without_clobbering_a_new
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn swarm_node_infrastructure_revokes_missing_service_bootstrap_and_only_old_absent_bindings()
 {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2004,9 +2023,9 @@ async fn inventory_initialization_serializes_one_platform_without_blocking_other
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn orphaned_stack_labels_do_not_abort_the_swarm_inventory_transaction() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2063,9 +2082,9 @@ async fn orphaned_stack_labels_do_not_abort_the_swarm_inventory_transaction() {
 // A valid owner ID is insufficient when the
 // namespace differs; an explicit import association takes precedence over labels.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stack_namespace_claims_are_checked_and_imported_associations_are_preserved() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2177,9 +2196,9 @@ async fn stack_namespace_claims_are_checked_and_imported_associations_are_preser
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stack_inventory_skips_busy_resources_and_reconciles_on_the_next_sweep() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2261,10 +2280,10 @@ async fn stack_inventory_skips_busy_resources_and_reconciles_on_the_next_sweep()
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity() {
     use citadel_platforms::jobs::{ResourceInventory, ResourceSnapshot};
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2442,13 +2461,13 @@ async fn event_resource_writes_preserve_unrelated_projections_and_swarm_identity
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn scoped_generations_reject_same_timestamp_updates_and_resurrection_without_cross_scope_retries()
  {
     use citadel_platforms::jobs::{
         ProjectionKind, ResourceInventory, ResourceSnapshot, SnapshotGeneration,
     };
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2576,13 +2595,13 @@ async fn scoped_generations_reject_same_timestamp_updates_and_resurrection_witho
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn semantic_container_replays_advance_fences_without_revisions_or_notifications() {
     use citadel_adapters::persistence::postgres::platforms::status::{
         container_event_committed, container_observation_committed,
     };
     use citadel_platforms::jobs::{ProjectionChange, ResourceInventory, ResourceSnapshot};
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2670,19 +2689,26 @@ async fn semantic_container_replays_advance_fences_without_revisions_or_notifica
         ProjectionChange::Unchanged
     );
     inventory.containers[0] = container.clone();
+    let replay = ResourceSnapshot {
+        platform_id: platform,
+        observed_at: chrono::DateTime::from_timestamp(observed + 3, 0).unwrap(),
+        inventory: ResourceInventory::Containers(inventory.containers.clone()),
+    };
     assert_eq!(
         store
-            .persist_resource_committed(
-                &ResourceSnapshot {
-                    platform_id: platform,
-                    observed_at: chrono::DateTime::from_timestamp(observed + 3, 0).unwrap(),
-                    inventory: ResourceInventory::Containers(inventory.containers.clone()),
-                },
-                None
-            )
+            .persist_resource_committed(&replay, None)
             .await
             .unwrap(),
-        ProjectionChange::Unchanged
+        ProjectionChange::Changed,
+        "The first inventory after an event repairs the platform's stale counts"
+    );
+    assert_eq!(
+        store
+            .persist_resource_committed(&replay, None)
+            .await
+            .unwrap(),
+        ProjectionChange::Unchanged,
+        "An identical inventory must not publish another count update"
     );
     container.state = "running".into();
     assert_eq!(
@@ -2726,7 +2752,7 @@ async fn semantic_container_replays_advance_fences_without_revisions_or_notifica
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn runtime_identity_index_follows_commits_rebuilds_and_repairs_stale_hints() {
     use citadel_adapters::persistence::postgres::platforms::{
         runtime_index::RuntimeIdentityIndex, status::container_event_committed,
@@ -2734,7 +2760,7 @@ async fn runtime_identity_index_follows_commits_rebuilds_and_repairs_stale_hints
     use citadel_platforms::jobs::{
         ProjectionKind, ProjectionWrite, ResourceInventory, ResourceSnapshot, SnapshotGeneration,
     };
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2833,7 +2859,7 @@ async fn runtime_identity_index_follows_commits_rebuilds_and_repairs_stale_hints
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn six_container_verification_is_sequential_and_keeps_every_authoritative_result() {
     use axum::{Json, Router, response::IntoResponse};
     use citadel_adapters::connectors::{
@@ -2847,7 +2873,7 @@ async fn six_container_verification_is_sequential_and_keeps_every_authoritative_
         },
         time::Duration,
     };
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2906,14 +2932,14 @@ async fn six_container_verification_is_sequential_and_keeps_every_authoritative_
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
     use citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore;
     use citadel_platforms::{
         image_mutations::{ImageDeletionObservation, ImageMutationStore},
         jobs::{ProjectionKind, SnapshotGeneration},
     };
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -2984,9 +3010,9 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn configured_node_policy_is_preserved_by_initialization_and_http_refresh() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

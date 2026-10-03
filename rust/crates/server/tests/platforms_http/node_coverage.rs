@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn node_coverage_uses_the_enrollment_protocol_version() {
     let fixture = fixture().await;
     let id = fixture.platform_id;
@@ -50,7 +50,7 @@ async fn node_coverage_uses_the_enrollment_protocol_version() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases() {
     let fixture = fixture().await;
     let id = fixture.platform_id;
@@ -152,7 +152,7 @@ async fn node_agent_coverage_ports_dotnet_manager_worker_and_service_drift_cases
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn empty_node_coverage_initializes_inventory_once_and_fences_stale_initialization() {
     let cluster = format!("coverage-{}", Uuid::now_v7());
     let fixture = fixture_for_cluster(cluster.clone()).await;

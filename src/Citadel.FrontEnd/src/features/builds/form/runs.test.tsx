@@ -78,6 +78,7 @@ it('renders the build list when a queued run has no platform snapshot', async ()
     buildArgs: [],
     buildSecrets: [],
     buildAgentPoolId: null,
+    pushToRegistry: true,
     registryId: 'registry-id',
     webhook: null,
     timeoutSeconds: 300,

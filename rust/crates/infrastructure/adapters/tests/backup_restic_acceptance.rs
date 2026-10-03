@@ -66,7 +66,7 @@ async fn docker(args: &[&str], stdin: Option<&[u8]>) -> Vec<u8> {
 // Ports the volume round trip in BackupCompatibilityTests/SwarmBackupCompatibilityTests.
 // This is real Docker + Restic + PostgreSQL, not the multi-node/Agent acceptance gate.
 #[tokio::test]
-#[ignore = "requires dedicated CITADEL_PHASE7_LOCAL_BACKUP_DATABASE_URL, Docker and restic/restic:0.18.1"]
+#[ignore = "requires dedicated CITADEL_LOCAL_BACKUP_DATABASE_URL, Docker and restic/restic:0.18.1"]
 async fn local_volume_backup_restores_root_data_and_persists_real_results() {
     volume_round_trip(None, Transport::Local).await;
 }
@@ -74,11 +74,11 @@ async fn local_volume_backup_restores_root_data_and_persists_real_results() {
 // Ports the S3/RustFS storage portion of WorkerVolume_ShouldBackupToRustFsAndRestoreOnAnotherNode.
 // Exact-node Agent routing has separate transport tests; this fixture uses Local Docker.
 #[tokio::test]
-#[ignore = "requires the dedicated RustFS/PostgreSQL fixture from Test-Phase7LocalBackup.ps1 -UseRustFs"]
+#[ignore = "requires the dedicated RustFS/PostgreSQL fixture from Test-LocalBackup.ps1 -UseRustFs"]
 async fn rustfs_volume_backup_restores_root_data_and_persists_real_results() {
     volume_round_trip(
         Some(
-            std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT")
+            std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT")
                 .expect("RustFS fixture endpoint required"),
         ),
         Transport::Local,
@@ -87,20 +87,20 @@ async fn rustfs_volume_backup_restores_root_data_and_persists_real_results() {
 }
 
 #[tokio::test]
-#[ignore = "requires Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage <published candidate>"]
+#[ignore = "requires Test-LocalBackup.ps1 -UseRustFs -AgentImage <published candidate>"]
 async fn rustfs_agent_volume_backup_restore_and_retention_never_use_core_docker() {
     volume_round_trip(
-        Some(std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT").unwrap()),
+        Some(std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap()),
         Transport::Agent,
     )
     .await;
 }
 
 #[tokio::test]
-#[ignore = "requires Test-Phase7LocalBackup.ps1 -UseRustFs -AgentImage <candidate> -UseEdgeAgent"]
+#[ignore = "requires Test-LocalBackup.ps1 -UseRustFs -AgentImage <candidate> -UseEdgeAgent"]
 async fn rustfs_edge_volume_backup_restore_and_retention_use_the_authenticated_session() {
     volume_round_trip(
-        Some(std::env::var("CITADEL_PHASE7_RUSTFS_ENDPOINT").unwrap()),
+        Some(std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap()),
         Transport::Edge,
     )
     .await;
@@ -109,7 +109,7 @@ async fn rustfs_edge_volume_backup_restore_and_retention_use_the_authenticated_s
 async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let use_agent = transport != Transport::Local;
     let fixture_image = if use_agent {
-        std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap()
+        std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap()
     } else {
         IMAGE.into()
     };
@@ -120,7 +120,7 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     } else {
         IMAGE
     };
-    let database = std::env::var("CITADEL_PHASE7_LOCAL_BACKUP_DATABASE_URL").unwrap();
+    let database = std::env::var("CITADEL_LOCAL_BACKUP_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database).await.unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(3)
@@ -156,9 +156,9 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
             let cancel=edge_cancel.clone();
             let intake=EdgeIntake::new(store,edge_registry.clone());
             edge_server=Some(tokio::spawn(async move {tonic::transport::Server::builder().add_service(EdgeAgentServiceServer::new(intake)).serve_with_incoming_shutdown(incoming,cancel.cancelled_owned()).await.unwrap()}));
-            let image=std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
-            let network=std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
-            let host=std::env::var("CITADEL_PHASE7_CORE_HOST").unwrap();
+            let image=std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
+            let network=std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
+            let host=std::env::var("CITADEL_TEST_CORE_HOST").unwrap();
             docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env","CITADEL_AGENT_MODE=edge","--env",&format!("CITADEL_CORE_URL=http://{host}:{}",address.port()),"--env",&format!("CITADEL_EDGE_ENROLLMENT_TOKEN={token}"),&image],None).await;
             let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
             while edge_registry.get(&edge_target).is_err() {
@@ -170,8 +170,8 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
         } else if use_agent {
             use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::connectors::agent::client::AgentRequestSigner;
-            let image=std::env::var("CITADEL_PHASE7_AGENT_IMAGE").unwrap();
-            let network=std::env::var("CITADEL_PHASE7_AGENT_NETWORK").unwrap();
+            let image=std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
+            let network=std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
             let mut key=[0;32];getrandom::fill(&mut key).unwrap();
             let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
             docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env",&format!("HUB_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;

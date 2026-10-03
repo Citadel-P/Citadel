@@ -34,9 +34,9 @@ impl ContainerMutationRuntime for Runtime {
 // Port: ContainerSyncJobTests pruning enabled/disabled, terminal tasks only;
 // DockerDaemonEventJobTests terminal task event; also verifies node identity.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn pruning_obeys_setting_and_only_deletes_terminal_tasks_without_volumes_or_force() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
         .unwrap();

@@ -7,7 +7,7 @@ use citadel_contracts::citadel::{
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn managed_service_logs_require_both_service_logs_and_parent_platform_access() {
     let f = fixture().await;
     let principal = super::lookup::subject(&f).await;
@@ -94,7 +94,7 @@ async fn managed_service_logs_require_both_service_logs_and_parent_platform_acce
 // Ports SwarmEndpointTests' log permission, bounded-tail, projected ownership,
 // and bounded connector result cases, with a real HTTP router and PostgreSQL.
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
     let f = fixture().await;
     let service = format!(

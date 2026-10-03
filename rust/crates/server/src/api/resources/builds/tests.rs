@@ -6,16 +6,17 @@ fn project_patch_preserves_null_and_omission_and_rejects_invalid_types() {
     let empty: UpdateBuildProjectInput = serde_json::from_value(json!({})).unwrap();
     assert_eq!(serde_json::to_value(empty).unwrap(), json!({}));
     let null: UpdateBuildProjectInput = serde_json::from_value(
-        json!({"webhook":null,"platformId":null,"target":null,"buildArgs":null}),
+        json!({"webhook":null,"platformId":null,"target":null,"buildArgs":null,"registryId":null,"pushToRegistry":false}),
     )
     .unwrap();
     assert_eq!(
         serde_json::to_value(null).unwrap(),
-        json!({"webhook":null,"platformId":null,"target":null,"buildArgs":null})
+        json!({"webhook":null,"platformId":null,"target":null,"buildArgs":null,"registryId":null,"pushToRegistry":false})
     );
     for input in [
         json!({"builderKind":"Unknown"}),
         json!({"enabled":null}),
+        json!({"pushToRegistry":null}),
         json!({"name":"rename"}),
         json!({"webhook":{"provider":"Unknown"}}),
     ] {
@@ -123,7 +124,7 @@ fn run_views_preserve_dependency_and_failure_details() {
         context_path: ".".into(),
         dockerfile_path: "Dockerfile".into(),
         target: None,
-        registry_id: Uuid::new_v4(),
+        registry_id: Some(Uuid::new_v4()),
         registry_host: "registry.test".into(),
         image_repository: "app".into(),
         image_references: vec![],

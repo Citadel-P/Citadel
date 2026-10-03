@@ -1,5 +1,6 @@
 import {
   ResourceType,
+  PlatformType,
   PermissionLevel,
   SpecificPermission,
   RolePermissionInput,
@@ -19,6 +20,7 @@ import {
 import { SelectField } from '@/components/custom/common';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRead } from '@/lib/hooks';
+import { useAppContext } from '@/lib/context/app-context';
 import { CitadelIcons } from '@/lib/icons';
 import { Link } from 'react-router';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -31,6 +33,7 @@ import { LicensedFeatureDescription } from '@/components/custom/license-feature-
 type ResourceItem = {
   id: string;
   name: string;
+  type?: PlatformType;
 };
 
 export type OverrideResourceType =
@@ -267,6 +270,7 @@ export const ResourceOverridesField = ({
   value: ResourceAccessEntry[] | null;
   onChange: (next: ResourceAccessEntry[]) => void;
 }) => {
+  const { platforms } = useAppContext();
   const { hasCapability } = useLicenseEntitlements();
   const canExpandAccess = hasCapability(LicenseCapability.CustomAccessControl);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -418,6 +422,13 @@ export const ResourceOverridesField = ({
                 const availableSpecific =
                   row.permissionLevel && matrix
                     ? Object.entries(matrix.specificPermissions)
+                        .filter(
+                          ([permission]) =>
+                            permission !== SpecificPermission.ManageNodeAgents ||
+                            (resourceType === ResourceType.Platform &&
+                              platforms?.find((platform) => platform.id === row.resourceId)?.type ===
+                                PlatformType.DockerSwarm),
+                        )
                         .filter(([, minLevel]) => {
                           const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
                           return (
@@ -451,7 +462,9 @@ export const ResourceOverridesField = ({
                         <div className="w-full min-w-0 max-w-full">
                           <MultiSelect
                             options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
-                            defaultValue={row.specificPermissions}
+                            defaultValue={row.specificPermissions.filter((permission) =>
+                              availableSpecific.includes(permission),
+                            )}
                             placeholder="Select capabilities"
                             onValueChange={() => {}}
                             maxCount={3}
@@ -533,6 +546,12 @@ export const ResourceOverridesField = ({
                         ? []
                         : Object.entries(matrix.specificPermissions)
                             .filter(
+                              ([permission]) =>
+                                permission !== SpecificPermission.ManageNodeAgents ||
+                                (resource.resourceType === ResourceType.Platform &&
+                                  resource.type === PlatformType.DockerSwarm),
+                            )
+                            .filter(
                               ([, minLevel]) =>
                                 levels.indexOf(minLevel as PermissionLevel) <= levels.indexOf(currentLevel),
                             )
@@ -572,7 +591,9 @@ export const ResourceOverridesField = ({
                             {currentLevel && availableSpecific.length > 0 ? (
                               <MultiSelect
                                 options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
-                                defaultValue={currentSpecific}
+                                defaultValue={currentSpecific.filter((permission) =>
+                                  availableSpecific.includes(permission),
+                                )}
                                 onValueChange={(v) =>
                                   handleResourcePermissionChange(resource.id, currentLevel, v as SpecificPermission[])
                                 }

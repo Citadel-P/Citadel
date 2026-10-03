@@ -12,7 +12,7 @@ use citadel_contracts::citadel::{
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_downloads() {
     let f = fixture().await;
     let reader = super::lookup::subject(&f).await;

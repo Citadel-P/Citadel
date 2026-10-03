@@ -148,10 +148,10 @@ impl PlatformRegistrationRuntime for StaticRegistrationRuntime {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn create_platform_enforces_authorization_and_commits_metadata_before_inventory() {
-    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
-        .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
+        .expect("CITADEL_PLATFORM_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -300,6 +300,8 @@ async fn create_platform_enforces_authorization_and_commits_metadata_before_inve
     let platform_id = Uuid::parse_str(body["id"].as_str().unwrap()).unwrap();
     assert_eq!(body["address"], "http://localhost.docker");
     assert_eq!(body["imageCount"], 0);
+    assert_eq!(body["platformDescriptor"]["containerCount"], 1);
+    assert_eq!(body["platformDescriptor"]["containersRunning"], 1);
     assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 1);
 
     let persisted: (i64, i64, i64) = sqlx::query_as(
@@ -407,7 +409,7 @@ async fn agent_setup_request(
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
     let suffix = Uuid::now_v7().simple().to_string();
     let name = format!("agent-{suffix}");
@@ -457,7 +459,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn swarm_manager_creation_persists_cluster_metadata_without_inline_inventory() {
     let suffix = Uuid::now_v7().simple().to_string();
     let cluster_id = format!("cluster-{suffix}");
@@ -499,7 +501,7 @@ async fn swarm_manager_creation_persists_cluster_metadata_without_inline_invento
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_types() {
     let authentication = harness(StaticInfo::error(
         RuntimeErrorKind::Authentication,
@@ -601,7 +603,7 @@ async fn platform_creation_preserves_runtime_errors_and_rejects_invalid_daemon_t
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let suffix = Uuid::now_v7().simple().to_string();
     let daemon_id = format!("duplicate-daemon-{suffix}");
@@ -696,7 +698,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_creates() {
     let suffix = Uuid::now_v7().simple().to_string();
     let invalid_tag = harness(StaticInfo::standalone(format!("tag-daemon-{suffix}"))).await;
@@ -772,7 +774,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_patch_reports_json_field_errors_without_writes() {
     let suffix = Uuid::now_v7().simple().to_string();
     let harness = harness(StaticInfo::standalone(format!("daemon-{suffix}"))).await;
@@ -836,8 +838,8 @@ struct TestHarness {
 }
 
 async fn harness(inventory: StaticInfo) -> TestHarness {
-    let database_url = std::env::var("CITADEL_PHASE4_DATABASE_URL")
-        .expect("CITADEL_PHASE4_DATABASE_URL is required for this fixture");
+    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
+        .expect("CITADEL_PLATFORM_DATABASE_URL is required for this fixture");
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)

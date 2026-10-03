@@ -31,9 +31,9 @@ impl Drop for Fixture {
 }
 
 #[tokio::test]
-#[ignore = "requires CITADEL_PHASE4_DATABASE_URL, Docker and an image containing citadel-volume-helper"]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL, Docker and an image containing citadel-volume-helper"]
 async fn local_volume_browser_uses_core_image_without_pulling_agent() {
-    let url = std::env::var("CITADEL_PHASE4_DATABASE_URL").unwrap();
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(3)
