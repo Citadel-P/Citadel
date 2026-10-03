@@ -17,6 +17,15 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 
 </details>
 
+<details>
+<summary>Swarm services and replica configuration</summary>
+
+![Citadel Swarm overview with three healthy services and their running replica counts](docs/public/screenshots/swarm-services.png)
+
+![Citadel Swarm service configuration showing replica settings and deployment controls](docs/public/screenshots/swarm-service-config.png)
+
+</details>
+
 ## What you can do
 
 - **Deploy applications** — manage containers and Compose stacks, deploy from Git, roll back releases, and check configuration drift.
