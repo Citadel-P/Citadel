@@ -1,32 +1,196 @@
-# Agent protocol and deployment profiles
+# Agent protocol
 
-This document records the Direct/Edge operation contract and restricted Swarm-node
-policy. Contract and Agent tests validate the inventory against generated descriptors
-and the runtime allowlist.
+This is the developer reference for Core/Agent transport, authentication and
+Swarm-node restrictions. For image builds and local setup, see
+[Agent development](DEVELOPMENT.md#agent-development).
 
-## Operations
+## Transports
 
-There are 68 Direct RPCs and 68 corresponding nonzero Edge command kinds.
-`EdgeAgentService/Connect` is a separate bidirectional connection lifecycle:
-`citadel.edge.v1.AgentEnvelope` to `citadel.edge.v1.CoreEnvelope`, protocol 2.
-Core intake, Agent connection lifecycle and all ordinary/Build Pool command kinds
-are implemented. An exhaustive Rust match and decoder coverage test enforce the
-command mapping independently of the advertised capabilities.
-`EDGE_COMMAND_KIND_UNSPECIFIED = 0` and unknown command numbers must be rejected.
+| Transport | Connection | Authentication |
+| --- | --- | --- |
+| Direct | Core calls the Agent's gRPC listener | Signed requests verified with `HUB_PUBLIC_KEY` |
+| Edge | Agent connects to Core's Edge gRPC listener | Enrollment and persisted session identity |
 
-The table is checked against compiled protobuf descriptors by
-`citadel-contracts/tests/agent_protocol.rs`, including message types, streaming,
-command numbers, missing and duplicate entries. Runtime references below are
-relative to `src/infrastructure/adapters/src`; they identify reusable pieces,
-with the behavior checks described below. Every operation also requires G0,
-G1 and, in the Swarm-node profile, G8.
+Both transports expose the same 68 operations. Edge carries commands through
+`EdgeAgentService/Connect`, a bidirectional stream from
+`citadel.edge.v1.AgentEnvelope` to `citadel.edge.v1.CoreEnvelope`. Its protocol
+version is **2**. Command number 0 and unknown command numbers are rejected.
 
-Ordinary Edge and Edge Build Pool use the full dispatcher. The Swarm column
-records the reference command policy: allowed, denied, helper-only or
-restore-only. Capability advertisements are **not** the authorization allowlist.
+The Agent runs without PostgreSQL. It maps requests onto shared Docker and
+external-tool implementations; Core owns persisted resource and user state.
+
+## Deployment profiles
+
+All profiles use the same Agent image. Build Pools do not have a separate transport.
+
+| Profile | Mode / profile setting | Core resource | Listener | Template |
+| --- | --- | --- | --- | --- |
+| Direct | Default mode | Platform | Direct RPCs and health on `0.0.0.0` | [Direct](../deploy/.env.agent.example) |
+| Direct Build Pool | Default mode | BuildAgentPool | Direct RPCs and health on `0.0.0.0` | [Build Pool](../deploy/.env.build-agent.example) |
+| Edge | `edge` / `edge-agent` (default) | Platform | Health on loopback only | [Edge](../deploy/.env.edge.example) |
+| Edge Build Pool | `edge` / `edge-build-agent` | BuildAgentPool | Health on loopback only | [Edge Build Pool](../deploy/.env.edge-build-agent.example) |
+| Swarm-node | `edge` / `swarm-node` | Platform and node identity | Health on loopback only | Injected by Core's node-agent installer |
+
+`CITADEL_AGENT_MODE` selects the transport; `CITADEL_EDGE_AGENT_PROFILE` selects
+an Edge profile. Swarm-node credentials cannot enroll as an ordinary Edge Agent.
+The default listener port is 9000. `/health` is unsigned process liveness, not
+proof of Docker reachability or an established Core session.
+
+## Configuration
+
+Read configuration once at startup. Docker can load the templates with
+`--env-file`; the Agent does not load dotenv files implicitly.
+
+| Variable | Default / requirement | Applies to |
+| --- | --- | --- |
+| CITADEL_AGENT_MODE | case-insensitive `edge` selects Edge; otherwise Direct; whitespace is not trimmed | all |
+| CITADEL_AGENT_PORT | 9000 when absent/blank; otherwise integer 1–65535 | all; health listener in Edge |
+| HUB_PUBLIC_KEY | required base64 raw Ed25519 public key | Direct |
+| CITADEL_AGENT_TLS_MODE | Disabled; accepts Disabled or Direct after trimming, case-insensitive; reject numeric/unknown values | Direct |
+| CITADEL_AGENT_TLS_CERTIFICATE_PATH | required for Direct TLS; reject when TLS disabled | Direct |
+| CITADEL_AGENT_TLS_PRIVATE_KEY_PATH | required for Direct TLS; reject when TLS disabled | Direct |
+| CITADEL_CORE_URL | required absolute HTTP(S) origin; no credentials, nonroot path, query or fragment | Edge |
+| CITADEL_EDGE_ENROLLMENT_TOKEN | required to enroll; persisted identity permits reconnection | ordinary Edge / Edge Build Pool |
+| CITADEL_EDGE_AGENT_PROFILE | edge-agent; accepts edge-agent, edge-build-agent, swarm-node after trimming, case-insensitive | Edge |
+| CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH | optional PEM CA; HTTPS only; additive trust with hostname verification | Edge |
+| CITADEL_EDGE_AGENT_KEY_PATH | /app/data/edge-agent.key when unset | Edge |
+| CITADEL_EDGE_IDENTITY_PATH | /app/data/edge-agent.identity.json when unset | Edge |
+| CITADEL_EDGE_BOOTSTRAP_FILE | required bootstrap file | Swarm-node |
+| CITADEL_PLATFORM_ID | required platform identity | Swarm-node |
+| CITADEL_SWARM_SERVICE_ID | required service identity | Swarm-node |
+| CITADEL_SWARM_TASK_ID | required task identity | Swarm-node |
+| CITADEL_SWARM_NODE_ID | required node identity | Swarm-node |
+| CITADEL_SWARM_NODE_HOSTNAME | required node hostname | Swarm-node |
+| CITADEL_SWARM_CLUSTER_ID | required cluster identity | Swarm-node |
+| DOCKER_HOST | unix:///var/run/docker.sock; Unix sockets and TCP/HTTP endpoints are supported by the Linux Agent | all |
+| CITADEL_HOST_ROOT | /host; optional host filesystem mount for disk usage | all |
+| RUST_LOG | citadel_agent=info; optional tracing filter | all; Rust host diagnostics |
+
+Edge ignores Direct TLS settings and does not require `HUB_PUBLIC_KEY`. Profile,
+bootstrap metadata and optional CA inputs are trimmed. Key and identity paths use
+defaults only when unset; an explicit empty value is not a default.
+
+The selected Docker endpoint applies to requests, streams, exec and Docker CLI
+work. Unsupported transports fail configuration; there is no fallback to another
+daemon. The Linux Agent does not support Docker HTTPS endpoints or Windows named
+pipes. This is separate from HTTPS support for Core/Agent connections.
+
+## Direct authentication
+
+Requests are signed with Ed25519. The signature covers the timestamp, nonce,
+method path and SHA-256 hash of the serialized request. Binary metadata has fixed
+lengths: timestamp 8 bytes, nonce 16, body hash 32 and signature 64.
+
+The Agent accepts a timestamp skew of ±60 seconds. Replay protection is atomic,
+retains nonces through the last accepted timestamp second, and is capped at
+65,536 entries. A full cache rejects new requests rather than evicting a nonce
+that could still be replayed.
+
+For interactive Exec, the first signed message must be `Open` and arrive within
+10 seconds. Authentication completes before Docker execution. Preserve the
+verified message when handing the stream to the handler; resize-first input
+must not bypass authentication.
+
+Implementation: [direct/auth.rs](../src/agent/src/direct/auth.rs).
+
+## Edge lifecycle and limits
+
+Ordinary Edge and Edge Build Pool enroll once and persist a private key and
+identity file. Keep both files across restarts. Corrupt state fails startup and
+is left untouched. A changed enrollment-token fingerprint resets ordinary
+identity and key state; Swarm-node identity comes from its bootstrap credential.
+
+HTTPS validates trusted roots and Core's hostname. An optional CA file adds
+trust without disabling verification. Core's URL must target its Edge gRPC
+listener and be reachable from the Agent host.
+
+| Limit | Value |
+| --- | --- |
+| Envelope payload | 16 MiB |
+| Active commands per session | 16 |
+| Input queue per command | 256 messages, with a separate byte bound |
+| Outgoing queue | 512 messages |
+| Heartbeat interval | 30 seconds |
+| HTTP/2 keepalive | 30 seconds, with a 10-second timeout |
+| Reconnect backoff | Starts at 1 second; base delay caps at 60 seconds, with jitter |
+
+Commands have deadlines and cancellation. Disconnect or shutdown cancels work
+owned by the session. SIGTERM and Ctrl+C stop listeners and outbound work with
+a ten-second shutdown limit. These limits are implementation constants, not
+additional deployment settings.
+
+Implementation: [edge/](../src/agent/src/edge/).
+
+## Swarm-node restrictions and capabilities
+
+Ordinary Edge and Edge Build Pool use the full command dispatcher. Swarm-node
+uses an explicit allowlist and validates the configured node identity before
+Docker calls. The operation table below distinguishes:
+
+- **allowed**: available to the restricted profile, subject to request validation;
+- **denied**: unavailable to Swarm-node Agents;
+- **helper-only**: only validated Citadel helper containers and commands;
+- **restore-only**: only owned backup-restore volumes, with safe removal checks.
+
+Helper requests validate ownership, image, mounts, privileges and exact commands.
+Binary exec inspects the helper and executes by immutable container ID. Restore
+volume deletion checks for container references, including stopped containers.
+
+Capability advertisements are discovery hints, not authorization. Ordinary Edge
+and Edge Build Pool advertise the same capabilities. Swarm-node advertises a
+smaller set; guarded restore-volume operations are intentionally available without
+advertising general volume creation/deletion.
+
+The current strings live in [edge/observation.rs](../src/agent/src/edge/observation.rs).
+Policy and helper guards live in [edge/swarm_policy.rs](../src/agent/src/edge/swarm_policy.rs)
+and [edge/swarm_guard.rs](../src/agent/src/edge/swarm_guard.rs).
+
+## Verification
+
+Run the contract and configuration checks from the repository root:
+
+```bash
+cargo test --locked -p citadel-contracts
+cargo test --locked -p citadel-agent --test configuration
+cargo test --locked -p citadel-agent --lib
+```
+
+Contract tests compare the operation table with compiled protobuf descriptors:
+RPC names, message types, streaming shape, Edge command numbers and completeness.
+They also check environment-template coverage. Agent unit tests compare the
+Swarm-node policy with every operation row.
+
+Registration and unit tests do not establish live interoperability. Use the
+[Agent image, compatibility and acceptance runners](DEVELOPMENT.md#agent-development)
+for packaged runtime behavior. Mixed-version verification additionally requires
+a released Agent image.
+
+When changing the protocol, update protobufs, mappings, this inventory and affected
+tests together. Preserve existing field numbers and command numbers unless making
+an explicitly coordinated protocol change.
+
+## Operation reference
+
+The protobuf sources are authoritative:
+[src/infrastructure/contracts/proto/](../src/infrastructure/contracts/proto/).
+Direct handlers live in [src/agent/src/direct/](../src/agent/src/direct/).
+Runtime reference paths below are relative to `src/infrastructure/adapters/src/`.
+
+The final column identifies the behavior checks that apply. Every operation also
+requires G0 and G1; Swarm-node operations additionally require G8.
+
+- **G0 — Docker endpoint:** use the configured endpoint for HTTP, streams, exec and CLI work; reject unsupported transports and never fall back to another daemon.
+- **G1 — Agent boundaries:** preserve protobuf presence, defaults and complete responses; enforce authentication, deadlines, cancellation and error translation.
+- **G2 — Lists and filters:** preserve request filters, limits, Swarm scope, empty lists and volume warnings/usage.
+- **G3 — Exec:** preserve binary framing, TTY, environment, user, resize, half-close and exit status; bound input and output.
+- **G4 — Streams and sampling:** honor sampling intervals, bounded queues, cancellation and stream completion; propagate failure without reporting success.
+- **G5 — Images/builds:** validate context paths and build options; isolate credentials, redact output and support independent build/push operations.
+- **G6 — Apply:** execute deployment and stack operations without a database; preserve resource settings, registry auth, secret files, progress and cleanup.
+- **G7 — Swarm mutations:** enforce version concurrency, labels, restart updates and managed/system-service constraints.
+- **G8 — Swarm-node guards:** enforce the allowlist before Docker calls; validate helper ownership, images, privileges, mounts and commands; remove only unused owned restore volumes.
 
 <!-- operations -->
-| RPC | Request | Response | Stream | Edge command | Number | Swarm | Reuse | Gap |
+| RPC | Request | Response | Stream | Edge command | Number | Swarm | Runtime reference | Checks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | citadel.containers.v1.ContainerService/List | citadel.containers.v1.ListContainersRequest | citadel.containers.v1.ListContainersResponse | unary | CONTAINER_LIST | 10 | allowed | connectors/docker/finite.rs:list_container_models | G2 |
 | citadel.containers.v1.ContainerService/Start | citadel.containers.v1.ContainerIds | google.protobuf.Empty | unary | CONTAINER_START | 14 | allowed | connectors/docker/finite.rs:start_container | G1 |
@@ -97,221 +261,3 @@ restore-only. Capability advertisements are **not** the authorization allowlist.
 | citadel.volumes.v1.VolumeService/Create | citadel.volumes.v1.CreateVolumeRequest | citadel.shared_models.v1.VolumeResponse | unary | VOLUME_CREATE | 52 | restore-only | connectors/docker/finite.rs:create_volume | G1 |
 | citadel.volumes.v1.VolumeService/Remove | citadel.volumes.v1.RemoveVolumeRequest | citadel.volumes.v1.RemoveVolumeResponse | unary | VOLUME_DELETE | 53 | restore-only | connectors/docker/finite.rs:delete_volume | G1 |
 <!-- /operations -->
-
-## Behavior checks
-
-- **G0 — Docker endpoint:** use the configured endpoint for HTTP, streams, exec and CLI work; reject unsupported transports and never fall back to another daemon.
-- **G1 — Agent boundaries:** preserve protobuf presence, defaults and complete responses; enforce authentication, deadlines, cancellation and error translation.
-- **G2 — Lists and filters:** preserve request filters, limits, Swarm scope, empty lists and volume warnings/usage.
-- **G3 — Exec:** preserve binary framing, TTY, environment, user, resize, half-close and exit status; bound input and output.
-- **G4 — Streams and sampling:** honor sampling intervals, bounded queues, cancellation and stream completion; propagate failure without reporting success.
-- **G5 — Images/builds:** validate context paths and build options; isolate credentials, redact output and support independent build/push operations.
-- **G6 — Apply:** execute deployment and stack operations without a database; preserve resource settings, registry auth, secret files, progress and cleanup.
-- **G7 — Swarm mutations:** enforce version concurrency, labels, restart updates and managed/system-service constraints.
-- **G8 — Swarm-node guards:** enforce the allowlist before Docker calls; validate helper ownership, images, privileges, mounts and commands; remove only unused owned restore volumes.
-
-## Deployment profiles
-
-| Deployment | Mode selection | Profile selection | Wire profile | Core resource | Listener | Template |
-| --- | --- | --- | --- | --- | --- | --- |
-| Regular inbound | unset/default | unused | none | Platform | inbound Direct RPCs and health | `deploy/.env.agent.example` |
-| Inbound Build Pool | unset/default | unused | none | BuildAgentPool | same Direct RPCs and health | `deploy/.env.build-agent.example` |
-| Edge | edge | edge-agent/default | Ordinary | Platform | loopback health only | `deploy/.env.edge.example` |
-| Edge Build Pool | edge | edge-build-agent | Ordinary | BuildAgentPool | loopback health only | `deploy/.env.edge-build-agent.example` |
-| Swarm-node | edge | swarm-node | SwarmNode | Platform plus node identity | loopback health only | generated service environment/bootstrap |
-
-The four templates are preserved at the Rust workspace root and checked for
-required assignments and separation of credentials. They describe deployment
-inputs. There is no `build` transport mode. Edge Build Pool shares the ordinary
-connection lifecycle and command dispatcher, and persists `BuildAgentPool` session
-identity. Swarm-node never enrolls as
-an ordinary standalone Edge Agent.
-
-Configuration tests cover all five profiles, invalid combinations, persisted
-Platform/Build Pool identity and injected Swarm identity.
-
-## Environment
-
-Read configuration once at startup. Templates are passed with Docker
-`--env-file`; the Agent must not add implicit dotenv loading. Blank/default
-behavior is part of the configuration contract; validation changes need tests.
-
-| Variable | Default / requirement | Applies to |
-| --- | --- | --- |
-| CITADEL_AGENT_MODE | only case-insensitive `edge` selects Edge; otherwise Direct; no trimming in reference | all |
-| CITADEL_AGENT_PORT | 9000 when absent/blank; otherwise integer 1–65535 | all; health listener in Edge |
-| HUB_PUBLIC_KEY | required base64 raw Ed25519 public key | Direct |
-| CITADEL_AGENT_TLS_MODE | Disabled; accepts Disabled or Direct after trimming, case-insensitive; reject numeric/unknown values | Direct |
-| CITADEL_AGENT_TLS_CERTIFICATE_PATH | required for Direct TLS; reject when TLS disabled | Direct |
-| CITADEL_AGENT_TLS_PRIVATE_KEY_PATH | required for Direct TLS; reject when TLS disabled | Direct |
-| CITADEL_CORE_URL | required absolute HTTP(S) origin; no credentials, nonroot path, query or fragment | Edge |
-| CITADEL_EDGE_ENROLLMENT_TOKEN | required to enroll; persisted identity permits reconnection | ordinary Edge / Edge Build Pool |
-| CITADEL_EDGE_AGENT_PROFILE | edge-agent; accepts edge-agent, edge-build-agent, swarm-node after trimming, case-insensitive | Edge |
-| CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH | optional PEM CA; HTTPS only; additive trust with hostname verification | Edge |
-| CITADEL_EDGE_AGENT_KEY_PATH | /app/data/edge-agent.key when unset | Edge |
-| CITADEL_EDGE_IDENTITY_PATH | /app/data/edge-agent.identity.json when unset | Edge |
-| CITADEL_EDGE_BOOTSTRAP_FILE | required bootstrap file | Swarm-node |
-| CITADEL_PLATFORM_ID | required platform identity | Swarm-node |
-| CITADEL_SWARM_SERVICE_ID | required service identity | Swarm-node |
-| CITADEL_SWARM_TASK_ID | required task identity | Swarm-node |
-| CITADEL_SWARM_NODE_ID | required node identity | Swarm-node |
-| CITADEL_SWARM_NODE_HOSTNAME | required node hostname | Swarm-node |
-| CITADEL_SWARM_CLUSTER_ID | required cluster identity | Swarm-node |
-| DOCKER_HOST | platform default: unix:///var/run/docker.sock on Linux; named pipe on Windows | all |
-| CITADEL_HOST_ROOT | /host; optional host filesystem mount for disk usage | all |
-| RUST_LOG | citadel_agent=info; optional tracing filter | all; Rust host diagnostics |
-
-Edge ignores Direct TLS fields and does not require `HUB_PUBLIC_KEY`. Profile,
-bootstrap metadata and optional CA inputs are trimmed. Key/identity paths use
-unset-only defaults; explicit empty values must not silently select defaults.
-Changing the ordinary enrollment-token fingerprint resets its persisted identity
-and key; Swarm bootstrap remains authoritative for Swarm-node identity.
-`ASPNETCORE_ENVIRONMENT` is intentionally absent: it configures a runtime that the
-Rust Agent does not use. Internal queue sizes are not operator template settings.
-
-## Authentication and lifecycle baseline
-
-Direct signatures cover timestamp, nonce, method path and the SHA-256 of the
-serialized request. Required binary metadata lengths are signature 64, timestamp
-8, nonce 16 and hash 32 bytes; timestamp skew is ±60 seconds. The signed first
-Exec message must be `Open` and arrive within 10 seconds before Docker work
-begins. The verified opening message must then be replayed to the handler.
-Resize buffering must not allow an unauthenticated resize-first Direct request.
-
-Reference nonce retention expires at signed timestamp plus skew plus one second.
-The Rust implementation must add the specification's explicit cache bound without
-prematurely evicting accepted nonces inside the replay window. Test saturation,
-replays, changed payloads/methods and invalid first stream messages.
-
-Edge limits: 16 MiB payload, 16 active commands per session, input queue 256,
-outgoing queue 512, heartbeat 30 seconds, keepalive 30 seconds with 10-second
-timeout. Reconnect starts at 1 second, caps at 60 seconds and uses jitter. Test
-queue saturation, session changes, cancellation, disconnected streams and
-identity persistence. These are implementation limits, not new environment knobs.
-
-## Capability advertisements
-
-Ordinary Edge and Edge Build Pool advertise the same 49 command capabilities.
-Swarm-node advertises 19. Preserve these strings until deliberate protocol review;
-they are discovery hints, not a substitute for dispatcher authorization.
-
-Ordinary / Edge Build Pool:
-
-```text
-platform.checkHealth
-platform.getInfo
-platform.stats
-platform.events
-platform.prune
-containers.list
-containers.logs
-containers.inspect
-containers.create
-containers.patch
-containers.delete
-containers.stats
-containers.exec
-containers.execBinary
-images.get
-images.list
-images.inspect
-images.delete
-images.history
-images.exposedPorts
-images.distributionInspect
-images.pull
-images.build
-images.push
-images.checkBuildHost
-volumes.list
-volumes.inspect
-volumes.create
-volumes.delete
-networks.list
-networks.inspect
-networks.create
-networks.delete
-stacks.apply
-deployments.apply
-swarm.nodes.list
-swarm.nodes.inspect
-swarm.services.list
-swarm.services.inspect
-swarm.services.logs
-swarm.tasks.list
-swarm.tasks.inspect
-swarm.tasks.logs
-swarm.networks.list
-swarm.networks.inspect
-swarm.secrets.list
-swarm.secrets.inspect
-swarm.configs.list
-swarm.configs.inspect
-```
-
-Swarm-node:
-
-```text
-platform.checkHealth
-platform.getInfo
-platform.stats
-platform.events
-containers.list
-containers.logs
-containers.inspect
-containers.patch
-containers.delete
-containers.stats
-containers.exec
-containers.createHelper
-containers.execBinaryHelper
-images.list
-images.inspect
-volumes.list
-volumes.inspect
-networks.list
-networks.inspect
-```
-
-The reference dispatcher permits guarded backup-restore volume creation/deletion
-without advertising general `volumes.create`/`volumes.delete` in Swarm-node mode.
-It also permits constrained backup helpers in addition to volume-browser helpers.
-Preserve these guards; do not derive an unrestricted allowlist from capability
-names or remove working backup behavior based on the shorter specification list.
-
-## Direct implementation
-
-`agent/src/direct` implements all 68 RPCs in the table above. G0/G1 authentication
-and wire boundaries are active for Direct mode: Ed25519, timestamp skew, body hash,
-atomic replay rejection, map-field byte preservation, size limits and deadlines.
-Health remains unsigned. HTTP/2 works with the shared health listener over HTTP
-and TLS; transport does not add a database dependency.
-
-Direct handlers map G2–G7 onto the shared runtime: optional values and 64-bit
-fields, filtered inventory, statistics/events, logs, interactive/binary exec,
-image build/pull/push, deployment observation, Compose/Swarm apply and Swarm
-mutations. Private staging and credential files have drop cleanup; successful
-Compose mounts retain their required secret files. Swarm conversion failures
-restore Compose without deleting volumes.
-
-The automated suite checks registration/authentication for every RPC, signed
-Core-client map requests, representative wire behavior, transport rejection,
-stream cleanup and TLS. The opt-in real Docker fixture covers Core platform info,
-container inventory, statistics/events, container lifecycle, both exec modes,
-logs, image inspection, network/volume operations and deployment apply.
-The compatibility fixture exercises live Swarm-cluster mutations and an
-authenticated disposable registry with the packaged Agent. Mixed-version binary
-interoperability remains an explicit gate; registration tests alone do not
-establish it.
-
-The Swarm-node dispatcher implements G8 with an explicit allowlist tested against every row above.
-Node IDs must match the configured identity. Helper creation requires platform
-ownership and exact mount, privilege and command constraints. Binary exec verifies
-the inspected helper configuration and executes by immutable container ID. Mount
-driver options, conflicting ownership labels and arbitrary shell/environment
-overrides are rejected. Backup exec accepts Core's supported S3 restic commands
-and flags; restore-volume creation/deletion checks ownership and container use.
-The packaged Rust helper passed live Docker listing, binary streaming, symlink
-rejection and cleanup tests through the restricted dispatcher. This test uses a
-node identity fixture, not a live Swarm cluster.
-
