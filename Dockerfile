@@ -29,16 +29,17 @@ WORKDIR /source
 ENV SQLX_OFFLINE=true
 
 FROM rust-source AS volume-helper-build
-RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=citadel-volume-helper-target,target=/source/target \
+# Cargo's package-cache lock lives outside these shared registry/git directories.
+RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=citadel-volume-helper-target,target=/source/target,sharing=locked \
     cargo build --locked --release -p citadel-volume-helper \
     && cp target/release/citadel-volume-helper /tmp/citadel-volume-helper
 
 FROM rust-source AS build
-RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=citadel-rust-target,target=/source/target \
+RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=citadel-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=citadel-rust-target,target=/source/target,sharing=locked \
     cargo build --locked --release -p citadel-server --bin citadel-server \
     && cp target/release/citadel-server /tmp/citadel-server
 
