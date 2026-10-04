@@ -6,6 +6,7 @@ import { server } from '@/test/server';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { createStack } from '@/test/factories/resources';
 import { useStackGroup } from './useStackGroup';
+import { useRead } from '@/lib/hooks';
 
 const initial = createStack();
 const activity = {
@@ -90,4 +91,45 @@ describe('useStackGroup recovery', () => {
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('Healthy'));
     expect(screen.getByTestId('activity')).toHaveTextContent('null');
   });
+});
+
+it('does not refetch drift for processing or deleted stacks, but still refreshes normal updates', async () => {
+  const stack = { id: 'stack-1', name: 'Demo stack', status: 'Healthy', controlState: 'Idle' };
+  const drift = vi.fn(() => HttpResponse.json({ hasDrift: false, drifts: [] }));
+  server.use(
+    http.get('*/api/v1/stacks/stack-1', () => HttpResponse.json(stack)),
+    http.get('*/api/v1/stacks/stack-1/drift', drift),
+  );
+  function Probe() {
+    const { stack } = useStackGroup('stack-1');
+    const report = useRead('getStackDrift', { stackId: 'stack-1' });
+    return (
+      <output>
+        {stack?.name}: {report.isFetching ? 'checking' : 'ready'}
+      </output>
+    );
+  }
+  const fake = new FakeRealtimeConnection();
+  const view = renderCitadel(<Probe />, {
+    groups: {
+      connectionFactory: () => fake.asRealtimeConnection(),
+      startConnection: (connection) => connection.start(),
+    },
+  });
+  expect(await screen.findByText('Demo stack: ready')).toBeVisible();
+  await waitFor(() => expect(drift).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'stack:stack-1'));
+
+  await act(async () => fake.emit('StackInfoUpdated', { ...stack, controlState: 'Processing' }, 'update'));
+  expect(drift).toHaveBeenCalledTimes(1);
+
+  await act(async () => fake.emit('StackInfoUpdated', stack, 'update'));
+  await waitFor(() => expect(drift).toHaveBeenCalledTimes(2));
+  await screen.findByText('Demo stack: ready');
+
+  const invalidate = vi.spyOn(view.queryClient, 'invalidateQueries');
+  await act(async () => fake.emit('StackInfoUpdated', { id: 'stack-1' }, 'delete'));
+  expect(invalidate).not.toHaveBeenCalled();
+  expect(drift).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Demo stack: ready')).toBeVisible();
 });
