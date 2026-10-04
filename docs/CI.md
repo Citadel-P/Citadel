@@ -12,7 +12,12 @@ for matching `vMAJOR.MINOR.PATCH` tags on `main`.
 | Agent images | Native amd64 and arm64 validation, packaged runtime smoke checks, Direct/Edge/live Docker tests, complete Core/Agent acceptance, and released Agent compatibility when a baseline is configured |
 
 Rust dependency caches are separated between Core and Agent architectures. Agent
-compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
+jobs reclaim unused SDK space on disposable GitHub-hosted runners before building
+both production images. The cleanup is skipped on self-hosted runners. Database
+fixtures must use unique Docker service IDs because regression suites share one
+database and the production schema enforces uniqueness.
+
+Agent compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
 stage, then run inside the tested Agent image. Host-built binaries can require a
 newer glibc than that runtime and must not be substituted for the pinned build.
 The tests use disposable Docker services rather than the host engine as their target.
