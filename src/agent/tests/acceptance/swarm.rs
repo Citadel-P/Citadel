@@ -92,7 +92,11 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
     nested(
         f,
         "swarm-manager",
-        &["tag", image, "registry:5000/citadel-agent:acceptance-native"],
+        &[
+            "tag",
+            image,
+            "registry:5000/citadel-agent:acceptance-native",
+        ],
     )
     .await;
     nested(
