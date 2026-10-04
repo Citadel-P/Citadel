@@ -235,6 +235,19 @@ describe('Stack subheader', () => {
     useReadMock.mockReturnValue({ data: undefined, error: undefined });
   });
 
+  it('disables drift reads while a stack operation is processing', () => {
+    useReadMock.mockClear();
+    const SubHeader = StackFormComponents.EditForm!.SubHeader!;
+    const resource = {
+      ...stack(PlatformType.Docker),
+      status: StackReleaseStatus.Healthy,
+      controlState: ResourceControlState.Processing,
+      driftPolicy: { mode: StackDriftMode.DetectOnly },
+    } as StackView;
+    renderCitadel(<SubHeader resource={resource} />);
+    expect(useReadMock).toHaveBeenCalledWith('getStackDrift', { stackId: resource.id }, { enabled: false });
+  });
+
   it('keeps the drift guidance for a Standalone Stack', () => {
     const SubHeader = StackFormComponents.EditForm!.SubHeader!;
 

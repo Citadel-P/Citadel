@@ -783,7 +783,11 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
   const driftEligibleStatus =
     stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
-  const queryEnabled = !isSwarmStack && !driftDetectionDisabled && driftEligibleStatus;
+  const queryEnabled =
+    !isSwarmStack &&
+    !driftDetectionDisabled &&
+    driftEligibleStatus &&
+    stack.controlState !== ResourceControlState.Processing;
   const { data, error } = useRead('getStackDrift', { stackId: stack.id }, { enabled: queryEnabled });
   const report = data?.data;
 
