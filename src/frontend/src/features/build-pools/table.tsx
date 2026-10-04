@@ -98,13 +98,7 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
   },
 ];
 
-const BuildPoolNameRow = ({
-  pool,
-  formatDateTime,
-}: {
-  pool: AuthorizedPool;
-  formatDateTime: DateTimeFormatter;
-}) => (
+const BuildPoolNameRow = ({ pool, formatDateTime }: { pool: AuthorizedPool; formatDateTime: DateTimeFormatter }) => (
   <div className="flex min-w-0 items-center gap-1">
     <StateIndicator
       value={pool.lastValidationStatus}
@@ -112,6 +106,11 @@ const BuildPoolNameRow = ({
       isProcessing={pool.controlState === ResourceControlState.Processing}
       tooltip={<ValidationTooltip pool={pool} formatDateTime={formatDateTime} />}
     />
+    {pool.connectionStatus && (
+      <span className="text-xs text-muted-foreground" title="Edge Agent connection status">
+        {pool.connectionStatus}
+      </span>
+    )}
     <Link to={`../build-pools/edit/${pool.id}`} title={pool.name} className="truncate text-sm hover:underline">
       {pool.name}
     </Link>
@@ -140,13 +139,7 @@ const ProviderCell = ({ pool }: { pool: AuthorizedPool }) => {
   );
 };
 
-const ValidationTooltip = ({
-  pool,
-  formatDateTime,
-}: {
-  pool: AuthorizedPool;
-  formatDateTime: DateTimeFormatter;
-}) => {
+const ValidationTooltip = ({ pool, formatDateTime }: { pool: AuthorizedPool; formatDateTime: DateTimeFormatter }) => {
   const testedAt = pool.lastValidatedAt ? formatDateTime(pool.lastValidatedAt) : 'Not tested yet';
 
   return (

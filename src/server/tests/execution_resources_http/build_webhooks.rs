@@ -22,6 +22,7 @@ impl BuildEntitlements for Entitlement {
 // queue cases through the real HTTP route and PostgreSQL transaction boundary.
 pub async fn verify(
     app: &Router,
+    hub: &RealtimeHub,
     pool: &sqlx::PgPool,
     builds: &BuildService,
     entitlement: &Entitlement,
@@ -47,12 +48,13 @@ pub async fn verify(
     let url = format!("/listener/generic/build/{id}/run");
     for token in [None, Some("Bearer wrong")] {
         assert_eq!(
-            send(app, &url, token, json!({})).await.status(),
+            send(app, hub, &url, token, json!({})).await.status(),
             StatusCode::UNAUTHORIZED
         );
     }
     assert_eq!(
-        response_json(send(app, &url, Some("Bearer build-hook-test"), json!({})).await).await["status"],
+        response_json(send(app, hub, &url, Some("Bearer build-hook-test"), json!({})).await).await
+            ["status"],
         "noop"
     );
     assert!(builds.store().get(id).await.unwrap().latest_run.is_none());
@@ -63,7 +65,8 @@ pub async fn verify(
         json!({"repository":"https://example.test/unrelated.git","changedPaths":["src/main.rs"]}),
     ] {
         assert_eq!(
-            response_json(send(app, &url, Some("Bearer build-hook-test"), payload).await).await["status"],
+            response_json(send(app, hub, &url, Some("Bearer build-hook-test"), payload).await)
+                .await["status"],
             "noop"
         );
         assert!(builds.store().get(id).await.unwrap().latest_run.is_none());
@@ -73,6 +76,7 @@ pub async fn verify(
     assert_eq!(
         send(
             app,
+            hub,
             &url,
             Some("Bearer build-hook-test"),
             json!({"commitSha":"--help"})
@@ -82,8 +86,17 @@ pub async fn verify(
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        response_json(send(app, &url, Some("Bearer build-hook-test"), payload.clone()).await).await
-            ["status"],
+        response_json(
+            send(
+                app,
+                hub,
+                &url,
+                Some("Bearer build-hook-test"),
+                payload.clone()
+            )
+            .await
+        )
+        .await["status"],
         "queued"
     );
     let queued = builds.store().get(id).await.unwrap();
@@ -107,8 +120,17 @@ pub async fn verify(
             .unwrap();
     assert_eq!(triggered_by, SYSTEM_ACTOR_ID);
     assert_eq!(
-        response_json(send(app, &url, Some("Bearer build-hook-test"), payload.clone()).await).await
-            ["status"],
+        response_json(
+            send(
+                app,
+                hub,
+                &url,
+                Some("Bearer build-hook-test"),
+                payload.clone()
+            )
+            .await
+        )
+        .await["status"],
         "noop"
     );
     assert_eq!(
@@ -140,7 +162,7 @@ pub async fn verify(
         Err(BuildError::Conflict(_))
     ));
     assert_eq!(
-        send(app, &url, Some("Bearer build-hook-test"), payload)
+        send(app, hub, &url, Some("Bearer build-hook-test"), payload)
             .await
             .status(),
         StatusCode::NOT_FOUND
@@ -151,20 +173,53 @@ pub async fn verify(
 
 async fn send(
     app: &Router,
+    hub: &RealtimeHub,
     url: &str,
     token: Option<&str>,
     body: Value,
 ) -> axum::response::Response {
+    let mut notifications = hub.subscribe();
     let mut request = Request::builder().method(Method::POST).uri(url);
     if let Some(token) = token {
         request = request.header("authorization", token);
     }
-    app.clone()
+    let response = app
+        .clone()
         .oneshot(
             request
                 .body(Body::from(serde_json::to_vec(&body).unwrap()))
                 .unwrap(),
         )
         .await
+        .unwrap();
+    // Every persisted delivery (queued, skipped, or rejected) must wake the
+    // open project, run list, and activity feed even without a worker event.
+    let mut latest = None;
+    while let Ok(event) = notifications.try_recv() {
+        if event.resource_type() == "Build" {
+            latest = Some(event);
+        }
+    }
+    let event = latest.expect("webhook realtime update");
+    let id = url.split('/').nth(4).unwrap();
+    for group in [
+        format!("build-project:{id}"),
+        format!("build-runs:{id}"),
+        format!("activity:Build:{id}"),
+    ] {
+        assert!(
+            citadel_server::realtime_groups::Group::parse(&group)
+                .unwrap()
+                .affected_by(&event)
+        );
+    }
+    assert!(
+        !citadel_server::realtime_groups::Group::parse(&format!(
+            "activity:Build:{}",
+            Uuid::now_v7()
+        ))
         .unwrap()
+        .affected_by(&event)
+    );
+    response
 }

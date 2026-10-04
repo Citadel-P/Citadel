@@ -99,3 +99,64 @@ fn rule_status_defaults_to_enabled_and_preserves_disabled_in_audit_snapshots() {
         assert!(serde_json::from_value::<AlertRuleConfiguration>(value).is_err());
     }
 }
+
+#[test]
+fn build_pool_availability_grace_is_configurable_and_recovery_never_matches() {
+    let mut input: AlertRuleConfiguration = serde_json::from_value(serde_json::json!({
+        "type":"BuildAgentPoolUnavailable", "severity":"Warning"
+    }))
+    .unwrap();
+    input.validate_create().unwrap();
+    let now = chrono::Utc::now();
+    let mut rule = AlertRule {
+        id: Uuid::now_v7(),
+        name: input.name,
+        description: None,
+        alert_type: input.alert_type,
+        severity: input.severity,
+        cooldown_seconds: None,
+        required_matches: None,
+        threshold: None,
+        status: AlertRuleStatus::Enabled,
+        channel_ids: vec![],
+        limited_to: vec![],
+        quiet_hours: vec![],
+        audit: citadel_primitives::AuditMetadata {
+            created_at: now,
+            created_by_actor_id: citadel_primitives::ActorId::new(Uuid::from_u128(1)),
+        },
+    };
+    let mut observation = AlertObservation {
+        alert_type: rule.alert_type.clone(),
+        info: serde_json::json!({}),
+        resource_id: Uuid::now_v7(),
+        resource_name: "builder".into(),
+        resource_type: "BuildAgentPool".into(),
+        deduplication_component: "availability".into(),
+        observed_at: now,
+        value: Some(89.9),
+        matched: true,
+    };
+    assert!(!rules::evaluation::observation_matches(&rule, &observation));
+    observation.value = Some(90.0);
+    assert!(rules::evaluation::observation_matches(&rule, &observation));
+    rule.threshold = Some(120.0);
+    assert!(!rules::evaluation::observation_matches(&rule, &observation));
+    observation.value = Some(120.0);
+    assert!(rules::evaluation::observation_matches(&rule, &observation));
+    observation.matched = false;
+    rule.threshold = Some(0.0);
+    assert!(!rules::evaluation::observation_matches(&rule, &observation));
+    for (seconds, valid) in [
+        (-1.0, false),
+        (0.0, true),
+        (90.0, true),
+        (86400.0, true),
+        (86401.0, false),
+        (f64::NAN, false),
+    ] {
+        let mut configuration = AlertRuleConfiguration::from(&rule);
+        configuration.threshold = Some(seconds);
+        assert_eq!(configuration.validate_create().is_ok(), valid);
+    }
+}

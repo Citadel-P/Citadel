@@ -205,6 +205,179 @@ fn swarm_service_activity_uses_the_existing_dotnet_payload_shape() {
 }
 
 #[test]
+fn webhook_severity_distinguishes_expected_skips_from_blocked_deliveries() {
+    for resource in [
+        ActivityResourceType::Build,
+        ActivityResourceType::GitRepository,
+        ActivityResourceType::Stack,
+        ActivityResourceType::SwarmService,
+        ActivityResourceType::AutomationAction,
+        ActivityResourceType::BackupPolicy,
+    ] {
+        for (status, reason, expected) in [
+            (
+                "noop",
+                Some("Stack update notification queued."),
+                ActivityStatus::Success,
+            ),
+            ("noop", Some("Branch mismatch"), ActivityStatus::Information),
+            (
+                "noop",
+                Some("Stack is pinned to a commit."),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Stack Git updates are disabled."),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Service image updates are disabled."),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Service image is up to date."),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Automatic Apply is paused by license."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Image scanner is unavailable."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("No recent registry observation is available."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Automated operations require an active license entitlement."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Action is disabled, busy, or its webhook configuration changed."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Backup Policy is disabled, busy, or its webhook configuration changed."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Service is busy, unavailable, or changed during dispatch."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Repository webhook configuration changed during dispatch."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Stack webhook configuration changed during dispatch."),
+                ActivityStatus::Warning,
+            ),
+            ("queued", None, ActivityStatus::Success),
+            (
+                "noop",
+                Some("No relevant path changes"),
+                ActivityStatus::Information,
+            ),
+            ("noop", Some("No new commit"), ActivityStatus::Information),
+            (
+                "noop",
+                Some("Branch filter did not match"),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Unsupported event type"),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Build Project is disabled."),
+                ActivityStatus::Information,
+            ),
+            (
+                "noop",
+                Some("Repository identity mismatch"),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Build webhook requires an active license entitlement."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Build Project already has an active run."),
+                ActivityStatus::Warning,
+            ),
+            (
+                "noop",
+                Some("Build Project is busy or its configuration changed."),
+                ActivityStatus::Warning,
+            ),
+            ("noop", None, ActivityStatus::Warning),
+            (
+                "noop",
+                Some("An unclassified dispatch condition"),
+                ActivityStatus::Warning,
+            ),
+            (
+                "rejected",
+                Some("Webhook authentication failed."),
+                ActivityStatus::Failure,
+            ),
+            (
+                "rejected",
+                Some("Webhook commit must be a full commit ID."),
+                ActivityStatus::Failure,
+            ),
+            (
+                "rejected",
+                Some("Repository synchronization failed."),
+                ActivityStatus::Failure,
+            ),
+        ] {
+            let event = ActivityEvent::new_webhook_event(
+                Uuid::now_v7(),
+                "build".into(),
+                None,
+                resource,
+                WebhookActivityDetails {
+                    request_id: Uuid::now_v7(),
+                    auth_type: "github".into(),
+                    execution: "run".into(),
+                    status,
+                    reason,
+                    source: WebhookActivitySource::default(),
+                    dispatched_branch: None,
+                    dispatched_commit_sha: None,
+                },
+                Utc::now(),
+            )
+            .unwrap();
+            assert_eq!(event.status(), expected, "{status}: {reason:?}");
+            assert_eq!(event.resource_type(), resource);
+            let info = serde_json::to_value(event.info()).unwrap();
+            assert_eq!(info["Status"], status);
+            assert_eq!(info["Reason"], serde_json::json!(reason));
+        }
+    }
+}
+
+#[test]
 fn webhook_activities_keep_dotnet_discriminators_and_safe_shared_metadata() {
     for (resource, discriminator) in [
         (
@@ -213,6 +386,14 @@ fn webhook_activities_keep_dotnet_discriminators_and_safe_shared_metadata() {
         ),
         (ActivityResourceType::Stack, "StackWebhookReceived"),
         (ActivityResourceType::Build, "BuildWebhookReceived"),
+        (
+            ActivityResourceType::AutomationAction,
+            "ActionWebhookReceived",
+        ),
+        (
+            ActivityResourceType::BackupPolicy,
+            "BackupPolicyWebhookReceived",
+        ),
         (
             ActivityResourceType::SwarmService,
             "SwarmServiceWebhookReceived",

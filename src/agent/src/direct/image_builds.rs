@@ -231,7 +231,15 @@ esac"#,
                 .iter()
                 .any(|v| v.stream.as_ref().is_some_and(|s| s.contains("progress")))
         );
-        assert!(frames.last().unwrap().error_message.is_some());
+        assert_eq!(
+            frames.last().unwrap().error_message.as_deref(),
+            Some("Docker build failed with exit code 7. See the build output for details.")
+        );
+        let transcript: String = frames
+            .iter()
+            .filter_map(|frame| frame.stream.as_deref())
+            .collect();
+        assert_eq!(transcript.matches("progress").count(), 1);
         assert!(
             !frames
                 .iter()

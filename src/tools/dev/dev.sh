@@ -136,7 +136,12 @@ compose_up() {
   development_compose up -d --wait --wait-timeout 90 postgres
   # Recreate Core to remount the newly installed executable,
   # without restarting PostgreSQL or discarding either service's data.
-  development_compose up -d --no-deps --force-recreate --wait --wait-timeout 90 core
+  if ! development_compose up -d --no-deps --force-recreate --wait --wait-timeout 90 core; then
+    echo 'Core failed to start. Recent Core logs:' >&2
+    development_compose logs --no-color --tail 60 core >&2 || true
+    echo 'If the logs report AppliedChecksum, reconcile the existing database as described in docs/DEVELOPMENT.md (Database schema changes).' >&2
+    return 1
+  fi
   echo 'Core and PostgreSQL are running in Docker Compose project citadel-wsl.'
 }
 

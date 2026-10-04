@@ -14,6 +14,12 @@ pub fn rule_applies(rule: &AlertRule, resource_id: Uuid) -> bool {
 }
 
 pub fn observation_matches(rule: &AlertRule, observation: &AlertObservation) -> bool {
+    if rule.alert_type == "BuildAgentPoolUnavailable" {
+        return observation.matched
+            && observation.value.is_some_and(|seconds| {
+                seconds.is_finite() && seconds >= rule.threshold.unwrap_or(90.0)
+            });
+    }
     match (rule.threshold, observation.value) {
         (Some(threshold), Some(value)) => value.is_finite() && value >= threshold,
         (Some(_), None) => false,

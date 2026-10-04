@@ -1,4 +1,6 @@
-//! One LISTEN connection fans out fixed, capacity-one signals; timers recover missed notifications.
+//! One LISTEN connection fans out worker wakeups and committed connection events.
+use super::connection_events::{ConnectionEventHub, ConnectionNotification};
+use citadel_adapters::persistence::postgres::connection_events::{CHANNEL, ConnectionEvent};
 use citadel_runtime::RuntimeSignal;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::watch;
@@ -7,11 +9,13 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone)]
 pub(super) struct DatabaseNotificationHub {
     signals: Arc<[watch::Sender<()>; RuntimeSignal::ALL.len()]>,
+    pub connections: ConnectionEventHub,
 }
 impl DatabaseNotificationHub {
     pub fn new() -> Self {
         Self {
             signals: Arc::new(std::array::from_fn(|_| watch::channel(()).0)),
+            connections: ConnectionEventHub::new(256),
         }
     }
     pub fn subscribe(&self, signal: RuntimeSignal) -> watch::Receiver<()> {
@@ -26,6 +30,17 @@ impl DatabaseNotificationHub {
             let result = tokio::select! { ()=token.cancelled()=>return Ok(()), result=listener.try_recv()=>result };
             match result {
                 Ok(Some(notification)) => {
+                    if notification.channel() == CHANNEL {
+                        match serde_json::from_str::<ConnectionEvent>(notification.payload()) {
+                            Ok(event) => self
+                                .connections
+                                .publish(ConnectionNotification::Changed(event)),
+                            Err(error) => {
+                                tracing::warn!(%error, "Invalid connection event; refreshing subscribers");
+                                self.connections.publish(ConnectionNotification::Resync);
+                            }
+                        }
+                    }
                     if let Some(signal) = RuntimeSignal::ALL
                         .into_iter()
                         .find(|signal| signal.channel() == notification.channel())
@@ -34,6 +49,7 @@ impl DatabaseNotificationHub {
                     }
                 }
                 Ok(None) => {
+                    self.connections.publish(ConnectionNotification::Resync);
                     citadel_runtime::runtime_metrics::RuntimeWork::NotificationReconnect.units(1);
                     // SQLx has re-established LISTEN before returning None. Recover lost
                     // signals immediately; timers are still the final safety net.
@@ -91,6 +107,49 @@ mod tests {
 #[cfg(test)]
 mod postgres_tests {
     use super::*;
+    #[tokio::test]
+    #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
+    async fn connection_events_reach_independent_subscribers_after_commit() {
+        let pool = sqlx::PgPool::connect(&std::env::var("CITADEL_TEST_DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+        let listener = super::super::listener(&pool, CHANNEL).await.unwrap();
+        let hub = DatabaseNotificationHub::new();
+        let mut first = hub.connections.subscribe();
+        let mut second = hub.connections.subscribe();
+        let token = CancellationToken::new();
+        let task = tokio::spawn(hub.run(listener, token.clone()));
+        let event = ConnectionEvent {
+            resource: citadel_adapters::persistence::postgres::connection_events::ConnectionResource::BuildAgentPool,
+            resource_id: uuid::Uuid::now_v7(),
+            state: citadel_adapters::persistence::postgres::connection_events::ConnectionState::Offline,
+        };
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query("SELECT pg_notify($1, $2)")
+            .bind(CHANNEL)
+            .bind(serde_json::to_string(&event).unwrap())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), first.recv())
+                .await
+                .is_err()
+        );
+        tx.commit().await.unwrap();
+        for receiver in [&mut first, &mut second] {
+            let notification = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(
+                matches!(notification, ConnectionNotification::Changed(received) if received == event)
+            );
+        }
+        token.cancel();
+        task.await.unwrap().unwrap();
+    }
+
     #[tokio::test]
     #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
     async fn every_fixed_topic_obeys_commit_and_rollback() {

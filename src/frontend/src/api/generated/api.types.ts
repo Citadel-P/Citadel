@@ -785,6 +785,7 @@ export enum AlertType {
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
   AutomationActionRunFailed = "AutomationActionRunFailed",
   BuildRunFailed = "BuildRunFailed",
+  BuildAgentPoolUnavailable = "BuildAgentPoolUnavailable",
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
 }
@@ -808,6 +809,7 @@ export enum AlertResourceType {
   Webhook = "Webhook",
   AutomationAction = "AutomationAction",
   Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
   License = "License",
   SwarmService = "SwarmService",
 }
@@ -931,6 +933,7 @@ export enum ActivityEventType {
   ActionRunTimedOut = "ActionRunTimedOut",
   ActionRunCancelled = "ActionRunCancelled",
   ActionRunRejected = "ActionRunRejected",
+  ActionWebhookReceived = "ActionWebhookReceived",
   StackCreated = "StackCreated",
   StackDuplicated = "StackDuplicated",
   StackUpdated = "StackUpdated",
@@ -997,6 +1000,8 @@ export enum ActivityEventType {
   BuildAgentPoolRenamed = "BuildAgentPoolRenamed",
   BuildAgentPoolDeleted = "BuildAgentPoolDeleted",
   BuildAgentPoolTested = "BuildAgentPoolTested",
+  BuildAgentPoolConnected = "BuildAgentPoolConnected",
+  BuildAgentPoolDisconnected = "BuildAgentPoolDisconnected",
   BackupPolicyCreated = "BackupPolicyCreated",
   BackupPolicyUpdated = "BackupPolicyUpdated",
   BackupPolicyRenamed = "BackupPolicyRenamed",
@@ -1004,6 +1009,7 @@ export enum ActivityEventType {
   BackupRunQueued = "BackupRunQueued",
   BackupRunStarted = "BackupRunStarted",
   BackupRunCompleted = "BackupRunCompleted",
+  BackupPolicyWebhookReceived = "BackupPolicyWebhookReceived",
   SwarmServiceCreated = "SwarmServiceCreated",
   SwarmServiceAdopted = "SwarmServiceAdopted",
   SwarmServiceUpdated = "SwarmServiceUpdated",
@@ -1978,6 +1984,8 @@ export interface BuildAgentPoolView {
   archivedAt: string | null;
   /** @format int32 */
   cleanupTimeoutSeconds: number;
+  /** Edge transport connection status, independent of build capability validation. */
+  connectionStatus?: string | null;
   /** @format int64 */
   controlStartedAt: number | null;
   controlState: ResourceControlState;
@@ -4511,6 +4519,12 @@ export type PublicActivityEventInfo =
       $type: "BuildWebhookReceived";
     })
   | (WebhookActivityDetails & {
+      $type: "ActionWebhookReceived";
+    })
+  | (WebhookActivityDetails & {
+      $type: "BackupPolicyWebhookReceived";
+    })
+  | (WebhookActivityDetails & {
       $type: "SwarmServiceWebhookReceived";
     })
   | {
@@ -5089,6 +5103,20 @@ export type PublicActivityEventInfo =
   | {
       $type: "BuildDeleted";
       build: BuildProjectActivitySnapshot;
+    }
+  | {
+      $type: "BuildAgentPoolConnected";
+      /** @format uuid */
+      agentId: string;
+      previousStatus: string;
+      reason: string;
+    }
+  | {
+      $type: "BuildAgentPoolDisconnected";
+      /** @format uuid */
+      agentId: string;
+      previousStatus: string;
+      reason: string;
     }
   | {
       $type: "BuildAgentPoolCreated";

@@ -12,6 +12,7 @@ import {
   UpdateBuildAgentPoolInput,
 } from '@/api/generated/api.types';
 import { EdgeCoreAddress } from '@/components/custom/edge-core-address';
+import { ResourceResponse } from '@/api/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import {
   FieldInput,
@@ -133,6 +134,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
       },
     ],
     useData(id: string) {
+      const queryClient = useQueryClient();
       const { data, isLoading, error, refetch, isFetching } = useRead('getBuildAgentPool', { id });
       const [pool, setPool] = useState<BuildPoolFormResource | undefined>(
         data?.data as BuildPoolFormResource | undefined,
@@ -151,8 +153,15 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
           if (nextPool.id !== id) return;
 
           setPool(nextPool as BuildPoolFormResource);
+          const queryKey = ['getBuildAgentPoolEdgeStatus', { id }];
+          const current = queryClient.getQueryData<ResourceResponse<'getBuildAgentPoolEdgeStatus'>>(queryKey);
+          // Health snapshots also arrive on this topic. Fetch Edge metadata only
+          // when its connection changes, not on every pool health update.
+          if (nextPool.connectionStatus && current?.data.connectionStatus !== nextPool.connectionStatus) {
+            void queryClient.invalidateQueries({ queryKey });
+          }
         },
-        [id],
+        [id, queryClient],
       );
 
       const setupEventListeners = useCallback(
@@ -243,7 +252,9 @@ function BuildPoolForm({
   const { data: edgeStatusData, isLoading: isEdgeStatusLoading } = useRead(
     'getBuildAgentPoolEdgeStatus',
     { id: id ?? '' },
-    { enabled: mode === 'edit' && Boolean(id) && isEdgePool },
+    {
+      enabled: mode === 'edit' && Boolean(id) && isEdgePool,
+    },
   );
   const edgeStatus = edgeStatusData?.data;
   const regenerateEnrollment = useCallback(async () => {

@@ -241,7 +241,7 @@ pub fn router(
     } else {
         app
     };
-    if let Some(hub) = realtime_hub {
+    if let Some(hub) = realtime_hub.clone() {
         app = app.layer(axum::Extension(hub));
     }
     if config.transport.openapi_enabled {

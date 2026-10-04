@@ -123,6 +123,9 @@ pub async fn verify(
     let accepted = send(app, &url, Some("Bearer backup-webhook-test")).await;
     assert_eq!(accepted.status(), StatusCode::ACCEPTED);
     assert_eq!(response_json(accepted).await["status"], "queued");
+    let severities: Vec<String> = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND eventtype='BackupPolicyWebhookReceived' ORDER BY id")
+        .bind(id).fetch_all(pool).await.unwrap();
+    assert_eq!(severities, ["Failure", "Failure", "Warning", "Success"]);
     let run_id = backups
         .store()
         .get_policy(id)

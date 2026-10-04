@@ -121,15 +121,17 @@ impl GitRepositoryExecutionService {
         {
             webhook.branch_filter = Some(source.default_branch.clone());
         }
-        if crate::repositories::webhooks::evaluate_webhook(&webhook, auth_type, headers, body)
-            .map_err(map_webhook_error)?
-            .is_some()
+        if let Some(reason) =
+            crate::repositories::webhooks::evaluate_webhook(&webhook, auth_type, headers, body)
+                .map_err(map_webhook_error)?
         {
-            return Ok(GitWebhookOutcome::Ignored);
+            return Ok(GitWebhookOutcome::Ignored { reason });
         }
         let payload = serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
         if !repository_matches(&source.url, &payload) {
-            return Ok(GitWebhookOutcome::Ignored);
+            return Ok(GitWebhookOutcome::Ignored {
+                reason: "Repository identity mismatch",
+            });
         }
         let (_, payload_branch) =
             webhook_branch(webhook.provider.as_str(), headers, body).map_err(map_webhook_error)?;

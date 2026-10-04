@@ -260,10 +260,7 @@ impl DockerBuildSession {
             .collect();
         let result = output::run(request, cancellation, progress, &secrets).await?;
         if !result.succeeded() {
-            return Err(BuildRuntimeError::Command(redact_values(
-                &logs(&result.stdout, &result.stderr),
-                &secrets,
-            )));
+            return Err(streamed_command_failure("build", result.exit_code));
         }
         Ok(())
     }
@@ -292,12 +289,24 @@ impl DockerBuildSession {
             &secrets,
         )
         .await?;
-        let log = logs(&result.stdout, &result.stderr);
         if !result.succeeded() {
-            return Err(BuildRuntimeError::Command(redact_values(&log, &secrets)));
+            return Err(streamed_command_failure("push", result.exit_code));
         }
-        Ok(find_digest(&log))
+        Ok(find_digest(&logs(&result.stdout, &result.stderr)))
     }
+}
+
+fn streamed_command_failure(operation: &str, exit_code: Option<i32>) -> BuildRuntimeError {
+    // output::run already delivered the command output to the log sink. Returning
+    // it again replays the entire transcript through the Agent's error frame and
+    // the executor's final stderr log (and duplicates local build output too).
+    let status = match exit_code {
+        Some(code) => format!("with exit code {code}"),
+        None => "without an exit code".into(),
+    };
+    BuildRuntimeError::Command(format!(
+        "Docker {operation} failed {status}. See the build output for details."
+    ))
 }
 
 impl Drop for DockerBuildSession {

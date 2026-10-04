@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import {
   AuthorizedProject,
@@ -16,6 +16,37 @@ const projectId = '00000000-0000-0000-0000-000000000201';
 const runId = '00000000-0000-0000-0000-000000000202';
 
 describe('BuildRunsTab', () => {
+  it('shows and advances a webhook run without reloading the run list', async () => {
+    const read = vi.fn(() => HttpResponse.json({ runs: [] }));
+    server.use(
+      http.get('http://localhost/api/v1/buildRuns', read),
+      http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})),
+    );
+    const fake = new FakeRealtimeConnection();
+    renderCitadel(<BuildRunsTab resource={{ id: projectId } as AuthorizedProject} />, {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', `build-runs:${projectId}`));
+    const run = {
+      id: runId,
+      buildProjectId: projectId,
+      status: 'Queued',
+      trigger: 'Webhook',
+      imageReferences: [],
+      queuedAt: '2026-10-04T12:00:00Z',
+    };
+    act(() => fake.emit('BuildRunInfoUpdated', run, 'update'));
+    expect(await screen.findByText('Webhook')).toBeVisible();
+    expect(screen.getByText('Queued', { selector: '[data-slot="badge"]' })).toBeVisible();
+    act(() => fake.emit('BuildRunInfoUpdated', { ...run, status: 'Running' }, 'update'));
+    expect(await screen.findByText('Running')).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['missing snapshot', undefined, 'Not available'],
     ['pool without a platform', { id: null, name: null, address: null }, 'Not available'],

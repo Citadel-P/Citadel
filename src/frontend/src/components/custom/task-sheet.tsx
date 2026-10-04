@@ -615,6 +615,10 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   BuildWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
+  ActionWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+
+  BackupPolicyWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+
   BuildAgentPoolCreated: (info, activity) => (
     <SpecViewer spec={info.pool} resourceId={activity.resourceId} title="Initial configuration" />
   ),
@@ -905,6 +909,8 @@ function WebhookActivityDetails({
     | InfoOf<'GitRepoWebhookReceived'>
     | InfoOf<'StackWebhookReceived'>
     | InfoOf<'BuildWebhookReceived'>
+    | InfoOf<'ActionWebhookReceived'>
+    | InfoOf<'BackupPolicyWebhookReceived'>
     | InfoOf<'SwarmServiceWebhookReceived'>;
 }) {
   const displayReason = formatWebhookReason(info.reason);
@@ -929,6 +935,8 @@ function compactWebhookDetails(
     | InfoOf<'GitRepoWebhookReceived'>
     | InfoOf<'StackWebhookReceived'>
     | InfoOf<'BuildWebhookReceived'>
+    | InfoOf<'ActionWebhookReceived'>
+    | InfoOf<'BackupPolicyWebhookReceived'>
     | InfoOf<'SwarmServiceWebhookReceived'>,
   message: string,
   reason: string | null | undefined,

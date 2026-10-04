@@ -849,6 +849,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     git_webhooks::verify(&app, &pool, &fixture).await;
     build_webhooks::verify(
         &app,
+        &hub,
         &pool,
         &builds,
         &build_entitlement,

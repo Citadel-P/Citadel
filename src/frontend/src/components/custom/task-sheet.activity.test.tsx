@@ -85,6 +85,34 @@ describe('TaskSheet activity details', () => {
     expect(screen.queryByTestId('monaco-diff')).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['ActionWebhookReceived', 'AutomationAction'],
+    ['BackupPolicyWebhookReceived', 'BackupPolicy'],
+  ] as const)('shows delivery details for %s', (eventType, resourceType) => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType,
+      eventType,
+      status: 'Warning',
+      info: {
+        $type: eventType,
+        requestId: 'webhook-request',
+        authType: 'generic',
+        execution: 'run',
+        status: 'noop',
+        reason: 'Automated operations require an active license entitlement.',
+      },
+    } as ActivityView;
+
+    renderCitadel(<TaskSheet type="Activity" />);
+
+    expect(screen.getByText('Webhook details')).toBeVisible();
+    expect(screen.getByTestId('monaco-editor')).toHaveTextContent(
+      'Automated operations require an active license entitlement.',
+    );
+    expect(screen.getByTestId('monaco-editor')).toHaveTextContent('webhook-request');
+  });
+
   it('shows the backup run, trigger, duration and failure details', () => {
     mocks.activity = {
       ...mocks.activity,

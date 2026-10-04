@@ -1,4 +1,5 @@
 import { act, screen, waitFor } from '@testing-library/react';
+import type { AuthorizedProject } from '@/api/generated/api.types';
 import { http, HttpResponse } from 'msw';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
@@ -14,6 +15,11 @@ import { useStackGroup } from '@/features/stacks/form/hooks/useStackGroup';
 import { useRead } from '@/lib/hooks';
 import { BuildFormComponents } from '@/features/builds/form';
 import { BuildPoolFormComponents } from '@/features/build-pools/form';
+import { useActivitiesGroup } from '@/features/activities/hooks/useActivitiesGroup';
+import { Route, Routes } from 'react-router';
+import { ComponentProps } from 'react';
+
+afterEach(() => vi.useRealTimers());
 
 function connect(socket: FakeWebSocket) {
   socket.send.mockImplementation((text: string) => {
@@ -31,6 +37,70 @@ function connect(socket: FakeWebSocket) {
 }
 const deliver = (socket: FakeWebSocket, target: string, ...args: unknown[]) =>
   act(() => socket.message({ protocolVersion: 1, kind: 'event', target, arguments: args }));
+
+it('updates an open Build activity tab and project status when a webhook queues a run', async () => {
+  const project = { id: 'b1', name: 'Build', enabled: true, controlState: 'Idle', latestRun: null };
+  const read = vi.fn(() => HttpResponse.json(project));
+  const activities = vi.fn(() =>
+    HttpResponse.json({ pagedResult: { items: [], totalCount: 0, page: 1, pageSize: 20 } }),
+  );
+  server.use(http.get('*/api/v1/buildProjects/b1', read), http.get('*/api/v1/activities', activities));
+  function Probe() {
+    const { item } = BuildFormComponents.EditForm!.useData('b1');
+    const build = item as AuthorizedProject | undefined;
+    const { pagedActivities } = useActivitiesGroup('b1', 'Build', 20);
+    return (
+      <>
+        <output>{build?.latestRun?.status ?? 'Idle'}</output>
+        {pagedActivities?.items.map((activity) => (
+          <output key={activity.id}>{activity.eventType}</output>
+        ))}
+      </>
+    );
+  }
+  const socket = new FakeWebSocket();
+  renderCitadel(<Probe />, {
+    groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
+  });
+  expect(await screen.findByText('Idle')).toBeVisible();
+  await waitFor(() => expect(activities).toHaveBeenCalledTimes(1));
+  connect(socket);
+  await waitFor(() => {
+    const joins = socket.send.mock.calls
+      .map(([text]) => JSON.parse(text))
+      .filter((message) => message.kind === 'invoke');
+    expect(joins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ arguments: ['build-project:b1'] }),
+        expect.objectContaining({ arguments: ['activity:Build:b1'] }),
+      ]),
+    );
+  });
+  const activity = {
+    id: 'a1',
+    resourceId: 'b1',
+    resourceType: 'Build',
+    eventType: 'BuildWebhookReceived',
+    status: 'Success',
+  };
+  deliver(socket, 'ActivityEventReceived', activity);
+  deliver(socket, 'ActivityEventReceived', activity);
+  deliver(
+    socket,
+    'BuildProjectInfoUpdated',
+    {
+      ...project,
+      controlState: 'Processing',
+      currentRunId: 'run1',
+      latestRun: { id: 'run1', buildProjectId: 'b1', status: 'Queued', trigger: 'Webhook' },
+    },
+    'update',
+  );
+  expect(await screen.findByText('Queued')).toBeVisible();
+  expect(screen.getAllByText('BuildWebhookReceived')).toHaveLength(1);
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(activities).toHaveBeenCalledTimes(1);
+});
 
 it('uses the unchanged Deployment hook to apply a named event without refetching', async () => {
   const read = vi.fn(() => HttpResponse.json({ id: 'd1', status: 'Applying' }));
@@ -184,3 +254,58 @@ it.each([
     expect(read).toHaveBeenCalledOnce();
   },
 );
+
+it('refreshes Edge details on connection changes and reconnect without polling on health snapshots', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  let connectionStatus = 'Connected';
+  const read = vi.fn(() => HttpResponse.json({ connectionStatus }));
+  const pool = {
+    id: 'r1',
+    name: 'Builder',
+    connectionStatus,
+    providerSpec: { $type: 'SelfManagedVm', connectionMode: 'EdgeAgent', architecture: 'Amd64' },
+  };
+  server.use(
+    http.get('*/api/v1/buildAgentPools/r1', () => HttpResponse.json(pool)),
+    http.get('*/api/v1/buildAgentPools/r1/edge/status', read),
+  );
+  const fake = new FakeRealtimeConnection();
+  function Probe() {
+    const { item } = BuildPoolFormComponents.EditForm!.useData('r1');
+    const Content = BuildPoolFormComponents.EditForm!.Tabs[0].Content;
+    return item && Content ? <Content resource={item as ComponentProps<typeof Content>['resource']} /> : null;
+  }
+  const rendered = renderCitadel(
+    <Routes>
+      <Route path="/build-pools/edit/:id" element={<Probe />} />
+    </Routes>,
+    {
+      route: '/build-pools/edit/r1',
+      groups: { connectionFactory: () => fake, startConnection: (connection) => connection.start() },
+    },
+  );
+  expect(await screen.findByText('Connected')).toBeVisible();
+  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'build-agent-pool:r1'));
+  await act(() => vi.advanceTimersByTimeAsync(90_000));
+  expect(read).toHaveBeenCalledOnce();
+  act(() => fake.emit('BuildAgentPoolInfoUpdated', { ...pool, lastValidationStatus: 'Ready' }, 'update'));
+  await act(() => vi.advanceTimersByTimeAsync(10_000));
+  expect(read).toHaveBeenCalledOnce();
+  connectionStatus = 'Offline';
+  act(() => fake.emit('BuildAgentPoolInfoUpdated', { ...pool, connectionStatus }, 'update'));
+  expect(await screen.findByText('Offline')).toBeVisible();
+  expect(read).toHaveBeenCalledTimes(2);
+  connectionStatus = 'Connected';
+  fake.invoke.mockImplementation(async (method, name) => {
+    if (method === 'JoinGroup' && name === 'build-agent-pool:r1') {
+      fake.emit('BuildAgentPoolInfoUpdated', { ...pool, connectionStatus }, 'update');
+    }
+  });
+  act(() => {
+    fake.reconnecting();
+    fake.reconnected();
+  });
+  expect(await screen.findByText('Connected')).toBeVisible();
+  expect(read).toHaveBeenCalledTimes(3);
+  rendered.unmount();
+});

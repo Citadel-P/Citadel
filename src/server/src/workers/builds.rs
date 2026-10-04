@@ -27,8 +27,16 @@ pub async fn build_consumers(
 pub async fn pool_health(
     cancellation: CancellationToken,
     service: Arc<BuildService>,
+    pool: sqlx::PgPool,
 ) -> Result<(), BuildError> {
+    let edge =
+        citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
+            pool,
+        );
     while !cancellation.is_cancelled() {
+        if let Err(error) = edge.expire_build_pool_connections().await {
+            tracing::warn!(%error, "Build Pool connection reconciliation failed");
+        }
         if let Err(error) = service.monitor_pool_health(&cancellation).await {
             tracing::error!(%error,"Build Pool health monitoring failed");
         }

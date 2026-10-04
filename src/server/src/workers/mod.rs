@@ -20,6 +20,7 @@ mod disk;
 #[cfg(test)]
 mod disk_tests;
 
+mod connection_events;
 mod maintenance;
 mod notifications;
 mod recovery;

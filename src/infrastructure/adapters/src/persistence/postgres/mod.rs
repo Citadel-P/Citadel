@@ -21,6 +21,7 @@ pub mod platforms;
 pub mod activities;
 
 pub mod connection;
+pub mod connection_events;
 
 pub mod discovery;
 

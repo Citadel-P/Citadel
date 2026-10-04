@@ -144,6 +144,66 @@ esac
 }
 
 #[tokio::test]
+async fn failed_build_and_push_stream_diagnostics_once_and_return_only_a_summary() {
+    let fixture = Fixture::new(
+        r#"
+if [ "$1" = build ]; then cat >/dev/null; fi
+printf 'progress\n'
+printf 'ERROR: command failed\n' >&2
+exit 7
+"#,
+    );
+    let cancel = CancellationToken::new();
+    let session = DockerBuildSession::open(
+        fixture.docker(),
+        endpoint(),
+        None,
+        Duration::from_secs(3),
+        4096,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    for operation in ["build", "push"] {
+        let logs = Logs::default();
+        let error = if operation == "build" {
+            session
+                .build(
+                    DockerBuildOptions {
+                        source: DockerBuildSource::Archive {
+                            data: b"archive",
+                            dockerfile: "Dockerfile",
+                        },
+                        tags: &[],
+                        build_args: &[],
+                        target: None,
+                        secrets: &[],
+                    },
+                    &logs,
+                    &cancel,
+                )
+                .await
+                .unwrap_err()
+        } else {
+            session
+                .push("fixture:latest", &logs, &cancel)
+                .await
+                .unwrap_err()
+        };
+        assert!(matches!(error, BuildRuntimeError::Command(_)));
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Docker {operation} failed with exit code 7. See the build output for details."
+            )
+        );
+        let transcript = format!("{}\n{error}", logs.0.lock().unwrap());
+        assert_eq!(transcript.matches("progress").count(), 1);
+        assert_eq!(transcript.matches("ERROR: command failed").count(), 1);
+    }
+}
+
+#[tokio::test]
 async fn failed_login_cleans_credentials_and_redacts_failure() {
     let fixture = Fixture::new(
         r#"

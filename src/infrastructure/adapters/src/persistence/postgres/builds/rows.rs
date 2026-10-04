@@ -26,7 +26,24 @@ pub(super) async fn enrich_pools(
     let mut tags = resource_tags::load(connection, "BuildAgentPool", &ids)
         .await
         .map_err(storage)?;
+    let statuses: Vec<(Uuid, String)> = sqlx::query_as("SELECT DISTINCT ON (resourceid) resourceid, CASE WHEN revokedatutc IS NOT NULL THEN 'Revoked' WHEN lastheartbeatatutc < now()-interval '90 seconds' THEN 'Offline' ELSE connectionstatus END FROM edgeagentbindings WHERE resourcetype='BuildAgentPool' AND resourceid=ANY($1) ORDER BY resourceid,createdatutc DESC")
+        .bind(&ids).fetch_all(&mut *connection).await.map_err(storage)?;
+    let statuses: std::collections::HashMap<_, _> = statuses.into_iter().collect();
     for pool in pools {
+        if pool
+            .provider_spec
+            .get("connectionMode")
+            .or_else(|| pool.provider_spec.get("ConnectionMode"))
+            .and_then(serde_json::Value::as_str)
+            == Some("EdgeAgent")
+        {
+            pool.connection_status = Some(
+                statuses
+                    .get(&pool.id)
+                    .cloned()
+                    .unwrap_or_else(|| "PendingEnrollment".into()),
+            );
+        }
         pool.tags = tags.remove(&pool.id).unwrap_or_default();
     }
     Ok(())
@@ -116,6 +133,7 @@ pub(super) fn map_project(row: sqlx::postgres::PgRow) -> Result<BuildProject, Bu
 
 pub(super) fn map_pool(row: sqlx::postgres::PgRow) -> Result<BuildAgentPool, BuildError> {
     Ok(BuildAgentPool {
+        connection_status: None,
         tags: Vec::new(),
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,

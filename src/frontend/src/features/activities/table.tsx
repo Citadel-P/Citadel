@@ -124,6 +124,9 @@ function getActivitySummary(info: PublicActivityEventInfo | null | undefined): s
       return [formatActivityEvent(info.status), info.errorMessage].filter(Boolean).join(' - ');
     case 'GitRepoWebhookReceived':
     case 'StackWebhookReceived':
+    case 'BuildWebhookReceived':
+    case 'ActionWebhookReceived':
+    case 'BackupPolicyWebhookReceived':
       return [
         info.status,
         formatWebhookReason(info.reason),
@@ -154,6 +157,9 @@ function getActivitySummary(info: PublicActivityEventInfo | null | undefined): s
       return `${info.oldPool.provider} - ${info.oldPool.region} - ${info.oldPool.instanceType}`;
     case 'BuildAgentPoolRenamed':
       return `${info.oldName} -> ${info.newName}`;
+    case 'BuildAgentPoolConnected':
+    case 'BuildAgentPoolDisconnected':
+      return info.reason;
     case 'BuildAgentPoolTested':
       return [info.status, info.message].filter(Boolean).join(' - ');
     default:

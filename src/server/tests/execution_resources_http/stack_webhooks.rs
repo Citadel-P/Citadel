@@ -135,6 +135,20 @@ pub async fn verify(
         1,
         "accepted deliveries are durably coalesced"
     );
+    let severities: Vec<String> = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND eventtype='StackWebhookReceived' ORDER BY id")
+        .bind(stack.id).fetch_all(pool).await.unwrap();
+    assert_eq!(
+        severities,
+        [
+            "Failure",
+            "Warning",
+            "Warning",
+            "Information",
+            "Failure",
+            "Success",
+            "Success"
+        ]
+    );
     assert_eq!(
         sqlx::query_scalar::<_, String>("SELECT controlstate FROM stacks WHERE id=$1")
             .bind(stack.id)

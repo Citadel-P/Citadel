@@ -113,6 +113,7 @@
           "ActionRunTimedOut",
           "ActionRunCancelled",
           "ActionRunRejected",
+          "ActionWebhookReceived",
           "StackCreated",
           "StackDuplicated",
           "StackUpdated",
@@ -179,6 +180,8 @@
           "BuildAgentPoolRenamed",
           "BuildAgentPoolDeleted",
           "BuildAgentPoolTested",
+          "BuildAgentPoolConnected",
+          "BuildAgentPoolDisconnected",
           "BackupPolicyCreated",
           "BackupPolicyUpdated",
           "BackupPolicyRenamed",
@@ -186,6 +189,7 @@
           "BackupRunQueued",
           "BackupRunStarted",
           "BackupRunCompleted",
+          "BackupPolicyWebhookReceived",
           "SwarmServiceCreated",
           "SwarmServiceAdopted",
           "SwarmServiceUpdated",
@@ -1029,6 +1033,7 @@
           "Webhook",
           "AutomationAction",
           "Build",
+          "BuildAgentPool",
           "License",
           "SwarmService"
         ],
@@ -1368,6 +1373,7 @@
           "WebhookStackGitDeployFailed",
           "AutomationActionRunFailed",
           "BuildRunFailed",
+          "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
           "LicenseExpired"
         ],
@@ -3974,6 +3980,13 @@
           "cleanupTimeoutSeconds": {
             "format": "int32",
             "type": "integer"
+          },
+          "connectionStatus": {
+            "description": "Edge transport connection status, independent of build capability validation.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "controlStartedAt": {
             "format": "int64",
@@ -14330,6 +14343,48 @@
                 "properties": {
                   "$type": {
                     "enum": [
+                      "ActionWebhookReceived"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "$type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookActivityDetails"
+              },
+              {
+                "properties": {
+                  "$type": {
+                    "enum": [
+                      "BackupPolicyWebhookReceived"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "$type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookActivityDetails"
+              },
+              {
+                "properties": {
+                  "$type": {
+                    "enum": [
                       "SwarmServiceWebhookReceived"
                     ],
                     "type": "string"
@@ -16847,6 +16902,60 @@
             },
             "required": [
               "build",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "BuildAgentPoolConnected"
+                ],
+                "type": "string"
+              },
+              "agentId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "previousStatus": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentId",
+              "previousStatus",
+              "reason",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "BuildAgentPoolDisconnected"
+                ],
+                "type": "string"
+              },
+              "agentId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "previousStatus": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentId",
+              "previousStatus",
+              "reason",
               "$type"
             ],
             "type": "object"

@@ -10,6 +10,79 @@ vi.mock('@/lib/use-profile-date-time', () => ({
 
 describe('ActivitiesTable', () => {
   it.each([
+    ['Warning', 'Warning', 'noop', 'Repository identity mismatch', 'Repository identity mismatch'],
+    ['Information', 'Info', 'noop', 'No relevant path changes', 'no watched path changes'],
+    ['Success', 'Success', 'queued', null, null],
+    ['Failure', 'Failure', 'rejected', 'Webhook authentication failed.', 'Webhook authentication failed.'],
+  ])('shows the %s build webhook outcome and reason', (severity, badge, status, reason, formattedReason) => {
+    const activity = {
+      id: 'webhook-activity',
+      resourceId: 'build-id',
+      resourceName: 'Vote build',
+      resourceType: 'Build',
+      eventType: 'BuildWebhookReceived',
+      status: severity,
+      createdAt: '2026-10-04T00:00:00Z',
+      info: {
+        $type: 'BuildWebhookReceived',
+        requestId: 'request-id',
+        authType: 'github',
+        execution: 'run',
+        status,
+        reason,
+        branch: 'main',
+        dispatchedBranch: status === 'queued' ? 'main' : null,
+      },
+      actorName: 'System',
+      actorType: 'System',
+    } as ActivityView;
+    renderCitadel(
+      <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
+    );
+    expect(screen.getByText('Build Webhook Received')).toBeVisible();
+    expect(screen.getByText(badge!)).toBeVisible();
+    expect(
+      screen.getByText(
+        [status, formattedReason, status === 'queued' ? 'queued main' : 'branch main'].filter(Boolean).join(' - '),
+      ),
+    ).toBeVisible();
+  });
+
+  it.each([
+    ['GitRepoWebhookReceived', 'GitRepository'],
+    ['StackWebhookReceived', 'Stack'],
+    ['SwarmServiceWebhookReceived', 'SwarmService'],
+    ['ActionWebhookReceived', 'AutomationAction'],
+    ['BackupPolicyWebhookReceived', 'BackupPolicy'],
+  ])('shows the shared warning summary for %s', (eventType, resourceType) => {
+    const activity = {
+      id: 'webhook-activity',
+      resourceId: 'resource-id',
+      resourceName: 'Target',
+      resourceType,
+      eventType,
+      status: 'Warning',
+      createdAt: '2026-10-04T00:00:00Z',
+      info: {
+        $type: eventType,
+        requestId: 'request-id',
+        authType: 'generic',
+        execution: 'run',
+        status: 'noop',
+        reason: 'Automated operations require an active license entitlement.',
+      },
+      actorName: 'System',
+      actorType: 'System',
+    } as ActivityView;
+    renderCitadel(
+      <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
+    );
+    expect(screen.getByText(formatActivityEvent(eventType))).toBeVisible();
+    expect(screen.getByText('Warning')).toBeVisible();
+    expect(screen.getByText('noop - Automated operations require an active license entitlement.')).toBeVisible();
+  });
+
+  it.each([
     ['Succeeded', 'Success', null, 'Succeeded'],
     ['Failed', 'Failure', 'Repository unavailable', 'Failed - Repository unavailable'],
     [

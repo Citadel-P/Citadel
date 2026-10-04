@@ -110,6 +110,7 @@ database_string_enum! {
         ActionRunTimedOut,
         ActionRunCancelled,
         ActionRunRejected,
+        ActionWebhookReceived,
         StackCreated,
         StackDuplicated,
         StackUpdated,
@@ -176,6 +177,8 @@ database_string_enum! {
         BuildAgentPoolRenamed,
         BuildAgentPoolDeleted,
         BuildAgentPoolTested,
+        BuildAgentPoolConnected,
+        BuildAgentPoolDisconnected,
         BackupPolicyCreated,
         BackupPolicyUpdated,
         BackupPolicyRenamed,
@@ -183,6 +186,7 @@ database_string_enum! {
         BackupRunQueued,
         BackupRunStarted,
         BackupRunCompleted,
+        BackupPolicyWebhookReceived,
         SwarmServiceCreated,
         SwarmServiceAdopted,
         SwarmServiceUpdated,
@@ -255,7 +259,8 @@ impl ActivityEventType {
             | Self::ActionRunFailed
             | Self::ActionRunTimedOut
             | Self::ActionRunCancelled
-            | Self::ActionRunRejected => ActivityResourceType::AutomationAction,
+            | Self::ActionRunRejected
+            | Self::ActionWebhookReceived => ActivityResourceType::AutomationAction,
             Self::StackCreated
             | Self::StackDuplicated
             | Self::StackUpdated
@@ -319,6 +324,8 @@ impl ActivityEventType {
             | Self::BuildAgentPoolUpdated
             | Self::BuildAgentPoolRenamed
             | Self::BuildAgentPoolDeleted
+            | Self::BuildAgentPoolConnected
+            | Self::BuildAgentPoolDisconnected
             | Self::BuildAgentPoolTested => ActivityResourceType::BuildAgentPool,
             Self::BackupPolicyCreated
             | Self::BackupPolicyUpdated
@@ -326,7 +333,8 @@ impl ActivityEventType {
             | Self::BackupPolicyArchived
             | Self::BackupRunQueued
             | Self::BackupRunStarted
-            | Self::BackupRunCompleted => ActivityResourceType::BackupPolicy,
+            | Self::BackupRunCompleted
+            | Self::BackupPolicyWebhookReceived => ActivityResourceType::BackupPolicy,
             Self::SwarmServiceCreated
             | Self::SwarmServiceAdopted
             | Self::SwarmServiceUpdated

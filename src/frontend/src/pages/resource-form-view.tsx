@@ -1,6 +1,7 @@
 import { canShowCachedResource } from '@/lib/request-error';
 import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { AppContent } from '@/components/custom/app-content';
+import { BackToTop } from '@/components/custom/back-to-top';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Pencil, Plus, Save, X } from 'lucide-react';
@@ -207,7 +208,10 @@ const EditFormContent = ({
 };
 
 const PageShell = ({ children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
-  <AppContent className="flex flex-col gap-(--section-gap)">{children}</AppContent>
+  <AppContent className="flex flex-col gap-(--section-gap)">
+    {children}
+    <BackToTop />
+  </AppContent>
 );
 
 const resourceLabel = (type: string) => capitalize(type.replace(/([a-z])([A-Z])/g, '$1 $2'));

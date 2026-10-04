@@ -57,7 +57,7 @@ impl AlertRuleConfiguration {
                     vec!["Non-threshold alerts must not define RequiredMatches.".into()],
                 );
             }
-            if self.threshold.is_some() {
+            if self.threshold.is_some() && self.alert_type != "BuildAgentPoolUnavailable" {
                 errors.insert(
                     "Threshold".into(),
                     vec!["Non-threshold alerts must not define Threshold.".into()],
@@ -125,7 +125,19 @@ impl AlertRuleConfiguration {
                 "Threshold alerts require RequiredMatches and Threshold.".into(),
             ));
         }
-        if !threshold_rule && (self.threshold.is_some() || self.required_matches.is_some()) {
+        if self.alert_type == "BuildAgentPoolUnavailable"
+            && self
+                .threshold
+                .is_some_and(|value| !(0.0..=86_400.0).contains(&value))
+        {
+            return Err(AlertError::Validation(
+                "Availability grace period must be between 0 and 86400 seconds.".into(),
+            ));
+        }
+        if !threshold_rule
+            && ((self.threshold.is_some() && self.alert_type != "BuildAgentPoolUnavailable")
+                || self.required_matches.is_some())
+        {
             return Err(AlertError::Validation(
                 "Non-threshold alerts must not define RequiredMatches or Threshold.".into(),
             ));

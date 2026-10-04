@@ -123,6 +123,7 @@ export const AlertRuleForm = ({
     if (merged.type.startsWith('AutomationAction')) return 'AutomationAction';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('License')) return 'License';
+    if (merged.type === AlertType.BuildAgentPoolUnavailable) return 'BuildAgentPool';
     if (merged.type.startsWith('Build')) return 'Build';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.startsWith('SwarmService')) return 'SwarmService';
@@ -231,6 +232,24 @@ export const AlertRuleForm = ({
                             if (v === '' || v === undefined) set({ cooldownSeconds: v });
                             else set({ cooldownSeconds: Math.max(0, Math.min(604800, n)) });
                           }}
+                        />
+                      ),
+                    }),
+                  ]
+                : []),
+              ...(merged.type === AlertType.BuildAgentPoolUnavailable
+                ? [
+                    defineField<AlertRuleFormInput, 'threshold'>({
+                      key: 'threshold',
+                      label: 'Unavailable grace period (seconds)',
+                      description:
+                        'Alert after the pool cannot accept builds for this long. Recovery resolves the incident automatically.',
+                      render: (val, set) => (
+                        <FieldInput
+                          type="number"
+                          value={val ?? 90}
+                          disabled={advancedFieldsDisabled}
+                          onChange={(v) => set({ threshold: v === '' ? undefined : Number(v) })}
                         />
                       ),
                     }),
@@ -370,6 +389,7 @@ export const AlertRuleForm = ({
       hasAdvancedAlerting,
       id,
       isSystemRule,
+      merged.type,
       mode,
       resourceFromAlertType,
       showCooldown,
@@ -712,8 +732,7 @@ const QuietHoursTable = ({
         header: 'Schedule',
         cell: ({ row }) => {
           const entry = row.original.quietHour;
-          const scheduleLabel =
-            entry.$type;
+          const scheduleLabel = entry.$type;
           return entry.$type === 'Weekly' && entry.dayOfWeek ? `${scheduleLabel} - ${entry.dayOfWeek}` : scheduleLabel;
         },
       },

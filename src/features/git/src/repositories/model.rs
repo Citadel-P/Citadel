@@ -25,7 +25,7 @@ pub struct GitSyncClaim {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitWebhookOutcome {
     Queued { branch: String },
-    Ignored,
+    Ignored { reason: &'static str },
 }
 
 #[derive(Debug, Clone)]
