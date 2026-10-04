@@ -15,6 +15,9 @@ cp .env.example .env
 chmod 600 .env
 ```
 
+Enter the database password without surrounding quotes. A long, randomly generated
+password containing letters and numbers avoids environment-file parsing problems.
+
 Do this only for a new installation. Keep your existing `.env` when upgrading.
 The example is a **local HTTP setup**, not a ready-made public installation.
 

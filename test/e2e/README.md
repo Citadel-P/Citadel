@@ -15,7 +15,7 @@ dependencies:
 
 ```powershell
 docker build -t citadel-e2e:local -f Dockerfile .
-Set-Location e2e
+Set-Location test/e2e
 npm ci
 npm run install:chromium
 ```
@@ -47,10 +47,12 @@ npm run test:vault            # Vault provider connection, save, and stored-toke
 npm test                      # Run every Playwright test
 ```
 
-The core runtime suite is a blocking CI check. The runtime lifecycle suite is
-initially scheduled nightly because it intentionally exercises a real network
-interruption. Both runtime suites create disposable resources whose names start
-with `e2e-runtime-` and remove them after each test.
+These Playwright suites are currently run manually; the Rust CI workflow does
+not yet invoke them or schedule the nightly runtime suite. Run smoke, core-runtime,
+and accessibility checks when reviewing browser behavior. The runtime lifecycle
+suite deliberately exercises a real network interruption. Both runtime suites
+create disposable resources whose names start with `e2e-runtime-` and remove them
+after each test.
 
 The visual suite covers the authenticated shell and resource table, collapsed
 desktop sidebar, Stack FormBuilder, global search results, and a completed task
@@ -61,12 +63,12 @@ accept an intentional visual change:
 npm run test:visual:update
 ```
 
-Run the visual suite with the same Playwright version and operating system used
-by CI before committing updated baselines. CI uses Ubuntu and Chromium.
+Run the visual suite with the pinned Playwright version and the same operating
+system used to produce the committed baselines before accepting new snapshots.
 
 The accessibility suite checks login validation, the authenticated shell,
-resource tables, FormBuilder validation, and a resource dialog. It runs in the
-blocking E2E job and does not suppress Axe rules globally. Any exception must
+resource tables, FormBuilder validation, and a resource dialog. It is currently a
+manual suite and does not suppress Axe rules globally. Any exception must
 be narrowly scoped in the test and reference a tracked issue.
 
 The OIDC suite requires the optional Keycloak profile. It uses a deterministic
