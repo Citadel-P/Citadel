@@ -17,6 +17,14 @@ stage, then run inside the tested Agent image. Host-built binaries can require a
 newer glibc than that runtime and must not be substituted for the pinned build.
 The tests use disposable Docker services rather than the host engine as their target.
 
+## Browser test coverage
+
+The Playwright suites under `test/e2e` are currently manual; these workflows do
+not run them or schedule the nightly suite. For changes to browser behavior,
+follow [the E2E guide](../test/e2e/README.md) and run smoke, core-runtime, and
+accessibility checks against its disposable production-image fixture. These
+checks complement the existing Rust, frontend unit, and Agent acceptance jobs.
+
 ## Publication settings
 
 Configure these under the repository's **Settings → Secrets and variables → Actions**:

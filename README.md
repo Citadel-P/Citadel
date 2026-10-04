@@ -56,7 +56,7 @@ cd Citadel/deploy
 cp .env.example .env
 ```
 
-Set a strong, unique `PG_PASSWORD` in `.env`, then start Citadel and PostgreSQL:
+Set a long, unique alphanumeric `PG_PASSWORD` in `.env` without surrounding quotes, then start Citadel and PostgreSQL:
 
 ```bash
 docker compose up -d --build

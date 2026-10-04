@@ -153,9 +153,11 @@ fn architectural_groups_enforce_inward_dependencies() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect::<Vec<_>>();
     groups.sort();
+    // Shared offline SQLx query metadata is a supported source-root directory.
     assert_eq!(
         groups,
         [
+            ".sqlx",
             "agent",
             "features",
             "frontend",
