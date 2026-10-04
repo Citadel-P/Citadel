@@ -258,5 +258,5 @@ Citadel keeps the current Git source snapshot and snapshots needed by healthy ro
 When a Git stack apply fails, Citadel leaves the current source pointer unchanged and discards the snapshot created for that failed attempt.
 
 Automatic-update activity reports the commit actually applied. If the branch
-advances between an update check and Apply, this can be newer than the commit
+advances between an update check and deployment, this can be newer than the commit
 shown by the earlier check.
