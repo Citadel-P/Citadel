@@ -131,8 +131,8 @@ impl Wire {
     }
 }
 
-async fn docker(args: &[&str]) -> String {
-    let output = tokio::time::timeout(
+async fn docker_output(args: &[&str]) -> std::process::Output {
+    tokio::time::timeout(
         Duration::from_secs(60),
         tokio::process::Command::new("docker")
             .args(args)
@@ -141,7 +141,11 @@ async fn docker(args: &[&str]) -> String {
     )
     .await
     .unwrap()
-    .unwrap();
+    .unwrap()
+}
+
+async fn docker(args: &[&str]) -> String {
+    let output = docker_output(args).await;
     assert!(
         output.status.success(),
         "docker {args:?}: {}",
@@ -548,7 +552,7 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
                 })
                 .await
                 .expect("Swarm stack must run its authenticated image");
-                docker(&["stack", "rm", &project]).await;
+                swarm::remove_stack(&project).await;
             } else {
                 let ids = docker(&[
                     "ps",
