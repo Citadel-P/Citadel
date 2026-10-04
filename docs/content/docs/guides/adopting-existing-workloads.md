@@ -104,7 +104,7 @@ If Docker has pruned the container's original image, Citadel leaves the
 **Local Image** field empty and asks you to select a synchronized replacement.
 You can select a synchronized local image or an external image from the same
 repository as the container's original image. Adoption does not pull an external
-image or restart the container, but future Apply operations use the replacement.
+image or restart the container, but future redeployments use the replacement.
 Citadel inspects local replacements before adoption and blocks incompatible
 process defaults. A build image cannot replace a missing original image during
 adoption because selecting a build project does not guarantee that an inspectable
@@ -162,7 +162,7 @@ bindings without sending their values to the browser. It is available only
 when every matching container provides the value and replicas agree.
 
 The imported Stack keeps the detected Docker Compose project name. On a Docker
-Standalone Platform, a later Apply targets the existing Compose project instead
+Standalone Platform, a later deployment targets the existing Compose project instead
 of creating a second set of containers.
 
 On a Docker Swarm manager, a regular Compose project can also be imported from
@@ -171,7 +171,7 @@ the running project and the Swarm compatibility rules before it creates the
 Stack. The import itself remains database-only and leaves the Compose project
 running.
 
-The first explicit Apply performs the conversion. Citadel stops the Compose
+The first **Deploy** performs the conversion. Citadel stops the Compose
 project without deleting named volumes, then runs `docker stack deploy` with
 the reviewed source and the same project name. Plan for downtime. If Compose
 shutdown is incomplete or Docker rejects the deployment command, Citadel starts
@@ -231,7 +231,7 @@ namespace changes while the review is open, the import is rejected and no
 partial Stack or ownership link is kept.
 
 The first later **Deploy** targets the reserved namespace and establishes normal
-Citadel ownership labels. Review that Apply carefully: the selected Compose
+Citadel ownership labels. Review that deployment carefully: the selected Compose
 source is authoritative and may update or remove runtime definitions that do
 not match it.
 
@@ -242,8 +242,8 @@ Import drafts default to no automatic runtime changes:
 - image update behavior is disabled
 - Stack drift monitoring and automatic correction are disabled
 - Stack webhooks are disabled
-- imported Stacks do not destroy the project before the first Apply
-- Citadel does not Apply automatically
+- imported Stacks do not destroy the project before the first deployment
+- Citadel does not deploy automatically
 
 You can enable update and webhook behavior while reviewing the import or later.
 Stack drift behavior can be enabled after import.
@@ -257,13 +257,13 @@ container from the saved Deployment definition.
 
 The first later **Deploy** of an imported Standalone Stack may update or recreate
 containers so they match the authoritative Compose source. For a regular
-Compose project imported on a Swarm Platform, the first Apply stops Compose and
+Compose project imported on a Swarm Platform, the first deployment stops Compose and
 deploys the source as a native Swarm Stack as described above.
 
-The first later **Deploy** of an adopted Swarm Service may roll out Tasks so the
+The first later **Apply** of an adopted Swarm Service may roll out Tasks so the
 running Service matches the reviewed Citadel configuration.
 
-Before selecting **Deploy** or **Redeploy**:
+Before selecting **Deploy**, **Redeploy**, or a Swarm Service's **Apply**:
 
 1. Review images, ports, mounts, networks, variables, and lifecycle settings.
 2. Confirm that required Citadel variables and secrets resolve successfully.
@@ -304,7 +304,7 @@ or its containers reference different Stack IDs.
 Docker Swarm Stacks follow the same rule at Service namespace scope. Every
 Service must reference the same missing Citadel Stack ID, or every Service must
 be unmanaged. Mixed, malformed, conflicting, or still-owned namespaces cannot
-be imported. The first later Apply replaces stale Stack labels on the linked
+be imported. The first later deployment replaces stale Stack labels on the linked
 Services and permits only their referenced namespace resources during that
 transition.
 
@@ -321,7 +321,7 @@ Citadel cannot safely assume that the new container is the same workload. The
 replacement appears unmanaged and must be reviewed again.
 
 Compose Stacks receive current Citadel ownership labels through the normal
-Stack Apply process after import or orphan recovery.
+Stack deployment process after import or orphan recovery.
 
 ## Permissions
 
@@ -391,4 +391,3 @@ For normal Deployment behavior, see [Deployments](/docs/guides/deployments).
 For Web Editor Stacks, see [Manual Stacks](/docs/guides/manual-stacks).
 
 For Git-backed Stacks, see [Git Stacks](/docs/guides/git-stacks).
-

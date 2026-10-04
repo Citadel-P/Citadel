@@ -265,13 +265,13 @@ In a deployment, choose:
 
 `Redeploy On Build` requires `Automated Operations`. Without it, Citadel still
 records the new desired artifact and shows it as pending, but an operator must
-apply the deployment manually.
+select **Deploy** or **Redeploy** manually.
 
 The deployment form shows the latest build artifact, the artifact currently desired by the deployment, and the artifact last applied successfully. You can save the deployment before the first successful build, but the deployment cannot be applied from that build image until a run succeeds.
 
 When a build succeeds, Citadel updates each deployment that uses that build image source with the new desired image reference and digest, records a `DeploymentUpdated` activity event, streams the deployment update to connected clients, and writes the update to the build run log. If `Redeploy On Build` is enabled, Citadel redeploys the deployment after the build finishes.
 
-Apply uses the stored desired artifact, not whichever build happens to be latest when apply starts. Citadel pins the runtime reference to the image digest when available and advances the applied fields only after the deployment starts successfully. A failed redeploy therefore remains visibly pending and does not claim that the new build is running.
+Deployment uses the saved desired artifact. A newer build arriving during deployment does not change the image being deployed. Citadel pins the image digest when available and records it as applied only after the deployment starts successfully. A failed redeploy leaves the desired artifact pending.
 
 ### Stacks
 
@@ -493,9 +493,8 @@ A queued build keeps the build settings selected when it was queued. Editing
 the project does not change a build that is already waiting to run.
 
 A successful build and a successful redeployment are separate outcomes. If the
-image builds successfully but Apply fails, the build remains successful; check
-the Deployment or Stack activity for the Apply error. For Stack bindings with
+image builds successfully but deployment fails, the build remains successful; check
+the Deployment or Stack activity for the deployment error. For Stack bindings with
 **Redeploy On Build**, only the selected services are redeployed.
 
 If secrets appear masked in logs, that is expected. Citadel redacts configured secret values before storing or streaming log output.
-
