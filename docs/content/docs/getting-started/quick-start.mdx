@@ -54,9 +54,9 @@ account details before continuing.
 
 ## 3. Connect Docker
 
-1. Open **Platforms** and select **Add**.
+1. Open **Platforms** and select **Add Platform**.
 2. Select **Docker Standalone** as the platform type and **Local** as the connector.
-3. Name it `Local Docker` and select **Save**.
+3. Name it `local-docker` and select **Save**. Names use 3 to 64 letters, numbers, hyphens, or underscores.
 4. Wait for it to come online, then open it to see the containers on this host.
 
 A Platform is a Docker host that Citadel manages. You do not need an Agent for
@@ -65,12 +65,13 @@ to connect another machine.
 
 ## 4. Run an application
 
-1. Open **Deployments** and select **Add**.
-2. Name it `hello-web` and choose `Local Docker`.
+1. Open **Deployments** and select **Add Deployment**.
+2. Name it `hello-web` and choose `local-docker`.
 3. Set **Image Source** to **External**, choose **Docker Hub**, and enter `nginx:alpine`.
-4. In **Ports**, publish host port `8080` to container port `80` using TCP. Choose another host port if `8080` is in use.
-5. Select **Save**, then **Deploy**. Wait for the operation to finish.
-6. Open [http://localhost:8080](http://localhost:8080). You should see the Nginx welcome page.
+4. Under **Networks**, select `bridge`.
+5. In the **Ports** editor, enter `8080:80/tcp`. This publishes host port `8080` to container port `80`. Choose another host port if `8080` is in use.
+6. Select **Save**, then **Deploy**. Enter `hello-web` in the confirmation dialog, select **Deploy**, and wait for the operation to finish.
+7. Open [http://localhost:8080](http://localhost:8080). You should see the Nginx welcome page.
 
 Port `8080` makes this example website reachable on the Docker host. Its
 firewall controls who else can reach it. Citadel itself stays on port `18000`.
