@@ -435,8 +435,8 @@ async fn packaged_core_routes_direct_and_edge_resources_and_recovers_connections
 }
 
 async fn exercise(f: &mut Fixture, core: String, agent: String) {
-    // Let Docker choose a free subnet, then explicitly configure it so the
-    // static Core address used by nested Swarm tasks is supported.
+    // Let Docker choose a free subnet and gateway, then explicitly configure
+    // both so the static Core address used by nested Swarm tasks is supported.
     docker(&["network", "create", &f.name]).await;
     let subnet = docker(&[
         "network",
@@ -446,13 +446,22 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
         &f.name,
     ])
     .await;
-    docker(&["network", "rm", &f.name]).await;
-    docker(&["network", "create", "--subnet", &subnet, &f.name]).await;
     let gateway = docker(&[
         "network",
         "inspect",
         "--format",
         "{{(index .IPAM.Config 0).Gateway}}",
+        &f.name,
+    ])
+    .await;
+    docker(&["network", "rm", &f.name]).await;
+    docker(&[
+        "network",
+        "create",
+        "--subnet",
+        &subnet,
+        "--gateway",
+        &gateway,
         &f.name,
     ])
     .await;
