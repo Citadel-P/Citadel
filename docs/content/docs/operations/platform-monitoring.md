@@ -22,7 +22,7 @@ The platform summary counts backup policies attached to that platform through a
 Docker volume, stack, deployment, or managed Swarm Service. Citadel control-plane backups are
 instance-wide, so they are shown on the main **Backups** page and are not
 included in a platform's total. See
-[[Backups](/docs/guides/backups)](/docs/guides/backups#backup-counts) for details.
+[Backups](/docs/guides/backups#backup-counts) for details.
 
 Citadel includes these system rules:
 

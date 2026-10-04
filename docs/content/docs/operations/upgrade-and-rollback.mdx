@@ -1,35 +1,46 @@
 ---
 title: "Upgrade and rollback"
-description: "Upgrade Citadel with immutable image tags and recover safely from a failed release."
+description: "Update Citadel while keeping a way to recover your accounts and settings."
 ---
+
+These steps are for an installation using a published image. For a source build,
+review the changes on `main`, back up first, update the checkout, and rebuild
+with `docker compose up -d --build` from `deploy`.
 
 ## Before an upgrade
 
-1. Read the target release notes and migration warnings.
-2. Back up PostgreSQL and the `citadel_data` volume together.
-3. Record the current exact Core and Agent image versions.
+1. Read the target [release notes](https://github.com/Citadel-P/Citadel/releases).
+2. Back up PostgreSQL and `citadel_data` together. Check that you can retrieve the backup.
+3. Record the current complete Core and Agent image addresses, including their versions or digests.
 4. Confirm the current installation is healthy.
 
 ## Upgrade
 
-Set `CITADEL_IMAGE_TAG` to the target exact patch version, then run:
+Open your existing `.env`. Change **`CITADEL_IMAGE`** to the complete published
+image address for the chosen version, for example
+`ghcr.io/citadel-p/citadel:VERSION` with `VERSION` replaced. Changing only
+`CITADEL_IMAGE_TAG` does not override an active `CITADEL_IMAGE` value.
+
+From the installation's `deploy` directory, run:
 
 ```bash
-docker compose -f docker-compose.yml pull
-docker compose -f docker-compose.yml up -d
-docker compose -f docker-compose.yml ps
+docker compose pull
+docker compose up -d --no-build
+docker compose ps
 ```
 
-Citadel applies generated database migrations during startup. Do not create or
-edit production schema objects manually. Keep the previous database and data
-backup until the new release has passed the operational checks.
+Include your TLS overlay in these commands if you use it. Citadel updates its
+database during startup. Check sign-in, Platform connectivity, and a normal
+application operation before removing the old backup. Update Agents using the
+new generated setup command when the release notes require it.
 
 ## Rollback
 
-A container-image rollback does not reverse database migrations. Use a previous
-exact image tag only when the release notes say the schema remains compatible.
+Changing the image back does **not** undo database changes. Use an earlier image
+without restoring data only when the release notes confirm it is compatible.
 Otherwise stop Core and restore the matched pre-upgrade PostgreSQL and
-`citadel_data` backup before starting the previous image.
+`citadel_data` backup before starting the previous image. Follow
+[control-plane recovery](/docs/operations/control-plane-recovery).
 
-Never move a release tag or replace an immutable patch image. Citadel does not
-publish `latest`.
+Use exact patch versions or digests for repeatable installations. Citadel's
+release workflows publish patch, minor, and major aliases, but no `latest` tag.

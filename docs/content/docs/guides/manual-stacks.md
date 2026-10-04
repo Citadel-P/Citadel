@@ -12,6 +12,17 @@ Use Git stacks instead when the Compose files should be reviewed, versioned, and
 To import a Docker Compose project that is already running without applying it
 again during onboarding, see [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
 
+## Deploy a Compose file
+
+1. Open **Stacks** and select **Add**.
+2. Choose a name, an online Platform, and **Web Editor** as the source.
+3. Paste the application's Compose file and fix any reported errors.
+4. Add referenced variables and secrets on the **Bindings** tab.
+5. Select **Save**, then **Deploy**. Check the result on the **Services** tab.
+
+Try [your first Stack](/docs/getting-started/first-stack) if you do not have a Compose file yet.
+On Swarm, Citadel checks whether the Compose fields can be represented by native Swarm services.
+
 ## Basic Setup
 
 Create a stack and choose:
@@ -37,7 +48,7 @@ volumes:
   app_data:
 ```
 
-After saving the stack, use **Apply** to deploy it. Editing the Compose file changes the stack definition, but the platform is not changed until the stack is applied again.
+After saving the stack, use **Deploy** to deploy it. Editing the Compose file changes the stack definition, but the platform is not changed until the stack is applied again.
 
 ## Compose File
 

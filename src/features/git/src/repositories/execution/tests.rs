@@ -110,7 +110,12 @@ fn compose_discovery_lists_named_env_files_in_their_project_directory() {
     );
     assert_eq!(
         projects[0].env_file_paths,
-        [".env", ".env.production", "demo-app.env", "sample-app.env.local"]
+        [
+            ".env",
+            ".env.production",
+            "demo-app.env",
+            "sample-app.env.local"
+        ]
     );
     assert_eq!(projects[1].env_file_paths, ["apps/api/.env.local"]);
 }

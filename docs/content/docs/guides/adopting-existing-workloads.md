@@ -25,6 +25,21 @@ connected manager during synchronization. Docker Desktop may still display
 worker-local history, or manager-local history when pruning is disabled in the
 Swarm Platform's Config tab.
 
+## Bring an existing application into Citadel
+
+Adoption creates a managed configuration from a workload already running in Docker.
+It does not recreate that workload during onboarding.
+
+1. Open the application's Platform and find the container or Compose project.
+2. Choose its adoption or import action and review the generated configuration.
+3. Check image references, ports, mounts, and any settings that could not be recovered.
+4. Save the reviewed adoption. Check that Citadel now shows the managed workload.
+5. Deploy later, after confirming that the saved configuration can reproduce the application.
+
+Keep a backup and the original source configuration. A later deployment can
+replace containers. Swarm Services and Swarm Stacks have their own supported
+management flows; the limits below explain what can be adopted.
+
 ## What Adoption Changes
 
 Adoption creates a Citadel resource and links it to the existing Docker
@@ -182,7 +197,7 @@ the original Docker value is never sent to the browser.
 
 Confirming adoption creates the Citadel Service and links it to the exact Docker
 Service ID. It does not update, relabel, restart, or recreate the Docker Service.
-The first later **Apply** updates that same Service and establishes Citadel's
+The first later **Deploy** updates that same Service and establishes Citadel's
 normal ownership labels.
 
 Citadel does not offer **Adopt Service** for stale inventory, Services already
@@ -215,7 +230,7 @@ deploy`, relabel a Service, restart a Task, or change a Docker resource. If the
 namespace changes while the review is open, the import is rejected and no
 partial Stack or ownership link is kept.
 
-The first later **Apply** targets the reserved namespace and establishes normal
+The first later **Deploy** targets the reserved namespace and establishes normal
 Citadel ownership labels. Review that Apply carefully: the selected Compose
 source is authoritative and may update or remove runtime definitions that do
 not match it.
@@ -240,12 +255,12 @@ Adoption and Apply are separate operations.
 The first later **Redeploy** of an adopted Deployment may recreate its
 container from the saved Deployment definition.
 
-The first later **Apply** of an imported Standalone Stack may update or recreate
+The first later **Deploy** of an imported Standalone Stack may update or recreate
 containers so they match the authoritative Compose source. For a regular
 Compose project imported on a Swarm Platform, the first Apply stops Compose and
 deploys the source as a native Swarm Stack as described above.
 
-The first later **Apply** of an adopted Swarm Service may roll out Tasks so the
+The first later **Deploy** of an adopted Swarm Service may roll out Tasks so the
 running Service matches the reviewed Citadel configuration.
 
 Before the first Redeploy or Apply:

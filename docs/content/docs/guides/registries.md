@@ -13,6 +13,21 @@ Use registries when:
 - you want to pull an image onto a platform from Citadel
 - private registry credentials are required
 
+## Use public or private images
+
+For a public Docker Hub image, select the built-in **Docker Hub** registry in
+the application form. You do not need to add credentials.
+
+For a private image:
+
+1. Open **Registries** and select **Add**.
+2. Choose **DockerHub**, **GitHub**, or **Custom**, then enter the required provider settings.
+3. Select **Save**. Citadel checks supported credentials before saving.
+4. Choose this Registry in your Deployment, Stack, or Build Project.
+
+Use a provider token with the access needed for your task. Pulling and pushing
+images may require different permissions.
+
 ## Supported Providers
 
 The registry form supports:

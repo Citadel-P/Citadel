@@ -5,12 +5,6 @@ set -euo pipefail
 image="${1:?Usage: test-agent-compatibility.sh AGENT_IMAGE [TEST_EXECUTABLE]}"
 binary="${2:-}"
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
-if [[ -z "$binary" ]]; then
-  binary=$(CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false \
-    cargo test --locked -p citadel-agent --test compatibility --test live_docker --test edge_intake --no-run --message-format=json |
-    python3 -c 'import json,sys; rows=[json.loads(line) for line in sys.stdin]; print("\n".join(r["executable"] for r in rows if r.get("reason")=="compiler-artifact" and r.get("target",{}).get("name") in ("compatibility", "live_docker", "edge_intake") and r.get("executable")))')
-fi
-mapfile -t binaries <<< "$binary"
 fixture="citadel-agent-compat-$$-$RANDOM"
 directory=$(mktemp -d)
 dind=docker@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
@@ -20,17 +14,58 @@ postgres=postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d3
 cleanup() {
   result=$?
   trap - EXIT
-  for role in runner registry postgres worker daemon; do
+  for role in runner builder registry postgres worker daemon; do
     if (( result != 0 )); then docker logs "$fixture-$role" 2>/dev/null || true; fi
     docker rm -fv "$fixture-$role" >/dev/null 2>&1 || true
   done
   docker network rm "$fixture" >/dev/null 2>&1 || true
+  docker image rm "$fixture-build" >/dev/null 2>&1 || true
   rm -rf "$directory"
   exit "$result"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [[ -z "$binary" ]]; then
+  # Host runners can require a newer glibc than the packaged Agent provides.
+  # Compile these executables with the Agent's pinned production Rust builder.
+  docker build --file Dockerfile.agent --target rust-source --tag "$fixture-build" .
+  mkdir -p "$directory/target"
+  docker run --name "$fixture-builder" \
+    --user "$(id -u):$(id -g)" \
+    --mount "type=bind,src=$directory/target,dst=/source/target" \
+    --env CARGO_HOME=/source/target/.cargo \
+    --env CARGO_PROFILE_TEST_DEBUG=0 --env CARGO_PROFILE_DEV_DEBUG=0 \
+    --env CARGO_PROFILE_DEV_INCREMENTAL=false \
+    --entrypoint cargo "$fixture-build" \
+    test --locked -p citadel-agent --test compatibility --test live_docker --test edge_intake \
+    --no-run --message-format=json --target-dir /source/target > "$directory/artifacts.json"
+  docker rm -fv "$fixture-builder" >/dev/null
+  binary=$(python3 - "$directory" <<'PY'
+import json
+import pathlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+expected = {"compatibility", "live_docker", "edge_intake"}
+executables = {}
+for line in (directory / "artifacts.json").read_text().splitlines():
+    row = json.loads(line)
+    name = row.get("target", {}).get("name")
+    if row.get("reason") == "compiler-artifact" and name in expected and row.get("executable"):
+        relative = pathlib.Path(row["executable"]).relative_to("/source/target")
+        executable = directory / "target" / relative
+        if not executable.is_file():
+            raise SystemExit(f"Missing test executable: {executable}")
+        executables[name] = executable
+if executables.keys() != expected:
+    raise SystemExit(f"Expected all three Agent test executables; found {sorted(executables)}")
+print("\n".join(str(executables[name]) for name in sorted(expected)))
+PY
+  )
+fi
+mapfile -t binaries <<< "$binary"
 
 # Public fixture credential, used only by the isolated registry.
 # shellcheck disable=SC2016

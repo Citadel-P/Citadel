@@ -13,11 +13,25 @@ Use Git stacks after the repository has been added and synced. See [Git Stacks](
 
 Use builds when a Dockerfile in the repository should produce an image pushed to a registry. See [Builds](/docs/guides/builds).
 
+## Connect a repository
+
+Ask the application's maintainer for its clone URL and branch name. For a private
+repository, also prepare a read-only token or SSH deploy key.
+
+1. Open **Repositories**.
+2. For private access, create the matching credentials in **Git Accounts** first.
+3. Add the repository, enter its URL and default branch, and choose the account if needed.
+4. Select **Save** and wait for the initial sync to finish.
+5. Check that the repository files and branches are available before creating a Git Stack or Build Project.
+
+Leave clone and pull scripts empty unless your maintainer needs them. They execute
+commands on Core. The sections below cover credentials and more advanced sync options.
+
 ## Git Accounts
 
 A Git account represents credentials for one Git host or domain.
 
-Create an account from the Git Repositories page, in the **Git Accounts** section, and choose:
+Create an account from the Repositories page, in the **Git Accounts** section, and choose:
 
 - Name: a recognizable label for the credentials.
 - Domain: the Git host, such as `github.com`, `gitlab.example.com`, or `gitea.internal`.

@@ -16,6 +16,20 @@ Examples:
 
 Actions run through Citadel permissions. They are not raw shell scripts and they do not get host or Docker access.
 
+## Run a prepared action
+
+An Action is a small script. Ask your application's maintainer to prepare and
+review it if you do not write TypeScript.
+
+1. Open **Automation** and add an Action.
+2. Enter its code and choose an enabled **Run As** account with only the access it needs.
+3. Save it, run a test, and review the logs before using it for a live operation.
+4. Start an enabled Action manually and check its **Runs** tab.
+
+Manual and test runs are available in Community. Schedules and webhook execution
+require Automated Operations. A test can perform real operations allowed by its
+permissions; use a safe target. The sections below are for the person maintaining the script.
+
 ## License Availability
 
 Community can:
@@ -38,7 +52,7 @@ available.
 Open:
 
 ```text
-Automation -> Actions
+Automation
 ```
 
 The list shows:
@@ -56,7 +70,7 @@ The status dot near the name reflects whether the action is enabled and whether 
 Select:
 
 ```text
-Automation -> Actions -> Add Action
+Automation -> Add
 ```
 
 Set:

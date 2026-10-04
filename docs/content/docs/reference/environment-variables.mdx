@@ -4,12 +4,15 @@ description: "Reference the production settings exposed by Citadel's Docker Comp
 ---
 
 Citadel uses environment variable names with double underscores between
-sections. The committed `.env.example` is the authoritative production
-template.
+sections. The committed `deploy/.env.example` lists supported installation options. Its
+active defaults are for local HTTP; configure TLS before sharing an installation.
 
 | Setting | Required when | Purpose |
 | --- | --- | --- |
-| `CITADEL_IMAGE_TAG` | Released Compose installation | Exact Citadel image version |
+| `CITADEL_IMAGE` | Published-image installation | Complete image address including version or digest; overrides the local image fallback |
+| `CITADEL_IMAGE_TAG` | Optional source-build/fallback setting | Version used by local image/build defaults; does not override `CITADEL_IMAGE` |
+| `CITADEL_BIND_ADDRESS` | Optional | Host bind address; defaults to `127.0.0.1` |
+| `CITADEL_HTTP_PORT`, `CITADEL_EDGE_PORT` | Optional | Host ports; default to `18000` and `18001` |
 | `PG_HOST` | External or renamed PostgreSQL | PostgreSQL hostname; Compose defaults to `pg_db` |
 | `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` | Always | PostgreSQL credentials and database |
 | `Transport__Mode` | Always | `ReverseProxy`, `Direct`, or development-only `Disabled` |
@@ -20,11 +23,11 @@ template.
 | `Transport__ForwardedHeaders__KnownNetworks` | Reverse proxy alternative | Immediate trusted proxy network |
 | `Transport__Certificate__Path` | Direct TLS | PEM certificate chain inside Core |
 | `Transport__Certificate__PrivateKeyPath` | Direct TLS | PEM private key inside Core |
-| `Jwt__Issuer`, `Jwt__Audience` | Always | Token validation identities |
+| `Jwt__Issuer`, `Jwt__Audience` | Optional override | Token validation identities; otherwise derived from the public URL |
 | `Jwt__Key` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
 | `Secrets__EncryptionKey` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
 | `Mfa__Policy` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
-| `EnableSwagger` | Optional | Exposes the internal Swagger UI; false by default |
+| `EnableSwagger` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 See [Docker Compose configuration](/docs/getting-started/configuration) for
 defaults, bootstrap settings, automation, monitoring intervals, and safe key

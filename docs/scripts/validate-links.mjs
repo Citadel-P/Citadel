@@ -1,7 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const contentRoot = path.resolve('content/docs');
+const contentRoot = path.resolve(process.argv[2] ?? 'content/docs');
 const pages = new Map();
 const errors = [];
 
@@ -12,7 +12,7 @@ for (const file of await walk(contentRoot)) {
     .replace(/\.(?:md|mdx)$/, '')
     .replace(/(^|\/)index$/, '$1')
     .replace(/\/$/, '');
-  const text = await readFile(file, 'utf8');
+  const text = withoutCodeBlocks(await readFile(file, 'utf8'));
   pages.set(`/docs${route ? `/${route}` : ''}`, {
     relative,
     anchors: headingAnchors(text),
@@ -21,10 +21,25 @@ for (const file of await walk(contentRoot)) {
 
 for (const [route, page] of pages) {
   const file = path.join(contentRoot, page.relative);
-  const text = await readFile(file, 'utf8');
-  for (const match of text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+  const text = withoutCodeBlocks(await readFile(file, 'utf8'));
+  if (/\[\[[^\]]+\]\([^)]+\)\]\(/.test(text)) {
+    errors.push(`${page.relative}: malformed nested Markdown link`);
+  }
+  const links = [
+    ...text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g),
+    ...text.matchAll(/\bhref\s*=\s*["']([^"']+)["']/g),
+  ];
+  for (const match of links) {
     const target = match[1].trim().replace(/^<|>$/g, '');
     if (/^(?:https?:|mailto:)/i.test(target)) continue;
+    if (target.startsWith('/screenshots/')) {
+      try {
+        await access(path.resolve('public', target.slice(1)));
+      } catch {
+        errors.push(`${page.relative}: missing screenshot ${target}`);
+      }
+      continue;
+    }
     if (target.startsWith('#')) {
       validateAnchor(page, route, target.slice(1));
       continue;
@@ -46,6 +61,24 @@ if (errors.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(`Documentation link validation passed for ${pages.size} pages.`);
+}
+
+function withoutCodeBlocks(text) {
+  let fence;
+  return text.split('\n').map((line) => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (!fence && marker) {
+      fence = marker[1];
+      return '';
+    }
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) {
+        fence = undefined;
+      }
+      return '';
+    }
+    return line;
+  }).join('\n');
 }
 
 function validateAnchor(page, route, anchor, source = page.relative) {

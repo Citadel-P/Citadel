@@ -132,12 +132,16 @@ overlay mounts it read-only at `/etc/citadel/tls`.
 Set:
 
 ```dotenv
+CITADEL_BIND_ADDRESS=0.0.0.0
+CITADEL_HTTP_PORT=443
+CITADEL_EDGE_PORT=8443
+
 Transport__Mode=Direct
-Transport__PublicUrl=https://citadel.example.com:8000
+Transport__PublicUrl=https://citadel.example.com
 Transport__ApiPort=8000
 Transport__EdgeGrpcPort=8001
 
-EdgeAgent__PublicGrpcUrl=https://citadel.example.com:8001
+EdgeAgent__PublicGrpcUrl=https://citadel.example.com:8443
 AllowedHosts=citadel.example.com;localhost
 
 Transport__Certificate__Path=/etc/citadel/tls/core-fullchain.pem
@@ -146,13 +150,13 @@ Transport__Certificate__PrivateKeyPath=/etc/citadel/tls/core-key.pem
 AgentTransport__AllowInsecure=true
 ```
 
-Use the supplied direct-TLS Compose overlay to publish both TLS ports and run
-the HTTPS health check:
+From `deploy`, use the supplied direct-TLS overlay to mount the certificates.
+The base Compose file publishes the configured host ports and checks listener health:
 
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f docker-compose.direct-tls.yml \
+  -f compose.direct-tls.yml \
   up -d
 ```
 
@@ -173,16 +177,18 @@ Use cleartext only when the network is intentionally isolated:
 
 ```dotenv
 Transport__Mode=Disabled
-Transport__PublicUrl=http://localhost:8000
+Transport__PublicUrl=http://localhost:18000
 Transport__ApiPort=8000
 Transport__EdgeGrpcPort=8001
-EdgeAgent__PublicGrpcUrl=http://host.docker.internal:8001
+EdgeAgent__PublicGrpcUrl=http://localhost:18001
 AllowedHosts=localhost;host.docker.internal
 
 AgentTransport__AllowInsecure=true
 ```
 
-Citadel logs a warning while this mode is active. Do not expose this setup to
+The supplied Compose setup maps the container ports to host ports `18000` and
+`18001`, bound to loopback. This gRPC URL is local-only; remote Agents need a
+reachable, secured address. Citadel logs a warning while this mode is active. Do not expose this setup to
 an untrusted LAN or the internet.
 
 ## Secure a regular Agent

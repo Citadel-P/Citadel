@@ -1,37 +1,43 @@
 ---
-title: "Architecture"
-description: "Understand Citadel Core, PostgreSQL, connectors, Agents, and managed Docker platforms."
+title: "How Citadel works"
+description: "Understand the parts of your installation and where your data lives."
 ---
 
-Citadel has a central control plane and one or more Docker data-plane
-connections.
+Citadel is the web interface you use to manage Docker. Docker runs your
+applications; Citadel stores their settings, sends operations to Docker, and
+shows the results.
 
-## Components
+## The main parts
 
-| Component | Responsibility |
+| Part | What it does |
 | --- | --- |
-| Core | Hosts the API and web UI, authorization, jobs, reconciliation, and orchestration |
-| PostgreSQL | Stores configuration, identity, ownership, activities, operations, and retained statistics |
-| Citadel data volume | Stores encryption, signing, data-protection, repository-cache, and other local control-plane files |
-| Local connector | Uses the Docker socket mounted into Core |
-| Regular Agent | Connects Core to a remote Docker host over the configured Agent transport |
-| Edge Agent | Establishes an enrolled outbound connection from a remote host |
-| Swarm node agent | Reports node-local container, log, terminal, volume, and statistics data that a manager cannot provide for other Nodes |
+| Citadel Core | Serves the web interface and API, checks access, and runs background jobs |
+| PostgreSQL | Saves accounts, application settings, activities, and collected statistics |
+| `citadel_data` volume | Saves keys used to protect secrets, signing keys, and local repository files |
+| Local connector | Lets Core manage Docker on its own host through the Docker socket |
+| Agent | Lets Core connect to Docker on another reachable host |
+| Edge Agent | Connects out from a remote host to Core when inbound connections are unavailable |
+| Swarm node agents | Provide information and operations on cluster nodes that the manager cannot supply alone |
 
-Core reconciles persisted desired state with Docker's observed state. Docker
-events provide prompt updates, while bounded reconciliation repairs missed
-events and state after disconnects or restarts.
+The [Platform guide](/docs/getting-started/first-platform) helps you choose a
+connection. You do not need an Agent for the local quick start.
 
-## State ownership
+## Saved settings and running applications
 
-Docker remains the runtime source for observed state. Citadel's database is the
-source for managed configuration, ownership, authorization, and operation
-history. Back up PostgreSQL and the Citadel data volume together; restoring
-only one can leave encrypted data or sessions unusable.
+Saving a Deployment or Stack changes Citadel's configuration. Selecting
+**Deploy** sends that configuration to Docker. Citadel then compares the saved
+configuration with what is actually running. An unexpected difference is called
+**drift**.
 
-## Trust boundaries
+Docker applications can keep running while Citadel is stopped, but Citadel
+cannot monitor them or carry out operations during that time.
 
-- Protect browser and API traffic with TLS.
-- Treat Docker socket access and Agent connections as administrative access to the target host.
-- Grant Service Accounts only the permissions their integration requires.
-- Do not expose PostgreSQL or Core's private upstream listeners publicly.
+## What to back up
+
+Back up **PostgreSQL and `citadel_data` together** to recover your Citadel
+installation. Back up your applications' named volumes separately to recover
+their data. See the [backup guide](/docs/guides/backups).
+
+Citadel and its Agents have administrative access to their Docker hosts. Protect
+administrator accounts, use HTTPS for shared access, and give other users only
+the permissions they need.

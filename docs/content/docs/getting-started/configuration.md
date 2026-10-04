@@ -1,120 +1,84 @@
 ---
 title: "Docker Compose configuration"
-description: "Configure a production Citadel installation deployed with Docker Compose."
+description: "Change Citadel settings without losing your installation data."
 ---
 
-Citadel ships `.env.example` as a production-oriented configuration template.
-Do not run a production installation directly from that file and do not store
-deployment secrets in the repository.
+Citadel's installation settings live in `deploy/.env`. Application settings,
+such as Platforms and Deployments, are managed in the browser.
 
 ## Prepare the environment
 
-Create the local configuration file:
+Run these commands from the repository's `deploy` directory:
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-On PowerShell:
+Do this only for a new installation. Keep your existing `.env` when upgrading.
+The example is a **local HTTP setup**, not a ready-made public installation.
 
-```powershell
-Copy-Item .env.example .env
-```
+## Settings most installations need
 
-Replace the active hostname and secret placeholders before starting Citadel.
-Optional settings are commented out so the initial configuration stays small.
-Uncomment one only when you need to override its documented default. The `.env`
-file is ignored by Git and is read by `docker-compose.yml`.
+| Setting | Example default | When to change it |
+| --- | --- | --- |
+| `PG_PASSWORD` | Empty | Always set a long, unique database password before starting |
+| `CITADEL_IMAGE` | `citadel-rust:local` | Use the complete image address and exact version for a published release |
+| `CITADEL_BIND_ADDRESS` | `127.0.0.1` | Change only after configuring secure network access |
+| `CITADEL_HTTP_PORT` | `18000` | Change if this host port is already in use |
+| `CITADEL_EDGE_PORT` | `18001` | Host port for the separate Edge Agent connection |
+| `Transport__Mode` | `Disabled` | Choose `ReverseProxy` or `Direct` for HTTPS network access |
+| `Transport__PublicUrl` | `http://localhost:18000` | Set to the browser address users will open |
+| `EdgeAgent__PublicGrpcUrl` | `http://localhost:18001` | Set to the reachable gRPC address for Edge Agents |
+| `AllowedHosts` | Local hostnames | Include the hostname of your shared installation |
 
-## Required production values
-
-The active settings in `.env.example` are the values required by the selected
-reverse-proxy setup:
-
-| Setting | Purpose |
-| --- | --- |
-| `PG_USER` | PostgreSQL user |
-| `PG_PASSWORD` | PostgreSQL password |
-| `PG_DATABASE` | PostgreSQL database |
-| `Transport__Mode` | Production transport mode |
-| `Transport__PublicUrl` | Browser and API origin |
-| `EdgeAgent__PublicGrpcUrl` | Public Edge Agent gRPC origin |
-| `Transport__ForwardedHeaders__KnownProxies` | Immediate reverse-proxy address |
-| `Jwt__Issuer` | JWT issuer, normally the public Citadel origin |
-| `Jwt__Audience` | JWT audience, normally the public Citadel origin |
-
-Generate a random database password. Do not reuse it for the initial
-administrator password.
+The supplied PostgreSQL values are `PG_HOST=pg_db`, `PG_PORT=5432`,
+`PG_USER=citadel`, and `PG_DATABASE=citadel`. These match the Compose database
+service. Do not change them independently on an existing installation.
 
 ## Transport mode
 
-The example selects `ReverseProxy`, the recommended production mode. Configure
-the immediate proxy address or network and keep Core's cleartext listeners on
-the private proxy network.
+- **Disabled**: HTTP for local evaluation on loopback or an isolated test network.
+- **ReverseProxy**: an HTTPS proxy sits in front of Citadel. Configure the immediate trusted proxy addresses and public URLs.
+- **Direct**: Citadel serves TLS. Configure certificate and key paths, then include `compose.direct-tls.yml`.
 
-For direct TLS, change `Transport__Mode` to `Direct`, remove the
-`Transport__ForwardedHeaders__*` values, configure the PEM certificate and key
-paths, and start the direct-TLS overlay:
+The complete instructions are in
+[TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
+Browser traffic and Edge Agent traffic use separate listeners. Their container
+ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001`).
 
-```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.direct-tls.yml \
-  up -d
-```
-
-Use `Disabled` only for local development or an intentionally isolated test
-network. See [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
-for complete proxy, direct TLS, and Agent TLS instructions.
-
-## Application settings
-
-The template also documents:
+## Optional settings
 
 | Setting | Default | Purpose |
-| --- | ---: | --- |
-| `CITADEL_IMAGE_TAG` | Required for release installs | Exact Core image version or digest; Citadel does not publish `latest` |
-| `PG_HOST` | `pg_db` | PostgreSQL host |
-| `JobConfiguration__MonitoringInterval` | `10` | Metric collection interval in seconds |
-| `JobConfiguration__FlashInterval` | `60` | Buffered metric persistence interval in seconds |
+| --- | --- | --- |
+| `Mfa__Policy` | `Optional` | Require two-factor authentication for administrators or all users |
+| `EnableSwagger` | `false` | Show API reference pages on your installation |
+| `JobConfiguration__MonitoringInterval` | `10` | Collect metrics every 10 seconds |
+| `JobConfiguration__FlashInterval` | `60` | Save buffered metrics every 60 seconds |
 | `Jwt__AccessToken__ValidForMinutes` | `15` | Access-token lifetime |
 | `Jwt__RefreshToken__ValidForDays` | `30` | Refresh-token lifetime |
-| `Jwt__Key` | Generated | JWT signing key |
-| `Secrets__EncryptionKey` | Generated | Encryption key for stored secrets and provider tokens |
-| `Mfa__Policy` | `Optional` | MFA enforcement policy |
-| `Cors__0` | Same-origin only | Additional browser origin allowed by CORS |
-| `EnableSwagger` | `false` | Swagger/OpenAPI exposure |
-| `EnableLogColor` | `false` | ANSI coloring in container logs |
-| `Automations__Enabled` | `true` | Automation execution |
-| `Automations__MaxParallelRuns` | `4` | Maximum concurrent automation runs |
-| `Automations__InternalBaseUrl` | `http://localhost:8000` | Loopback API URL used by automation actions |
+| `Automations__Enabled` | `true` | Allow automation execution |
+| `Automations__MaxParallelRuns` | `4` | Limit concurrent automation runs |
 
 Leave `Jwt__Key` and `Secrets__EncryptionKey` commented to let Citadel generate
-and persist them in the Core data volume. Back up that volume with the database
-because sessions and encrypted stored values cannot be recovered without those
-keys.
+and save them in `citadel_data`. `Jwt__Issuer` and `Jwt__Audience` normally
+follow the public URL when not explicitly configured. Back up the data volume
+with PostgreSQL so these keys remain available during recovery.
 
-Unattended first-run setup is optional. If enabled, mount the administrator
-password file read-only rather than putting the password in `.env`. See
-[First-Run Setup](/docs/getting-started/first-run-setup).
+For additional options, use the [environment variable reference](/docs/reference/environment-variables).
+Unattended administrator setup is explained in
+[first-run setup](/docs/getting-started/first-run-setup).
 
-## Start and update
+## Apply a setting change
 
-Start the production services without the development override:
-
-```bash
-docker compose -f docker-compose.yml up -d
-```
-
-After changing `.env`, apply the configuration again:
+Save `.env`, then run from `deploy`:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+docker compose up -d
+docker compose ps
 ```
 
-Keep `.env` out of source control, support bundles, screenshots, and shared
-archives. TLS private keys and bootstrap password files should also remain
-outside the repository and be mounted read-only.
-
-
+Include your TLS overlay if you use one. Changing an environment variable
+requires recreating the container; `docker compose restart` alone does not
+load the new value. Keep `.env`, certificates, and bootstrap password files
+out of screenshots and shared support files.

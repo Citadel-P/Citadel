@@ -1,99 +1,85 @@
 ---
 title: "Quick start"
-description: "Run Citadel locally, connect Docker, and deploy a first container."
+description: "Start Citadel, connect Docker, and run your first application."
 ---
 
-This guide starts Citadel and PostgreSQL on one Docker machine. Citadel will
-also manage Docker on that machine. You only need Docker with the Compose
-plugin installed.
+This guide runs Citadel on a Linux machine that already has Docker. You will
+use the terminal once to install it, then manage your applications in a browser.
+If someone has already installed Citadel for you, start at
+[create your account](#2-create-your-account).
 
-> The local setup uses HTTP and listens only on `127.0.0.1`. Use the
-> [production installation](/docs/getting-started/install) before exposing
-> Citadel to a network.
+**You need:** Git, Docker, and Docker Compose version 2.30 or newer. Check with
+`git --version`, `docker --version`, and `docker compose version`.
 
 ## 1. Start Citadel
 
-> Citadel has not published its first stable tag yet. For now, use the
-> [source-build instructions](#try-the-current-source). The release commands
-> below become available with the first stable release.
-
-Choose an exact version from the
-[Citadel releases page](https://github.com/Citadel-P/Citadel/releases) and run:
+The following commands build the current code from `main`. Use the
+[release installation guide](/docs/getting-started/install) when you have a
+published release image.
 
 ```bash
-export VERSION=1.0.0
-mkdir citadel && cd citadel
-
-curl -fsSLO "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/deploy/docker-compose.yml"
-curl -fsSLO "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/docker-compose.local.yml"
-
-cat > .env <<EOF
-CITADEL_IMAGE_TAG=${VERSION}
-PG_USER=citadel
-PG_PASSWORD=$(openssl rand -hex 24)
-PG_DATABASE=citadel
-EOF
-
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+git clone --branch main --single-branch https://github.com/Citadel-P/Citadel.git
+cd Citadel/deploy
+cp .env.example .env
 ```
 
-Wait for both services to become healthy:
+Open `.env` in a text editor. Set `PG_PASSWORD` to a long, unique password and
+save the file. This is the database password; you will choose your sign-in
+password separately.
+
+Start Citadel:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml ps
+docker compose up -d --build
+docker compose ps
 ```
+
+The first build can take several minutes. Wait until `server` and `pg_db` are
+healthy. If either fails, use the
+[troubleshooting guide](/docs/operations/troubleshooting).
+
+This setup listens only on this machine. It gives Citadel administrative access
+to its Docker engine. Follow the [installation guide](/docs/getting-started/install)
+before making Citadel available to other people over a network.
 
 ## 2. Create your account
 
-Open [http://localhost:8000](http://localhost:8000). Citadel asks you to create
-the first administrator account and signs you in.
+Open [http://localhost:18000](http://localhost:18000) on the machine where
+Citadel is running. Enter your name, email, and a password of 15 to 128
+characters, then select **Create administrator**.
 
-There is no default username or password.
+There is no default username or password. If you see the sign-in page instead,
+this installation already has an administrator.
 
 ## 3. Connect Docker
 
 1. Open **Platforms** and select **Add**.
-2. Choose **Docker Standalone**.
-3. Choose the **Local** connector.
-4. Enter a name such as `Local Docker` and save.
+2. Select **Docker Standalone** as the platform type and **Local** as the connector.
+3. Name it `Local Docker` and select **Save**.
+4. Wait for it to come online, then open it to see the containers on this host.
 
-The platform indicator turns green after Citadel reads the Docker inventory.
+A Platform is a Docker host that Citadel manages. You do not need an Agent for
+this local setup. See [connect a platform](/docs/getting-started/first-platform)
+to connect another machine.
 
-## 4. Deploy a container
+## 4. Run an application
 
 1. Open **Deployments** and select **Add**.
-2. Select `Local Docker`.
-3. Name the Deployment `nginx`.
-4. Choose **External image**, then select the built-in **Docker Hub** registry.
-5. Enter `nginx:alpine` as the image reference.
-6. Save the Deployment and select **Apply**.
+2. Name it `hello-web` and choose `Local Docker`.
+3. Set **Image Source** to **External**, choose **Docker Hub**, and enter `nginx:alpine`.
+4. In **Ports**, publish host port `8080` to container port `80` using TCP. Choose another host port if `8080` is in use.
+5. Select **Save**, then **Deploy**. Wait for the operation to finish.
+6. Open [http://localhost:8080](http://localhost:8080). You should see the Nginx welcome page.
 
-When the progress sheet completes, the Deployment and its container should be
-green. You can now open its logs, inspect it, or add a published port from the
-Config tab.
+Port `8080` makes this example website reachable on the Docker host. Its
+firewall controls who else can reach it. Citadel itself stays on port `18000`.
 
 ## What next?
 
-- [Deploy a Compose Stack](/docs/getting-started/first-stack).
-- [Connect another Docker host](/docs/getting-started/first-platform).
-- [Prepare a production installation](/docs/getting-started/install).
-- [Configure backups](/docs/guides/backups).
+- [Deploy a Compose Stack](/docs/getting-started/first-stack) for an application with several services.
+- [Choose a task](/docs/guides) to learn about backups, updates, Git, and access.
+- [Secure network access](/docs/getting-started/install) before sharing this installation.
 
-To stop the local installation without deleting its data:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml down
-```
-
-## Try the current source
-
-Until the first stable image is published, run the current source locally:
-
-```bash
-git clone https://github.com/Citadel-P/Citadel.git
-cd Citadel
-cp .env.example .env
-docker compose up -d --build
-```
-
-Then continue at [create your account](#2-create-your-account).
+To stop Citadel while keeping its accounts and settings, run `docker compose
+stop` from `Citadel/deploy`. To start it again, run `docker compose up -d`.
+Avoid `down -v`: it deletes the database and Citadel data volumes.

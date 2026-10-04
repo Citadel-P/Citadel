@@ -15,8 +15,8 @@ npm ci --prefix docs
 npm run dev --prefix docs
 ```
 
-Local development defaults to `http://localhost:3000`. Production and CI builds
-must set:
+Local development defaults to `http://localhost:3000`. Set explicit URLs when
+checking an export locally or preparing a publication:
 
 ```text
 NEXT_PUBLIC_DOCS_URL=https://docs.example.com
@@ -26,6 +26,7 @@ NEXT_PUBLIC_API_DOCS_URL=https://api-docs.example.com
 ## Validation
 
 ```bash
+npm run test:config --prefix docs
 npm run validate --prefix docs
 npm run lint --prefix docs
 npm run types:check --prefix docs
@@ -55,3 +56,24 @@ from an arbitrary `main` commit.
 
 Until a separate API-reference hostname and deployment target are configured,
 the release workflow publishes `docs/api-out` as an independent artifact.
+
+## GitHub Pages and CI
+
+`DOCS_SITE_URL` and `API_DOCS_URL` are GitHub repository variables. Release builds
+require both. Ordinary documentation checks use local test URLs when the variables
+are absent, so pull requests and forks can validate the docs before hosting exists.
+
+The product site's URL can include a path, for example
+`https://citadel-p.github.io/Citadel`. The build derives Next.js `basePath` from
+that path and prefixes images, search, and navigation accordingly. A custom
+root domain does not need a prefix. Set the URL before building; changing it
+requires rebuilding the static output.
+
+The API output uses relative asset paths and can be hosted independently. Setting
+`API_DOCS_URL` adds its navigation link; it does not deploy that artifact.
+See [CI and release configuration](CI.md) for the publication settings and checks.
+
+Keep user pages task-focused: explain prerequisites, give the shortest useful
+steps, show what success looks like, and put detailed controls after that path.
+Use current button and menu labels. Reuse real screenshots from `public/screenshots`
+with descriptive alt text and say when they show demonstration data.

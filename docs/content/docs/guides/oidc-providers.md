@@ -16,6 +16,21 @@ Citadel uses the provider only to verify who the user is. After login, Citadel s
 
 Local Citadel login remains available, including the local admin account.
 
+## Set up company sign-in
+
+OIDC connects Citadel to your identity provider. Your organization's sign-in
+administrator should supply the client settings and configure the callback.
+
+1. Open **Settings → OIDC Providers** and add a provider.
+2. Enter the issuer URL and client settings supplied by the sign-in administrator.
+3. Register the callback URL shown by Citadel with that provider.
+4. Test discovery, save the settings, and test sign-in with an approved account.
+5. Confirm the new account has the intended Citadel access.
+
+Keep a working local administrator account while testing. Signing in through a
+provider does not by itself grant access to every resource. The sections below
+explain discovery, claims, and account assignment.
+
 ## When To Use OIDC
 
 Use OIDC when your organization already manages users in a central identity provider and you want users to sign in with that account.

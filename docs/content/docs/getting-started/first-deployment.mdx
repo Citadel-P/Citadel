@@ -1,21 +1,33 @@
 ---
-title: "Create the first Deployment"
-description: "Deploy one container from an external image through Citadel."
+title: "Run your first application"
+description: "Create a Deployment and open a simple website."
 ---
 
+A **Deployment** runs one container from an image. You need an online Docker
+Standalone Platform; connect one using
+[connect a Docker host](/docs/getting-started/first-platform).
+
+## Create and deploy
+
 1. Open **Deployments** and select **Add**.
-2. Select the target Docker platform.
-3. Enter a name.
-4. Choose **External image**, select the built-in **Docker Hub** registry, and enter `nginx:alpine`.
-5. Add ports, volumes, variables, or secrets only when the workload needs them.
-6. Save, review the configuration, and select **Apply**.
-7. Keep the progress sheet open until Citadel reports the completed operation.
+2. Name it `hello-web` and select your Platform.
+3. Choose **External** under **Image Source**, select **Docker Hub**, and enter `nginx:alpine`.
+4. In **Ports**, publish host port `8080` to container port `80` using TCP.
+5. Select **Save**, then **Deploy**. Wait for the operation to finish.
+6. Open `http://YOUR-DOCKER-HOST:8080`. For a local host, use [http://localhost:8080](http://localhost:8080).
 
-The Deployment and its container should turn green.
+**Success looks like:** the container is running and the browser shows the
+Nginx welcome page. The host firewall determines who can reach port `8080`.
 
-The Deployment is configuration owned by Citadel. Applying it can recreate the
-runtime container. A container discovered outside Citadel remains unmanaged
-until it is adopted.
+## View logs or change the application
 
-See [Deployments](/docs/guides/deployments) for updates, drift, image sources,
-backups, and adoption behavior.
+Open the Deployment to view its container, logs, and configuration. Saving a
+change updates Citadel's settings. Select **Deploy** or **Redeploy** to send the
+reviewed configuration to Docker; this can recreate the container.
+
+If deployment fails, read the error in the operation panel before retrying.
+A port already in use or an image pull failure are common causes.
+
+For persistent data, image updates, and existing containers, see the
+[Deployment guide](/docs/guides/deployments). Use a
+[Stack](/docs/getting-started/first-stack) for an application with several services.

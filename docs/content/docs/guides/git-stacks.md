@@ -15,6 +15,20 @@ To import a Compose project that is already running and use a Git repository
 as its authoritative source, see
 [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
 
+## Deploy from a repository
+
+You need a connected Platform and a repository that has synced successfully in
+**Repositories**. Ask the application's maintainer for its Compose file path.
+
+1. Open **Stacks**, select **Add**, and choose **Git** as the source.
+2. Select the Platform, repository, and branch.
+3. Select the Compose file and any environment files that belong to the application.
+4. Review missing variables, secrets, and editor errors.
+5. Select **Save**, then **Deploy**. Check the **Services** tab and the deployed release.
+
+Pulling new Git code does not automatically deploy it unless an automatic update
+policy is enabled. Start with manual deployment while you check the configuration.
+
 ## Simple Repository
 
 Use this setup when the repository contains one compose project.

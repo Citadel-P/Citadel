@@ -49,7 +49,15 @@ jobs:
       - name: Install pinned Rust toolchain
         run: |
           toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
-          rustup toolchain install "$toolchain" --profile minimal
+          rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-validation
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
 
       - name: Set up Java for pinned Docker API generation
         uses: actions/setup-java@v4
@@ -69,10 +77,8 @@ jobs:
       - name: Check Rust workspace without external contracts
         run: cargo check --locked --workspace
 
-      - name: Check Rust formatting and lints
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Check Rust lints
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Run Rust workspace tests
         run: cargo test --locked --workspace
@@ -304,6 +310,7 @@ jobs:
 
       - name: Build product documentation
         run: |
+          npm run test:config --prefix docs
           npm run validate --prefix docs
           npm run lint --prefix docs
           npm run types:check --prefix docs

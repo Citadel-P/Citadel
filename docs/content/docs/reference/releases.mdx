@@ -1,19 +1,28 @@
 ---
 title: "Releases"
-description: "Understand Citadel version tags, image aliases, release validation, and documentation publication."
+description: "Find published versions and choose a repeatable installation."
 ---
 
-Stable Citadel releases use annotated `vMAJOR.MINOR.PATCH` Git tags. The release
-workflow verifies that the tag matches `version.json`, runs the required tests,
-then publishes one image digest under exact patch, minor, and major aliases.
+Use the [Citadel releases page](https://github.com/Citadel-P/Citadel/releases)
+to check which versions and images are available. Read the notes for the version
+you plan to install. The code version in `version.json` does not itself confirm
+that an image has been published.
 
-For example, release `v1.0.1` publishes `1.0.1`, `1.0`, and `1`. The exact patch
-tag is immutable; the minor and major aliases can move to a newer stable patch.
-Citadel does not publish `latest`.
+## Choose an image version
 
-Product documentation is built from the same stable release commit and does not
-publish arbitrary `main` behavior as stable documentation. The independent API
-Preview is generated from that commit's explicitly public OpenAPI document.
+Release workflows accept `vMAJOR.MINOR.PATCH` tags that match `version.json`
+and point to a commit on `main`. After their checks pass, they publish image
+aliases for the full version, the minor version, and the major version.
 
-Citadel currently has no stable v1 tag. Check the GitHub releases page before
-using an installation command or image version.
+For example, `0.1.2`, `0.1`, and `0` are three aliases of an initial publication.
+Minor and major aliases can later move. Use an exact patch version or digest
+when you need a repeatable installation. The workflows do not publish `latest`.
+
+## Documentation and API
+
+Product documentation is built and published from the release commit. The
+public [API Preview](/docs/reference/api) is built as a separate static artifact
+from `schema/public-v1.json`. Its hosting needs to be configured separately.
+
+For installation steps, see [install Citadel](/docs/getting-started/install).
+Before changing versions, follow [upgrade and rollback](/docs/operations/upgrade-and-rollback).
