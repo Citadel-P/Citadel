@@ -1963,8 +1963,14 @@ async fn swarm_node_infrastructure_revokes_missing_service_bootstrap_and_only_ol
             architecture: "x86_64".into(),
             ..Default::default()
         });
-    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerserviceid,dockerservicename,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:agent','agent:latest',$2,'Installed','missing-agent-service','citadel-agent','daemon','node-1')")
-        .bind(platform).bind(&cluster).execute(&pool).await.unwrap();
+    // Other suites share this database; Docker service IDs must remain unique.
+    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerserviceid,dockerservicename,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:agent','agent:latest',$2,'Installed',$3,'citadel-agent','daemon','node-1')")
+        .bind(platform)
+        .bind(&cluster)
+        .bind(format!("missing-{platform}"))
+        .execute(&pool)
+        .await
+        .unwrap();
     let bootstrap = Uuid::now_v7();
     sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,'test-hash',1)")
         .bind(bootstrap).bind(&cluster).bind(actor).bind(platform).execute(&pool).await.unwrap();
@@ -3044,8 +3050,14 @@ async fn configured_node_policy_is_preserved_by_initialization_and_http_refresh(
             architecture: "s390x".into(),
             ..Default::default()
         });
-    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerserviceid,dockerservicename,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:agent','agent:latest',$2,'Installed','missing-agent-service','citadel-agent','daemon','node-1')")
-        .bind(platform).bind(&cluster).execute(&pool).await.unwrap();
+    // Other suites share this database; Docker service IDs must remain unique.
+    sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,agentimagedigest,agentimagereference,clusterid,desiredstate,dockerserviceid,dockerservicename,managerdockerdaemonid,managerdockernodeid) VALUES($1,'sha256:agent','agent:latest',$2,'Installed',$3,'citadel-agent','daemon','node-1')")
+        .bind(platform)
+        .bind(&cluster)
+        .bind(format!("missing-{platform}"))
+        .execute(&pool)
+        .await
+        .unwrap();
     let bootstrap = Uuid::now_v7();
     sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,'test-hash',1)")
         .bind(bootstrap).bind(&cluster).bind(actor).bind(platform).execute(&pool).await.unwrap();
