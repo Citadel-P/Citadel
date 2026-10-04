@@ -1972,8 +1972,16 @@ async fn swarm_node_infrastructure_revokes_missing_service_bootstrap_and_only_ol
         .await
         .unwrap();
     let bootstrap = Uuid::now_v7();
-    sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,'test-hash',1)")
-        .bind(bootstrap).bind(&cluster).bind(actor).bind(platform).execute(&pool).await.unwrap();
+    // Bootstrap token hashes also have a global uniqueness constraint.
+    sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,$5,1)")
+        .bind(bootstrap)
+        .bind(&cluster)
+        .bind(actor)
+        .bind(platform)
+        .bind(bootstrap.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
     for (node, profile, recent) in [
         ("worker", "SwarmNode", false),
         ("absent", "SwarmNode", false),
@@ -3059,8 +3067,16 @@ async fn configured_node_policy_is_preserved_by_initialization_and_http_refresh(
         .await
         .unwrap();
     let bootstrap = Uuid::now_v7();
-    sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,'test-hash',1)")
-        .bind(bootstrap).bind(&cluster).bind(actor).bind(platform).execute(&pool).await.unwrap();
+    // Bootstrap token hashes also have a global uniqueness constraint.
+    sqlx::query("INSERT INTO swarmnodeagentbootstraps(id,clusterid,createdbyactorid,dockersecretname,expiresatutc,platformid,tokenhash,version) VALUES($1,$2,$3,'bootstrap',now()+interval '1 hour',$4,$5,1)")
+        .bind(bootstrap)
+        .bind(&cluster)
+        .bind(actor)
+        .bind(platform)
+        .bind(bootstrap.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
     for (node, profile, recent) in [
         ("worker", "SwarmNode", false),
         ("absent", "SwarmNode", false),

@@ -14,8 +14,8 @@ for matching `vMAJOR.MINOR.PATCH` tags on `main`.
 Rust dependency caches are separated between Core and Agent architectures. Agent
 jobs reclaim unused SDK space on disposable GitHub-hosted runners before building
 both production images. The cleanup is skipped on self-hosted runners. Database
-fixtures must use unique Docker service IDs because regression suites share one
-database and the production schema enforces uniqueness.
+fixtures must use unique Docker service IDs and bootstrap token hashes because
+regression suites share one database and the production schema enforces uniqueness.
 
 Agent compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
 stage, then run inside the tested Agent image. Host-built binaries can require a
