@@ -28,11 +28,11 @@ export const useLiveSwarmItems = <T extends LiveSwarmResource>(
         ...item,
         capabilities: previous?.data.capabilities,
       }));
+      void queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<CachedResponse<SwarmCollection<T>>>(
         queryKey,
         previous ? { ...previous, data: { ...previous.data, items } } : { data: { items } },
       );
-      void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
       onInventoryUpdated?.(inventory);
     },
     [onInventoryUpdated, platformId, queryArgs, queryClient, queryName, select],
@@ -65,6 +65,7 @@ export const useLiveSwarmResource = <T extends LiveSwarmResource>(
 
       const queryKey = [queryName, queryArgs] as const;
       const previous = queryClient.getQueryData<CachedResponse<T>>(queryKey);
+      void queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<CachedResponse<T>>(queryKey, {
         ...previous,
         data: {
@@ -72,7 +73,6 @@ export const useLiveSwarmResource = <T extends LiveSwarmResource>(
           capabilities: previous?.data.capabilities,
         },
       });
-      void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
     },
     [listPath, navigate, platformId, queryArgs, queryClient, queryName, resourceId, select],
   );

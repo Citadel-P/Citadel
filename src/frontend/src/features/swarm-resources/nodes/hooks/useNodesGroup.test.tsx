@@ -4,13 +4,22 @@ import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { useNodesGroup } from './useNodesGroup';
+import { useHTTPErrorHandler } from '@/lib/hooks';
+import { toast } from 'sonner';
+import { useNodeInfoGroup, useNodesGroup } from './useNodesGroup';
 
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 const NodesProbe = () => {
+  useHTTPErrorHandler();
   const { items } = useNodesGroup(platformId);
   return <span>{items[0] ? `${items[0].hostname}:${items[0].isStale}` : 'loading'}</span>;
+};
+
+const NodeInfoProbe = () => {
+  useHTTPErrorHandler();
+  const { resource } = useNodeInfoGroup(platformId, 'node-1');
+  return <span>{resource ? `${resource.hostname}:${resource.isStale}` : 'loading'}</span>;
 };
 
 const CapabilitiesProbe = () => {
@@ -48,45 +57,61 @@ describe('useNodesGroup', () => {
     expect(requestCount).toBe(1);
   });
 
-  it('keeps a newer realtime snapshot when the initial request completes late', async () => {
-    const fake = new FakeRealtimeConnection();
-    let releaseResponse!: () => void;
-    const responseGate = new Promise<void>((resolve) => {
-      releaseResponse = resolve;
-    });
-    let requestCount = 0;
-    server.use(
-      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/nodes`, async () => {
-        requestCount++;
+  it.each(['list', 'detail'])(
+    'keeps a newer realtime snapshot when the initial %s request completes late',
+    async (view) => {
+      const errorToast = vi.spyOn(toast, 'error');
+      const fake = new FakeRealtimeConnection();
+      let releaseResponse!: () => void;
+      const responseGate = new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+      });
+      let requestCount = 0;
+      server.use(
+        http.get(
+          `http://localhost/api/v1/platforms/${platformId}/swarm/nodes${view === 'detail' ? '/node-1' : ''}`,
+          async () => {
+            requestCount++;
+            await responseGate;
+            const node = createNode({ hostname: 'older-http-state' });
+            return HttpResponse.json(view === 'detail' ? node : { items: [node] });
+          },
+        ),
+        http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
+      );
+
+      const { queryClient } = renderCitadel(view === 'detail' ? <NodeInfoProbe /> : <NodesProbe />, {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      });
+      await waitFor(() => expect(requestCount).toBe(1));
+      await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(2));
+
+      act(() => {
+        fake.emit('SwarmInventoryUpdated', inventory([createNode({ hostname: 'newer-realtime-state' })]));
+      });
+      expect(await screen.findByText('newer-realtime-state:false')).toBeVisible();
+
+      await act(async () => {
+        releaseResponse();
         await responseGate;
-        return HttpResponse.json({ items: [createNode({ hostname: 'older-http-state' })] });
-      }),
-      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
-    );
+      });
 
-    renderCitadel(<NodesProbe />, {
-      groups: {
-        connectionFactory: () => fake.asRealtimeConnection(),
-        startConnection: (connection) => connection.start(),
-      },
-    });
-    await waitFor(() => expect(requestCount).toBe(1));
-    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(2));
-
-    act(() => {
-      fake.emit('SwarmInventoryUpdated', inventory([createNode({ hostname: 'newer-realtime-state' })]));
-    });
-    expect(await screen.findByText('newer-realtime-state:false')).toBeVisible();
-
-    await act(async () => {
-      releaseResponse();
-      await responseGate;
-    });
-
-    await waitFor(() => expect(screen.getByText('newer-realtime-state:false')).toBeVisible());
-    expect(screen.queryByText('older-http-state:false')).not.toBeInTheDocument();
-    expect(requestCount).toBe(1);
-  });
+      await waitFor(() => expect(screen.getByText('newer-realtime-state:false')).toBeVisible());
+      expect(screen.queryByText('older-http-state:false')).not.toBeInTheDocument();
+      expect(requestCount).toBe(1);
+      expect(errorToast).not.toHaveBeenCalled();
+      const queryKey =
+        view === 'detail' ? ['getSwarmNode', { platformId, nodeId: 'node-1' }] : ['listSwarmNodes', { platformId }];
+      expect(queryClient.getQueryState(queryKey)).toMatchObject({
+        status: 'success',
+        fetchStatus: 'idle',
+        error: null,
+      });
+    },
+  );
 
   it('preserves caller capabilities when realtime replaces collection items', async () => {
     const fake = new FakeRealtimeConnection();

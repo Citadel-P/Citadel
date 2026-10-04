@@ -104,6 +104,9 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
 
       const response = await createPlatform.mutateAsync({ data: payload });
       const created = response.data;
+      // Keep the saved connector stable while list refresh and form reset run
+      // before navigation (or Edge Agent enrollment).
+      setCreatedPlatform(created);
       await queryClient.invalidateQueries({ queryKey: ['listPlatforms'] });
 
       if (!isEdge) {
@@ -112,7 +115,6 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
         return;
       }
 
-      setCreatedPlatform(created);
       toast.success(`Edge Agent platform "${created.name}" created`);
 
       try {

@@ -110,7 +110,7 @@ export const PlatformForm = ({
     createdPlatform?.connectorType ?? update.connectorType ?? original.connectorType ?? PlatformConnectorType.Local;
   const isAgent = connectorType === PlatformConnectorType.Agent;
   const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
-  const platformType = update.type ?? original.type ?? PlatformType.Docker;
+  const platformType = createdPlatform?.type ?? update.type ?? original.type ?? PlatformType.Docker;
   const isSwarm = platformType === PlatformType.DockerSwarm;
   const { data: agentSetupData, isLoading: isAgentSetupLoading } = useRead('getAgentSetup', undefined, {
     enabled: isAgent,

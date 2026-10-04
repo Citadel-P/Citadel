@@ -5,13 +5,17 @@ import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { SwarmQuorumState } from '@/api/generated/api.types';
-import { calculateSwarmQuorum } from './hooks/useSwarmOverview';
+import { useHTTPErrorHandler } from '@/lib/hooks';
+import { toast } from 'sonner';
+import { createQueryClient } from '@/query-client-wrapper';
+import { calculateSwarmQuorum, useSwarmOverview } from './hooks/useSwarmOverview';
 import { applySwarmInventoryToOverview, SwarmPlatformSummary } from './platform-summary';
 
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('SwarmPlatformSummary', () => {
   it('keeps an early realtime snapshot instead of allowing an older HTTP response to replace it', async () => {
+    const errorToast = vi.spyOn(toast, 'error');
     const fake = new FakeRealtimeConnection();
     let releaseResponse!: () => void;
     const responseGate = new Promise<void>((resolve) => {
@@ -31,8 +35,15 @@ describe('SwarmPlatformSummary', () => {
       }),
     );
 
-    renderCitadel(
-      <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />,
+    function RequestErrors() {
+      useHTTPErrorHandler();
+      return null;
+    }
+    const { queryClient } = renderCitadel(
+      <>
+        <RequestErrors />
+        <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />
+      </>,
       {
         groups: {
           connectionFactory: () => fake.asRealtimeConnection(),
@@ -87,6 +98,61 @@ describe('SwarmPlatformSummary', () => {
     expect(screen.queryByText('Healthy')).not.toBeInTheDocument();
     expect(screen.queryByText('older HTTP state')).not.toBeInTheDocument();
     expect(requestCount).toBe(1);
+    expect(errorToast).not.toHaveBeenCalled();
+    expect(queryClient.getQueryState(['getSwarmOverview', { platformId }])).toMatchObject({
+      status: 'success',
+      fetchStatus: 'idle',
+      error: null,
+    });
+  });
+
+  it.each([false, true])('handles an early node-local snapshot with cached overview: %s', async (hasCachedOverview) => {
+    const errorToast = vi.spyOn(toast, 'error');
+    const fake = new FakeRealtimeConnection();
+    const queryClient = createQueryClient();
+    const queryKey = ['getSwarmOverview', { platformId }];
+    if (hasCachedOverview) {
+      queryClient.setQueryData(queryKey, { data: { ...overview(), nodeCount: 2 } });
+    }
+    let releaseResponse!: () => void;
+    const responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const read = vi.fn(async () => {
+      await responseGate;
+      return HttpResponse.json({ ...overview(), nodeCount: 3 });
+    });
+    server.use(http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, read));
+    function Probe() {
+      useHTTPErrorHandler();
+      const { overview: current } = useSwarmOverview(platformId);
+      return <span>{current ? `${current.nodeCount} nodes, ${current.volumeCount} volumes` : 'Loading'}</span>;
+    }
+    renderCitadel(<Probe />, {
+      queryClient,
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    try {
+      await waitFor(() => expect(read).toHaveBeenCalledOnce());
+      await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(1));
+      await act(async () => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, volumes: [], volumeCount: 4 }));
+      expect(queryClient.getQueryState(queryKey)).toMatchObject({
+        status: hasCachedOverview ? 'success' : 'pending',
+        fetchStatus: hasCachedOverview ? 'idle' : 'fetching',
+        error: null,
+      });
+    } finally {
+      await act(async () => {
+        releaseResponse();
+        await responseGate;
+      });
+    }
+    expect(await screen.findByText(`${hasCachedOverview ? 2 : 3} nodes, 4 volumes`)).toBeVisible();
+    expect(queryClient.getQueryState(queryKey)).toMatchObject({ status: 'success', fetchStatus: 'idle', error: null });
+    expect(errorToast).not.toHaveBeenCalled();
   });
 
   it.each(['Offline', 'Degraded'])('clears a previous %s state after a healthy inventory update', (health) => {

@@ -107,11 +107,14 @@ export const useSwarmOverview = (platformId?: string) => {
     (inventory: SwarmInventoryUpdate) => {
       if (!platformId || inventory.platformId !== platformId) return;
       const queryKey = ['getSwarmOverview', args] as const;
-      queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, (previous) => ({
+      const previous = queryClient.getQueryData<CachedResponse<SwarmOverviewView>>(queryKey);
+      // Cancel the older read before publishing the snapshot, so cancellation
+      // neither reverts the new data nor leaves the query in an error state.
+      void queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, {
         ...previous,
         data: applySwarmInventoryToOverview(inventory, previous?.data),
-      }));
-      void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
+      });
     },
     [args, platformId, queryClient],
   );
@@ -125,24 +128,24 @@ export const useSwarmOverview = (platformId?: string) => {
         volumeCount: snapshot.volumes ? snapshot.volumeCount : previous?.volumeCount,
       }));
       const queryKey = ['getSwarmOverview', args] as const;
-      queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, (previous) => {
-        if (!previous?.data) return previous;
-        const clusterNetworkCount = Math.max(
-          0,
-          count(previous.data.networkCount) - count(previous.data.localNetworkCount),
-        );
-        return {
-          ...previous,
-          data: {
-            ...previous.data,
-            imageCount: (snapshot.images?.length ?? previous.data.imageCount),
-            volumeCount: (snapshot.volumeCount ?? (!snapshot.nodeOnly ? snapshot.volumes?.length : undefined) ?? previous.data.volumeCount),
-            localNetworkCount: (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
-            networkCount: clusterNetworkCount + (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
-          },
-        };
+      const previous = queryClient.getQueryData<CachedResponse<SwarmOverviewView>>(queryKey);
+      // Node-local data alone cannot replace the initial cluster overview read.
+      if (!previous?.data) return;
+      const clusterNetworkCount = Math.max(
+        0,
+        count(previous.data.networkCount) - count(previous.data.localNetworkCount),
+      );
+      void queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<CachedResponse<SwarmOverviewView>>(queryKey, {
+        ...previous,
+        data: {
+          ...previous.data,
+          imageCount: (snapshot.images?.length ?? previous.data.imageCount),
+          volumeCount: (snapshot.volumeCount ?? (!snapshot.nodeOnly ? snapshot.volumes?.length : undefined) ?? previous.data.volumeCount),
+          localNetworkCount: (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
+          networkCount: clusterNetworkCount + (snapshot.networks?.length ?? count(previous.data.localNetworkCount)),
+        },
       });
-      void queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
     },
     [args, platformId, queryClient],
   );
