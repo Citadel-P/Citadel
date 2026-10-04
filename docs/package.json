@@ -14,7 +14,8 @@
     "validate": "node scripts/validate-content.mjs && node scripts/validate-links.mjs",
     "validate:api": "node scripts/validate-api-schema.mjs && npm run lint:api",
     "test:static": "node scripts/smoke-static.mjs",
-    "test:api": "node scripts/smoke-api-static.mjs"
+    "test:api": "node scripts/smoke-api-static.mjs",
+    "test:config": "node --test scripts/site-config.test.mjs scripts/validate-links.test.mjs"
   },
   "dependencies": {
     "cnfast": "0.1.0",

@@ -1,6 +1,7 @@
 {
   "title": "Guides",
   "pages": [
+    "index",
     "deployments",
     "manual-stacks",
     "git-stacks",

@@ -7,6 +7,18 @@ Alert rules let Citadel record alert events and send notifications when platform
 
 Notifications are delivered through notification channels. The Citadel server image includes notification delivery support, so normal Docker installs do not need any extra notification service.
 
+## Receive your first notification
+
+1. Open **Settings → Alert Rules**.
+2. Add a **Notification Channel** for your preferred destination.
+3. Use **Send Test Notification** and confirm it arrives.
+4. Assign the channel to a suitable built-in rule and enable the rule.
+5. Use **Alerts** to review events and delivery results.
+
+Community includes the built-in system rules and notification channels. Creating
+custom rules and changing advanced rule behavior require Advanced Alerting.
+The provider setup below explains where to obtain each destination URL.
+
 ## Before You Start
 
 Channel URLs often contain webhook IDs, tokens, or bot credentials. Treat them as secrets.
@@ -50,7 +62,7 @@ sending in-app and external notifications.
 Open:
 
 ```text
-Monitoring -> Alert Rules
+Settings -> Alert Rules
 ```
 
 Use the `Notification Channels` section to add destinations such as Discord, Teams, Slack, Telegram, ntfy, Gotify, or a generic webhook.
@@ -262,7 +274,7 @@ These are the channel URL patterns supported by the Alert Rules page:
 
 Community administrators can configure a rule installed by Citadel:
 
-1. Open `Monitoring -> Alert Rules`.
+1. Open `Settings -> Alert Rules`.
 2. Select a seeded system rule.
 3. Enable or disable the rule.
 4. Select one or more notification channels.
@@ -281,7 +293,7 @@ Creating a custom alert rule requires Team's `Advanced Alerting` capability.
 Select:
 
 ```text
-Monitoring -> Alert Rules -> Add Rule
+Settings -> Alert Rules -> Add Rule
 ```
 
 Set:

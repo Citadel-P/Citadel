@@ -1,26 +1,30 @@
 ---
 title: "API Preview"
-description: "Use Citadel's independently hosted, read-only ReDoc API reference."
+description: "Find the API reference for integrations and developer tools."
 ---
 
-Citadel generates a separate public OpenAPI document from endpoints that
-explicitly opt in to the public contract. The full schema used by the web UI is
-not a supported external API.
+You do not need the API to use Citadel in a browser. It is for scripts,
+integrations, and developer tools that perform Citadel operations.
 
-The API reference is hosted independently with ReDoc. It is documentation only:
-it has no request executor, proxy, credential input, or persisted authorization.
-The final API-reference hostname must be configured by the project owner before
-publication; the product documentation does not guess that URL.
+## Where to find the reference
+
+- The repository includes the public contract at [schema/public-v1.json](https://github.com/Citadel-P/Citadel/blob/main/schema/public-v1.json).
+- If an API Preview site is configured, use **API Preview** in this documentation's navigation. It shows the public schema with ReDoc.
+- On your own installation, set `EnableSwagger=true` in `.env` and recreate Core with `docker compose up -d server` to enable `/swagger/` and `/openapi/public/v1.json`. Include your TLS overlay if you use one.
+
+The independent API Preview is a reference only. It does not send requests or
+store credentials. The release workflow builds its static artifact separately;
+its public hosting address must be configured by the project owner.
 
 ## Authentication
 
-Public operations use an `Authorization: Bearer` header with either a user JWT
-or a `cit_sa_` Service Account token, subject to the operation's authentication
-and authorization requirements. Prefer a dedicated Service Account with a
-narrow Role for CI/CD and external integrations.
+Protected operations use an `Authorization: Bearer` header. Depending on the
+operation, use a user JWT or a Service Account token with the required access.
+For an integration, prefer a dedicated [Service Account](/docs/concepts/service-accounts)
+with narrowly scoped permissions. Keep its token out of source files and logs.
 
 ## Stability
 
-The contract is labelled **API Preview** until Citadel publishes a compatibility
-and deprecation policy. Operation IDs and the downloadable public schema are the
-reference for an individual release.
+The external contract is labelled **API Preview**. Use the public schema that
+matches your installed version and read its release notes before upgrading.
+The full schema used by Citadel's web UI is internal and is not the external contract.

@@ -108,6 +108,10 @@ jobs:
           sudo apt-get install -y pkg-config libssl-dev ripgrep
           toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
           rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: agent-${{ matrix.arch }}
       - name: Validate Agent, contracts and volume helper
         working-directory: .
         run: |

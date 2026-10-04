@@ -1,4 +1,8 @@
 {
   "title": "Overview",
-  "pages": ["architecture", "licensing"]
+  "pages": [
+    "architecture",
+    "glossary",
+    "licensing"
+  ]
 }

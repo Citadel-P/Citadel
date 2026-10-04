@@ -46,12 +46,12 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 
 ## Try Citadel
 
-This branch contains the Rust version. A stable release has not been published yet; the steps below build the current source.
+The steps below build the current Rust code from `main`. For published images, follow the [installation guide](docs/content/docs/getting-started/install.mdx).
 
-With Git and Docker Compose available on a Linux Docker host:
+With Git, Docker, and Docker Compose 2.30 or newer on a Linux Docker host:
 
 ```bash
-git clone --branch feat--migrate-to-rust --single-branch https://github.com/Citadel-P/Citadel.git
+git clone --branch main --single-branch https://github.com/Citadel-P/Citadel.git
 cd Citadel/deploy
 cp .env.example .env
 ```
@@ -68,7 +68,7 @@ The Compose setup grants Citadel administrative access to the local Docker host.
 
 ## Documentation and API
 
-Start with the [user guides](docs/content/docs/index.mdx) and [architecture overview](docs/content/docs/overview/architecture.mdx).
+Start with the [quick start](docs/content/docs/getting-started/quick-start.mdx), [task guides](docs/content/docs/guides/index.mdx) and [architecture overview](docs/content/docs/overview/architecture.mdx).
 
 For integrations, use the [public OpenAPI schema](schema/public-v1.json) and [API Preview guide](docs/content/docs/reference/api.mdx). The full schema used by the web UI is internal.
 

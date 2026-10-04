@@ -13,6 +13,18 @@ Use the regular Agent when:
 
 Use an **Edge Agent** instead when the Docker host is behind NAT, protected by a restrictive firewall, or located on a network where opening an inbound port is not practical.
 
+## Connect a remote Docker host
+
+1. Open **Platforms**, select **Add**, and choose the host's platform type.
+2. Select **Agent** under **Connector**.
+3. Copy the **Docker Command** from **Agent Setup** and run it on that Docker host.
+4. Enter the reachable **Agent Address**, usually `http://HOST:9000` on a trusted private network.
+5. Select **Save** and wait for the Platform to come online.
+
+Core must reach this address from inside its container. For a public or untrusted
+network, configure TLS using the guide below. Do not use Core's `localhost` as the
+address of another machine. The generated command selects the expected Agent image.
+
 ## How it works
 
 The regular Agent runs on the Docker host and listens for requests from Citadel Core.
@@ -72,8 +84,8 @@ management port and do not replace the manager Agent.
 
 Once installed, Citadel aggregates current Containers and routes worker Task
 inspect, logs, statistics, lifecycle operations, and Terminal through the
-owning Node's authenticated satellite session. Images and Volumes remain
-manager-local until their node-scoped inventory support is delivered.
+owning Node's authenticated satellite session. Covered Nodes also contribute
+Images, Volumes, and local Networks, with each resource retaining its Node identity.
 
 ## Builds
 
@@ -155,7 +167,10 @@ The Edge build Agent is scoped directly to the Build Pool. It is not an Edge Age
 
 The generated command is authoritative. It includes the correct container name, data volume, token, identity path, and `CITADEL_CORE_URL`.
 
-For local Docker testing, `CITADEL_CORE_URL` should point to the Edge Agent gRPC endpoint, usually port `8001`. Port `8000` is the normal Citadel HTTP API and UI endpoint.
+Use the generated gRPC address. Core listens on container port `8001`; the supplied
+Compose setup maps it to host port `18001` on loopback. Remote build Agents need
+a reachable, secured address; they cannot use that local-only binding. The browser
+host port `18000` is separate.
 
 Before selecting the pool in a build project, click **Test** on the Build Pool. A ready result confirms the Agent is connected, advertises build capabilities, and can reach Docker.
 

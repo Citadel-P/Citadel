@@ -1,9 +1,9 @@
 ---
 title: "Known limitations"
-description: "Review confirmed Citadel v1 operational and compatibility limitations."
+description: "Review confirmed Citadel operational and compatibility limitations."
 ---
 
-- Citadel has not published a stable v1 tag yet; source builds are development installations.
+- Source builds track current development code. Check the release notes for published images and supported versions.
 - The public HTTP contract is an API Preview and contains only explicitly opted-in operations.
 - A manager cannot provide node-local logs, terminal sessions, volume browsing, or complete container statistics for every Swarm Node; those functions require node-agent coverage.
 - Swarm Config and Secret payloads are immutable after creation. Citadel can update supported metadata, while payload rotation requires a replacement and workload update.

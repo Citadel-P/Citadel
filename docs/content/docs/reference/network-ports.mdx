@@ -1,20 +1,38 @@
 ---
 title: "Network ports"
-description: "Plan Citadel browser, API, Agent, Edge Agent, Docker, and PostgreSQL traffic."
+description: "Find the browser address and the ports needed by Agents and Docker."
 ---
 
-| Traffic | Default | Direction | Exposure |
-| --- | ---: | --- | --- |
-| Browser and API upstream | TCP 8000 | Reverse proxy to Core | Private in reverse-proxy mode |
-| Edge Agent gRPC upstream | TCP 8001 | Reverse proxy or Edge Agent to Core | Publish through TLS when Edge Agents are used |
-| PostgreSQL | TCP 5432 | Core to PostgreSQL | Private only |
-| Docker socket | Unix socket | Core/Agent to local Docker | Host-local, never public |
+In the supplied local Compose setup, open
+[http://localhost:18000](http://localhost:18000) in your browser. Port `18001`
+is for Edge Agent connections; it is not another web page.
 
-The public HTTPS and gRPC ports are selected by your proxy and may differ from
-Core's upstream ports. Direct TLS publishes the configured API and Edge gRPC
-ports through the provided Compose overlay.
+## Default connections
 
-Regular Agent and Edge Agent connectivity differs. Follow the generated setup
-shown by Citadel and the [Agent](/docs/operations/agent) or
-[Edge Agent](/docs/operations/edge-agent) guide. Allow only the required
-direction and protect every non-loopback hop.
+| Connection | Host port in the supplied setup | Container port | Direction |
+| --- | --- | --- | --- |
+| Browser and API | `127.0.0.1:18000` | `8000` | Browser or reverse proxy to Core |
+| Edge Agent gRPC | `127.0.0.1:18001` | `8001` | Edge Agent or its reverse proxy to Core |
+| Regular Agent | Chosen on the Agent host, usually `9000` | `9000` | Core to Agent |
+| PostgreSQL | Not published | `5432` | Core to the database on its private Docker network |
+| Docker engine | Not a TCP port in the supplied setup | `/var/run/docker.sock` | Local Core or Agent to Docker |
+
+The bind address and Core host ports are controlled by `CITADEL_BIND_ADDRESS`,
+`CITADEL_HTTP_PORT`, and `CITADEL_EDGE_PORT`. A reverse proxy may publish HTTPS
+on a different port, commonly `443`. Direct TLS uses the configured listeners
+and Compose port mappings.
+
+## Connecting another machine
+
+`localhost` always means the machine making the connection. A remote Agent
+cannot reach your Core by using Core's `localhost` address. Configure a hostname
+or IP it can reach and protect that connection with TLS or a trusted private
+network, as described in the [TLS guide](/docs/operations/tls-and-secure-agent-transport).
+
+- A regular Agent needs an inbound connection from Core to its Agent port.
+- An Edge Agent needs an outbound, long-lived HTTP/2 gRPC connection to Core.
+- A Swarm cluster has its own Docker networking requirements; connecting it to Citadel does not change those requirements.
+
+Use the generated [Agent](/docs/operations/agent) or
+[Edge Agent](/docs/operations/edge-agent) setup command. Keep PostgreSQL and the
+Docker socket private.

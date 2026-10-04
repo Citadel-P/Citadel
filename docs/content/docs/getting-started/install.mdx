@@ -1,59 +1,85 @@
 ---
-title: "Production installation"
-description: "Install Citadel with persistent storage and secure network access."
+title: "Install and secure Citadel"
+description: "Choose an installation, protect network access, and preserve your data."
 ---
 
-If you are evaluating Citadel on your own machine, follow the
-[quick start](/docs/getting-started/quick-start). This page covers a permanent
-installation behind a reverse proxy or with direct TLS.
+For a first local trial, use the [quick start](/docs/getting-started/quick-start).
+For a shared installation, the person responsible for your Docker server should
+complete the steps below before creating user accounts.
 
-> Citadel has not published a stable v1 tag yet. The commands below are the
-> stable-release procedure and become usable when the corresponding tag and
-> images exist. Do not substitute `latest`; Citadel does not publish that tag.
+## 1. Choose the code or image
 
-## Download one release
+Check the [release notes](https://github.com/Citadel-P/Citadel/releases) for an
+available version, its image address, and upgrade instructions. The version in
+`version.json` alone does not mean an image has been published.
 
-Set `VERSION` to an exact version shown on the Citadel releases page, without
-the leading `v`:
+If no release image is available, use the source build in the quick start.
+For a release, clone its exact tag (replace `VERSION` with the version you chose):
 
 ```bash
-export VERSION=1.0.0
-mkdir citadel && cd citadel
-curl -fsSLo docker-compose.yml "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/deploy/docker-compose.yml"
-curl -fsSLo docker-compose.direct-tls.yml "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/deploy/compose.direct-tls.yml"
-curl -fsSLo .env.example "https://raw.githubusercontent.com/Citadel-P/Citadel/v${VERSION}/deploy/.env.example"
+git clone --branch vVERSION --single-branch https://github.com/Citadel-P/Citadel.git
+cd Citadel/deploy
 cp .env.example .env
 chmod 600 .env
 ```
 
-Set this active value in `.env`:
+Open `.env`, set a unique `PG_PASSWORD`, and replace the local image setting
+with the **complete published image address**, including the exact version:
 
 ```text
-CITADEL_IMAGE_TAG=1.0.0
+CITADEL_IMAGE=ghcr.io/citadel-p/citadel:VERSION
 ```
 
-Replace the hostname, proxy, JWT issuer/audience, and PostgreSQL placeholders
-described in [Docker Compose configuration](/docs/getting-started/configuration).
+Replace `VERSION` before running any commands. Setting `CITADEL_IMAGE_TAG` alone
+will not select a published image while `CITADEL_IMAGE=citadel-rust:local` is set.
+Citadel's release workflows do not publish `latest`.
 
-## Start the services
+## 2. Protect network access
 
-For the recommended reverse-proxy mode:
+The supplied `.env.example` uses local HTTP. Its default browser address is
+`http://localhost:18000`; both published ports bind to `127.0.0.1`.
+
+For a shared installation, choose one of these options:
+
+| Option | Who should use it? | What to configure |
+| --- | --- | --- |
+| Reverse proxy | You already have a proxy that manages HTTPS certificates | `Transport__Mode=ReverseProxy`, public URLs, trusted proxy addresses, and an HTTP/2 gRPC route if you use Edge Agents |
+| Direct TLS | Citadel will serve HTTPS itself | `Transport__Mode=Direct`, public URLs, certificates, and `compose.direct-tls.yml` |
+
+Follow [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
+for the full settings. Do not simply change the bind address to `0.0.0.0`
+while leaving local HTTP enabled. Set `Transport__PublicUrl` to the browser
+address users will actually open. If you use Edge Agents, also set
+`EdgeAgent__PublicGrpcUrl` to the separate address those Agents can reach.
+
+## 3. Start and check
+
+For a published image, from the `deploy` directory:
 
 ```bash
-docker compose -f docker-compose.yml pull
-docker compose -f docker-compose.yml up -d
-docker compose -f docker-compose.yml ps
+docker compose pull
+docker compose up -d --no-build
+docker compose ps
 ```
 
-The Compose file exposes the API and Edge gRPC ports only to its Docker network;
-the reverse proxy must share that network and publish TLS. For direct TLS, mount
-the configured certificate files and include `docker-compose.direct-tls.yml`.
+For direct TLS, include the supplied overlay in each Compose command:
 
-## Verify
+```bash
+docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d --no-build
+```
 
-Confirm both containers are healthy, then open the configured
-`Transport__PublicUrl`. A clean database redirects to the setup page. Continue
-with [first-run setup](/docs/getting-started/first-run-setup).
+The overlay mounts the certificate directory; the base Compose file controls
+host bindings and ports. Confirm both services are healthy, open your configured
+browser address, and complete [first-run setup](/docs/getting-started/first-run-setup).
 
-The `citadel_data` and `postgres_data` volumes are persistent control-plane
-state. Never delete them as an upgrade step.
+## 4. Protect your installation data
+
+Keep `.env` private. Keep the `citadel_data` and `postgres_data` volumes: together
+they hold accounts, settings, history, and the keys used to protect saved secrets.
+Configure a [control-plane backup](/docs/guides/backups) and keep a copy away
+from the Docker host. Do not delete these volumes during an upgrade.
+
+See [requirements](/docs/getting-started/requirements),
+[configuration](/docs/getting-started/configuration), and
+[upgrade and rollback](/docs/operations/upgrade-and-rollback) when planning a
+permanent installation.

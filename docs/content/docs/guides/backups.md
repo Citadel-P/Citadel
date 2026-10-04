@@ -5,6 +5,21 @@ description: "Configure backup repositories, policies, runs, restores, and Swarm
 
 Citadel backups let you save the Citadel control plane and Docker named volumes to a restic-compatible repository.
 
+## Make your first backup
+
+A backup needs a **repository** (where it is stored) and a **policy** (what it saves).
+
+1. Open **Backups** and create a backup repository. For recovery from host failure, use storage away from that host.
+2. Create a policy for the Citadel control plane or for the application's named Docker volumes.
+3. Start the backup manually and wait for its run to finish successfully.
+4. Check that the snapshot appears and record how to access the repository.
+5. Plan a restore test before relying on the backup.
+
+A control-plane backup saves Citadel's own installation. It does not replace
+backups of application volumes. Volume restore is available in Citadel;
+control-plane recovery follows the separate [recovery guide](/docs/operations/control-plane-recovery).
+Keep the repository password safe: it is needed to recover encrypted snapshots.
+
 ## License Availability
 
 Community can:
@@ -305,7 +320,7 @@ Repository and platform rules for restore:
 
 For the PostgreSQL dump, security assets, clean-environment restore sequence,
 and recovery drill requirements, see
-[[Control-plane recovery](/docs/operations/control-plane-recovery)](/docs/operations/control-plane-recovery).
+[Control-plane recovery](/docs/operations/control-plane-recovery).
 
 ## Alerts
 

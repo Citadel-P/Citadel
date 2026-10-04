@@ -1,6 +1,6 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import Image from 'next/image';
-import { appName, getApiDocsUrl, gitConfig } from './shared';
+import { appName, docsAssetUrl, getApiDocsUrl, gitConfig } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
   const apiDocsUrl = getApiDocsUrl();
@@ -19,7 +19,7 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <span className="flex items-center gap-2 font-semibold">
-          <Image src="/logo.svg" alt="" width={24} height={24} aria-hidden="true" />
+          <Image src={docsAssetUrl('/logo.svg')} alt="" width={24} height={24} aria-hidden="true" />
           {appName}
         </span>
       ),

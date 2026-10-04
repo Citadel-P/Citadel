@@ -70,27 +70,16 @@ If the proxy does not support gRPC over HTTP/2, the agent may connect and then f
 
 ## Create An Edge Platform
 
-Open:
+1. Open **Platforms** and select **Add**.
+2. Choose **Docker Standalone** or **Docker Swarm** for the host you are connecting.
+3. Select **Edge Agent** under **Connector** and enter a clear name.
+4. Select **Save**. Citadel creates the Platform and generates enrollment instructions.
+5. Copy the **Docker Command** from the **Enrollment** section and run it on the target host.
+6. Wait for the Platform to come online, then open it to check its resources.
 
-```text
-Platforms -> Add Platform
-```
-
-Choose:
-
-- `Connection`: `Edge Agent`
-- `Name`: a clear host or site name
-- `Tags`: optional tags for grouping and filtering
-
-Select:
-
-```text
-Create and Enroll
-```
-
-Citadel creates the platform and generates an enrollment token.
-
-The token is shown once and stored only as a hash. Copy the generated Docker command or the environment values before leaving the page.
+The token is shown once and stored only as a hash. Copy the command before leaving
+the page. If you need new instructions, use **Generate Enrollment Token** in the
+saved Platform. An existing displayed token or enrolled identity changes the action label.
 
 ## Run The Agent
 
@@ -101,7 +90,7 @@ The command includes environment variables similar to:
 ```text
 CITADEL_AGENT_MODE=edge
 CITADEL_EDGE_AGENT_PROFILE=edge-agent
-CITADEL_CORE_URL=https://citadel.example.com
+CITADEL_CORE_URL=https://edge.citadel.example.com
 CITADEL_EDGE_ENROLLMENT_TOKEN=...
 CITADEL_EDGE_AGENT_KEY_PATH=/app/data/edge-agent.key
 CITADEL_EDGE_IDENTITY_PATH=/app/data/edge-agent.identity.json
@@ -142,13 +131,13 @@ The data volume stores the agent key and enrolled identity.
 
 Do not remove the persistent data volume unless you intend to re-enroll the agent.
 
-For local Docker testing, Citadel Core exposes the Edge Agent gRPC endpoint on port `8001`. In that setup, use:
+Core listens for Edge gRPC on container port `8001`. The supplied Compose setup
+maps it to `127.0.0.1:18001` on the host. This local-only binding cannot be reached
+by a remote Agent. Configure a reachable `EdgeAgent__PublicGrpcUrl` and secure
+network access before enrolling one. Use the generated command rather than
+copying a hard-coded local address.
 
-```text
-CITADEL_CORE_URL=http://host.docker.internal:8001
-```
-
-Port `8000` is the normal Citadel HTTP API and UI endpoint. Edge Agent gRPC uses HTTP/2 and should connect to the configured gRPC endpoint.
+The browser's default host port is `18000`; it is not the Edge gRPC endpoint.
 
 ## Enrollment
 
@@ -209,8 +198,8 @@ sources under the same Swarm Platform.
 Installing the System Service is an explicit privileged action because its
 tasks mount each Node's Docker socket read-write. With coverage installed,
 Citadel aggregates current Containers and routes worker Task inspect, logs,
-statistics, lifecycle operations, and Terminal to the owning Node. Images and
-Volumes remain manager-local in this release.
+statistics, lifecycle operations, and Terminal to the owning Node. Covered Nodes
+also contribute Images, Volumes, and local Networks with their owning Node identified.
 
 ## Docker Operations
 

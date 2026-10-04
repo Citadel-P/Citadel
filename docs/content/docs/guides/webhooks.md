@@ -7,6 +7,20 @@ Webhooks let external systems notify Citadel through a public listener URL. Cita
 
 Citadel does not have a separate "Webhook" resource page. Webhook settings live on the resource that will be triggered.
 
+## Connect an external trigger
+
+A webhook lets another service request an operation in Citadel. The sender must
+reach your Citadel API address, not this documentation website.
+
+1. Open the target repository, Stack, Build Project, Action, backup policy, or managed Swarm Service.
+2. Configure its webhook, choose the provider, and copy its listener URL and authentication settings.
+3. Add those settings to the sending service and select only the events you need.
+4. Send a test event and check Citadel's Activities or run history.
+
+Receiving an event and executing an automatic operation are separate results.
+Execution can require Automated Operations or Operational Guardrails; check the
+requirements below. Keep webhook secrets private.
+
 ## License Availability
 
 Community can receive and authenticate repository webhooks, synchronize source,

@@ -14,6 +14,21 @@ Use builds when:
 
 Builds are not automation actions. Automation actions may call the Build API, but build projects do not run arbitrary TypeScript or shell scripts.
 
+## Build your first image
+
+You need a synced [repository](/docs/guides/git-repositories), a Dockerfile,
+an online builder Platform, and a [registry](/docs/guides/registries) that can
+accept image pushes. Ask the application's maintainer for the build paths.
+
+1. Open **Build Projects** and select **Add**.
+2. Choose the repository and branch, Dockerfile path, and build context.
+3. Select the builder Platform, destination Registry, image repository, and tag.
+4. Save the project and start a manual build.
+5. Check the run's logs and published image before using **Build** as an application's image source.
+
+A successful build creates an image; it does not start an application by itself.
+You can begin with a connected Platform instead of setting up a Build Pool.
+
 ## License Availability
 
 Community can:
@@ -79,7 +94,7 @@ For Agent and self-managed Build Pool setup, see [Regular Agent](/docs/operation
 Open:
 
 ```text
-Builds -> Add Build
+Build Projects -> Add
 ```
 
 Set:
@@ -203,7 +218,9 @@ After the pool is saved, open the pool's configuration and generate an Edge Agen
 
 The build pool Edge Agent is scoped to the build pool itself. You do not need to create a Platform resource, and there is no Edge Agent platform dropdown for build pools.
 
-The generated command uses the Edge Agent gRPC endpoint. For local Docker testing, that endpoint is usually port `8001`; port `8000` is the normal HTTP API and UI endpoint.
+The generated command uses the Edge Agent gRPC endpoint. Its container port is
+`8001`; the supplied Compose host mapping is `127.0.0.1:18001`. A remote builder
+needs a reachable, secured gRPC address rather than the browser port or a local-only address.
 
 Click **Test** on the Build Pool before selecting it in a build project. A ready edge pool confirms that the pool-scoped Edge Agent is connected, advertises build capabilities, and can reach Docker.
 

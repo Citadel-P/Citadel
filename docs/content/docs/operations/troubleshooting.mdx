@@ -1,38 +1,54 @@
 ---
 title: "Troubleshooting"
-description: "Diagnose Citadel health, connectivity, operations, and managed workloads without exposing secrets."
+description: "Find the cause of a problem and collect the information needed for help."
 ---
 
-## Start with scope
+Start with the error shown in Citadel's operation panel or **Activities** page.
+Wait for the current operation to finish before trying it again.
 
-Identify whether the failure belongs to Core, PostgreSQL, a connector, Docker,
-or one managed resource. Check the operation progress and Activity entry before
-retrying a mutation; a request timeout does not prove that Docker rejected it.
+## Citadel will not open
 
-## Basic checks
+From your installation's `deploy` directory, run:
 
 ```bash
-docker compose -f docker-compose.yml ps
-docker compose -f docker-compose.yml logs --tail=200 server pg_db
-curl --fail https://citadel.example.com/health
+docker compose ps
+docker compose logs --tail=100 server pg_db
 ```
 
-For an Agent or Edge Agent, verify the configured public URL, DNS, certificate
-chain, firewall direction, enrollment state, and version compatibility. For
-Swarm, also verify manager quorum and node-agent coverage.
+- For the supplied local setup, use **http://localhost:18000**, not port `8000`.
+- Open that address on the machine running Citadel. For another machine, use your configured HTTPS address.
+- If PostgreSQL cannot start, check `PG_PASSWORD` and persistent storage. Changing its initial password in `.env` does not reset an existing database password.
+- If the first source build is still running, let it finish before opening the page.
 
-## Safe diagnostic bundle
+## A Platform stays offline
 
-Include:
+Check Docker is running on the target host. For a regular Agent, check its
+container and whether Core can reach its Agent address. For an Edge Agent,
+check enrollment and whether it can reach Core's **gRPC** address. Follow
+[Agent troubleshooting](/docs/operations/agent#troubleshooting) or
+[Edge Agent troubleshooting](/docs/operations/edge-agent#troubleshooting).
 
-- Citadel version and exact image digest;
-- platform and connector type;
-- operation/activity timestamps and non-secret error text;
-- relevant sanitized Core, Agent, and Docker errors;
-- whether the issue persists after reconnecting, not after deleting state.
+For Swarm, check manager health and node-agent coverage. Adding another Platform
+record for the same Docker engine will not repair connectivity.
 
-Never include `.env`, bearer tokens, Service Account tokens, private keys,
-provider credentials, secret values, or an unsanitized database dump.
+## An application will not deploy
 
-Use the project's GitHub issue tracker for reproducible defects. Security issues
-must be reported privately according to the repository security policy.
+Read the failed operation's error. Check the image name and registry access,
+whether the host port is already used, and whether the requested volumes exist.
+For a Stack, fix editor or preflight errors before selecting **Deploy**.
+Saving configuration alone does not deploy it.
+
+## The application is running but its page will not open
+
+Use the Docker host's address and the **published host port**, not the container
+port. Check the application's logs, port mapping, and host firewall. A running
+container does not always mean the application inside it is ready.
+
+## Get help
+
+Report reproducible defects in [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
+Include the Citadel version, Platform and connector type, what you expected,
+what happened, the time of the failed operation, and the relevant error text.
+
+Remove passwords, tokens, secret values, and personal data from logs and
+screenshots. Do not attach `.env`, private keys, or a database dump.

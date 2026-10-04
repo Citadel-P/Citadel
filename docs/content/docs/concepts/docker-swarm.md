@@ -20,7 +20,7 @@ default. The optional node data plane extends current Container, Image,
 Volume, and local Network inventory to covered workers and routes Task runtime
 plus Volume browsing and bounded Volume backup/restore to the owning Node.
 General-purpose destructive Image, Volume, and local Network actions remain
-unavailable. See [[Backups](/docs/guides/backups)](/docs/guides/backups#docker-swarm) for the supported
+unavailable. See [Backups](/docs/guides/backups#docker-swarm) for the supported
 backup sources and safety limits.
 
 ## Before You Begin
@@ -200,7 +200,7 @@ The selected orchestration type is locked after creation. A never-applied draft
 can move to another Platform of the same type. Moving between Docker Standalone
 and Docker Swarm requires duplicating the Stack and reviewing the new draft.
 
-Select **Apply** after reviewing a valid draft. The progress sheet reports
+Select **Deploy** after reviewing a valid draft. The progress sheet reports
 preflight, Docker CLI output, and rollout observation. Citadel supports this
 flow through Local, regular Agent, and Edge Agent connections.
 
@@ -209,7 +209,7 @@ container-oriented **Start**, **Stop**, **Pause**, **Resume**, or **Reconcile
 drift** actions used by Docker Standalone Stacks. Manually changing an
 individual Task container is temporary because Swarm recreates it to restore
 the Service's desired state. Change the Compose configuration, including
-`deploy.replicas`, then use **Apply** or **Redeploy** instead.
+`deploy.replicas`, then use **Deploy** or **Redeploy** instead.
 
 Docker accepting the Stack definition does not by itself mark the release
 healthy. Citadel observes the Stack Services and their Tasks and reports a

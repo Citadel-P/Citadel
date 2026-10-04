@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Boxes, Rocket, Workflow } from 'lucide-react';
+import { docsAssetUrl } from '@/lib/shared';
 
 export default function HomePage() {
   return (
@@ -30,7 +31,7 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-        <Image className="mx-auto size-56" src="/logo.svg" alt="Citadel fortress logo" width={224} height={224} priority />
+        <Image className="mx-auto size-56" src={docsAssetUrl('/logo.svg')} alt="Citadel fortress logo" width={224} height={224} priority />
       </section>
 
       <section className="mt-20 grid gap-4 md:grid-cols-3" aria-label="Documentation areas">

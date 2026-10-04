@@ -1,12 +1,17 @@
 ---
-title: "Deploy the first Stack"
-description: "Deploy a small manual Compose Stack to Docker Standalone or Swarm."
+title: "Run your first Compose Stack"
+description: "Paste a Compose file, deploy it, and check its services."
 ---
 
+A **Stack** groups services described in a Docker Compose file. This example
+uses a Docker Standalone Platform and does not need a Git repository.
+
+## Create a Stack
+
 1. Open **Stacks** and select **Add**.
-2. Select a Docker Standalone or Docker Swarm platform.
-3. Choose the manual/web-editor source.
-4. Enter a Stack name and this Compose document:
+2. Name it `hello-stack` and select your Docker Standalone Platform.
+3. Choose **Web Editor** as the source.
+4. Paste this Compose file. Use another host port if `8080` is already in use:
 
 ```yaml
 services:
@@ -16,13 +21,27 @@ services:
       - "8080:80"
 ```
 
-5. Resolve every editor error or preflight blocker.
-6. Save and select **Apply**.
-7. Watch the progress sheet, then verify Services/containers in the Runtime tab.
+5. Fix any errors shown by the editor, then select **Save**.
+6. Select **Deploy** and wait for the operation to finish.
+7. Open the **Services** tab to check the running container.
+8. Open `http://YOUR-DOCKER-HOST:8080` to see the Nginx welcome page.
 
-The platform type is part of Stack orchestration. Standalone uses Docker Compose;
-Swarm uses a native Docker Stack deployment and rejects Compose fields that
-Swarm cannot represent.
+For the local quick-start host, the website is
+[http://localhost:8080](http://localhost:8080). Its published port is reachable
+according to the Docker host's firewall rules.
 
-See [Manual Stacks](/docs/guides/manual-stacks), [Git Stacks](/docs/guides/git-stacks),
-and [Docker Swarm](/docs/concepts/docker-swarm).
+## Change or update the Stack
+
+![Example deployed Stack with running services and their logs](/screenshots/stacks.png)
+
+This example has a web service and a cache. Your first Stack will show only the
+`web` service from the Compose file above.
+
+Edit the Compose file on the **Config** tab and save it, then select **Deploy**
+or **Redeploy**. Saving alone does not change the running application.
+The **Releases** tab shows successful releases and available rollback targets.
+
+See [Manual Stacks](/docs/guides/manual-stacks) for storage and variables, or
+[Git Stacks](/docs/guides/git-stacks) to keep Compose files in a repository.
+For Swarm, use the [Swarm guide](/docs/concepts/docker-swarm): Citadel deploys
+native Swarm services and checks that the Compose fields are supported.

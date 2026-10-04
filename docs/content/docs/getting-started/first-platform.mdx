@@ -1,20 +1,43 @@
 ---
-title: "Connect the first platform"
-description: "Connect a local or remote Docker Standalone or Swarm platform to Citadel."
+title: "Connect a Docker host"
+description: "Choose a connection and see your Docker resources in Citadel."
 ---
 
-1. Sign in as an administrator or an account allowed to create Platforms.
+A **Platform** is a Docker host or Swarm cluster that Citadel manages. Connecting
+it lets you see its existing resources; it does not deploy or replace them.
+
+## Choose a connection
+
+| Where is Docker running? | Connector | What you need |
+| --- | --- | --- |
+| On the same host as Citadel | **Local** | The Docker socket mounted into Citadel; the supplied Compose setup includes it |
+| On another host that Citadel can reach | **Agent** | Install the generated Agent command and allow Citadel to reach its Agent port |
+| Behind NAT or a firewall that blocks inbound access | **Edge Agent** | Run the generated enrollment command; the host connects out to Citadel |
+
+Use one Platform per Docker engine. A Citadel installation can have only one
+Local Platform. For Swarm, connect an existing **manager**; adding a Platform
+does not create a Swarm cluster.
+
+## Connect local Docker
+
+1. Sign in as an administrator.
 2. Open **Platforms** and select **Add**.
-3. Choose Docker Standalone or Docker Swarm.
-4. Choose the connector: local Docker, regular Agent, or Edge Agent.
-5. Enter the connector settings shown by the form and save.
-6. Wait for the health indicator and inventory counts to update.
+3. Select **Docker Standalone** and **Local**.
+4. Enter a clear name and select **Save**.
+5. Open the Platform after it comes online. You should see the containers already on this host.
 
-For a local connector, Core must have access to the Docker socket. For a remote
-connector, follow [Regular Agent](/docs/operations/agent) or
-[Edge Agent](/docs/operations/edge-agent). A Swarm platform must connect to a
-manager, and node-local functionality requires node-agent coverage on the
-relevant Nodes.
+For a remote machine, follow [Agent setup](/docs/operations/agent) or
+[Edge Agent setup](/docs/operations/edge-agent). For a Swarm cluster, use the
+[Swarm guide](/docs/concepts/docker-swarm).
 
-The platform page reports connectivity separately from Swarm quorum. Resolve a
-disconnected connector or unhealthy manager quorum before applying workloads.
+![Example Platforms page showing connected Docker and Swarm hosts](/screenshots/platforms.png)
+
+The names in this example are demonstration hosts. Your own Platform should
+appear here after it connects.
+
+## If it stays offline
+
+Check that Docker is running and that Citadel can reach the selected socket or
+Agent. An Edge Platform stays offline until its Agent enrolls and connects.
+See [troubleshooting](/docs/operations/troubleshooting) before adding a duplicate
+Platform.

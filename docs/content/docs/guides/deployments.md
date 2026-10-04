@@ -11,6 +11,19 @@ To bring an existing standalone Docker container under Citadel management
 without recreating it first, see
 [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
 
+## Run one container
+
+You need an online Docker Standalone Platform and an image name.
+
+1. Open **Deployments**, select **Add**, and choose a name and Platform.
+2. Choose **External** and a Registry, then enter the image and tag.
+3. Add the application's required ports and persistent storage.
+4. Select **Save**, then **Deploy**. Wait for the operation to finish.
+5. Open the Deployment to check its container and logs.
+
+For a complete example, follow [your first Deployment](/docs/getting-started/first-deployment).
+The sections below explain the other settings. Saving alone does not update the running container.
+
 ## Basic Setup
 
 Create a deployment and choose:

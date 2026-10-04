@@ -1,5 +1,5 @@
 import { Provider } from '@/components/provider';
-import { getSiteUrl } from '@/lib/shared';
+import { docsAssetUrl, getSiteUrl } from '@/lib/shared';
 import type { Metadata } from 'next';
 import './global.css';
 
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: '%s | Citadel Documentation',
   },
   description: 'Install, configure, operate, and secure Citadel.',
-  icons: [{ rel: 'icon', url: '/favicon.svg', type: 'image/svg+xml' }],
+  icons: [{ rel: 'icon', url: docsAssetUrl('/favicon.svg'), type: 'image/svg+xml' }],
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
