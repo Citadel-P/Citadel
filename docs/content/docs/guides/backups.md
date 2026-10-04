@@ -107,16 +107,20 @@ When Citadel runs against Docker Desktop on Windows, Linux-style paths such as `
 
 To inspect a Platform filesystem repository on the same Docker daemon, run a temporary container with the image used by that platform type.
 
+Replace `CORE_IMAGE` with your installed Core image address (the `CITADEL_IMAGE`
+value in `.env`). Replace `AGENT_IMAGE` with the image address in that Platform's
+generated Agent installation command. These examples do not assume a published version.
+
 For a local platform:
 
 ```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel:1.0.0
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup CORE_IMAGE
 ```
 
 For a regular agent or edge agent platform:
 
 ```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel.agent:1.0.0
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup AGENT_IMAGE
 ```
 
 Then inside the container:
@@ -336,5 +340,4 @@ backup and restore. If that node's Agent is unavailable, the operation fails
 instead of reading or restoring a same-named volume on another node.
 
 Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.
-
 

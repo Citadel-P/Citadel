@@ -248,9 +248,9 @@ Import drafts default to no automatic runtime changes:
 You can enable update and webhook behavior while reviewing the import or later.
 Stack drift behavior can be enabled after import.
 
-## The First Redeploy Or Apply
+## The first Deploy or Redeploy
 
-Adoption and Apply are separate operations.
+Adoption and deployment are separate operations.
 
 The first later **Redeploy** of an adopted Deployment may recreate its
 container from the saved Deployment definition.
@@ -263,7 +263,7 @@ deploys the source as a native Swarm Stack as described above.
 The first later **Deploy** of an adopted Swarm Service may roll out Tasks so the
 running Service matches the reviewed Citadel configuration.
 
-Before the first Redeploy or Apply:
+Before selecting **Deploy** or **Redeploy**:
 
 1. Review images, ports, mounts, networks, variables, and lifecycle settings.
 2. Confirm that required Citadel variables and secrets resolve successfully.
@@ -391,5 +391,4 @@ For normal Deployment behavior, see [Deployments](/docs/guides/deployments).
 For Web Editor Stacks, see [Manual Stacks](/docs/guides/manual-stacks).
 
 For Git-backed Stacks, see [Git Stacks](/docs/guides/git-stacks).
-
 
