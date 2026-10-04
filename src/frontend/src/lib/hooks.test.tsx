@@ -114,13 +114,13 @@ describe('useStreamProgress', () => {
       http.post('http://localhost/api/v1/stacks/apply', () =>
         HttpResponse.json([
           ...[
-            'Network beszel_default Creating',
-            'Network beszel_default Created',
-            'Network beszel_default Created',
-            'Image henrygd/beszel:latest Pulling',
-            'Image henrygd/beszel:latest Pulled',
-            'Container beszel Starting',
-            'Container beszel Started',
+            'Network demo-app_default Creating',
+            'Network demo-app_default Created',
+            'Network demo-app_default Created',
+            'Image example/demo-app:latest Pulling',
+            'Image example/demo-app:latest Pulled',
+            'Container demo-app Starting',
+            'Container demo-app Started',
           ].map((progressMessage) => ({ type: 'StdErr', progressMessage })),
           {
             type: 'CommandCompleted',
@@ -133,10 +133,10 @@ describe('useStreamProgress', () => {
     );
     const view = renderCitadel(<StackProgressProbe />);
     await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('success'));
-    expect(view.getByText('Pulled image henrygd/beszel:latest.')).toBeVisible();
-    expect(view.getAllByText('Created network beszel_default.')).toHaveLength(1);
-    expect(view.queryByText('Creating network beszel_default...')).not.toBeInTheDocument();
-    expect(view.queryByText('Starting container beszel...')).not.toBeInTheDocument();
+    expect(view.getByText('Pulled image example/demo-app:latest.')).toBeVisible();
+    expect(view.getAllByText('Created network demo-app_default.')).toHaveLength(1);
+    expect(view.queryByText('Creating network demo-app_default...')).not.toBeInTheDocument();
+    expect(view.queryByText('Starting container demo-app...')).not.toBeInTheDocument();
     expect(view.queryByText(/Pulling image/)).not.toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe('useStreamProgress', () => {
               start(controller) {
                 output = controller;
                 controller.enqueue(
-                  encoder.encode('[{"type":"StdErr","progressMessage":"Network beszel_default Creating"},'),
+                  encoder.encode('[{"type":"StdErr","progressMessage":"Network demo-app_default Creating"},'),
                 );
               },
             }),
@@ -161,18 +161,18 @@ describe('useStreamProgress', () => {
       ),
     );
     const view = renderCitadel(<StackProgressProbe />);
-    await waitFor(() => expect(view.getByText('Creating network beszel_default...')).toBeVisible());
+    await waitFor(() => expect(view.getByText('Creating network demo-app_default...')).toBeVisible());
     expect(view.getByTestId('status')).toHaveTextContent('pending');
     output!.enqueue(
       encoder.encode(
         JSON.stringify({ type: 'CommandCompleted', exitCode: 0 }) +
           ',' +
-          JSON.stringify({ type: 'StdErr', progressMessage: 'Container beszel Starting' }) +
+          JSON.stringify({ type: 'StdErr', progressMessage: 'Container demo-app Starting' }) +
           ',',
       ),
     );
-    await waitFor(() => expect(view.getByText('Starting container beszel...')).toBeVisible());
-    expect(view.queryByText('Creating network beszel_default...')).not.toBeInTheDocument();
+    await waitFor(() => expect(view.getByText('Starting container demo-app...')).toBeVisible());
+    expect(view.queryByText('Creating network demo-app_default...')).not.toBeInTheDocument();
     output!.enqueue(
       encoder.encode(
         JSON.stringify({ type: 'CommandCompleted', progressMessage: 'Stack deployment completed.', exitCode: 0 }) + ']',
@@ -180,7 +180,7 @@ describe('useStreamProgress', () => {
     );
     output!.close();
     await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('success'));
-    expect(view.queryByText('Starting container beszel...')).not.toBeInTheDocument();
+    expect(view.queryByText('Starting container demo-app...')).not.toBeInTheDocument();
     expect(view.getByText('Stack deployment completed.')).toBeVisible();
   });
 
@@ -189,7 +189,7 @@ describe('useStreamProgress', () => {
       http.post('http://localhost/api/v1/stacks/apply', () =>
         HttpResponse.json([
           { type: 'SystemMessage', progressMessage: 'Resolving Stack variables and secrets...' },
-          { type: 'StdErr', progressMessage: 'Container beszel Started' },
+          { type: 'StdErr', progressMessage: 'Container demo-app Started' },
           {
             type: 'CommandCompleted',
             progressMessage: 'Stack deployment completed.',
@@ -212,8 +212,8 @@ describe('useStreamProgress', () => {
     server.use(
       http.post('http://localhost/api/v1/stacks/apply', () =>
         HttpResponse.json([
-          { type: 'StdErr', progressMessage: 'beszel Pulled' },
-          { type: 'StdErr', progressMessage: 'Network beszel-copy_default Created' },
+          { type: 'StdErr', progressMessage: 'demo-app Pulled' },
+          { type: 'StdErr', progressMessage: 'Network demo-app-copy_default Created' },
           { type: 'StdErr', progressMessage: dockerConflict, severity: 'error' },
           { type: 'CommandCompleted', message: failure, exitCode: 1, severity: 'error' },
         ]),
@@ -221,8 +221,8 @@ describe('useStreamProgress', () => {
     );
     const view = renderCitadel(<StackProgressProbe />);
     await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('error'));
-    expect(view.getByText('Pulled image beszel.')).toHaveAttribute('data-severity', 'info');
-    expect(view.getByText('Created network beszel-copy_default.')).toHaveAttribute('data-severity', 'info');
+    expect(view.getByText('Pulled image demo-app.')).toHaveAttribute('data-severity', 'info');
+    expect(view.getByText('Created network demo-app-copy_default.')).toHaveAttribute('data-severity', 'info');
     expect(view.getAllByText(dockerConflict)).toHaveLength(1);
     expect(view.getByText(dockerConflict)).toHaveAttribute('data-severity', 'error');
     expect(view.getByText(failure)).toHaveAttribute('data-severity', 'error');

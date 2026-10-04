@@ -393,10 +393,10 @@ mod tests {
             citadel_stacks::StackApplyEventType::StdOut,
             citadel_stacks::StackApplyEventType::StdErr,
         ] {
-            let mut item = citadel_stacks::StackProgressItem::system("Container beszel Started");
+            let mut item = citadel_stacks::StackProgressItem::system("Container demo-app Started");
             item.event_type = event_type;
             let wire = serde_json::to_value(StackStreamItem::from(item)).unwrap();
-            assert_eq!(wire["progressMessage"], "Container beszel Started");
+            assert_eq!(wire["progressMessage"], "Container demo-app Started");
             assert!(
                 wire.get("message").is_none(),
                 "Normal output must not populate the error field"

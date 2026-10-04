@@ -92,13 +92,13 @@ impl StackRuntime for CompletingStackRuntime {
                     "Error response from daemon: port 8080 is already allocated; token=fixture-secret-value",
                 );
                 error.event_type = citadel_stacks::StackApplyEventType::StdErr;
-                let mut pulled = citadel_stacks::StackProgressItem::system("beszel Pulled");
+                let mut pulled = citadel_stacks::StackProgressItem::system("demo-app Pulled");
                 pulled.event_type = citadel_stacks::StackApplyEventType::StdErr;
                 let mut prefixed = error.clone();
                 prefixed.message = error
                     .message
                     .as_ref()
-                    .map(|text| format!("Container beszel-agent  {text}"));
+                    .map(|text| format!("Container demo-app-agent  {text}"));
                 let result = StackRuntimeResult {
                     status: StackReleaseStatus::Failed,
                     messages: vec![

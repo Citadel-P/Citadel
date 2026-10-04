@@ -119,7 +119,7 @@ fn drift_reports_missing_extra_stopped_and_paused_containers() {
 fn one_stopped_service_is_not_reported_as_two_missing_services() {
     let stack = stack(StackReleaseStatus::Healthy, StackDriftPolicy::default());
     let runtime = StackRuntimeSnapshot {
-        containers: [("beszel", "running"), ("beszel-agent", "exited")]
+        containers: [("demo-app", "running"), ("demo-app-agent", "exited")]
             .into_iter()
             .map(|(name, state)| crate::StackRuntimeContainer {
                 docker_container_id: format!("{name}-id"),
@@ -134,14 +134,14 @@ fn one_stopped_service_is_not_reported_as_two_missing_services() {
         &stack,
         &runtime,
         &[
-            "services:\n  beszel:\n    image: beszel\n  beszel-agent:\n    image: beszel-agent\n"
+            "services:\n  demo-app:\n    image: demo-app\n  demo-app-agent:\n    image: demo-app-agent\n"
                 .into(),
         ],
     )
     .unwrap();
     assert!(!report.has_structural_drift);
     assert!(
-        matches!(report.drifts.as_slice(), [StackDrift::ContainerStopped { service_name, .. }] if service_name == "beszel-agent")
+        matches!(report.drifts.as_slice(), [StackDrift::ContainerStopped { service_name, .. }] if service_name == "demo-app-agent")
     );
 }
 
@@ -465,11 +465,11 @@ fn failed_apply_summary_keeps_redacted_error_before_empty_completion() {
 fn compose_failure_summary_does_not_replay_progress_or_duplicate_errors() {
     let error = "Error response from daemon: Conflict. The container name is already in use.";
     let mut messages: Vec<_> = [
-        "beszel Pulled",
-        "beszel-agent Pulled",
-        "Network beszel-copy_default Created",
-        "Container beszel Creating",
-        &format!("Container beszel-agent {error}"),
+        "demo-app Pulled",
+        "demo-app-agent Pulled",
+        "Network demo-app-copy_default Created",
+        "Container demo-app Creating",
+        &format!("Container demo-app-agent {error}"),
         error,
     ]
     .into_iter()

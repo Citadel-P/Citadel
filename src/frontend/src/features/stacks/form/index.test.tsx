@@ -372,9 +372,9 @@ describe('Stack tabs', () => {
       containersInfo: [
         {
           id: '9964fd452f13',
-          name: '/beszel',
-          image: 'henrygd/beszel:latest',
-          imageId: 'sha256:beszel',
+          name: '/demo-app',
+          image: 'example/demo-app:latest',
+          imageId: 'sha256:demo-app',
           state: ContainerStateStatus.Running,
           controlState: ResourceControlState.Idle,
           isSystem: false,
@@ -390,7 +390,7 @@ describe('Stack tabs', () => {
     renderCitadel(<Content resource={resource} />);
 
     expect(screen.getByText('Awaiting first Swarm Apply')).toBeInTheDocument();
-    expect(screen.getByText('beszel')).toBeInTheDocument();
+    expect(screen.getByText('demo-app')).toBeInTheDocument();
   });
 
   it('does not present Swarm task containers as a pending Compose project', () => {
