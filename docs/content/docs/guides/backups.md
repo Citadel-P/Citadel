@@ -10,10 +10,11 @@ Citadel backups let you save the Citadel control plane and Docker named volumes 
 A backup needs a **repository** (where it is stored) and a **policy** (what it saves).
 
 1. Open **Backups** and create a backup repository. For recovery from host failure, use storage away from that host.
-2. Create a policy for the Citadel control plane or for the application's named Docker volumes.
-3. Start the backup manually and wait for its run to finish successfully.
-4. Check that the snapshot appears and record how to access the repository.
-5. Plan a restore test before relying on the backup.
+2. For a new repository, select **Initialize**, then **Validate** to confirm it is ready.
+3. Create a policy for the Citadel control plane or for the application's named Docker volumes.
+4. Start the backup manually and wait for its run to finish successfully.
+5. Check that the snapshot appears and record how to access the repository.
+6. Plan a restore test before relying on the backup.
 
 A control-plane backup saves Citadel's own installation. It does not replace
 backups of application volumes. Volume restore is available in Citadel;
@@ -340,4 +341,3 @@ backup and restore. If that node's Agent is unavailable, the operation fails
 instead of reading or restoring a same-named volume on another node.
 
 Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.
-

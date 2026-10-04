@@ -22,6 +22,11 @@ stage, then run inside the tested Agent image. Host-built binaries can require a
 newer glibc than that runtime and must not be substituted for the pinned build.
 The tests use disposable Docker services rather than the host engine as their target.
 
+Swarm acceptance publishes each candidate as a one-platform image index in its
+disposable registry, matching the release format. Docker's distribution endpoint
+can omit platform metadata for a single OCI manifest. The index contains only the
+candidate's actual architecture; the amd64 and arm64 jobs each test their native image.
+
 ## Browser test coverage
 
 The Playwright suites under `test/e2e` are currently manual; these workflows do
