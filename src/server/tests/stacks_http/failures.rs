@@ -40,7 +40,7 @@ pub(super) async fn verify(
     );
     let pulled = items
         .iter()
-        .find(|item| item["progressMessage"] == "beszel Pulled")
+        .find(|item| item["progressMessage"] == "demo-app Pulled")
         .unwrap();
     assert!(pulled["severity"].is_null());
     for item in items.iter().filter(|item| {
@@ -62,7 +62,7 @@ pub(super) async fn verify(
     assert!(!info.to_string().contains("fixture-secret-value"));
     let summary = info["Result"]["Message"].as_str().unwrap();
     assert!(!summary.contains("Pulled"));
-    assert!(!summary.contains("Container beszel-agent"));
+    assert!(!summary.contains("Container demo-app-agent"));
     assert_eq!(summary.matches("Error response from daemon").count(), 1);
 
     assert_eq!(

@@ -76,7 +76,7 @@ describe('useStackInfoGroup', () => {
           id: '00000000-0000-0000-0000-000000000300',
           platformId,
           containerId,
-          name: '/beszel-copy-beszel-1',
+          name: '/demo-app-copy-demo-app-1',
           dockerImageId: 'image-id',
           created: 1,
           state: ContainerStateStatus.Exited,
@@ -162,14 +162,14 @@ describe('useStackInfoGroup', () => {
 
 const createContainer = (state: ContainerStateStatus): ContainerRuntimeView =>
   ({
-    name: '/beszel-copy-beszel-1',
-    image: 'example/beszel:latest',
+    name: '/demo-app-copy-demo-app-1',
+    image: 'example/demo-app:latest',
     id: containerId,
     imageId: 'image-id',
     state,
     controlState: ResourceControlState.Idle,
     created: 1,
-    stack: 'beszel-copy',
+    stack: 'demo-app-copy',
     containerStat: null,
     ports: {},
     deploymentId: null,

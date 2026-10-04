@@ -50,7 +50,7 @@ Path rules:
 
 If the repository has already been synced, the stack form shows branch refs from the repository cache. It also shows the current deployed commit and the latest synced commit for the selected branch, so you can tell whether the stack is behind before deploying.
 
-Use **Discover compose projects** to scan the selected repository branch. For a simple repository, choose the discovered root project to pre-fill compose paths, working directory, repo env files, and watch paths.
+Use **Discover compose paths** to scan the selected repository branch and select the Compose files for this stack. Discovery suggests paths; it does not create stacks or automatically select all discovered files.
 
 ## Inspecting Deployed Source
 
@@ -92,7 +92,7 @@ Example layout:
 
 ```text
 stacks/
-  beszel/
+  demo-app/
     compose.yml
     .env
   caddy/
@@ -103,18 +103,18 @@ shared/
 
 Create one Citadel stack per Compose project:
 
-Beszel stack:
+Demo App stack:
 
 - Compose paths:
-  - `stacks/beszel/compose.yml`
+  - `stacks/demo-app/compose.yml`
   - `shared/networks.yml`, if the compose file depends on it
 - Compose env files from repo:
-  - `stacks/beszel/.env`
+  - `stacks/demo-app/.env`
 - Working directory:
-  - `stacks/beszel`
+  - `stacks/demo-app`
 - Watch paths:
   - empty for the default, or explicitly:
-  - `stacks/beszel/**`
+  - `stacks/demo-app/**`
   - `shared/networks.yml`
 
 Caddy stack:
@@ -126,15 +126,19 @@ Caddy stack:
 - Watch paths:
   - empty, or `stacks/caddy/**`
 
-This keeps unrelated monorepo commits quiet. A change under `stacks/caddy` should not mark the Beszel stack outdated unless Beszel explicitly watches that path.
+This keeps unrelated monorepo commits quiet. A change under `stacks/caddy` should not mark the Demo App stack outdated unless Demo App explicitly watches that path.
 
-For monorepos, use **Discover compose projects** after selecting the repository and branch. Citadel scans common Compose file names such as `compose.yml`, `compose.yaml`, `docker-compose.yml`, and override files in the same folder. Select the project you want this stack to represent. A Citadel stack still maps to one Compose project; create another stack for another discovered project.
+For monorepos, use **Discover compose paths** after selecting the repository and branch. Citadel recognizes `.yml` and `.yaml` filenames containing `compose` separated by dots, hyphens, or underscores, such as `docker-compose.yaml`, `sample-app-compose.yaml`, `app-compose-prod.yml`, and `app.compose.yml`. Matching is case-insensitive.
+
+Environment file discovery recognizes `.env`, `.env.production`, `demo-app.env`, and `sample-app.env.local` alongside each project's Compose files. These are suggestions; select only the files needed by the stack.
+
+Separate folders are optional. A Citadel stack maps to one Compose project: when Demo App and Sample App have separate Compose files at the repository root, create two stacks and select the corresponding file for each.
 
 Compose path order matters. Put the base compose file first and override files after it:
 
 ```text
-stacks/beszel/compose.yml
-stacks/beszel/compose.override.yml
+stacks/demo-app/compose.yml
+stacks/demo-app/compose.override.yml
 ```
 
 ## Update Policy
@@ -242,5 +246,3 @@ When a Git stack apply fails, Citadel leaves the current source pointer unchange
 Automatic-update activity reports the commit actually applied. If the branch
 advances between an update check and Apply, this can be newer than the commit
 shown by the earlier check.
-
-

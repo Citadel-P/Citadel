@@ -93,7 +93,7 @@ fn blocks_unrepresentable_settings_but_accepts_docker_defaults() {
             .iter()
             .any(|i| i.code == "IMAGE_OVERRIDE_NOT_PRESERVED")
     );
-    inspection["Config"]["Labels"] = json!({"com.docker.compose.project":"beszel"});
+    inspection["Config"]["Labels"] = json!({"com.docker.compose.project":"demo-app"});
     assert!(
         draft(&inspection)
             .issues
@@ -142,7 +142,7 @@ fn sensitive_classifier_matches_dotnet_boundaries_and_name_normalization() {
         "stripe_api_key_1",
         "DATABASE_URL",
         "ConnectionStrings__Default",
-        "BESZEL_AGENT_TOKEN",
+        "DEMO_APP_AGENT_TOKEN",
         "PRIVATE.KEY",
         "db-password",
     ] {

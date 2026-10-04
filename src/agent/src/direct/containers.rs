@@ -419,7 +419,7 @@ mod tests {
             ),
             (
                 "com.docker.compose.service".to_owned(),
-                "beszel-agent".to_owned(),
+                "demo-app-agent".to_owned(),
             ),
             ("com.docker.compose.oneoff".to_owned(), "False".to_owned()),
         ]

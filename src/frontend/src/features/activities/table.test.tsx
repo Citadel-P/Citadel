@@ -126,7 +126,7 @@ describe('ActivitiesTable', () => {
       platformId: null,
       resourceId: '019fba8b-3629-7553-8eb1-a7b011f9d5a0',
       platformName: '',
-      resourceName: 'beszel',
+      resourceName: 'demo-app',
       platformStatus: 'Online',
       resourceType: 'GitRepository',
       eventType: 'GitRepoCloned',

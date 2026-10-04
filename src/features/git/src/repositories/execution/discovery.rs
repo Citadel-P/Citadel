@@ -52,7 +52,7 @@ pub(super) fn compose_projects(entries: &[GitTreeEntry]) -> Vec<GitComposeProjec
             .map_or((".", entry.path.as_str()), |(directory, name)| {
                 (directory, name)
             });
-        if name == ".env" {
+        if is_env_file(name) {
             env_files.insert(entry.path.clone());
         }
         if is_compose_file(name) {
@@ -101,25 +101,18 @@ pub(super) fn compose_projects(entries: &[GitTreeEntry]) -> Vec<GitComposeProjec
 
 pub(super) fn is_compose_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    if matches!(
-        lower.as_str(),
-        "compose.yml" | "compose.yaml" | "docker-compose.yml" | "docker-compose.yaml"
-    ) {
-        return true;
-    }
     let Some(stem) = lower
         .strip_suffix(".yml")
         .or_else(|| lower.strip_suffix(".yaml"))
     else {
         return false;
     };
-    stem == "compose"
-        || stem == "docker-compose"
-        || stem.ends_with(".compose")
-        || stem.starts_with("compose.")
-        || stem.starts_with("compose-")
-        || stem.starts_with("docker-compose.")
-        || stem.starts_with("docker-compose-")
+    stem.split(['.', '-', '_']).any(|part| part == "compose")
+}
+
+fn is_env_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".env") || lower.contains(".env.")
 }
 
 pub(super) fn compose_order(path: &str) -> u8 {

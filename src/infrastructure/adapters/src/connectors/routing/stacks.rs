@@ -1109,26 +1109,26 @@ mod tests {
                 ..Default::default()
             }
         };
-        let mut oneoff = container("beszel", "job", "running");
+        let mut oneoff = container("demo-app", "job", "running");
         oneoff
             .labels
             .insert("com.docker.compose.oneoff".into(), "True".into());
-        let mut swarm_task = container("beszel", "task", "running");
+        let mut swarm_task = container("demo-app", "task", "running");
         swarm_task
             .labels
             .insert("com.docker.swarm.task.id".into(), "task-id".into());
         let snapshot = compose_snapshot(
             vec![
-                container("beszel", "agent", "running"),
+                container("demo-app", "agent", "running"),
                 container("other", "other", "running"),
-                container("beszel", "web", "exited"),
+                container("demo-app", "web", "exited"),
                 oneoff,
                 swarm_task,
             ]
             .into_iter()
             .map(crate::connectors::docker::runtime::map_container)
             .collect(),
-            "beszel",
+            "demo-app",
         );
         assert_eq!(snapshot.containers.len(), 2);
         assert_eq!(snapshot.containers[1].service_name, "web");
@@ -1141,8 +1141,8 @@ mod tests {
         use prost::Message;
 
         let containers = [
-            ("beszel", ContainerStateType::Running),
-            ("beszel-agent", ContainerStateType::Exited),
+            ("demo-app", ContainerStateType::Running),
+            ("demo-app-agent", ContainerStateType::Exited),
         ]
         .into_iter()
         .map(|(service, state)| {
@@ -1167,14 +1167,14 @@ mod tests {
         let agent = snapshot
             .containers
             .iter()
-            .find(|c| c.service_name == "beszel-agent")
+            .find(|c| c.service_name == "demo-app-agent")
             .unwrap();
         assert_eq!(agent.state, "exited");
         assert!(
             snapshot
                 .containers
                 .iter()
-                .any(|c| c.service_name == "beszel" && c.state == "running")
+                .any(|c| c.service_name == "demo-app" && c.state == "running")
         );
     }
 

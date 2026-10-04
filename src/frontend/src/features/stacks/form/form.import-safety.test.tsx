@@ -20,13 +20,13 @@ const importDraft = {
   source: {
     platformId: '019f0000-0000-7000-8000-000000000001',
     platformName: 'Local',
-    projectName: 'beszel-git',
+    projectName: 'demo-app-git',
     containerIds: ['container-1'],
-    containerNames: ['beszel'],
+    containerNames: ['demo-app'],
     services: [],
   },
   draft: {
-    name: 'beszel-git',
+    name: 'demo-app-git',
     platformId: '019f0000-0000-7000-8000-000000000001',
     description: null,
     stackSource: StackSource.Git,
@@ -37,7 +37,7 @@ const importDraft = {
       commitSha: null,
       composePaths: ['compose.yml'],
       registryId: '019f0000-0000-7000-8000-000000000003',
-      projectName: 'beszel-git',
+      projectName: 'demo-app-git',
       updateBehavior: StackUpdateBehavior.Disabled,
       webhook: null,
       destroyBeforeDeploy: false,
@@ -71,7 +71,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
                   issues: [],
                   previewFingerprint: 'preview-fingerprint',
                   services: [],
-                  importableSensitiveEnvironmentNames: ['BESZEL_AGENT_TOKEN', 'stripe_api_key_1'],
+                  importableSensitiveEnvironmentNames: ['DEMO_APP_AGENT_TOKEN', 'stripe_api_key_1'],
                   canImportSensitiveEnvironmentValues: true,
                 },
               })
@@ -98,7 +98,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
             data: {
               data: {
                 id: '019f0000-0000-7000-8000-000000000002',
-                name: 'beszel',
+                name: 'demo-app',
               },
             },
             isFetching: false,
@@ -233,7 +233,7 @@ describe('Stack Compose import configuration', () => {
   it('sends the selected import kind as an API query parameter', async () => {
     renderCitadel(<StackForm mode="add" />, {
       route:
-        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git&importKind=ComposeProject',
+        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=demo-app-git&importKind=ComposeProject',
     });
 
     await waitFor(() =>
@@ -241,7 +241,7 @@ describe('Stack Compose import configuration', () => {
         'getComposeProjectImportDraft',
         {
           platformId: '019f0000-0000-7000-8000-000000000001',
-          projectName: 'beszel-git',
+          projectName: 'demo-app-git',
           query: { importKind: StackImportKind.ComposeProject },
         },
         { enabled: true },
@@ -252,7 +252,7 @@ describe('Stack Compose import configuration', () => {
   it('shows and locks the imported platform without waiting for the platform list', async () => {
     renderCitadel(<StackForm mode="add" />, {
       route:
-        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git&importKind=ComposeProject',
+        '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=demo-app-git&importKind=ComposeProject',
     });
 
     const platform = await screen.findByRole('button', { name: 'Platform selection' });
@@ -262,7 +262,7 @@ describe('Stack Compose import configuration', () => {
 
   it('allows reviewed update and webhook settings while keeping drift disabled', async () => {
     renderCitadel(<StackForm mode="add" />, {
-      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git',
+      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=demo-app-git',
     });
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Auto Update setting' })).toBeEnabled());
@@ -274,7 +274,7 @@ describe('Stack Compose import configuration', () => {
 
   it('offers the compact repository browser action', async () => {
     renderCitadel(<StackForm mode="add" />, {
-      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git',
+      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=demo-app-git',
     });
 
     expect(await screen.findByRole('button', { name: 'Browse' })).toBeEnabled();
@@ -284,7 +284,7 @@ describe('Stack Compose import configuration', () => {
   it('requires the project name in the standard confirmation dialog', async () => {
     const user = userEvent.setup();
     renderCitadel(<StackForm mode="add" />, {
-      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=beszel-git',
+      route: '/stacks/add?importPlatform=019f0000-0000-7000-8000-000000000001&importProject=demo-app-git',
     });
 
     expect(await screen.findByRole('switch', { name: 'Import detected values as Citadel secrets' })).toBeChecked();
@@ -295,7 +295,7 @@ describe('Stack Compose import configuration', () => {
     await user.click(screen.getByRole('button', { name: 'Submit import' }));
 
     expect(await screen.findByRole('heading', { name: 'Confirm Import' })).toBeInTheDocument();
-    expect(screen.getByText(/BESZEL_AGENT_TOKEN, stripe_api_key_1/)).toBeInTheDocument();
+    expect(screen.getByText(/DEMO_APP_AGENT_TOKEN, stripe_api_key_1/)).toBeInTheDocument();
     expect(
       within(screen.getByRole('dialog')).queryByRole('switch', {
         name: 'Import detected values as Citadel secrets',
@@ -304,7 +304,7 @@ describe('Stack Compose import configuration', () => {
     const confirmButton = screen.getByRole('button', { name: 'Import' });
     expect(confirmButton).toBeDisabled();
 
-    await user.type(screen.getByRole('textbox', { name: 'Enter beszel-git to confirm' }), 'beszel-git');
+    await user.type(screen.getByRole('textbox', { name: 'Enter demo-app-git to confirm' }), 'demo-app-git');
 
     expect(confirmButton).toBeEnabled();
     await user.click(confirmButton);

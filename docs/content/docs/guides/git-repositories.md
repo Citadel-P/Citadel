@@ -148,7 +148,7 @@ After the repository syncs successfully, create or edit a stack and choose:
 - Compose paths: one or more Compose files relative to the repository root
 - Compose env files from repo: optional `.env` files relative to the repository root
 
-Use **Discover compose projects** in the stack form when you want Citadel to scan the repository branch and pre-fill Compose paths, working directory, env files, and watch paths.
+Use **Discover compose paths** in the stack form to scan the repository branch and select Compose files. Discovery also suggests environment files alongside the Compose files. Configure working directory and watch paths separately when their defaults do not fit your project.
 
 ## Using Repositories With Builds
 
@@ -198,5 +198,4 @@ If repository sync fails:
 - Review the repository activity entry for the exact clone or pull error.
 
 If a branch does not appear in a Git stack form, sync the repository first. You can still enter a branch manually when the ref has not been cached yet.
-
 
