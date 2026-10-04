@@ -4,6 +4,26 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use citadel_contracts::citadel::platforms::v1::CheckHealthResponse;
 use serde_json::Value;
 
+pub(super) async fn remove_stack(project: &str) {
+    // Service removal is asynchronous; tasks can briefly retain the overlay network.
+    tokio::time::timeout(Duration::from_secs(45), async {
+        loop {
+            let output = docker_output(&["stack", "rm", project]).await;
+            if output.status.success() {
+                return;
+            }
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                error.contains("Failed to remove network") && error.contains("is in use by task"),
+                "docker stack rm {project}: {error}"
+            );
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    })
+    .await
+    .expect("Swarm tasks must release the fixture network before cleanup times out");
+}
+
 pub(super) async fn check(
     pool: &sqlx::PgPool,
     store: &PostgresEdgeStore,
