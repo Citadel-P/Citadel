@@ -8,7 +8,7 @@ uses a Docker Standalone Platform and does not need a Git repository.
 
 ## Create a Stack
 
-1. Open **Stacks** and select **Add**.
+1. Open **Stacks** and select **Add Stack**.
 2. Name it `hello-stack` and select your Docker Standalone Platform.
 3. Choose **Web Editor** as the source.
 4. Paste this Compose file. Use another host port if `8080` is already in use:
@@ -21,8 +21,8 @@ services:
       - "8080:80"
 ```
 
-5. Fix any errors shown by the editor, then select **Save**.
-6. Select **Deploy** and wait for the operation to finish.
+5. Select **Docker Hub** under **Registry**, fix any editor errors, and select **Save**.
+6. Select **Deploy**, enter `hello-stack` in the confirmation dialog, and select **Deploy** again. Wait for the operation to finish.
 7. Open the **Services** tab to check the running container.
 8. Open `http://YOUR-DOCKER-HOST:8080` to see the Nginx welcome page.
 

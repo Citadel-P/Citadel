@@ -814,7 +814,6 @@ const FormNavigationLink = ({
     className={cn(
       'relative flex min-h-(--control-height) w-full items-center gap-2 rounded-md px-3 py-[calc(var(--surface-padding)/4)] text-sm text-muted-foreground transition-colors after:pointer-events-none after:absolute after:inset-y-2 after:left-0 after:w-0.5 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
       active && 'bg-primary/5 font-medium text-foreground after:bg-primary',
-      item.error && 'text-destructive',
     )}
     onClick={(event) => {
       event.preventDefault();

@@ -9,12 +9,13 @@ Standalone Platform; connect one using
 
 ## Create and deploy
 
-1. Open **Deployments** and select **Add**.
+1. Open **Deployments** and select **Add Deployment**.
 2. Name it `hello-web` and select your Platform.
 3. Choose **External** under **Image Source**, select **Docker Hub**, and enter `nginx:alpine`.
-4. In **Ports**, publish host port `8080` to container port `80` using TCP.
-5. Select **Save**, then **Deploy**. Wait for the operation to finish.
-6. Open `http://YOUR-DOCKER-HOST:8080`. For a local host, use [http://localhost:8080](http://localhost:8080).
+4. Under **Networks**, select `bridge`.
+5. In the **Ports** editor, enter `8080:80/tcp` to publish host port `8080` to container port `80`. Choose another host port if `8080` is in use.
+6. Select **Save**, then **Deploy**. Enter `hello-web` in the confirmation dialog, select **Deploy**, and wait for the operation to finish.
+7. Open `http://YOUR-DOCKER-HOST:8080`. For a local host, use [http://localhost:8080](http://localhost:8080).
 
 **Success looks like:** the container is running and the browser shows the
 Nginx welcome page. The host firewall determines who can reach port `8080`.

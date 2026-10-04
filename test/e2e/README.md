@@ -20,7 +20,7 @@ npm ci
 npm run install:chromium
 ```
 
-Start the isolated environment and run the blocking smoke suite:
+Start the isolated environment and run the smoke suite:
 
 ```powershell
 $env:COMPOSE_PROJECT_NAME = "citadel-e2e-local"

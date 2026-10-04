@@ -1146,6 +1146,7 @@ export const StackForm = ({
       isComposeImport,
       lockedPlatformType,
       original.name,
+      original.platformId,
       original.stackSource,
       preflightSwarmStack,
       stackPlatforms,
