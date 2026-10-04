@@ -6,6 +6,7 @@ description: "Review confirmed Citadel operational and compatibility limitations
 - Source builds track current development code. Check the release notes for published images and supported versions.
 - The public HTTP contract is an API Preview and contains only explicitly opted-in operations.
 - A manager cannot provide node-local logs, terminal sessions, volume browsing, or complete container statistics for every Swarm Node; those functions require node-agent coverage.
+- Swarm Node Agent installation can reject custom OCI images whose registry metadata does not identify supported hardware. Use a published Agent image or publish the custom image as an index with accurate platform entries.
 - Swarm Config and Secret payloads are immutable after creation. Citadel can update supported metadata, while payload rotation requires a replacement and workload update.
 - Docker Swarm rejects Compose fields it cannot represent. Citadel preflight reports blockers before native Stack deployment.
 - Rolling Swarm updates retain historical Task containers according to Docker behavior; Citadel may hide those from current workload summaries and can prune eligible historical containers according to platform policy.

@@ -92,13 +92,38 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
     nested(
         f,
         "swarm-manager",
-        &["tag", image, "registry:5000/citadel-agent:acceptance"],
+        &["tag", image, "registry:5000/citadel-agent:acceptance-native"],
     )
     .await;
     nested(
         f,
         "swarm-manager",
-        &["push", "registry:5000/citadel-agent:acceptance"],
+        &["push", "registry:5000/citadel-agent:acceptance-native"],
+    )
+    .await;
+    // Docker's distribution endpoint omits platforms for a single OCI manifest.
+    // Use the release index format, with only this candidate's actual platform.
+    nested(
+        f,
+        "swarm-manager",
+        &[
+            "manifest",
+            "create",
+            "--insecure",
+            "registry:5000/citadel-agent:acceptance",
+            "registry:5000/citadel-agent:acceptance-native",
+        ],
+    )
+    .await;
+    nested(
+        f,
+        "swarm-manager",
+        &[
+            "manifest",
+            "push",
+            "--insecure",
+            "registry:5000/citadel-agent:acceptance",
+        ],
     )
     .await;
 
