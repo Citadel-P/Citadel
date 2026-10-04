@@ -209,7 +209,9 @@ CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem
 HUB_PUBLIC_KEY=the-public-key-shown-by-citadel
 ```
 
-Mount the files and publish the Agent:
+Mount the files and publish the Agent. Replace `AGENT_IMAGE` with the complete
+image address from this Platform's generated installation command, and replace
+the example paths and public key with your own:
 
 ```bash
 docker run -d \
@@ -226,7 +228,7 @@ docker run -d \
   -e CITADEL_AGENT_TLS_CERTIFICATE_PATH=/etc/citadel/tls/agent-fullchain.pem \
   -e CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem \
   -e HUB_PUBLIC_KEY="..." \
-  ghcr.io/citadel-p/citadel.agent:1.0.0
+  AGENT_IMAGE
 ```
 
 Configure the Platform or inbound Build Pool endpoint with the exact DNS name
@@ -378,5 +380,4 @@ Use an `https://` Agent endpoint, or set
 a trusted private network or VPN.
 
 Citadel does not provide a certificate-validation bypass.
-
 

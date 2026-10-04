@@ -178,7 +178,7 @@ reports both outcomes in the progress sheet. If Docker accepts the command but
 the later rollout fails, the workload remains a Swarm Stack so its failure can
 be inspected and corrected.
 
-## Create And Apply A Swarm Stack
+## Create and deploy a Swarm Stack
 
 Open **Stacks**, select **Add**, and choose a Docker Swarm Platform. The Stack
 form removes Docker Standalone-only controls such as container drift repair,
@@ -220,7 +220,7 @@ the release remains **Unknown** or **Timed out** and background Swarm
 reconciliation can recover it after Docker's state becomes observable.
 
 Stack-owned Services remain visible from the Swarm Platform's **Services** and
-**Tasks** pages. After the first Apply, the Stack's **Services** tab also shows
+**Tasks** pages. After the first deployment, the Stack's **Services** tab also shows
 only the Services owned by that Stack, with their current Tasks as expandable
 rows. The table follows the live Swarm inventory stream. Select a Service to
 use the bounded log viewer, inspect its Docker definition, or open a terminal
@@ -591,5 +591,4 @@ The current Swarm milestone does not provide:
 
 The implementation roadmap and safety rules for these future milestones live
 in the internal Docker Swarm v1 specification.
-
 
