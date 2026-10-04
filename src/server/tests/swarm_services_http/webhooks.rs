@@ -128,6 +128,9 @@ pub(super) async fn verify(
     digests.changed.store(true, Ordering::Relaxed);
     let (_, body) = send(&app, id, "disposable-service-webhook").await;
     assert_eq!(body["status"], "queued");
+    let severities: Vec<String> = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceWebhookReceived' ORDER BY id")
+        .bind(id).fetch_all(pool).await.unwrap();
+    assert_eq!(severities, ["Failure", "Warning", "Information", "Success"]);
     let current = services.get(admin.actor_id, true, id).await.unwrap();
     assert_eq!(
         current.auto_update_state.status,

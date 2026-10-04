@@ -113,7 +113,18 @@ pub async fn register(
     for signal in citadel_runtime::RuntimeSignal::ALL {
         target_listener.listen(signal.channel()).await?;
     }
+    target_listener
+        .listen(citadel_adapters::persistence::postgres::connection_events::CHANNEL)
+        .await?;
     let notifications = super::notifications::DatabaseNotificationHub::new();
+    supervisor.spawn(
+        "connection-realtime-updates",
+        super::connection_events::realtime_updates(
+            notifications.connections.subscribe(),
+            dependencies.realtime.clone(),
+            cancellation.child_token(),
+        ),
+    );
     supervisor.spawn(
         "database-notifications",
         notifications
@@ -263,7 +274,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "build-pool-health",
-        super::builds::pool_health(cancellation.child_token(), builds),
+        super::builds::pool_health(cancellation.child_token(), builds, pool.clone()),
     );
     supervisor.spawn(
         "backup-runs",

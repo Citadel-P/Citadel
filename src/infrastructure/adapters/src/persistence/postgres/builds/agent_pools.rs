@@ -20,9 +20,46 @@ impl PostgresBuildRepository {
         result: &'a citadel_builds::BuildPoolCheck,
     ) -> BoxFuture<'a, Result<bool, BuildError>> {
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            // Fence observations against configuration changes and manual checks.
+            let current: Option<Option<DateTime<Utc>>> = sqlx::query_scalar("SELECT unavailablesince FROM buildagentpools WHERE id=$1 AND rowversion=$2 AND enabled AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) FOR UPDATE")
+                .bind(pool.id).bind(pool.row_version).fetch_optional(&mut *tx).await.map_err(storage)?;
+            let Some(previous_since) = current else {
+                return Ok(false);
+            };
+            let eligible = pool.provider_spec.get("connectionMode").or_else(|| pool.provider_spec.get("ConnectionMode")).and_then(serde_json::Value::as_str) != Some("EdgeAgent") || sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype='BuildAgentPool' AND lastconnectedatutc IS NOT NULL)")
+                .bind(pool.id).fetch_one(&mut *tx).await.map_err(storage)?;
+            let observed_at = Utc::now();
+            let unavailable_since = if !result.ready && eligible {
+                Some(previous_since.unwrap_or(observed_at))
+            } else {
+                None
+            };
+            sqlx::query("UPDATE buildagentpools SET unavailablesince=$2 WHERE id=$1")
+                .bind(pool.id)
+                .bind(unavailable_since)
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             let message: String = result.message.chars().take(2048).collect();
             let count = sqlx::query("UPDATE buildagentpools SET lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND enabled AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) AND (lastvalidationstatus IS DISTINCT FROM $3 OR lastvalidationmessage IS DISTINCT FROM $4 OR lastvalidatedat IS NULL OR lastvalidatedat < now()-INTERVAL '5 minutes' OR controlstate<>'Idle')")
-                .bind(pool.id).bind(pool.row_version).bind(if result.ready {"Ready"} else {"Invalid"}).bind(message).execute(&self.pool).await.map_err(storage)?.rows_affected();
+                .bind(pool.id).bind(pool.row_version).bind(if result.ready {"Ready"} else {"Invalid"}).bind(&message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let observation = citadel_alerts::AlertObservation {
+                alert_type: "BuildAgentPoolUnavailable".into(),
+                resource_id: pool.id,
+                resource_name: pool.name.clone(),
+                resource_type: "BuildAgentPool".into(),
+                deduplication_component: "availability".into(),
+                observed_at,
+                matched: unavailable_since.is_some(),
+                value: unavailable_since
+                    .map(|since| (observed_at - since).num_milliseconds().max(0) as f64 / 1000.0),
+                info: serde_json::json!({"HumanMessage": message, "UnavailableSince": unavailable_since}),
+            };
+            crate::persistence::postgres::alerts::observations::enqueue(&mut tx, &observation)
+                .await
+                .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
             Ok(count == 1)
         })
     }
@@ -248,6 +285,7 @@ impl PostgresBuildRepository {
                     new_pool: pool.snapshot(),
                 }
             };
+            reset_pool_availability(&mut tx, &pool).await?;
             record_pool_activity(&mut tx, &pool, actor, info).await?;
             tx.commit().await.map_err(storage)?;
             self.get_pool(pool.id).await
@@ -277,6 +315,7 @@ impl PostgresBuildRepository {
             }
             sqlx::query("UPDATE buildagentpools SET enabled=false,archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1")
                 .bind(id).execute(&mut *tx).await.map_err(storage)?;
+            reset_pool_availability(&mut tx, &current).await?;
             record_pool_activity(
                 &mut tx,
                 &current,
@@ -290,4 +329,20 @@ impl PostgresBuildRepository {
             Ok(())
         })
     }
+}
+
+async fn reset_pool_availability(
+    tx: &mut Transaction<'_, Postgres>,
+    pool: &BuildAgentPool,
+) -> Result<(), BuildError> {
+    sqlx::query("UPDATE buildagentpools SET unavailablesince=NULL WHERE id=$1")
+        .bind(pool.id)
+        .execute(&mut **tx)
+        .await
+        .map_err(storage)?;
+    crate::persistence::postgres::alerts::observations::enqueue(tx, &citadel_alerts::AlertObservation {
+        alert_type: "BuildAgentPoolUnavailable".into(), resource_id: pool.id, resource_name: pool.name.clone(),
+        resource_type: "BuildAgentPool".into(), deduplication_component: "availability".into(), observed_at: Utc::now(),
+        matched: false, value: None, info: serde_json::json!({"HumanMessage":"Build pool configuration changed or monitoring disabled."}),
+    }).await.map_err(storage)
 }

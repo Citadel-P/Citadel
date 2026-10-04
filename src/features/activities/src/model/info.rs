@@ -74,6 +74,8 @@ pub enum ActivityEventInfo {
     GitRepoWebhookReceived(WebhookActivityDetails),
     StackWebhookReceived(WebhookActivityDetails),
     BuildWebhookReceived(WebhookActivityDetails),
+    ActionWebhookReceived(WebhookActivityDetails),
+    BackupPolicyWebhookReceived(WebhookActivityDetails),
     SwarmServiceWebhookReceived(WebhookActivityDetails),
     UserProfileUpdated {
         #[serde(rename = "Changes")]
@@ -691,6 +693,22 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Build")]
         build: BuildProjectActivitySnapshot,
     },
+    BuildAgentPoolConnected {
+        #[serde(rename = "AgentId")]
+        agent_id: Uuid,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    BuildAgentPoolDisconnected {
+        #[serde(rename = "AgentId")]
+        agent_id: Uuid,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
     BuildAgentPoolCreated {
         #[serde(rename = "Pool")]
         pool: BuildAgentPoolActivitySnapshot,
@@ -1205,6 +1223,8 @@ impl ActivityEventInfo {
             Self::GitRepoWebhookReceived(_) => ActivityEventType::GitRepoWebhookReceived,
             Self::StackWebhookReceived(_) => ActivityEventType::StackWebhookReceived,
             Self::BuildWebhookReceived(_) => ActivityEventType::BuildWebhookReceived,
+            Self::ActionWebhookReceived(_) => ActivityEventType::ActionWebhookReceived,
+            Self::BackupPolicyWebhookReceived(_) => ActivityEventType::BackupPolicyWebhookReceived,
             Self::SwarmServiceWebhookReceived(_) => ActivityEventType::SwarmServiceWebhookReceived,
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
             Self::UserPreferencesUpdated { .. } => ActivityEventType::UserPreferencesUpdated,
@@ -1333,6 +1353,10 @@ impl ActivityEventInfo {
             Self::ActionRunTimedOut { .. } => ActivityEventType::ActionRunTimedOut,
             Self::ActionRunCancelled { .. } => ActivityEventType::ActionRunCancelled,
             Self::ActionRunRejected { .. } => ActivityEventType::ActionRunRejected,
+            Self::BuildAgentPoolConnected { .. } => ActivityEventType::BuildAgentPoolConnected,
+            Self::BuildAgentPoolDisconnected { .. } => {
+                ActivityEventType::BuildAgentPoolDisconnected
+            }
             Self::BuildAgentPoolTested { .. } => ActivityEventType::BuildAgentPoolTested,
             Self::BuildCreated { .. } => ActivityEventType::BuildCreated,
             Self::BuildRunQueued { .. } => ActivityEventType::BuildRunQueued,

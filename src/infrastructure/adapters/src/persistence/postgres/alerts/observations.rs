@@ -27,9 +27,20 @@ impl PostgresAlertRepository {
         };
         let id: Uuid = row.try_get("id").map_err(storage)?;
         let result = async {
-            let observation: AlertObservation =
+            let mut observation: AlertObservation =
                 serde_json::from_value(row.try_get("payload").map_err(storage)?)
                     .map_err(|e| AlertError::Storage(e.to_string()))?;
+            if observation.alert_type == "BuildAgentPoolUnavailable" {
+                // Availability is a condition, not a historical failure. A delayed
+                // receipt must not reopen an incident after recovery or disablement.
+                let state: Option<(Option<DateTime<Utc>>, Option<String>)> = sqlx::query_as("SELECT unavailablesince,lastvalidationmessage FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL AND provider='SelfManagedVm'")
+                    .bind(observation.resource_id).fetch_optional(&self.pool).await.map_err(storage)?;
+                observation.observed_at = Utc::now();
+                let (since, message) = state.unwrap_or_default();
+                observation.info = serde_json::json!({"HumanMessage": message, "UnavailableSince": since});
+                observation.matched = since.is_some();
+                observation.value = since.map(|at| (observation.observed_at-at).num_milliseconds().max(0) as f64 / 1000.0);
+            }
             self.process_observation(&observation, Some(id)).await?;
             sqlx::query("DELETE FROM alertobservations WHERE id=$1 AND claimowner=$2")
                 .bind(id)

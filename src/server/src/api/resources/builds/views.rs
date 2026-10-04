@@ -177,6 +177,8 @@ impl TryFrom<citadel_builds::BuildRun> for BuildRunView {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAgentPoolView {
+    /// Edge transport connection status, independent of build capability validation.
+    pub connection_status: Option<String>,
     pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
     pub id: Uuid,
     pub name: String,
@@ -218,6 +220,7 @@ impl TryFrom<citadel_builds::BuildAgentPool> for BuildAgentPoolView {
     type Error = serde_json::Error;
     fn try_from(value: citadel_builds::BuildAgentPool) -> Result<Self, Self::Error> {
         Ok(Self {
+            connection_status: value.connection_status,
             tags: value.tags.into_iter().map(Into::into).collect(),
             id: value.id,
             name: value.name,

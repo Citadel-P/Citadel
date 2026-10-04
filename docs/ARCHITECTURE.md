@@ -136,6 +136,17 @@ persisted claims and may continue after a browser disconnect. Recovery inspects
 and settles interrupted work; it must not blindly replay ambiguous mutations.
 PostgreSQL notifications are wakeups, while claims and queue rows remain authoritative.
 
+Platform and Build Pool connection transitions publish typed events on
+`citadel_connection_events` within the transaction that persists the transition
+and its activity. PostgreSQL delivers them after commit. The shared
+`DatabaseNotificationHub` forwards these to `ConnectionEventHub`; consumers use
+`notifications.connections.subscribe()` independently. The realtime subscriber
+publishes resource invalidations, and authorized readers load the current state.
+Repeated health observations and obsolete Edge sessions do not emit transitions.
+Listener reconnects and subscriber lag trigger a resync of both resource types.
+This bounded stream is for notifications; durable activities and alert work remain
+in PostgreSQL. Adding a subscriber does not require wiring callbacks into stores.
+
 ## Runtime routing and observations
 
 `PlatformRuntimeRouter` resolves persisted Platform identity or an exact Swarm

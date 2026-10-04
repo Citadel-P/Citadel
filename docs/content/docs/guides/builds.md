@@ -348,6 +348,18 @@ If the payload does not include changed paths, Citadel syncs the repository bran
 
 Only one run per build project can be active at a time. If a webhook arrives while a run is already queued, preparing, or running, Citadel rejects the delivery instead of starting another build.
 
+**Build Webhook Received** activities show the delivery outcome:
+
+- **Success**: the build was queued. This does not mean the build has succeeded.
+- **Information**: an expected skip, such as no relevant changes, no new commit,
+  a filtered branch or event type, or a disabled build project.
+- **Warning**: a build could not be queued because the repository did not match,
+  a required entitlement was unavailable, another run was active, or the
+  configuration changed during dispatch. Other unexplained skips are warnings too.
+- **Failure**: authentication, request validation, or dispatch failed.
+
+The activity summary includes the outcome reason.
+
 For the shared listener URL format and provider setup, see [Webhooks](/docs/guides/webhooks).
 
 ## Logs And History
@@ -399,6 +411,26 @@ Retention does not delete:
 - local platform images
 - activity records required by the audit model
 
+## Build pool connection and availability
+
+For Edge Agent pools, the pool list shows the agent connection status separately
+from the latest Docker build capability check. Connection changes update through
+realtime notifications. The pool activity history records one **Connected** or
+**Disconnected** event per transition, including disconnects detected by heartbeat
+expiry and binding revocation.
+
+The **Build Pool Unavailable** system rule raises a warning after an enabled
+self-managed pool fails its capability checks for at least 90 seconds. This covers
+both a disconnected agent and a connected agent whose Docker builder is unusable.
+Checks run periodically, so an alert can appear after the grace period on the next
+check. The outage start is retained across Core restarts.
+
+The alert resolves when a capability check succeeds. Disabled, archived, and
+never-connected Edge pools do not raise availability alerts. Disabling or archiving
+a pool clears its availability incident. Configure notification channels on the
+rule; advanced alerting also allows changing the grace period and limiting the
+rule to selected build pools.
+
 ## Troubleshooting
 
 If no platform appears in the build form:
@@ -449,5 +481,4 @@ the Deployment or Stack activity for the Apply error. For Stack bindings with
 **Redeploy On Build**, only the selected services are redeployed.
 
 If secrets appear masked in logs, that is expected. Citadel redacts configured secret values before storing or streaming log output.
-
 

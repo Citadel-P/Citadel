@@ -74,6 +74,7 @@ function SearchSection() {
       [AlertResourceType.Webhook]: CitadelIcons.Webhook,
       [AlertResourceType.AutomationAction]: CitadelIcons.AutomationAction,
       [AlertResourceType.Build]: CitadelIcons.Build,
+      [AlertResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
       [AlertResourceType.License]: CitadelIcons.License,
     };
 

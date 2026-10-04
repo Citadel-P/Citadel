@@ -29,6 +29,7 @@ PlatformCpuHigh,
     WebhookStackGitDeployFailed,
     AutomationActionRunFailed,
     BuildRunFailed,
+    BuildAgentPoolUnavailable,
     LicenseEnteredGracePeriod,
     LicenseExpired,
     }

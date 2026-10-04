@@ -67,6 +67,7 @@ pub enum AlertResourceType {
     Webhook,
     AutomationAction,
     Build,
+    BuildAgentPool,
     License,
     SwarmService,
 }
@@ -80,6 +81,7 @@ impl AlertResourceType {
             Self::Webhook => "Webhook",
             Self::AutomationAction => "AutomationAction",
             Self::Build => "Build",
+            Self::BuildAgentPool => "BuildAgentPool",
             Self::License => "License",
             Self::SwarmService => "SwarmService",
         }

@@ -669,6 +669,20 @@ pub(crate) async fn platform_status(
     if previous_status == status.as_str() {
         return Ok(false);
     }
+    use crate::persistence::postgres::connection_events::{
+        self, ConnectionResource, ConnectionState,
+    };
+    connection_events::publish(
+        tx,
+        ConnectionResource::Platform,
+        id,
+        if status == citadel_primitives::PlatformStatus::Online {
+            ConnectionState::Online
+        } else {
+            ConnectionState::Offline
+        },
+    )
+    .await?;
     sqlx::query("UPDATE platforms SET status=$2 WHERE id=$1")
         .bind(id)
         .bind(status.as_str())

@@ -295,15 +295,32 @@ Service webhook deliveries create `SwarmServiceWebhookReceived` activities. Appl
 
 ## Activities, Runs, And Alerts
 
-Git repository and Git stack webhooks write webhook activity events:
+All supported webhook targets write delivery activities:
 
 - `GitRepoWebhookReceived`
 - `StackWebhookReceived`
 - `SwarmServiceWebhookReceived`
+- `BuildWebhookReceived`
+- `ActionWebhookReceived`
+- `BackupPolicyWebhookReceived`
 
 Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.
 
-Build webhooks appear in build activities and build run history. Automation action webhooks appear in action run history. Backup policy webhooks appear in backup run history.
+Execution results remain in their resource's run or operation history.
+
+Every delivery activity uses the same severity rules:
+
+- **Success**: work was queued or the configured update notification was handled.
+  This is delivery success, not a successful build, deployment, script, or backup.
+- **Information**: an expected skip, such as an unchanged source or image, a filtered
+  branch or event, disabled updates, or a stack pinned to a commit.
+- **Warning**: delivery could not proceed because of a repository mismatch, missing
+  entitlement, busy resource, changed configuration, or unavailable dependency.
+  Unrecognized skip reasons also produce warnings.
+- **Failure**: authentication, validation, synchronization, or dispatch failed.
+
+The activity summary shows the outcome reason. These classifications apply to new
+activities; existing activity records retain their recorded severity.
 
 Webhook alerts are reserved for failures that need attention:
 
@@ -372,5 +389,3 @@ Provider cannot reach Citadel:
 These docs are plain Markdown so they can be moved into a docs website later.
 
 If Citadel adopts Docusaurus or Fumadocs, keep each resource guide as a separate page and add a Webhooks section under an Operations or Integrations category. The current file structure already maps cleanly to that kind of navigation.
-
-

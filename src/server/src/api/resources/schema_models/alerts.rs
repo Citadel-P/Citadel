@@ -51,6 +51,7 @@ enum_schema!(
         WebhookStackGitDeployFailed,
         AutomationActionRunFailed,
         BuildRunFailed,
+        BuildAgentPoolUnavailable,
         LicenseEnteredGracePeriod,
         LicenseExpired,
     ]

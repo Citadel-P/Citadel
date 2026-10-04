@@ -26,7 +26,7 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
     let git = Arc::new(GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
         Arc::new(GitAccountService::new(
-            Arc::new(PostgresGitAccountRepository::new(pool)),
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             Arc::new(AesGcmSecretProtector::new(&[33; 32]).unwrap()),
         )),
         Arc::new(GitCli::new(
@@ -49,7 +49,7 @@ pub fn router(pool: PgPool, automation: Arc<AutomationService>) -> Router {
             builds: None,
             stacks: None,
             services: None,
-            audit: None,
+            audit: Some(Arc::new(citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(pool))),
             alerts: None,
         },
     )
@@ -163,6 +163,9 @@ pub async fn verify(
     .await;
     assert_eq!(response.status(), StatusCode::ACCEPTED);
     assert_eq!(body(response).await["status"], "queued");
+    let severities: Vec<String> = sqlx::query_scalar("SELECT DISTINCT status FROM activityevents WHERE resourceid=$1 AND eventtype='ActionWebhookReceived' ORDER BY status")
+        .bind(id).fetch_all(db).await.unwrap();
+    assert_eq!(severities, ["Failure", "Success", "Warning"]);
     let run = store.list_runs(id, 1).await.unwrap().remove(0);
     assert_eq!(run.status, citadel_automation::AutomationRunStatus::Queued);
     assert_eq!(run.trigger, "Webhook");

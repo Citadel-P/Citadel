@@ -8,17 +8,19 @@ impl ActivityEvent {
         details: WebhookActivityDetails,
         now: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
-        let status = match details.status {
-            "queued" => ActivityStatus::Success,
-            "noop" => ActivityStatus::Information,
-            _ => ActivityStatus::Failure,
-        };
+        let status = details.activity_status();
         let info = match resource_type {
             ActivityResourceType::GitRepository => {
                 ActivityEventInfo::GitRepoWebhookReceived(details)
             }
             ActivityResourceType::Stack => ActivityEventInfo::StackWebhookReceived(details),
             ActivityResourceType::Build => ActivityEventInfo::BuildWebhookReceived(details),
+            ActivityResourceType::AutomationAction => {
+                ActivityEventInfo::ActionWebhookReceived(details)
+            }
+            ActivityResourceType::BackupPolicy => {
+                ActivityEventInfo::BackupPolicyWebhookReceived(details)
+            }
             ActivityResourceType::SwarmService => {
                 ActivityEventInfo::SwarmServiceWebhookReceived(details)
             }
@@ -338,13 +340,18 @@ impl ActivityEvent {
         info: ActivityEventInfo,
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
+        let status = if matches!(info, ActivityEventInfo::BuildAgentPoolDisconnected { .. }) {
+            ActivityStatus::Warning
+        } else {
+            ActivityStatus::Success
+        };
         Self::new_resource_event(
             resource_id,
             resource_name,
             ActivityResourceType::BuildAgentPool,
             actor_id,
             info,
-            ActivityStatus::Success,
+            status,
             created_at,
         )
     }

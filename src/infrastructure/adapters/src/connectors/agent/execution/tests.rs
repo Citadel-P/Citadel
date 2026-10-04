@@ -185,6 +185,7 @@ async fn edge_build_pushes_the_requested_tags_using_the_shared_contract() {
     let cancellation = CancellationToken::new();
     let (progress, mut progress_receiver) = tokio::sync::mpsc::channel(1);
     let command = AgentBuildCommand {
+        push_to_registry: true,
         output: Some(progress),
         context_archive: vec![1, 2, 3],
         dockerfile_path: "Dockerfile".into(),

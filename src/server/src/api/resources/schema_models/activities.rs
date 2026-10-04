@@ -125,6 +125,14 @@ pub enum ActivityEventInfoSchema {
         crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
     ),
 
+    ActionWebhookReceived(
+        crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
+    ),
+
+    BackupPolicyWebhookReceived(
+        crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
+    ),
+
     SwarmServiceWebhookReceived(
         crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
     ),
@@ -938,6 +946,22 @@ pub enum ActivityEventInfoSchema {
         build: citadel_activities::BuildProjectActivitySnapshot,
     },
 
+    BuildAgentPoolConnected {
+        #[serde(rename = "AgentId")]
+        agent_id: Uuid,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    BuildAgentPoolDisconnected {
+        #[serde(rename = "AgentId")]
+        agent_id: Uuid,
+        #[serde(rename = "PreviousStatus")]
+        previous_status: String,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
     BuildAgentPoolCreated {
         #[serde(rename = "Pool")]
         #[schema(value_type = crate::api::resources::schema_models::activities::BuildAgentPoolActivitySnapshotSchema)]
@@ -1041,6 +1065,12 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             }
             citadel_activities::ActivityEventInfo::BuildWebhookReceived(field_0) => {
                 Self::BuildWebhookReceived(field_0.into())
+            }
+            citadel_activities::ActivityEventInfo::ActionWebhookReceived(field_0) => {
+                Self::ActionWebhookReceived(field_0.into())
+            }
+            citadel_activities::ActivityEventInfo::BackupPolicyWebhookReceived(field_0) => {
+                Self::BackupPolicyWebhookReceived(field_0.into())
             }
             citadel_activities::ActivityEventInfo::SwarmServiceWebhookReceived(field_0) => {
                 Self::SwarmServiceWebhookReceived(field_0.into())
@@ -1584,6 +1614,24 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::BuildAgentPoolDeleted { pool } => {
                 Self::BuildAgentPoolDeleted { pool }
             }
+            citadel_activities::ActivityEventInfo::BuildAgentPoolConnected {
+                agent_id,
+                previous_status,
+                reason,
+            } => Self::BuildAgentPoolConnected {
+                agent_id,
+                previous_status,
+                reason,
+            },
+            citadel_activities::ActivityEventInfo::BuildAgentPoolDisconnected {
+                agent_id,
+                previous_status,
+                reason,
+            } => Self::BuildAgentPoolDisconnected {
+                agent_id,
+                previous_status,
+                reason,
+            },
             citadel_activities::ActivityEventInfo::BuildAgentPoolTested {
                 pool,
                 status,
@@ -1717,6 +1765,7 @@ enum_schema!(
         ActionRunTimedOut,
         ActionRunCancelled,
         ActionRunRejected,
+        ActionWebhookReceived,
         StackCreated,
         StackDuplicated,
         StackUpdated,
@@ -1783,6 +1832,8 @@ enum_schema!(
         BuildAgentPoolRenamed,
         BuildAgentPoolDeleted,
         BuildAgentPoolTested,
+        BuildAgentPoolConnected,
+        BuildAgentPoolDisconnected,
         BackupPolicyCreated,
         BackupPolicyUpdated,
         BackupPolicyRenamed,
@@ -1790,6 +1841,7 @@ enum_schema!(
         BackupRunQueued,
         BackupRunStarted,
         BackupRunCompleted,
+        BackupPolicyWebhookReceived,
         SwarmServiceCreated,
         SwarmServiceAdopted,
         SwarmServiceUpdated,

@@ -1,3 +1,4 @@
+use crate::persistence::postgres::connection_events::{self, ConnectionResource, ConnectionState};
 use base64::{
     Engine,
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
@@ -62,7 +63,7 @@ struct NodeReconnect {
 
 #[derive(Clone)]
 pub struct PostgresEdgeStore {
-    pool: PgPool,
+    pub(super) pool: PgPool,
     node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
 }
 impl PostgresEdgeStore {
@@ -368,10 +369,48 @@ impl PostgresEdgeStore {
                 .await?;
             }
         }
+        let previous: Option<(String, bool)> = if binding.target.resource_type == 1 {
+            sqlx::query_as("SELECT connectionstatus,COALESCE(lastheartbeatatutc < now()-interval '90 seconds',false) FROM edgeagentbindings WHERE agentid=$1 AND revokedatutc IS NULL FOR UPDATE")
+                .bind(binding.agent_id).fetch_optional(&mut *tx).await?
+        } else {
+            None
+        };
         let updated = sqlx::query("UPDATE edgeagentbindings SET connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
             .bind(binding.agent_id).bind(at).bind(&binding.target.node_id).execute(&mut *tx).await?.rows_affected();
         if updated != 1 {
             return Err(EdgeStoreError::Unauthorized);
+        }
+        let previous = if let Some((status, expired)) = previous {
+            if status == "Connected" && expired {
+                super::build_pools::activity(
+                    &mut tx,
+                    binding.target.resource_id,
+                    binding.agent_id,
+                    ConnectionState::Offline,
+                    status,
+                    "Edge Agent heartbeat expired before reconnect.",
+                )
+                .await?;
+                Some("Offline".to_owned())
+            } else {
+                Some(status)
+            }
+        } else {
+            None
+        };
+        let changed = previous
+            .as_deref()
+            .is_some_and(|status| status != "Connected");
+        if changed {
+            super::build_pools::activity(
+                &mut tx,
+                binding.target.resource_id,
+                binding.agent_id,
+                ConnectionState::Online,
+                previous.unwrap(),
+                "Edge Agent session authenticated.",
+            )
+            .await?;
         }
         tx.commit().await?;
         Ok(())
@@ -381,13 +420,39 @@ impl PostgresEdgeStore {
         agent_id: Uuid,
         connected_at: DateTime<Utc>,
     ) -> Result<(), EdgeStoreError> {
+        self.disconnect(agent_id, connected_at, false).await
+    }
+    pub(super) async fn disconnect(
+        &self,
+        agent_id: Uuid,
+        connected_at: DateTime<Utc>,
+        expired: bool,
+    ) -> Result<(), EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
-        let changed: Option<(Uuid, Option<String>, String)> = sqlx::query_as("UPDATE edgeagentbindings SET connectionstatus='Offline',lastdisconnectedatutc=now(),updatedatutc=now() WHERE agentid=$1 AND lastconnectedatutc=$2 AND revokedatutc IS NULL RETURNING platformid,dockernodeid,resourcetype")
-            .bind(agent_id).bind(connected_at).fetch_optional(&mut *tx).await?;
-        let offline_platform = changed.as_ref().and_then(|(platform, node, kind)| {
+        let changed: Option<(Uuid, Option<String>, String, Uuid)> = sqlx::query_as("UPDATE edgeagentbindings SET connectionstatus='Offline',lastdisconnectedatutc=now(),updatedatutc=now() WHERE agentid=$1 AND lastconnectedatutc=$2 AND revokedatutc IS NULL AND connectionstatus='Connected' AND (NOT $3 OR lastheartbeatatutc < now()-interval '90 seconds') RETURNING platformid,dockernodeid,resourcetype,resourceid")
+            .bind(agent_id).bind(connected_at).bind(expired).fetch_optional(&mut *tx).await?;
+        let pool_id = changed
+            .as_ref()
+            .and_then(|(_, _, kind, id)| (kind == "BuildAgentPool").then_some(*id));
+        if let Some(id) = pool_id {
+            super::build_pools::activity(
+                &mut tx,
+                id,
+                agent_id,
+                ConnectionState::Offline,
+                "Connected".into(),
+                if expired {
+                    "Edge Agent heartbeat expired."
+                } else {
+                    "Edge Agent session disconnected."
+                },
+            )
+            .await?;
+        }
+        let offline_platform = changed.as_ref().and_then(|(platform, node, kind, _)| {
             (kind == "Platform" && node.is_none()).then_some(*platform)
         });
-        if let Some((platform, node, resource_type)) = changed
+        if let Some((platform, node, resource_type, _)) = changed
             && resource_type == "Platform"
         {
             if let Some(node) = node {
@@ -958,14 +1023,42 @@ impl PostgresEdgeStore {
             .await?;
         sqlx::query("UPDATE edgeagentenrollments SET revokedatutc=now() WHERE resourceid=$1 AND resourcetype=$2 AND revokedatutc IS NULL")
             .bind(target.resource_id).bind(resource_type(target)).execute(&mut *tx).await?;
+        if target.resource_type == 1 {
+            let agents: Vec<(Uuid, String)> = sqlx::query_as("SELECT agentid,connectionstatus FROM edgeagentbindings WHERE resourceid=$1 AND resourcetype='BuildAgentPool' AND revokedatutc IS NULL FOR UPDATE")
+                .bind(target.resource_id).fetch_all(&mut *tx).await?;
+            for (agent, status) in agents {
+                if status == "Connected" {
+                    super::build_pools::activity(
+                        &mut tx,
+                        target.resource_id,
+                        agent,
+                        ConnectionState::Revoked,
+                        status,
+                        "Edge Agent binding revoked.",
+                    )
+                    .await?;
+                } else {
+                    connection_events::publish(
+                        &mut tx,
+                        ConnectionResource::BuildAgentPool,
+                        target.resource_id,
+                        ConnectionState::Revoked,
+                    )
+                    .await?;
+                }
+            }
+        }
         sqlx::query("UPDATE edgeagentbindings SET revokedatutc=now(),connectionstatus='Revoked',updatedatutc=now() WHERE resourceid=$1 AND resourcetype=$2 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL")
             .bind(target.resource_id).bind(resource_type(target)).bind(&target.node_id).execute(&mut *tx).await?;
-        if target.resource_type == 0 && target.node_id.is_none() {
-            sqlx::query(
-                "UPDATE platforms SET status='Offline' WHERE id=$1 AND connectortype='EdgeAgent'",
+        if target.resource_type == 0 && target.node_id.is_none()
+            && sqlx::query_scalar::<_, Uuid>("SELECT id FROM platforms WHERE id=$1 AND connectortype='EdgeAgent' FOR NO KEY UPDATE")
+                .bind(target.platform_id).fetch_optional(&mut *tx).await?.is_some()
+        {
+            crate::persistence::postgres::platforms::status::platform_status(
+                &mut tx,
+                target.platform_id,
+                citadel_primitives::PlatformStatus::Offline,
             )
-            .bind(target.platform_id)
-            .execute(&mut *tx)
             .await?;
         }
         if let Some(node) = &target.node_id {

@@ -4,7 +4,7 @@ use crate::{api::resources::webhooks::views::WebhookResponse, openapi::router::O
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
@@ -80,6 +80,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Webhooks
 async fn receive(
     State(state): State<WebhooksHttpState>,
     Path((auth_type, resource_type, id, execution)): Path<(String, String, Uuid, String)>,
+    realtime: Option<Extension<crate::realtime::RealtimeHub>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -169,7 +170,15 @@ async fn receive(
         )
         .await
         {
-            Ok(Ok(())) => {}
+            Ok(Ok(())) => {
+                // Queue notifications can precede this activity's transaction,
+                // and skipped/rejected deliveries never queue work at all.
+                // Refresh authorized resource and activity subscribers only
+                // after the delivery audit has committed.
+                if let Some(Extension(hub)) = &realtime {
+                    hub.publish_resource_change(resource.as_database_str(), id, "webhookReceived");
+                }
+            }
             _ => tracing::warn!(%request_id, "Webhook audit persistence failed after dispatch"),
         }
     }
@@ -232,6 +241,14 @@ fn audit_resource(resource: &str) -> Option<citadel_activities::ActivityResource
     use citadel_activities::ActivityResourceType;
     if resource.eq_ignore_ascii_case("repo") {
         Some(ActivityResourceType::GitRepository)
+    } else if resource.eq_ignore_ascii_case("action")
+        || resource.eq_ignore_ascii_case("automation-action")
+    {
+        Some(ActivityResourceType::AutomationAction)
+    } else if resource.eq_ignore_ascii_case("backup-policy")
+        || resource.eq_ignore_ascii_case("backupPolicy")
+    {
+        Some(ActivityResourceType::BackupPolicy)
     } else if resource.eq_ignore_ascii_case("stack") {
         Some(ActivityResourceType::Stack)
     } else if resource.eq_ignore_ascii_case("swarm-service") {
@@ -292,9 +309,7 @@ async fn dispatch(
             .await
         {
             Ok(GitWebhookOutcome::Queued { branch }) => Ok(WebhookDispatch::queued(&branch, None)),
-            Ok(GitWebhookOutcome::Ignored) => {
-                Ok(WebhookDispatch::noop("Branch filter did not match"))
-            }
+            Ok(GitWebhookOutcome::Ignored { reason }) => Ok(WebhookDispatch::noop(reason)),
             Err(GitRepositoryExecutionError::NotFound) => {
                 Err((StatusCode::NOT_FOUND, "Webhook not found."))
             }
@@ -992,6 +1007,27 @@ fn stack_error(error: StackError) -> (StatusCode, &'static str) {
 #[cfg(test)]
 mod audit_tests {
     use crate::api::routes::webhooks::*;
+
+    #[test]
+    fn every_supported_webhook_target_and_alias_is_audited() {
+        use citadel_activities::ActivityResourceType::*;
+        for (alias, resource) in [
+            ("repo", GitRepository),
+            ("stack", Stack),
+            ("swarm-service", SwarmService),
+            ("build", Build),
+            ("build-project", Build),
+            ("buildProject", Build),
+            ("action", AutomationAction),
+            ("automation-action", AutomationAction),
+            ("backup-policy", BackupPolicy),
+            ("backupPolicy", BackupPolicy),
+        ] {
+            assert_eq!(audit_resource(alias), Some(resource));
+            assert_eq!(audit_resource(&alias.to_uppercase()), Some(resource));
+        }
+        assert_eq!(audit_resource("unsupported"), None);
+    }
 
     #[test]
     fn provider_metadata_is_bounded_and_never_uses_clone_urls_or_credentials() {

@@ -8,6 +8,7 @@ pub struct BuildAgentPool {
     pub normalized_name: String,
     pub description: Option<String>,
     pub enabled: bool,
+    pub connection_status: Option<String>,
     pub provider: String,
     pub provider_spec: Value,
     pub max_active_builders: i32,

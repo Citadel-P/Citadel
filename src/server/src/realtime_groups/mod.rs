@@ -136,6 +136,11 @@ impl Group {
             };
         }
         match self.topic() {
+            Topic::DockerDaemon(..) => {
+                event.resource_type == "Platform"
+                    && event.event_kind == "connectionChanged"
+                    && event.affects_resource(self.id())
+            }
             Topic::Platforms => matches!(
                 event.resource_type,
                 "Platform" | "Deployment" | "Stack" | "SwarmService" | "ResourceTags"

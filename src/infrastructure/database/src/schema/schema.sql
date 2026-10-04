@@ -179,6 +179,7 @@ CREATE TABLE buildagentpools (
     lastvalidatedat timestamp with time zone,
     lastvalidationmessage text,
     lastvalidationstatus text NOT NULL DEFAULT 'NotTested',
+    unavailablesince timestamp with time zone,
     maxactivebuilders integer NOT NULL DEFAULT 1,
     maximuminstancelifetimeseconds integer NOT NULL DEFAULT 7200,
     name text NOT NULL,
@@ -1534,6 +1535,10 @@ INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, descri
 VALUES ('019d0000-0001-7000-8001-00000000001a', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Expired', '[]', NULL, 'Critical', 'Enabled', NULL, 'LicenseExpired');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-00000000001b', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Build Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'BuildRunFailed');
+
+INSERT INTO alertrules (id, createdbyactorid, description, limitedto, name, quiethours, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-00000000001d', '00000000-0000-0000-0000-000000000001', 'Enabled build pool unavailable for 90 seconds.', '[]', 'Build Pool Unavailable', '[]', 'Warning', 90, 'BuildAgentPoolUnavailable');
+
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-00000000001c', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Operation Failed - Swarm Service', '[]', NULL, 'Critical', 'Enabled', NULL, 'SwarmServiceOperationFailed');
 
