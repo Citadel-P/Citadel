@@ -15,7 +15,7 @@ operations. A complete Citadel control-plane backup contains:
 
 The database alone is not a usable control-plane backup. Losing the
 secret-encryption key makes stored local secrets and provider credentials
-undecryptable. Losing the Core Ed25519 private key prevents existing Agents
+undecryptable. Losing the Core Ed25519 private key prevents existing regular Agents
 from trusting Core requests.
 
 ## System Containers
