@@ -9,8 +9,8 @@ operations. A complete Citadel control-plane backup contains:
 - a PostgreSQL logical dump created with `pg_dump --format=custom`;
 - the JWT signing key;
 - the local secret-encryption key;
-- the Core-to-Agent Ed25519 key pair;
-- a manifest entry for each equivalent key supplied through external
+- the Core-to-Agent Ed25519 private signing key (the public key is derived from it);
+- a manifest listing any keys that must instead be recovered from external
   configuration.
 
 The database alone is not a usable control-plane backup. Losing the
@@ -34,7 +34,7 @@ disabling the control plane or remote connection that must report and recover
 the operation. Manage local Core and PostgreSQL containers from the Docker host
 with the Compose file used to install Citadel:
 
-```powershell
+```bash
 docker compose ps
 docker compose restart
 docker compose up -d
@@ -44,7 +44,7 @@ docker compose down
 Manage regular and Edge Agent containers directly from their remote Docker
 host, using the installation method shown by Citadel. For example:
 
-```powershell
+```bash
 docker restart citadel-agent
 docker restart edge-agent
 ```
@@ -63,9 +63,11 @@ backup** source in the backup-policy UI. Each restic snapshot contains a
 PostgreSQL custom-format dump, a recovery manifest, checksums, and every
 required file-backed recovery key.
 
-The offline `citadel-recovery` command is not yet shipped. Restore the bundle
-manually into a clean environment using the procedure below. Test this
-procedure before relying on it in production.
+The Core executable includes an offline `restore-system` command. It validates
+the bundle inventory and checksums before restoring PostgreSQL in one transaction.
+It requires the original secret-encryption key and explicit confirmation. It
+does not copy recovery keys into the data volume; the procedure below does that
+first. Test recovery before relying on it in production.
 
 ## Required Inputs
 
@@ -75,9 +77,7 @@ For the default file-backed configuration, preserve these paths from the
 ```text
 jwtsecret
 secret-encryption-key
-keys/id_ed25519
-keys/id_ed25519.pub
-keys/dataprotection/
+agent/signing-key
 ```
 
 If `Jwt__Key` or `Secrets__EncryptionKey` is supplied by a secret manager or
@@ -113,7 +113,7 @@ The official Citadel Core image includes the PostgreSQL client. Native
 installations and custom images must install a `pg_dump` version that supports
 the PostgreSQL server and can set `Backups__PostgresDumpPath` to its executable.
 
-The snapshot root contains:
+The recovery bundle directory contains:
 
 ```text
 manifest.json
@@ -121,90 +121,127 @@ checksums.json
 database/citadel.dump
 recovery/jwtsecret
 recovery/secret-encryption-key
-recovery/keys/id_ed25519
-recovery/keys/id_ed25519.pub
-recovery/keys/dataprotection/
+recovery/agent/signing-key
 ```
 
-Assets supplied through external configuration are listed in `manifest.json`
-with origin `ExternalConfiguration` and are not copied into the snapshot.
+Keys supplied through `Jwt__Key` or `Secrets__EncryptionKey` are listed in
+`manifest.json` under `requiredExternalConfiguration` and are not copied into
+the bundle. Recover their original values from your secret manager.
 
 ## Export A Recovery Bundle
 
-Use restic with the same repository configuration and password used by
-Citadel. Locate the snapshot by its backup-run tag, then restore it into a
-private local directory:
+Install restic on the recovery host. Configure `RESTIC_REPOSITORY` and its
+password through `RESTIC_PASSWORD` or `RESTIC_PASSWORD_FILE`, using the same
+repository settings as Citadel. For S3, also supply the original AWS credentials
+and any required session token. Load credentials securely; do not put their
+literal values in shell history.
 
-```powershell
-$runId = "<backup-run-id>"
-$backup = "citadel-recovery-$runId"
-restic -r "<repository>" snapshots --tag "backup-run:$runId"
-restic -r "<repository>" restore "<snapshot-id>" --target "$backup"
+The commands below use Bash on a Linux Docker host. Find the snapshot by its
+backup-run tag, then list its contents:
+
+```bash
+run_id="<backup-run-id>"
+backup="$PWD/citadel-recovery-$run_id"
+umask 077
+restic snapshots --tag "backup-run:$run_id"
+
+snapshot_id="<snapshot-id-from-the-list>"
+restic ls "$snapshot_id"
 ```
 
-For S3-compatible repositories, configure `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`, the restic repository URL, and `RESTIC_PASSWORD`
-before running these commands. Do not store these credentials in shell
-history.
+Find the directory containing `manifest.json`, `checksums.json`, `database/`,
+and `recovery/`. Set `bundle_path` to that directory's full path **inside the
+snapshot**, then restore just that directory:
 
-Verify `checksums.json` against every listed file before proceeding. Restrict
-access to the exported directory because it can contain keys that decrypt
-stored secrets and authenticate Core to Agents.
+```bash
+bundle_path="/<bundle-directory-from-restic-ls>"
+restic restore "${snapshot_id}:${bundle_path}" --target "$backup"
+ls -la "$backup"
+```
+
+Citadel backs up an absolute staging path. Restoring the whole snapshot keeps
+those parent directories, so the manifest would not be directly under
+`$backup`. Restic's [subfolder restore syntax](https://restic.readthedocs.io/en/stable/050_restore.html)
+places the bundle's contents directly in the target directory.
+
+Keep the export private: it can contain keys that decrypt stored secrets and
+authenticate Core to Agents. The offline command below verifies every checksum
+before modifying PostgreSQL.
 
 ## Restore Into A Clean Environment
 
-Restore into an empty PostgreSQL database and an empty Citadel data volume.
-Do not overwrite a running installation.
+Use an empty PostgreSQL database and an empty Citadel data volume. The restore
+command can replace existing database objects; the confirmation flag is not a
+check that the target is empty.
 
-Use a clean host or a new Compose project so Docker creates new volumes. The
-example below uses `citadel-recovery`; choose a name that does not already
-exist. Set `$backup` to the verified backup directory.
+These steps assume the supplied published-image Compose file, with PostgreSQL
+at `PG_HOST=pg_db` and project-scoped volumes. A different project name does
+not isolate an external database or explicitly shared volumes. If you changed
+those settings, configure separate recovery storage before continuing.
 
-1. Stop the original Core, select the clean Compose project, and start only
-PostgreSQL:
+1. Prepare a separate recovery installation directory with copies of your
+   Compose file and private `.env`. Pin `CITADEL_IMAGE` to the exact image
+   recorded when the backup was created; compare it with `coreVersion` in
+   `manifest.json`. Do not use a moving `latest` tag for recovery. Preserve
+   the original external keys listed in `requiredExternalConfiguration`,
+   and copy your TLS overlay and certificates if needed.
 
-```powershell
-$backup = "path\to\citadel-recovery-<backup-run-id>"
+2. From the **original installation directory**, stop Core. Stop every other
+   Core instance that uses that database too:
+
+```bash
 docker compose stop server
-$env:COMPOSE_PROJECT_NAME = "citadel-recovery"
-docker compose up -d pg_db
 ```
 
-2. Verify `manifest.json`, confirm its Citadel version is compatible with the
-   target image, and verify every entry in `checksums.json`.
+3. From the **recovery installation directory**, set the absolute export path
+   and choose a project name that has never been used. Check for existing volumes:
 
-3. Recreate the target database. Replace the database name when your Compose
-configuration does not use `POSTGRES_DB`:
-
-```powershell
-docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" dropdb --host=127.0.0.1 --username="$POSTGRES_USER" --if-exists "$POSTGRES_DB"'
-docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" createdb --host=127.0.0.1 --username="$POSTGRES_USER" "$POSTGRES_DB"'
+```bash
+backup="/absolute/path/to/citadel-recovery-<backup-run-id>"
+recovery_project="citadel-recovery"
+docker volume ls --filter "label=com.docker.compose.project=$recovery_project"
 ```
 
-4. Copy and restore the logical dump:
+If the list contains any volumes, choose another project name. Keep the original
+volumes intact. Start only the new PostgreSQL instance and wait for it to be healthy:
 
-```powershell
-docker compose cp "$backup\database\citadel.dump" pg_db:/tmp/citadel.dump
-docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore --host=127.0.0.1 --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --no-owner --no-privileges --exit-on-error --single-transaction /tmp/citadel.dump'
-docker compose exec -T pg_db rm -f /tmp/citadel.dump
+```bash
+docker compose -p "$recovery_project" up -d --wait pg_db
 ```
 
-5. Create the stopped Core container with a new empty data volume, then copy
-the recovery assets:
+4. Copy the recovery keys into the new data volume, give them to the Core
+   runtime user, and run the offline restore. This one-off container runs the
+   restore command, not the Core server:
 
-```powershell
-docker compose create server
-docker compose cp "$backup\recovery\." server:/app/data/
+```bash
+docker compose -p "$recovery_project" run --rm --no-deps \
+  --user 0 --entrypoint sh \
+  --volume "$backup:/bundle:ro" server -ec '
+    umask 077
+    cp -R /bundle/recovery/. /app/data/
+    chown -R 65532:0 /app/data
+    chmod -R go-rwx /app/data
+    exec /app/citadel-server restore-system \
+      --bundle /bundle --confirm-instance-replacement
+  '
 ```
 
-Supply any externally configured keys before starting Core.
+The command reads the original file-backed encryption key from `/app/data`,
+or the original `Secrets__EncryptionKey` from the container environment.
+It never generates a replacement key. A new key cannot decrypt the restored
+secrets. Wait for `Citadel system recovery bundle restored successfully.`
+before continuing.
 
-6. Start Core and verify:
+5. Start the recovered Core and check its status:
 
-```powershell
-docker compose start server
-docker compose ps
+```bash
+docker compose -p "$recovery_project" up -d --wait server
+docker compose -p "$recovery_project" ps
 ```
+
+Include your TLS overlay in all Compose commands if configured. Keep using the
+recovery project name for later commands. Leave the original Core stopped while
+checking the recovered instance.
 
 Confirm that:
 
@@ -221,15 +258,13 @@ Confirm that:
 
 Do not start Core when:
 
-- the database dump checksum fails;
-- the target database was not empty before restore;
+- bundle validation or the restore command fails;
+- the target database or data volume was not empty before this procedure;
 - `secret-encryption-key` is missing and no external
   `Secrets__EncryptionKey` is available;
 - `jwtsecret` is missing and no external `Jwt__Key` is available;
-- either Core Ed25519 key is missing;
-- data-protection keys are missing from an installation that used them.
+- `agent/signing-key` is missing.
 
-Keep the failed target isolated, correct the recovery inputs, recreate the
-empty target, and repeat the restore.
-
+Keep the failed target isolated, correct the recovery inputs, and repeat the
+procedure with a new empty target. Preserve the original installation and backup.
 

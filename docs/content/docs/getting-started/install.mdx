@@ -24,11 +24,17 @@ Keep both files in this directory. For an existing installation, follow
 [upgrade and rollback](/docs/operations/upgrade-and-rollback) and keep your
 existing `.env` and Compose project name.
 
+If the download returns `404` because repository access is restricted, open
+[the installation folder](https://github.com/Citadel-P/Citadel/tree/main/deploy/install)
+while signed in to GitHub. Download `docker-compose.yml` and `.env.example`,
+save them in your installation directory, rename `.env.example` to `.env`,
+and run `chmod 600 .env`.
+
 ## 2. Configure Citadel
 
 Open `.env` in a text editor and set:
 
-- **`CITADEL_IMAGE`**: leave blank to use the latest release.
+- **`CITADEL_IMAGE`**: leave blank to use the default `latest` image tag, or set a complete published image address.
 - **`PG_PASSWORD`**: a long, unique database password containing letters and
   numbers, without surrounding quotes. You can generate one with
   `openssl rand -hex 32`.
@@ -37,6 +43,12 @@ The database password is separate from your Citadel sign-in password.
 With `CITADEL_IMAGE` blank, Compose uses `ghcr.io/citadel-p/citadel:latest`.
 To pin a specific version instead, set it to the complete image address from
 your chosen [release](https://github.com/Citadel-P/Citadel/releases).
+
+The selected image must be published and accessible to your Docker host.
+Restricted packages require registry access; a tag that has not been published
+cannot be pulled. If a download fails, check the image address and access before
+retrying, or use the [source-development setup](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
+to build from a checkout.
 
 ### Network access
 

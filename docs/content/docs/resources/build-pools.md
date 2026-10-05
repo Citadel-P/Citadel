@@ -23,6 +23,13 @@ For a self-managed VM pool, choose one connection mode.
 
 Use this when Citadel Core can reach the builder host directly. Run a dedicated Citadel Agent on the builder host:
 
+Replace `AGENT_IMAGE` with the image address expected by your Core version and
+`...` with Core's current `HUB_PUBLIC_KEY`, as described in
+[regular Agent setup](/docs/operations/agent#requirements). The HTTP example
+below is for a trusted private network; use
+[Agent TLS](/docs/operations/tls-and-secure-agent-transport#secure-a-regular-agent)
+when the connection needs encryption.
+
 ```bash
 docker run -d \
   --name citadel-agent-build \
@@ -30,7 +37,7 @@ docker run -d \
   -p 9001:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e HUB_PUBLIC_KEY="..." \
-  ghcr.io/citadel-p/citadel.agent:1.2.3
+  AGENT_IMAGE
 ```
 
 Then create the pool:

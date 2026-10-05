@@ -58,7 +58,9 @@ curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/instal
 chmod 600 .env
 ```
 
-In `.env`, leave `CITADEL_IMAGE` blank to use the latest release. Set a long, unique alphanumeric `PG_PASSWORD` without surrounding quotes, then start Citadel and PostgreSQL:
+If repository access is restricted, follow the signed-in download steps in the [installation guide](docs/content/docs/getting-started/install.mdx). The selected container image must be published and accessible to your Docker host.
+
+In `.env`, leave `CITADEL_IMAGE` blank to select `ghcr.io/citadel-p/citadel:latest`, or set a complete published image address. Set a long, unique alphanumeric `PG_PASSWORD` without surrounding quotes, then start Citadel and PostgreSQL:
 
 ```bash
 docker compose pull

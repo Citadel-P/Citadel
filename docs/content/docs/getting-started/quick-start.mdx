@@ -23,8 +23,12 @@ curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/instal
 chmod 600 .env
 ```
 
-Open `.env` in a text editor. Leave `CITADEL_IMAGE` blank to use the latest
-release. Set `PG_PASSWORD` to a long, unique password containing
+If repository access is restricted, use the signed-in download steps in the
+[installation guide](/docs/getting-started/install).
+
+Open `.env` in a text editor. Leave `CITADEL_IMAGE` blank to select
+`ghcr.io/citadel-p/citadel:latest`, or set an accessible published image address.
+Set `PG_PASSWORD` to a long, unique password containing
 letters and numbers, without surrounding quotes, and save the file. This is
 the database password; you will choose your sign-in password separately.
 

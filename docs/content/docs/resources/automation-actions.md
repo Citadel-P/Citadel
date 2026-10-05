@@ -99,31 +99,36 @@ console.log(deployments);
 
 The code editor knows the built-in globals and uses Citadel's generated API types for completions on `citadel`, `args`, and `run`.
 
-Generated API operations are available through `citadel.api` and grouped resource helpers:
+Use the generated operation names through `citadel.api`:
 
 ```ts
-const platforms = await citadel.platforms.listPlatforms();
-const repos = await citadel.repositories.listGitRepositories();
-const volumes = await citadel.volumes.listVolumes(platforms.platforms[0].id);
+const platforms = await citadel.api.listPlatforms();
+const repositories = await citadel.api.listGitRepositories();
+console.log(platforms, repositories);
 ```
 
-Shortcut aliases are available for common deployment and stack operations:
+For deployment and stack operations, replace the placeholder IDs below with
+real resource IDs. Rollback also needs the ID of a previous healthy release:
 
 ```ts
-await citadel.deployments.apply({
-  deploymentId: args.deploymentId
+await citadel.api.applyDeployment({
+  id: "<deployment-id>"
 });
 
-await citadel.stacks.apply({
-  stackId: args.stackId
+await citadel.api.applyStack({
+  id: "<stack-id>"
 });
 
-await citadel.stacks.rollback({
-  stackId: args.stackId
+await citadel.api.rollbackStack({
+  stackId: "<stack-id>",
+  releaseId: "<healthy-release-id>"
 });
 ```
 
-The exact request body must match the Citadel API endpoint you call.
+These are separate examples; include only the operation your Action needs.
+The request body must match the Citadel API endpoint. The current runtime
+does not expose the `apply` and `rollback` shortcuts or the `repositories`
+alias suggested by some editor completions; use the operation names above.
 
 ## Arguments
 
@@ -141,10 +146,15 @@ Example:
 Use them in code:
 
 ```ts
+const stackId = args.stackId;
+if (typeof stackId !== "string" || !stackId) {
+  throw new Error("Set stackId to the Stack's ID in Default Args.");
+}
+
 if (args.dryRun) {
   console.log("Dry run only");
 } else {
-  await citadel.stacks.apply({ stackId: args.stackId });
+  await citadel.api.applyStack({ id: stackId });
 }
 ```
 
