@@ -572,6 +572,23 @@ function splitDockerComposeOutput(value: string): string[] {
 }
 
 function compactDockerComposeLine(value: string): CompactedComposeLine | undefined {
+  // Swarm's CLI redraws these lines repeatedly while a Service converges.
+  // Share one active row across rollout and verification, retaining the outcome.
+  const swarmKey = 'compose:swarm:rollout';
+  const rollout = value.match(/^overall progress:\s*(\d+) out of (\d+) tasks\s*$/);
+  if (rollout) {
+    return { kind: 'active', key: swarmKey, line: `Swarm rollout: ${rollout[1]} of ${rollout[2]} tasks ready.` };
+  }
+  const verification = value.match(/^verify: Waiting (\d+) seconds? to verify that tasks are stable\.{3}\s*$/);
+  if (verification) {
+    return { kind: 'active', key: swarmKey, line: `Verifying task stability: ${verification[1]}s remaining...` };
+  }
+  const converged = value.match(/^verify: Service (\S+) converged\s*$/);
+  if (converged) {
+    return { kind: 'history', key: swarmKey, line: `Service ${converged[1]} converged.` };
+  }
+  if (/^\d+\/\d+:\s*$/.test(value)) return { kind: 'ignore' };
+
   const summary = value.match(/^\[\+\]\s*(.+)$/);
   if (summary) {
     return { kind: 'active', key: 'compose:summary', line: `Docker Compose: ${summary[1].trim()}` };
@@ -712,7 +729,8 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
         if (entries.length === 0) return false;
 
         for (const entry of entries) {
-          const compacted = compactDockerComposeLine(entry);
+          const compacted =
+            severity === 'error' || severity === 'warning' ? undefined : compactDockerComposeLine(entry);
           if (!compacted) {
             newHistory.push({ message: entry, severity: severity ?? undefined });
             continue;

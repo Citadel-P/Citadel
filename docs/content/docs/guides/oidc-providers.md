@@ -236,7 +236,7 @@ The default role does not automatically update existing users every time they lo
 
 ## Teams And Roles
 
-In the MVP, Citadel remains the source of truth for role and team membership.
+Citadel manages role and team membership after OIDC sign-in.
 
 Admins manage access in:
 
@@ -244,7 +244,8 @@ Admins manage access in:
 Settings -> Access
 ```
 
-Future versions may support claim-based role and team mapping. Until then, use OIDC for login and Citadel Access for authorization.
+OIDC claims can restrict sign-in, but they do not automatically map users to
+Citadel Roles or Teams. Manage those assignments from **Settings → Access**.
 
 ## Disable A Provider
 
@@ -348,5 +349,4 @@ Do not enter the authorization endpoint or token endpoint as the issuer URL. Ent
 - Use verified email and required claims for auto-provisioning.
 - Disable providers that are no longer trusted.
 - Use HTTPS for Citadel and the OIDC provider.
-
 

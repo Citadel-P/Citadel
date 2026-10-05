@@ -230,7 +230,7 @@ the caller cannot replace the code or run-as account in the run request.
 Citadel creates a short-lived internal token for each Action run. It does not
 copy or expose the Service Account's persistent API token to the script.
 
-See [Automation Actions](/docs/guides/automation-actions) for Action configuration and
+See [Automation Actions](/docs/resources/automation-actions) for Action configuration and
 execution behavior.
 
 ## Use With Backup Policies
@@ -245,7 +245,7 @@ webhook-triggered backups also require **Automated Operations**.
 Manual backups use the authenticated caller. Backups requested from an
 Automation Action use that Action run's identity.
 
-See [Backups](/docs/guides/backups) for source, repository, scheduling, and restore
+See [Backups](/docs/resources/backups) for source, repository, scheduling, and restore
 behavior.
 
 ## Service Account Tokens And Webhook Secrets

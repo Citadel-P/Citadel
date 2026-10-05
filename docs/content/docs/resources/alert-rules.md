@@ -11,13 +11,14 @@ Notifications are delivered through notification channels. The Citadel server im
 
 1. Open **Settings → Alert Rules**.
 2. Add a **Notification Channel** for your preferred destination.
-3. Use **Send Test Notification** and confirm it arrives.
+3. Use **Send Test Notification**, confirm it arrives, then **Save** the channel.
 4. Assign the channel to a suitable built-in rule and enable the rule.
 5. Use **Alerts** to review events and delivery results.
 
 Community includes the built-in system rules and notification channels. Creating
 custom rules and changing advanced rule behavior require Advanced Alerting.
-The provider setup below explains where to obtain each destination URL.
+The provider setup below explains where to obtain each destination URL. See
+[License Availability](#license-availability) for the full feature breakdown.
 
 ## Before You Start
 
@@ -25,56 +26,22 @@ Channel URLs often contain webhook IDs, tokens, or bot credentials. Treat them a
 
 Use a separate webhook or bot token for Citadel when the destination service supports it. If the URL is exposed later, you can revoke only the Citadel webhook or token without breaking other integrations.
 
-## License Availability
-
-Community includes:
-
-- notification channel creation, testing, update, enablement, and deletion
-- every supported notification destination type
-- in-app alert events
-- Citadel's seeded system alert rules
-- enabling or disabling seeded system rules
-- assigning notification channels to seeded system rules
-- external delivery when a seeded system rule triggers
-
-Community has no license-enforced notification-channel count limit.
-
-Team's `Advanced Alerting` capability adds:
-
-- custom alert-rule creation
-- custom conditions and rule behavior
-- quiet hours
-- cooldown changes
-- threshold and required-match changes
-- severity changes
-- resource-specific scoping
-
-A seeded system rule is installed by Citadel and owned by the Citadel system
-actor. In Community, you can change its enabled status and notification-channel
-assignments. Changing its other fields requires Advanced Alerting.
-
-If a Team license expires after its grace period, custom rules pause.
-Notification channels remain configured, and seeded system rules continue
-sending in-app and external notifications.
-
 ## Notification Channels
 
-Open:
+1. Open **Settings → Alert Rules** and select **Add Channel** in the
+   **Notification Channels** section.
+2. Enter a descriptive **Name**, such as `Operations email`.
+3. Select the **Type** and enter the **Channel URL** using the matching setup below.
+4. Leave **Is Active** enabled to allow alert delivery.
+5. Select **Send Test Notification** and check the destination for the message.
+6. Select **Save**. Testing uses the values in the dialog; it does not save the channel.
+7. Open a rule, select the channel under **Notification Channels**, enable the
+   rule, and save it.
 
-```text
-Settings -> Alert Rules
-```
-
-Use the `Notification Channels` section to add destinations such as Discord, Teams, Slack, Telegram, ntfy, Gotify, or a generic webhook.
-
-Create a channel with:
-
-- `Name`: friendly channel name shown in Citadel
-- `Type`: destination type, such as `Discord`, `Teams`, or `Generic`
-- `Channel URL`: destination URL in Citadel's notification URL format
-- `Active`: whether Citadel can send to this channel
-
-After entering the URL, use `Send Test Notification`. Citadel verifies the channel and sends a test message.
+A saved channel does not receive alerts until it is assigned to an enabled rule.
+You can reuse a channel across rules or select several channels for one rule.
+Notifications are sent by the Citadel server, so the destination must be reachable
+from the server's container.
 
 ## Channel URL Format
 
@@ -89,6 +56,45 @@ service://credentials@destination/path?options
 Replace placeholder values such as `<token>`, `<webhook-id>`, and `<chat-id>` with the values from the destination service. If a token contains special URL characters such as `@`, `/`, `?`, `&`, or `#`, URL-encode that value before saving it.
 
 ## Configure Common Channels
+
+Citadel uses [Shoutrrr](https://github.com/nicholas-fedor/shoutrrr) service URLs.
+Select the matching **Type** in Citadel, then enter the URL described below.
+The screenshots show Citadel's actual forms with demonstration values; replace
+all example credentials and destinations with your own.
+
+### Email (SMTP)
+
+Select **Email** to deliver notifications through an SMTP server.
+
+1. Obtain your provider's SMTP hostname, port, credentials, and an authorized
+   sender address. Use an application password if your provider requires one.
+2. Enter the sender in `from` and the recipient in `to`.
+3. For port **587** with required STARTTLS, use:
+
+```text
+smtp://<username>:<password>@<smtp-host>:587/?from=alerts@example.com&to=ops@example.com&requirestarttls=yes
+```
+
+For port **465** with implicit TLS, use:
+
+```text
+smtp://<username>:<password>@<smtp-host>:465/?from=alerts@example.com&to=ops@example.com&encryption=ImplicitTLS
+```
+
+Use the port and authentication method specified by your provider. Add
+`&auth=Login` if it requires LOGIN authentication. Separate multiple recipients
+with commas: `to=ops@example.com,oncall@example.com`.
+
+URL-encode credentials before inserting them: a username of `alerts@example.com`
+becomes `alerts%40example.com`, and a password containing `#` uses `%23`.
+
+See the [SMTP reference](https://github.com/nicholas-fedor/shoutrrr/blob/v0.19.0/docs/services/email/smtp/index.md)
+for additional authentication and sender options.
+
+![Citadel notification channel dialog with Email selected and an example SMTP URL](/screenshots/notification-channel-email.png)
+
+Select **Send Test Notification**, check the recipient's inbox and spam folder,
+then **Save** and assign the channel to a rule.
 
 ### Discord
 
@@ -114,27 +120,37 @@ In Citadel:
 discord://<webhook-token>@<webhook-id>
 ```
 
+The token goes before `@`; the numeric webhook ID goes after it. Keep the webhook
+in a channel intended for operational notifications.
+
+![Citadel notification channel dialog with Discord selected and a demonstration webhook URL](/screenshots/notification-channel-discord.png)
+
+Select **Send Test Notification** and confirm the message appears in the chosen
+Discord channel. Then **Save** and assign it to a rule.
+
 ### Microsoft Teams
 
-In Teams:
-
-1. Create or open the channel that should receive alerts.
-2. Add an incoming webhook or workflow webhook for the channel.
-3. Copy the webhook URL.
-
-For Teams, use this Citadel URL format:
-
-```text
-teams://<group>@<tenant>/<alt-id>/<group-owner>/<extra-id>?host=<webhook-host>
-```
-
-Example:
+1. Create a Power Automate workflow with the **When a Teams webhook request is
+   received** trigger and an action that posts to the desired Teams channel.
+2. Copy the generated workflow webhook URL.
+3. Percent-encode the **entire** URL, including its query string, and use it as
+   the `host` parameter below.
+4. Select **Teams** in Citadel.
 
 ```text
-teams://group@tenant/altId/groupOwner/extraId?host=organization.webhook.office.com
+teams://?host=<percent-encoded-workflow-url>
 ```
 
-Use the group, tenant, path values, and host from the Teams webhook URL.
+For example, `https://` becomes `https%3A%2F%2F`, `?` becomes `%3F`, and `&`
+becomes `%26`. Do not paste the unencoded workflow URL after `host=`: its query
+parameters would be interpreted as notification options.
+
+The bundled sender uses workflow webhooks. Replace existing legacy
+`teams://group@tenant/...` configurations with this format. See the
+[Teams reference](https://github.com/nicholas-fedor/shoutrrr/blob/v0.19.0/docs/services/chat/teams/index.md)
+for a complete conversion example.
+
+Test the channel, confirm the workflow posts the message, then save and assign it.
 
 ### Slack
 
@@ -160,6 +176,9 @@ In Citadel:
 slack://<token-a>/<token-b>/<token-c>
 ```
 
+Keep the three path segments in the same order, and omit `/services/`.
+Test the channel and confirm the message arrives before saving and assigning it.
+
 You can include a bot name:
 
 ```text
@@ -173,7 +192,12 @@ In Telegram:
 1. Create a bot with BotFather.
 2. Copy the bot token.
 3. Add the bot to the target chat, group, or channel.
-4. Get the chat ID or channel username.
+4. Use a numeric chat ID for a private chat or group, or an `@username` for a
+   public channel. An invite link is not a chat ID.
+
+For help finding IDs, follow the
+[Telegram setup reference](https://github.com/nicholas-fedor/shoutrrr/blob/v0.19.0/docs/services/chat/telegram/index.md).
+Give the bot permission to post in the destination.
 
 In Citadel:
 
@@ -191,6 +215,10 @@ telegram://<bot-token>@telegram?chats=@channel-name
 ```
 
 ### ntfy
+
+1. Choose your ntfy server and topic.
+2. Subscribe to that same server and topic in your ntfy app or web client.
+3. Select **Ntfy** in Citadel and configure its publishing URL.
 
 For a public ntfy topic:
 
@@ -212,7 +240,8 @@ ntfy://:<access-token>@<ntfy-host>/<topic>
 In Gotify:
 
 1. Create an application.
-2. Copy the application token.
+2. Copy the **application** token for sending messages.
+3. Open a Gotify client connected to the same server so you can verify delivery.
 
 In Citadel:
 
@@ -242,6 +271,11 @@ Example:
 generic://hooks.example.com/citadel/alerts?template=json
 ```
 
+The JSON template sends `title` and `message` fields. Confirm the receiver accepts
+this payload; an arbitrary webhook may require different fields or headers. See
+[Generic webhook options](https://github.com/nicholas-fedor/shoutrrr/blob/v0.19.0/docs/services/specialized/generic/index.md)
+for customization.
+
 ## Supported Channel Types
 
 These are the channel URL patterns supported by the Alert Rules page:
@@ -250,6 +284,7 @@ These are the channel URL patterns supported by the Alert Rules page:
 | --- | --- |
 | Bark | `bark://<device-key>@<host>` |
 | Discord | `discord://<webhook-token>@<webhook-id>` |
+| Email | `smtp://<username>:<password>@<host>:587/?from=<sender>&to=<recipient>&requirestarttls=yes` |
 | Generic | `generic://<host>/<path>?template=json` |
 | Gotify | `gotify://<gotify-host>/<token>` |
 | Google Chat | `googlechat://chat.googleapis.com/v1/spaces/<space>/messages?key=<key>&token=<token>` |
@@ -265,7 +300,7 @@ These are the channel URL patterns supported by the Alert Rules page:
 | Rocket.Chat | `rocketchat://<username>@<rocketchat-host>/<token>/<channel>` |
 | Signal | `signal://<host>/<source-phone>/<recipient>` |
 | Slack | `slack://<botname>@<token-a>/<token-b>/<token-c>` |
-| Teams | `teams://<group>@<tenant>/<alt-id>/<group-owner>/<extra-id>?host=<webhook-host>` |
+| Teams | `teams://?host=<percent-encoded-workflow-url>` |
 | Telegram | `telegram://<bot-token>@telegram?chats=<chat-id>` |
 | WeCom | `wecom://<key>` |
 | Zulip Chat | `zulip://<bot-email>:<bot-key>@<zulip-domain>/?stream=<stream>&topic=<topic>` |
@@ -432,7 +467,8 @@ If the test notification fails:
 - Check that the Citadel server has outbound network access to the destination service.
 - URL-encode special characters in tokens, webhook IDs, or path values when required.
 - Confirm the webhook, bot token, or destination channel still exists.
-- Confirm the channel is enabled.
+- For email, check the SMTP credentials, sender authorization, port, and TLS settings.
+  If the test succeeds but the inbox is empty, check spam filtering and the mail provider's delivery logs.
 
 If Citadel records alert events but sends no notification:
 
@@ -456,4 +492,34 @@ If alerts are too noisy:
 - Limit the rule to specific resources.
 - Add quiet hours for maintenance windows.
 
+## License Availability
 
+Community includes:
+
+- notification channel creation, testing, update, enablement, and deletion
+- every supported notification destination type
+- in-app alert events
+- Citadel's seeded system alert rules
+- enabling or disabling seeded system rules
+- assigning notification channels to seeded system rules
+- external delivery when a seeded system rule triggers
+
+Community has no license-enforced notification-channel count limit.
+
+Team's `Advanced Alerting` capability adds:
+
+- custom alert-rule creation
+- custom conditions and rule behavior
+- quiet hours
+- cooldown changes
+- threshold and required-match changes
+- severity changes
+- resource-specific scoping
+
+A seeded system rule is installed by Citadel and owned by the Citadel system
+actor. In Community, you can change its enabled status and notification-channel
+assignments. Changing its other fields requires Advanced Alerting.
+
+If a Team license expires after its grace period, custom rules pause.
+Notification channels remain configured, and seeded system rules continue
+sending in-app and external notifications.

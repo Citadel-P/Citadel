@@ -222,7 +222,8 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}
             docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/citadel
-          flavor: latest=false
+          # This job only publishes validated stable release tags.
+          flavor: latest=true
           tags: |
             type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}

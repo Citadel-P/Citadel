@@ -3,17 +3,14 @@ title: "Docker Compose configuration"
 description: "Change Citadel settings without losing your installation data."
 ---
 
-Citadel's installation settings live in `deploy/.env`. Application settings,
+Citadel's installation settings live in `.env` beside `docker-compose.yml`
+in your installation directory. Application settings,
 such as Platforms and Deployments, are managed in the browser.
 
 ## Prepare the environment
 
-Run these commands from the repository's `deploy` directory:
-
-```bash
-cp .env.example .env
-chmod 600 .env
-```
+The [installation guide](/docs/getting-started/install) downloads the environment
+template as `.env`. Open that file in a text editor to change settings.
 
 Enter the database password without surrounding quotes. A long, randomly generated
 password containing letters and numbers avoids environment-file parsing problems.
@@ -26,7 +23,7 @@ The example is a **local HTTP setup**, not a ready-made public installation.
 | Setting | Example default | When to change it |
 | --- | --- | --- |
 | `PG_PASSWORD` | Empty | Always set a long, unique database password before starting |
-| `CITADEL_IMAGE` | `citadel-rust:local` | Use the complete image address and exact version for a published release |
+| `CITADEL_IMAGE` | Empty → `ghcr.io/citadel-p/citadel:latest` | Optional: pin a specific version or use another registry |
 | `CITADEL_BIND_ADDRESS` | `127.0.0.1` | Change only after configuring secure network access |
 | `CITADEL_HTTP_PORT` | `18000` | Change if this host port is already in use |
 | `CITADEL_EDGE_PORT` | `18001` | Host port for the separate Edge Agent connection |
@@ -54,6 +51,7 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
+| `Passwords__MinimumLength` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
 | `Mfa__Policy` | `Optional` | Require two-factor authentication for administrators or all users |
 | `EnableSwagger` | `false` | Show API reference pages on your installation |
 | `JobConfiguration__MonitoringInterval` | `10` | Collect metrics every 10 seconds |
@@ -63,7 +61,7 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | `Automations__Enabled` | `true` | Allow automation execution |
 | `Automations__MaxParallelRuns` | `4` | Limit concurrent automation runs |
 
-Leave `Jwt__Key` and `Secrets__EncryptionKey` commented to let Citadel generate
+Leave `Jwt__Key` and `Secrets__EncryptionKey` unset to let Citadel generate
 and save them in `citadel_data`. `Jwt__Issuer` and `Jwt__Audience` normally
 follow the public URL when not explicitly configured. Back up the data volume
 with PostgreSQL so these keys remain available during recovery.
@@ -74,7 +72,7 @@ Unattended administrator setup is explained in
 
 ## Apply a setting change
 
-Save `.env`, then run from `deploy`:
+Save `.env`, then run from your installation directory:
 
 ```bash
 docker compose up -d

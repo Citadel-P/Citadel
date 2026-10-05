@@ -15,7 +15,7 @@ Use an **Edge Agent** instead when the Docker host is behind NAT, protected by a
 
 ## Connect a remote Docker host
 
-1. Open **Platforms**, select **Add**, and choose the host's platform type.
+1. Open **Platforms**, select **Add Platform**, and choose the host's platform type.
 2. Select **Agent** under **Connector**.
 3. Copy the **Docker Command** from **Agent Setup** and run it on that Docker host.
 4. Enter the reachable **Agent Address**, usually `http://HOST:9000` on a trusted private network.
@@ -83,9 +83,12 @@ regular Agent mode is not the satellite transport. They expose no inbound
 management port and do not replace the manager Agent.
 
 Once installed, Citadel aggregates current Containers and routes worker Task
-inspect, logs, statistics, lifecycle operations, and Terminal through the
+inspect, logs, statistics, and Terminal through the
 owning Node's authenticated satellite session. Covered Nodes also contribute
 Images, Volumes, and local Networks, with each resource retaining its Node identity.
+
+Change Task lifecycle through the owning Service or Stack; direct start, stop,
+and restart actions on individual Tasks are not available.
 
 ## Builds
 
@@ -534,5 +537,4 @@ Copy the latest installation command from the platform setup section and recreat
 
 For the supported direct TLS setup and private-CA trust, see
 [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
-
 

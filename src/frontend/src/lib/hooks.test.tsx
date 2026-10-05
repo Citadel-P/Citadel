@@ -184,6 +184,90 @@ describe('useStreamProgress', () => {
     expect(view.getByText('Stack deployment completed.')).toBeVisible();
   });
 
+  it('updates a single Swarm rollout row across chunks and retains each Service outcome', async () => {
+    const encoder = new TextEncoder();
+    let output: ReadableStreamDefaultController<Uint8Array>;
+    const progress = (text: string) => JSON.stringify({ type: 'StdErr', progressMessage: text }) + ',';
+    server.use(
+      http.post(
+        'http://localhost/api/v1/stacks/apply',
+        () =>
+          new HttpResponse(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                output = controller;
+                controller.enqueue(
+                  encoder.encode(
+                    '[' +
+                      progress(
+                        'overall progress: 0 out of 1 tasks\r1/1: \r' +
+                          'overall progress: 0 out of 1 tasks\r'.repeat(50),
+                      ),
+                  ),
+                );
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+      ),
+    );
+    const view = renderCitadel(<StackProgressProbe />);
+    await waitFor(() => expect(view.getAllByText('Swarm rollout: 0 of 1 tasks ready.')).toHaveLength(1));
+    expect(view.queryByText('1/1:')).not.toBeInTheDocument();
+    output!.enqueue(encoder.encode(progress('overall progress: 1 out of 1 tasks')));
+    await waitFor(() => expect(view.getByText('Swarm rollout: 1 of 1 tasks ready.')).toBeVisible());
+    expect(view.queryByText('Swarm rollout: 0 of 1 tasks ready.')).not.toBeInTheDocument();
+    output!.enqueue(
+      encoder.encode(progress('verify: Waiting 5 seconds to verify that tasks are stable...\n'.repeat(10))),
+    );
+    await waitFor(() => expect(view.getAllByText('Verifying task stability: 5s remaining...')).toHaveLength(1));
+    expect(view.queryByText(/Swarm rollout:/)).not.toBeInTheDocument();
+    output!.enqueue(encoder.encode(progress('verify: Waiting 1 seconds to verify that tasks are stable...')));
+    await waitFor(() => expect(view.getByText('Verifying task stability: 1s remaining...')).toBeVisible());
+    expect(view.queryByText('Verifying task stability: 5s remaining...')).not.toBeInTheDocument();
+    output!.enqueue(
+      encoder.encode(progress('verify: Service demo-web converged') + progress('overall progress: 0 out of 2 tasks')),
+    );
+    await waitFor(() => expect(view.getByText('Swarm rollout: 0 of 2 tasks ready.')).toBeVisible());
+    expect(view.getByText('Service demo-web converged.')).toBeVisible();
+    output!.enqueue(
+      encoder.encode(
+        progress('verify: Service demo-worker converged') +
+          JSON.stringify({
+            type: 'CommandCompleted',
+            progressMessage: 'Stack deployment completed.',
+            exitCode: 0,
+          }) +
+          ']',
+      ),
+    );
+    output!.close();
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('success'));
+    expect(view.getByText('Service demo-web converged.')).toBeVisible();
+    expect(view.getByText('Service demo-worker converged.')).toBeVisible();
+    expect(view.queryByText(/Swarm rollout:|Verifying task stability:/)).not.toBeInTheDocument();
+  });
+
+  it('preserves Swarm diagnostics and warnings while clearing failed rollout progress', async () => {
+    const diagnostic = '1/1: no suitable node (insufficient resources)';
+    server.use(
+      http.post('http://localhost/api/v1/stacks/apply', () =>
+        HttpResponse.json([
+          { type: 'StdErr', progressMessage: 'overall progress: 0 out of 1 tasks' },
+          { type: 'StdErr', progressMessage: diagnostic, severity: 'error' },
+          { type: 'StdErr', progressMessage: 'overall progress: 0 out of 1 tasks', severity: 'warning' },
+          { type: 'CommandCompleted', exitCode: 1, message: 'Stack deployment failed.' },
+        ]),
+      ),
+    );
+    const view = renderCitadel(<StackProgressProbe />);
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('error'));
+    expect(view.getByText(diagnostic)).toHaveAttribute('data-severity', 'error');
+    expect(view.getByText('overall progress: 0 out of 1 tasks')).toHaveAttribute('data-severity', 'warning');
+    expect(view.getByText('Stack deployment failed.')).toHaveAttribute('data-severity', 'error');
+    expect(view.queryByText(/Swarm rollout:/)).not.toBeInTheDocument();
+  });
+
   it('renders normal Stack progress neutrally and successful completion in green', async () => {
     server.use(
       http.post('http://localhost/api/v1/stacks/apply', () =>

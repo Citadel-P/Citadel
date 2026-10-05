@@ -17,13 +17,26 @@ Enter:
 
 1. The administrator username.
 2. The administrator email address.
-3. A password containing 15 to 128 characters.
+3. A password meeting the configured length requirement (15 to 128 characters by default).
 4. The same password again.
 
 Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
 The password should be unique to Citadel and stored in a password manager.
+
+### Configure password length
+
+Set the minimum password length in your Docker Compose `.env` file:
+
+```dotenv
+Passwords__MinimumLength=15
+```
+
+The minimum defaults to **15** and accepts values from **8 to 128**. The maximum
+password length remains **128** characters. After changing `.env`, run
+`docker compose up -d` from your installation directory, including your TLS
+overlay if configured, then reload the setup page.
 
 ## Two-Factor Authentication
 
@@ -93,5 +106,4 @@ editing the setup-state database row is unsupported.
 Citadel is still pre-release. Databases created with an older development
 baseline that seeded `admin` must be recreated with the current baseline rather
 than modified manually.
-
 

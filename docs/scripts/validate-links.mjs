@@ -56,6 +56,21 @@ for (const [route, page] of pages) {
   }
 }
 
+// Redirects are exported separately from the content tree. Validate their
+// canonical destinations, including sections split across resource pages.
+if (!process.argv[2]) {
+  const redirects = JSON.parse(await readFile('redirects.json', 'utf8'));
+  for (const [legacy, rule] of Object.entries(redirects)) {
+    if (pages.has(legacy)) errors.push(`Redirect shadows an existing page: ${legacy}`);
+    for (const target of [rule.to, ...Object.values(rule.anchors ?? {})]) {
+      const [route, anchor] = target.split('#', 2);
+      const destination = pages.get(route);
+      if (!destination) errors.push(`${legacy}: missing redirect destination ${target}`);
+      else if (anchor) validateAnchor(destination, route, anchor, legacy);
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error(errors.join('\n'));
   process.exitCode = 1;

@@ -824,6 +824,7 @@ export enum AlertDestination {
   Generic = "Generic",
   Bark = "Bark",
   Discord = "Discord",
+  Email = "Email",
   Gotify = "Gotify",
   GoogleChat = "Google_Chat",
   IFTTT = "IFTTT",

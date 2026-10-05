@@ -1,0 +1,17 @@
+{
+  "title": "Resources",
+  "pages": [
+    "index",
+    "platforms",
+    "deployments",
+    "stacks",
+    "swarm-services",
+    "builds",
+    "build-pools",
+    "registries",
+    "git-repositories",
+    "backups",
+    "automation-actions",
+    "alert-rules"
+  ]
+}

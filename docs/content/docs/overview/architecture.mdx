@@ -3,9 +3,10 @@ title: "How Citadel works"
 description: "Understand the parts of your installation and where your data lives."
 ---
 
-Citadel is the web interface you use to manage Docker. Docker runs your
-applications; Citadel stores their settings, sends operations to Docker, and
-shows the results.
+Citadel provides centralized management for Docker Standalone and Swarm
+environments. It stores application configuration, coordinates deployments,
+and monitors workloads through a web interface and API. Docker remains
+responsible for running the containers.
 
 ## The main parts
 
@@ -36,7 +37,7 @@ cannot monitor them or carry out operations during that time.
 
 Back up **PostgreSQL and `citadel_data` together** to recover your Citadel
 installation. Back up your applications' named volumes separately to recover
-their data. See the [backup guide](/docs/guides/backups).
+their data. See the [backup guide](/docs/resources/backups).
 
 Citadel and its Agents have administrative access to their Docker hosts. Protect
 administrator accounts, use HTTPS for shared access, and give other users only

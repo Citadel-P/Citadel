@@ -46,6 +46,9 @@ fn accepts_supported_shoutrrr_urls_and_rejects_unknown_destinations() {
         is_active: true,
     };
     input.validate().unwrap();
+    input.alert_destination = "Email".into();
+    input.url = "smtp://mailer:demo@smtp.example.com:587/?from=alerts@example.com&to=ops@example.com&requirestarttls=yes".into();
+    input.validate().unwrap();
     input.alert_destination = "Unknown".into();
     assert!(matches!(input.validate(), Err(AlertError::Validation(_))));
 }

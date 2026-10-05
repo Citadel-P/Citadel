@@ -102,9 +102,14 @@ Keep Core ports `8000` and `8001` on the private proxy network. If a proxy
 installed directly on the host requires published ports, bind them to
 `127.0.0.1` instead of every interface.
 
-The repository's base Compose file follows this topology and does not publish
-the cleartext Core listeners. Start the production proxy topology without the
-development override:
+The installation's `docker-compose.yml` publishes Core's listeners on host
+loopback ports `18000` and `18001` by default; it does not include a reverse
+proxy. A proxy running on the host can use those ports. A containerized proxy
+needs a shared private Docker network and upstreams `server:8000` and
+`server:8001`; its own `localhost` does not reach Core.
+
+Configure the proxy, trusted proxy addresses, and public URLs before starting
+Core in `ReverseProxy` mode. Run from your installation directory:
 
 ```bash
 docker compose -f docker-compose.yml up -d
@@ -129,6 +134,12 @@ Place the certificate and key in `./tls`, or set
 `CITADEL_TLS_HOST_DIRECTORY` to another directory. The direct-TLS Compose
 overlay mounts it read-only at `/etc/citadel/tls`.
 
+Download the overlay into your installation directory:
+
+```bash
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/compose.direct-tls.yml -o compose.direct-tls.yml
+```
+
 Set:
 
 ```dotenv
@@ -150,7 +161,7 @@ Transport__Certificate__PrivateKeyPath=/etc/citadel/tls/core-key.pem
 AgentTransport__AllowInsecure=true
 ```
 
-From `deploy`, use the supplied direct-TLS overlay to mount the certificates.
+From your installation directory, include the direct-TLS overlay to mount the certificates.
 The base Compose file publishes the configured host ports and checks listener health:
 
 ```bash
@@ -380,4 +391,3 @@ Use an `https://` Agent endpoint, or set
 a trusted private network or VPN.
 
 Citadel does not provide a certificate-validation bypass.
-

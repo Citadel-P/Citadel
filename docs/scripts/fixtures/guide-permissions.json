@@ -1,0 +1,187 @@
+{
+  "Alert": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Alert Rules",
+    "specificPermissionLabels": {}
+  },
+  "AlertChannel": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Alert Channel",
+    "specificPermissionLabels": {}
+  },
+  "AutomationAction": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Automation",
+    "specificPermissionLabels": {}
+  },
+  "BackupPolicy": {
+    "maximumLevel": "Execute",
+    "specificPermissions": { "Restore": "Read" },
+    "label": "Backups",
+    "specificPermissionLabels": { "Restore": "Restore" }
+  },
+  "BackupRepository": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Backup Repositories",
+    "specificPermissionLabels": {}
+  },
+  "Binding": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Bindings",
+    "specificPermissionLabels": {}
+  },
+  "Build": {
+    "maximumLevel": "Execute",
+    "specificPermissions": { "Apply": "Read" },
+    "label": "Builds",
+    "specificPermissionLabels": { "Apply": "Apply" }
+  },
+  "BuildAgentPool": {
+    "maximumLevel": "Execute",
+    "specificPermissions": { "Apply": "Read" },
+    "label": "Build Pools",
+    "specificPermissionLabels": { "Apply": "Apply" }
+  },
+  "Deployment": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {
+      "Apply": "Read",
+      "Inspect": "Read",
+      "Logs": "Read",
+      "ResourceBindings": "Read",
+      "Terminal": "Read"
+    },
+    "label": "Deployment",
+    "specificPermissionLabels": {
+      "Apply": "Apply",
+      "Inspect": "Inspect",
+      "Logs": "Logs",
+      "ResourceBindings": "Resource Bindings",
+      "Terminal": "Terminal"
+    }
+  },
+  "GitAccount": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Git Account",
+    "specificPermissionLabels": {}
+  },
+  "GitRepository": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Git Repository",
+    "specificPermissionLabels": {}
+  },
+  "License": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "License",
+    "specificPermissionLabels": {}
+  },
+  "Platform": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {
+      "Inspect": "Read",
+      "Logs": "Read",
+      "ManageNodeAgents": "Execute",
+      "Pull": "Read",
+      "Terminal": "Read"
+    },
+    "label": "Platform",
+    "specificPermissionLabels": {
+      "Inspect": "Inspect",
+      "Logs": "Logs",
+      "ManageNodeAgents": "ManageNodeAgents",
+      "Pull": "Pull",
+      "Terminal": "Terminal"
+    }
+  },
+  "Registry": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Registry",
+    "specificPermissionLabels": {}
+  },
+  "Role": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Role",
+    "specificPermissionLabels": {}
+  },
+  "ServiceAccount": {
+    "maximumLevel": "Execute",
+    "specificPermissions": { "ManageCredentials": "Read", "Use": "Read" },
+    "label": "ServiceAccount",
+    "specificPermissionLabels": {
+      "ManageCredentials": "ManageCredentials",
+      "Use": "Use"
+    }
+  },
+  "Stack": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {
+      "Apply": "Read",
+      "Inspect": "Read",
+      "Logs": "Read",
+      "Pull": "Read",
+      "Releases": "Read",
+      "ResourceBindings": "Read",
+      "Terminal": "Read"
+    },
+    "label": "Stack",
+    "specificPermissionLabels": {
+      "Apply": "Apply",
+      "Inspect": "Inspect",
+      "Logs": "Logs",
+      "Pull": "Pull",
+      "Releases": "Releases",
+      "ResourceBindings": "Resource Bindings",
+      "Terminal": "Terminal"
+    }
+  },
+  "SwarmService": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {
+      "Apply": "Read",
+      "Inspect": "Read",
+      "Logs": "Read",
+      "ResourceBindings": "Read"
+    },
+    "label": "Swarm Services",
+    "specificPermissionLabels": {
+      "Apply": "Apply",
+      "Inspect": "Inspect",
+      "Logs": "Logs",
+      "ResourceBindings": "Resource Bindings"
+    }
+  },
+  "Tag": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Tags",
+    "specificPermissionLabels": {}
+  },
+  "Team": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "Team",
+    "specificPermissionLabels": {}
+  },
+  "User": {
+    "maximumLevel": "Execute",
+    "specificPermissions": {},
+    "label": "User",
+    "specificPermissionLabels": {}
+  },
+  "Volume": {
+    "maximumLevel": "Execute",
+    "specificPermissions": { "Browse": "Read", "Download": "Read" },
+    "label": "Volume",
+    "specificPermissionLabels": { "Browse": "Browse", "Download": "Download" }
+  }
+}

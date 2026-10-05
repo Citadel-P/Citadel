@@ -3,7 +3,8 @@ title: "Backups"
 description: "Configure backup repositories, policies, runs, restores, and Swarm volume coverage."
 ---
 
-Citadel backups let you save the Citadel control plane and Docker named volumes to a restic-compatible repository.
+Citadel provides backup and recovery for its control plane and Docker named
+volumes, with snapshots stored in restic-compatible repositories.
 
 ## Make your first backup
 
@@ -20,21 +21,6 @@ A control-plane backup saves Citadel's own installation. It does not replace
 backups of application volumes. Volume restore is available in Citadel;
 control-plane recovery follows the separate [recovery guide](/docs/operations/control-plane-recovery).
 Keep the repository password safe: it is needed to recover encrypted snapshots.
-
-## License Availability
-
-Community can:
-
-- create and manage backup repositories
-- create backup policy definitions
-- start backups manually
-- restore Docker volume backups
-- view backup and restore history and logs
-
-Backup schedules and webhook-triggered backup execution require Team's
-`Automated Operations` capability. If the capability becomes unavailable,
-configured triggers remain stored but pause. Manual backup and restore remain
-available.
 
 ## Backup Repositories
 
@@ -155,7 +141,7 @@ capability. Scheduled and webhook-triggered policies additionally require
 unavailable, Citadel preserves the binding as `Paused by license` and does not
 start new runs under it.
 
-See [Service Accounts](/docs/concepts/service-accounts) for creating an account, assigning
+See [Service Accounts](/docs/guides/service-accounts) for creating an account, assigning
 access, and understanding **Use** permission. Backup Policies never store the
 Service Account's persistent API token.
 
@@ -166,6 +152,13 @@ Supported sources:
 - **Stack**: backs up all resolved Docker named volumes used by a stack.
 - **Deployment**: backs up all resolved Docker named volumes used by a deployment.
 - **Swarm Service**: backs up the supported node-local named volumes mounted by the current Tasks of a managed Swarm Service.
+
+[![Backup policy selecting a Stack, previewing its named volume, and choosing a repository with retention of fourteen successful snapshots](/screenshots/backup-policy-source-destination.png)](/screenshots/backup-policy-source-destination.png)
+
+Example policy using demo resources. Review the resolved volume and Node under
+**Source**, then choose the repository and retention under **Destination**.
+The example keeps 14 successful snapshots. **Protected** indicates backup
+coverage for that volume; inspect completed runs to confirm successful backups.
 
 ### Backup Counts
 
@@ -233,7 +226,8 @@ Supported Swarm sources are:
 
 Swarm backup requires:
 
-- a connected Citadel Node Agent on every Node needed by the source
+- a usable connection to every required Node: the existing manager connection
+  covers that manager, and node agents cover other Nodes
 - current, stable Task placement with all desired Tasks running
 - Docker-managed named volumes using the `local` driver without driver options
 - an S3-compatible backup repository reachable from every required Node
@@ -337,7 +331,22 @@ Use S3-compatible storage for remote platforms, edge agents, and Docker Swarm. I
 
 For Swarm, volume names alone do not identify the data: two nodes can have
 different local volumes with the same name. Citadel uses the selected node for
-backup and restore. If that node's Agent is unavailable, the operation fails
+backup and restore. If that node's connection is unavailable, the operation fails
 instead of reading or restoring a same-named volume on another node.
 
 Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.
+
+## License Availability
+
+Community can:
+
+- create and manage backup repositories
+- create backup policy definitions
+- start backups manually
+- restore Docker volume backups
+- view backup and restore history and logs
+
+Backup schedules and webhook-triggered backup execution require Team's
+`Automated Operations` capability. If the capability becomes unavailable,
+configured triggers remain stored but pause. Manual backup and restore remain
+available.

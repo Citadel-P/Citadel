@@ -1,0 +1,36 @@
+---
+title: "Stacks"
+description: "Choose a Compose source and deployment target for a Citadel Stack."
+---
+
+A Stack manages an application described by one or more Compose files. On a
+Docker Standalone Platform it runs as a Compose project; on a Swarm Platform
+it runs as a native Docker Stack.
+
+## Choose the source
+
+| Source | Use it when |
+| --- | --- |
+| [Web Editor](/docs/resources/stacks/web-editor) | You want to store and edit Compose content in Citadel |
+| [Git](/docs/resources/stacks/git) | Your Compose files belong in a versioned repository |
+
+Both sources support Standalone and Swarm Platforms. Source selection controls
+where Citadel gets the configuration; the Platform determines how it deploys it.
+
+## Choose the deployment target
+
+On Docker Standalone, the source pages describe container lifecycle actions,
+drift checks, and deployment settings. For a cluster, also read
+[Swarm Stacks](/docs/resources/stacks/swarm) for Compose compatibility, rollout
+behavior, Task operations, and rollback limitations.
+
+Use [Deployments](/docs/resources/deployments) for individual Standalone containers
+or [Swarm Services](/docs/resources/swarm-services) for independently managed
+Swarm Services.
+
+## Get started
+
+- [Deploy your first Stack](/docs/getting-started/first-stack).
+- [Adopt an existing Compose project or Docker Stack](/docs/guides/adopting-existing-workloads).
+- [Configure variables and secrets](/docs/guides/variables-and-secrets).
+- [Back up application data](/docs/resources/backups).

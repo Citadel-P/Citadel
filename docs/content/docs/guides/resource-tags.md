@@ -3,7 +3,8 @@ title: "Resource tags"
 description: "Organize and locate Citadel resources with tags."
 ---
 
-Tags help organize deployments, stacks, platforms, and git repositories.
+Tags help organize workloads, Platforms, repositories, Builds, and other
+Citadel resources.
 
 Use tags for labels such as:
 
@@ -13,7 +14,8 @@ Use tags for labels such as:
 - `Customer-A`
 - `Experimental`
 
-Tags are global. An admin creates the available tags, and users assign those existing tags to resources they can edit.
+Tags are shared across the installation. Users with Tag Write permission can
+manage them, and users can assign existing tags to resources they can edit.
 
 ## What Tags Are For
 
@@ -30,18 +32,15 @@ Avoid using tags for secrets, credentials, or values that should not be visible 
 
 ## Who Can Manage Tags
 
-Admins can:
+Administrators can manage all tags. Other users need global Tag Write
+permission to create tags, or Write permission on an existing tag to rename,
+recolor, or delete it. The tag catalog is filtered by the user's access.
 
-- create tags
-- rename tags
-- change tag colors
-- delete tags
-
-Non-admin users can view the tag catalog and assign tags to resources when they have permission to edit those resources.
+Assigning tags requires Write permission on the resource being tagged.
 
 ## Create A Tag
 
-Open the global `Tags` page.
+Open **Settings → Tags**.
 
 Create a tag with:
 
@@ -78,6 +77,12 @@ Supported resources:
 - stacks
 - platforms
 - git repositories
+- registries
+- automation actions
+- backup policies
+- build projects
+- build pools
+- managed Swarm Services
 
 Select one or more tags from the tag selector and save the resource.
 
@@ -99,7 +104,7 @@ The removed tag is no longer assigned to that resource, but it still exists in t
 
 ## Filter By Tags
 
-Supported list pages include a tag filter:
+List pages with a tag filter include:
 
 - Deployments
 - Stacks
@@ -122,7 +127,7 @@ Resource detail pages show tags near the resource title or metadata area.
 
 ## Delete A Tag
 
-Admins can delete a tag from the global Tags page.
+Users with Write permission on a tag can delete it from **Settings → Tags**.
 
 Deleting a tag removes it from every resource that uses it. The resources themselves are not deleted or changed otherwise.
 
@@ -163,5 +168,4 @@ Experimental
 ```
 
 Assign it to trial resources. Remove the tag when the resource becomes permanent, or filter by the tag to clean up old experiments.
-
 

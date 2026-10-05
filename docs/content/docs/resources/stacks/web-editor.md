@@ -1,21 +1,23 @@
 ---
-title: "Manual Stacks"
+title: "Web Editor Stacks"
 description: "Author and operate Stack Compose files directly in the Citadel editor."
 ---
 
-Web editor stacks let Citadel deploy a Docker Compose project from Compose YAML stored directly in Citadel. Use this when the stack is small, managed by Citadel operators, or does not need a Git repository workflow.
+Web Editor Stacks deploy Compose YAML stored in Citadel as a Docker Compose
+project on a Standalone Platform or a native Stack on a Swarm Platform. Use
+this when the application does not need a Git repository workflow.
 
-Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/docs/guides/deployments).
+Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/docs/resources/deployments).
 
-Use Git stacks instead when the Compose files should be reviewed, versioned, and deployed from a repository. See [Git Stacks](/docs/guides/git-stacks).
+Use Git stacks instead when the Compose files should be reviewed, versioned, and deployed from a repository. See [Git Stacks](/docs/resources/stacks/git).
 
 To import a Docker Compose project that is already running without applying it
 again during onboarding, see [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
 
 ## Deploy a Compose file
 
-1. Open **Stacks** and select **Add**.
-2. Choose a name, an online Platform, and **Web Editor** as the source.
+1. Open **Stacks** and select **Add Stack**.
+2. Choose a name, an online Platform, **Web Editor** as the source, and a Registry such as **Docker Hub**.
 3. Paste the application's Compose file and fix any reported errors.
 4. Add referenced variables and secrets on the **Bindings** tab.
 5. Select **Save**, then **Deploy**. Check the result on the **Services** tab.
@@ -54,7 +56,8 @@ After saving the stack, use **Deploy** to deploy it. Editing the Compose file ch
 
 The Compose editor stores one Compose YAML document in Citadel. It is the source of truth for a web editor stack.
 
-Use standard Docker Compose syntax:
+Use Docker Compose syntax for Standalone Platforms. Swarm Stacks use Docker's
+supported Compose v3 fields; Citadel checks compatibility before deployment.
 
 - `services` define the containers Citadel deploys.
 - `volumes` define named Docker volumes.
@@ -88,18 +91,20 @@ Generated env file path:
 - Set it only when the Compose project or scripts need a predictable env file path.
 - The path is relative to the Docker Compose run directory.
 
-For more detail, see [Variables and secrets](/docs/concepts/variables-and-secrets).
+For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets).
 
 ## Update Behavior
 
-Web editor stacks can check service image tags for new digests when a registry is selected.
+On Docker Standalone, Web Editor Stacks can check service image tags for new
+digests when a registry is selected. These periodic Stack image checks do not
+currently run for Web Editor Swarm Stacks.
 
 - `Disabled`: do not check this stack for image updates.
 - `Notify Only`: record image update availability and emit an alert.
 - `Auto Deploy Services`: pull updated images and redeploy only changed services.
 - `Auto Deploy Stack`: pull updated images and redeploy the full stack.
 
-For registry setup, see [Registries](/docs/guides/registries).
+For registry setup, see [Registries](/docs/resources/registries).
 
 Image update checks only work for services with image references that can be resolved as repository and tag pairs. Pinned digest-only images are not checked as tag updates.
 
@@ -140,7 +145,11 @@ When the stack is applied, Citadel uses the desired artifact stored on each bind
 
 When a mapped build succeeds later, Citadel updates the binding's desired image reference and digest. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped service. Applied state changes only after that apply succeeds.
 
-For build setup and webhook-triggered builds, see [Builds](/docs/guides/builds).
+Service-scoped deployment is supported only for Docker Standalone Stacks.
+For a Swarm Stack, leave **Redeploy On Build** disabled and deploy the complete
+Stack manually after the desired build image changes.
+
+For build setup and webhook-triggered builds, see [Builds](/docs/resources/builds).
 
 ## Project Name
 
@@ -163,6 +172,9 @@ Project names must start with a lowercase letter or digit and contain only lower
 
 Use advanced commands when the stack needs host-side work around `docker compose up`.
 
+Pre-deploy and post-deploy commands are available only for Docker Standalone
+Stacks. They are hidden and rejected for Swarm Stacks.
+
 Pre deploy examples:
 
 - log in to a private registry
@@ -181,13 +193,18 @@ The command path is relative to the run directory. Keep commands idempotent; the
 
 The **Destroy** option runs `docker compose down` before redeploying the stack.
 
-Keep it enabled for simple stacks and stacks that do not support rolling updates. Disable it only when the stack can be safely updated in place and you want to avoid tearing down services before every full reapply.
+This option is available only for Docker Standalone Stacks. Enable it when the
+application requires a full shutdown before deployment and you accept the
+downtime. Leave it disabled when the Compose project can be updated in place.
 
 Service-scoped auto-deploy does not use destructive full-stack behavior.
 
 ## Drift Management
 
 Drift management compares the Compose definition against containers currently running on the platform.
+
+This feature applies to Docker Standalone Stacks. Swarm owns Task convergence
+and does not expose these container drift controls.
 
 - `Disabled`: do not check runtime drift.
 - `Detect only`: detect drift, alert, and optionally mark the stack degraded.
@@ -205,6 +222,11 @@ Rollback uses a previously healthy release snapshot. For web editor stacks, the 
 
 If the current Compose editor has newer changes, rollback does not deploy those edits. It deploys the selected release snapshot.
 
+Rollback does not restore application volumes or historical secret values.
+Bindings are resolved again, and mutable image tags can point to newer images.
+Review those dependencies before rollback. Swarm Secret and Config limitations
+are described in the [Swarm guide](/docs/resources/stacks/swarm#create-and-deploy-a-swarm-stack).
+
 ## When To Use Web Editor Stacks
 
 Use web editor stacks for:
@@ -221,5 +243,3 @@ Use Git stacks for:
 - monorepos
 - webhook-triggered deploys from a Git provider
 - pinning deployments to specific commits
-
-

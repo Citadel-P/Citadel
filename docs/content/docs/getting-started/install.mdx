@@ -1,43 +1,46 @@
 ---
 title: "Install and secure Citadel"
-description: "Choose an installation, protect network access, and preserve your data."
+description: "Install published Citadel images with Docker Compose and configure secure access."
 ---
 
-For a first local trial, use the [quick start](/docs/getting-started/quick-start).
-For a shared installation, the person responsible for your Docker server should
-complete the steps below before creating user accounts.
+Install Citadel and PostgreSQL with Docker Compose. You need a Linux Docker
+host, Docker Compose **2.30 or newer**, curl, and a text editor.
+The installation uses published container images.
 
-## 1. Choose the code or image
+## 1. Download the installation files
 
-Check the [release notes](https://github.com/Citadel-P/Citadel/releases) for an
-available version, its image address, and upgrade instructions. The version in
-`version.json` alone does not mean an image has been published.
-
-If no release image is available, use the source build in the quick start.
-For a release, clone its exact tag (replace `VERSION` with the version you chose):
+For a new installation, create a directory and download the Compose file and
+environment template:
 
 ```bash
-git clone --branch vVERSION --single-branch https://github.com/Citadel-P/Citadel.git
-cd Citadel/deploy
-cp .env.example .env
+mkdir -p citadel
+cd citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
 chmod 600 .env
 ```
 
-Open `.env`, set a long, unique alphanumeric `PG_PASSWORD` without surrounding
-quotes, and replace the local image setting
-with the **complete published image address**, including the exact version:
+Keep both files in this directory. For an existing installation, follow
+[upgrade and rollback](/docs/operations/upgrade-and-rollback) and keep your
+existing `.env` and Compose project name.
 
-```text
-CITADEL_IMAGE=ghcr.io/citadel-p/citadel:VERSION
-```
+## 2. Configure Citadel
 
-Replace `VERSION` before running any commands. Setting `CITADEL_IMAGE_TAG` alone
-will not select a published image while `CITADEL_IMAGE=citadel-rust:local` is set.
-Citadel's release workflows do not publish `latest`.
+Open `.env` in a text editor and set:
 
-## 2. Protect network access
+- **`CITADEL_IMAGE`**: leave blank to use the latest release.
+- **`PG_PASSWORD`**: a long, unique database password containing letters and
+  numbers, without surrounding quotes. You can generate one with
+  `openssl rand -hex 32`.
 
-The supplied `.env.example` uses local HTTP. Its default browser address is
+The database password is separate from your Citadel sign-in password.
+With `CITADEL_IMAGE` blank, Compose uses `ghcr.io/citadel-p/citadel:latest`.
+To pin a specific version instead, set it to the complete image address from
+your chosen [release](https://github.com/Citadel-P/Citadel/releases).
+
+### Network access
+
+The supplied `.env` uses local HTTP. Its default browser address is
 `http://localhost:18000`; both published ports bind to `127.0.0.1`.
 
 For a shared installation, choose one of these options:
@@ -55,29 +58,41 @@ address users will actually open. If you use Edge Agents, also set
 
 ## 3. Start and check
 
-For a published image, from the `deploy` directory:
+For local HTTP or a configured reverse proxy, run from your `citadel`
+installation directory:
 
 ```bash
 docker compose pull
-docker compose up -d --no-build
+docker compose up -d
 docker compose ps
 ```
 
-For direct TLS, include the supplied overlay in each Compose command:
+For direct TLS, download the overlay described in the
+[TLS guide](/docs/operations/tls-and-secure-agent-transport#direct-core-tls)
+and use these commands instead:
 
 ```bash
-docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d --no-build
+docker compose -f docker-compose.yml -f compose.direct-tls.yml pull
+docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d
+docker compose -f docker-compose.yml -f compose.direct-tls.yml ps
 ```
 
 The overlay mounts the certificate directory; the base Compose file controls
-host bindings and ports. Confirm both services are healthy, open your configured
-browser address, and complete [first-run setup](/docs/getting-started/first-run-setup).
+host bindings and ports. Include the overlay in later Compose commands too.
+
+Wait until `server` and `pg_db` are healthy. For the default local setup, open
+[http://localhost:18000](http://localhost:18000) on the Docker host and create
+your administrator account. There are no default credentials. If you installed
+on a remote server, use the HTTPS address you configured above.
+
+Complete [first-run setup](/docs/getting-started/first-run-setup),
+then [connect your first Platform](/docs/getting-started/first-platform).
 
 ## 4. Protect your installation data
 
 Keep `.env` private. Keep the `citadel_data` and `postgres_data` volumes: together
 they hold accounts, settings, history, and the keys used to protect saved secrets.
-Configure a [control-plane backup](/docs/guides/backups) and keep a copy away
+Configure a [control-plane backup](/docs/resources/backups) and keep a copy away
 from the Docker host. Do not delete these volumes during an upgrade.
 
 See [requirements](/docs/getting-started/requirements),

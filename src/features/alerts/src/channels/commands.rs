@@ -29,6 +29,7 @@ impl AlertChannelConfiguration {
             "Generic"
                 | "Bark"
                 | "Discord"
+                | "Email"
                 | "Gotify"
                 | "Google_Chat"
                 | "IFTTT"

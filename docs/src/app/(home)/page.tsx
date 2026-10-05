@@ -38,10 +38,10 @@ export default function HomePage() {
         <Feature href="/docs/getting-started/quick-start" icon={<Rocket />} title="Start in minutes">
           Run Citadel locally, create your account, and connect Docker.
         </Feature>
-        <Feature href="/docs/guides/deployments" icon={<Boxes />} title="Deploy workloads">
+        <Feature href="/docs/resources/deployments" icon={<Boxes />} title="Deploy workloads">
           Create containers, Compose stacks, and native Swarm services.
         </Feature>
-        <Feature href="/docs/guides/automation-actions" icon={<Workflow />} title="Automate operations">
+        <Feature href="/docs/resources/automation-actions" icon={<Workflow />} title="Automate operations">
           Schedule updates, backups, alerts, builds, and repeatable actions.
         </Feature>
       </section>

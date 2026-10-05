@@ -70,7 +70,7 @@ If the proxy does not support gRPC over HTTP/2, the agent may connect and then f
 
 ## Create An Edge Platform
 
-1. Open **Platforms** and select **Add**.
+1. Open **Platforms** and select **Add Platform**.
 2. Choose **Docker Standalone** or **Docker Swarm** for the host you are connecting.
 3. Select **Edge Agent** under **Connector** and enter a clear name.
 4. Select **Save**. Citadel creates the Platform and generates enrollment instructions.
@@ -198,8 +198,11 @@ sources under the same Swarm Platform.
 Installing the System Service is an explicit privileged action because its
 tasks mount each Node's Docker socket read-write. With coverage installed,
 Citadel aggregates current Containers and routes worker Task inspect, logs,
-statistics, lifecycle operations, and Terminal to the owning Node. Covered Nodes
+statistics, and Terminal to the owning Node. Covered Nodes
 also contribute Images, Volumes, and local Networks with their owning Node identified.
+
+Change Task lifecycle through the owning Service or Stack; direct start, stop,
+and restart actions on individual Tasks are not available.
 
 ## Docker Operations
 
@@ -271,5 +274,4 @@ The Edge Agent gRPC endpoint is probably being served through an HTTP/1.1-only r
 - Keep the agent data volume private.
 - Revoke an agent if its host or data volume is compromised.
 - Do not expose the Docker socket to containers you do not trust.
-
 

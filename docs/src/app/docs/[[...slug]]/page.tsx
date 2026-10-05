@@ -4,9 +4,20 @@ import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
+import { DocRedirect } from '@/components/doc-redirect';
+import redirects from '../../../../redirects.json';
+import { getDocsBasePath } from '../../../../site-config.mjs';
+
+const legacyRoutes: Record<string, { to: string; anchors?: Record<string, string> }> = redirects;
+
+function legacyRoute(slug: string[] | undefined) {
+  return legacyRoutes[`/docs/${(slug ?? []).join('/')}`];
+}
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
+  const redirect = legacyRoute(params.slug);
+  if (redirect) return <DocRedirect rule={redirect} basePath={getDocsBasePath()} />;
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
@@ -28,11 +39,20 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 }
 
 export async function generateStaticParams() {
-  return source.generateParams();
+  return [
+    ...source.generateParams(),
+    ...Object.keys(legacyRoutes).map((route) => ({ slug: route.slice('/docs/'.length).split('/') })),
+  ];
 }
 
 export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): Promise<Metadata> {
   const params = await props.params;
+  const redirect = legacyRoute(params.slug);
+  if (redirect) return {
+    title: 'Page moved',
+    alternates: { canonical: redirect.to },
+    robots: { index: false },
+  };
   const page = source.getPage(params.slug);
   if (!page) notFound();
 

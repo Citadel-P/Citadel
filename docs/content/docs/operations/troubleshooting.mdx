@@ -8,7 +8,7 @@ Wait for the current operation to finish before trying it again.
 
 ## Citadel will not open
 
-From your installation's `deploy` directory, run:
+From your installation directory, run:
 
 ```bash
 docker compose ps
@@ -18,7 +18,7 @@ docker compose logs --tail=100 server pg_db
 - For the supplied local setup, use **http://localhost:18000**, not port `8000`.
 - Open that address on the machine running Citadel. For another machine, use your configured HTTPS address.
 - If PostgreSQL cannot start, check `PG_PASSWORD` and persistent storage. Changing its initial password in `.env` does not reset an existing database password.
-- If the first source build is still running, let it finish before opening the page.
+- If an image download fails, check the image address, version, and registry access in `.env`.
 
 ## A Platform stays offline
 

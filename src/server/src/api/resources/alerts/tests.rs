@@ -113,7 +113,7 @@ fn patches_preserve_omission_and_explicit_null_and_ignore_identity_fields() {
 fn channel_patch_accepts_partial_update_and_destination_uses_wire_spelling() {
     let patch: PatchAlertChannelInput = serde_json::from_value(json!({"isActive":false})).unwrap();
     assert_eq!(patch.into_value(), json!({"isActive":false}));
-    for destination in ["Google_Chat", "Zulip_Chat", "IFTTT", "Generic"] {
+    for destination in ["Google_Chat", "Zulip_Chat", "IFTTT", "Generic", "Email"] {
         let input: AlertChannelInput=serde_json::from_value(json!({"alertDestination":destination,"url":"https://example.com/hook","isActive":true})).unwrap();
         let mut config: citadel_alerts::AlertChannelConfiguration = input.into();
         config.validate().unwrap();
