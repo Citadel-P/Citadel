@@ -303,7 +303,16 @@ Docker volume snapshots can be restored from a backup run into a Docker named vo
 
 Open a backup policy, go to **Runs**, and select the restore action on an available Docker volume backup run. Citadel opens a restore dialog and then streams progress in a sheet.
 
-By default, restore to a new volume name. This is the safest option because the original volume is left untouched.
+The target name is pre-filled from the selected source volume. Enter a **new Target Volume**
+name to restore a separate copy, and leave **Overwrite existing target volume**
+disabled. This keeps the original volume untouched.
+
+[![Restore Volume dialog selecting an application data snapshot, the target Docker Platform, and a new recovery volume with overwrite disabled](/screenshots/backup-restore-selection.png)](/screenshots/backup-restore-selection.png)
+
+This demo backup contains two volume snapshots. **Snapshot Volume** selects the
+one to restore; **Target Platform** and **Target Volume** specify where it goes.
+The example restores `application_data` as `application_data_recovered`. Review
+all three before selecting **Restore**.
 
 Overwrite restore is destructive. When **Overwrite existing target volume** is enabled, Citadel deletes and recreates the target volume before restoring the snapshot. The UI requires you to type the exact target volume name before the restore can start. Citadel rejects overwrite when the target volume is currently in use.
 

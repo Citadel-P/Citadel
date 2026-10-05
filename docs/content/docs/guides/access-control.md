@@ -31,6 +31,22 @@ may still provide access because permissions are additive.
 Custom Roles require Team's **Custom access control** capability. Built-in System
 Roles can be inspected but cannot be edited.
 
+## Grant Access to One Resource
+
+Open a User's **Config** tab and choose **Advanced → Overrides → Grant Access**.
+Select the resource type, then set the level and any additional capabilities for
+only the resources that User needs. Save the dialog, then save the User form.
+
+[![Resource Overrides dialog granting Write access to the Storefront Stack while leaving Internal tools without a direct grant](/screenshots/resource-access-grant.png)](/screenshots/resource-access-grant.png)
+
+In this demo, a User with the **Operations reader** Role receives additional
+**Write** access to the `Storefront` Stack. The `Internal tools` Stack receives
+no direct grant. Its existing Role-based access still applies: an empty override
+does not revoke permissions inherited from Roles or Teams.
+
+Creating or expanding resource-specific grants requires Team's **Custom access
+control** capability. Existing grants can still be reduced or removed without it.
+
 ## Review Access Changes
 
 The **Activities** tab on a User, Team, or Role records the administrative

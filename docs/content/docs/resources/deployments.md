@@ -274,6 +274,23 @@ Only named volumes are included. Bind mounts are not included because they are h
 
 For backup setup and restore behavior, see [Backups](/docs/resources/backups).
 
+## Diagnose a Failed Deployment
+
+During **Deploy** or **Redeploy**, read the progress sheet for the operation's
+output and error. If you have closed it, open the Deployment's **Activities** tab
+or the main **Activities** page and select the failed **Deployment Applied** event.
+The event details show the recorded configuration and failure message.
+
+[![Deployment Applied activity details showing the configured image and a manifest unknown failure for a missing image tag](/screenshots/deployment-failure-details.png)](/screenshots/deployment-failure-details.png)
+
+This demo failure refers to `nginx:demo-missing`. Compare the image reference in
+**Applied configuration** with the failure message, correct the image tag under
+**Config**, save, and deploy again. An activity named **Deployment Applied** can
+have **Failure** status; its name alone does not indicate success.
+
+Container logs describe the application's output after a container starts. A
+failure while pulling an image can occur before there is a container to inspect.
+
 ## When To Use Deployments
 
 Use deployments for:

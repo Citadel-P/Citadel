@@ -274,12 +274,128 @@ routes[`/gitRepositories/${id(3)}/compose-projects`] = {
   ],
 };
 routes["/platforms/agent/setup"] = {};
+const recoveryPlatform = fixture("PlatformView", {
+  id: id(20),
+  name: "Production Docker",
+  type: "Docker",
+  status: "Running",
+  connectorType: "Agent",
+  address: "https://docker.example.com:7443",
+  capabilities: caps,
+  stats: [],
+});
+const recoveryPolicy = {
+  ...policy,
+  id: id(21),
+  name: "Application volumes",
+  source: { $type: "Stack", stackId: id(22) },
+};
+const backupRun = fixture("BackupRunView", {
+  id: id(23),
+  backupPolicyId: recoveryPolicy.id,
+  backupRepositoryId: backupRepo.id,
+  policyNameSnapshot: recoveryPolicy.name,
+  sourceSnapshot: recoveryPolicy.source,
+  repositoryTypeSnapshot: "S3Compatible",
+  status: "Succeeded",
+  snapshotAvailability: "Available",
+  trigger: "Manual",
+  startedAt: "2026-01-01T08:00:00Z",
+  completedAt: "2026-01-01T08:01:00Z",
+  items: ["application_data", "application_uploads"].map((volumeName, i) =>
+    fixture("BackupRunItemView", {
+      id: id(24 + i),
+      backupRunId: id(23),
+      platformId: recoveryPlatform.id,
+      volumeName,
+      status: "Succeeded",
+      resticSnapshotId: i === 0 ? "a1b2c3d4" : "e5f60718",
+    }),
+  ),
+});
+const demoUser = fixture("UserView", {
+  id: id(26),
+  name: "Application operator",
+  email: "operator@example.com",
+  isEnabled: true,
+  capabilities: caps,
+  roles: [{ id: role.id, name: role.name }],
+  teams: [],
+  resourceAccesses: [
+    {
+      resourceType: "Stack",
+      resourceId: stack.id,
+      resourceName: stack.name,
+      permissionLevel: "Write",
+      specificPermissions: [],
+    },
+  ],
+});
+const failedActivity = fixture("ActivityView", {
+  id: id(27),
+  eventType: "DeploymentApplied",
+  resourceType: "Deployment",
+  resourceId: id(28),
+  resourceName: "Storefront web",
+  platformId: recoveryPlatform.id,
+  platformName: recoveryPlatform.name,
+  platformStatus: "Running",
+  status: "Failure",
+  actorId: id(10),
+  actorName: "Demo Administrator",
+  actorType: "User",
+  info: {
+    $type: "DeploymentApplied",
+    deployment: {
+      id: id(28),
+      name: "Storefront web",
+      platformId: recoveryPlatform.id,
+      spec: {
+        image: {
+          $type: "External",
+          imageTag: "nginx:demo-missing",
+          registryId: id(4),
+        },
+        networks: ["bridge"],
+        ports: ["8080:80"],
+      },
+    },
+    result: {
+      message:
+        "Failed to pull nginx:demo-missing: manifest unknown: manifest unknown",
+      containerIds: [],
+    },
+  },
+});
+routes[`/platforms/${recoveryPlatform.id}`] = recoveryPlatform;
+routes["/platforms"].platforms.push(recoveryPlatform);
+lookups.Platform.push(recoveryPlatform);
+routes[`/backupPolicies/${recoveryPolicy.id}`] = recoveryPolicy;
+routes["/backupRuns"] = { runs: [backupRun] };
+routes["/backupRestoreRuns"] = { runs: [] };
+routes[`/users/${demoUser.id}`] = demoUser;
+routes["/teams"] = { teams: [], pagedResult: { items: [], totalCount: 0 } };
+routes["/users"] = { pagedResult: { items: [], totalCount: 0 } };
+routes["/stacks"] = {
+  stacks: [stack, { ...stack, id: id(29), name: "Internal tools" }],
+  capabilities: caps,
+};
+routes["/activities"] = {
+  pagedResult: {
+    items: [failedActivity],
+    totalCount: 1,
+    page: 1,
+    pageSize: 20,
+  },
+};
+routes[`/activities/${failedActivity.id}`] = failedActivity;
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 1360, height: 2000 },
   deviceScaleFactor: 2,
   colorScheme: "light",
   reducedMotion: "reduce",
+  timezoneId: "UTC",
 });
 await context.addInitScript(() =>
   localStorage.setItem(
@@ -318,6 +434,7 @@ await context.route("**/api/v1/**", async (route) => {
 });
 const page = await context.newPage();
 page.on("pageerror", (e) => errors.push(e.message));
+page.setDefaultTimeout(15000);
 async function capture(name, start, end = start) {
   await start.evaluate((el) =>
     el.scrollIntoView({ block: "start", behavior: "instant" }),
@@ -352,7 +469,16 @@ try {
     ["backup", `backup-policies/edit/${id(6)}#config`],
     ["automation", `automation/edit/${id(7)}#config`],
     ["roles", "access/roles"],
+    ["restore", `backup-policies/edit/${recoveryPolicy.id}#runs`],
+    ["access", `access/users/edit/${demoUser.id}#config`],
+    ["failure", "activities"],
   ]) {
+    if (process.argv.length > 2 && !process.argv.slice(2).includes(name))
+      continue;
+    await page.setViewportSize({
+      width: name === "failure" ? 900 : 1360,
+      height: 2000,
+    });
     await page.goto(`${origin}/${path}`, { waitUntil: "networkidle" });
     if (name === "git") {
       await expect(page.locator("#git_stack_source")).toContainText(
@@ -398,6 +524,50 @@ try {
       const detail = heading.locator("xpath=../../..");
       await capture("role-permissions", detail, detail.getByRole("row").nth(4));
     }
+    if (name === "restore") {
+      await page.getByTitle("Restore volume", { exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Restore Volume" });
+      await dialog.getByLabel("Snapshot Volume").click();
+      await page
+        .getByRole("option", { name: "application_data", exact: true })
+        .click();
+      await dialog
+        .getByLabel("Target Volume", { exact: true })
+        .fill("application_data_recovered");
+      await expect(
+        dialog.getByRole("button", { name: "Restore", exact: true }),
+      ).toBeEnabled();
+      await expect(dialog.getByRole("switch")).not.toBeChecked();
+      await dialog.screenshot({
+        path: `${root}/docs/public/screenshots/backup-restore-selection.png`,
+        animations: "disabled",
+      });
+    }
+    if (name === "access") {
+      await page
+        .getByRole("button", { name: "Grant Access", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Resource Overrides" });
+      await dialog.getByRole("combobox").first().click();
+      await page.getByRole("option", { name: "Stack", exact: true }).click();
+      await expect(
+        dialog.getByRole("row").filter({ hasText: "Storefront" }),
+      ).toContainText("Write");
+      await dialog.screenshot({
+        path: `${root}/docs/public/screenshots/resource-access-grant.png`,
+        animations: "disabled",
+      });
+    }
+    if (name === "failure") {
+      await page.getByRole("button", { name: /Deployment Applied/ }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText("Failed to pull nginx:demo-missing");
+      await expect(dialog.locator(".monaco-editor")).toBeVisible();
+      await capture(
+        "deployment-failure-details",
+        dialog.locator(".p-2").first(),
+      );
+    }
     console.log(`Captured ${name}`);
   }
   expect([...unknown]).toEqual([]);
@@ -405,6 +575,13 @@ try {
   console.log(
     "All guide screenshots captured without browser errors or unmatched API requests.",
   );
+} catch (error) {
+  console.error({
+    unknown: [...unknown],
+    errors,
+    body: await page.locator("body").innerText(),
+  });
+  throw error;
 } finally {
   await browser.close();
 }

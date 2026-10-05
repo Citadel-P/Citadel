@@ -87,7 +87,8 @@ and keep all essential instructions in the text. Link images to their original
 files so readers can enlarge them.
 
 To refresh the Git Stack, Swarm coverage, backup policy, automation, and Role
-screenshots, start the frontend development server and run from the repository root:
+screenshots, including restore selection, resource access, and deployment failures,
+start the frontend development server and run from the repository root:
 
 ```bash
 npm ci --prefix test/e2e
@@ -95,6 +96,12 @@ cd test/e2e
 npx playwright install chromium
 cd ../..
 node docs/scripts/capture-guide-screenshots.mjs
+```
+
+To capture only the restore, resource-access, and failure examples:
+
+```bash
+node docs/scripts/capture-guide-screenshots.mjs restore access failure
 ```
 
 Set `CITADEL_SCREENSHOT_BASE_URL` if the frontend uses a different address.

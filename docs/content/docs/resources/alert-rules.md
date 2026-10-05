@@ -91,7 +91,7 @@ becomes `alerts%40example.com`, and a password containing `#` uses `%23`.
 See the [SMTP reference](https://github.com/nicholas-fedor/shoutrrr/blob/v0.19.0/docs/services/email/smtp/index.md)
 for additional authentication and sender options.
 
-![Citadel notification channel dialog with Email selected and an example SMTP URL](/screenshots/notification-channel-email.png)
+[![Citadel notification channel dialog with Email selected and an example SMTP URL](/screenshots/notification-channel-email.png)](/screenshots/notification-channel-email.png)
 
 Select **Send Test Notification**, check the recipient's inbox and spam folder,
 then **Save** and assign the channel to a rule.
@@ -123,7 +123,7 @@ discord://<webhook-token>@<webhook-id>
 The token goes before `@`; the numeric webhook ID goes after it. Keep the webhook
 in a channel intended for operational notifications.
 
-![Citadel notification channel dialog with Discord selected and a demonstration webhook URL](/screenshots/notification-channel-discord.png)
+[![Citadel notification channel dialog with Discord selected and a demonstration webhook URL](/screenshots/notification-channel-discord.png)](/screenshots/notification-channel-discord.png)
 
 Select **Send Test Notification** and confirm the message appears in the chosen
 Discord channel. Then **Save** and assign it to a rule.
