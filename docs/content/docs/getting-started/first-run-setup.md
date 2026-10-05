@@ -103,7 +103,6 @@ reopen first-run setup. The setup endpoint is not a password-recovery feature.
 Use another administrator account to restore access. Directly deleting or
 editing the setup-state database row is unsupported.
 
-Citadel is still pre-release. Databases created with an older development
-baseline that seeded `admin` must be recreated with the current baseline rather
-than modified manually.
-
+For an older development database, check the target release's migration notes
+before upgrading. Preserve a matched database-and-keys backup before any migration
+or rebuild; deleting the database is not a password-recovery procedure.

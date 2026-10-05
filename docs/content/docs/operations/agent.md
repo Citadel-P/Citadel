@@ -64,6 +64,11 @@ Before installing the Agent, confirm that the Docker host has:
 
 The Citadel Agent version should match the Citadel Core version. Citadel generates the installation command using the expected image tag.
 
+In the examples below, replace `AGENT_IMAGE` with the complete image address
+shown by your installation, and `...` with its current public key or enrollment
+token. Copy the generated command when available; example placeholders are not
+released versions or usable credentials.
+
 ## Docker Swarm
 
 For a Docker Swarm Platform, install the regular Agent on the manager endpoint
@@ -119,7 +124,7 @@ docker run -d \
   -p 9001:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e HUB_PUBLIC_KEY="..." \
-  ghcr.io/citadel-p/citadel.agent:1.2.3
+  AGENT_IMAGE
 ```
 
 Then create a Build Pool in Citadel:
@@ -163,7 +168,7 @@ docker run -d \
   -e CITADEL_EDGE_ENROLLMENT_TOKEN="..." \
   -e CITADEL_EDGE_AGENT_KEY_PATH="/app/data/edge-build-agent.key" \
   -e CITADEL_EDGE_IDENTITY_PATH="/app/data/edge-build-agent.identity.json" \
-  ghcr.io/citadel-p/citadel.agent:1.2.3
+  AGENT_IMAGE
 ```
 
 The Edge build Agent is scoped directly to the Build Pool. It is not an Edge Agent platform, and it does not require a Platform resource to exist.
@@ -229,7 +234,7 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /:/host:ro \
   -e HUB_PUBLIC_KEY="..." \
-  ghcr.io/citadel-p/citadel.agent:1.2.3
+  AGENT_IMAGE
 ```
 
 Regular Agent mode is the default. Do not set:
@@ -267,7 +272,7 @@ Use the public key and image tag displayed by Citadel:
 ```yaml
 services:
   citadel-agent:
-    image: ghcr.io/citadel-p/citadel.agent:1.2.3
+    image: AGENT_IMAGE
     container_name: citadel-agent
     restart: always
     labels:
@@ -365,7 +370,8 @@ Then save the platform in Citadel. The save operation validates that:
 
 Citadel Core uses its signing key to authenticate requests sent to regular Agents.
 
-Based on the shared Core signing-key model, rotation affects **every regular Agent connected to that Citadel Core instance**, not only the platform from which the action is initiated.
+Rotation affects **every regular Agent connected to that Citadel Core instance**,
+including inbound Build Pool Agents. The key is shared across those connections.
 
 The public key stored in `HUB_PUBLIC_KEY` is not confidential. Rotate the key when:
 
@@ -537,4 +543,3 @@ Copy the latest installation command from the platform setup section and recreat
 
 For the supported direct TLS setup and private-CA trust, see
 [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
-

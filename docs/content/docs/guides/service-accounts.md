@@ -159,7 +159,7 @@ Send the token through the HTTP `Authorization` header:
 ```bash
 curl \
   -H "Authorization: Bearer <service-account-token>" \
-  https://citadel.example.com/api/v1/platforms/
+  https://citadel.example.com/api/v1/platforms
 ```
 
 Use HTTPS for remote Citadel installations. Never place a token in a URL,
@@ -296,5 +296,4 @@ the lost token and create a replacement.
 
 Review **Used by** on the Service Account. Replace or disable each active
 run-as reference, then archive the account again.
-
 

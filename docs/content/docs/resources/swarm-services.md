@@ -18,7 +18,7 @@ published ports, storage, Swarm Secrets and Configs, placement, resources,
 health, restart, rolling-update policy, and Docker Service labels. Enter labels
 as `KEY=value`, one per line. The `com.citadel.*` namespace is reserved for
 Citadel ownership and operation metadata. Saving creates Citadel desired
-state; it does not contact Docker until you select **Deploy**.
+state; it does not contact Docker until you select **Apply**.
 
 The Environment editor supports Citadel variables and environment-delivered
 secrets. Use `KEY` to inject a binding with the same name, or
@@ -33,9 +33,9 @@ automatically for ports published in Ingress mode. Citadel excludes it from
 new Network selections; if an older saved Service contains it, remove it from
 the configuration before applying.
 
-After the first Deploy, use:
+After the first Apply, use:
 
-- **Duplicate Config** to open a new Service form prefilled from the current
+- **Duplicate** to open a new Service form prefilled from the current
   configuration; review and save it as a separate Service. Service-scoped
   variables and secret references are copied when it is saved, while global
   bindings remain inherited;
@@ -48,7 +48,7 @@ After the first Deploy, use:
 - **Delete** to remove the Docker Service and then its Citadel record.
 
 Global Services cannot be scaled by replica count. Scheduling mode cannot be
-changed after the first successful Deploy; create another Service when you
+changed after the first successful Apply; create another Service when you
 need to change between replicated and global mode.
 
 ### Scale A Replicated Service To Zero
@@ -86,7 +86,7 @@ across its logical replicas.
 
 External tagged images support **Disabled**, **Notify only**, and **Auto
 deploy** update behavior. Disabled Services are not scanned in the background,
-but an authorized manual check remains available after the first Deploy.
+but an authorized manual check remains available after the first Apply.
 Digest-pinned and build-produced images do not support Registry update checks.
 Auto deploy requires the Operational Guardrails license capability.
 
@@ -180,7 +180,7 @@ Node data source are shown but disabled.
 Managed Services require visibility of their Platform, plus:
 
 - Swarm Service Write to create or edit desired state.
-- Swarm Service Read plus Apply to Deploy, Apply, or restart Tasks.
+- Swarm Service Read plus Apply to create, update, or restart Tasks.
 - Swarm Service Write plus Apply to scale a replicated Service.
 - Swarm Service Execute to delete a managed Service.
 - Swarm Service Read plus Logs to read managed Service logs.

@@ -34,17 +34,18 @@ Supported repository types:
 For filesystem repositories:
 
 - **Core** location stores backups on the Citadel Core host or container volume.
-- **Platform** location stores backups on the selected Docker platform.
+- **Platform** location stores backups on the selected Docker host when it uses the **Local** connector.
 
 Choose the repository location based on where the backup runs:
 
 - Use **Core filesystem** for Citadel backups and Docker volume backups from a local platform.
-- Use **Platform filesystem** for Docker volume, stack, or deployment backups from a regular agent or edge agent when snapshots should stay on that platform host.
+- Use **Platform filesystem** for local-platform workload backups when the repository folder is on that Docker host.
 - Use **S3 compatible** when backups should be independent of the Core host and platform host filesystem.
 
-Citadel prevents policies that combine a remote regular agent or edge agent source with a Core filesystem repository. Core cannot directly write a filesystem snapshot for Docker volumes that live behind an agent.
-
-For remote regular agent and edge agent platforms, prefer an S3-compatible repository unless you explicitly want snapshots stored on that platform's host filesystem.
+Remote regular Agent, Edge Agent, and Swarm Node Agent backup execution currently
+requires **S3-compatible storage**. Filesystem repository fields may appear in
+the UI, but the Agent executor rejects them. Use filesystem repositories only
+for Citadel control-plane backups or workloads reached through the Local connector.
 
 ### S3-Compatible Repository Settings
 
@@ -85,29 +86,21 @@ Examples:
 Filesystem repository paths are resolved where the repository is executed:
 
 - **Core filesystem** paths are on the Citadel Core host or inside the Core container volume.
-- **Platform filesystem** paths are on the selected platform's Docker host.
-- **Regular agent** and **edge agent** platform paths are still Docker host paths, not paths inside the agent container.
+- **Platform filesystem** paths are on the Docker host reached through the Local connector.
 
-For example, a Platform filesystem repository path of `/srv/backup-01` on an agent platform creates the restic repository on the Docker host managed by that agent. The repository contains folders such as `config`, `data`, `index`, `keys`, `locks`, and `snapshots`.
+For example, a Platform filesystem repository path of `/srv/backup-01` on a local
+platform stores the restic repository on that Docker host. The repository contains
+folders such as `config`, `data`, `index`, `keys`, `locks`, and `snapshots`.
 
 When Citadel runs against Docker Desktop on Windows, Linux-style paths such as `/srv/backup-01` are usually inside Docker Desktop's Linux VM filesystem. They will not appear as `C:\srv\backup-01` or `D:\srv\backup-01` in Windows Explorer unless that path is explicitly backed by a shared Windows bind mount.
 
-To inspect a Platform filesystem repository on the same Docker daemon, run a temporary container with the image used by that platform type.
+To inspect a local Platform filesystem repository, run this from your Citadel
+installation directory on the same Docker host. It uses the running Core's
+actual image, even when `CITADEL_IMAGE` is blank in `.env`:
 
-Replace `CORE_IMAGE` with your installed Core image address (the `CITADEL_IMAGE`
-value in `.env`). Replace `AGENT_IMAGE` with the image address in that Platform's
-generated Agent installation command. These examples do not assume a published version.
-
-For a local platform:
-
-```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup CORE_IMAGE
-```
-
-For a regular agent or edge agent platform:
-
-```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup AGENT_IMAGE
+```bash
+core_image=$(docker inspect --format '{{.Image}}' "$(docker compose ps -q server)")
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup,readonly "$core_image"
 ```
 
 Then inside the container:
@@ -207,7 +200,7 @@ Backups can run against:
 For Docker volume, stack, deployment, and Swarm Service backups:
 
 - S3-compatible repositories run from the target platform and upload directly to the bucket.
-- Platform filesystem repositories run on the selected platform and write to the configured host path.
+- Platform filesystem repositories are supported through the Local connector and write to the configured host path.
 - Core filesystem repositories are only valid for Citadel backups and local-platform backups.
 
 This means Citadel mounts Docker named volumes through the platform's Docker daemon, then runs restic in the backup helper container. For regular agent and edge agent platforms, this avoids routing remote volume contents through Citadel Core. For local Docker Desktop platforms, it also avoids relying on Docker's internal `/var/lib/docker/volumes/...` paths being visible to the host.
@@ -321,7 +314,7 @@ Restore history is shown in the same **Runs** tab under **Restore runs**. Use th
 Repository and platform rules for restore:
 
 - A Core filesystem repository can restore to the local platform only.
-- A Platform filesystem repository restores on the same platform that owns that repository path.
+- A Platform filesystem repository restores on the same local platform that owns that repository path. Agent-based filesystem restore is not supported.
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
 - A Swarm child snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
 - Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
@@ -343,7 +336,8 @@ different local volumes with the same name. Citadel uses the selected node for
 backup and restore. If that node's connection is unavailable, the operation fails
 instead of reading or restoring a same-named volume on another node.
 
-Use filesystem repositories for simple local setups or when the backup storage is mounted directly on the platform that runs the backup.
+Use filesystem repositories for simple local setups. Use S3-compatible storage
+when execution goes through an Agent, even if that Agent runs on the Core host.
 
 ## License Availability
 
