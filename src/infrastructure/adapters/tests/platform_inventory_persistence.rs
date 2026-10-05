@@ -265,7 +265,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
         "web"
     );
 
-    // A later complete snapshot repairs counts and marks missing resources stale.
+    // A later complete snapshot repairs counts and removes absent resources.
     let mut second = snapshot(platform_id, false);
     second.containers.clear();
     second.images.clear();
@@ -1924,6 +1924,68 @@ async fn failed_swarm_refresh_marks_previous_rows_stale_without_clobbering_a_new
         [false],
         "failure cannot mark a newer successful refresh stale"
     );
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn successful_swarm_refresh_removes_absent_resources_from_current_inventory() {
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let mut inventory = snapshot(platform, true);
+    let swarm = inventory.swarm.as_mut().unwrap();
+    let mut absent_node = swarm.nodes[0].clone();
+    absent_node.id = "absent-node".into();
+    absent_node.role = "worker".into();
+    swarm.nodes.push(absent_node);
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    store
+        .mark_swarm_stale(platform, inventory.observed_at)
+        .await
+        .unwrap();
+    inventory.observed_at += chrono::Duration::seconds(1);
+    inventory.networks.clear();
+    let swarm = inventory.swarm.as_mut().unwrap();
+    swarm.nodes.retain(|node| node.id != "absent-node");
+    swarm.services.clear();
+    swarm.tasks.clear();
+    swarm.secrets.clear();
+    swarm.configs.clear();
+    store.persist(&inventory).await.unwrap();
+    for table in [
+        "swarmserviceprojections",
+        "swarmtaskprojections",
+        "swarmnetworkprojections",
+        "swarmsecretprojections",
+        "swarmconfigprojections",
+    ] {
+        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FROM {table} WHERE platformid=$1"
+        )))
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            count, 0,
+            "{table} should not retain absent resources as stale"
+        );
+    }
+    let nodes: Vec<(String, bool)> =
+        sqlx::query_as("SELECT dockernodeid,isstale FROM swarmnodeprojections WHERE platformid=$1")
+            .bind(platform)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(nodes, [("node-1".into(), false)]);
     pool.close().await;
 }
 

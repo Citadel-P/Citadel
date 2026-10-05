@@ -127,6 +127,7 @@ pub fn router(state: PlatformsHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<PlatformsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(get))
+        .normalized_routes(utoipa_axum::routes!(refresh_swarm_inventory))
         .normalized_routes(utoipa_axum::routes!(inspect_swarm_task))
         .normalized_routes(utoipa_axum::routes!(terminal))
         .normalized_routes(utoipa_axum::routes!(inspect_container))
@@ -5885,6 +5886,50 @@ async fn get(
         ))
         .into_response(),
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/platforms/{platformId}/swarm/refresh",
+    operation_id = "refreshSwarmInventory",
+    tag = "Platforms",
+    summary = "Refresh Swarm inventory from the manager",
+    responses(
+        (status = 204, description = "Inventory refreshed"),
+        crate::openapi::errors::ExternalRuntimeErrors
+    ),
+    params(("platformId" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn refresh_swarm_inventory(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
+    // Refresh only observes Docker state; it does not modify Swarm resources.
+    let platform = context(
+        &state,
+        principal,
+        id,
+        PermissionLevel::Read,
+        false,
+        &headers,
+    )
+    .await?;
+    match citadel_platforms::swarm_mutations::refresh_inventory(
+        state.projections.as_ref(),
+        state.runtime.as_ref(),
+        &platform,
+        |kind| publish_runtime_change(&state, id, kind, "update", ""),
+    )
+    .await
+    {
+        Ok(()) => Ok(no_store(StatusCode::NO_CONTENT.into_response())),
+        Err(error) => Ok(runtime_error_response(error, &headers)),
+    }
 }
 
 macro_rules! task_reader {

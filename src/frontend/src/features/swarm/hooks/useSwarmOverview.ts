@@ -48,7 +48,7 @@ export const applySwarmInventoryToOverview = (
   const quorum = calculateSwarmQuorum(inventory.nodes.items);
   const health = isStale ? 'Stale' : quorum.state === SwarmQuorumState.Healthy ? 'Healthy' : 'Degraded';
   const message = isStale
-    ? 'The latest inventory refresh failed. Last-known inventory may be out of date.'
+    ? 'Some inventory is out of date. Last-known state is shown.'
     : quorum.state === SwarmQuorumState.Lost
       ? `Swarm manager quorum is unavailable: ${quorum.reachableManagers} of ${managerCount} managers are reachable and ${quorum.requiredManagers} are required.`
       : quorum.state === SwarmQuorumState.Degraded

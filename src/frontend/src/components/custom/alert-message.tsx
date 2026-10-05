@@ -11,6 +11,7 @@ interface AlertMessageProps {
   dismissible?: boolean;
   onDismiss?: () => void;
   className?: string;
+  action?: ReactNode;
 }
 
 export const AlertMessage = ({
@@ -21,6 +22,7 @@ export const AlertMessage = ({
   onDismiss,
   className,
   date,
+  action,
 }: AlertMessageProps): JSX.Element | null => {
   const [dismissed, setDismissed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -102,6 +104,7 @@ export const AlertMessage = ({
       </div>
 
       <div className="flex items-center gap-2 shrink-0 ml-2">
+        {action}
         {date && (
           <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
             <Clock width={13} height={13} />

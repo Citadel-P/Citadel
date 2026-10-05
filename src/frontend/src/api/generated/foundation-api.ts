@@ -290,6 +290,7 @@ export const foundationOperations = {
   queueBuildRun: { method: 'POST', path: '/api/v1/buildProjects/{id}/runs' },
   receiveWebhook: { method: 'POST', path: '/listener/{authType}/{resourceType}/{id}/{execution}' },
   reconcileStack: { method: 'POST', path: '/api/v1/stacks/{stackId}/reconcile' },
+  refreshSwarmInventory: { method: 'POST', path: '/api/v1/platforms/{platformId}/swarm/refresh' },
   refreshToken: { method: 'GET', path: '/api/v1/authentication/refresh' },
   regenerateProfileMfaRecoveryCodes: { method: 'POST', path: '/api/v1/profile/mfa/recovery-codes' },
   removeLicense: { method: 'DELETE', path: '/api/v1/license' },

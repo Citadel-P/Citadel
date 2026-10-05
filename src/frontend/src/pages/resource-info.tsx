@@ -6,7 +6,6 @@ import { ResourceTabs } from '@/components/custom/resource-tabs';
 import { ResourceSkeleton } from './resource-skeleton';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
-import { Badge } from '@/components/ui/badge';
 import { Box } from 'lucide-react';
 
 export const ResourceInfoView = <T extends { id: string; name: string }>({
@@ -55,9 +54,7 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
                         {Header.Status ? (
                           <Header.Status resource={resource} />
                         ) : Header.Indicator ? (
-                          <Badge variant="outline">
-                            <Header.Indicator resource={resource} />
-                          </Badge>
+                            <Header.Indicator resource={resource} />                       
                         ) : null}
                         {Header.NameSuffix && <Header.NameSuffix resource={resource} />}
                       </div>

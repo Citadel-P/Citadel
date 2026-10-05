@@ -70,9 +70,7 @@ pub fn overview(
         ("Offline", _) => {
             Some("The Swarm manager is offline. Last-known inventory remains available.".into())
         }
-        ("Stale", _) => Some(
-            "The latest inventory refresh failed. Last-known inventory may be out of date.".into(),
-        ),
+        ("Stale", _) => Some("Some inventory is out of date. Last-known state is shown.".into()),
         ("Degraded", "Lost") => Some(format!(
             "Swarm manager quorum is unavailable: {} of {} managers are reachable and {} are required.",
             summary.reachable_managers, summary.manager_count, required

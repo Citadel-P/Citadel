@@ -222,6 +222,95 @@ async fn cleanup(f: Fixture) {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn manual_swarm_refresh_replaces_stale_inventory_without_mutating_docker() {
+    let (f, runtime) = fixture_swarm().await;
+    sqlx::query("UPDATE swarmnodeprojections SET isstale=true WHERE platformid=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let reader = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        reader.actor_id.value(),
+        ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    assert_status(
+        send_json(&f, Method::POST, &url(&f, "refresh"), reader, Value::Null).await,
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    let node =
+        json_body(send(&f, &url(&f, "nodes/node-1"), Some(f.administrator.clone())).await).await;
+    assert_eq!(node["isStale"], false);
+    assert_eq!(node["hostname"], "manager");
+    let overview = json_body(
+        send(
+            &f,
+            &format!("/api/v1/platforms/{}/swarm", f.platform_id),
+            Some(f.administrator.clone()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(overview["isStale"], false);
+    assert_eq!(overview["health"], "Healthy");
+    // The manager no longer reports the seeded network. A successful refresh
+    // must remove it from the current inventory instead of keeping Stale set.
+    let networks =
+        json_body(send(&f, &url(&f, "networks"), Some(f.administrator.clone())).await).await;
+    assert_eq!(networks["items"], json!([]));
+    assert!(runtime.lock().await.mutations.is_empty());
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn manual_swarm_refresh_requires_access_and_preserves_inventory_on_failure() {
+    let (f, _) = fixture_swarm().await;
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri(url(&f, "refresh"))
+        .body(Body::empty())
+        .unwrap();
+    assert_status(
+        f.app.clone().oneshot(request).await.unwrap(),
+        StatusCode::UNAUTHORIZED,
+    )
+    .await;
+    let denied = super::lookup::subject(&f).await;
+    assert_status(
+        send_json(&f, Method::POST, &url(&f, "refresh"), denied, Value::Null).await,
+        StatusCode::FORBIDDEN,
+    )
+    .await;
+    sqlx::query("UPDATE swarmnodeprojections SET isstale=true WHERE platformid=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let before = json_body(send(&f, &url(&f, "nodes"), Some(f.administrator.clone())).await).await;
+    f.docker_server.abort();
+    let _ = tokio::fs::remove_file(&f.docker_socket).await;
+    let response = send_json(
+        &f,
+        Method::POST,
+        &url(&f, "refresh"),
+        f.administrator.clone(),
+        Value::Null,
+    )
+    .await;
+    assert_status(response, StatusCode::CONFLICT).await;
+    let after = json_body(send(&f, &url(&f, "nodes"), Some(f.administrator.clone())).await).await;
+    assert_eq!(after, before);
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn native_swarm_mutations_persist_nodes_materials_and_restarted_services() {
     let (f, runtime) = fixture_swarm().await;
     let mut older_snapshot = snapshot(f.platform_id);

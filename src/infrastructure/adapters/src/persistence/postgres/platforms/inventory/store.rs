@@ -8,8 +8,6 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
 
-const STALE_RETENTION_HOURS: i32 = 24;
-
 #[derive(Clone)]
 pub struct PostgresInventoryProjectionStore {
     health_owned: bool,
@@ -1004,7 +1002,7 @@ ON CONFLICT (platformid, dockertaskid) DO UPDATE SET
     persist_secrets(transaction, snapshot, swarm).await?;
     persist_swarm_networks(transaction, snapshot).await?;
     update_swarm_counts(transaction, snapshot.platform_id).await?;
-    cleanup_stale(transaction, snapshot.platform_id).await
+    remove_absent_swarm_resources(transaction, snapshot.platform_id).await
 }
 
 async fn persist_configs(
@@ -1176,7 +1174,11 @@ WHERE resource.platformid = $1
     Ok(())
 }
 
-async fn cleanup_stale(
+// Called only after every manager inventory set has been persisted successfully.
+// Rows not observed in that snapshot are no longer part of the current inventory
+// (Tasks are the bounded active projection). Failed reads never reach this point
+// and continue to retain last-known state via mark_swarm_stale.
+async fn remove_absent_swarm_resources(
     transaction: &mut Transaction<'_, Postgres>,
     platform_id: uuid::Uuid,
 ) -> Result<(), RuntimeCapabilityError> {
@@ -1188,12 +1190,9 @@ async fn cleanup_stale(
         "swarmsecretprojections",
         "swarmnetworkprojections",
     ] {
-        let statement = format!(
-            "DELETE FROM {table} WHERE platformid = $1 AND isstale AND observedat < now() - make_interval(hours => $2)"
-        );
+        let statement = format!("DELETE FROM {table} WHERE platformid = $1 AND isstale");
         sqlx::query(sqlx::AssertSqlSafe(statement))
             .bind(platform_id)
-            .bind(STALE_RETENTION_HOURS)
             .execute(&mut **transaction)
             .await
             .map_err(storage)?;

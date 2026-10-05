@@ -187,8 +187,9 @@ Citadel reports that limitation in the quorum tooltip.
 
 - **Healthy** means the manager is online, exposes Swarm control, and the
   persisted inventory and quorum are healthy.
-- **Stale** means the most recent refresh failed. The displayed inventory is
-  last-known state and may no longer match Docker.
+- **Stale** means some inventory is last-known state and may no longer match
+  Docker because a refresh failed. Node-local inventory can also be stale when
+  its Node Agent is unavailable.
 - **Degraded** means the endpoint is online but does not currently expose
   usable manager control, or Docker reported a sanitized manager error.
 - **Offline** means Citadel cannot currently reach the Platform.
@@ -296,8 +297,13 @@ Platform or update its manager endpoint.
 ### Inventory is stale or the manager is offline
 
 Workloads may continue on workers while Citadel cannot manage or refresh the
-cluster. Restore access to a manager in the same cluster. The next relevant
-daemon event or bounded reconciliation repairs the persisted projection.
+cluster. Restore access to a manager in the same cluster, then select **Refresh
+inventory** in the Platform's **Stale** warning to retry immediately. Citadel
+also refreshes inventory after relevant Docker events and during reconciliation.
+If the retry fails, the page shows the error and retains the last-known inventory.
+Refreshing the manager does not recover a disconnected worker's Node Agent.
+A successful manager refresh removes obsolete records from the current inventory.
+Failed refreshes preserve last-known inventory for diagnosis.
 
 ### Logs are unavailable
 

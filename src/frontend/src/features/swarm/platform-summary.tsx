@@ -1,6 +1,8 @@
 import { PlatformBackupSummary, WorkloadStatusCounts, ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import Loader from '@/components/ui/loader';
+import { Button } from '@/components/ui/button';
+import { useMutate } from '@/lib/hooks';
 import { PlatformResourceMetric } from '@/features/platforms/forms/platform-stats';
 import { applySwarmInventoryToOverview, useSwarmOverview } from './hooks/useSwarmOverview';
 import {
@@ -8,7 +10,7 @@ import {
   getBackupSourceStates,
   PLATFORM_BACKUP_ICON_CLASS_NAME,
 } from '@/features/platforms/platform-backups';
-import { ArchiveRestore, Boxes, CircleDot, ListTodo, Network, Server } from 'lucide-react';
+import { ArchiveRestore, Boxes, CircleDot, ListTodo, Network, RefreshCw, Server } from 'lucide-react';
 import { SwarmQuorumStatus } from './swarm-quorum-status';
 import { getServiceStates } from '@/features/platforms/platform-workload-status';
 
@@ -29,7 +31,13 @@ export const SwarmPlatformSummary = ({
   isBackupSummaryLoading?: boolean;
   isBackupSummaryError?: boolean;
 }) => {
-  const { overview, isLoading, error } = useSwarmOverview(platformId);
+  const { overview, isLoading, error, refetch } = useSwarmOverview(platformId);
+  const refresh = useMutate('refreshSwarmInventory', {
+    onSuccess: async () => {
+      await refetch();
+    },
+  });
+  const refreshProblem = (refresh.error as unknown as { error?: ProblemDetails } | undefined)?.error;
   const problem = (error as unknown as { error?: ProblemDetails } | undefined)?.error;
   const backupMetric = getBackupMetric(backupSummary, isBackupSummaryLoading, isBackupSummaryError);
 
@@ -42,8 +50,33 @@ export const SwarmPlatformSummary = ({
         </AlertMessage>
       )}
       {overview?.message && (
-        <AlertMessage title={overview.health} type={overview.health === 'Offline' ? 'error' : 'warning'}>
+        <AlertMessage
+          title={overview.health}
+          type={overview.health === 'Offline' ? 'error' : 'warning'}
+          action={
+            overview.isStale && overview.capabilities.canRead ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={refresh.isPending}
+                onClick={() => refresh.mutate({ platformId })}>
+                <RefreshCw className={refresh.isPending ? 'animate-spin' : undefined} aria-hidden="true" />
+                {refresh.isPending ? 'Refreshing…' : 'Refresh inventory'}
+              </Button>
+            ) : undefined
+          }>
           {overview.message}
+        </AlertMessage>
+      )}
+      {refresh.isSuccess && overview?.isStale && (
+        <AlertMessage title="Inventory refreshed" type="info">
+          The manager inventory is up to date. Check Node Agent connections for remaining stale node-local inventory.
+        </AlertMessage>
+      )}
+      {refresh.isError && overview?.isStale && (
+        <AlertMessage title="Inventory refresh failed" type="error">
+          {refreshProblem?.detail ?? 'Unable to refresh inventory. Check the Swarm manager connection and try again.'}
         </AlertMessage>
       )}
       <div className="grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

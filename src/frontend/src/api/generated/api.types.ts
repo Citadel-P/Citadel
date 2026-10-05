@@ -14374,6 +14374,34 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name RefreshSwarmInventory
+     * @summary Refresh Swarm inventory from the manager
+     * @request POST:/api/v1/platforms/{platformId}/swarm/refresh
+     * @secure
+     * @response `204` `void` Inventory refreshed
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `503` `ProblemDetails` Service Unavailable
+     * @response `default` `ProblemDetails` Request failed
+     */
+    refreshSwarmInventory: (platformId: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/swarm/refresh`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name DeleteSwarmSecrets
      * @summary deleteSwarmSecrets
      * @request DELETE:/api/v1/platforms/{platformId}/swarm/secrets

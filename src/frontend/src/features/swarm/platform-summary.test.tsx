@@ -14,6 +14,114 @@ import { applySwarmInventoryToOverview, SwarmPlatformSummary } from './platform-
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('SwarmPlatformSummary', () => {
+  it('refreshes stale inventory from the manager and clears the warning after success', async () => {
+    const fake = new FakeRealtimeConnection();
+    let refreshed = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const refresh = vi.fn(async () => {
+      await gate;
+      refreshed = true;
+      return new HttpResponse(null, { status: 204 });
+    });
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () =>
+        HttpResponse.json(
+          refreshed
+            ? overview()
+            : { ...overview(), health: 'Stale', isStale: true, message: 'Last-known inventory may be out of date.' },
+        ),
+      ),
+      http.post(`http://localhost/api/v1/platforms/${platformId}/swarm/refresh`, refresh),
+    );
+    const { user } = renderCitadel(
+      <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />,
+      {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Refresh inventory' }));
+    expect(await screen.findByRole('button', { name: 'Refreshing…' })).toBeDisabled();
+    expect(screen.getByText('Stale')).toBeVisible();
+    release();
+    await waitFor(() => expect(screen.queryByText('Stale')).not.toBeInTheDocument());
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Refresh inventory' })).not.toBeInTheDocument();
+  });
+
+  it('explains a successful manager refresh when node-local inventory is still stale', async () => {
+    const fake = new FakeRealtimeConnection();
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () =>
+        HttpResponse.json({
+          ...overview(),
+          health: 'Stale',
+          isStale: true,
+          message: 'Some node-local inventory is out of date.',
+        }),
+      ),
+      http.post(
+        `http://localhost/api/v1/platforms/${platformId}/swarm/refresh`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
+    const { user } = renderCitadel(
+      <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />,
+      {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Refresh inventory' }));
+    expect(await screen.findByText('Inventory refreshed')).toBeVisible();
+    expect(screen.getByText('Stale')).toBeVisible();
+    expect(screen.getByText(/Check Node Agent connections/)).toBeVisible();
+    expect(screen.queryByText('Inventory refresh failed')).not.toBeInTheDocument();
+  });
+
+  it('keeps stale inventory visible, shows the refresh error, and allows another attempt', async () => {
+    const fake = new FakeRealtimeConnection();
+    const refresh = vi.fn(() =>
+      HttpResponse.json(
+        { title: 'Bad Gateway', status: 502, detail: 'The Swarm manager could not be reached.' },
+        { status: 502 },
+      ),
+    );
+    server.use(
+      http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () =>
+        HttpResponse.json({
+          ...overview(),
+          health: 'Stale',
+          isStale: true,
+          message: 'Last-known inventory may be out of date.',
+        }),
+      ),
+      http.post(`http://localhost/api/v1/platforms/${platformId}/swarm/refresh`, refresh),
+    );
+    const { user } = renderCitadel(
+      <SwarmPlatformSummary platformId={platformId} networkCount={4} serviceStatusCounts={managedServiceCounts()} />,
+      {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Refresh inventory' }));
+    expect(await screen.findByText('The Swarm manager could not be reached.')).toBeVisible();
+    expect(screen.getByText('Stale')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Refresh inventory' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Refresh inventory' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+  });
+
   it('keeps an early realtime snapshot instead of allowing an older HTTP response to replace it', async () => {
     const errorToast = vi.spyOn(toast, 'error');
     const fake = new FakeRealtimeConnection();
