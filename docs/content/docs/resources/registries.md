@@ -20,7 +20,7 @@ the application form. You do not need to add credentials.
 
 For a private image:
 
-1. Open **Registries** and select **Add**.
+1. Open **Registries** and select **Add Registry**.
 2. Choose **DockerHub**, **GitHub**, or **Custom**, then enter the required provider settings.
 3. Select **Save**. Citadel checks supported credentials before saving.
 4. Choose this Registry in your Deployment, Stack, or Build Project.
@@ -159,15 +159,17 @@ During deploy, Citadel:
 
 Auto update for deployments also depends on the selected registry. It checks the configured external image tag for a new digest.
 
-For deployment setup, see [Deployments](/docs/guides/deployments).
+For deployment setup, see [Deployments](/docs/resources/deployments).
 
 ## Using Registries In Web Editor Stacks
 
-Web editor stacks can select a registry for image update checks.
+Select a Registry when creating a Web Editor Stack. Citadel uses its credentials
+for deployment and, on Docker Standalone, for service-image update checks.
+The selected Platform determines whether deployment uses Docker Compose or a
+native Swarm Stack. The Compose definition or Build Images bindings determine
+the images used by its services.
 
-The registry is used to check service image tags for new digests. Stack deploy still uses Docker Compose and the images defined in the Compose file.
-
-For web editor stack setup, see [Manual Stacks](/docs/guides/manual-stacks).
+For web editor stack setup, see [Web Editor Stacks](/docs/resources/stacks/web-editor).
 
 ## Using Registries In Builds
 
@@ -196,7 +198,7 @@ ghcr.io/acme/platform/api:latest
 
 For private repositories or pushes, make sure the registry credentials have write permission.
 
-For build setup, see [Builds](/docs/guides/builds).
+For build setup, see [Builds](/docs/resources/builds).
 
 ## Pulling Images To A Platform
 
@@ -241,5 +243,3 @@ Use Custom when:
 - images are hosted on a private OCI-compatible registry
 - the registry uses a custom host or port
 - the registry does not match DockerHub or GHCR behavior
-
-

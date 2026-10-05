@@ -4,13 +4,14 @@ description: "Reference the production settings exposed by Citadel's Docker Comp
 ---
 
 Citadel uses environment variable names with double underscores between
-sections. The committed `deploy/.env.example` lists supported installation options. Its
-active defaults are for local HTTP; configure TLS before sharing an installation.
+sections. The `.env` downloaded in the [installation guide](/docs/getting-started/install)
+contains the settings needed to start Citadel. Add optional settings from this
+reference as needed. The defaults are for local HTTP; configure TLS before
+sharing an installation.
 
 | Setting | Required when | Purpose |
 | --- | --- | --- |
-| `CITADEL_IMAGE` | Published-image installation | Complete image address including version or digest; overrides the local image fallback |
-| `CITADEL_IMAGE_TAG` | Optional source-build/fallback setting | Version used by local image/build defaults; does not override `CITADEL_IMAGE` |
+| `CITADEL_IMAGE` | Optional | Blank or unset uses `ghcr.io/citadel-p/citadel:latest`; set a complete image address to override |
 | `CITADEL_BIND_ADDRESS` | Optional | Host bind address; defaults to `127.0.0.1` |
 | `CITADEL_HTTP_PORT`, `CITADEL_EDGE_PORT` | Optional | Host ports; default to `18000` and `18001` |
 | `PG_HOST` | External or renamed PostgreSQL | PostgreSQL hostname; Compose defaults to `pg_db` |
@@ -27,6 +28,7 @@ active defaults are for local HTTP; configure TLS before sharing an installation
 | `Jwt__Key` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
 | `Secrets__EncryptionKey` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
 | `Mfa__Policy` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
+| `Passwords__MinimumLength` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
 | `EnableSwagger` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 See [Docker Compose configuration](/docs/getting-started/configuration) for

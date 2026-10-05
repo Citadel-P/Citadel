@@ -26,26 +26,8 @@ review it if you do not write TypeScript.
 3. Save it, run a test, and review the logs before using it for a live operation.
 4. Start an enabled Action manually and check its **Runs** tab.
 
-Manual and test runs are available in Community. Schedules and webhook execution
-require Automated Operations. A test can perform real operations allowed by its
-permissions; use a safe target. The sections below are for the person maintaining the script.
-
-## License Availability
-
-Community can:
-
-- create and edit action definitions
-- test an action
-- start an enabled action manually
-- view runs and logs
-
-Schedules and webhook-triggered action execution require Team's
-`Automated Operations` capability. A webhook may be received and authenticated
-without that capability, but it cannot queue the action run.
-
-If the capability becomes unavailable, existing schedule and webhook
-configuration remains stored and is shown as paused. Manual and test runs remain
-available.
+A test can perform real operations allowed by its permissions; use a safe
+target. The sections below are for the person maintaining the script.
 
 ## Open Actions
 
@@ -70,7 +52,7 @@ The status dot near the name reflects whether the action is enabled and whether 
 Select:
 
 ```text
-Automation -> Add
+Automation -> Add Action
 ```
 
 Set:
@@ -214,6 +196,12 @@ Example cron values:
 0 2 * * 1        Mondays at 02:00
 ```
 
+[![Automation runtime and schedule with an Operations runner identity, a 120 second timeout, failure alerts, and a weekday UTC schedule](/screenshots/automation-runtime-schedule.png)](/screenshots/automation-runtime-schedule.png)
+
+This demo Action uses the `Operations runner` identity, a 120-second timeout,
+and `0 8 * * 1-5` to run at 08:00 UTC on weekdays. Review **Run as** and its
+permissions together with the schedule before enabling unattended execution.
+
 When a scheduled run is due, Citadel queues an action run with trigger `Schedule`.
 
 If the action is already running, Citadel records a rejected run instead of starting a duplicate.
@@ -352,7 +340,7 @@ each run.
 
 Use a least-privileged Service Account for schedules and webhooks so unattended
 execution does not depend on a human account. See
-[Service Accounts](/docs/concepts/service-accounts).
+[Service Accounts](/docs/guides/service-accounts).
 
 ## Safety Notes
 
@@ -401,4 +389,19 @@ permission for the operation the script attempted.
 Enable the configured identity or select another enabled User or Service
 Account. Citadel does not fall back to the Action creator or System.
 
+## License Availability
 
+Community can:
+
+- create and edit action definitions
+- test an action
+- start an enabled action manually
+- view runs and logs
+
+Schedules and webhook-triggered action execution require Team's
+`Automated Operations` capability. A webhook may be received and authenticated
+without that capability, but it cannot queue the action run.
+
+If the capability becomes unavailable, existing schedule and webhook
+configuration remains stored and is shown as paused. Manual and test runs remain
+available.

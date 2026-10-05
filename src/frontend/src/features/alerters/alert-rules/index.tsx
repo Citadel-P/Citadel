@@ -42,12 +42,14 @@ const EMPTY_CHANNEL: AlertChannelInput = {
 };
 const EMPTY_ALERT_RULES: never[] = [];
 
-const urlFormatHelper: Record<string, string> = {
+const urlFormatHelper: Record<AlertDestination, string> = {
   Generic: 'generic://example.com?template=json',
   Bark: 'bark://devicekey@host',
   Discord: 'discord://token@id',
+  Email:
+    'smtp://username:password@smtp.example.com:587/?from=alerts@example.com&to=ops@example.com&requirestarttls=yes',
   Gotify: 'gotify://gotify-host/token',
-  GoogleChat: 'googlechat://chat.googleapis.com/v1/spaces/FOO/messages?key=bar&token=baz',
+  Google_Chat: 'googlechat://chat.googleapis.com/v1/spaces/FOO/messages?key=bar&token=baz',
   IFTTT: 'ifttt://key/?events=event1[,event2,...]&value1=value1&value2=value2&value3=value3',
   Join: 'join://shoutrrr:api-key@join/?devices=device1[,device2,...][&icon=icon]',
   Lark: 'lark://host/token?secret=secret',
@@ -60,10 +62,10 @@ const urlFormatHelper: Record<string, string> = {
   Rocketchat: 'rocketchat://[username@]rocketchat-host/token[/channel|@recipient]',
   Signal: 'signal://[user[:password]@]host[:port]/source_phone/recipient1[,recipient2,...]',
   Slack: 'slack://[botname@]token-a/token-b/token-c',
-  Teams: 'teams://group@tenant/altId/groupOwner/extraId?host=organization.webhook.office.com',
+  Teams: 'teams://?host=<percent-encoded-workflow-url>',
   Telegram: 'telegram://token@telegram?chats=@channel-1[,chat-id-1,...]',
   WeCom: 'wecom://key',
-  ZulipChat: 'zulip://bot-mail:bot-key@zulip-domain/?stream=name-or-id&topic=name',
+  Zulip_Chat: 'zulip://bot-mail:bot-key@zulip-domain/?stream=name-or-id&topic=name',
 };
 
 const getInitialInput = (c?: AlertChannelView): AlertChannelInput =>
@@ -300,7 +302,6 @@ function AlertNotificationChannels() {
             <div>
               <Label htmlFor="channelURL">Channel URL</Label>
 
-              <Label>Channel URL</Label>
               <FieldInput
                 id="channelURL"
                 className="max-w-full"
@@ -310,7 +311,7 @@ function AlertNotificationChannels() {
               />
               <div className="text-xs text-muted-foreground mt-1">
                 Format:{' '}
-                <span className="font-mono bg-muted p-0.5 rounded">
+                <span className="font-mono bg-muted p-0.5 rounded break-all">
                   {urlFormatHelper[input.alertDestination] ?? 'url'}
                 </span>
               </div>
@@ -320,7 +321,7 @@ function AlertNotificationChannels() {
               <div className="space-y-0.5">
                 <Label htmlFor="is-active">Is Active</Label>
                 <div className="text-xs text-muted-foreground">
-                  Determine if alerts should be sent to this channel immediately.
+                  Allow enabled alert rules to send notifications through this channel.
                 </div>
               </div>
               <div>

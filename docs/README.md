@@ -77,3 +77,33 @@ Keep user pages task-focused: explain prerequisites, give the shortest useful
 steps, show what success looks like, and put detailed controls after that path.
 Use current button and menu labels. Reuse real screenshots from `public/screenshots`
 with descriptive alt text and say when they show demonstration data.
+
+## Guide screenshots
+
+Use screenshots for configuration decisions and useful result states. Keep simple
+navigation and single-field instructions as text. Crop to the relevant panel,
+use demonstration resources, add descriptive alt text and a short explanation,
+and keep all essential instructions in the text. Link images to their original
+files so readers can enlarge them.
+
+To refresh the Git Stack, Swarm coverage, backup policy, automation, and Role
+screenshots, start the frontend development server and run from the repository root:
+
+```bash
+npm ci --prefix test/e2e
+cd test/e2e
+npx playwright install chromium
+cd ../..
+node docs/scripts/capture-guide-screenshots.mjs
+```
+
+Set `CITADEL_SCREENSHOT_BASE_URL` if the frontend uses a different address.
+The script uses a fresh browser context and intercepted API fixtures; no login,
+running backend, or real resources are needed. Writes and unknown API requests
+are blocked. The permission matrix fixture contains public capability metadata,
+not user assignments. Refresh it when the supported permissions change.
+
+After capture, inspect the PNGs in `docs/public/screenshots`, check the surrounding
+captions, and run the documentation validation. Check the affected pages at both
+desktop and mobile widths. These captures document example configurations, not
+successful operations against a live Docker environment.

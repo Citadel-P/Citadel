@@ -15,9 +15,9 @@ without recreating it first, see
 
 You need an online Docker Standalone Platform and an image name.
 
-1. Open **Deployments**, select **Add**, and choose a name and Platform.
+1. Open **Deployments**, select **Add Deployment**, and choose a name and Platform.
 2. Choose **External** and a Registry, then enter the image and tag.
-3. Add the application's required ports and persistent storage.
+3. Select at least one existing **Network**, then add the application's required ports and persistent storage.
 4. Select **Save**, then **Deploy**. Wait for the operation to finish.
 5. Open the Deployment to check its container and logs.
 
@@ -30,7 +30,7 @@ Create a deployment and choose:
 
 - Name: an internal name for the workload
 - Platform: the Docker platform where the container should run
-- Image source: `External` or `Local`
+- Image source: `External`, `Local`, or `Build`
 - Networks: one or more Docker networks to attach the container to
 - Ports: optional host-to-container port mappings
 - Volumes: optional named volumes or bind mounts
@@ -48,7 +48,7 @@ Use this for normal deployments:
 - Registry: the configured Citadel registry to pull from
 - Image reference: the image and tag, for example `nginx:1.27` or `ghcr.io/example/api:1.4.2`
 
-For registry setup, see [Registries](/docs/guides/registries).
+For registry setup, see [Registries](/docs/resources/registries).
 
 Local images are selected from images that already exist on the target Docker host.
 
@@ -74,7 +74,7 @@ You can save a deployment before the selected build has a successful run. The fo
 
 Citadel deploys the stored desired artifact and pins it to its digest when available. It falls back to the latest successful build only when the deployment has not resolved an artifact yet.
 
-For build setup and webhook-triggered builds, see [Builds](/docs/guides/builds).
+For build setup and webhook-triggered builds, see [Builds](/docs/resources/builds).
 
 Auto update is only available for external image sources. It is disabled for local images and for external images pinned by digest, such as `nginx@sha256:...`.
 
@@ -136,7 +136,7 @@ PUBLIC_URL=${APP_PUBLIC_URL}
 
 Define referenced values on the deployment `Bindings` tab or as global bindings. At deploy time, Citadel resolves only the referenced keys, injects them into the container environment, and redacts secret values from logs and activity output.
 
-For more detail, see [Variables and secrets](/docs/concepts/variables-and-secrets).
+For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets).
 
 ## Auto Update
 
@@ -272,7 +272,7 @@ Deployment backup policies back up Docker named volumes used by the deployment.
 
 Only named volumes are included. Bind mounts are not included because they are host filesystem paths, not Docker volumes.
 
-For backup setup and restore behavior, see [Backups](/docs/guides/backups).
+For backup setup and restore behavior, see [Backups](/docs/resources/backups).
 
 ## When To Use Deployments
 
@@ -289,5 +289,4 @@ Use stacks for:
 - shared Compose networks and volumes
 - Compose overrides or advanced Compose syntax
 - Git-backed deployment workflows
-
 

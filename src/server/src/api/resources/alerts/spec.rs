@@ -8,6 +8,7 @@ pub enum AlertDestination {
     Generic,
     Bark,
     Discord,
+    Email,
     Gotify,
     #[serde(rename = "Google_Chat")]
     GoogleChat,
@@ -36,6 +37,7 @@ impl AlertDestination {
             Self::Generic => "Generic",
             Self::Bark => "Bark",
             Self::Discord => "Discord",
+            Self::Email => "Email",
             Self::Gotify => "Gotify",
             Self::GoogleChat => "Google_Chat",
             Self::Ifttt => "IFTTT",

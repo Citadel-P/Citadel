@@ -1,5 +1,5 @@
 ---
-title: "Builds"
+title: "Build Projects"
 description: "Build container images from Git repositories and publish them through Citadel."
 ---
 
@@ -16,11 +16,11 @@ Builds are not automation actions. Automation actions may call the Build API, bu
 
 ## Build your first image
 
-You need a synced [repository](/docs/guides/git-repositories), a Dockerfile,
-an online builder Platform, and a [registry](/docs/guides/registries) that can
+You need a synced [repository](/docs/resources/git-repositories), a Dockerfile,
+an online builder Platform, and a [registry](/docs/resources/registries) that can
 accept image pushes. Ask the application's maintainer for the build paths.
 
-1. Open **Build Projects** and select **Add**.
+1. Open **Build Projects** and select **Add Build**.
 2. Choose the repository and branch, Dockerfile path, and build context.
 3. Select the builder Platform, destination Registry, image repository, and tag.
 4. Save the project and start a manual build.
@@ -81,11 +81,11 @@ Before creating a build, configure:
 - a registry where Citadel can push the built image
 - optional Citadel secrets when your Dockerfile uses BuildKit secret mounts
 
-For repository setup, see [Git repositories and accounts](/docs/guides/git-repositories).
+For repository setup, see [Git repositories and accounts](/docs/resources/git-repositories).
 
-For registry setup, see [Registries](/docs/guides/registries).
+For registry setup, see [Registries](/docs/resources/registries).
 
-For secrets, see [Variables and secrets](/docs/concepts/variables-and-secrets).
+For secrets, see [Variables and secrets](/docs/guides/variables-and-secrets).
 
 For Agent and self-managed Build Pool setup, see [Regular Agent](/docs/operations/agent).
 
@@ -94,7 +94,7 @@ For Agent and self-managed Build Pool setup, see [Regular Agent](/docs/operation
 Open:
 
 ```text
-Build Projects -> Add
+Build Projects -> Add Build
 ```
 
 Set:
@@ -167,62 +167,9 @@ In monorepos, prefer the smallest service directory as the context instead of us
 
 ## Build Pools
 
-Use a Build Pool when builds should run on builder infrastructure rather than on one of the Docker platforms managed by Citadel.
-
-For a self-managed VM pool, choose one connection mode.
-
-### Inbound Agent endpoint
-
-Use this when Citadel Core can reach the builder host directly. Run a dedicated Citadel Agent on the builder host:
-
-```bash
-docker run -d \
-  --name citadel-agent-build \
-  --restart=always \
-  -p 9001:9000 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -e HUB_PUBLIC_KEY="..." \
-  ghcr.io/citadel-p/citadel.agent:1.2.3
-```
-
-Then create the pool:
-
-```text
-Build Pools -> Add Build Pool
-Provider: Self-managed VM / Static VM
-Connection mode: Inbound Agent endpoint
-Endpoint: http://<builder-host>:9001
-```
-
-For local Docker testing where Citadel Core also runs in Docker, use:
-
-```text
-http://host.docker.internal:9001
-```
-
-Click **Test** on the Build Pool before selecting it in a build project. A ready pool confirms that Citadel can reach the Agent and that the Agent can reach Docker.
-
-### Edge Agent
-
-Use this when the builder host should connect outbound to Citadel Core and should not expose a build Agent port.
-
-Create and save the build pool first:
-
-```text
-Build Pools -> Add Build Pool
-Provider: Self-managed VM / Static VM
-Connection mode: Edge Agent
-```
-
-After the pool is saved, open the pool's configuration and generate an Edge Agent enrollment token from the **Edge Agent enrollment** section. Citadel shows a Docker command for that build pool. Run it on the builder host.
-
-The build pool Edge Agent is scoped to the build pool itself. You do not need to create a Platform resource, and there is no Edge Agent platform dropdown for build pools.
-
-The generated command uses the Edge Agent gRPC endpoint. Its container port is
-`8001`; the supplied Compose host mapping is `127.0.0.1:18001`. A remote builder
-needs a reachable, secured gRPC address rather than the browser port or a local-only address.
-
-Click **Test** on the Build Pool before selecting it in a build project. A ready edge pool confirms that the pool-scoped Edge Agent is connected, advertises build capabilities, and can reach Docker.
+To run builds on dedicated builder infrastructure, configure a [Build Pool](/docs/resources/build-pools)
+and select it as the project's runner. The pool documentation covers inbound
+Agent and Edge Agent setup, connection status, and availability alerts.
 
 ## Image Repository And Tags
 
@@ -290,6 +237,10 @@ When the stack is applied, Citadel uses the desired artifact stored on each bind
 
 When a build succeeds, Citadel updates matching stack build image bindings with the new desired image reference and digest, records a `StackUpdated` activity event, streams the stack update to connected clients, and writes the affected service names to the build run log. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped services. Applied provenance changes only for services that were included in a successful apply.
 
+This service-scoped redeployment is supported only for Docker Standalone
+Stacks. For a Swarm Stack, leave **Redeploy On Build** disabled and deploy the
+complete Stack manually after the desired build image changes.
+
 If a mapped build has no successful image yet, save is allowed, but stack apply fails until that build has a successful run.
 
 ## Build Arguments
@@ -339,10 +290,10 @@ A run:
 3. resolves the exact commit SHA
 4. validates the context and Dockerfile paths
 5. resolves build args, resolves Citadel-backed build secret mappings, and resolves registry credentials
-6. runs the Docker Engine API build on the selected platform
+6. builds the image on the selected builder
 7. pushes all generated image tags to the registry
 8. updates deployment and stack build-image consumers when the build succeeds
-9. redeploys consumers that have `Redeploy On Build` enabled
+9. redeploys supported consumers that have `Redeploy On Build` enabled
 10. stores run status, image references, digest when available, and logs
 
 Step 9 requires `Automated Operations`. Without it, the desired artifacts in
@@ -428,25 +379,6 @@ Retention does not delete:
 - local platform images
 - activity records required by the audit model
 
-## Build pool connection and availability
-
-For Edge Agent pools, the pool list shows the agent connection status separately
-from the latest Docker build capability check. Connection changes update through
-realtime notifications. The pool activity history records one **Connected** or
-**Disconnected** event per transition, including disconnects detected by heartbeat
-expiry and binding revocation.
-
-The **Build Pool Unavailable** system rule raises a warning after an enabled
-self-managed pool fails its capability checks for at least 90 seconds. This covers
-both a disconnected agent and a connected agent whose Docker builder is unusable.
-Checks run periodically, so an alert can appear after the grace period on the next
-check. The outage start is retained across Core restarts.
-
-The alert resolves when a capability check succeeds. Disabled, archived, and
-never-connected Edge pools do not raise availability alerts. Disabling or archiving
-a pool clears its availability incident. Configure notification channels on the
-rule; advanced alerting also allows changing the grace period and limiting the
-rule to selected build pools.
 
 ## Troubleshooting
 

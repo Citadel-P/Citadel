@@ -16,14 +16,16 @@ Use:
 
 Adoption is available in every Citadel edition.
 
-Individual Docker Swarm Task containers cannot be adopted or managed directly.
+Individual Docker Swarm Task containers cannot be adopted. Use their owning
+Service or Stack for lifecycle changes; covered Tasks still support inspect,
+logs, statistics, and terminals.
 On a Swarm Platform, Citadel groups Task containers by their Docker Stack
 namespace. Select the namespace row to import the complete Stack. Exited Task
 containers retained by Docker are historical and are not included in that
 group. By default, Citadel deletes bounded batches of that history from the
-connected manager during synchronization. Docker Desktop may still display
-worker-local history, or manager-local history when pruning is disabled in the
-Swarm Platform's Config tab.
+connected manager and covered workers during synchronization. Docker Desktop
+may still display history on uncovered or unavailable Nodes, or when pruning
+is disabled in the Swarm Platform's Config tab.
 
 ## Bring an existing application into Citadel
 
@@ -386,8 +388,8 @@ Resolve every Swarm compatibility error before importing. Settings such as
 cannot be carried into `docker stack deploy`. Portability warnings for bind
 mounts, local Volumes, and fixed Host-mode ports require review on every Node.
 
-For normal Deployment behavior, see [Deployments](/docs/guides/deployments).
+For normal Deployment behavior, see [Deployments](/docs/resources/deployments).
 
-For Web Editor Stacks, see [Manual Stacks](/docs/guides/manual-stacks).
+For Web Editor Stacks, see [Web Editor Stacks](/docs/resources/stacks/web-editor).
 
-For Git-backed Stacks, see [Git Stacks](/docs/guides/git-stacks).
+For Git-backed Stacks, see [Git Stacks](/docs/resources/stacks/git).

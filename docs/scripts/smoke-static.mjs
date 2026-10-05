@@ -7,6 +7,12 @@ const requiredFiles = [
   'out/docs/index.html',
   'out/docs/getting-started/quick-start/index.html',
   'out/docs/getting-started/install/index.html',
+  'out/docs/resources/index.html',
+  'out/docs/resources/platforms/docker-swarm/index.html',
+  'out/docs/resources/stacks/swarm/index.html',
+  'out/docs/resources/swarm-services/index.html',
+  'out/docs/resources/build-pools/index.html',
+  'out/docs/guides/access-control/index.html',
   'out/docs/operations/control-plane-recovery/index.html',
   'out/404.html',
   'out/robots.txt',
@@ -31,6 +37,13 @@ for (const [index, html] of pages.entries()) {
 const searchFiles = await findFiles(path.resolve('out'), (file) => /search|orama/i.test(file));
 if (searchFiles.length === 0) throw new Error('The static search index was not exported.');
 const basePath = getDocsBasePath();
+const redirects = JSON.parse(await readFile('redirects.json', 'utf8'));
+for (const [legacy, rule] of Object.entries(redirects)) {
+  const html = await readFile(path.join('out', legacy, 'index.html'), 'utf8');
+  if (!html.includes(`href="${basePath}${rule.to}/"`)) {
+    throw new Error(`${legacy} is missing its static redirect fallback link.`);
+  }
+}
 if (!pages[0].includes(`src="${basePath}/logo.svg"`)) {
   throw new Error('The homepage logo does not use the configured publication path.');
 }

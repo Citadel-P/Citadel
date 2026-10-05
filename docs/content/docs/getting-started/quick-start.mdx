@@ -3,38 +3,40 @@ title: "Quick start"
 description: "Start Citadel, connect Docker, and run your first application."
 ---
 
-This guide runs Citadel on a Linux machine that already has Docker. You will
-use the terminal once to install it, then manage your applications in a browser.
-If someone has already installed Citadel for you, start at
-[create your account](#2-create-your-account).
+Install Citadel on a Linux machine with Docker, create your administrator
+account, and deploy your first application. Start Citadel with Docker Compose
+in the terminal, then complete setup in your browser.
 
-**You need:** Git, Docker, and Docker Compose version 2.30 or newer. Check with
-`git --version`, `docker --version`, and `docker compose version`.
+**You need:** Docker, Docker Compose version 2.30 or newer, curl, and a text
+editor. Check with `docker --version`, `docker compose version`, and
+`curl --version`.
 
 ## 1. Start Citadel
 
-The following commands build the current code from `main`. Use the
-[release installation guide](/docs/getting-started/install) when you have a
-published release image.
+Download the installation files into a new directory:
 
 ```bash
-git clone --branch main --single-branch https://github.com/Citadel-P/Citadel.git
-cd Citadel/deploy
-cp .env.example .env
+mkdir -p citadel
+cd citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
+chmod 600 .env
 ```
 
-Open `.env` in a text editor. Set `PG_PASSWORD` to a long, unique password
-containing letters and numbers, without surrounding quotes, and save the file. This is the database password; you will choose your sign-in
-password separately.
+Open `.env` in a text editor. Leave `CITADEL_IMAGE` blank to use the latest
+release. Set `PG_PASSWORD` to a long, unique password containing
+letters and numbers, without surrounding quotes, and save the file. This is
+the database password; you will choose your sign-in password separately.
 
 Start Citadel:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 ```
 
-The first build can take several minutes. Wait until `server` and `pg_db` are
+The first image download can take several minutes. Wait until `server` and `pg_db` are
 healthy. If either fails, use the
 [troubleshooting guide](/docs/operations/troubleshooting).
 
@@ -79,9 +81,10 @@ firewall controls who else can reach it. Citadel itself stays on port `18000`.
 ## What next?
 
 - [Deploy a Compose Stack](/docs/getting-started/first-stack) for an application with several services.
-- [Choose a task](/docs/guides) to learn about backups, updates, Git, and access.
+- [Explore resources](/docs/resources) to learn about backups, builds, and Git repositories.
+- [Follow a guide](/docs/guides) to configure access, secrets, and integrations.
 - [Secure network access](/docs/getting-started/install) before sharing this installation.
 
 To stop Citadel while keeping its accounts and settings, run `docker compose
-stop` from `Citadel/deploy`. To start it again, run `docker compose up -d`.
+stop` from your `citadel` installation directory. To start it again, run `docker compose up -d`.
 Avoid `down -v`: it deletes the database and Citadel data volumes.

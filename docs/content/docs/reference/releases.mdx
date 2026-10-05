@@ -5,18 +5,20 @@ description: "Find published versions and choose a repeatable installation."
 
 Use the [Citadel releases page](https://github.com/Citadel-P/Citadel/releases)
 to check which versions and images are available. Read the notes for the version
-you plan to install. The code version in `version.json` does not itself confirm
-that an image has been published.
+you plan to install. Leaving `CITADEL_IMAGE` blank in your installation's `.env`
+uses `ghcr.io/citadel-p/citadel:latest`. You can set a complete image address to
+choose a specific version instead.
 
 ## Choose an image version
 
-Release workflows accept `vMAJOR.MINOR.PATCH` tags that match `version.json`
-and point to a commit on `main`. After their checks pass, they publish image
-aliases for the full version, the minor version, and the major version.
+Published images have aliases for the full version, the minor version, and the
+major version.
 
 For example, `0.1.2`, `0.1`, and `0` are three aliases of an initial publication.
 Minor and major aliases can later move. Use an exact patch version or digest
-when you need a repeatable installation. The workflows do not publish `latest`.
+when you need a repeatable installation. Core releases also publish `latest`,
+the default for new installations. Pulling a newer image does not update a
+running container until you recreate it with `docker compose up -d`.
 
 ## Documentation and API
 

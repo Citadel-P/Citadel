@@ -1,5 +1,6 @@
-# docker compose --env-file deploy/.env -f deploy/docker-compose.yml -f deploy/compose.direct-tls.yml up -d --build
-# Configure HTTPS public origins and certificate/key paths in deploy/.env.
+# Run from the installation directory:
+# docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d
+# Configure HTTPS public origins and certificate/key paths in .env.
 services:
   server:
     environment:

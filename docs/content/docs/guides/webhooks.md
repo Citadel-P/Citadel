@@ -75,7 +75,7 @@ Examples:
 ```text
 https://citadel.example.com/listener/github/repo/019f0000-0000-7000-9000-000000000001/pull
 https://citadel.example.com/listener/github/stack/019f0000-0000-7000-9000-000000000002/deploy
-https://citadel.example.com/listener/github/src/tools/build/019f0000-0000-7000-9000-000000000003/run
+https://citadel.example.com/listener/github/build/019f0000-0000-7000-9000-000000000003/run
 https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000004/run
 https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000005/run
 https://citadel.example.com/listener/generic/swarm-service/019f0000-0000-7000-9000-000000000006/update
@@ -104,7 +104,7 @@ permissions, or resource access. Use a Service Account token when an external
 system needs to call authenticated `/api/v1` endpoints, and never paste that
 token into a webhook secret field. Service Account authentication requires
 Team's **Custom access control** capability. See
-[Service Accounts](/docs/concepts/service-accounts).
+[Service Accounts](/docs/guides/service-accounts).
 
 ### Generic / CI
 
@@ -224,9 +224,9 @@ Git stack webhook deploy still validates:
 - repository identity matches, when provider metadata is present
 - changed paths are relevant, unless force deploy is enabled
 
-For Git stack setup, see [Git Stacks](/docs/guides/git-stacks).
+For Git stack setup, see [Git Stacks](/docs/resources/stacks/git).
 
-For Git repository and account setup, see [Git repositories and accounts](/docs/guides/git-repositories).
+For Git repository and account setup, see [Git repositories and accounts](/docs/resources/git-repositories).
 
 ## Build Webhooks
 
@@ -249,7 +249,7 @@ Build webhooks use the same one-active-run-per-project rule as manual builds. If
 
 For monorepos, keep the build context scoped to the service directory. If the provider payload includes changed files, unrelated path changes are accepted as no-op deliveries. If the payload omits changed files, Citadel syncs the repository and diffs the latest successful build commit against the new branch head before deciding.
 
-For build project setup, see [Builds](/docs/guides/builds).
+For build project setup, see [Builds](/docs/resources/builds).
 
 ## Automation Action Webhooks
 
@@ -264,7 +264,7 @@ Behavior:
 1. Citadel validates provider authentication and optional branch filter.
 2. Citadel queues the action run with trigger `Webhook`.
 3. The raw webhook body becomes the run arguments payload.
-4. The action runs as the configured `Run As User`.
+4. The action runs as the configured **Run as** User or Service Account.
 
 If the payload is not a JSON object, Citadel wraps it as:
 
@@ -274,7 +274,7 @@ If the payload is not a JSON object, Citadel wraps it as:
 }
 ```
 
-For automation action setup, see [Automation actions](/docs/guides/automation-actions).
+For automation action setup, see [Automation actions](/docs/resources/automation-actions).
 
 ## Backup Policy Webhooks
 
@@ -289,11 +289,11 @@ Behavior:
 1. Citadel validates provider authentication and optional branch filter.
 2. Citadel checks that the backup policy is enabled.
 3. Citadel queues a backup run with trigger `Webhook`.
-4. The run uses the policy's configured `Run As User`.
+4. The run uses the policy's configured **Run as** User or Service Account.
 
 Disabled or archived policies do not run from webhooks.
 
-For backup policy setup, see [Backups](/docs/guides/backups).
+For backup policy setup, see [Backups](/docs/resources/backups).
 
 ## Managed Swarm Service Webhooks
 

@@ -3,11 +3,14 @@ title: "Uninstall Citadel"
 description: "Remove Citadel while making an explicit decision about persistent control-plane state."
 ---
 
-Stop and remove the Citadel containers without deleting persistent volumes:
+From your installation directory, stop and remove the Citadel
+containers without deleting persistent volumes:
 
 ```bash
 docker compose -f docker-compose.yml down
 ```
+
+Include `-f compose.direct-tls.yml` if your installation uses that overlay.
 
 This does not remove workloads that Citadel previously deployed. Decide whether
 those Docker resources should remain before removing the control plane.

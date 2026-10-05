@@ -3,9 +3,7 @@ title: "Upgrade and rollback"
 description: "Update Citadel while keeping a way to recover your accounts and settings."
 ---
 
-These steps are for an installation using a published image. For a source build,
-review the changes on `main`, back up first, update the checkout, and rebuild
-with `docker compose up -d --build` from `deploy`.
+These steps update an installation using published Citadel images.
 
 ## Before an upgrade
 
@@ -16,16 +14,20 @@ with `docker compose up -d --build` from `deploy`.
 
 ## Upgrade
 
-Open your existing `.env`. Change **`CITADEL_IMAGE`** to the complete published
-image address for the chosen version, for example
-`ghcr.io/citadel-p/citadel:VERSION` with `VERSION` replaced. Changing only
-`CITADEL_IMAGE_TAG` does not override an active `CITADEL_IMAGE` value.
+If **`CITADEL_IMAGE`** is blank, leave it blank to upgrade to the latest release.
+If you pinned a version, change it to the complete image address for your chosen
+release, for example `ghcr.io/citadel-p/citadel:VERSION` with `VERSION` replaced.
 
-From the installation's `deploy` directory, run:
+Keep your existing Compose project name and volumes. Downloading a fresh `.env`
+or changing `COMPOSE_PROJECT_NAME` can start a separate installation instead of
+upgrading the existing one. Apply any Compose changes required by the release
+notes to your existing files.
+
+From your installation directory, run:
 
 ```bash
 docker compose pull
-docker compose up -d --no-build
+docker compose up -d
 docker compose ps
 ```
 
@@ -42,5 +44,5 @@ Otherwise stop Core and restore the matched pre-upgrade PostgreSQL and
 `citadel_data` backup before starting the previous image. Follow
 [control-plane recovery](/docs/operations/control-plane-recovery).
 
-Use exact patch versions or digests for repeatable installations. Citadel's
-release workflows publish patch, minor, and major aliases, but no `latest` tag.
+Use exact patch versions or digests when you need a repeatable installation.
+Core releases publish `latest` alongside patch, minor, and major aliases.

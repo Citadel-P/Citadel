@@ -1,0 +1,8 @@
+{
+  "title": "Platforms",
+  "pages": [
+    "index",
+    "docker-standalone",
+    "docker-swarm"
+  ]
+}

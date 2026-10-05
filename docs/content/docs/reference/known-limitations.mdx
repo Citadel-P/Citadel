@@ -3,12 +3,15 @@ title: "Known limitations"
 description: "Review confirmed Citadel operational and compatibility limitations."
 ---
 
-- Source builds track current development code. Check the release notes for published images and supported versions.
+- Check the release notes for published images and supported versions.
 - The public HTTP contract is an API Preview and contains only explicitly opted-in operations.
-- A manager cannot provide node-local logs, terminal sessions, volume browsing, or complete container statistics for every Swarm Node; those functions require node-agent coverage.
+- Citadel supports Task logs, terminal sessions, volume browsing, and container statistics across Swarm Nodes. For Nodes beyond the connected manager, enable [Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage) using **Install node agents** on the Platform page. Saving a Platform does not install node agents automatically.
 - Swarm Node Agent installation can reject custom OCI images whose registry metadata does not identify supported hardware. Use a published Agent image or publish the custom image as an index with accurate platform entries.
 - Swarm Config and Secret payloads are immutable after creation. Citadel can update supported metadata, while payload rotation requires a replacement and workload update.
 - Docker Swarm rejects Compose fields it cannot represent. Citadel preflight reports blockers before native Stack deployment.
+- The Stack binding editor exposes **Mounted file**, but the current Rust deployment path does not deliver those secret bindings. Use environment-variable bindings or separately configured Compose secrets; see [secret delivery modes](/docs/guides/variables-and-secrets#delivery-mode).
+- Git Stack rollback reloads saved configuration but does not automatically pin an unpinned branch to the release's recorded deployed commit. Explicitly select the earlier commit when exact source recovery is required; see [Git rollback](/docs/resources/stacks/git#rollback).
+- Swarm Stack rollback does not restore recorded Docker Secret or Config versions or automatically retain those versions for rollback. Preserve required resources before redeploying an earlier configuration.
 - Rolling Swarm updates retain historical Task containers according to Docker behavior; Citadel may hide those from current workload summaries and can prune eligible historical containers according to platform policy.
 - Restoring a previous Core image does not automatically reverse database migrations.
 

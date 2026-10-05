@@ -7,11 +7,11 @@ Git repositories let Citadel sync source-controlled files into a local repositor
 
 Git accounts store reusable credentials for Git hosts. Create a Git account when the repository is private or when the Git provider requires authenticated clone and pull access.
 
-Use web editor stacks instead when the Compose YAML should be stored directly in Citadel and does not need a Git workflow. See [Manual Stacks](/docs/guides/manual-stacks).
+Use web editor stacks instead when the Compose YAML should be stored directly in Citadel and does not need a Git workflow. See [Web Editor Stacks](/docs/resources/stacks/web-editor).
 
-Use Git stacks after the repository has been added and synced. See [Git Stacks](/docs/guides/git-stacks).
+Use Git stacks after the repository has been added and synced. See [Git Stacks](/docs/resources/stacks/git).
 
-Use builds when a Dockerfile in the repository should produce an image pushed to a registry. See [Builds](/docs/guides/builds).
+Use builds when a Dockerfile in the repository should produce an image pushed to a registry. See [Builds](/docs/resources/builds).
 
 ## Connect a repository
 
@@ -84,7 +84,7 @@ Repository sync updates that cache and records branch refs that Git stacks can s
 Available sync modes:
 
 - `Pull on interval`: Citadel checks the repository on a schedule. The pull interval is configured in minutes and must be at least `1`.
-- `Manual only`: Citadel syncs only when you click **Sync** or when another explicit workflow queues a repository sync.
+- `Manual only`: Citadel syncs when you select **Sync Repo** or when another explicit workflow queues a repository sync.
 
 Creating a repository queues an initial sync. Editing the repository URL, default branch, or linked account clears the previous cache and queues a new sync.
 
@@ -177,7 +177,7 @@ After the repository is added, create a build and choose:
 
 Builds sync the selected branch before each run and store the resolved commit SHA on the run.
 
-For build setup, see [Builds](/docs/guides/builds).
+For build setup, see [Builds](/docs/resources/builds).
 
 ## Common Setups
 
@@ -212,4 +212,3 @@ If repository sync fails:
 - Review the repository activity entry for the exact clone or pull error.
 
 If a branch does not appear in a Git stack form, sync the repository first. You can still enter a branch manually when the ref has not been cached yet.
-

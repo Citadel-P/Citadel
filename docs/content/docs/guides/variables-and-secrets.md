@@ -126,7 +126,7 @@ Use this when the secret value should stay in your external secret manager inste
 
 ### Create A Provider
 
-On the global `Variables` page, create a Vault provider.
+Open **Settings → Bindings** and create a Vault provider.
 
 Provider fields:
 
@@ -248,61 +248,18 @@ services:
 
 ### Mounted File
 
-Mounted file delivery is supported for stack secret keys.
+The Stack binding editor exposes **Mounted file**, but the current Rust Stack
+deployment path does not deliver these bindings. A referenced secret using
+this mode fails deployment with an environment-variable delivery error;
+an unreferenced binding does not create a file mount.
 
-Use this when the image supports a file-based secret setting, often with a `_FILE` environment variable.
+Use **Environment variable** for Citadel-managed secret bindings. For a Swarm
+application that needs file-based secrets, create a Docker Secret from the
+Platform's **Secrets** page and reference it as an external secret in Compose.
+This is separate from a Citadel stored-secret binding. See
+[Swarm Secrets and Configs](/docs/resources/platforms/docker-swarm#manage-secrets-and-configs).
 
-Example:
-
-```yaml
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-```
-
-Then create a stack secret key:
-
-```text
-Name: POSTGRES_PASSWORD
-Delivery: Mounted file
-Target path: /run/secrets/postgres_password
-```
-
-At deploy time, Citadel writes the secret value to a generated stack secret file and mounts it read-only at the target path inside each stack service.
-
-Mounted file delivery is not available for global entries or deployments. Native platform secrets are not supported yet.
-
-### Postgres Mounted File Example
-
-1. Create a stored secret:
-
-```text
-Name: postgres-prod-password
-Value: <your password>
-```
-
-2. On the stack `Bindings` tab, add a secret key:
-
-```text
-Name: POSTGRES_PASSWORD
-Secret: postgres-prod-password
-Delivery: Mounted file
-Target path: /run/secrets/postgres_password
-```
-
-3. In the compose file, point Postgres at the mounted file:
-
-```yaml
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-```
-
-Do not also reference `${POSTGRES_PASSWORD}` in the compose file unless you intentionally want environment-variable delivery. With mounted-file delivery, Citadel mounts the secret at the target path and does not inject `POSTGRES_PASSWORD=<value>` into the generated env file.
+Mounted-file bindings are also unavailable for global entries and Deployments.
 
 ### Safety Rules
 
@@ -376,12 +333,10 @@ For that stack, `${APP_ENV}` resolves to `staging`.
 
 ## Where To Configure Them
 
-Use the global `Variables` page for reusable values shared by multiple resources.
+Use **Settings → Bindings** for reusable values shared by multiple resources.
 
 Use the stack or deployment `Bindings` tab for resource-specific values and overrides.
 
-Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on the global `Variables` page.
+Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on **Settings → Bindings**.
 
 Use the stack `Config` tab to reference keys in compose content, for example `${IMAGE_TAG}` or `${POSTGRES_PASSWORD}`.
-
-

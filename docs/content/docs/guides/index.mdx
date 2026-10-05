@@ -1,30 +1,23 @@
 ---
-title: "Choose a task"
-description: "Find the steps for common Citadel tasks."
+title: "Guides"
+description: "Configure shared features and complete tasks across Citadel resources."
 ---
 
-After [connecting your first Docker host](/docs/getting-started/first-platform),
-choose the task you want to complete. Each guide starts with a short path through
-the interface, followed by detailed settings when you need them.
+These guides cover permissions, shared configuration, integrations, and tasks
+that involve several resources. For an individual resource's setup and everyday
+operations, start with [Resources](/docs/resources).
 
-| I want to… | Open in Citadel | Follow this guide |
-| --- | --- | --- |
-| Run one container | **Deployments** | [Deployments](/docs/guides/deployments) |
-| Run a Compose application | **Stacks** | [Manual Stacks](/docs/guides/manual-stacks) |
-| Deploy Compose files from Git | **Repositories**, then **Stacks** | [Git Stacks](/docs/guides/git-stacks) |
-| Manage an application already running | Its Platform's resources | [Adopt existing workloads](/docs/guides/adopting-existing-workloads) |
-| Use a private container registry | **Registries** | [Registries](/docs/guides/registries) |
-| Build an image from source | **Repositories**, then **Build Projects** | [Builds](/docs/guides/builds) |
-| Save a backup or restore a volume | **Backups** | [Backups](/docs/guides/backups) |
-| Set up notifications | **Alert Rules** | [Alert rules](/docs/guides/alert-rules) |
-| Give another person access | **Access** | [Access control](/docs/concepts/access-control) |
-| Add two-factor authentication | **Profile**, then **Security** | [Two-factor authentication](/docs/guides/two-factor-authentication) |
-| Use company sign-in | **OIDC Providers** | [OIDC providers](/docs/guides/oidc-providers) |
-| Connect a remote host | **Platforms** | [Agent](/docs/operations/agent) or [Edge Agent](/docs/operations/edge-agent) |
-| Manage a Swarm cluster | Its Platform and **Swarm Services** | [Docker Swarm](/docs/concepts/docker-swarm) |
-| Run a repeatable script | **Automation** | [Automation actions](/docs/guides/automation-actions) |
-| Trigger an operation from another service | The resource's webhook settings | [Webhooks](/docs/guides/webhooks) |
+| I want to… | Guide |
+| --- | --- |
+| Give users and Teams access | [Access control](/docs/guides/access-control) |
+| Create credentials for an integration | [Service Accounts](/docs/guides/service-accounts) |
+| Supply shared configuration and protected values | [Variables and secrets](/docs/guides/variables-and-secrets) |
+| Organize and find resources | [Resource tags](/docs/guides/resource-tags) |
+| Manage an application already running | [Adopt existing workloads](/docs/guides/adopting-existing-workloads) |
+| Trigger operations from another service | [Webhooks](/docs/guides/webhooks) |
+| Use company sign-in | [OIDC providers](/docs/guides/oidc-providers) |
+| Protect sign-in with a second factor | [Two-factor authentication](/docs/guides/two-factor-authentication) |
 
-Manual operations are available in Community. Some schedules, automatic actions,
-and advanced controls require a paid capability; each guide explains its
-requirements. See [editions](/docs/overview/licensing) for the complete comparison.
+For installing and maintaining Citadel itself, use
+[installation](/docs/getting-started/install), [upgrade and rollback](/docs/operations/upgrade-and-rollback),
+or [troubleshooting](/docs/operations/troubleshooting).

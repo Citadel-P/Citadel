@@ -46,20 +46,23 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 
 ## Try Citadel
 
-The steps below build the current Rust code from `main`. For published images, follow the [installation guide](docs/content/docs/getting-started/install.mdx).
+Install published Citadel images with Docker Compose. See the [installation guide](docs/content/docs/getting-started/install.mdx) for HTTPS and shared access.
 
-With Git, Docker, and Docker Compose 2.30 or newer on a Linux Docker host:
+With Docker, Docker Compose 2.30 or newer, and curl on a Linux Docker host:
 
 ```bash
-git clone --branch main --single-branch https://github.com/Citadel-P/Citadel.git
-cd Citadel/deploy
-cp .env.example .env
+mkdir -p citadel
+cd citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
+chmod 600 .env
 ```
 
-Set a long, unique alphanumeric `PG_PASSWORD` in `.env` without surrounding quotes, then start Citadel and PostgreSQL:
+In `.env`, leave `CITADEL_IMAGE` blank to use the latest release. Set a long, unique alphanumeric `PG_PASSWORD` without surrounding quotes, then start Citadel and PostgreSQL:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Open [http://localhost:18000](http://localhost:18000), create your administrator account, and add a **Local** platform to manage Docker on this host. There are no default credentials.
