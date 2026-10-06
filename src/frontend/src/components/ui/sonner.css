@@ -1,0 +1,90 @@
+/* Scoped overrides retain Sonner's stacking, swipe and reduced-motion behavior. */
+.citadel-toaster[data-sonner-toaster] {
+  font-family: var(--app-font-sans);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 44px 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow:
+    0 4px 16px rgb(0 0 0 / 8%),
+    0 1px 3px rgb(0 0 0 / 4%);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-content] {
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-title] {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-description] {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-icon] {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-type='success'] [data-icon] {
+  color: var(--success);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-type='error'] [data-icon] {
+  color: var(--destructive);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-type='warning'] [data-icon] {
+  color: var(--warning);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-type='info'] [data-icon] {
+  color: var(--info);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-button] {
+  align-self: center;
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-weight: 500;
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-close-button] {
+  top: 8px;
+  right: 8px;
+  left: auto;
+  width: 28px;
+  height: 28px;
+  transform: none;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.6);
+  background: transparent;
+  color: var(--muted-foreground);
+  box-shadow: none;
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-close-button]:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-close-button]:focus-visible,
+.citadel-toaster[data-sonner-toaster] [data-sonner-toast] [data-button]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}

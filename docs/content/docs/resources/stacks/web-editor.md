@@ -95,13 +95,12 @@ For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets)
 
 ## Update Behavior
 
-On Docker Standalone, Web Editor Stacks can check service image tags for new
-digests when a registry is selected. These periodic Stack image checks do not
-currently run for Web Editor Swarm Stacks.
+On Docker Standalone and Swarm, Web Editor Stacks can check service image tags
+for new digests when a registry is selected.
 
-- `Disabled`: do not check this stack for image updates.
+- `Disabled`: disable periodic checks; manual checks remain available.
 - `Notify Only`: record image update availability and emit an alert.
-- `Auto Deploy Services`: pull updated images and redeploy only changed services.
+- `Auto Deploy Services`: pull updated images and redeploy only changed services. Available for Docker Standalone only.
 - `Auto Deploy Stack`: pull updated images and redeploy the full stack.
 
 For registry setup, see [Registries](/docs/resources/registries).
@@ -112,17 +111,19 @@ Use `Notify Only` for production stacks until the stack has been tested. Use aut
 
 Update detection and `Notify Only` remain available in Community. Automatic
 deployment caused by a detected image change requires Team's
-`Operational Guardrails` capability.
+`Operational Guardrails` and `Automated Operations` capabilities.
 
 Use **Check for updates** on the Stack page to query the selected registry
 immediately. The check records service-image update state but does not pull or
 apply an image, emit an alert, or run an automatic deployment. It remains
 available when periodic update behavior is disabled.
 
-The first check for a service records its current registry digest as a
-baseline. Citadel can report a newer digest only on a later check after it has
-that baseline. Services whose images come from Citadel Builds are excluded
-because their artifact state is managed by the Build workflow.
+Citadel compares the registry digest with the deployed image digest, so the
+first check can detect an update. On Standalone, it reads the Stack's containers
+and local images; on Swarm, it reads the manager's Service image references.
+If the deployed digest is unavailable, deploy the Stack with registry access
+before checking again. Services whose images come from Citadel Builds are
+excluded because their artifact state is managed by the Build workflow.
 
 On the Stacks page, use **Updates available** to show only stacks with a
 detected newer image digest. The filter works with search, tags, and the

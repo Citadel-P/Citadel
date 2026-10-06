@@ -308,6 +308,31 @@ impl StackSpec {
         }
     }
 
+    pub fn supports_service_auto_deploy(&self, platform: citadel_platforms::PlatformKind) -> bool {
+        platform == citadel_platforms::PlatformKind::Docker
+            && matches!(self, Self::WebEditor { .. })
+    }
+
+    pub fn validate_update_behavior(
+        &self,
+        platform: citadel_platforms::PlatformKind,
+    ) -> Result<(), StackError> {
+        let (Self::WebEditor {
+            update_behavior, ..
+        }
+        | Self::Git {
+            update_behavior, ..
+        }) = self;
+        if *update_behavior == StackUpdateBehavior::ServiceAutoDeploy
+            && !self.supports_service_auto_deploy(platform)
+        {
+            return Err(validation(
+                "Service-only automatic updates require a Standalone Web Editor Stack. Use Auto Deploy Stack for Swarm or Git Stacks.",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), StackError> {
         if let Some(project) = self.common().project_name.as_deref() {
             validate_project_name(project)?;

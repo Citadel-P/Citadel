@@ -30,14 +30,6 @@ README. `--check` compares the complete generated file set without changing it.
 Generator documentation, shell scripts, manifests and bookkeeping outside those
 two outputs are discarded. CI runs regeneration verification and the fixture tests.
 
-The initially supplied JAR SHA-256
-(`2c5b8f0cd4d992c61684be9393f9f7a74f631067ac793414f919f51330700359`) does not match the published
-7.25.0 artifact. Downloads from both `repo.maven.apache.org` and `repo1.maven.org`
-produced `41ce4f6b07f196676439d710759fa1ced7a08066d06ff1bf314681470289efae`,
-and matched Maven's published SHA-1 `56a9bb79e3bb565f477eddca2c6daa288a9c6f35`.
-The executable reports version 7.25.0. The corrected SHA-256 is enforced in
-`source.json`; the generator version and Docker API version were not changed.
-
 ## Client ownership
 
 The selected `reqwest-trait` configuration uses `topLevelApiClient=false`.

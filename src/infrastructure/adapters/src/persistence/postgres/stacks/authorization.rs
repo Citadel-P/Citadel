@@ -24,7 +24,7 @@ pub(super) async fn ensure_platform(
     actor: ActorId,
     administrator: bool,
     id: Uuid,
-) -> Result<(), StackError> {
+) -> Result<citadel_platforms::PlatformKind, StackError> {
     let row = sqlx::query("SELECT platformdescriptor FROM platforms WHERE id=$1")
         .bind(id)
         .fetch_optional(&mut **tx)
@@ -58,10 +58,7 @@ pub(super) async fn ensure_platform(
         .get("$type")
         .and_then(Value::as_str)
         .unwrap_or("Docker");
-    if crate::persistence::postgres::platforms::classification::platform_kind(kind).is_err() {
-        return Err(StackError::Validation(
-            "Stacks require a Docker or Docker Swarm Platform.".to_owned(),
-        ));
-    }
-    Ok(())
+    crate::persistence::postgres::platforms::classification::platform_kind(kind).map_err(|_| {
+        StackError::Validation("Stacks require a Docker or Docker Swarm Platform.".to_owned())
+    })
 }

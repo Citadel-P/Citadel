@@ -150,6 +150,11 @@ case "${1:-}" in
   prepare) prepare ;;
   compose-up) compose_up ;;
   compose-stop) configure_compose; development_compose stop core postgres ;;
-  exec) shift; load_environment; exec "$@" ;;
+  exec)
+    shift
+    load_environment
+    python3 "$repo_root/src/tools/build/version.py" install
+    exec python3 "$repo_root/src/tools/build/version.py" exec -- "$@"
+    ;;
   *) echo 'Usage: bash src/tools/dev/dev.sh {configure|prepare|compose-up|compose-stop|exec COMMAND...}' >&2; exit 2 ;;
 esac

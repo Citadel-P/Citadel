@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/dotnet/Nerdbank.GitVersioning.git",
+  "revision": "71caefc18092ab128cc61c156340cd7d63db1d27",
+  "lockSha256": "3bd91b57d1de5e97872ce921647b59b716c1b0175905792bc57312d512f70a26",
+  "cliVersion": "nbgv 0.1.0",
+  "packagePath": "src/nerdbank-gitversioning-rs/nbgv"
+}

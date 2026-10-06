@@ -26,6 +26,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Print embedded display and informational versions without starting Core.
+    VersionJson,
     /// Run the Rust foundation server and supervised workers.
     Serve,
     /// Apply the embedded Citadel schema migrations and exit.
@@ -63,6 +65,14 @@ enum Command {
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     match cli.command.unwrap_or(Command::Serve) {
+        Command::VersionJson => {
+            let mut info =
+                serde_json::to_value(citadel_server::application_info_http::application_info())?;
+            info["protocolVersion"] =
+                serde_json::json!(citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION);
+            println!("{}", serde_json::to_string(&info)?);
+            Ok(())
+        }
         Command::Serve => crate::app::serve(Config::from_env()?).await,
         Command::Migrate => migrate(DatabaseConfig::from_env()?).await,
         Command::RestoreSystem {

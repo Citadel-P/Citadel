@@ -36,7 +36,7 @@ void document.fonts
                   <AppearanceProvider>
                     <LoadingBarWrapper />
                     <Router />
-                    <Toaster richColors toastOptions={{}} />
+                    <Toaster />
                   </AppearanceProvider>
                 </AuthProvider>
               </SetupProvider>

@@ -57,6 +57,13 @@ WORKDIR /app
 ENV HOME=/app \
     DENO_DIR=/app/.cache/deno
 ARG TARGETARCH
+ARG VERSION
+ARG INFORMATIONAL_VERSION
+ARG SOURCE_REVISION
+ARG PRODUCT_VERSION
+LABEL org.opencontainers.image.version="${PRODUCT_VERSION}" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="core"
 

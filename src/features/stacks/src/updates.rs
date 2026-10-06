@@ -234,6 +234,46 @@ mod tests {
     use citadel_tags::TagSummary;
 
     #[test]
+    fn update_behavior_support_matches_platform_and_source() {
+        use citadel_platforms::PlatformKind;
+        for behavior in [
+            StackUpdateBehavior::Disabled,
+            StackUpdateBehavior::Notify,
+            StackUpdateBehavior::StackAutoDeploy,
+            StackUpdateBehavior::ServiceAutoDeploy,
+        ] {
+            let mut value = stack(
+                behavior,
+                "services:\n  web:\n    image: nginx:alpine\n",
+                false,
+            );
+            let spec = value.spec.as_ref().unwrap();
+            assert!(spec.validate_update_behavior(PlatformKind::Docker).is_ok());
+            assert_eq!(
+                spec.validate_update_behavior(PlatformKind::DockerSwarm)
+                    .is_ok(),
+                behavior != StackUpdateBehavior::ServiceAutoDeploy
+            );
+            value.platform_type = PlatformKind::DockerSwarm;
+            assert!(build_manual_stack_checks(&value, false).is_ok());
+            assert_eq!(
+                build_manual_stack_checks(&value, true).is_ok(),
+                behavior != StackUpdateBehavior::Disabled
+            );
+            let git: StackSpec = serde_json::from_value(serde_json::json!({"$type":"Git", "gitRepoId":Uuid::now_v7(), "branch":"main", "composePaths":["compose.yml"], "updateBehavior":behavior})).unwrap();
+            assert_eq!(
+                git.validate_update_behavior(PlatformKind::Docker).is_ok(),
+                behavior != StackUpdateBehavior::ServiceAutoDeploy
+            );
+            assert_eq!(
+                git.validate_update_behavior(PlatformKind::DockerSwarm)
+                    .is_ok(),
+                behavior != StackUpdateBehavior::ServiceAutoDeploy
+            );
+        }
+    }
+
+    #[test]
     fn check_builder_allows_disabled_on_demand_and_excludes_pinned_and_build_images() {
         let stack = stack(
             StackUpdateBehavior::Disabled,

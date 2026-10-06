@@ -10,16 +10,32 @@ fn main() {
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../../version.json");
     println!("cargo:rerun-if-changed={}", version_file.display());
 
-    let fallback = repository_version(&version_file);
-    let informational_version = nonempty_env("CITADEL_INFORMATIONAL_VERSION")
-        .or_else(|| nonempty_env("CITADEL_VERSION"))
-        .unwrap_or_else(|| fallback.clone());
-    let display_version = strip_build_metadata(&informational_version).to_owned();
+    let (display_version, informational_version) = versions(
+        &repository_version(&version_file),
+        nonempty_env("CITADEL_VERSION"),
+        nonempty_env("CITADEL_INFORMATIONAL_VERSION"),
+    );
 
     validate("display", &display_version);
     validate("informational", &informational_version);
     println!("cargo:rustc-env=CITADEL_BUILD_VERSION={display_version}");
     println!("cargo:rustc-env=CITADEL_BUILD_INFORMATIONAL_VERSION={informational_version}");
+}
+
+fn versions(
+    product: &str,
+    display: Option<String>,
+    informational: Option<String>,
+) -> (String, String) {
+    match (display, informational) {
+        (Some(display), Some(informational)) => (display, informational),
+        (Some(display), None) => (display.clone(), display),
+        (None, Some(informational)) => (strip_build_metadata(&informational).into(), informational),
+        (None, None) => (
+            format!("{product}-dev.unknown"),
+            format!("{product}-dev.unknown+source.unknown"),
+        ),
+    }
 }
 
 fn repository_version(path: &PathBuf) -> String {
@@ -46,7 +62,37 @@ fn strip_build_metadata(version: &str) -> &str {
 
 fn validate(label: &str, version: &str) {
     assert!(
-        version.len() <= 256 && !version.chars().any(char::is_control),
+        version.len() <= 256 && valid_semver(version),
         "{label} version metadata is invalid"
     );
+}
+
+fn valid_semver(version: &str) -> bool {
+    let identifiers = |text: &str, prerelease: bool| {
+        text.split('.').all(|part| {
+            !part.is_empty()
+                && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                && !(prerelease
+                    && part.len() > 1
+                    && part.starts_with('0')
+                    && part.bytes().all(|b| b.is_ascii_digit()))
+        })
+    };
+    let (version, metadata) = version
+        .split_once('+')
+        .map_or((version, None), |(v, m)| (v, Some(m)));
+    if metadata.is_some_and(|m| !identifiers(m, false)) {
+        return false;
+    }
+    let (base, pre) = version
+        .split_once('-')
+        .map_or((version, None), |(v, p)| (v, Some(p)));
+    let parts: Vec<_> = base.split('.').collect();
+    parts.len() == 3
+        && parts.iter().all(|p| {
+            !p.is_empty()
+                && p.bytes().all(|b| b.is_ascii_digit())
+                && (p.len() == 1 || !p.starts_with('0'))
+        })
+        && pre.is_none_or(|p| identifiers(p, true))
 }

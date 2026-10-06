@@ -133,7 +133,7 @@ pub(super) async fn verify(
     scanner.mode.store(0, Ordering::Relaxed);
     verify_single_flight(stacks, admin.actor_id, id, scanner).await;
     verify_selected_apply(pool, admin, id).await;
-    verify_update_producers(pool, id).await;
+    verify_update_producers(pool, id, false).await;
     verify_git_update_producers(pool, admin, id).await;
 }
 
@@ -332,7 +332,7 @@ impl citadel_stacks::StackEntitlements for Entitlements {
         Box::pin(async { Ok(self.guardrails.load(Ordering::Relaxed)) })
     }
 }
-async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
+pub(super) async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid, swarm: bool) {
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let entitlements = Arc::new(Entitlements {
@@ -353,7 +353,9 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
     .with_entitlements(entitlements.clone())
     .with_alerts(alerts.clone());
     for (behavior, guardrails, rejected, kind) in [
+        ("Disabled", true, false, ""),
         ("Notify", true, false, "StackImageUpdateAvailable"),
+        ("StackAutoDeploy", false, false, "StackImageUpdateAvailable"),
         (
             "ServiceAutoDeploy",
             false,
@@ -387,6 +389,17 @@ async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid) {
             .await
             .unwrap();
         let observations = alerts.0.lock().unwrap();
+        if behavior == "Disabled" {
+            assert!(!observations.iter().any(|a| a.resource_id == id));
+            assert_eq!(runtime.apply_calls.lock().unwrap().len(), calls);
+            continue;
+        }
+        // Persisted legacy service-only settings must not trigger unsupported Swarm mutations.
+        let kind = if swarm && behavior == "ServiceAutoDeploy" {
+            "StackImageUpdateAvailable"
+        } else {
+            kind
+        };
         let alert = observations
             .iter()
             .find(|a| a.resource_id == id && a.alert_type == kind)

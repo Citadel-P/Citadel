@@ -7,8 +7,10 @@ services:
       context: ..
       dockerfile: Dockerfile
       args:
-        VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
-        INFORMATIONAL_VERSION: ${CITADEL_VERSION:-${CITADEL_IMAGE_TAG:-0.0.0-local}}
+        SOURCE_REVISION: ${CITADEL_SOURCE_REVISION:-}
+        PRODUCT_VERSION: ${CITADEL_PRODUCT_VERSION:-}
+        VERSION: ${CITADEL_VERSION:-}
+        INFORMATIONAL_VERSION: ${CITADEL_INFORMATIONAL_VERSION:-}
     restart: unless-stopped
     env_file:
       - path: .env

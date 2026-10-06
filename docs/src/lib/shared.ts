@@ -21,8 +21,6 @@ export function getSiteUrl() {
 export function getApiDocsUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_API_DOCS_URL;
   if (configuredUrl) return configuredUrl.replace(/\/$/, '');
-  if (process.env.CI === 'true') {
-    throw new Error('NEXT_PUBLIC_API_DOCS_URL is required for CI documentation builds.');
-  }
+  // The API Preview is retained as an artifact until its independent host exists.
   return null;
 }

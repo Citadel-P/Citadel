@@ -118,12 +118,7 @@ impl StackUpdateRuntime {
                 recreate_stack_on_new_commit_state.last_checked_at = chrono::Utc::now();
                 return Ok(next);
             }
-            if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
-                return Err(StackError::Validation(
-                    "Image update checks for native Swarm Stacks are unavailable.".into(),
-                ));
-            }
-            let checks = build_manual_stack_checks(stack, false)?;
+            let checks = build_manual_stack_checks(stack, scheduled)?;
             if checks.len() > 256 {
                 return Err(StackError::Validation(
                     "Too many Stack images to check in one operation.".into(),
@@ -138,83 +133,101 @@ impl StackUpdateRuntime {
             } else {
                 Some(self.runtime.agent_for(&target, cancel).await?)
             };
-            let (containers, images) = match &peer {
-                Some(peer) => (
-                    peer.list_containers(cancel)
-                        .await
-                        .map_err(runtime_failure)?,
-                    peer.list_images(cancel).await.map_err(runtime_failure)?,
-                ),
-                None => (
-                    citadel_platforms::ContainerInventoryPort::list_containers(
-                        &self.runtime.docker,
-                        cancel,
-                    )
-                    .await
-                    .map_err(runtime_failure)?,
-                    citadel_platforms::ImageInventoryPort::list_images(
-                        &self.runtime.docker,
-                        cancel,
-                    )
-                    .await
-                    .map_err(runtime_failure)?,
-                ),
-            };
             let owned_id = stack.id.to_string();
             let project =
                 spec.common().project_name.clone().unwrap_or_else(|| {
                     citadel_stacks::normalize_project_name(&stack.name, stack.id)
                 });
-            let owned = containers
-                .iter()
-                .filter(
-                    |container| match container.labels.get("com.citadel.stack-id") {
-                        Some(id) => id == &owned_id,
-                        None => {
-                            !container.labels.contains_key("com.citadel.deployment-id")
-                                && container.labels.get("com.docker.compose.project")
-                                    == Some(&project)
+            let deployed = if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
+                use citadel_platforms::SwarmInventoryPort;
+                let manager = self
+                    .runtime
+                    .runtime
+                    .swarm(stack.platform_id.ok_or(StackError::NotFound)?, cancel)
+                    .await
+                    .map_err(runtime_failure)?;
+                let services = manager
+                    .list_swarm_services(cancel)
+                    .await
+                    .map_err(runtime_failure)?;
+                swarm_deployed_digests(stack.id, &project, &checks, &services)?
+            } else {
+                let (containers, images) = match &peer {
+                    Some(peer) => (
+                        peer.list_containers(cancel)
+                            .await
+                            .map_err(runtime_failure)?,
+                        peer.list_images(cancel).await.map_err(runtime_failure)?,
+                    ),
+                    None => (
+                        citadel_platforms::ContainerInventoryPort::list_containers(
+                            &self.runtime.docker,
+                            cancel,
+                        )
+                        .await
+                        .map_err(runtime_failure)?,
+                        citadel_platforms::ImageInventoryPort::list_images(
+                            &self.runtime.docker,
+                            cancel,
+                        )
+                        .await
+                        .map_err(runtime_failure)?,
+                    ),
+                };
+                let owned = containers
+                    .iter()
+                    .filter(
+                        |container| match container.labels.get("com.citadel.stack-id") {
+                            Some(id) => id == &owned_id,
+                            None => {
+                                !container.labels.contains_key("com.citadel.deployment-id")
+                                    && container.labels.get("com.docker.compose.project")
+                                        == Some(&project)
+                            }
+                        },
+                    )
+                    .collect::<Vec<_>>();
+                let images = images
+                    .iter()
+                    .map(|image| (image.id.as_str(), image))
+                    .collect::<BTreeMap<_, _>>();
+                let mut deployed = BTreeMap::new();
+                for check in &checks {
+                    let mut digests = BTreeSet::new();
+                    for container in &owned {
+                        if container
+                            .labels
+                            .get("com.docker.compose.service")
+                            .is_none_or(|service| service != &check.service_name)
+                        {
+                            continue;
                         }
-                    },
-                )
-                .collect::<Vec<_>>();
-            let images = images
-                .iter()
-                .map(|image| (image.id.as_str(), image))
-                .collect::<BTreeMap<_, _>>();
-            let mut deployed = BTreeMap::new();
+                        let Some(image) = images.get(container.image_id.as_str()) else {
+                            continue;
+                        };
+                        for digest in &image.repo_digests {
+                            if repository(digest) == repository(&check.image_name)
+                                && let Some((_, digest)) = digest.rsplit_once('@')
+                            {
+                                digests.insert(digest.to_owned());
+                            }
+                        }
+                    }
+                    if digests.len() != 1 {
+                        return Err(StackError::Conflict(format!(
+                            "The deployed digest for service '{}' is unavailable or ambiguous. Apply with image pulling enabled before checking again.",
+                            check.service_name
+                        )));
+                    }
+                    deployed.insert(
+                        state_key(&check.service_name, &check.image_name),
+                        digests.into_iter().next().unwrap(),
+                    );
+                }
+                deployed
+            };
             let mut remote = BTreeMap::new();
             for check in &checks {
-                let mut digests = BTreeSet::new();
-                for container in &owned {
-                    if container
-                        .labels
-                        .get("com.docker.compose.service")
-                        .is_none_or(|service| service != &check.service_name)
-                    {
-                        continue;
-                    }
-                    let Some(image) = images.get(container.image_id.as_str()) else {
-                        continue;
-                    };
-                    for digest in &image.repo_digests {
-                        if repository(digest) == repository(&check.image_name)
-                            && let Some((_, digest)) = digest.rsplit_once('@')
-                        {
-                            digests.insert(digest.to_owned());
-                        }
-                    }
-                }
-                if digests.len() != 1 {
-                    return Err(StackError::Conflict(format!(
-                        "The deployed digest for service '{}' is unavailable or ambiguous. Apply with image pulling enabled before checking again.",
-                        check.service_name
-                    )));
-                }
-                deployed.insert(
-                    state_key(&check.service_name, &check.image_name),
-                    digests.into_iter().next().unwrap(),
-                );
                 if !remote.contains_key(&check.key) {
                     let digest = if scheduled {
                         if !self.runtime.image_cache.wait_ready(cancel).await {
@@ -284,4 +297,134 @@ fn repository(reference: &str) -> String {
         .strip_prefix("library/")
         .unwrap_or(reference)
         .to_ascii_lowercase()
+}
+
+fn swarm_deployed_digests(
+    stack_id: Uuid,
+    project: &str,
+    checks: &[citadel_stacks::ManualStackImageCheck],
+    services: &[citadel_platforms::RuntimeSwarmService],
+) -> Result<BTreeMap<String, String>, StackError> {
+    let owner = stack_id.to_string();
+    let mut deployed = BTreeMap::new();
+    for check in checks {
+        let name = format!("{project}_{}", check.service_name);
+        let matching = services
+            .iter()
+            .filter(|service| {
+                service.name == name
+                    && service.stack_namespace.as_deref() == Some(project)
+                    && !service.labels.contains_key("com.citadel.service-id")
+                    && !service.labels.contains_key("com.citadel.deployment-id")
+                    && service
+                        .labels
+                        .get("com.citadel.stack-id")
+                        .is_none_or(|id| id == &owner)
+            })
+            .collect::<Vec<_>>();
+        let digest = if matching.len() == 1
+            && repository(&matching[0].image) == repository(&check.image_name)
+        {
+            matching[0]
+                .image
+                .rsplit_once('@')
+                .map(|(_, digest)| digest)
+                .filter(|digest| {
+                    digest.strip_prefix("sha256:").is_some_and(|hash| {
+                        hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+                })
+        } else {
+            None
+        };
+        let digest = digest.ok_or_else(|| StackError::Conflict(format!(
+            "The deployed digest for Swarm service '{}' is unavailable or ambiguous. Deploy the Stack with registry access before checking again.", check.service_name
+        )))?;
+        deployed.insert(
+            state_key(&check.service_name, &check.image_name),
+            digest.to_owned(),
+        );
+    }
+    Ok(deployed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use citadel_platforms::RuntimeSwarmService;
+    use citadel_stacks::{ManualStackImageCheck, StackImageKey};
+
+    fn check() -> ManualStackImageCheck {
+        ManualStackImageCheck {
+            service_name: "web".into(),
+            image_name: "nginx:alpine".into(),
+            key: StackImageKey {
+                registry_id: Uuid::nil(),
+                repository: "nginx".into(),
+                tag: "alpine".into(),
+            },
+        }
+    }
+    fn service(owner: Uuid) -> RuntimeSwarmService {
+        RuntimeSwarmService {
+            name: "demo_web".into(),
+            stack_namespace: Some("demo".into()),
+            image: format!("docker.io/library/nginx:alpine@sha256:{}", "a".repeat(64)),
+            labels: BTreeMap::from([("com.citadel.stack-id".into(), owner.to_string())]),
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn swarm_digest_comes_from_manager_service_even_without_local_tasks() {
+        let owner = Uuid::now_v7();
+        let service = service(owner);
+        let checks = vec![check()];
+        let deployed = swarm_deployed_digests(owner, "demo", &checks, &[service]).unwrap();
+        assert_eq!(
+            deployed[&state_key("web", "nginx:alpine")],
+            format!("sha256:{}", "a".repeat(64))
+        );
+        let remote =
+            BTreeMap::from([(checks[0].key.clone(), format!("sha256:{}", "b".repeat(64)))]);
+        let evaluation = evaluate_manual_stack_updates(
+            &StackUpdateState::WebEditor {
+                recreate_stack_on_new_image_state: Default::default(),
+            },
+            &checks,
+            &remote,
+            chrono::Utc::now(),
+            Some(&deployed),
+        );
+        assert_eq!(evaluation.baselines_created, 0);
+        assert_eq!(evaluation.available_updates.len(), 1);
+    }
+    #[test]
+    fn swarm_digest_rejects_wrong_ownership_namespace_image_missing_and_ambiguous_services() {
+        let owner = Uuid::now_v7();
+        let good = service(owner);
+        let mut wrong_namespace = good.clone();
+        wrong_namespace.stack_namespace = Some("other".into());
+        let mut unpinned = good.clone();
+        unpinned.image = "nginx:alpine".into();
+        let mut malformed = good.clone();
+        malformed.image = "nginx:alpine@sha256:bad".into();
+        let mut changed_repo = good.clone();
+        changed_repo.image = format!("redis@sha256:{}", "a".repeat(64));
+        let mut managed_service = good.clone();
+        managed_service
+            .labels
+            .insert("com.citadel.service-id".into(), Uuid::now_v7().to_string());
+        for services in [
+            vec![],
+            vec![service(Uuid::now_v7())],
+            vec![wrong_namespace],
+            vec![unpinned],
+            vec![malformed],
+            vec![changed_repo],
+            vec![managed_service],
+            vec![good.clone(), good],
+        ] {
+            assert!(swarm_deployed_digests(owner, "demo", &[check()], &services).is_err());
+        }
+    }
 }

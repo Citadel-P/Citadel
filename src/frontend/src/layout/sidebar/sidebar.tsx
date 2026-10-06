@@ -60,15 +60,16 @@ export const Sidebar = () => {
               target="_blank"
               rel="noreferrer"
               href="https://github.com/Citadel-P/Citadel"
-              className="truncate hover:text-foreground hover:underline">
+              title={`v ${version}`}
+              className="min-w-0 max-w-[16ch] truncate hover:text-foreground hover:underline">
               v {version}
             </a>
             {isAdministrator ? (
-              <Link to="/license" className="truncate hover:text-foreground">
+              <Link to="/license" className="shrink-0 whitespace-nowrap hover:text-foreground">
                 {licenseType}
               </Link>
             ) : (
-              <span className="truncate hover:text-foreground">{licenseType}</span>
+              <span className="shrink-0 whitespace-nowrap hover:text-foreground">{licenseType}</span>
             )}
           </div>
         )}

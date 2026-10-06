@@ -715,6 +715,19 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     )
     .await;
     let swarm_id = Uuid::parse_str(swarm_created["id"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        request(
+            &app,
+            Method::PATCH,
+            &format!("/api/v1/stacks/{swarm_id}"),
+            Some(admin.clone()),
+            Some(json!({"spec":{"updateBehavior":"ServiceAutoDeploy"}}))
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+
     let swarm_apply = response_json(
         request(
             &app,
@@ -737,6 +750,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         assert!(calls[1].compose.contains("deploy:"));
         assert!(calls[1].compose.matches("com.citadel.stack-id").count() >= 2);
     }
+    updates::verify_update_producers(&pool, swarm_id, true).await;
     assert_eq!(
         request(
             &app,

@@ -62,7 +62,7 @@ import { getSwarmComposeDiagnostics } from './swarm-compose-diagnostics';
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
     label: 'Disabled',
-    description: 'Do not check for updates.',
+    description: 'Do not check for updates automatically. Manual checks remain available.',
   },
   [StackUpdateBehavior.Notify]: {
     label: 'Notify Only',
@@ -70,7 +70,7 @@ const update_behaviors = {
   },
   [StackUpdateBehavior.ServiceAutoDeploy]: {
     label: 'Auto Deploy Services',
-    description: 'Redeploy changed image services. Git source updates redeploy the stack.',
+    description: 'Redeploy only services with newer images. Available for Standalone Web Editor stacks.',
   },
   [StackUpdateBehavior.StackAutoDeploy]: {
     label: 'Auto Deploy Stack',
@@ -766,6 +766,7 @@ export const StackForm = ({
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
   const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
+  const automaticUpdatesEnabled = automatedOperationsEnabled && operationalGuardrailsEnabled;
   const updateSensitiveEnvironmentImport = useCallback((enabled: boolean) => {
     importSensitiveEnvironmentAsSecretsRef.current = enabled;
     setImportSensitiveEnvironmentAsSecrets(enabled);
@@ -937,17 +938,21 @@ export const StackForm = ({
       [StackUpdateBehavior.ServiceAutoDeploy]: {
         ...update_behaviors[StackUpdateBehavior.ServiceAutoDeploy],
         label: 'Auto Deploy Services',
-        disabled: !operationalGuardrailsEnabled,
-        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+        disabled: isSwarmStack || currentStackSource !== StackSource.WebEditor || !automaticUpdatesEnabled,
+        description:
+          isSwarmStack || currentStackSource !== StackSource.WebEditor
+            ? 'Service-only updates require a Standalone Web Editor stack. Use Auto Deploy Stack instead.'
+            : update_behaviors[StackUpdateBehavior.ServiceAutoDeploy].description,
+        requiredLicense: !automaticUpdatesEnabled ? ('Team' as const) : undefined,
       },
       [StackUpdateBehavior.StackAutoDeploy]: {
         ...update_behaviors[StackUpdateBehavior.StackAutoDeploy],
         label: 'Auto Deploy Stack',
-        disabled: !operationalGuardrailsEnabled,
-        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+        disabled: !automaticUpdatesEnabled,
+        requiredLicense: !automaticUpdatesEnabled ? ('Team' as const) : undefined,
       },
     }),
-    [operationalGuardrailsEnabled],
+    [automaticUpdatesEnabled, isSwarmStack, currentStackSource],
   );
   const licensedDriftModes = useMemo(
     () => ({
@@ -1600,7 +1605,10 @@ export const StackForm = ({
                 defineField<StackInput, 'spec.updateBehavior'>({
                   key: 'spec.updateBehavior',
                   label: 'Auto Update',
-                  description: 'Choose how the platform handles new stack versions when they become available.',
+                  description:
+                    currentStackSource === StackSource.Git
+                      ? 'Choose how to handle changes to the tracked Git source. Git stacks do not check image tags.'
+                      : 'Choose how to handle newer registry images for this stack.',
                   render: (value, set) => {
                     return (
                       <div className="flex flex-col gap-2">

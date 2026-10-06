@@ -4,19 +4,89 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    tags: ['v*.*.*']
+    tags: ['v*']
   pull_request:
     branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
+  packages: read
+  actions: read
 
 jobs:
+  version:
+    name: Resolve identity and release preflight
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.version.outputs.releaseEligible }}
+      product: ${{ steps.version.outputs.productVersion }}
+      publication: ${{ steps.version.outputs.publicationEligible }}
+      development: ${{ steps.version.outputs.developmentReleaseEligible }}
+      display: ${{ steps.version.outputs.displayVersion }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install native tooling prerequisites
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev skopeo
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/citadel-tools
+          key: nbgv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/tools/build/nbgv-pin.json', 'rust-toolchain.toml') }}
+      - name: Install and verify pinned native NBGV
+        run: python3 src/tools/build/version.py install
+      - name: Resolve build identity once
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          git fetch origin +refs/heads/main:refs/remotes/origin/main --tags
+          mkdir -p "$RUNNER_TEMP/release-inputs"
+          python3 src/tools/build/version.py resolve --event "$EVENT" --ref "$REF" --sha "$SHA" \
+            --output "$RUNNER_TEMP/release-inputs/version.json" --github-output "$GITHUB_OUTPUT"
+      - name: Check version mapping and embedding
+        run: CITADEL_TEST_OCI_TRANSPORT=1 python3 -m unittest discover -s test/release -v
+      - name: Validate coordinated publication prerequisites
+        if: steps.version.outputs.publicationEligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
+          CITADEL_AGENT_ROLLBACK_IMAGE: ${{ vars.CITADEL_AGENT_ROLLBACK_IMAGE }}
+          CITADEL_CORE_ROLLBACK_IMAGE: ${{ vars.CITADEL_CORE_ROLLBACK_IMAGE }}
+          CITADEL_FIRST_RUST_RELEASE: ${{ vars.CITADEL_FIRST_RUST_RELEASE }}
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+          API_DOCS_URL: ${{ vars.API_DOCS_URL }}
+        run: |
+          printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if jq -e '.releaseEligible' "$RUNNER_TEMP/release-inputs/version.json" >/dev/null; then
+            printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          fi
+          python3 src/tools/release/release.py preflight --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs" \
+            > "$RUNNER_TEMP/release-inputs/compatibility.json"
+      - name: Non-publishing validation context
+        if: steps.version.outputs.publicationEligible != 'true'
+        run: |
+          printf '%s\n' '{"bootstrap":false,"agent":null,"core":null,"protocolVersion":2,"architectures":["amd64","arm64"],"agentFirstUpgrades":true}' > "$RUNNER_TEMP/release-inputs/compatibility.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-inputs
+          overwrite: true
+          path: ${{ runner.temp }}/release-inputs
+          if-no-files-found: error
+          retention-days: 30
+
   rust-openapi:
+    needs: version
     name: Rust validation
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -115,10 +185,11 @@ jobs:
           cargo test --locked -p citadel-adapters --test identity_authorization_differential -- --ignored --test-threads=1
           cargo test --locked -p citadel-adapters --test deployment_apply_persistence -- --ignored --test-threads=1
           cargo test --locked -p citadel-adapters --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
-          cargo test --locked -p citadel-server --test platforms_http node_coverage -- --ignored --test-threads=1
+          cargo test --locked -p citadel-server --test platforms_http -- --ignored --test-threads=1
           cargo test --locked -p citadel-adapters --test edge_transport -- --ignored --test-threads=1
 
   frontend-tests:
+    needs: version
     name: Frontend unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -149,209 +220,257 @@ jobs:
 
       - name: Run frontend unit tests
         run: npm run test:run
+  candidates:
+    needs: [version, rust-openapi, frontend-tests]
+    uses: ./.github/workflows/agent.yml
+    with:
+      release: ${{ needs.version.outputs.publication == 'true' }}
 
-  release-image:
-    name: Publish release image
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [frontend-tests, rust-openapi]
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 0
-          token: ${{ secrets.ACCESS_TOKEN || github.token }}
-
-      - name: Validate release tag
-        id: version
-        shell: bash
-        run: |
-          git fetch origin main --no-tags
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
-            echo "Release tag '${GITHUB_REF_NAME}' does not point to a commit on main." >&2
-            exit 1
-          fi
-
-          version="$(python3 -c 'import json; print(json.load(open("version.json"))["version"])')"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
-            echo "Release tag '${GITHUB_REF_NAME}' does not match version.json ('v${version}')." >&2
-            exit 1
-          fi
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Validate Docker Hub configuration
-        shell: bash
-        env:
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          [[ -n "${DOCKERHUB_NAMESPACE}" ]] || { echo "DOCKERHUB_NAMESPACE is not configured." >&2; exit 1; }
-          [[ -n "${DOCKERHUB_USERNAME}" ]] || { echo "DOCKERHUB_USERNAME is not configured." >&2; exit 1; }
-          [[ -n "${DOCKERHUB_TOKEN}" ]] || { echo "DOCKERHUB_TOKEN is not configured." >&2; exit 1; }
-
-      - name: Log into GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Log into Docker Hub
-        uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Generate image tags
-        id: metadata
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/citadel
-          # This job only publishes validated stable release tags.
-          flavor: latest=true
-          tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
-
-      - name: Build and publish release image
-        id: image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.version.outputs.version }}
-            INFORMATIONAL_VERSION=${{ steps.version.outputs.version }}
-
-      - name: Verify published image aliases
-        env:
-          TAGS: ${{ steps.metadata.outputs.tags }}
-          DIGEST: ${{ steps.image.outputs.digest }}
-        shell: bash
-        run: |
-          while IFS= read -r tag; do
-            [[ -z "${tag}" ]] && continue
-            remote_digest="$(docker buildx imagetools inspect "${tag}" --format '{{.Manifest.Digest}}')"
-            if [[ "${remote_digest}" != "${DIGEST}" ]]; then
-              echo "Published alias '${tag}' resolved to '${remote_digest}', expected '${DIGEST}'." >&2
-              exit 1
-            fi
-          done <<< "${TAGS}"
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign published image
-        env:
-          TAGS: ${{ steps.metadata.outputs.tags }}
-          DIGEST: ${{ steps.image.outputs.digest }}
-        shell: bash
-        run: |
-          while IFS= read -r tag; do
-            [[ -n "${tag}" ]] && cosign sign --yes "${tag}@${DIGEST}"
-          done <<< "${TAGS}"
-
-          {
-            echo "### Published Citadel ${GITHUB_REF_NAME}"
-            echo
-            echo "- Manifest digest: \`${DIGEST}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-  release-documentation:
-    name: Build release documentation
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [release-image]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  documentation:
+    name: Validate and retain release documentation
+    needs: version
+    runs-on: ubuntu-24.04
     env:
-      NEXT_PUBLIC_DOCS_URL: ${{ vars.DOCS_SITE_URL }}
+      NEXT_PUBLIC_DOCS_URL: ${{ vars.DOCS_SITE_URL || 'http://localhost:3000' }}
       NEXT_PUBLIC_API_DOCS_URL: ${{ vars.API_DOCS_URL }}
-
     steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          submodules: false
-          fetch-depth: 0
-          token: ${{ secrets.ACCESS_TOKEN || github.token }}
-
-      - name: Validate documentation URLs
-        shell: bash
+          name: release-inputs
+          path: ${{ runner.temp }}/documentation
+      - name: Recover original documentation on retry
+        if: needs.version.outputs.publication == 'true'
+        id: recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          [[ -n "${NEXT_PUBLIC_DOCS_URL}" ]] || { echo "DOCS_SITE_URL is not configured." >&2; exit 1; }
-          [[ -n "${NEXT_PUBLIC_API_DOCS_URL}" ]] || { echo "API_DOCS_URL is not configured." >&2; exit 1; }
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          python3 src/tools/release/release.py recover --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/documentation/version.json" --directory "$RUNNER_TEMP/documentation" \
+            --artifact release-documentation \
+            > "$RUNNER_TEMP/docs-recovery.json"
+          echo "recovered=$(jq -r .recovered "$RUNNER_TEMP/docs-recovery.json")" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.recovery.outputs.recovered != 'true'
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: docs/package-lock.json
-
-      - name: Install documentation dependencies
-        run: npm ci --prefix docs
-
-      - name: Build product documentation
+      - name: Build and validate static sites from this commit
+        if: steps.recovery.outputs.recovered != 'true'
         run: |
+          npm ci --prefix docs
           npm run test:config --prefix docs
           npm run validate --prefix docs
           npm run lint --prefix docs
           npm run types:check --prefix docs
           npm run build --prefix docs
           npm run test:static --prefix docs
-
-      - name: Build API Preview
-        run: |
           npm run build:api --prefix docs
           git diff --exit-code -- schema
           npm run test:api --prefix docs
-
-      - name: Upload product documentation for GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+          tar -cf "$RUNNER_TEMP/documentation/docs.tar" -C docs/out .
+          tar -cf "$RUNNER_TEMP/documentation/api-docs.tar" -C docs/api-out .
+          python3 - "$RUNNER_TEMP/documentation" <<'PYDOC'
+          import hashlib,json,pathlib,sys
+          directory=pathlib.Path(sys.argv[1])
+          manifest={"metadata":json.loads((directory/'version.json').read_text()),
+                    "artifacts":{n:hashlib.sha256((directory/n).read_bytes()).hexdigest() for n in ['docs.tar','api-docs.tar']}}
+          (directory/'documentation-inputs.json').write_text(json.dumps(manifest))
+          PYDOC
+      - uses: actions/upload-artifact@v4
         with:
-          path: docs/out
-
-      - name: Upload independent API Preview artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: citadel-api-docs-${{ github.ref_name }}
-          path: docs/api-out
+          name: release-documentation
+          overwrite: true
+          path: |
+            ${{ runner.temp }}/documentation/docs.tar
+            ${{ runner.temp }}/documentation/api-docs.tar
+            ${{ runner.temp }}/documentation/documentation-inputs.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
 
-  deploy-documentation:
-    name: Publish release documentation
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [release-documentation]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  publish:
+    name: Promote verified product and documentation
+    if: needs.version.outputs.release == 'true'
+    needs: [version, rust-openapi, frontend-tests, candidates, documentation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    # Hold one global lock through image aliases AND default documentation.
+    concurrency:
+      group: citadel-product-publication
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     permissions:
-      pages: write
+      contents: write
+      actions: read
+      packages: write
       id-token: write
-
+      pages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
+      CITADEL_AGENT_ROLLBACK_IMAGE: ${{ vars.CITADEL_AGENT_ROLLBACK_IMAGE }}
+      CITADEL_CORE_ROLLBACK_IMAGE: ${{ vars.CITADEL_CORE_ROLLBACK_IMAGE }}
+      CITADEL_FIRST_RUST_RELEASE: ${{ vars.CITADEL_FIRST_RUST_RELEASE }}
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+      API_DOCS_URL: ${{ vars.API_DOCS_URL }}
     steps:
-      - name: Deploy product documentation to GitHub Pages
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-inputs
+          path: ${{ runner.temp }}/promotion
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidates-*
+          path: ${{ runner.temp }}/promotion
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-documentation
+          path: ${{ runner.temp }}/promotion
+      - name: Install OCI transport
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - uses: sigstore/cosign-installer@v3
+      - name: Authenticate registry transport
+        run: |
+          printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Promote recorded Agent then Core and eligible aliases
+        run: |
+          python3 src/tools/release/release.py promote --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion" \
+            > "$RUNNER_TEMP/promotion/result.json"
+      - name: Check default documentation version ordering
+        id: docs
+        run: |
+          python3 src/tools/release/release.py docs --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion" >> "$GITHUB_OUTPUT"
+      - name: Restore the verified documentation artifact
+        if: steps.docs.outputs.eligible == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -xf "$RUNNER_TEMP/promotion/docs.tar" -C "$RUNNER_TEMP/site"
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.docs.outputs.eligible == 'true'
+        with:
+          path: ${{ runner.temp }}/site
+      - name: Deploy eligible stable documentation
         id: deployment
+        if: steps.docs.outputs.eligible == 'true'
         uses: actions/deploy-pages@v4
+      - name: Finalize durable release record
+        env:
+          CITADEL_DOCS_RESULT: ${{ steps.docs.outputs.eligible == 'true' && steps.deployment.outputs.page_url || 'skipped-older-release' }}
+        run: |
+          python3 src/tools/release/release.py finalize --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
+      - name: Link recovery record even after failure
+        if: always()
+        run: |
+          echo "Release/recovery record: https://github.com/$GITHUB_REPOSITORY/releases/tag/v${{ needs.version.outputs.product }}" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-development:
+    name: Publish tested development images
+    if: needs.version.outputs.development == 'true'
+    needs: [version, rust-openapi, frontend-tests, candidates, documentation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    concurrency:
+      group: citadel-product-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+      packages: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-inputs
+          path: ${{ runner.temp }}/promotion
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidates-*
+          path: ${{ runner.temp }}/promotion
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-documentation
+          path: ${{ runner.temp }}/promotion
+      - name: Install OCI transport
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - uses: sigstore/cosign-installer@v3
+      - name: Authenticate GHCR transport
+        run: printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Publish retained images and development aliases
+        run: |
+          python3 src/tools/release/release.py promote --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
+          python3 src/tools/release/release.py finalize --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
+      - name: Link development release and recovery record
+        if: always()
+        env:
+          DISPLAY_VERSION: ${{ needs.version.outputs.display }}
+        run: echo "Development release/recovery record https://github.com/$GITHUB_REPOSITORY/releases/tag/v$DISPLAY_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-demo:
+    name: Deploy published development release to demo
+    if: needs.version.outputs.development == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true'
+    needs: [version, publish-development]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The VPS lock serializes deployments without discarding queued versions.
+    environment:
+      name: demo
+      url: ${{ vars.CITADEL_DEMO_URL }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CITADEL_DEMO_HOST: ${{ vars.CITADEL_DEMO_HOST }}
+      CITADEL_DEMO_USER: ${{ vars.CITADEL_DEMO_USER }}
+      CITADEL_DEMO_PORT: ${{ vars.CITADEL_DEMO_PORT || '22' }}
+      CITADEL_DEMO_DIRECTORY: ${{ vars.CITADEL_DEMO_DIRECTORY }}
+      CITADEL_DEMO_URL: ${{ vars.CITADEL_DEMO_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-inputs
+          path: ${{ runner.temp }}/demo
+      - name: Configure pinned SSH identity
+        env:
+          SSH_KEY: ${{ secrets.CITADEL_DEMO_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CITADEL_DEMO_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          mkdir -p "$RUNNER_TEMP/demo-ssh"
+          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/demo-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/demo-ssh/known_hosts"
+      - name: Deploy recorded digests and verify demo health
+        run: |
+          python3 src/tools/release/demo.py --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/demo/version.json" \
+            --identity "$RUNNER_TEMP/demo-ssh/key" --known-hosts "$RUNNER_TEMP/demo-ssh/known_hosts"
+      - name: Remove temporary SSH credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/demo-ssh"

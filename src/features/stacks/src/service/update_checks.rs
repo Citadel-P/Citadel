@@ -152,11 +152,17 @@ impl StackService {
                         return Ok(());
                     }
                     let git = matches!(checked.spec, Some(StackSpec::Git { .. }));
-                    let auto = matches!(
-                        behavior,
-                        StackUpdateBehavior::StackAutoDeploy
-                            | StackUpdateBehavior::ServiceAutoDeploy
-                    ) && self.automated_operations_enabled().await?
+                    let service_only_supported = checked.spec.as_ref().is_some_and(|spec| {
+                        spec.supports_service_auto_deploy(checked.platform_type)
+                    });
+                    let auto = (behavior != StackUpdateBehavior::ServiceAutoDeploy
+                        || service_only_supported)
+                        && matches!(
+                            behavior,
+                            StackUpdateBehavior::StackAutoDeploy
+                                | StackUpdateBehavior::ServiceAutoDeploy
+                        )
+                        && self.automated_operations_enabled().await?
                         && match &self.entitlements {
                             Some(entitlements) => entitlements.operational_guardrails().await?,
                             None => false,

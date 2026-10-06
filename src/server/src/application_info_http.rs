@@ -73,17 +73,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn display_version_omits_only_build_metadata() {
+    fn application_info_exposes_each_embedded_version_independently() {
         let info = application_info();
         assert_eq!(info.name, "Citadel");
         assert!(!info.version.is_empty());
         assert!(!info.informational_version.is_empty());
         assert_eq!(info.realtime_transport, "WebSocketV1");
+        assert_eq!(info.version, env!("CITADEL_BUILD_VERSION"));
         assert_eq!(
-            info.version,
-            info.informational_version
-                .split_once('+')
-                .map_or(info.informational_version, |(display, _)| display)
+            info.informational_version,
+            env!("CITADEL_BUILD_INFORMATIONAL_VERSION")
         );
     }
 }

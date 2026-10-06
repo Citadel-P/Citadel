@@ -466,7 +466,7 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
-async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_workloads() {
+async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
     use citadel_adapters::connectors::registries::digest_cache::ImageDigestCache;
     use citadel_adapters::connectors::routing::images::scanner::ImageScanRuntime;
     use citadel_adapters::connectors::routing::images::scanner::ImageScanTask;
@@ -546,8 +546,26 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
     inspector.0.lock().unwrap().clear();
     assert_eq!(
         scanner.run_cycle(&CancellationToken::new()).await.unwrap(),
-        0,
-        "Deployment and Compose image checks are unsupported on Swarm"
+        1,
+        "Swarm Stack image checks remain scheduled; standalone Deployment checks are excluded"
+    );
+    assert_eq!(*inspector.0.lock().unwrap(), vec!["nginx:latest"]);
+    inspector.0.lock().unwrap().clear();
+    let stack_store =
+        citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(pool.clone());
+    assert!(
+        stack_store
+            .update_check_candidates(Uuid::nil(), true, 100)
+            .await
+            .unwrap()
+            .contains(&stack.id)
+    );
+    assert!(
+        !stack_store
+            .update_check_candidates(Uuid::nil(), false, 100)
+            .await
+            .unwrap()
+            .contains(&stack.id)
     );
     let mut definition = spec(registry, 1);
     definition.update_behavior = UpdateBehavior::Notify;
@@ -568,9 +586,12 @@ async fn image_scanner_deduplicates_resources_and_excludes_unsupported_swarm_wor
         .unwrap();
     assert_eq!(
         scanner.run_cycle(&CancellationToken::new()).await.unwrap(),
-        1
+        2
     );
-    assert_eq!(*inspector.0.lock().unwrap(), vec!["redis:7-alpine"]);
+    assert_eq!(
+        *inspector.0.lock().unwrap(),
+        vec!["nginx:latest", "redis:7-alpine"]
+    );
     sqlx::query("UPDATE swarmservices SET appliedimagedigest='sha256:current',health='Healthy',lastapplieddesiredspechash=desiredspechash WHERE id=$1").bind(service.id).execute(&pool).await.unwrap();
     let router = Arc::new(
         citadel_adapters::connectors::routing::swarm_services::SwarmServiceRuntimeRouter::new(

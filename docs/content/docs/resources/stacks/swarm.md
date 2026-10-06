@@ -103,6 +103,27 @@ reports both outcomes in the progress sheet. If Docker accepts the command but
 the later rollout fails, the workload remains a Swarm Stack so its failure can
 be inspected and corrected.
 
+## Image checks and automatic updates
+
+For Web Editor stacks, **Check Updates** compares each supported image tag with
+the image digest recorded in its Swarm Service on the manager. Tasks do not need
+to run on the manager, and node-agent coverage is not required for this check.
+Select a Registry with access to the images. If a deployed Service has no resolved
+digest, deploy the stack with registry access before checking again. Images pinned
+to a digest and services linked to Citadel Builds are excluded from tag checks.
+
+| Auto Update option | Behavior |
+| --- | --- |
+| **Disabled** | No scheduled checks; manual checks remain available. |
+| **Notify Only** | Detect updates and report them without deploying. Configure an Alert Rule to receive notifications. |
+| **Auto Deploy Stack** | Deploy the complete stack when an update is found, using Swarm's rollout configuration. Requires the automation and operational guardrails entitlements. |
+| **Auto Deploy Services** | Unavailable for Swarm stacks; service-scoped Stack deployment is not supported. |
+
+Git stacks check changes to their tracked source rather than registry image tags.
+Use **Notify Only** or **Auto Deploy Stack** for that source. A stack pinned to a
+Git commit cannot follow new commits automatically. Build-linked services use
+their build completion settings separately from registry image checks.
+
 ## Permissions
 
 Importing an external Docker Stack requires Stack Write plus Platform Read and

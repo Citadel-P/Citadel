@@ -176,12 +176,12 @@ For branch-tracking Git stacks, Citadel stores the exact deployed commit in the 
 
 - `Notify`: mark the stack outdated and emit a Git update alert.
 - `StackAutoDeploy`: automatically reapply the stack when relevant Git paths change.
-- `ServiceAutoDeploy`: currently treated as stack-level Git source deployment because a Git commit can affect networks, volumes, env files, and dependencies.
-- `Disabled`: do not report Git source updates.
+- `ServiceAutoDeploy`: unavailable for Git Stacks. Use `StackAutoDeploy` because a Git commit can affect networks, volumes, env files, and dependencies.
+- `Disabled`: disable periodic checks; manual checks remain available.
 
 `Notify` and update detection remain available in Community. Automatic
 deployment caused by continuously observed repository changes requires
-`Operational Guardrails`. Deployment caused by an external webhook requires
+`Operational Guardrails` and `Automated Operations`. Deployment caused by an external webhook requires
 `Automated Operations`.
 
 Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook deploys are ignored.

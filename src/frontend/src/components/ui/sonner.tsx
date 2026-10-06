@@ -1,21 +1,29 @@
 import { useAppearance } from '@/lib/appearance/appearance-context';
-import { Toaster as Sonner, ToasterProps } from 'sonner';
+import { cn } from '@/lib/utils';
+import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
+import { Toaster as Sonner, type ToasterProps } from 'sonner';
+import './sonner.css';
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ className, toastOptions, icons, ...props }: ToasterProps) => {
   const { effectiveMode: theme } = useAppearance();
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
-      className="toaster group"
+      theme={theme}
+      closeButton
+      richColors={false}
+      className={cn('citadel-toaster', className)}
+      icons={{
+        success: <CircleCheck className="size-4" aria-hidden="true" />,
+        error: <CircleAlert className="size-4" aria-hidden="true" />,
+        info: <Info className="size-4" aria-hidden="true" />,
+        warning: <TriangleAlert className="size-4" aria-hidden="true" />,
+        close: <X className="size-3.5" aria-hidden="true" />,
+        ...icons,
+      }}
       toastOptions={{
-        classNames: {
-          toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
-          description: 'group-[.toast]:text-muted-foreground',
-          actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground font-medium',
-          cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground font-medium',
-        },
+        closeButtonAriaLabel: 'Dismiss notification',
+        ...toastOptions,
       }}
       {...props}
     />

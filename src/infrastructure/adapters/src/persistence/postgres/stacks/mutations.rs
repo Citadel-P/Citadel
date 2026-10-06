@@ -105,7 +105,9 @@ impl PostgresStackRepository {
     ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
+            let platform_kind =
+                ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
+            input.spec.validate_update_behavior(platform_kind)?;
             validate_references(&mut tx, &input.spec).await?;
             lock_name(&mut tx, &input.name).await?;
             ensure_name_available(&mut tx, &input.name, None).await?;
@@ -203,8 +205,15 @@ impl PostgresStackRepository {
                     "A deployed Stack cannot be moved to another Platform.".to_owned(),
                 ));
             }
-            ensure_same_platform_type(&mut tx, actor, administrator, old_platform, new_platform)
-                .await?;
+            let platform_kind = ensure_same_platform_type(
+                &mut tx,
+                actor,
+                administrator,
+                old_platform,
+                new_platform,
+            )
+            .await?;
+            spec.validate_update_behavior(platform_kind)?;
             validate_references(&mut tx, spec).await?;
             let old_name: String = row.try_get("name").map_err(storage)?;
             let next_name = input.name.as_deref().unwrap_or(&old_name);
@@ -430,7 +439,9 @@ impl PostgresStackRepository {
                 .await
                 .map_err(storage)?
                 .ok_or(StackError::NotFound)?;
-            ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
+            let platform_kind =
+                ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
+            input.spec.validate_update_behavior(platform_kind)?;
             if claim.platform_id != input.platform_id
                 || claim.project_name != input.project_name
                 || claim.import_kind != input.import_kind
@@ -568,8 +579,8 @@ pub(super) async fn ensure_same_platform_type(
     administrator: bool,
     old: Uuid,
     new: Uuid,
-) -> Result<(), StackError> {
-    ensure_platform(tx, actor, administrator, new).await?;
+) -> Result<citadel_platforms::PlatformKind, StackError> {
+    let kind = ensure_platform(tx, actor, administrator, new).await?;
     let rows = sqlx::query("SELECT id,platformdescriptor FROM platforms WHERE id=ANY($1::uuid[])")
         .bind(vec![old, new])
         .fetch_all(&mut **tx)
@@ -585,7 +596,7 @@ pub(super) async fn ensure_same_platform_type(
             "A Stack cannot move between Docker Standalone and Docker Swarm Platforms.".to_owned(),
         ));
     }
-    Ok(())
+    Ok(kind)
 }
 pub(super) async fn validate_references(
     tx: &mut Transaction<'_, Postgres>,

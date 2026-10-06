@@ -30,9 +30,9 @@
       "label": "Citadel: Run release (Compose)",
       "detail": "Builds the release image with the bundled UI and starts Core and PostgreSQL in the citadel Compose project using deploy/.env.",
       "type": "process",
-      "command": "docker",
+      "command": "bash",
       "args": [
-        "compose",
+        "${workspaceFolder}/src/tools/build/with-version.sh", "docker", "compose",
         "--project-name", "citadel",
         "--env-file", "${workspaceFolder}/deploy/.env",
         "-f", "${workspaceFolder}/deploy/docker-compose.yml",

@@ -29,7 +29,7 @@ jobs:
     env:
       # Validation must also work in forks and before publication is configured.
       NEXT_PUBLIC_DOCS_URL: ${{ vars.DOCS_SITE_URL || 'http://localhost:3000' }}
-      NEXT_PUBLIC_API_DOCS_URL: ${{ vars.API_DOCS_URL || 'http://localhost:3001' }}
+      NEXT_PUBLIC_API_DOCS_URL: ${{ vars.API_DOCS_URL }}
 
     steps:
       - name: Checkout repository

@@ -43,3 +43,6 @@ test-results/
 *~
 .DS_Store
 Thumbs.db
+
+# Python build/release tooling
+__pycache__/

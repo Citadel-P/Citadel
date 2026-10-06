@@ -16,11 +16,11 @@ npm run dev --prefix docs
 ```
 
 Local development defaults to `http://localhost:3000`. Set explicit URLs when
-checking an export locally or preparing a publication:
+checking the static exports locally:
 
 ```text
-NEXT_PUBLIC_DOCS_URL=https://docs.example.com
-NEXT_PUBLIC_API_DOCS_URL=https://api-docs.example.com
+NEXT_PUBLIC_DOCS_URL=http://localhost:3000
+NEXT_PUBLIC_API_DOCS_URL=http://localhost:3001
 ```
 
 ## Validation
@@ -47,31 +47,22 @@ by Rust. After changing API contracts, run `cargo run --locked -p xtask -- opena
 from the repository root to regenerate both schemas and the frontend client. Do not copy or edit that schema by hand. The API output
 contains a downloadable copy named `public-openapi.json`.
 
-Edit pages under `content/docs`. Keep `docs-audit.md` outside that directory so
-it remains an implementation record rather than a public page. Update the
-matching `meta.json` when navigation changes.
+Edit pages under `content/docs` and update the matching `meta.json` when
+navigation changes.
 
-Documentation published as stable must be built from a stable Citadel tag, not
-from an arbitrary `main` commit.
+## Static export configuration
 
-Until a separate API-reference hostname and deployment target are configured,
-the release workflow publishes `docs/api-out` as an independent artifact.
+The product site's build URL can include a path, for example
+`http://localhost:3000/Citadel`. Set `NEXT_PUBLIC_DOCS_URL` before building; the
+build derives Next.js `basePath` from that path and prefixes images, search and
+navigation accordingly. Rebuild after changing the URL, then run `test:static`
+to check the generated paths. Ordinary CI checks use local URLs so contributors
+can validate exports without setting up public hosting.
 
-## GitHub Pages and CI
-
-`DOCS_SITE_URL` and `API_DOCS_URL` are GitHub repository variables. Release builds
-require both. Ordinary documentation checks use local test URLs when the variables
-are absent, so pull requests and forks can validate the docs before hosting exists.
-
-The product site's URL can include a path, for example
-`https://citadel-p.github.io/Citadel`. The build derives Next.js `basePath` from
-that path and prefixes images, search, and navigation accordingly. A custom
-root domain does not need a prefix. Set the URL before building; changing it
-requires rebuilding the static output.
-
-The API output uses relative asset paths and can be hosted independently. Setting
-`API_DOCS_URL` adds its navigation link; it does not deploy that artifact.
-See [CI and release configuration](CI.md) for the publication settings and checks.
+The API output uses relative asset paths. Set `NEXT_PUBLIC_API_DOCS_URL` when
+testing its navigation link in the product site; leave it unset to omit the link.
+Run `npm run start:api --prefix docs -- --listen 3001` to serve the API export
+at the example address above. See [Continuous integration](CI.md) for checks.
 
 Keep user pages task-focused: explain prerequisites, give the shortest useful
 steps, show what success looks like, and put detailed controls after that path.

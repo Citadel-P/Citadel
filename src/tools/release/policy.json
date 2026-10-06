@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "architectures": ["amd64", "arm64"],
+  "protocolVersion": 2,
+  "registries": {
+    "agent": ["ghcr.io/citadel-p/citadel.agent", "docker.io/citadelplane/citadel-agent"],
+    "core": ["ghcr.io/citadel-p/citadel", "docker.io/citadelplane/citadel"]
+  },
+  "agentFirstUpgrades": true
+}

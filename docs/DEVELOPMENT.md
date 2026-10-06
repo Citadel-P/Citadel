@@ -11,6 +11,7 @@ Linux filesystem, for example `~/projects/Citadel`.
 
 Install:
 
+- Python 3.10+ and Git for shared build/release tooling.
 - Rust through rustup; `rust-toolchain.toml` selects the required toolchain.
 - Linux Node.js and npm. CI uses Node.js 24.
 - Docker with Compose. On WSL, enable Docker Desktop integration for Ubuntu.
@@ -257,7 +258,7 @@ builds; it does not remove database or runtime data.
 Copy `deploy/.env.example` to `deploy/.env` if needed, configure it, then run:
 
 ```bash
-docker compose --project-name citadel --env-file deploy/.env -f deploy/docker-compose.yml up -d --build --wait
+bash src/tools/build/with-version.sh docker compose --project-name citadel --env-file deploy/.env -f deploy/docker-compose.yml up -d --build --wait
 ```
 
 The default application address is <http://localhost:18000>. This project has
@@ -283,3 +284,52 @@ separate volumes from `citadel-wsl`. The equivalent VS Code task is
 
 Use `/health` for process liveness and `/ready` for dependency readiness. Agent
 `/health` does not prove it is connected to Core or can reach Docker.
+
+## Build version metadata
+
+Local builds use the pinned native Rust Nerdbank.GitVersioning (NBGV) CLI.
+The development launcher and build wrappers install it when needed. To install
+and inspect it directly:
+
+```bash
+python3 src/tools/build/version.py install
+python3 src/tools/build/version.py resolve
+```
+
+The installer uses the source revision and dependency lock checksum in
+`src/tools/build/nbgv-pin.json`. It requires Git, Python, the pinned Rust toolchain
+and the Linux build prerequisites listed above; no .NET SDK is needed. Its verified
+binary is cached outside the checkout under `~/.cache/citadel-tools` by default.
+
+`version.json` contains the three-part product version. Local builds add the Git
+height and abbreviated commit, for example `0.1.0-dev.24.g0123456789ab`. Tracked
+changes and non-ignored untracked files add `.dirty`; ignored build outputs do
+not. These values identify the source used by a development build.
+
+Use complete Git history. For a shallow checkout, run
+`git fetch --unshallow --tags`. Commit changes to the product-version value before
+resolving identity; configuration-only edits keep the committed product version
+and mark the build dirty. Ordinary feature changes do not require a version bump.
+
+Wrap commands that need resolved version metadata:
+
+```bash
+bash src/tools/build/with-version.sh cargo build --locked -p citadel-agent
+```
+
+The wrapper supplies `CITADEL_VERSION`, `CITADEL_INFORMATIONAL_VERSION`,
+`CITADEL_SOURCE_REVISION` and `CITADEL_PRODUCT_VERSION`. Direct Docker builds accept
+the corresponding build arguments `VERSION`, `INFORMATIONAL_VERSION`,
+`SOURCE_REVISION` and `PRODUCT_VERSION`. The development and local Compose build
+wrappers pass them through the existing Compose configuration.
+
+Direct Cargo builds without supplied metadata deliberately display
+`<product>-dev.unknown`. For a source archive or an intentional build without Git
+identity, use the explicit fallback:
+
+```bash
+python3 src/tools/build/version.py exec --fallback -- cargo build --locked -p citadel-server
+```
+
+To check changes to version resolution or embedding, install the pinned tool and
+run `python3 -m unittest discover -s test/release -p test_version.py -v`.

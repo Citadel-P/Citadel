@@ -1,6 +1,6 @@
 # Rust development and verification commands
 
-Agent release image checks (Bash, Docker and OpenSSL):
+Packaged Agent checks (Bash, Docker and OpenSSL):
 
 ```bash
 docker build -t citadel-agent:local -f Dockerfile.agent .
@@ -9,7 +9,6 @@ bash test/scripts/test-agent-compatibility.sh citadel-agent:local
 docker build -t citadel-core:acceptance -f Dockerfile .
 bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
 # Optional third argument: an already-pulled released Agent pinned by digest.
-# CI requires this baseline before release publication.
 bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local "$RELEASED_AGENT_IMAGE"
 ```
 
@@ -22,9 +21,8 @@ and revocation. It also exercises Core's three-node Swarm installer and worker
 routing through Direct and Edge managers, including outage recovery, repair,
 upgrade and removal. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
-See
-[Agent development](../docs/DEVELOPMENT.md#agent-development) for runtime configuration
-and the release publication gate.
+See [Agent development](../docs/DEVELOPMENT.md#agent-development) for runtime
+configuration and local image setup.
 
 Run these commands from the repository root in PowerShell.
 
