@@ -43,7 +43,6 @@ From the repository root, with Node.js 24:
 ```bash
 npm ci --prefix docs
 export NEXT_PUBLIC_DOCS_URL=http://localhost:3000
-export NEXT_PUBLIC_API_DOCS_URL=http://localhost:3001
 npm run test:config --prefix docs
 npm run validate --prefix docs
 npm run lint --prefix docs

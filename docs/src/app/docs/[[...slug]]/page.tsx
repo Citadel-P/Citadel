@@ -5,6 +5,7 @@ import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { DocRedirect } from '@/components/doc-redirect';
+import { ApiReference } from '@/components/api-reference';
 import redirects from '../../../../redirects.json';
 import { getDocsBasePath } from '../../../../site-config.mjs';
 
@@ -22,18 +23,31 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const content = (
+    <MDX
+      components={getMDXComponents({
+        // Resolve links relative to the current documentation page.
+        a: createRelativeLink(source, page),
+      })}
+    />
+  );
+  if (page.slugs.join('/') === 'reference/api') {
+    return (
+      <main className="min-w-0 w-full">
+        <div className="max-w-5xl space-y-4 px-4 py-6 sm:px-6">
+          <DocsTitle>{page.data.title}</DocsTitle>
+          <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
+          <DocsBody>{content}</DocsBody>
+        </div>
+        <ApiReference />
+      </main>
+    );
+  }
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
-      <DocsBody>
-        <MDX
-          components={getMDXComponents({
-            // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
-          })}
-        />
-      </DocsBody>
+      <DocsBody>{content}</DocsBody>
     </DocsPage>
   );
 }

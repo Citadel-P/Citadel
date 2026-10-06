@@ -1,32 +1,30 @@
 ---
 title: "API Preview"
-description: "Find the API reference for integrations and developer tools."
+description: "Explore Citadel's public API endpoints, request parameters, and response schemas."
+full: true
 ---
 
-You do not need the API to use Citadel in a browser. It is for scripts,
-integrations, and developer tools that perform Citadel operations.
+Use the public API to integrate Citadel with scripts and developer tools.
+This **API Preview** documents the public contract; use the schema matching your
+installed version when building integrations.
 
-## Where to find the reference
+<details>
+<summary>Authentication and trying requests</summary>
 
-- The repository includes the public contract at [schema/public-v1.json](https://github.com/Citadel-P/Citadel/blob/main/schema/public-v1.json).
-- If an API Preview site is configured, use **API Preview** in this documentation's navigation. It shows the public schema with ReDoc.
-- On your own installation, set `EnableSwagger=true` in `.env` and recreate Core with `docker compose up -d server` to enable `/swagger/` and `/openapi/public/v1.json`. Include your TLS overlay if you use one.
-
-The independent API Preview is a reference only. It does not send requests or
-store credentials. Use your installation's Swagger UI when you need to try API
-requests against your own resources.
-
-## Authentication
-
-Protected operations use an `Authorization: Bearer` header. Depending on the
+Protected operations use an `Authorization: Bearer <token>` header. Depending on the
 operation, use a user JWT or a Service Account token with the required access.
 For an integration, prefer a dedicated [Service Account](/docs/guides/service-accounts)
 with narrowly scoped permissions. Service Accounts require the **Custom Access
 Control** license capability. User JWTs remain subject to the operation's own
 permissions and capability requirements. Keep tokens out of source files and logs.
 
-## Stability
+This reference does not send API requests or store credentials. To try requests
+against your own installation, set `EnableSwagger=true` in `.env` and recreate
+Core with `docker compose up -d server`. Include your TLS overlay if you use one.
+Swagger UI is then available at `/swagger/`, with the public schema at
+`/openapi/public/v1.json`.
 
-The external contract is labelled **API Preview**. Use the public schema that
-matches your installed version and read its release notes before upgrading.
-The full schema used by Citadel's web UI is internal and is not the external contract.
+The full schema used by Citadel's web UI is internal and is not the external
+contract. Read the release notes before upgrading an integration.
+
+</details>

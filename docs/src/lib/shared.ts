@@ -17,10 +17,3 @@ export function getSiteUrl() {
   }
   return localSiteUrl;
 }
-
-export function getApiDocsUrl() {
-  const configuredUrl = process.env.NEXT_PUBLIC_API_DOCS_URL;
-  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
-  // The API Preview is retained as an artifact until its independent host exists.
-  return null;
-}

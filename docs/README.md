@@ -2,7 +2,7 @@
 
 This directory owns both documentation builds:
 
-- `docs/out`: the static Fumadocs product and user documentation;
+- `docs/out`: the static Fumadocs product and user documentation, including the embedded ReDoc API reference at `/docs/reference/api/`;
 - `docs/api-out`: the independently deployable, read-only ReDoc API Preview.
 
 They share one npm package and lockfile, but remain separate static outputs and
@@ -20,7 +20,6 @@ checking the static exports locally:
 
 ```text
 NEXT_PUBLIC_DOCS_URL=http://localhost:3000
-NEXT_PUBLIC_API_DOCS_URL=http://localhost:3001
 ```
 
 ## Validation
@@ -47,6 +46,14 @@ by Rust. After changing API contracts, run `cargo run --locked -p xtask -- opena
 from the repository root to regenerate both schemas and the frontend client. Do not copy or edit that schema by hand. The API output
 contains a downloadable copy named `public-openapi.json`.
 
+The main documentation site renders the same public schema directly with ReDoc.
+Its `/api/openapi` route is exported as a static JSON file, so both local
+development and static hosting work without a running Citadel backend or a
+separate API documentation host. The renderer is loaded only on the API page
+and follows the documentation site's light or dark theme. The API page uses
+a full-width layout with ReDoc's endpoint navigation and a compact Citadel
+header; **Back to docs** returns to the regular documentation layout.
+
 Edit pages under `content/docs` and update the matching `meta.json` when
 navigation changes.
 
@@ -59,8 +66,8 @@ navigation accordingly. Rebuild after changing the URL, then run `test:static`
 to check the generated paths. Ordinary CI checks use local URLs so contributors
 can validate exports without setting up public hosting.
 
-The API output uses relative asset paths. Set `NEXT_PUBLIC_API_DOCS_URL` when
-testing its navigation link in the product site; leave it unset to omit the link.
+The standalone API output uses relative asset paths. The product site's
+**API Preview** navigation link opens its embedded reference.
 Run `npm run start:api --prefix docs -- --listen 3001` to serve the API export
 at the example address above. See [Continuous integration](CI.md) for checks.
 

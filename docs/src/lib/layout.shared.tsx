@@ -1,19 +1,16 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import Image from 'next/image';
-import { appName, docsAssetUrl, getApiDocsUrl, gitConfig } from './shared';
+import { appName, docsAssetUrl, gitConfig } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
-  const apiDocsUrl = getApiDocsUrl();
   const links: NonNullable<BaseLayoutProps['links']> = [
+    { text: 'API Preview', url: '/docs/reference/api' },
     {
       text: 'Report an issue',
       url: `https://github.com/${gitConfig.user}/${gitConfig.repo}/issues/new`,
       external: true,
     },
   ];
-  if (apiDocsUrl) {
-    links.unshift({ text: 'API Preview', url: apiDocsUrl, external: true });
-  }
 
   return {
     nav: {

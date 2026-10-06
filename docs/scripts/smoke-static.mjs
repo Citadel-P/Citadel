@@ -14,6 +14,8 @@ const requiredFiles = [
   'out/docs/resources/build-pools/index.html',
   'out/docs/guides/access-control/index.html',
   'out/docs/operations/control-plane-recovery/index.html',
+  'out/docs/reference/api/index.html',
+  'out/api/openapi',
   'out/404.html',
   'out/robots.txt',
   'out/sitemap.xml',
@@ -37,6 +39,16 @@ for (const [index, html] of pages.entries()) {
 const searchFiles = await findFiles(path.resolve('out'), (file) => /search|orama/i.test(file));
 if (searchFiles.length === 0) throw new Error('The static search index was not exported.');
 const basePath = getDocsBasePath();
+const apiPage = await readFile('out/docs/reference/api/index.html', 'utf8');
+if (!apiPage.includes('aria-label="OpenAPI reference"') ||
+    !apiPage.includes(`href="${basePath}/api/openapi"`)) {
+  throw new Error('The API page is missing its embedded reference or local schema download.');
+}
+const schema = JSON.parse(await readFile('out/api/openapi', 'utf8'));
+const sourceSchema = JSON.parse(await readFile('../schema/public-v1.json', 'utf8'));
+if (JSON.stringify(schema) !== JSON.stringify(sourceSchema)) {
+  throw new Error('The embedded reference must serve the complete, current public schema.');
+}
 const redirects = JSON.parse(await readFile('redirects.json', 'utf8'));
 for (const [legacy, rule] of Object.entries(redirects)) {
   const html = await readFile(path.join('out', legacy, 'index.html'), 'utf8');
