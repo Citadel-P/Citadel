@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install native tooling prerequisites
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev skopeo
+        run: bash .github/scripts/install-packages.sh pkg-config libssl-dev skopeo
       - uses: actions/cache@v4
         with:
           path: ~/.cache/citadel-tools
@@ -108,7 +108,7 @@ jobs:
 
       - name: Install Rust build prerequisites
         run: |
-          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev ripgrep
+          bash .github/scripts/install-packages.sh pkg-config libssl-dev ripgrep
           echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
 
       - name: Verify Rust source ownership
@@ -171,7 +171,7 @@ jobs:
 
       - name: Install Rust build prerequisites
         run: |
-          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+          bash .github/scripts/install-packages.sh pkg-config libssl-dev
           echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
 
       - name: Install pinned Rust toolchain
@@ -391,7 +391,7 @@ jobs:
           name: release-documentation
           path: ${{ runner.temp }}/promotion
       - name: Install OCI transport
-        run: sudo apt-get update && sudo apt-get install -y skopeo
+        run: bash .github/scripts/install-packages.sh skopeo
       - uses: sigstore/cosign-installer@v3
       - name: Authenticate registry transport
         run: |
@@ -472,7 +472,7 @@ jobs:
           name: release-documentation
           path: ${{ runner.temp }}/promotion
       - name: Install OCI transport
-        run: sudo apt-get update && sudo apt-get install -y skopeo
+        run: bash .github/scripts/install-packages.sh skopeo
       - uses: sigstore/cosign-installer@v3
       - name: Authenticate GHCR transport
         run: printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin

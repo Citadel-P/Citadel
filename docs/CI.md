@@ -21,6 +21,12 @@ validation, candidate, and documentation job to succeed. The `Rust validation`
 check aggregates both Rust jobs so existing required-check settings keep covering
 the complete Rust suite.
 
+System prerequisites already installed on the runner are reused without contacting
+APT mirrors. When packages are missing, the shared installer uses bounded network
+retries and timeouts, with a three-minute limit for each APT update or install.
+An unavailable mirror therefore fails the prerequisite step promptly instead of
+consuming the entire build timeout.
+
 Rust caches retain workspace crates as well as dependencies, with separate caches
 for checks, tests, and each candidate architecture. Database regressions use the
 same workspace feature resolution as the unit tests to reuse their compiled
