@@ -31,10 +31,13 @@ if [[ -z "$binary" ]]; then
   # Host runners can require a newer glibc than the packaged Agent provides.
   # Compile these executables with the Agent's pinned production Rust builder.
   docker build --file Dockerfile.agent --target rust-source --tag "$fixture-build" .
-  mkdir -p "$directory/target"
+  # CI retains this directory between runs; local runs remain disposable by default.
+  target_directory="${CITADEL_AGENT_COMPATIBILITY_CACHE_DIR:-$directory/target}"
+  mkdir -p "$target_directory"
+  target_directory=$(realpath "$target_directory")
   docker run --name "$fixture-builder" \
     --user "$(id -u):$(id -g)" \
-    --mount "type=bind,src=$directory/target,dst=/source/target" \
+    --mount "type=bind,src=$target_directory,dst=/source/target" \
     --env CARGO_HOME=/source/target/.cargo \
     --env CARGO_PROFILE_TEST_DEBUG=0 --env CARGO_PROFILE_DEV_DEBUG=0 \
     --env CARGO_PROFILE_DEV_INCREMENTAL=false \
@@ -42,12 +45,13 @@ if [[ -z "$binary" ]]; then
     test --locked -p citadel-agent --test compatibility --test live_docker --test edge_intake \
     --no-run --message-format=json --target-dir /source/target > "$directory/artifacts.json"
   docker rm -fv "$fixture-builder" >/dev/null
-  binary=$(python3 - "$directory" <<'PY'
+  binary=$(python3 - "$directory" "$target_directory" <<'PY'
 import json
 import pathlib
 import sys
 
 directory = pathlib.Path(sys.argv[1])
+target_directory = pathlib.Path(sys.argv[2])
 expected = {"compatibility", "live_docker", "edge_intake"}
 executables = {}
 for line in (directory / "artifacts.json").read_text().splitlines():
@@ -55,7 +59,7 @@ for line in (directory / "artifacts.json").read_text().splitlines():
     name = row.get("target", {}).get("name")
     if row.get("reason") == "compiler-artifact" and name in expected and row.get("executable"):
         relative = pathlib.Path(row["executable"]).relative_to("/source/target")
-        executable = directory / "target" / relative
+        executable = target_directory / relative
         if not executable.is_file():
             raise SystemExit(f"Missing test executable: {executable}")
         executables[name] = executable

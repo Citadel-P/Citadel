@@ -373,6 +373,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Restore annotated release tags
+        # Every publishing job has its own checkout; preflight's refs are not shared.
+        run: |
+          git fetch origin +refs/heads/main:refs/remotes/origin/main '+refs/tags/*:refs/tags/*'
       - uses: actions/download-artifact@v4
         with:
           name: release-inputs
@@ -450,6 +454,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Restore annotated release tags
+        # Every publishing job has its own checkout; preflight's refs are not shared.
+        run: |
+          git fetch origin +refs/heads/main:refs/remotes/origin/main '+refs/tags/*:refs/tags/*'
       - uses: actions/download-artifact@v4
         with:
           name: release-inputs

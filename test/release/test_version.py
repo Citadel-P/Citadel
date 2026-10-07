@@ -1,11 +1,15 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from test_release import FakeBackend, release
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("version", ROOT / "src/tools/build/version.py")
@@ -109,28 +113,48 @@ class VersionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "annotated"):
             self.resolve(event="push", ref="refs/tags/v1.2.3-dev.13")
 
-    def test_ci_fetch_restores_annotated_tag_after_checkout_peels_it(self):
-        ref = "refs/tags/v1.2.3-dev.1"
-        self.git("tag", "-a", ref.removeprefix("refs/tags/"), "-m", "fixture")
-        tag_object = self.git("rev-parse", ref)
-        source = self.git("rev-parse", "HEAD")
-        checkout = Path(self.temp.name) / "checkout"
-        version.run("git", "clone", self.root.as_uri(), checkout)
-        version.git(checkout, "checkout", "--detach", source)
-        # actions/checkout can fetch the event SHA into the tag ref, replacing
-        # the annotated tag object with its commit in the disposable checkout.
-        version.git(checkout, "update-ref", ref, source)
-        self.assertEqual(version.git(checkout, "cat-file", "-t", ref), "commit")
+    def test_ci_fetch_restores_annotated_tags_in_every_release_checkout(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        fetch = next(line.strip() for line in workflow.splitlines()
-                     if line.strip().startswith("git fetch origin "))
-        subprocess.run(["bash", "-c", fetch], cwd=checkout, check=True,
-                       capture_output=True, text=True)
-        self.assertEqual(version.git(checkout, "rev-parse", ref), tag_object)
-        self.assertEqual(version.git(checkout, "rev-parse", "HEAD"), source)
-        result = version.resolve(checkout, event="push", ref=ref, expected_sha=source)
-        self.assertTrue(result["developmentReleaseEligible"])
-        self.assertEqual(result["displayVersion"], "1.2.3-dev.1")
+        for tag in ["v1.2.3", "v1.2.3-dev.1"]:
+            ref = "refs/tags/" + tag
+            self.git("tag", "-a", tag, "-m", "fixture")
+            tag_object = self.git("rev-parse", ref)
+            source = self.git("rev-parse", "HEAD")
+            metadata = self.resolve(event="push", ref=ref, expected_sha=source)
+            metadata_file = Path(self.temp.name) / "metadata.json"
+            metadata_file.write_text(json.dumps(metadata))
+            for job in ["version", "publish", "publish-development"]:
+                with self.subTest(tag=tag, job=job):
+                    checkout = Path(self.temp.name) / f"checkout-{tag}-{job}"
+                    version.run("git", "clone", self.root.as_uri(), checkout)
+                    version.git(checkout, "checkout", "--detach", source)
+                    # Each actions/checkout can replace an annotated tag ref
+                    # with its event commit, including the publication jobs.
+                    version.git(checkout, "update-ref", ref, source)
+                    self.assertEqual(version.git(checkout, "cat-file", "-t", ref), "commit")
+                    block = workflow.split(f"  {job}:\n", 1)[1]
+                    block = re.split(r"\n  [a-z][a-z0-9-]*:\n", block, maxsplit=1)[0]
+                    fetch = next((line.strip() for line in block.splitlines()
+                                  if line.strip().startswith("git fetch origin ")), None)
+                    self.assertIsNotNone(fetch, f"{job} must restore annotated tags")
+                    subprocess.run(["bash", "-c", fetch], cwd=checkout, check=True,
+                                   capture_output=True, text=True)
+                    self.assertEqual(version.git(checkout, "rev-parse", ref), tag_object)
+                    self.assertEqual(version.git(checkout, "rev-parse", "HEAD"), source)
+                    result = version.resolve(checkout, event="push", ref=ref, expected_sha=source)
+                    self.assertEqual(result, metadata)
+                    # Exercise the actual publication guard with real Git refs.
+                    # Recovery has no record; the fake backend makes no external writes.
+                    args = ["release.py", "recover", "--apply", "--repository", "Citadel-P/Citadel",
+                            "--metadata", str(metadata_file), "--directory", self.temp.name]
+                    backend = FakeBackend()
+                    with patch.object(release, "ROOT", checkout), \
+                         patch.object(release.sys, "argv", args), \
+                         patch.object(release, "Backend", return_value=backend), \
+                         patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": ref,
+                                                 "GITHUB_SHA": source}), patch("builtins.print"):
+                        release.main()
+                    self.assertFalse(backend.operations)
 
     def test_manual_patch_height_and_uncommitted_version(self):
         first = self.resolve()

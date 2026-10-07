@@ -47,6 +47,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev ripgrep skopeo
           echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+          echo "CITADEL_AGENT_COMPATIBILITY_CACHE_DIR=$RUNNER_TEMP/citadel-compatibility-target" >> "$GITHUB_ENV"
           toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
           rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@v2
@@ -88,6 +89,32 @@ jobs:
           cargo test --locked -p citadel-adapters --test agent_mutations --test edge_sessions
           cargo test --locked -p citadel-adapters --lib connectors::agent::execution::tests
       - uses: docker/setup-buildx-action@v3
+        id: buildx
+      - name: Cache Docker Cargo mounts
+        if: steps.recovery.outputs.recovered != 'true'
+        uses: actions/cache@v4
+        id: docker-cargo-cache
+        with:
+          path: ${{ runner.temp }}/citadel-docker-cargo
+          key: docker-cargo-v1-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.agent', 'rust-toolchain.toml', '.cargo/config.toml', '**/Cargo.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            docker-cargo-v1-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('Dockerfile', 'Dockerfile.agent', 'rust-toolchain.toml', '.cargo/config.toml', '**/Cargo.toml', 'Cargo.lock') }}-
+      # Registered after actions/cache so extraction runs before the cache is saved.
+      - name: Restore and retain Docker Cargo mounts
+        if: steps.recovery.outputs.recovered != 'true'
+        uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          scratch-dir: ${{ runner.temp }}/citadel-cache-dance
+          skip-extraction: ${{ steps.docker-cargo-cache.outputs.cache-hit }}
+          utility-image: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+          cache-map: |
+            {
+              "${{ runner.temp }}/citadel-docker-cargo/registry": {"target": "/usr/local/cargo/registry", "id": "citadel-rust-registry", "sharing": "locked"},
+              "${{ runner.temp }}/citadel-docker-cargo/git": {"target": "/usr/local/cargo/git", "id": "citadel-rust-git", "sharing": "locked"},
+              "${{ runner.temp }}/citadel-docker-cargo/release": {"target": "/source/target", "id": "citadel-rust-target", "sharing": "locked"},
+              "${{ runner.temp }}/citadel-docker-cargo/volume-helper": {"target": "/source/target", "id": "citadel-volume-helper-target", "sharing": "locked"}
+            }
       - name: Build Agent candidate once
         if: steps.recovery.outputs.recovered != 'true'
         uses: docker/build-push-action@v6
@@ -122,6 +149,13 @@ jobs:
             PRODUCT_VERSION=${{ steps.version.outputs.productVersion }}
           cache-from: type=gha,scope=core-${{ matrix.arch }}
           cache-to: type=gha,scope=core-${{ matrix.arch }},mode=max
+      - name: Cache pinned-builder compatibility compilation
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CITADEL_AGENT_COMPATIBILITY_CACHE_DIR }}
+          key: agent-compat-v1-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('Dockerfile.agent', 'rust-toolchain.toml', '.cargo/config.toml', '**/Cargo.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            agent-compat-v1-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('Dockerfile.agent', 'rust-toolchain.toml', '.cargo/config.toml', '**/Cargo.toml', 'Cargo.lock') }}-
       - name: Exercise exact candidates and supported upgrade directions
         run: python3 src/tools/release/candidates.py --directory "$RUNNER_TEMP/candidates" --arch '${{ matrix.arch }}'
       - uses: actions/upload-artifact@v4

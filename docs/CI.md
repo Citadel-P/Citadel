@@ -31,6 +31,15 @@ cache keys will populate those caches; later runs can reuse them. Parallel jobs
 reduce elapsed time but may consume more
 total runner minutes, especially when an early check fails.
 
+Candidate jobs also persist Docker's Cargo cache mounts explicitly; the Docker
+layer cache alone does not retain them. Registry sources, release compilation,
+and the volume helper are restored into the same Buildx builder used for both
+images. Compatibility-test compilation has a separate retained directory and
+continues to run inside the pinned Rust builder. Both caches are separated by
+architecture and build configuration, restore compatible earlier commits, and
+save a new snapshot for each commit. Cache misses rebuild normally; cache hits
+still run Cargo and all packaged tests. The first run populates these caches.
+
 Agent jobs reclaim unused SDK space on disposable GitHub-hosted runners before building
 both production images. The cleanup is skipped on self-hosted runners. Database
 fixtures must use unique Docker service IDs and bootstrap token hashes because

@@ -24,6 +24,13 @@ and removes only its own containers, volumes and network.
 See [Agent development](../docs/DEVELOPMENT.md#agent-development) for runtime
 configuration and local image setup.
 
+To reuse compatibility-test compilation locally, set
+`CITADEL_AGENT_COMPATIBILITY_CACHE_DIR` to a dedicated directory outside the
+checkout before running `test-agent-compatibility.sh`. Use a separate directory
+for each architecture and pinned builder, and do not share it between concurrent
+runs. The script retains this explicitly supplied directory while removing its
+temporary fixtures. Without this variable, compilation remains disposable.
+
 Run these commands from the repository root in PowerShell.
 
 Docker-based Cargo test suites use a unique `citadel-rust-test-<id>` build
