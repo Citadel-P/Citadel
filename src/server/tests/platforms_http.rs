@@ -55,6 +55,9 @@ use uuid::Uuid;
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "platforms_http/database.rs"]
+mod database;
+
 #[path = "platforms_http/resource_mutations.rs"]
 mod resource_mutations;
 #[path = "platforms_http/service_adoption.rs"]
@@ -121,6 +124,7 @@ struct Fixture {
     docker_server: tokio::task::JoinHandle<()>,
     docker_socket: PathBuf,
     lookup_state: citadel_server::api::routes::lookup::LookupHttpState,
+    _database: database::TestDatabase,
     _guard: OwnedMutexGuard<()>,
 }
 
@@ -483,12 +487,13 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
+    let admin_url = std::env::var("CITADEL_PLATFORM_DATABASE_URL")
         .expect("CITADEL_PLATFORM_DATABASE_URL is required for this fixture");
-    MigrationRunner::migrate(&database_url).await.unwrap();
+    let database = database::TestDatabase::create(admin_url).await;
+    MigrationRunner::migrate(&database.url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(4)
-        .connect(&database_url)
+        .connect(&database.url)
         .await
         .unwrap();
     let platform_id = Uuid::now_v7();
@@ -649,6 +654,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
         docker_server,
         docker_socket,
         lookup_state,
+        _database: database,
         _guard: guard,
     }
 }

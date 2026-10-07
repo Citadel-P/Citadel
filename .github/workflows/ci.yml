@@ -85,9 +85,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  rust-openapi:
-    needs: version
-    name: Rust validation
+  rust-checks:
+    name: Rust lint and generated contracts
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -105,7 +104,9 @@ jobs:
           submodules: false
 
       - name: Install Rust build prerequisites
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev ripgrep
+        run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev ripgrep
+          echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
 
       - name: Verify Rust source ownership
         run: bash test/scripts/check-source-ownership.sh
@@ -124,7 +125,8 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: core-validation
+          shared-key: core-checks
+          cache-workspace-crates: true
           cache-on-failure: true
 
       - name: Check Rust formatting
@@ -145,11 +147,40 @@ jobs:
       - name: Verify committed OpenAPI artifacts
         run: cargo run --locked -p xtask -- openapi --check
 
-      - name: Check Rust workspace without external contracts
-        run: cargo check --locked --workspace
-
       - name: Check Rust lints
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+  rust-tests:
+    name: Rust unit and database tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SQLX_OFFLINE: "true"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Rust build prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+          echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+
+      - name: Install pinned Rust toolchain
+        run: |
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$toolchain" --profile minimal
+
+      - name: Cache Rust tests
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-tests
+          cache-workspace-crates: true
+          cache-on-failure: true
 
       - name: Run Rust workspace tests
         run: cargo test --locked --workspace
@@ -180,16 +211,30 @@ jobs:
           export CITADEL_PLATFORM_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
           export CITADEL_EXECUTION_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
           export CITADEL_REQUIRE_QUERY_COUNTS=1
-          cargo test --locked -p citadel-server --test deployments_http \
+          # Keep workspace feature resolution identical to the unit-test build.
+          cargo test --locked --workspace --test deployments_http \
             deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture
-          cargo test --locked -p citadel-adapters --test identity_authorization_differential -- --ignored --test-threads=1
-          cargo test --locked -p citadel-adapters --test deployment_apply_persistence -- --ignored --test-threads=1
-          cargo test --locked -p citadel-adapters --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
-          cargo test --locked -p citadel-server --test platforms_http -- --ignored --test-threads=1
-          cargo test --locked -p citadel-adapters --test edge_transport -- --ignored --test-threads=1
+          cargo test --locked --workspace --test identity_authorization_differential -- --ignored --test-threads=1
+          cargo test --locked --workspace --test deployment_apply_persistence -- --ignored --test-threads=1
+          cargo test --locked --workspace --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
+          cargo test --locked --workspace --test platforms_http -- --ignored --test-threads=1
+          cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
+
+  # Preserve the existing required-check name while covering both parallel jobs.
+  rust-openapi:
+    name: Rust validation
+    if: always()
+    needs: [rust-checks, rust-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all Rust checks
+        env:
+          CHECKS_RESULT: ${{ needs.rust-checks.result }}
+          TESTS_RESULT: ${{ needs.rust-tests.result }}
+        run: test "$CHECKS_RESULT" = success && test "$TESTS_RESULT" = success
 
   frontend-tests:
-    needs: version
     name: Frontend unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -221,7 +266,8 @@ jobs:
       - name: Run frontend unit tests
         run: npm run test:run
   candidates:
-    needs: [version, rust-openapi, frontend-tests]
+    # Build and test images in parallel; publication still requires every gate.
+    needs: version
     uses: ./.github/workflows/agent.yml
     with:
       release: ${{ needs.version.outputs.publication == 'true' }}

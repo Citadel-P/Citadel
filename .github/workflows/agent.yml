@@ -46,11 +46,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev ripgrep skopeo
+          echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
           toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
           rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: candidate-${{ matrix.arch }}
+          cache-workspace-crates: true
           cache-on-failure: true
       - name: Recover durable candidates on a release retry
         if: inputs.release

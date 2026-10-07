@@ -86,6 +86,10 @@ These must point to disposable test databases. The PowerShell harnesses set them
 for their fixture processes. Recovery tests use separate source and target databases.
 Run ignored database tests serially (`--ignored --test-threads=1`).
 
+The `platforms_http` suite requires `CREATE DATABASE` permission on
+`CITADEL_PLATFORM_DATABASE_URL`. Each test creates and removes its own database
+so administrator list and realtime reads cannot pick up another test's fixtures.
+
 `Test-Workspace.ps1` runs formatting, Clippy and workspace tests. The server's
 optional Docker and Agent probes are `docker-smoke` and `agent-smoke`.
 `realtime-client.mjs` takes its token from `CITADEL_REALTIME_TEST_TOKEN` and connects
