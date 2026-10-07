@@ -269,7 +269,7 @@ describe('Stack Compose import configuration', () => {
 
     expect(screen.getByRole('button', { name: 'Webhook setting' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Drift setting' })).toBeDisabled();
-    expect(screen.getByText(/Choose how the platform handles new stack versions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Choose how to handle changes to the tracked Git source/i)).toBeInTheDocument();
   });
 
   it('offers the compact repository browser action', async () => {

@@ -42,7 +42,8 @@ it('tests an Email channel without saving, then persists it with SMTP settings',
   expect(dialog.getByPlaceholderText('smtp://...')).toBeVisible();
   const url =
     'smtp://demo:password@smtp.example.com:587/?from=alerts@example.com&to=ops@example.com&requirestarttls=yes';
-  await user.type(dialog.getByLabelText('Channel URL'), url);
+  await user.click(dialog.getByLabelText('Channel URL'));
+  await user.paste(url);
   await user.click(dialog.getByRole('button', { name: 'Send Test Notification' }));
   await waitFor(() =>
     expect(verified).toEqual([{ name: 'Operations email', alertDestination: AlertDestination.Email, url }]),

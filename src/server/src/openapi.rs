@@ -211,8 +211,13 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 404);
-        assert_eq!(operations(&public), 305);
+        assert_eq!(operations(&full), 405);
+        assert_eq!(operations(&public), 306);
+        for doc in [&full, &public] {
+            let refresh = &doc["paths"]["/api/v1/platforms/{platformId}/swarm/refresh"]["post"];
+            assert_eq!(refresh["operationId"], "refreshSwarmInventory");
+            assert_eq!(refresh["security"], json!([{"Bearer": []}]));
+        }
         assert!(
             public["paths"]
                 .get("/api/v1/authentication/login")
