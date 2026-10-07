@@ -31,7 +31,7 @@ class LicensingDistributionChecks(unittest.TestCase):
         for text in (unauth, auth):
             self.assertIn("sourceAndLicenseLinks", text)
             self.assertIn("Source code", text)
-            self.assertIn("no warranty", text.lower())
+            self.assertRegex(text.lower(), r"(?:no|without) warranty")
         self.assertIn("License terms", unauth)
         self.assertIn("AGPL-3.0 license", auth)
         self.assertIn("VITE_CITADEL_BUILD_SHA", helper)
