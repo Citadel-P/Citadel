@@ -475,7 +475,9 @@ jobs:
         run: bash .github/scripts/install-packages.sh skopeo
       - uses: sigstore/cosign-installer@v3
       - name: Authenticate GHCR transport
-        run: printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+        run: |
+          printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       - name: Publish retained images and development aliases
         run: |
           python3 src/tools/release/release.py promote --apply --repository "$GITHUB_REPOSITORY" \

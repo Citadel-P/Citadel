@@ -27,6 +27,11 @@ retries and timeouts, with a three-minute limit for each APT update or install.
 An unavailable mirror therefore fails the prerequisite step promptly instead of
 consuming the entire build timeout.
 
+Each existing GHCR package must grant the workflow repository Write access under
+**Package settings > Manage Actions access**; a successful registry login alone
+does not establish package access. Both Skopeo and Docker are authenticated so
+image transfer and Cosign signing can access private packages.
+
 Rust caches retain workspace crates as well as dependencies, with separate caches
 for checks, tests, and each candidate architecture. Database regressions use the
 same workspace feature resolution as the unit tests to reuse their compiled

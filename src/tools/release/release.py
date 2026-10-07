@@ -192,7 +192,10 @@ class Backend:
         return True
 
     def tags(self, repository):
-        return json.loads(self.command("skopeo", "list-tags", "docker://" + repository))["Tags"] or []
+        try:
+            return json.loads(self.command("skopeo", "list-tags", "docker://" + repository))["Tags"] or []
+        except RuntimeError as error:
+            raise RuntimeError(f"Cannot list image tags for {repository}: {error}") from error
 
     def manifest(self, reference):
         # Raw bytes are hashed, not reformatted JSON. Missing/auth/network errors
