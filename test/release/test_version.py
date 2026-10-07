@@ -109,6 +109,29 @@ class VersionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "annotated"):
             self.resolve(event="push", ref="refs/tags/v1.2.3-dev.13")
 
+    def test_ci_fetch_restores_annotated_tag_after_checkout_peels_it(self):
+        ref = "refs/tags/v1.2.3-dev.1"
+        self.git("tag", "-a", ref.removeprefix("refs/tags/"), "-m", "fixture")
+        tag_object = self.git("rev-parse", ref)
+        source = self.git("rev-parse", "HEAD")
+        checkout = Path(self.temp.name) / "checkout"
+        version.run("git", "clone", self.root.as_uri(), checkout)
+        version.git(checkout, "checkout", "--detach", source)
+        # actions/checkout can fetch the event SHA into the tag ref, replacing
+        # the annotated tag object with its commit in the disposable checkout.
+        version.git(checkout, "update-ref", ref, source)
+        self.assertEqual(version.git(checkout, "cat-file", "-t", ref), "commit")
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        fetch = next(line.strip() for line in workflow.splitlines()
+                     if line.strip().startswith("git fetch origin "))
+        subprocess.run(["bash", "-c", fetch], cwd=checkout, check=True,
+                       capture_output=True, text=True)
+        self.assertEqual(version.git(checkout, "rev-parse", ref), tag_object)
+        self.assertEqual(version.git(checkout, "rev-parse", "HEAD"), source)
+        result = version.resolve(checkout, event="push", ref=ref, expected_sha=source)
+        self.assertTrue(result["developmentReleaseEligible"])
+        self.assertEqual(result["displayVersion"], "1.2.3-dev.1")
+
     def test_manual_patch_height_and_uncommitted_version(self):
         first = self.resolve()
         (self.root / "code").write_text("change")

@@ -46,7 +46,9 @@ jobs:
           REF: ${{ github.ref }}
           SHA: ${{ github.sha }}
         run: |
-          git fetch origin +refs/heads/main:refs/remotes/origin/main --tags
+          # checkout may replace the annotated tag ref with the event commit.
+          # Restore origin's tag objects in this disposable checkout before validation.
+          git fetch origin +refs/heads/main:refs/remotes/origin/main '+refs/tags/*:refs/tags/*'
           mkdir -p "$RUNNER_TEMP/release-inputs"
           python3 src/tools/build/version.py resolve --event "$EVENT" --ref "$REF" --sha "$SHA" \
             --output "$RUNNER_TEMP/release-inputs/version.json" --github-output "$GITHUB_OUTPUT"
