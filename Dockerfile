@@ -6,6 +6,12 @@ RUN npm ci
 COPY src/frontend/ ./
 ENV NODE_OPTIONS=--max-old-space-size=4096 \
     VITE_API_BASE_URL=""
+# Embed the immutable source revision for unauthenticated legal notices.
+# Fork builders can point the links to their own corresponding source.
+ARG SOURCE_REVISION
+ARG VITE_CITADEL_SOURCE_REPOSITORY_URL=""
+ENV VITE_CITADEL_BUILD_SHA="${SOURCE_REVISION}" \
+    VITE_CITADEL_SOURCE_REPOSITORY_URL="${VITE_CITADEL_SOURCE_REPOSITORY_URL}"
 RUN npm run build:image
 
 FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust-source
@@ -55,6 +61,8 @@ FROM docker.io/denoland/deno@sha256:aa665f8777136863b5b8a0445a5cdfccff8103b5f40c
 
 WORKDIR /app
 COPY LICENSE /app/LICENSE
+COPY src/features/alerts/LICENSE.unicode /app/third-party-notices/Unicode-3.0.txt
+COPY src/features/identity/src/authentication/common-passwords.LICENSE /app/third-party-notices/Common-Passwords-MIT.txt
 ENV HOME=/app \
     DENO_DIR=/app/.cache/deno
 ARG TARGETARCH
