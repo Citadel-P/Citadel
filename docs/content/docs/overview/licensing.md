@@ -10,6 +10,36 @@ A license is needed only for paid product capabilities. Citadel does not
 license ordinary resource counts such as platforms, stacks, deployments,
 builds, backup definitions, or automation definitions.
 
+## Source Licensing and Product Entitlements
+
+Citadel-authored Core, Agent, frontend, and feature implementations in this
+repository are available under the
+[GNU Affero General Public License v3.0](https://github.com/Citadel-P/Citadel/blob/main/LICENSE)
+(`AGPL-3.0-only`). **This is an open-source license.** Anyone receiving the
+AGPL-covered code may use, fork, modify, and redistribute it under the AGPL's
+terms, including modifications to paid-feature checks. Modified versions
+offered over a network must meet the AGPL's Corresponding Source obligations.
+
+An [alternative commercial source license](https://github.com/Citadel-P/Citadel/blob/main/COMMERCIAL-LICENSING.md)
+may be negotiated separately with the relevant copyright holders. It is
+not included automatically with a Team subscription or product license key.
+
+**Source licensing** and the **product-license system** are different things:
+Citadel's official builds use signed product licenses to enable Team workflows;
+Community needs no paid key. Product entitlement enforcement does not
+override the rights granted to recipients under AGPL-3.0.
+
+The official repository welcomes Community fixes but reserves decisions about
+changes to paid-feature behavior and entitlement verification to maintainers.
+This contribution policy does not limit the rights of AGPL forks. See
+[CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/main/CONTRIBUTING.md).
+
+Third-party dependencies and bundled data may have different licenses. Known
+bundled data notices include
+[Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/main/src/features/alerts/LICENSE.unicode)
+and [MIT](https://github.com/Citadel-P/Citadel/blob/main/src/features/identity/src/authentication/common-passwords.LICENSE);
+the root license does not replace those notices.
+
 ## Edition Comparison
 
 | Area | Community | Team | Enterprise |

@@ -79,8 +79,24 @@ For integrations, use the [public OpenAPI schema](schema/public-v1.json) and [AP
 
 On your installation, set `EnableSwagger=true` in `.env` and run `docker compose up -d server` to enable `/swagger/` and `/openapi/public/v1.json`.
 
-## Editions and support
+## License and editions
 
-Community runs without an installed product license. See the [edition comparison](docs/content/docs/overview/licensing.md) for included and paid capabilities.
+Citadel is open source under the [GNU Affero General Public License v3.0](LICENSE)
+(`AGPL-3.0-only`). This repository includes the code for Community and paid-gated
+Team functionality. AGPL recipients may use, study, modify, fork, and
+redistribute that code under the AGPL's terms, including modifications to
+license-key checks. Modified network-accessible versions must comply with
+the AGPL's Corresponding Source obligations.
 
-For source development, see the [development guide](docs/DEVELOPMENT.md). Report bugs and request features through [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
+Citadel's **product license** is different: Community runs without a paid
+license key, while official Team features require a signed product license.
+See the [edition comparison](docs/content/docs/overview/licensing.md). A
+Team product key is not a commercial source-code license.
+
+A [separate commercial source license](COMMERCIAL-LICENSING.md) may be
+negotiated with the copyright holders for use outside the AGPL's terms.
+Third-party code and data keep their own licenses and notices.
+
+For source development, see the [development guide](docs/DEVELOPMENT.md)
+and [contribution policy](CONTRIBUTING.md). Report bugs and request
+features through [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).

@@ -45,6 +45,7 @@ FROM docker.io/denoland/deno@sha256:aa665f8777136863b5b8a0445a5cdfccff8103b5f40c
 # Docker builds/Compose and S3 backup helpers share this Agent runtime.
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS agent-runtime-base
 WORKDIR /app
+COPY LICENSE /app/LICENSE
 ENV HOME=/app
 ARG VERSION
 ARG INFORMATIONAL_VERSION
@@ -53,6 +54,7 @@ ARG PRODUCT_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Citadel-P/Citadel" \
       org.opencontainers.image.version="${PRODUCT_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="agent"

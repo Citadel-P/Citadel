@@ -54,6 +54,7 @@ RUN apk add --no-cache binutils \
 FROM docker.io/denoland/deno@sha256:aa665f8777136863b5b8a0445a5cdfccff8103b5f40c9a877de5276b04facb1e AS runtime-base
 
 WORKDIR /app
+COPY LICENSE /app/LICENSE
 ENV HOME=/app \
     DENO_DIR=/app/.cache/deno
 ARG TARGETARCH
@@ -64,6 +65,7 @@ ARG PRODUCT_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Citadel-P/Citadel" \
       org.opencontainers.image.version="${PRODUCT_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="core"

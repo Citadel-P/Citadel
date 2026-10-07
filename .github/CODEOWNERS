@@ -1,0 +1,6 @@
+# A maintainer reviews all official upstream changes, including shared files
+# where Community features and paid licensing behavior intersect.
+# GitHub enforcement requires enabling "Require review from Code Owners" for
+# the main branch's protection rule or ruleset.
+# This governs official merges, not rights in AGPL-licensed forks.
+* @7amou3
