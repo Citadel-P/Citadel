@@ -38,7 +38,15 @@ Third-party dependencies and bundled data may have different licenses. Known
 bundled data notices include
 [Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/main/src/features/alerts/LICENSE.unicode)
 and [MIT](https://github.com/Citadel-P/Citadel/blob/main/src/features/identity/src/authentication/common-passwords.LICENSE);
-the root license does not replace those notices.
+the root license does not replace those notices. Official Core and Agent
+images also include the source license and these known bundled-data notices.
+
+The sign-in and setup screens and the signed-in account menu display license
+and source-code links. Official builds use their full embedded Git revision
+when available. A modified build must offer **its own Corresponding Source**;
+linking to unchanged upstream code is not sufficient for modified versions.
+See the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/main/docs/LEGAL-RELEASE-CHECKLIST.md)
+for release considerations.
 
 ## Edition Comparison
 

@@ -11,7 +11,15 @@ not itself grant commercial-license rights or change the public AGPL grant.
 
 AGPL-3.0 already permits commercial use, redistribution, and offering services
 when the license's conditions are met; a separately negotiated license is
-optional rather than required merely because someone charges money.
+optional rather than required merely because someone charges money. Running
+an unmodified copy of Citadel for an organization's internal operations does
+not, by itself, require a commercial source license. Using Citadel to manage
+separate Docker workloads does not automatically place those workloads under
+the AGPL.
+
+A commercial source agreement is not a way to withdraw AGPL rights already
+granted to other recipients; it does not automatically include future paid
+features, support, indemnification, or SLAs unless the signed agreement says so.
 
 ## Different from a Citadel Team license key
 
@@ -33,5 +41,10 @@ bundled data retain their own licenses. Contributions from third parties
 require sufficient additional permissions before the project can include
 them in a commercial licensing offering.
 
-To discuss a separate commercial source-code agreement, contact the project
-maintainers. This file is explanatory, not a substitute for executed terms.
+Before offering alternative terms, maintainers must confirm copyright and
+commercial relicensing authority for the work, including past contributions.
+A commercial agreement cannot override separately licensed third-party code.
+
+For inquiries about a separate commercial source-code agreement, contact the
+project maintainers through the GitHub repository. This file is explanatory,
+not a substitute for executed terms.

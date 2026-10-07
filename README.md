@@ -97,6 +97,10 @@ A [separate commercial source license](COMMERCIAL-LICENSING.md) may be
 negotiated with the copyright holders for use outside the AGPL's terms.
 Third-party code and data keep their own licenses and notices.
 
+The web UI exposes source and license links, including links to the build's
+source revision when available. See the [distribution checklist](docs/LEGAL-RELEASE-CHECKLIST.md)
+and [trademark policy](TRADEMARKS.md) for release and branding guidance.
+
 For source development, see the [development guide](docs/DEVELOPMENT.md)
 and [contribution policy](CONTRIBUTING.md). Report bugs and request
 features through [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).

@@ -34,11 +34,18 @@ relicensed.
 
 A separate written contributor license agreement (CLA), or equivalent explicit
 permission granting the necessary commercial relicensing rights, is required
-for third-party code contributions. **A CLA signing workflow is not yet
-available**: please open an issue to coordinate before proposing code. Merely
-submitting a PR or signing off a commit does not grant the project additional
-commercial relicensing rights. Maintainers should not merge contributions
-requiring those rights without securing that agreement first.
+before third-party code contributions are merged into code intended for dual
+licensing. **No approved CLA text or electronic signature workflow is active
+yet.** Please open an issue to coordinate *before* investing in a code PR.
+Merely opening a PR, ticking a checkbox, or signing off a commit is **not**
+an executed CLA. Maintainers must verify and securely record signed permission
+before merging covered contributions. Counsel should review the final agreement,
+especially corporate-employer ownership and patent grants.
+
+Documentation fixes, issue reports, and feedback are welcome; maintainers
+will determine whether a proposed text contribution needs an additional
+rights agreement. Contributions accepted under AGPL alone cannot automatically
+be sublicensed under separate commercial terms by Citadel.
 
 ## Submitting a change
 
@@ -48,9 +55,10 @@ requiring those rights without securing that agreement first.
    include relevant tests and documentation changes.
 4. Open a PR describing behavior, tests, and any security or compatibility
    implications.
-5. Wait for maintainer review. Some paths are marked in
-   [.github/CODEOWNERS](.github/CODEOWNERS); required review is enforced only
-   if the corresponding GitHub branch rules are enabled.
+5. Wait for maintainer review. [CODEOWNERS](.github/CODEOWNERS) routes
+   reviews but does not itself enforce approval. A single maintainer cannot
+   approve their own PR; only enable mandatory code-owner review after a
+   second eligible reviewer is available.
 
 Do not submit secrets, private keys, credentials, or third-party code that
 you do not have permission to contribute.
