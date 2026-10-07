@@ -88,6 +88,7 @@ jobs:
           retention-days: 30
 
   rust-checks:
+    needs: version
     name: Rust lint and generated contracts
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -153,6 +154,7 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   rust-tests:
+    needs: version
     name: Rust unit and database tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -225,8 +227,8 @@ jobs:
   # Preserve the existing required-check name while covering both parallel jobs.
   rust-openapi:
     name: Rust validation
-    if: always()
-    needs: [rust-checks, rust-tests]
+    if: always() && needs.version.result == 'success'
+    needs: [version, rust-checks, rust-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -237,6 +239,7 @@ jobs:
         run: test "$CHECKS_RESULT" = success && test "$TESTS_RESULT" = success
 
   frontend-tests:
+    needs: version
     name: Frontend unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
