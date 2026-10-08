@@ -105,7 +105,14 @@ publication job. Connection settings and SSH secrets are scoped to each environm
 the previous shared `CITADEL_DEMO_CHANNEL` selector is retired.
 
 The targets use separate Compose projects, host ports, databases, networks, volumes,
-and deployment state. Core and PostgreSQL have no container memory or swap caps
+and deployment state. The deployment helper also supports operator-provisioned
+rootless targets: it verifies the deployment account, channel, and pinned Docker
+engine ID before changing files or starting containers. Compose explicitly replaces
+the host mounts with that account's Docker socket and Docker data directory.
+Tests render the merged configuration to reject inherited host-root mounts and
+exercise failure when an engine or account does not match. Provisioning and data
+migration remain operator tasks; CI does not create Linux accounts or use sudo.
+Core and PostgreSQL have no container memory or swap caps
 by default on either target (`0` means unlimited). CPU ceilings remain independent.
 Operators can tune these values in each server-owned `.env` through
 `CITADEL_CORE_MEMORY_LIMIT`, `CITADEL_DATABASE_MEMORY_LIMIT`, `CITADEL_CORE_CPUS`,
