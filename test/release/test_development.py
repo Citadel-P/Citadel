@@ -36,10 +36,10 @@ def dev_record(number=1):
 
 
 class DevelopmentTests(unittest.TestCase):
-    def test_preflight_does_not_require_stable_hosting_or_baselines(self):
+    def test_preflight_requires_docs_but_not_stable_registries_or_baselines(self):
         value = dev_record()
         backend = FakeBackend()
-        env = {"CITADEL_RUST_AGENT_RELEASE_ENABLED": "true"}
+        env = {"CITADEL_RUST_AGENT_RELEASE_ENABLED": "true", "DOCS_SITE_URL": "https://docs.example.invalid"}
         self.assertEqual(release.preflight(value["metadata"], backend, env), release.development_compatibility())
         with self.assertRaises(ValueError):
             release.preflight(metadata(), backend, env)
@@ -69,12 +69,13 @@ class DevelopmentTests(unittest.TestCase):
         self.assertFalse(any(op[0] == "copy" for op in backend.operations))
         self.assertEqual(backend.images["ghcr.io/citadel-p/citadel", "dev"], newer["indexes"]["core"])
 
-    def test_finalization_marks_prerelease_without_pages(self):
+    def test_finalization_marks_prerelease_after_pages(self):
         backend, value = FakeBackend(), dev_record()
         value["status"] = "images-verified"
         backend.records[value["tag"]] = value
         env = dict(CITADEL_RUST_AGENT_RELEASE_ENABLED="true", GITHUB_EVENT_NAME="push",
-                   GITHUB_REF="refs/tags/" + value["tag"], GITHUB_SHA="a" * 40)
+                   GITHUB_REF="refs/tags/" + value["tag"], GITHUB_SHA="a" * 40,
+                   DOCS_SITE_URL="https://docs.example.invalid", CITADEL_DOCS_RESULT="https://docs.example.invalid/")
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "metadata.json"
             path.write_text(json.dumps(value["metadata"]))
@@ -88,6 +89,7 @@ class DevelopmentTests(unittest.TestCase):
             self.assertIn("--prerelease", command.call_args.args)
             self.assertIn("--latest=false", command.call_args.args)
             self.assertEqual(backend.load(value["tag"])["status"], "complete")
+            self.assertEqual(backend.load(value["tag"])["steps"]["documentation"], env["CITADEL_DOCS_RESULT"])
 
     def test_demo_only_consumes_completed_signed_prerelease_digests(self):
         backend, value = FakeBackend(), dev_record()

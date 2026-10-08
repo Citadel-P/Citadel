@@ -353,7 +353,7 @@ jobs:
       queue: max
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.documentation.outputs.url }}
     permissions:
       contents: write
       actions: read
@@ -406,27 +406,13 @@ jobs:
           python3 src/tools/release/release.py promote --apply --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion" \
             > "$RUNNER_TEMP/promotion/result.json"
-      - name: Check default documentation version ordering
-        id: docs
-        run: |
-          python3 src/tools/release/release.py docs --repository "$GITHUB_REPOSITORY" \
-            --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion" >> "$GITHUB_OUTPUT"
-      - name: Restore the verified documentation artifact
-        if: steps.docs.outputs.eligible == 'true'
-        run: |
-          mkdir -p "$RUNNER_TEMP/site"
-          tar -xf "$RUNNER_TEMP/promotion/docs.tar" -C "$RUNNER_TEMP/site"
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.docs.outputs.eligible == 'true'
+      - uses: ./.github/actions/publish-docs
+        id: documentation
         with:
-          path: ${{ runner.temp }}/site
-      - name: Deploy eligible stable documentation
-        id: deployment
-        if: steps.docs.outputs.eligible == 'true'
-        uses: actions/deploy-pages@v4
+          directory: ${{ runner.temp }}/promotion
       - name: Finalize durable release record
         env:
-          CITADEL_DOCS_RESULT: ${{ steps.docs.outputs.eligible == 'true' && steps.deployment.outputs.page_url || 'skipped-older-release' }}
+          CITADEL_DOCS_RESULT: ${{ steps.documentation.outputs.result }}
         run: |
           python3 src/tools/release/release.py finalize --apply --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
@@ -436,7 +422,7 @@ jobs:
           echo "Release/recovery record: https://github.com/$GITHUB_REPOSITORY/releases/tag/v${{ needs.version.outputs.product }}" >> "$GITHUB_STEP_SUMMARY"
 
   publish-development:
-    name: Publish tested development images
+    name: Publish tested development images and documentation
     if: needs.version.outputs.development == 'true'
     needs: [version, rust-openapi, frontend-tests, candidates, documentation]
     runs-on: ubuntu-24.04
@@ -445,14 +431,20 @@ jobs:
       group: citadel-product-publication
       cancel-in-progress: false
       queue: max
+    environment:
+      name: github-pages
+      url: ${{ steps.documentation.outputs.url }}
     permissions:
       contents: write
       actions: read
       packages: write
       id-token: write
+      pages: write
     env:
       GH_TOKEN: ${{ github.token }}
       CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
+      DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+      API_DOCS_URL: ${{ vars.API_DOCS_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -485,6 +477,14 @@ jobs:
         run: |
           python3 src/tools/release/release.py promote --apply --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
+      - uses: ./.github/actions/publish-docs
+        id: documentation
+        with:
+          directory: ${{ runner.temp }}/promotion
+      - name: Finalize durable development release record
+        env:
+          CITADEL_DOCS_RESULT: ${{ steps.documentation.outputs.result }}
+        run: |
           python3 src/tools/release/release.py finalize --apply --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/promotion/version.json" --directory "$RUNNER_TEMP/promotion"
       - name: Link development release and recovery record

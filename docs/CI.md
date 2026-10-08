@@ -67,6 +67,24 @@ disposable registry, matching the release format. Docker's distribution endpoint
 can omit platform metadata for a single OCI manifest. The index contains only the
 candidate's actual architecture; the amd64 and arm64 jobs each test their native image.
 
+## Release documentation publication
+
+Both annotated stable tags (`vMAJOR.MINOR.PATCH`) and numbered development tags
+(`vMAJOR.MINOR.PATCH-dev.N`) publish the retained static documentation artifact to
+GitHub Pages after the release checks and image promotion succeed. Branch/PR builds
+validate documentation without publishing it. Both publication jobs use the same
+Pages action and `github-pages` environment; that environment must allow release tags.
+`DOCS_SITE_URL` supplies the canonical HTTPS URL for builds and publication checks.
+
+The shared docs site follows the highest published SemVer across both channels:
+`0.1.0-dev.9 < 0.1.0-dev.10 < 0.1.0 < 0.1.1-dev.1`. Older tag retries skip replacing
+the site, while their retained release documentation remains available. Consequently,
+the shared site can describe development features before the stable demo has them.
+Publication holds the same concurrency lock through Pages deployment and release
+finalization. Failed Pages deployment leaves the release recoverable and prevents
+its downstream VPS deployment. Eligible releases cannot finalize without successful
+publication to the configured docs URL.
+
 ## Release deployment checks
 
 The release tests cover deployment after successful publication, selection of one
