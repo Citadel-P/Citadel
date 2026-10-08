@@ -27,6 +27,7 @@ jobs:
       publication: ${{ steps.version.outputs.publicationEligible }}
       development: ${{ steps.version.outputs.developmentReleaseEligible }}
       display: ${{ steps.version.outputs.displayVersion }}
+      revision: ${{ steps.version.outputs.sourceRevision }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -349,6 +350,7 @@ jobs:
     concurrency:
       group: citadel-product-publication
       cancel-in-progress: false
+      queue: max
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -442,6 +444,7 @@ jobs:
     concurrency:
       group: citadel-product-publication
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
       actions: read
@@ -491,46 +494,69 @@ jobs:
         run: echo "Development release/recovery record https://github.com/$GITHUB_REPOSITORY/releases/tag/v$DISPLAY_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-demo:
-    name: Deploy published development release to demo
-    if: needs.version.outputs.development == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true'
+    name: Deploy published dev release to demo
+    if: needs.version.outputs.development == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true' && vars.CITADEL_DEMO_CHANNEL == 'dev'
     needs: [version, publish-development]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    # The VPS lock serializes deployments without discarding queued versions.
+    timeout-minutes: 30
+    # Prevent alias movement throughout deployment and public health verification.
+    concurrency:
+      group: citadel-product-publication
+      cancel-in-progress: false
+      queue: max
     environment:
       name: demo
       url: ${{ vars.CITADEL_DEMO_URL }}
     permissions:
       contents: read
       actions: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      CITADEL_DEMO_HOST: ${{ vars.CITADEL_DEMO_HOST }}
-      CITADEL_DEMO_USER: ${{ vars.CITADEL_DEMO_USER }}
-      CITADEL_DEMO_PORT: ${{ vars.CITADEL_DEMO_PORT || '22' }}
-      CITADEL_DEMO_DIRECTORY: ${{ vars.CITADEL_DEMO_DIRECTORY }}
-      CITADEL_DEMO_URL: ${{ vars.CITADEL_DEMO_URL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
         with:
-          name: release-inputs
-          path: ${{ runner.temp }}/demo
-      - name: Configure pinned SSH identity
+          ref: ${{ needs.version.outputs.revision }}
+      - uses: ./.github/actions/deploy-demo
         env:
-          SSH_KEY: ${{ secrets.CITADEL_DEMO_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.CITADEL_DEMO_KNOWN_HOSTS }}
-        run: |
-          umask 077
-          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
-          mkdir -p "$RUNNER_TEMP/demo-ssh"
-          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/demo-ssh/key"
-          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/demo-ssh/known_hosts"
-      - name: Deploy recorded digests and verify demo health
-        run: |
-          python3 src/tools/release/demo.py --apply --repository "$GITHUB_REPOSITORY" \
-            --metadata "$RUNNER_TEMP/demo/version.json" \
-            --identity "$RUNNER_TEMP/demo-ssh/key" --known-hosts "$RUNNER_TEMP/demo-ssh/known_hosts"
-      - name: Remove temporary SSH credentials
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/demo-ssh"
+          GH_TOKEN: ${{ github.token }}
+          CITADEL_DEMO_HOST: ${{ vars.CITADEL_DEMO_HOST }}
+          CITADEL_DEMO_USER: ${{ vars.CITADEL_DEMO_USER }}
+          CITADEL_DEMO_PORT: ${{ vars.CITADEL_DEMO_PORT || '22' }}
+          CITADEL_DEMO_DIRECTORY: ${{ vars.CITADEL_DEMO_DIRECTORY }}
+          CITADEL_DEMO_URL: ${{ vars.CITADEL_DEMO_URL }}
+        with:
+          channel: dev
+          ssh-key: ${{ secrets.CITADEL_DEMO_SSH_KEY }}
+          known-hosts: ${{ secrets.CITADEL_DEMO_KNOWN_HOSTS }}
+
+  deploy-demo-stable:
+    name: Deploy published latest release to demo
+    if: needs.version.outputs.release == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true' && vars.CITADEL_DEMO_CHANNEL == 'latest'
+    needs: [version, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Prevent alias movement throughout deployment and public health verification.
+    concurrency:
+      group: citadel-product-publication
+      cancel-in-progress: false
+      queue: max
+    environment:
+      name: demo
+      url: ${{ vars.CITADEL_DEMO_URL }}
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.revision }}
+      - uses: ./.github/actions/deploy-demo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CITADEL_DEMO_HOST: ${{ vars.CITADEL_DEMO_HOST }}
+          CITADEL_DEMO_USER: ${{ vars.CITADEL_DEMO_USER }}
+          CITADEL_DEMO_PORT: ${{ vars.CITADEL_DEMO_PORT || '22' }}
+          CITADEL_DEMO_DIRECTORY: ${{ vars.CITADEL_DEMO_DIRECTORY }}
+          CITADEL_DEMO_URL: ${{ vars.CITADEL_DEMO_URL }}
+        with:
+          channel: latest
+          ssh-key: ${{ secrets.CITADEL_DEMO_SSH_KEY }}
+          known-hosts: ${{ secrets.CITADEL_DEMO_KNOWN_HOSTS }}

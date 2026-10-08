@@ -1,0 +1,65 @@
+name: Deploy coordinated release to demo
+description: Deploy immutable Core and paired Agent references over pinned SSH and verify public health.
+inputs:
+  channel:
+    description: Release channel (dev or latest)
+    required: true
+  ssh-key:
+    description: Dedicated deployment private key
+    required: true
+  known-hosts:
+    description: Previously verified SSH host keys
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: release-inputs
+        path: ${{ runner.temp }}/demo
+    - name: Install registry inspection tooling
+      shell: bash
+      run: bash .github/scripts/install-packages.sh skopeo
+    - name: Configure pinned SSH identity
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        umask 077
+        test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+        mkdir -p "$RUNNER_TEMP/demo-ssh"
+        printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/demo-ssh/key"
+        printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/demo-ssh/known_hosts"
+    - name: Deploy recorded digests and verify public health
+      id: deploy
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        python3 src/tools/release/demo.py --apply --channel "$CHANNEL" --repository "$GITHUB_REPOSITORY" \
+          --metadata "$RUNNER_TEMP/demo/version.json" \
+          --identity "$RUNNER_TEMP/demo-ssh/key" --known-hosts "$RUNNER_TEMP/demo-ssh/known_hosts"
+    - name: Report preparation failure
+      if: failure() && steps.deploy.outcome == 'skipped'
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        python3 - <<'PYTHON'
+        import json, os, sys
+        from pathlib import Path
+        sys.path.insert(0, "src/tools/release")
+        from demo import write_summary
+        identity = {"channel": os.environ["CHANNEL"]}
+        try:
+            metadata = json.loads((Path(os.environ["RUNNER_TEMP"]) / "demo/version.json").read_text())
+            identity["version"] = metadata["displayVersion"]
+        except (OSError, ValueError, KeyError):
+            pass
+        write_summary(identity, "failed-preparation", os.environ.get("CITADEL_DEMO_URL", ""))
+        PYTHON
+    - name: Remove temporary SSH credentials
+      if: always()
+      shell: bash
+      run: rm -rf "$RUNNER_TEMP/demo-ssh"

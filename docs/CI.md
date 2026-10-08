@@ -67,6 +67,28 @@ disposable registry, matching the release format. Docker's distribution endpoint
 can omit platform metadata for a single OCI manifest. The index contains only the
 candidate's actual architecture; the amd64 and arm64 jobs each test their native image.
 
+## Release deployment checks
+
+The release tests cover deployment after successful publication, selection of one
+release channel per target, exact Core and paired Agent digests, stale aliases,
+legacy state migration, failed-attempt ordering, and HTTPS health verification.
+The installation Compose file starts Core and PostgreSQL; the paired Agent digest
+configures Core's Agent provisioning image, rather than starting an Agent service.
+
+Publication and demo deployment share the `citadel-product-publication` concurrency
+group through the public health check. GitHub's `queue: max` retains up to 100
+pending jobs, with cancellation of running jobs disabled. Deployment still checks
+alias ownership and VPS attempt history because job arrival order is not version
+order. Repository variables select whether deployment runs and its channel;
+connection settings and SSH secrets belong to the `demo` environment.
+
+Run the release regression suite with
+`python3 -m unittest discover -s test/release -v`. The tests use the Python standard
+library and do not require VPS or publication access. Actionlint 1.7.12 does not
+recognize the newer [`concurrency.queue` setting](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency);
+validate that setting against GitHub's schema when using this version, and retain
+all other workflow diagnostics.
+
 ## Browser test coverage
 
 The Playwright suites under `test/e2e` are currently manual; these workflows do
