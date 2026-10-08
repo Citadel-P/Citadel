@@ -35,7 +35,7 @@ class PublicDeploymentComposeTests(unittest.TestCase):
             self.assertEqual(value["services"]["server"]["environment"]["CITADEL_EDGE_AGENT_IMAGE"], agent)
             return value
 
-    def test_targets_have_independent_volumes_ports_networks_and_resource_budgets(self):
+    def test_targets_have_independent_resources_without_memory_caps(self):
         preview = self.render("dev", "citadel", 18000)
         stable = self.render("latest", "citadel-stable", 28000)
         self.assertNotEqual(preview["name"], stable["name"])
@@ -43,18 +43,16 @@ class PublicDeploymentComposeTests(unittest.TestCase):
             names = [{v["name"] for v in target[resource].values()} for target in (preview, stable)]
             self.assertTrue(names[0].isdisjoint(names[1]), resource)
         ports = []
-        for target, budget in ((preview, (1024**3, 512 * 1024**2)), (stable, (2 * 1024**3, 1024**3))):
+        for target, cpus in ((preview, (1.0, 0.5)), (stable, (2.0, 1.0))):
             bindings = target["services"]["server"]["ports"]
             self.assertTrue(all(p["host_ip"] == "127.0.0.1" for p in bindings))
             ports.append({p["published"] for p in bindings})
-            for service, maximum in zip(("server", "pg_db"), budget):
+            for service, maximum in zip(("server", "pg_db"), cpus):
                 settings = target["services"][service]
-                self.assertEqual(int(settings["mem_limit"]), maximum)
-                self.assertEqual(int(settings["memswap_limit"]), maximum)
-                self.assertGreater(float(settings["cpus"]), 0)
+                self.assertEqual(int(settings.get("mem_limit", 0)), 0)
+                self.assertEqual(int(settings.get("memswap_limit", 0)), 0)
+                self.assertEqual(float(settings["cpus"]), maximum)
         self.assertTrue(ports[0].isdisjoint(ports[1]))
-        self.assertLess(sum(int(preview["services"][s]["mem_limit"]) + int(stable["services"][s]["mem_limit"])
-                            for s in ("server", "pg_db")), 5 * 1024**3)
 
     def test_operator_can_tune_limits_without_changing_release_identity(self):
         value = self.render("dev", "citadel", 18000,

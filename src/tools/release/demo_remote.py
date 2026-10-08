@@ -90,16 +90,15 @@ def deployment_state(directory, channel):
 
 
 def compose_override(channel):
-    # Bound the two public instances on the shared VPS. Operators may tune these
-    # values in their own .env without CI rewriting application configuration.
-    core_memory, database_memory = ("1g", "512m") if channel == "dev" else ("2g", "1g")
+    # Memory is unlimited by default. Keep CPU ceilings independently tunable
+    # through the operator-owned .env without CI rewriting configuration.
     core_cpus, database_cpus = ("1.0", "0.5") if channel == "dev" else ("2.0", "1.0")
     services = {}
-    for name, prefix, memory, cpus in (
-        ("server", "CORE", core_memory, core_cpus),
-        ("pg_db", "DATABASE", database_memory, database_cpus),
+    for name, prefix, cpus in (
+        ("server", "CORE", core_cpus),
+        ("pg_db", "DATABASE", database_cpus),
     ):
-        limit = "${CITADEL_" + prefix + "_MEMORY_LIMIT:-" + memory + "}"
+        limit = "${CITADEL_" + prefix + "_MEMORY_LIMIT:-0}"
         services[name] = {"mem_limit": limit, "memswap_limit": limit,
                           "cpus": "${CITADEL_" + prefix + "_CPUS:-" + cpus + "}"}
     services["server"]["environment"] = {

@@ -105,12 +105,12 @@ publication job. Connection settings and SSH secrets are scoped to each environm
 the previous shared `CITADEL_DEMO_CHANNEL` selector is retired.
 
 The targets use separate Compose projects, host ports, databases, networks, volumes,
-and deployment state. Default memory ceilings are 1 GiB Core + 512 MiB PostgreSQL
-for preview and 2 GiB Core + 1 GiB PostgreSQL for stable. CPU ceilings also limit
-preview load. Operators can tune these values in each server-owned `.env` through
+and deployment state. Core and PostgreSQL have no container memory or swap caps
+by default on either target (`0` means unlimited). CPU ceilings remain independent.
+Operators can tune these values in each server-owned `.env` through
 `CITADEL_CORE_MEMORY_LIMIT`, `CITADEL_DATABASE_MEMORY_LIMIT`, `CITADEL_CORE_CPUS`,
 and `CITADEL_DATABASE_CPUS`. Compose rendering tests verify target separation and
-resource limits without starting containers.
+unlimited default memory and CPU settings without starting containers.
 
 Run the release regression suite with
 `python3 -m unittest discover -s test/release -v`. The tests use the Python standard
