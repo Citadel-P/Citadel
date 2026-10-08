@@ -91,7 +91,7 @@ def write_summary(identity, status, url):
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if path:
         with open(path, "a") as summary:
-            summary.write("### Citadel demo deployment\n\n")
+            summary.write("### Citadel deployment\n\n")
             for label, value in [("Channel", identity.get("channel", "unavailable")),
                                  ("Version", identity.get("version", "unavailable")),
                                  ("Core", identity.get("core", "unavailable")),

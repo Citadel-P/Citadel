@@ -79,8 +79,20 @@ Publication and demo deployment share the `citadel-product-publication` concurre
 group through the public health check. GitHub's `queue: max` retains up to 100
 pending jobs, with cancellation of running jobs disabled. Deployment still checks
 alias ownership and VPS attempt history because job arrival order is not version
-order. Repository variables select whether deployment runs and its channel;
-connection settings and SSH secrets belong to the `demo` environment.
+order. Separate repository toggles enable the two targets:
+`CITADEL_PREVIEW_DEPLOY_ENABLED` selects development deployment to the `preview`
+environment, while `CITADEL_DEMO_DEPLOY_ENABLED` selects stable deployment to the
+`demo` environment. Each job has a fixed channel and waits for its corresponding
+publication job. Connection settings and SSH secrets are scoped to each environment;
+the previous shared `CITADEL_DEMO_CHANNEL` selector is retired.
+
+The targets use separate Compose projects, host ports, databases, networks, volumes,
+and deployment state. Default memory ceilings are 1 GiB Core + 512 MiB PostgreSQL
+for preview and 2 GiB Core + 1 GiB PostgreSQL for stable. CPU ceilings also limit
+preview load. Operators can tune these values in each server-owned `.env` through
+`CITADEL_CORE_MEMORY_LIMIT`, `CITADEL_DATABASE_MEMORY_LIMIT`, `CITADEL_CORE_CPUS`,
+and `CITADEL_DATABASE_CPUS`. Compose rendering tests verify target separation and
+resource limits without starting containers.
 
 Run the release regression suite with
 `python3 -m unittest discover -s test/release -v`. The tests use the Python standard

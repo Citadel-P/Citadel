@@ -493,9 +493,9 @@ jobs:
           DISPLAY_VERSION: ${{ needs.version.outputs.display }}
         run: echo "Development release/recovery record https://github.com/$GITHUB_REPOSITORY/releases/tag/v$DISPLAY_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
-  deploy-demo:
-    name: Deploy published dev release to demo
-    if: needs.version.outputs.development == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true' && vars.CITADEL_DEMO_CHANNEL == 'dev'
+  deploy-preview:
+    name: Deploy published dev release to preview
+    if: needs.version.outputs.development == 'true' && vars.CITADEL_PREVIEW_DEPLOY_ENABLED == 'true'
     needs: [version, publish-development]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -505,7 +505,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     environment:
-      name: demo
+      name: preview
       url: ${{ vars.CITADEL_DEMO_URL }}
     permissions:
       contents: read
@@ -529,7 +529,7 @@ jobs:
 
   deploy-demo-stable:
     name: Deploy published latest release to demo
-    if: needs.version.outputs.release == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true' && vars.CITADEL_DEMO_CHANNEL == 'latest'
+    if: needs.version.outputs.release == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true'
     needs: [version, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 30

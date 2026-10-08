@@ -1,4 +1,4 @@
-name: Deploy coordinated release to demo
+name: Deploy coordinated release to a public target
 description: Deploy immutable Core and paired Agent references over pinned SSH and verify public health.
 inputs:
   channel:

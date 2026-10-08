@@ -89,6 +89,26 @@ def deployment_state(directory, channel):
     return attempted
 
 
+def compose_override(channel):
+    # Bound the two public instances on the shared VPS. Operators may tune these
+    # values in their own .env without CI rewriting application configuration.
+    core_memory, database_memory = ("1g", "512m") if channel == "dev" else ("2g", "1g")
+    core_cpus, database_cpus = ("1.0", "0.5") if channel == "dev" else ("2.0", "1.0")
+    services = {}
+    for name, prefix, memory, cpus in (
+        ("server", "CORE", core_memory, core_cpus),
+        ("pg_db", "DATABASE", database_memory, database_cpus),
+    ):
+        limit = "${CITADEL_" + prefix + "_MEMORY_LIMIT:-" + memory + "}"
+        services[name] = {"mem_limit": limit, "memswap_limit": limit,
+                          "cpus": "${CITADEL_" + prefix + "_CPUS:-" + cpus + "}"}
+    services["server"]["environment"] = {
+        "CITADEL_EDGE_AGENT_IMAGE": "${CITADEL_EDGE_AGENT_IMAGE:?Missing Agent digest}",
+    }
+    # JSON is valid YAML and avoids hand-building nested Compose configuration.
+    return json.dumps({"services": services}, indent=2) + "\n"
+
+
 def deploy(directory, payload):
     validate(payload)
     if not isinstance(payload.get("compose"), str) or not payload["compose"].strip():
@@ -113,7 +133,7 @@ def deploy(directory, payload):
             subprocess.run([*compose, *args], cwd=directory, env=env, check=True,
                            stdout=sys.stderr, timeout=timeout)
         atomic(directory / "docker-compose.yml", payload["compose"])
-        atomic(directory / "demo.override.yml", "services:\n  server:\n    environment:\n      CITADEL_EDGE_AGENT_IMAGE: ${CITADEL_EDGE_AGENT_IMAGE:?Missing Agent digest}\n")
+        atomic(directory / "demo.override.yml", compose_override(payload["channel"]))
         atomic(directory / ".release.env", f"CITADEL_IMAGE={payload['core']}\nCITADEL_EDGE_AGENT_IMAGE={payload['agent']}\n")
         run("config", "--quiet", timeout=30)
         run("pull", timeout=600)

@@ -394,17 +394,21 @@ class DeploymentWorkflowTests(unittest.TestCase):
     def test_publication_dependencies_channel_gates_and_shared_lock(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()
         jobs = dict(re.findall(r"^  ([a-z][a-z0-9-]*):\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source, re.M | re.S))
-        for job in ("publish", "publish-development", "deploy-demo", "deploy-demo-stable"):
+        for job in ("publish", "publish-development", "deploy-preview", "deploy-demo-stable"):
             with self.subTest(job=job):
                 self.assertIn("group: citadel-product-publication", jobs[job])
                 self.assertIn("cancel-in-progress: false", jobs[job])
                 self.assertIn("queue: max", jobs[job])
-        for job, channel, output, dependency in (("deploy-demo", "dev", "development", "publish-development"),
-                                                 ("deploy-demo-stable", "latest", "release", "publish")):
+        for job, channel, output, dependency, environment, toggle in (
+            ("deploy-preview", "dev", "development", "publish-development", "preview", "CITADEL_PREVIEW_DEPLOY_ENABLED"),
+            ("deploy-demo-stable", "latest", "release", "publish", "demo", "CITADEL_DEMO_DEPLOY_ENABLED"),
+        ):
             block = jobs[job]
             self.assertIn(f"needs: [version, {dependency}]", block)
             condition = re.search(r"^    if: (.+)$", block, re.M).group(1)
-            self.assertEqual(condition, f"needs.version.outputs.{output} == 'true' && vars.CITADEL_DEMO_DEPLOY_ENABLED == 'true' && vars.CITADEL_DEMO_CHANNEL == '{channel}'")
+            self.assertEqual(condition, f"needs.version.outputs.{output} == 'true' && vars.{toggle} == 'true'")
+            self.assertIn(f"environment:\n      name: {environment}\n", block)
+            self.assertNotIn("CITADEL_DEMO_CHANNEL", block)
             self.assertIn("ref: ${{ needs.version.outputs.revision }}", block)
             self.assertIn("uses: ./.github/actions/deploy-demo", block)
             self.assertIn(f"channel: {channel}", block)
