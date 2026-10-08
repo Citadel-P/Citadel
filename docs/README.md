@@ -66,6 +66,11 @@ navigation accordingly. Rebuild after changing the URL, then run `test:static`
 to check the generated paths. Ordinary CI checks use local URLs so contributors
 can validate exports without setting up public hosting.
 
+Stable and numbered development release tags publish the validated static export
+to the same GitHub Pages site. The site follows the highest published version across
+both channels; see [Continuous integration](CI.md#release-documentation-publication)
+for publication and retry behavior.
+
 The standalone API output uses relative asset paths. The product site's
 **API Preview** navigation link opens its embedded reference.
 Run `npm run start:api --prefix docs -- --listen 3001` to serve the API export

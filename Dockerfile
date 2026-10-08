@@ -7,7 +7,7 @@ COPY src/frontend/ ./
 ENV NODE_OPTIONS=--max-old-space-size=4096 \
     VITE_API_BASE_URL=""
 # Embed the immutable source revision for unauthenticated legal notices.
-# Fork builders can point the links to their own corresponding source.
+# Modified builds can point the links to their own source for provenance.
 ARG SOURCE_REVISION
 ARG VITE_CITADEL_SOURCE_REPOSITORY_URL=""
 ENV VITE_CITADEL_BUILD_SHA="${SOURCE_REVISION}" \
@@ -73,7 +73,7 @@ ARG PRODUCT_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Citadel-P/Citadel" \
       org.opencontainers.image.version="${PRODUCT_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.licenses="Elastic-2.0" \
       com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="core"

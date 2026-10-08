@@ -1,64 +1,61 @@
 # Contributing to Citadel
 
-Thanks for your interest in improving Citadel. Bug reports, reproducible issues,
-documentation improvements, tests, and Community feature fixes are welcome.
-Please discuss substantial changes in a GitHub issue before writing code.
+Bug reports, reproducible issues, documentation improvements, tests and
+Community feature fixes are welcome. Discuss substantial changes in a GitHub
+issue before implementation.
 
-## Community and paid features
+## Source terms and upstream review
 
-Citadel Community and Team implementations share Rust crates, services, API
-routes, and frontend components. **Directories are not license boundaries.**
+Citadel-authored source in this revision uses the
+[Elastic License 2.0](LICENSE) (`Elastic-2.0`). It is source-available, not
+OSI-approved open source. Review its permissions and limitations before
+modifying or redistributing the software.
 
-The following are **maintainer-controlled in the official Citadel repository**:
+Community and Team implementations share Rust crates, APIs and React
+components. Directories are not separate license boundaries. The official
+project reserves decisions about paid-feature behavior, activation,
+license-key verification and licensing infrastructure to maintainers.
+Do not submit unsolicited PRs changing those behaviors; open an issue first.
+Community fixes in shared files can still be considered.
 
-- changes that introduce, alter, or unlock paid Team capabilities;
-- license verification, signed entitlements, activation, and license-key checks;
-- distribution terms or commercial-source licensing infrastructure.
+Upstream review approval is not a license exception. For work that changes
+license-key functionality or otherwise needs rights beyond ELv2, obtain
+separate written permission from the relevant rights holder before doing
+that work. Report security concerns through [SECURITY.md](https://github.com/Citadel-P/Citadel/security/policy)
+when a private reporting channel is available; never publish credentials or
+private signing keys.
 
-Please do **not submit unsolicited pull requests** changing those behaviors.
-Open an issue instead. Community bug fixes that happen to touch a shared file
-may still be considered with maintainer review.
+## Contributor permissions
 
-This is an **upstream merge policy, not a restriction on AGPL users**. Under
-AGPL-3.0, anyone may modify and redistribute their own forks in compliance
-with the license, including changes to paid-feature checks. This project
-cannot revoke those permissions by contribution guidelines or CODEOWNERS.
+Contributors retain ownership of their work. Maintainers must verify that a
+submission can lawfully be included in an ELv2 distribution, including any
+employer permission and obligations attached to third-party material.
 
-## Contributor licensing
+A separate written contributor license agreement (CLA), or equivalent express
+permission, is required before accepting contributions that the project needs
+to distribute under separately negotiated commercial terms. ELv2's public
+license is not an automatic grant of commercial relicensing authority to the
+maintainers. **No approved CLA or electronic signing workflow is active yet.**
+External code contributors should coordinate permissions before investing in
+a PR, and maintainers must record any required signed agreement before merge.
+A PR submission, checkbox or Git sign-off is not an executed CLA or copyright
+assignment. Legal review should cover copyright, patent and employer rights.
 
-The public source is offered under [AGPL-3.0-only](LICENSE), and Citadel may
-also offer separately negotiated commercial source licenses. Contributors
-retain ownership of their work. The project must obtain sufficient permission
-from contributors **before merging** changes that may be commercially
-relicensed.
-
-A separate written contributor license agreement (CLA), or equivalent explicit
-permission granting the necessary commercial relicensing rights, is required
-before third-party code contributions are merged into code intended for dual
-licensing. **No approved CLA text or electronic signature workflow is active
-yet.** Please open an issue to coordinate *before* investing in a code PR.
-Merely opening a PR, ticking a checkbox, or signing off a commit is **not**
-an executed CLA. Maintainers must verify and securely record signed permission
-before merging covered contributions. Counsel should review the final agreement,
-especially corporate-employer ownership and patent grants.
-
-Documentation fixes, issue reports, and feedback are welcome; maintainers
-will determine whether a proposed text contribution needs an additional
-rights agreement. Contributions accepted under AGPL alone cannot automatically
-be sublicensed under separate commercial terms by Citadel.
+Documentation corrections and issue reports are welcome; maintainers should
+identify any additional permissions needed for contributed text or assets.
+This policy does not revoke rights already granted for earlier copies.
 
 ## Submitting a change
 
-1. Open an issue or check an existing issue to align on scope.
+1. Align on scope in an issue and secure any necessary permissions.
 2. Keep the change focused; avoid unrelated refactors and generated-file churn.
-3. Follow [development and validation guidance](docs/DEVELOPMENT.md), and
-   include relevant tests and documentation changes.
-4. Open a PR describing behavior, tests, and any security or compatibility
-   implications.
-5. Wait for maintainer review. [CODEOWNERS](.github/CODEOWNERS) routes
-   reviews but does not itself enforce approval. A single maintainer cannot
-   approve their own PR; only enable mandatory code-owner review after a
-   second eligible reviewer is available.
+3. Follow [development and validation guidance](docs/DEVELOPMENT.md), adding
+   relevant tests and documentation.
+4. Open a PR describing behavior, validation and compatibility implications.
+5. Wait for maintainer review. [CODEOWNERS](.github/CODEOWNERS) routes reviews
+   but does not itself enforce approval. A solo maintainer cannot approve
+   their own PR; plan branch protection around the available reviewers.
 
-Do not submit secrets, private keys, credentials, or third-party code that
-you do not have permission to contribute.
+Do not submit secrets, credentials, private keys or third-party work you do
+not have permission to contribute. Preserve applicable license, attribution
+and modification notices.

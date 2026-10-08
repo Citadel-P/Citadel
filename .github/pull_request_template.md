@@ -12,13 +12,13 @@ Explain the problem, the focused change, and any compatibility implications.
 ## Contribution and licensing
 
 - [ ] I have the right to contribute this work, including any employer approval.
-- [ ] If I am an external contributor, I have coordinated with maintainers
-  about additional commercial-relicensing permission needed **before merge**.
+- [ ] I have read CONTRIBUTING.md and coordinated any additional contributor
+  permissions required before merge.
 
-**Checking a box or adding a Git sign-off is not an executed CLA.**
+A checkbox or Git sign-off is not an executed contributor license agreement.
 A maintainer must verify and record any separately signed agreement required.
 See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-Please discuss paid-feature, entitlement-verification, or licensing changes
-with maintainers first. Official-project acceptance policy does not restrict
-AGPL-compliant forks.
+Discuss paid-feature, entitlement-verification, and licensing changes with
+maintainers before implementation. Review approval does not waive the Elastic
+License 2.0 restrictions; obtain any necessary separate written permission.

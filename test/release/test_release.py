@@ -192,6 +192,50 @@ class PromotionTests(unittest.TestCase):
         self.assertFalse(self.backend.operations)
 
 
+class ReleaseLookupTests(unittest.TestCase):
+    def setUp(self):
+        self.backend = release.Backend('Citadel-P/Citadel')
+
+    def test_draft_lookup_uses_graphql_id_and_preserves_rest_assets(self):
+        draft = dict(id=42, tag_name='v1.2.3', draft=True,
+                     assets=[dict(id=91, name='release-record-000001.json')])
+        lookup = dict(data=dict(repository=dict(release=dict(databaseId=42))))
+        with patch.object(self.backend, 'command', side_effect=[json.dumps(lookup), json.dumps(draft)]) as command:
+            self.assertEqual(self.backend.release('v1.2.3'), draft)
+        self.assertEqual(command.call_args_list[0].args[:3], ('gh', 'api', 'graphql'))
+        self.assertIn('tag=v1.2.3', command.call_args_list[0].args)
+        self.assertEqual(command.call_args_list[1].args,
+                         ('gh', 'api', 'repos/Citadel-P/Citadel/releases/42'))
+
+    def test_absent_release_returns_none_without_rest_request(self):
+        lookup = dict(data=dict(repository=dict(release=None)))
+        with patch.object(self.backend, 'command', return_value=json.dumps(lookup)) as command:
+            self.assertIsNone(self.backend.release('v1.2.3'))
+            command.assert_called_once()
+
+    def test_lookup_errors_are_not_treated_as_absent_releases(self):
+        with patch.object(self.backend, 'command', return_value=json.dumps({'errors': [{'message': 'denied'}]})):
+            with self.assertRaisesRegex(RuntimeError, 'release lookup failed'):
+                self.backend.release('v1.2.3')
+        with patch.object(self.backend, 'command', side_effect=RuntimeError('network failure')):
+            with self.assertRaisesRegex(RuntimeError, 'network failure'):
+                self.backend.release('v1.2.3')
+
+    def test_invalid_release_id_is_rejected(self):
+        for release_id in [None, True, 0, -1, '42']:
+            with self.subTest(release_id=release_id):
+                lookup = dict(data=dict(repository=dict(release=dict(databaseId=release_id))))
+                with patch.object(self.backend, 'command', return_value=json.dumps(lookup)):
+                    with self.assertRaisesRegex(ValueError, 'Invalid GitHub release ID'):
+                        self.backend.release('v1.2.3')
+
+    def test_missing_journal_stops_retention_before_writes(self):
+        backend = FakeBackend()
+        with self.assertRaisesRegex(ValueError, 'Release journal is not visible'):
+            release.retain(backend, record(), Path('.'))
+        self.assertEqual(backend.operations, [])
+
+
 class CommandBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)

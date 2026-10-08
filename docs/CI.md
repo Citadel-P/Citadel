@@ -67,6 +67,58 @@ disposable registry, matching the release format. Docker's distribution endpoint
 can omit platform metadata for a single OCI manifest. The index contains only the
 candidate's actual architecture; the amd64 and arm64 jobs each test their native image.
 
+## Release documentation publication
+
+Both annotated stable tags (`vMAJOR.MINOR.PATCH`) and numbered development tags
+(`vMAJOR.MINOR.PATCH-dev.N`) publish the retained static documentation artifact to
+GitHub Pages after the release checks and image promotion succeed. Branch/PR builds
+validate documentation without publishing it. Both publication jobs use the same
+Pages action and `github-pages` environment; that environment must allow release tags.
+`DOCS_SITE_URL` supplies the canonical HTTPS URL for builds and publication checks.
+
+The shared docs site follows the highest published SemVer across both channels:
+`0.1.0-dev.9 < 0.1.0-dev.10 < 0.1.0 < 0.1.1-dev.1`. Older tag retries skip replacing
+the site, while their retained release documentation remains available. Consequently,
+the shared site can describe development features before the stable demo has them.
+Publication holds the same concurrency lock through Pages deployment and release
+finalization. Failed Pages deployment leaves the release recoverable and prevents
+its downstream VPS deployment. Eligible releases cannot finalize without successful
+publication to the configured docs URL.
+
+## Release deployment checks
+
+The release tests cover deployment after successful publication, selection of one
+release channel per target, exact Core and paired Agent digests, stale aliases,
+legacy state migration, failed-attempt ordering, and HTTPS health verification.
+The installation Compose file starts Core and PostgreSQL; the paired Agent digest
+configures Core's Agent provisioning image, rather than starting an Agent service.
+
+Publication and demo deployment share the `citadel-product-publication` concurrency
+group through the public health check. GitHub's `queue: max` retains up to 100
+pending jobs, with cancellation of running jobs disabled. Deployment still checks
+alias ownership and VPS attempt history because job arrival order is not version
+order. Separate repository toggles enable the two targets:
+`CITADEL_PREVIEW_DEPLOY_ENABLED` selects development deployment to the `preview`
+environment, while `CITADEL_DEMO_DEPLOY_ENABLED` selects stable deployment to the
+`demo` environment. Each job has a fixed channel and waits for its corresponding
+publication job. Connection settings and SSH secrets are scoped to each environment;
+the previous shared `CITADEL_DEMO_CHANNEL` selector is retired.
+
+The targets use separate Compose projects, host ports, databases, networks, volumes,
+and deployment state. Core and PostgreSQL have no container memory or swap caps
+by default on either target (`0` means unlimited). CPU ceilings remain independent.
+Operators can tune these values in each server-owned `.env` through
+`CITADEL_CORE_MEMORY_LIMIT`, `CITADEL_DATABASE_MEMORY_LIMIT`, `CITADEL_CORE_CPUS`,
+and `CITADEL_DATABASE_CPUS`. Compose rendering tests verify target separation and
+unlimited default memory and CPU settings without starting containers.
+
+Run the release regression suite with
+`python3 -m unittest discover -s test/release -v`. The tests use the Python standard
+library and do not require VPS or publication access. Actionlint 1.7.12 does not
+recognize the newer [`concurrency.queue` setting](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency);
+validate that setting against GitHub's schema when using this version, and retain
+all other workflow diagnostics.
+
 ## Browser test coverage
 
 The Playwright suites under `test/e2e` are currently manual; these workflows do
@@ -102,9 +154,8 @@ API artifacts with `cargo run --locked -p xtask -- openapi`; never hand-edit the
 
 ## License and release compliance
 
-The standard release-test suite checks that the source license, basic UI source
-offer and known bundled-data notices remain in the distribution recipes. This
-is a baseline regression check, **not** a third-party dependency inventory or
-a legal compliance certification. Follow the
-[legal distribution checklist](LEGAL-RELEASE-CHECKLIST.md) before publishing a
-release.
+The release-test suite checks the canonical Elastic License 2.0 text, source
+and license links, image metadata and known bundled-data notices. These are
+baseline regression checks, not a complete third-party license inventory or
+legal compliance certification. Follow the
+[legal distribution checklist](LEGAL-RELEASE-CHECKLIST.md) before publication.

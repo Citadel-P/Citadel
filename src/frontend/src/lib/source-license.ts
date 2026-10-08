@@ -4,7 +4,7 @@ const EMBEDDED_REVISION = /(?:^|[.+-])sha\.([0-9a-f]{40})(?=$|[.+-])/i;
 
 /**
  * Resolve links to the exact revision of an official build when available.
- * Modified builds must set their own source-repository URL during compilation.
+ * Modified builds can set their own source-repository URL for provenance.
  */
 export function sourceAndLicenseLinks({
   informationalVersion,

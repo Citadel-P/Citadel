@@ -1,58 +1,68 @@
 ---
 title: "Licensing"
-description: "Understand Citadel Community and Team capabilities and license behavior."
+description: "Understand Citadel source licensing, Community and Team capabilities, and product-license behavior."
 ---
 
-Citadel works without an installed license. An unlicensed installation runs as
-the Community edition.
+Citadel works without an installed paid product license. An installation
+without a product key runs as the Community edition under the source license.
 
-A license is needed only for paid product capabilities. Citadel does not
+A paid product license is needed only for paid capabilities. Citadel does not
 license ordinary resource counts such as platforms, stacks, deployments,
 builds, backup definitions, or automation definitions.
 
 ## Source Licensing and Product Entitlements
 
-Citadel-authored Core, Agent, frontend, and feature implementations in this
-repository are available under the
-[GNU Affero General Public License v3.0](https://github.com/Citadel-P/Citadel/blob/main/LICENSE)
-(`AGPL-3.0-only`). **This is an open-source license.** Anyone receiving the
-AGPL-covered code may use, fork, modify, and redistribute it under the AGPL's
-terms, including modifications to paid-feature checks. Modified versions
-offered over a network must meet the AGPL's Corresponding Source obligations.
+Unless separately identified, Citadel-authored Core, Agent, frontend and feature
+implementations in this revision are offered under the
+[Elastic License 2.0](https://github.com/Citadel-P/Citadel/blob/main/LICENSE)
+(`Elastic-2.0`). Citadel is **source-available, not OSI-approved open source**.
+ELv2 permits use, modification and redistribution subject to its conditions.
+In particular, it restricts:
 
-An [alternative commercial source license](https://github.com/Citadel-P/Citadel/blob/main/COMMERCIAL-LICENSING.md)
-may be negotiated separately with the relevant copyright holders. It is
-not included automatically with a Team subscription or product license key.
+- providing the software to third parties as a hosted or managed service that
+  gives them access to a substantial set of its features or functionality;
+- moving, changing, disabling or circumventing license-key functionality, or
+  removing or obscuring functionality protected by a license key;
+- altering, removing or obscuring the licensor's licensing, copyright or other
+  notices.
 
-**Source licensing** and the **product-license system** are different things:
-Citadel's official builds use signed product licenses to enable Team workflows;
-Community needs no paid key. Product entitlement enforcement does not
-override the rights granted to recipients under AGPL-3.0.
+Recipients of copies must receive the license terms, and modified copies must
+carry prominent modification notices. The full LICENSE controls these rights;
+this summary does not replace it or introduce additional restrictions.
 
-The official repository welcomes Community fixes but reserves decisions about
-changes to paid-feature behavior and entitlement verification to maintainers.
-This contribution policy does not limit the rights of AGPL forks. See
-[CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/main/CONTRIBUTING.md).
+Community is free for personal self-hosting and internal business production
+use under ELv2. A company does not need Team merely because it is a company.
+Team product keys enable paid capabilities; they do not waive ELv2 or grant
+hosted-service rights. The source license does not provide a signed Team key.
 
-Third-party dependencies and bundled data may have different licenses. Known
-bundled data notices include
-[Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/main/src/features/alerts/LICENSE.unicode)
-and [MIT](https://github.com/Citadel-P/Citadel/blob/main/src/features/identity/src/authentication/common-passwords.LICENSE);
-the root license does not replace those notices. Official Core and Agent
-images also include the source license and these known bundled-data notices.
+Consultant setup work and internal use by service providers are not the same
+as selling customer access to substantial Citadel functionality as a hosted
+service. See [commercial plans and partner scenarios](https://github.com/Citadel-P/Citadel/blob/main/COMMERCIAL-LICENSING.md)
+for examples and separately negotiated permissions. A Team key alone is not
+a hosting or reseller agreement.
 
-The sign-in and setup screens and the signed-in account menu display license
-and source-code links. Official builds use their full embedded Git revision
-when available. A modified build must offer **its own Corresponding Source**;
-linking to unchanged upstream code is not sufficient for modified versions.
-See the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/main/docs/LEGAL-RELEASE-CHECKLIST.md)
-for release considerations.
+The official project welcomes Community fixes and reserves paid-feature and
+licensing changes for maintainer review. Review approval alone does not waive
+ELv2. See [CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/main/CONTRIBUTING.md).
+
+Third-party material retains its own licenses. Known bundled-data notices
+include [Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/main/src/features/alerts/LICENSE.unicode)
+and [MIT](https://github.com/Citadel-P/Citadel/blob/main/src/features/identity/src/authentication/common-passwords.LICENSE).
+Official Core and Agent images carry the root license and these known notices;
+they are not a complete inventory of third-party obligations.
+
+Source and license links remain available on the sign-in/setup screens and
+in the account menu. Commit-specific source links are retained for transparency,
+not as a network-source-disclosure requirement imposed by ELv2. Third-party
+license obligations still apply. This update does not revoke rights already
+granted for earlier copies; see the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/main/docs/LEGAL-RELEASE-CHECKLIST.md)
+for ownership, earlier public snapshots and release review.
 
 ## Edition Comparison
 
 | Area | Community | Team | Enterprise |
 | --- | --- | --- | --- |
-| Availability | Included without a license | Paid license | Not currently generally available |
+| Availability | Included without a paid product key | Paid license | Not currently generally available |
 | Intended for | Individuals, evaluation, labs, and manually operated environments | Teams operating shared or production environments | Organizations requiring centralized governance, resilience, and formal assurance |
 | Resource counts | No license-enforced limits | No license-enforced limits | No license-enforced limits |
 | Users and teams | Included | Included | Included |
@@ -116,7 +126,7 @@ Consider Team when you need any of the following:
 - different permissions for particular resources or teams
 - backups that run without an administrator starting them
 - automation triggered by a schedule or webhook
-- webhook-triggered builds, deployments, or stack applies
+- webhook-triggered builds, deployments, and stack applies
 - builds that execute through an external build pool
 - custom alert rules beyond Citadel's seeded system rules
 - quiet hours, cooldowns, thresholds, required matches, severity changes, or

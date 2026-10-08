@@ -56,7 +56,7 @@ ARG PRODUCT_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Citadel-P/Citadel" \
       org.opencontainers.image.version="${PRODUCT_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.licenses="Elastic-2.0" \
       com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="agent"

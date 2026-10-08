@@ -1,12 +1,28 @@
-<img src="docs/public/logo.svg" alt="Citadel logo" width="64" height="64">
+<p align="center">
+  <img src="docs/public/logo.svg" alt="Citadel logo" width="64" height="64">
+</p>
 
-# Citadel
+<h1 align="center">Citadel</h1>
 
-**Deploy and operate your Docker applications from one place.**
+<p align="center">
+  <strong>A self-hosted management platform for Docker and Swarm.</strong>
+</p>
 
 Citadel is a self-hosted Docker management platform for developers and teams. Build images from Git, deploy containers and Compose stacks, and manage Docker Standalone and Swarm across multiple hosts through one web interface.
 
-[Documentation](docs/content/docs/index.mdx) · [API Preview](docs/content/docs/reference/api.mdx) · [OpenAPI schema](schema/public-v1.json) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
+[Documentation](https://docs.citadelplane.com/) · [Live demo](https://demo.citadelplane.com/) · [Development preview](https://preview.citadelplane.com/) · [API reference](https://docs.citadelplane.com/docs/reference/api/) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
+
+## Try Citadel
+
+| Site | Purpose |
+| --- | --- |
+| [Demo](https://demo.citadelplane.com/) | Explore the stable release |
+| [Preview](https://preview.citadelplane.com/) | Explore development releases and upcoming changes |
+| [Documentation](https://docs.citadelplane.com/) | Installation, resources, guides, and API reference |
+
+**Demo sign-in:** username `demo` · password `demodemo`.
+
+## Screenshots
 
 ![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
 
@@ -44,11 +60,11 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 - **Monitor and recover** — track resource usage, receive alerts, and back up and restore the control plane and Docker volumes.
 - **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.
 
-## Try Citadel
+## Install Citadel
 
-Install published Citadel images with Docker Compose. See the [installation guide](docs/content/docs/getting-started/install.mdx) for HTTPS and shared access.
+Run Citadel and PostgreSQL with Docker Compose using the published images. No source checkout or build is required.
 
-With Docker, Docker Compose 2.30 or newer, and curl on a Linux Docker host:
+On a Linux Docker host with Docker Compose **2.30 or newer**, curl, and OpenSSL, download the installation files:
 
 ```bash
 mkdir -p citadel
@@ -58,49 +74,58 @@ curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/instal
 chmod 600 .env
 ```
 
-If repository access is restricted, follow the signed-in download steps in the [installation guide](docs/content/docs/getting-started/install.mdx). The selected container image must be published and accessible to your Docker host.
+Generate a database password:
 
-In `.env`, leave `CITADEL_IMAGE` blank to select `ghcr.io/citadel-p/citadel:latest`, or set a complete published image address. Set a long, unique alphanumeric `PG_PASSWORD` without surrounding quotes, then start Citadel and PostgreSQL:
+```bash
+openssl rand -hex 32
+```
+
+Open `.env` and paste the generated value after `PG_PASSWORD=`. This password is for PostgreSQL; you create your Citadel sign-in separately during setup.
+
+Leave `CITADEL_IMAGE` blank to use the latest stable release. To use the development channel, set `CITADEL_IMAGE=ghcr.io/citadel-p/citadel:dev`. You can also pin an exact version from the [releases](https://github.com/Citadel-P/Citadel/releases).
+
+Start the services:
 
 ```bash
 docker compose pull
 docker compose up -d
+docker compose ps
 ```
 
-Open [http://localhost:18000](http://localhost:18000), create your administrator account, and add a **Local** platform to manage Docker on this host. There are no default credentials.
+Once both services are healthy, open [http://localhost:18000](http://localhost:18000) on the Docker host, create your administrator account, and add a **Local** platform to manage that host.
 
-The Compose setup grants Citadel administrative access to the local Docker host. For network access, follow the [configuration](docs/content/docs/getting-started/configuration.md) and [TLS guide](docs/content/docs/operations/tls-and-secure-agent-transport.md).
+The default setup binds to localhost. For a remote server or shared access, configure HTTPS using the [installation guide](https://docs.citadelplane.com/docs/getting-started/install/) and [TLS guide](https://docs.citadelplane.com/docs/operations/tls-and-secure-agent-transport/).
+
+Citadel has administrative access to the connected Docker host. Preserve `.env` and the `citadel_data` and `postgres_data` volumes when upgrading; they contain your configuration, application keys, and database.
 
 ## Documentation and API
 
-Start with the [quick start](docs/content/docs/getting-started/quick-start.mdx), [task guides](docs/content/docs/guides/index.mdx) and [architecture overview](docs/content/docs/overview/architecture.mdx).
+Start with the [quick start](https://docs.citadelplane.com/docs/getting-started/quick-start/), browse [resources](https://docs.citadelplane.com/docs/resources/) and [guides](https://docs.citadelplane.com/docs/guides/), or read the [architecture overview](https://docs.citadelplane.com/docs/overview/architecture/).
 
-For integrations, use the [public OpenAPI schema](schema/public-v1.json) and [API Preview guide](docs/content/docs/reference/api.mdx). The full schema used by the web UI is internal.
+The documentation follows the newest published version across stable and development releases, so it may describe features not yet available in the stable demo.
 
-On your installation, set `EnableSwagger=true` in `.env` and run `docker compose up -d server` to enable `/swagger/` and `/openapi/public/v1.json`.
+The [API reference](https://docs.citadelplane.com/docs/reference/api/) includes an embedded ReDoc explorer for the public OpenAPI contract. Browse endpoints and schemas directly in the documentation without enabling Swagger on your installation.
+
+For integrations, use the [public OpenAPI schema](schema/public-v1.json) from the tag matching your installed version. The public API is currently labeled **API Preview**; the full schema used by the web UI is internal.
 
 ## License and editions
 
-Citadel is open source under the [GNU Affero General Public License v3.0](LICENSE)
-(`AGPL-3.0-only`). This repository includes the code for Community and paid-gated
-Team functionality. AGPL recipients may use, study, modify, fork, and
-redistribute that code under the AGPL's terms, including modifications to
-license-key checks. Modified network-accessible versions must comply with
-the AGPL's Corresponding Source obligations.
+Citadel-authored source in this revision is available under the
+[Elastic License 2.0](LICENSE) (`Elastic-2.0`). Citadel is **source-available,
+not OSI-approved open source**. Use, modification and redistribution are subject
+to ELv2, including its license-key, hosted-service and notice restrictions.
 
-Citadel's **product license** is different: Community runs without a paid
-license key, while official Team features require a signed product license.
-See the [edition comparison](docs/content/docs/overview/licensing.md). A
-Team product key is not a commercial source-code license.
+Community is free for personal self-hosting and internal business production
+use under ELv2. Team adds paid capabilities enabled by a signed product key.
+See the [edition comparison](https://docs.citadelplane.com/docs/overview/licensing/)
+and [commercial licensing explanation](COMMERCIAL-LICENSING.md). A Team key
+does not itself grant hosted-service or other rights beyond the source license.
 
-A [separate commercial source license](COMMERCIAL-LICENSING.md) may be
-negotiated with the copyright holders for use outside the AGPL's terms.
-Third-party code and data keep their own licenses and notices.
+Third-party material retains its own licenses and notices. This update does
+not revoke rights already granted for earlier copies. Source and license links
+remain available in the UI; see the [release checklist](docs/LEGAL-RELEASE-CHECKLIST.md)
+and [trademark policy](TRADEMARKS.md) for distribution guidance.
 
-The web UI exposes source and license links, including links to the build's
-source revision when available. See the [distribution checklist](docs/LEGAL-RELEASE-CHECKLIST.md)
-and [trademark policy](TRADEMARKS.md) for release and branding guidance.
-
-For source development, see the [development guide](docs/DEVELOPMENT.md)
-and [contribution policy](CONTRIBUTING.md). Report bugs and request
-features through [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
+For source development, see the [development guide](docs/DEVELOPMENT.md) and
+[contribution policy](CONTRIBUTING.md). Report bugs and request features through
+[GitHub Issues](https://github.com/Citadel-P/Citadel/issues).

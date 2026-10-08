@@ -1,60 +1,75 @@
 # Legal distribution checklist
 
-A maintainer checklist for the first AGPL release and later Core/Agent images.
-It is **not** a legal compliance certification or legal advice.
+Maintainer checks for Citadel distributions under Elastic License 2.0 (ELv2).
+This is not a legal opinion, complete dependency audit or compliance certificate.
 
-## Before the first AGPL release
+## Ownership and licensing authority
 
-- [ ] Verify the actual copyright holders and authority to license Citadel
-  source, including migrated .NET code, contractor work, generated material,
-  documentation, frontend assets and logos. Resolve any employer ownership.
-- [ ] Approve contributor relicensing terms with counsel and arrange for
-  verifiable signing/storage before merging third-party code that may appear
-  in commercial source distributions. The project has no approved CLA or
-  automated signing workflow yet.
-- [ ] Confirm who owns rights to the project name and logos before relying
-  on the [trademark policy](../TRADEMARKS.md) for enforcement.
+- [ ] Confirm the copyright holders and authority to offer Citadel-authored
+  material under ELv2, including migrated .NET code, contractor contributions,
+  generated code, documentation, images and other assets. Resolve employer
+  ownership and third-party licensing questions before distribution.
+- [ ] Verify dependency compatibility and retain separate third-party grants.
+  A root ELv2 license does not relicense externally owned material.
+- [ ] Establish and securely record any necessary contributor permissions
+  before accepting code for separately negotiated commercial distributions.
+  No approved CLA or automated signature workflow is active yet.
+- [ ] Confirm rights to project names and logos before relying on
+  [TRADEMARKS.md](../TRADEMARKS.md) for enforcement.
 
-## Before every official distribution
+## Earlier public licensing snapshots
 
-- [ ] Include the root `LICENSE` in both Core and Agent images and set the
-  OCI license label to `AGPL-3.0-only`.
-- [ ] Confirm source links from unauthenticated setup/login screens and the
-  signed-in account menu. They must point to the **Corresponding Source**
-  for the exact deployed revision, including the relevant source, build
-  scripts, generated-code inputs and local modifications.
-- [ ] Ensure legal notice text discloses AGPL redistribution rights and lack
-  of warranty. Retain the notices in modified distributions, as required.
-- [ ] For downstream forks, update the frontend build argument
-  `VITE_CITADEL_SOURCE_REPOSITORY_URL` to the fork's repository, preserve
-  the full build `SOURCE_REVISION`, and publish the full modified
-  Corresponding Source. A link to unmodified Citadel is not sufficient.
-  If the exact revision is unavailable, provide an equivalent accurate
-  source-download link instead of assuming upstream's main branch matches.
-- [ ] Inventory and review applicable licenses and attribution obligations
-  for all Rust and npm dependencies, generated API code, assets, fonts, and
-  binary/runtime software included in images (e.g. Docker CLI, Deno and OS
-  packages). Retain required notices; the root AGPL license does not
-  override their terms.
-- [ ] Confirm the known Unicode-3.0 time-zone and MIT common-password
-  notices remain in the image at `/app/third-party-notices/`.
-  **Those two notices are not a comprehensive third-party inventory.**
-- [ ] Record a release-specific dependency/license inventory or SBOM and
-  obtain legal sign-off when required.
+Earlier public PR #47 revisions contained an AGPL-3.0-only proposal, including
+`d476d34f5ec9d9d439aae47d933ee8420458e87f` and
+`ae38ab491c9ddd936936d8b1631791d8e13bf0f9`.
 
-`test/release/test_licensing.py` performs limited source-tree/recipe checks.
-It does not replace full build inspection, SBOM review, license notices, or
-verification of a hosted exact-source offer.
+- [ ] Have counsel determine the licensing effect of those published snapshots
+  and identify any rights already granted for copies of that code. A draft PR
+  is not necessarily a private or legally ineffective publication.
+- [ ] Do not claim this update, a merge, branch deletion or history rewrite
+  revokes valid earlier grants. Preserve provenance and historical notices.
+- [ ] Establish which material can be offered under ELv2 and what previous
+  rights remain before making exclusivity or enforcement claims.
 
-## Commercial subscriptions are separate
+This revision uses ELv2; it does not revoke rights already granted for earlier
+copies. The scope and effect of any previous grants require legal review.
 
-The public AGPL source license and Citadel's signed Team product license
-grant different rights. An activation key does not grant an alternative
-commercial source license, and the public AGPL allows forks that modify
-feature checks (subject to AGPL compliance). An alternative commercial
-source license needs an executed agreement and suitable rights for all
-included contributions and dependencies.
+## Before each source or binary distribution
 
-Keep the [licensing guide](content/docs/overview/licensing.md),
-[commercial terms explanation](../COMMERCIAL-LICENSING.md), and
-[contribution rules](../CONTRIBUTING.md) consistent.
+- [ ] Keep the canonical, unmodified ELv2 text in root LICENSE and include
+  `/app/LICENSE` in both Core and Agent images. Use `Elastic-2.0` for their
+  Citadel source-license metadata; bundled components retain their own terms.
+- [ ] Ensure recipients receive the license terms with copies of the software.
+  Retain licensing, copyright and other notices, and prominent notices for
+  modifications. Apply the ELv2 license-key and protected-functionality terms.
+- [ ] Describe the product as source-available, not OSI-approved open source.
+  Distinguish the source license from signed Team product entitlements.
+- [ ] Verify the sign-in/setup and account-menu license and source links.
+  Commit-specific source links are retained for transparency and provenance;
+  ELv2 itself does not impose AGPL's network-source-disclosure obligation.
+  Third-party source-disclosure obligations, where applicable, still apply.
+- [ ] Inventory licenses and required notices for Rust/npm dependencies,
+  generated code, fonts, assets, Docker tools, Deno and OS/runtime packages.
+  Provide source or other materials where their own licenses require it.
+- [ ] Verify the known Unicode-3.0 time-zone and MIT password-data notices
+  remain under `/app/third-party-notices/`. These two notices are not a
+  complete dependency inventory or evidence of full compliance.
+- [ ] Inspect built images and retain a release-specific license inventory or
+  SBOM. Source-tree recipe tests alone cannot verify final distributions.
+
+## Product and partner agreements
+
+Community remains free for personal and internal business use under ELv2;
+Team keys enable paid capabilities. Neither a Team key nor an explanatory
+Markdown file grants hosted-service, reseller or alternative source rights.
+
+- [ ] Publish reviewed subscription/order terms covering entitlements,
+  duration, renewal and support before taking paid orders.
+- [ ] Review consultant/MSP arrangements according to actual access to Citadel
+  functionality, rather than imposing a blanket MSP ban. Grant any required
+  hosting/reseller permission through an executed written agreement.
+
+Keep [the licensing guide](content/docs/overview/licensing.md),
+[commercial plan explanation](../COMMERCIAL-LICENSING.md) and
+[contribution policy](../CONTRIBUTING.md) consistent. The baseline tests in
+`test/release/test_licensing.py` do not substitute for these human reviews.

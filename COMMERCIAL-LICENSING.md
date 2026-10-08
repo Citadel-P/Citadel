@@ -1,50 +1,71 @@
-# Commercial source licensing
+# Source licensing and commercial plans
 
-Citadel-authored code in this repository is made available to the public under
-the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`).
+Unless separately identified, Citadel-authored source in this revision is
+provided under the unmodified [Elastic License 2.0](LICENSE) (`Elastic-2.0`).
+Citadel is **source-available, not OSI-approved open source**.
 
-A **separate commercial source-code license** may be negotiated with the
-relevant copyright holders for customers who want different terms, for example
-for incorporation into proprietary software. These additional rights exist
-**only when granted under an executed written agreement**. This document does
-not itself grant commercial-license rights or change the public AGPL grant.
+This page explains the product model; it is not a subscription contract or an
+additional license grant. The full license and any applicable signed agreement
+control the permissions for a particular copy.
 
-AGPL-3.0 already permits commercial use, redistribution, and offering services
-when the license's conditions are met; a separately negotiated license is
-optional rather than required merely because someone charges money. Running
-an unmodified copy of Citadel for an organization's internal operations does
-not, by itself, require a commercial source license. Using Citadel to manage
-separate Docker workloads does not automatically place those workloads under
-the AGPL.
+## Community and Team
 
-A commercial source agreement is not a way to withdraw AGPL rights already
-granted to other recipients; it does not automatically include future paid
-features, support, indemnification, or SLAs unless the signed agreement says so.
+Community is free for personal self-hosting and internal business production
+use, subject to ELv2. A company does not need a paid plan merely because it is
+a company. Community has no product-license-enforced resource-count limits.
 
-## Different from a Citadel Team license key
+Team adds the paid capabilities listed in the
+[edition guide](docs/content/docs/overview/licensing.md). Its signed product key
+enables those capabilities; it does not waive ELv2 or automatically authorize
+customer-facing hosted services. The source license alone does not supply a
+paid entitlement. Subscription scope, duration, support and renewal terms must
+be specified in the applicable order or agreement; none are invented here.
 
-The Citadel product's signed license key enables specified Team functionality
-in **official distributions**. Buying or installing a Team key does not, on
-its own, grant alternative source-code licensing rights. Conversely, the
-source-code license does not provide a signed Team entitlement.
+## Source rights and restrictions
 
-This repository contains the implementation of paid-gated functionality.
-Recipients under AGPL-3.0 may change those implementations or license checks
-in their forks, subject to AGPL requirements. Maintainer approval rules apply
-only to contributions accepted into the official project.
+ELv2 permits use, copying, modification and redistribution subject to its
+terms. In particular, it restricts:
 
-## Scope and contributors
+- providing the software to third parties as a hosted or managed service that
+  gives them access to a substantial set of its features or functionality;
+- moving, changing, disabling or circumventing license-key functionality, and
+  removing or obscuring functionality protected by a license key;
+- altering, removing or obscuring the licensor's licensing, copyright or other
+  notices.
 
-Commercial agreements can only grant rights the relevant copyright holders
-are authorized to license. Third-party dependencies, generated material, and
-bundled data retain their own licenses. Contributions from third parties
-require sufficient additional permissions before the project can include
-them in a commercial licensing offering.
+Redistributors must include the license terms. Modified copies must carry
+prominent modification notices. This summary does not replace LICENSE.
 
-Before offering alternative terms, maintainers must confirm copyright and
-commercial relicensing authority for the work, including past contributions.
-A commercial agreement cannot override separately licensed third-party code.
+## Consultants, MSPs and hosted offerings
 
-For inquiries about a separate commercial source-code agreement, contact the
-project maintainers through the GitHub repository. This file is explanatory,
-not a substitute for executed terms.
+Do not treat every consultant or managed-service provider as prohibited.
+Elastic's [official FAQ](https://www.elastic.co/licensing/elastic-license/faq)
+distinguishes installing software for a customer's internal use from providing
+substantial product access as a hosted service. Applied to Citadel:
+
+- A consultant setting up Citadel for a customer's own internal use can work
+  within ELv2, provided the license conditions are followed.
+- An operator using Citadel internally without giving customers access to its
+  functionality is different from selling customer access to Citadel itself.
+- Offering customers substantial Citadel UI or API functionality as a hosted
+  or managed service requires separate permission from the rights holders.
+
+These are explanatory examples, not a blanket exception or legal opinion on
+an individual arrangement. A Team key alone is not a hosting/reseller grant.
+Contact the project maintainers through GitHub to discuss such an offering.
+Any additional rights require an executed written agreement with a party
+that has authority to grant them. No standard partner contract is in force
+merely because this document mentions one.
+
+## Ownership, dependencies and earlier copies
+
+Third-party dependencies, bundled data and separately identified material keep
+their own licenses and notices. ELv2 does not override their rights. Before
+promising alternative terms, maintainers must verify copyright, contributor
+permissions and dependency compatibility for the relevant distribution.
+
+This update does not revoke rights already granted for earlier copies.
+Earlier public revisions of PR #47 contained an AGPL proposal. Their licensing
+effect requires legal review; an unmerged draft must not be assumed to have
+been private or legally ineffective. See the
+[release checklist](docs/LEGAL-RELEASE-CHECKLIST.md#earlier-public-licensing-snapshots).

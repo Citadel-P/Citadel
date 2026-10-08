@@ -1,5 +1,5 @@
-# Routes review of official repository changes without limiting AGPL forks.
+# Routes review of official repository changes; LICENSE governs source use.
 # A required-code-owner approval rule is unsuitable for a solo maintainer
 # without another eligible reviewer: authors cannot approve their own PRs.
-# Configure GitHub branch protection separately if/when reviewers are available.
+# Configure GitHub branch protection separately when reviewers are available.
 * @7amou3

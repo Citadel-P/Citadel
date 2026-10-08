@@ -56,6 +56,23 @@ def development_order(value):
     return (*semver(match[1]), int(match[2]))
 
 
+def documentation_order(value):
+    """One public docs site follows SemVer across development and stable releases."""
+    if version.DEVELOPMENT.fullmatch(value):
+        *product, number = development_order(value)
+        return (*product, 0, number)
+    return (*semver(value), 1, 0)
+
+
+def documentation_eligible(metadata, backend):
+    current = documentation_order(metadata["displayVersion"])
+    # Both channels publish to GHCR. Never require Docker Hub credentials for dev.
+    published = (tag for repos in POLICY["registries"].values()
+                 for tag in backend.tags(repos[0])
+                 if version.STABLE.fullmatch(tag) or version.DEVELOPMENT.fullmatch(tag))
+    return not any(documentation_order(tag) > current for tag in published)
+
+
 def development_compatibility():
     # No stable upgrade guarantee is claimed for the development channel.
     return dict(bootstrap=False, agent=None, core=None, protocolVersion=POLICY["protocolVersion"],
@@ -91,7 +108,22 @@ class Backend:
         return [release for page in pages for release in page]
 
     def release(self, tag):
-        return next((item for item in self.releases() if item["tag_name"] == tag), None)
+        # REST's release listing can omit unpublished draft releases.
+        # Resolve by tag with GraphQL, as gh release view does, then fetch the
+        # REST representation so journal assets retain their numeric IDs.
+        owner, name = self.repository.split("/")
+        query = "query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}"
+        data = json.loads(self.command("gh", "api", "graphql", "-f", "query=" + query,
+                                       "-f", "owner=" + owner, "-f", "name=" + name, "-f", "tag=" + tag))
+        if data.get("errors"):
+            raise RuntimeError("GitHub release lookup failed")
+        found = data["data"]["repository"]["release"]
+        if found is None:
+            return None
+        release_id = found["databaseId"]
+        if type(release_id) is not int or release_id <= 0:
+            raise ValueError("Invalid GitHub release ID")
+        return json.loads(self.command("gh", "api", f"repos/{self.repository}/releases/{release_id}"))
 
     def asset(self, release, name, destination):
         item = next((a for a in release["assets"] if a["name"] == name), None)
@@ -246,6 +278,11 @@ def preflight(metadata, backend, environ):
         raise ValueError("Coordinated release blocked: CITADEL_RUST_AGENT_RELEASE_ENABLED must be true")
     if backend.repository.lower() != "citadel-p/citadel":
         raise ValueError("Publication destinations require the Citadel-P/Citadel repository")
+    if not environ.get("DOCS_SITE_URL"):
+        raise ValueError("Release blocked: DOCS_SITE_URL is not configured")
+    for key in ["DOCS_SITE_URL", "API_DOCS_URL"]:
+        if environ.get(key) and not re.fullmatch(r"https://[^\s]+", environ[key]):
+            raise ValueError(f"{key} must be a canonical HTTPS URL")
     if development(metadata):
         recorded = backend.load("v" + metadata["displayVersion"])
         if recorded and recorded["metadata"] != metadata:
@@ -253,12 +290,9 @@ def preflight(metadata, backend, environ):
         return recorded["compatibility"] if recorded else development_compatibility()
     if environ.get("DOCKERHUB_NAMESPACE") != "citadelplane":
         raise ValueError("DOCKERHUB_NAMESPACE must match the reviewed destinations")
-    for key in ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN", "DOCS_SITE_URL"]:
+    for key in ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"]:
         if not environ.get(key):
             raise ValueError(f"Release blocked: {key} is not configured")
-    for key in ["DOCS_SITE_URL", "API_DOCS_URL"]:
-        if environ.get(key) and not re.fullmatch(r"https://[^\s]+", environ[key]):
-            raise ValueError(f"{key} must be a canonical HTTPS URL")
     recorded = backend.load("v" + metadata["productVersion"])
     if recorded:
         if recorded["metadata"] != metadata:
@@ -410,8 +444,7 @@ def checkpoint(backend, record, key, value=True):
 def promote(backend, record, directory):
     """Resume idempotently; verify remote exact tags even for journaled steps."""
     if not backend.apply:
-        final = "prerelease" if development(record["metadata"]) else "docs"
-        return {"dryRun": True, "tag": record["tag"], "sequence": ["agent exact", "core exact", "aliases", final]}
+        return {"dryRun": True, "tag": record["tag"], "sequence": ["agent exact", "core exact", "aliases", "docs"]}
     if not record["steps"].get("artifacts-retained"):
         raise ValueError("Durable artifacts must be retained before registry mutation")
     product = record["metadata"]["displayVersion"]
@@ -459,7 +492,10 @@ def promote(backend, record, directory):
 
 def retain(backend, record, directory):
     """Fill missing draft assets after an interrupted upload, before promotion."""
-    available = {a["name"] for a in backend.release(record["tag"])["assets"]}
+    draft = backend.release(record["tag"])
+    if draft is None:
+        raise ValueError("Release journal is not visible; retry the original workflow before publishing")
+    available = {a["name"] for a in draft["assets"]}
     for name, expected in record["artifacts"].items():
         path = directory / name
         if version.sha256(path) != expected:
@@ -558,14 +594,9 @@ def main():
         return
     record = backend.load(tag)
     if args.command == "docs":
-        if development(metadata):
-            print("eligible=false")
-            return
         if not record or record["status"] not in ["images-verified", "complete"]:
             raise ValueError("Documentation requires verified exact images")
-        published = [tag for repos in POLICY["registries"].values() for repo in repos
-                     for tag in backend.tags(repo) if version.STABLE.fullmatch(tag)]
-        eligible = "latest" in aliases(metadata["productVersion"], "core", published)
+        eligible = documentation_eligible(metadata, backend)
         print("eligible=" + str(eligible).lower())
         return
     if args.command == "finalize":
@@ -574,23 +605,19 @@ def main():
             return
         if not record or record["status"] not in ["images-verified", "complete"]:
             raise ValueError("Exact artifacts and aliases must be verified before finalizing")
+        result = os.environ.get("CITADEL_DOCS_RESULT", "")
+        eligible = documentation_eligible(metadata, backend)
+        if eligible and result.rstrip("/") != os.environ["DOCS_SITE_URL"].rstrip("/"):
+            raise ValueError("Latest release requires a successful documentation deployment to DOCS_SITE_URL")
+        if not eligible and result != "skipped-older-release":
+            raise ValueError("Older release must not replace default documentation")
         record["status"] = "complete"
+        record["steps"]["documentation"] = result
+        backend.save(record)
         if development(metadata):
-            record["steps"]["documentation"] = "skipped-development-release"
-            backend.save(record)
             backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",
                             "--prerelease", "--latest=false", "--title", f"Citadel {tag}", write=True)
             return
-        result = os.environ.get("CITADEL_DOCS_RESULT", "")
-        published_tags = [t for repos in POLICY["registries"].values() for repo in repos
-                          for t in backend.tags(repo) if version.STABLE.fullmatch(t)]
-        eligible = "latest" in aliases(metadata["productVersion"], "core", published_tags)
-        if eligible and not result.startswith("https://"):
-            raise ValueError("Latest release requires a successful documentation deployment")
-        if not eligible and result != "skipped-older-release":
-            raise ValueError("Older release must not replace default documentation")
-        record["steps"]["documentation"] = result
-        backend.save(record)
         published = [r["tag_name"][1:] for r in backend.releases() if not r["draft"] and version.STABLE.fullmatch(r["tag_name"][1:])]
         newest = not any(semver(v) > semver(metadata["productVersion"]) for v in published)
         backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",

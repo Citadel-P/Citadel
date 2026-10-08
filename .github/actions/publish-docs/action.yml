@@ -1,0 +1,40 @@
+name: Publish verified release documentation
+description: Deploy retained documentation for development and stable releases without replacing newer versions.
+inputs:
+  directory:
+    description: Directory containing verified release metadata and docs.tar
+    required: true
+outputs:
+  result:
+    description: Deployed URL or skipped-older-release
+    value: ${{ steps.order.outputs.eligible == 'true' && steps.deployment.outputs.page_url || 'skipped-older-release' }}
+  url:
+    description: Published Pages URL
+    value: ${{ steps.deployment.outputs.page_url }}
+runs:
+  using: composite
+  steps:
+    - name: Check documentation version ordering
+      id: order
+      shell: bash
+      env:
+        DIRECTORY: ${{ inputs.directory }}
+      run: |
+        python3 src/tools/release/release.py docs --repository "$GITHUB_REPOSITORY" \
+          --metadata "$DIRECTORY/version.json" --directory "$DIRECTORY" >> "$GITHUB_OUTPUT"
+    - name: Restore the verified documentation artifact
+      if: steps.order.outputs.eligible == 'true'
+      shell: bash
+      env:
+        DIRECTORY: ${{ inputs.directory }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/site"
+        tar -xf "$DIRECTORY/docs.tar" -C "$RUNNER_TEMP/site"
+    - uses: actions/upload-pages-artifact@v3
+      if: steps.order.outputs.eligible == 'true'
+      with:
+        path: ${{ runner.temp }}/site
+    - name: Deploy release documentation
+      id: deployment
+      if: steps.order.outputs.eligible == 'true'
+      uses: actions/deploy-pages@v4

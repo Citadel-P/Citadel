@@ -32,8 +32,8 @@ export function AuthShell({
           <div className="space-y-5">{children}</div>
         </section>
         <footer className="mt-4 space-y-1 text-center text-xs leading-relaxed text-muted-foreground">
-          <p>© Citadel authors and contributors. AGPL-3.0; no warranty.</p>
-          <p>You may copy, modify and redistribute Citadel under its license.</p>
+          <p>© Citadel authors and contributors. Elastic License 2.0; no warranty.</p>
+          <p>Source-available. Use, modification and redistribution are subject to the license terms.</p>
           <nav aria-label="Source and license" className="flex justify-center gap-4">
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">
               Source code

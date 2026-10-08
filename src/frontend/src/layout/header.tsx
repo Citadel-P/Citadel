@@ -98,12 +98,12 @@ function HeaderAccountMenu() {
         <DropdownMenuItem asChild>
           <a href={licenseUrl} target="_blank" rel="noopener noreferrer">
             <Scale className="size-4" />
-            AGPL-3.0 license
+            Elastic License 2.0
           </a>
         </DropdownMenuItem>
         <p className="px-2 py-2 text-xs leading-relaxed text-muted-foreground">
-          © Citadel authors and contributors. You may copy, modify and redistribute Citadel under the
-          AGPL-3.0. Provided without warranty.
+          © Citadel authors and contributors. Source-available under Elastic License 2.0.
+          Use, modification and redistribution are subject to the license terms. Provided without warranty.
         </p>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={logout}>
