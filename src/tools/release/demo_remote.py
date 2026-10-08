@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """VPS-side deployment, sent over SSH by demo.py. Requires Python 3.10+."""
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -100,10 +101,18 @@ def rootless_target(directory, channel):
         return None
     target = json.loads(marker.read_text())
     expected = "citadel-preview" if channel == "dev" else "citadel-demo"
-    if (set(target) != {"user", "uid", "dockerId"} or target["user"] != expected
+    if (set(target) not in ({"user", "uid", "dockerId"}, {"user", "uid", "dockerId", "network"}) or target["user"] != expected
             or account != expected or type(target["uid"]) is not int
             or target["uid"] != os.geteuid() or target["uid"] <= 0):
         raise ValueError("Rootless deployment account does not match target")
+    if "network" in target:
+        network = target["network"]
+        if not isinstance(network, dict) or set(network) != {"subnet", "gateway"}:
+            raise ValueError("Invalid rootless network configuration")
+        subnet, gateway = ipaddress.IPv4Network(network["subnet"]), ipaddress.IPv4Address(network["gateway"])
+        if (not subnet.is_private or subnet.is_loopback or gateway not in subnet
+                or gateway in (subnet.network_address, subnet.broadcast_address)):
+            raise ValueError("Invalid rootless network gateway")
     socket = f"unix:///run/user/{target['uid']}/docker.sock"
     info = json.loads(subprocess.check_output(
         ["docker", "--host", socket, "info", "--format", "{{json .}}"], text=True, timeout=30))
@@ -137,7 +146,12 @@ def compose_override(channel, rootless=None):
                   "citadel_data:/app/data",
                   f"{home}/.local/share/docker:/host{home}/.local/share/docker:ro"]
         services["server"]["volumes"] = "__ROOTLESS_MOUNTS__"
-        return json.dumps({"services": services}, indent=2).replace(
+        override = {"services": services}
+        if "network" in rootless:
+            # Preserve the bridge gateway already trusted by the reverse proxy
+            # configuration in the operator-owned .env, including on recreation.
+            override["networks"] = {"default": {"ipam": {"config": [rootless["network"]]}}}
+        return json.dumps(override, indent=2).replace(
             '"__ROOTLESS_MOUNTS__"', "!override " + json.dumps(mounts)) + "\n"
     return json.dumps({"services": services}, indent=2) + "\n"
 

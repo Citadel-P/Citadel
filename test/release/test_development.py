@@ -218,6 +218,22 @@ class DemoTests(unittest.TestCase):
                 remote.deploy(self.directory, self.payload)
             run.assert_not_called()
 
+    def test_rootless_network_gateway_must_belong_to_private_subnet(self):
+        target = dict(user="citadel-preview", uid=1101, dockerId="preview-engine")
+        for network in [dict(subnet="172.18.0.0/16", gateway="172.19.0.1"),
+                        dict(subnet="172.18.0.0/16", gateway="172.18.0.0"),
+                        dict(subnet="8.8.8.0/24", gateway="8.8.8.1"),
+                        dict(subnet="127.0.0.0/8", gateway="127.0.0.1")]:
+            with self.subTest(network=network):
+                (self.directory / ".rootless-deployment.json").write_text(json.dumps(dict(target, network=network)))
+                with patch.object(remote.os, "geteuid", return_value=1101), \
+                     patch.object(remote.pwd, "getpwuid") as account, \
+                     patch.object(remote.subprocess, "check_output") as inspect:
+                    account.return_value.pw_name = "citadel-preview"
+                    with self.assertRaisesRegex(ValueError, "network gateway"):
+                        remote.rootless_target(self.directory, "dev")
+                    inspect.assert_not_called()
+
     def test_deploy_pins_both_images_and_preserves_env_and_newer_version(self):
         with patch.object(remote.subprocess, "run") as run:
             self.assertEqual(remote.deploy(self.directory, self.payload)["status"], "deployed")

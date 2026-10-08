@@ -74,6 +74,12 @@ class PublicDeploymentComposeTests(unittest.TestCase):
                 self.assertEqual(sources["/host" + data], data)
                 self.assertTrue(next(m for m in mounts if m["source"] == data)["read_only"])
 
+    def test_rootless_recreation_preserves_trusted_proxy_gateway(self):
+        network = {"subnet": "172.19.0.0/16", "gateway": "172.19.0.1"}
+        value = self.render("latest", "citadel-stable", 28000,
+                            rootless={"user": "citadel-demo", "uid": 1102, "network": network})
+        self.assertEqual(value["networks"]["default"]["ipam"]["config"], [network])
+
 
 if __name__ == "__main__":
     unittest.main()
