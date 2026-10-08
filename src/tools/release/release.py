@@ -108,7 +108,22 @@ class Backend:
         return [release for page in pages for release in page]
 
     def release(self, tag):
-        return next((item for item in self.releases() if item["tag_name"] == tag), None)
+        # REST's release listing can omit unpublished draft releases.
+        # Resolve by tag with GraphQL, as gh release view does, then fetch the
+        # REST representation so journal assets retain their numeric IDs.
+        owner, name = self.repository.split("/")
+        query = "query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}"
+        data = json.loads(self.command("gh", "api", "graphql", "-f", "query=" + query,
+                                       "-f", "owner=" + owner, "-f", "name=" + name, "-f", "tag=" + tag))
+        if data.get("errors"):
+            raise RuntimeError("GitHub release lookup failed")
+        found = data["data"]["repository"]["release"]
+        if found is None:
+            return None
+        release_id = found["databaseId"]
+        if type(release_id) is not int or release_id <= 0:
+            raise ValueError("Invalid GitHub release ID")
+        return json.loads(self.command("gh", "api", f"repos/{self.repository}/releases/{release_id}"))
 
     def asset(self, release, name, destination):
         item = next((a for a in release["assets"] if a["name"] == name), None)
@@ -477,7 +492,10 @@ def promote(backend, record, directory):
 
 def retain(backend, record, directory):
     """Fill missing draft assets after an interrupted upload, before promotion."""
-    available = {a["name"] for a in backend.release(record["tag"])["assets"]}
+    draft = backend.release(record["tag"])
+    if draft is None:
+        raise ValueError("Release journal is not visible; retry the original workflow before publishing")
+    available = {a["name"] for a in draft["assets"]}
     for name, expected in record["artifacts"].items():
         path = directory / name
         if version.sha256(path) != expected:
