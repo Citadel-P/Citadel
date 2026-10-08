@@ -33,6 +33,9 @@ Browse the example Compose monorepo in Forgejo:
 [development preview](https://preview.citadelplane.com/forgejo/examples/demo-stacks).
 No sign-in is required to browse or clone these repositories.
 
+Open the WordPress example: [stable demo](https://demo.citadelplane.com/wordpress/)
+· [development preview](https://preview.citadelplane.com/wordpress/).
+
 ## Screenshots
 
 ![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)

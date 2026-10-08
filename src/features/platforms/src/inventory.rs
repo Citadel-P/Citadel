@@ -281,7 +281,9 @@ pub struct InventoryProjectionChange {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeContainerStat {
     pub docker_container_id: String,
+    /// Container memory excluding the cache reported in `memory_cache`, in bytes.
     pub memory_active: f64,
+    /// Reported file cache, in bytes; does not overlap with `memory_active`.
     pub memory_cache: f64,
     pub cpu_usage: f64,
     pub memory_limit: f64,

@@ -69,7 +69,7 @@ const STACK_STAT_METRICS: MetricConfig[] = [
   {
     kind: 'memory',
     title: 'Memory Usage',
-    description: 'Showing memory usage for the selected range',
+    description: 'Memory usage excludes file cache. Cache is shown separately.',
     fields: [
       {
         key: 'memoryActive',
@@ -202,13 +202,7 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
       });
     });
 
-    appendLiveStats(
-      setLiveStats,
-      activeIds,
-      updates,
-      getLiveStatsPointLimit(longestWindow),
-      longestWindow * 60 * 60,
-    );
+    appendLiveStats(setLiveStats, activeIds, updates, getLiveStatsPointLimit(longestWindow), longestWindow * 60 * 60);
     lastStatRef.current = Object.fromEntries(Object.entries(lastStatRef.current).filter(([id]) => activeIds.has(id)));
   }, [containers, longestWindow]);
 

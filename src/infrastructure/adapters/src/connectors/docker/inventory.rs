@@ -257,28 +257,19 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
         .usage
         .or(value.memory_stats.privateworkingset)
         .unwrap_or_default();
-    let inactive = value
-        .memory_stats
-        .stats
-        .get("total_inactive_file")
-        .copied()
-        .filter(|inactive| *inactive < usage)
-        .or_else(|| {
-            value
-                .memory_stats
-                .stats
-                .get("inactive_file")
-                .copied()
-                .filter(|inactive| *inactive < usage)
-        })
-        .unwrap_or_default();
+    // Report non-overlapping usage/cache components. Docker CLI's working set
+    // subtracts only inactive file pages, so it still overlaps with full cache.
+    // Prefer the hierarchical cgroup v1 cache counter to match total usage;
+    // cgroup v2 exposes the corresponding counter as `file`.
     let memory_cache = value
         .memory_stats
         .stats
-        .get("cache")
+        .get("total_cache")
+        .or_else(|| value.memory_stats.stats.get("cache"))
         .or_else(|| value.memory_stats.stats.get("file"))
         .copied()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .min(usage);
     let cpu_delta = value
         .cpu_stats
         .cpu_usage
@@ -306,7 +297,7 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
     });
     RuntimeContainerStat {
         docker_container_id: id.to_owned(),
-        memory_active: usage.saturating_sub(inactive) as f64,
+        memory_active: usage.saturating_sub(memory_cache) as f64,
         memory_cache: memory_cache as f64,
         cpu_usage,
         memory_limit: value.memory_stats.limit as f64,
@@ -664,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_container_stats_like_docker_stats_without_cache() {
+    fn maps_container_stats_with_full_file_cache_excluded_from_usage() {
         let value = ContainerStats {
             cpu_stats: super::super::projection::CpuStats {
                 cpu_usage: super::super::projection::CpuUsage {
@@ -704,22 +695,48 @@ mod tests {
         };
 
         let stat = map_container_stat("container-1", value);
-        assert_eq!(stat.memory_active, 750.0);
+        assert_eq!(stat.memory_active, 700.0);
         assert_eq!(stat.memory_cache, 300.0);
+        assert_eq!(stat.memory_active + stat.memory_cache, 1_000.0);
         assert_eq!(stat.cpu_usage, 40.0);
         assert_eq!(stat.rx_bytes, 10.0);
         assert_eq!(stat.tx_bytes, 20.0);
     }
     #[test]
-    fn invalid_v1_inactive_memory_falls_back_to_v2() {
-        let mut value = ContainerStats::default();
-        value.memory_stats.usage = Some(1_000);
-        value.memory_stats.stats = [
-            ("total_inactive_file".into(), 1_500),
-            ("inactive_file".into(), 250),
-        ]
-        .into();
-        assert_eq!(map_container_stat("container", value).memory_active, 750.0);
+    fn memory_breakdown_handles_cgroup_versions_missing_and_inconsistent_counters() {
+        for (counters, expected_usage, expected_cache) in [
+            // Inactive cache is part of full cache, never an extra subtraction.
+            (vec![("file", 900), ("inactive_file", 800)], 100.0, 900.0),
+            // cgroup v1 hierarchical usage needs hierarchical cache as well.
+            (
+                vec![
+                    ("total_cache", 400),
+                    ("cache", 300),
+                    ("total_inactive_file", 200),
+                ],
+                600.0,
+                400.0,
+            ),
+            (vec![("cache", 300)], 700.0, 300.0),
+            // An explicitly reported zero takes precedence over other counters.
+            (vec![("total_cache", 0), ("cache", 300)], 1_000.0, 0.0),
+            // Without full cache data, retain usage rather than guessing a total.
+            (vec![("inactive_file", 250)], 1_000.0, 0.0),
+            (vec![], 1_000.0, 0.0),
+            (vec![("file", 1_500)], 0.0, 1_000.0),
+            (vec![("file", 1_000)], 0.0, 1_000.0),
+        ] {
+            let mut value = ContainerStats::default();
+            value.memory_stats.usage = Some(1_000);
+            value.memory_stats.stats = counters
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect();
+            let stat = map_container_stat("container", value);
+            assert_eq!(stat.memory_active, expected_usage);
+            assert_eq!(stat.memory_cache, expected_cache);
+            assert_eq!(stat.memory_active + stat.memory_cache, 1_000.0);
+        }
     }
 }
 

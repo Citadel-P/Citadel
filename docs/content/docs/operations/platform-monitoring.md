@@ -6,6 +6,20 @@ description: "Monitor platform health, capacity, statistics, and stale data."
 Citadel reports CPU, memory, network, and Docker storage filesystem usage for
 Local, regular Agent, and Platform Edge Agent connections.
 
+## Container memory
+
+The Containers table's **Memory** column shows usage excluding reported file
+cache, followed by the memory limit. Container and Stack Stats show that same
+**Usage** value and **Cache** separately:
+
+```text
+Usage = raw container memory − reported file cache
+Cache = reported file cache
+```
+
+Usage may be lower than Linux `docker stats`, which excludes only inactive file
+cache. If Docker does not report cache, no cache is subtracted.
+
 ## Disk Usage
 
 Disk Usage is the capacity of the host filesystem containing Docker's
@@ -58,4 +72,3 @@ The environment value and actual bind target must match.
 
 For ZFS, Citadel reports the mounted dataset or filesystem containing Docker's
 data root, not whole-pool allocation.
-
