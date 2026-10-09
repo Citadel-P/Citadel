@@ -53,7 +53,7 @@ const resources = [
     icon: GitBranch,
     title: "Build from your source",
     description:
-      "Build container images from Git, run builds on dedicated pools, and publish to your registries.",
+      "Build container images from Git and publish to your registries. Team adds execution on external build pools.",
     href: "/docs/resources/builds",
     link: "Builds & build pools",
   },
@@ -61,7 +61,7 @@ const resources = [
     icon: Workflow,
     title: "Put routine work on a schedule",
     description:
-      "Connect actions into repeatable workflows and trigger them manually, on a schedule, or with a webhook.",
+      "Connect actions into repeatable workflows. Run them manually, or use Team for schedules and webhook triggers.",
     href: "/docs/resources/automation-actions",
     link: "Automation",
   },
@@ -162,8 +162,8 @@ export default function HomePage() {
           </h2>
           <p>
             Organize your applications in a monorepo. Give each stack its own
-            Compose path and watched files, then use webhooks to deploy relevant
-            changes.
+            Compose path and watched files, then use Team’s webhook-triggered
+            deployments to apply relevant changes.
           </p>
           <Link className={styles.textLink} href="/docs/resources/stacks/git">
             Set up a Git stack <ArrowRight size={16} aria-hidden="true" />
@@ -238,10 +238,78 @@ export default function HomePage() {
           <ShieldCheck size={21} aria-hidden="true" />
           <div>
             <h3>Give access with intent</h3>
-            <p>Combine roles and resource permissions for least privilege.</p>
+            <p>Use built-in roles, with custom access control available in Team.</p>
           </div>
           <ArrowUpRight size={16} aria-hidden="true" />
         </Link>
+      </section>
+
+      <section
+        id="licensing"
+        className={`${styles.section} ${styles.licensing}`}
+        aria-labelledby="licensing-title"
+      >
+        <div className={styles.sectionHeading}>
+          <div>
+            <p className={styles.eyebrow}>Choose the capabilities you need</p>
+            <h2 id="licensing-title">License and editions</h2>
+          </div>
+          <a
+            className={styles.textLink}
+            href={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.licenseRef}/LICENSE`}
+          >
+            Read license terms <ArrowUpRight size={16} aria-hidden="true" />
+          </a>
+        </div>
+        <p>
+          Citadel is source-available under Elastic License 2.0. Community is
+          free for personal self-hosting and internal business production use.
+          Team adds paid capabilities enabled by a signed product key.
+        </p>
+        <p>
+          ELv2 is not an OSI-approved open-source license. Use, modification,
+          and redistribution are subject to its terms. A Team key does not
+          grant hosting or reseller permission.
+        </p>
+        <div className={styles.editionGrid}>
+          <article className={styles.edition} aria-labelledby="community-title">
+            <p className={styles.eyebrow}>Free</p>
+            <h3 id="community-title">Community</h3>
+            <p>
+              Manage Docker and Swarm, deploy containers and Compose stacks,
+              inspect logs, and run manual builds and recovery workflows.
+              No product-license-enforced limits on hosts, containers, stacks,
+              or users. Local authentication, MFA, and existing OIDC are included;
+              no vendor account or paid activation is required.
+            </p>
+            <Link className={styles.textLink} href="/docs/overview/licensing#community">
+              Explore Community <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </article>
+          <article className={styles.edition} aria-labelledby="team-title">
+            <p className={styles.eyebrow}>Paid capabilities</p>
+            <h3 id="team-title">Team</h3>
+            <p>
+              Add scheduled and webhook-triggered operations, custom access
+              control, advanced alerts, continuous guardrails, and execution
+              through external build pools. Scheduled backups and
+              webhook-triggered deployments require Team. The capabilities in
+              your product key determine which paid workflows are enabled.
+            </p>
+            <Link className={styles.textLink} href="/docs/overview/licensing#edition-comparison">
+              Compare editions <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        </div>
+        <p className={styles.commitment}>
+          Established Community capabilities stay free in later supported
+          releases. Read the{" "}
+          <Link className={styles.textLink} href="/docs/overview/community-commitment">
+            Community commitment
+          </Link>{" "}
+          for its scope and change policy. This product commitment does not
+          change the source license.
+        </p>
       </section>
 
       <section className={styles.startSection} aria-labelledby="start-title">
@@ -289,6 +357,7 @@ export default function HomePage() {
         <nav aria-label="Footer">
           <Link href="/docs">Documentation</Link>
           <Link href="/docs/reference/api">API</Link>
+          <Link href="/docs/overview/licensing">Licensing</Link>
           <a href="https://preview.citadelplane.com">Dev preview</a>
           <a href={`https://github.com/${gitConfig.user}/${gitConfig.repo}`}>
             GitHub <ArrowUpRight size={13} aria-hidden="true" />

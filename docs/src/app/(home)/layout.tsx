@@ -4,8 +4,7 @@ import { baseOptions } from "@/lib/layout.shared";
 export default function Layout({ children }: LayoutProps<"/">) {
   return (
     <HomeLayout
-      {...baseOptions()}
-      links={[
+      {...baseOptions([
         { text: "Documentation", url: "/docs" },
         { text: "Resources", url: "/docs/resources" },
         {
@@ -13,7 +12,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
           url: "https://demo.citadelplane.com",
           external: true,
         },
-      ]}
+      ])}
     >
       {children}
     </HomeLayout>

@@ -2,16 +2,16 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import Image from 'next/image';
 import { appName, docsAssetUrl, gitConfig } from './shared';
 
-export function baseOptions(): BaseLayoutProps {
-  const links: NonNullable<BaseLayoutProps['links']> = [
+export function baseOptions(
+  links: NonNullable<BaseLayoutProps['links']> = [
     { text: 'API Preview', url: '/docs/reference/api' },
     {
       text: 'Report an issue',
       url: `https://github.com/${gitConfig.user}/${gitConfig.repo}/issues/new`,
       external: true,
     },
-  ];
-
+  ],
+): BaseLayoutProps {
   return {
     nav: {
       title: (
@@ -22,6 +22,6 @@ export function baseOptions(): BaseLayoutProps {
       ),
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
-    links,
+    links: [...links, { text: 'Licensing', url: '/docs/overview/licensing' }],
   };
 }

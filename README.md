@@ -8,144 +8,66 @@
   <strong>A self-hosted management platform for Docker and Swarm.</strong>
 </p>
 
-Citadel is a self-hosted Docker management platform for developers and teams. Build images from Git, deploy containers and Compose stacks, and manage Docker Standalone and Swarm across multiple hosts through one web interface.
+Build images from Git, deploy containers and Compose stacks, and manage Docker Standalone and Swarm across multiple hosts through one web interface.
 
-[Documentation](https://docs.citadelplane.com/) · [Live demo](https://demo.citadelplane.com/) · [Development preview](https://preview.citadelplane.com/) · [API reference](https://docs.citadelplane.com/docs/reference/api/) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
+[Live demo](https://demo.citadelplane.com/) · [Documentation](https://docs.citadelplane.com/) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
 
-## Try Citadel
+## What Citadel does
 
-| Site | Purpose |
-| --- | --- |
-| [Demo](https://demo.citadelplane.com/) | Explore the stable release |
-| [Preview](https://preview.citadelplane.com/) | Explore development releases and upcoming changes |
-| [Documentation](https://docs.citadelplane.com/) | Installation, resources, guides, and API reference |
+- **Deploy applications** — build images from Git, publish to registries, deploy containers and Compose stacks, and roll back releases.
+- **Manage hosts and Swarm** — connect local Docker, remote Agents, and outbound Edge Agents; manage nodes, services, tasks, configs, and secrets.
+- **Inspect and recover** — follow logs, open terminals, track resource usage, and back up and restore the control plane and Docker volumes.
+- **Automate operations** — run TypeScript actions, schedule work, respond to webhooks, and check configuration drift.
+- **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.
 
-**Stable demo sign-in:** username `demo` · password `citadel-demo-2026`.
-
-**Preview sign-in:** username `demo` · password `demodemo`.
-
-Both sites include Nginx, Whoami and Forgejo Deployments, two Git Stacks from a
-shared monorepo, and a Web Editor Stack with a persistent counter. Visitor
-accounts have read-only access.
-
-Browse the example Compose monorepo in Forgejo:
-[stable demo](https://demo.citadelplane.com/forgejo/examples/demo-stacks) ·
-[development preview](https://preview.citadelplane.com/forgejo/examples/demo-stacks).
-No sign-in is required to browse or clone these repositories.
-
-Open the WordPress example: [stable demo](https://demo.citadelplane.com/wordpress/)
-· [development preview](https://preview.citadelplane.com/wordpress/).
-
-## Screenshots
+Capabilities vary by edition; see the [Community and Team comparison](docs/content/docs/overview/licensing.md#edition-comparison).
 
 ![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
 
 <details>
-<summary>Platforms, containers, and monitoring</summary>
+<summary>More screenshots</summary>
 
 ![Citadel Platforms page with an online standalone Docker host and an online Swarm host](docs/public/screenshots/platforms.png)
 
 ![Citadel Docker platform with five running containers and live CPU and memory usage](docs/public/screenshots/platform-containers.png)
 
-</details>
-
-<details>
-<summary>Swarm services and replica configuration</summary>
-
 ![Citadel Swarm overview with three healthy services and their running replica counts](docs/public/screenshots/swarm-services.png)
 
 ![Citadel Swarm service configuration showing replica settings and deployment controls](docs/public/screenshots/swarm-service-config.png)
-
-</details>
-
-<details>
-<summary>Dark mode</summary>
 
 ![Citadel dark-mode Platforms page showing Docker and Swarm hosts](docs/public/screenshots/platforms-dark.png)
 
 </details>
 
-## What you can do
+## Try Citadel
 
-- **Deploy applications** — manage containers and Compose stacks, deploy from Git, roll back releases, and check configuration drift.
-- **Connect your hosts** — manage local Docker, remote Agents, and outbound Edge Agents; inspect resources, logs, and terminals.
-- **Operate Swarm** — manage nodes, services, tasks, configs, and secrets.
-- **Build and automate** — build images from Git, publish to registries, and run TypeScript actions and webhooks.
-- **Monitor and recover** — track resource usage, receive alerts, and back up and restore the control plane and Docker volumes.
-- **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.
+Explore the [stable demo](https://demo.citadelplane.com/) with **read-only access**:
+username `demo` · password `citadel-demo-2026`.
+
+Browse the hosts, stacks, and resource details without installing anything.
+The [demo guide](docs/content/docs/guides/demo.mdx) covers the example applications,
+Git repositories, and secondary development preview, which has separate credentials.
 
 ## Install Citadel
 
-Run Citadel and PostgreSQL with Docker Compose using the published images. No source checkout or build is required.
+Follow the [installation guide](https://docs.citadelplane.com/docs/getting-started/install/)
+to run Citadel with Docker Compose using published images.
 
-On a Linux Docker host with Docker Compose **2.30 or newer**, curl, and OpenSSL, download the installation files:
+## Documentation and contributing
 
-```bash
-mkdir -p citadel
-cd citadel
-curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
-curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
-chmod 600 .env
-```
+Start with the [quick start](https://docs.citadelplane.com/docs/getting-started/quick-start/)
+for first-run setup and connecting a host. The [public API reference](https://docs.citadelplane.com/docs/reference/api/)
+is currently **API Preview**. Shared documentation can be ahead of the stable
+release; use [documentation and API schemas matching your installed version](https://docs.citadelplane.com/docs/reference/releases/#documentation-and-api).
 
-Generate a database password:
-
-```bash
-openssl rand -hex 32
-```
-
-Open `.env` and paste the generated value after `PG_PASSWORD=`. This password is for PostgreSQL; you create your Citadel sign-in separately during setup.
-
-Leave `CITADEL_IMAGE` blank to use the latest stable release. To use the development channel, set `CITADEL_IMAGE=ghcr.io/citadel-p/citadel:dev`. You can also pin an exact version from the [releases](https://github.com/Citadel-P/Citadel/releases).
-
-Start the services:
-
-```bash
-docker compose pull
-docker compose up -d
-docker compose ps
-```
-
-Once both services are healthy, open [http://localhost:18000](http://localhost:18000) on the Docker host, create your administrator account, and add a **Local** platform to manage that host.
-
-The default setup binds to localhost. For a remote server or shared access, configure HTTPS using the [installation guide](https://docs.citadelplane.com/docs/getting-started/install/) and [TLS guide](https://docs.citadelplane.com/docs/operations/tls-and-secure-agent-transport/).
-
-Citadel has administrative access to the connected Docker host. Preserve `.env` and the `citadel_data` and `postgres_data` volumes when upgrading; they contain your configuration, application keys, and database.
-
-## Documentation and API
-
-Start with the [quick start](https://docs.citadelplane.com/docs/getting-started/quick-start/), browse [resources](https://docs.citadelplane.com/docs/resources/) and [guides](https://docs.citadelplane.com/docs/guides/), or read the [architecture overview](https://docs.citadelplane.com/docs/overview/architecture/).
-
-The documentation follows the newest published version across stable and development releases, so it may describe features not yet available in the stable demo.
-
-The [API reference](https://docs.citadelplane.com/docs/reference/api/) includes an embedded ReDoc explorer for the public OpenAPI contract. Browse endpoints and schemas directly in the documentation without enabling Swagger on your installation.
-
-For integrations, use the [public OpenAPI schema](schema/public-v1.json) from the tag matching your installed version. The public API is currently labeled **API Preview**; the full schema used by the web UI is internal.
+For development and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License and editions
 
-Citadel-authored source in this revision is available under the
-[Elastic License 2.0](LICENSE) (`Elastic-2.0`). Citadel is **source-available,
-not OSI-approved open source**. Use, modification and redistribution are subject
-to ELv2, including its license-key, hosted-service and notice restrictions.
+Citadel is source-available under the [Elastic License 2.0](LICENSE).
 
-Community is free for personal self-hosting and internal business production
-use under ELv2. Team adds paid capabilities enabled by a signed product key.
-See the [edition comparison](https://docs.citadelplane.com/docs/overview/licensing/)
-and [commercial licensing explanation](COMMERCIAL-LICENSING.md). A Team key
-does not itself grant hosted-service or other rights beyond the source license.
+Community is free for personal and internal business production use under these
+terms. Team adds paid operational capabilities.
 
-Our [Community commitment](docs/content/docs/overview/community-commitment.md)
-protects established free workflows from becoming paid-only in later supported
-releases. It covers advance change notices, non-destructive expiry and control
-of your data. This is a product policy, not an amendment to ELv2 or a promise
-of eventual open-source conversion.
-
-Third-party material retains its own licenses and notices. This update does
-not revoke rights already granted for earlier copies. Source and license links
-remain available in the UI; see the [release checklist](docs/LEGAL-RELEASE-CHECKLIST.md)
-and [trademark policy](TRADEMARKS.md) for distribution guidance.
-
-For source development, see the [development guide](docs/DEVELOPMENT.md) and
-[contribution policy](CONTRIBUTING.md). Report bugs and request features through
-[GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
+See [editions and licensing](docs/content/docs/overview/licensing.md)
+and our [Community commitment](docs/content/docs/overview/community-commitment.md).
