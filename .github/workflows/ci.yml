@@ -101,6 +101,8 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -111,6 +113,14 @@ jobs:
         run: |
           bash .github/scripts/install-packages.sh pkg-config libssl-dev ripgrep
           echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+
+      - name: Authenticate Docker Hub pulls
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Verify Rust source ownership
         run: bash test/scripts/check-source-ownership.sh
@@ -164,6 +174,8 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -174,6 +186,14 @@ jobs:
         run: |
           bash .github/scripts/install-packages.sh pkg-config libssl-dev
           echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+
+      - name: Authenticate Docker Hub pulls
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Install pinned Rust toolchain
         run: |
@@ -277,6 +297,9 @@ jobs:
     uses: ./.github/workflows/agent.yml
     with:
       release: ${{ needs.version.outputs.publication == 'true' }}
+      dockerhub_username: ${{ vars.DOCKERHUB_USERNAME }}
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   documentation:
     name: Validate and retain release documentation
