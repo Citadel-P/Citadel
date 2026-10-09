@@ -121,6 +121,12 @@ See the [edition comparison](https://docs.citadelplane.com/docs/overview/licensi
 and [commercial licensing explanation](COMMERCIAL-LICENSING.md). A Team key
 does not itself grant hosted-service or other rights beyond the source license.
 
+Our [Community commitment](docs/content/docs/overview/community-commitment.md)
+protects established free workflows from becoming paid-only in later supported
+releases. It covers advance change notices, non-destructive expiry and control
+of your data. This is a product policy, not an amendment to ELv2 or a promise
+of eventual open-source conversion.
+
 Third-party material retains its own licenses and notices. This update does
 not revoke rights already granted for earlier copies. Source and license links
 remain available in the UI; see the [release checklist](docs/LEGAL-RELEASE-CHECKLIST.md)

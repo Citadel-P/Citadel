@@ -14,12 +14,23 @@ Community is free for personal self-hosting and internal business production
 use, subject to ELv2. A company does not need a paid plan merely because it is
 a company. Community has no product-license-enforced resource-count limits.
 
+The [Community commitment](docs/content/docs/overview/community-commitment.md)
+defines the protected free baseline for later supported releases and the policy
+for notice, deprecation, portability and non-destructive expiry. It is a product
+commitment; it does not amend ELv2 or grant unrestricted open-source rights.
+Paid plans add value rather than reclaiming established Community workflows.
+
 Team adds the paid capabilities listed in the
 [edition guide](docs/content/docs/overview/licensing.md). Its signed product key
 enables those capabilities; it does not waive ELv2 or automatically authorize
 customer-facing hosted services. The source license alone does not supply a
 paid entitlement. Subscription scope, duration, support and renewal terms must
 be specified in the applicable order or agreement; none are invented here.
+
+A separate [packaging review](docs/COMMUNITY-PACKAGING-REVIEW.md) considers basic
+backup schedules and Git-triggered deployments. Those remain Team capabilities
+today. A proposal or product-policy document is not an implemented entitlement
+change, a price quote or a release announcement.
 
 ## Source rights and restrictions
 

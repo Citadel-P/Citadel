@@ -8,6 +8,8 @@ Explain the problem, the focused change, and any compatibility implications.
 - [ ] Updated documentation for user-visible behavior changes
 - [ ] No secrets, credentials, or unrelated generated files included
 - [ ] Checked licenses and attribution requirements for new dependencies/assets
+- [ ] Reviewed the [Community commitment](../docs/content/docs/overview/community-commitment.md): no established free workflow becomes paid-only
+- [ ] For material policy or edition changes, identified affected versions, public notice and migration steps; proposals are not presented as released features
 
 ## Contribution and licensing
 

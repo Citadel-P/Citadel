@@ -57,6 +57,33 @@ copies. The scope and effect of any previous grants require legal review.
 - [ ] Inspect built images and retain a release-specific license inventory or
   SBOM. Source-tree recipe tests alone cannot verify final distributions.
 
+## Community stability and change notices
+
+- [ ] Review the [Community commitment](content/docs/overview/community-commitment.md)
+  against the previous supported release and its recorded free baseline. Do not
+  move an established Community workflow behind a paid key, rename it to evade
+  the commitment, or introduce artificial resource-count quotas.
+- [ ] Review the commitment's scope and legal implications before publishing it;
+  it is a project product policy, not part of the unmodified ELv2 text.
+- [ ] For material changes, publish a dated notice before the affected release
+  stating old/new behavior, affected versions, effective date, audience and
+  migration steps. Honor any separate contractual notice requirements.
+- [ ] Check README, edition guide, website/pricing, application and release notes
+  against actual behavior for the same version. Keep proposals and previews
+  distinct from released features; preserve previous terms in version history.
+- [ ] Test non-destructive expiry and Community recovery/data access. Document
+  paid workflows that pause, export limitations and migration procedures. Do
+  not promise an unimplemented one-click export or a free support SLA.
+- [ ] Explain security-driven retirements and free replacement/migration options
+  where feasible. Do not turn deprecation into a paid-only replacement of a
+  protected Community workflow.
+
+The [packaging review](COMMUNITY-PACKAGING-REVIEW.md) is a separate proposal.
+Basic backup schedules and webhook-triggered deployments remain Team features
+until an independently reviewed implementation and release change that.
+Documentation-policy tests do not prove the runtime respects this commitment;
+behavioral regressions need the appropriate existing feature tests.
+
 ## Product and partner agreements
 
 Community remains free for personal and internal business use under ELv2;
