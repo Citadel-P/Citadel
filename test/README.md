@@ -21,6 +21,14 @@ and revocation. It also exercises Core's three-node Swarm installer and worker
 routing through Direct and Edge managers, including outage recovery, repair,
 upgrade and removal. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
+The Swarm image-transfer regression also checks digest-pinned inputs in a clean
+Docker daemon, verifying that save/load preserves the selected image identity.
+Run it independently with:
+
+```bash
+cargo test --locked -p citadel-agent --test acceptance stages_digest_pinned_image_without_registry_digest_metadata -- --ignored --nocapture
+```
+
 See [Agent development](../docs/DEVELOPMENT.md#agent-development) for runtime
 configuration and local image setup.
 
