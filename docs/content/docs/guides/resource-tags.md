@@ -104,6 +104,9 @@ The removed tag is no longer assigned to that resource, but it still exists in t
 
 ## Filter By Tags
 
+Use [global search](/docs/guides/finding-resources) to find a resource by name
+across Citadel, then use Tag filters on its list to narrow related resources.
+
 List pages with a tag filter include:
 
 - Deployments
@@ -168,4 +171,3 @@ Experimental
 ```
 
 Assign it to trial resources. Remove the tag when the resource becomes permanent, or filter by the tag to clean up old experiments.
-

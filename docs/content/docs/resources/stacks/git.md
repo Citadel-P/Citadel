@@ -23,14 +23,46 @@ as its authoritative source, see
 You need a connected Platform and a repository that has synced successfully in
 **Repositories**. Ask the application's maintainer for its Compose file path.
 
-1. Open **Stacks**, select **Add Stack**, and choose **Git Stack** as the source.
-2. Select the Platform, repository, and branch.
-3. Select the Compose file and any environment files that belong to the application.
-4. Review missing variables, secrets, and editor errors.
-5. Select **Save**, then **Deploy**. Check the **Services** tab and the deployed release.
+1. In **Repositories**, [connect the repository](/docs/resources/git-repositories#connect-a-repository)
+   and confirm its initial sync succeeds. For private source, configure its Git Account first.
+2. Open **Stacks**, select **Add Stack**, enter a name, and choose **Git** as the source.
+3. Select the Platform, repository, and branch. Leave **Commit** empty to track
+   that branch, or enter a commit SHA for a fixed revision.
+4. Select the application's Compose paths in order: base file first, then
+   overrides. Select any repository environment files it requires. The
+   [simple repository](#simple-repository) example below shows the minimum setup.
+5. Review missing variables and secrets on **Bindings** and fix reported errors.
+   Keep update behavior **Disabled** or **Notify Only** while validating the first deployment.
+6. Select **Save**, then **Deploy**. Wait for the operation to finish and check
+   the **Services** tab, application logs, and application endpoint.
+7. Record the deployed commit from **Config → Source files** or the release's
+   source details. This is the revision to use if you need to return to this deployment.
 
 Pulling new Git code does not automatically deploy it unless an automatic update
 policy is enabled. Start with manual deployment while you check the configuration.
+
+## Review and deploy an update
+
+Use this workflow with **Disabled** or **Notify Only** update behavior and no
+deploy webhook. Repository sync runs any configured hooks and can trigger other
+Stacks whose automatic deployment policies are enabled.
+
+1. Commit and push the application change to the selected branch.
+2. Synchronize the repository in **Repositories** to refresh its cached source.
+   On the Stack, select **Check for updates** to record relevant changes for that
+   Stack. The check itself does not deploy or run repository hooks.
+3. In **Config → Source files**, compare the deployed and latest synchronized
+   source. **Compare** and source browsing also require Git Repository Read access.
+4. Review changed Compose paths, bindings, and images. Save any Stack configuration
+   edits, then select **Deploy** or **Redeploy** when ready.
+5. Check the operation result, service health, and application behavior. Confirm
+   the deployed commit in source details after the operation succeeds.
+
+A branch can advance between the check and deployment. To apply precisely the
+revision you reviewed, set **Commit** to its SHA and save before deploying.
+A pinned Stack does not track later branch updates until you clear **Commit**.
+For recovery, follow [Rollback](#rollback); a saved release alone does not pin
+an otherwise unpinned branch to its historical commit.
 
 [![Git Stack configuration showing repository, branch, ordered Compose paths, and an environment file](/screenshots/git-stack-source.png)](/screenshots/git-stack-source.png)
 
@@ -174,10 +206,10 @@ Add shared paths only when changes there should mark the Stack outdated; leave
 
 For branch-tracking Git stacks, Citadel stores the exact deployed commit in the stack release source metadata.
 
-- `Notify`: mark the stack outdated and emit a Git update alert.
-- `StackAutoDeploy`: automatically reapply the stack when relevant Git paths change.
-- `ServiceAutoDeploy`: unavailable for Git Stacks. Use `StackAutoDeploy` because a Git commit can affect networks, volumes, env files, and dependencies.
-- `Disabled`: disable periodic checks; manual checks remain available.
+- **Notify Only**: mark the stack outdated and emit a Git update alert.
+- **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change.
+- **Auto Deploy Services**: unavailable for Git Stacks. A Git commit can affect networks, volumes, env files, and dependencies.
+- **Disabled**: disable periodic checks; manual checks remain available.
 
 `Notify` and update detection remain available in Community. Automatic
 deployment caused by continuously observed repository changes requires
@@ -267,11 +299,18 @@ The current Rust implementation does not automatically use the deployed commit
 recorded in release source metadata. If the selected release was tracking a
 branch with **Commit** empty, rollback can deploy that branch's current head.
 
-To redeploy an exact earlier revision, find its deployed commit in release
-source details, set **Commit** to that SHA in the Stack configuration, review
-the paths and bindings, and select **Deploy** or **Redeploy**. The commit must
-still be available to Citadel. A pinned Stack stops tracking branch updates
-until you clear **Commit**.
+To redeploy an exact earlier revision:
+
+1. Open **Releases** and find the healthy release you want to recover. Copy its
+   deployed commit SHA from source details.
+2. In **Config**, set **Commit** to that SHA. Review the repository, Compose paths,
+   environment files, and bindings needed by that revision, then save.
+3. Select **Deploy** or **Redeploy**. The commit must still be available to Citadel.
+4. Verify service health and application behavior, then confirm the deployed
+   commit matches the selected SHA.
+
+Keep **Commit** pinned while diagnosing the regression. Clear it and save only
+when you intend to resume branch tracking and the configured update policy.
 
 Rollback does not restore application volumes or historical secret values.
 Review bindings, image references, and external Docker Secrets or Configs

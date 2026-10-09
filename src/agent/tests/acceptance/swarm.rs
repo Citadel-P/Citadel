@@ -8,6 +8,85 @@ async fn nested(f: &Fixture, role: &str, args: &[&str]) -> String {
     docker(&command).await
 }
 
+async fn stage_agent_image(f: &Fixture, image: &str) {
+    // Image IDs can identify a manifest/index in the containerd store and a config in
+    // the classic store. Registry digest references also do not survive load.
+    // Save a unique tag so either store can resolve the transferred image.
+    let source: Value = serde_json::from_str(&docker(&["image", "inspect", image]).await).unwrap();
+    let image_id = source[0]["Id"].as_str().unwrap();
+    let transfer_tag = format!("{}:transfer", f.name);
+    let output = tokio::time::timeout(
+        Duration::from_secs(120),
+        tokio::process::Command::new("bash")
+            .args([
+                "-o",
+                "pipefail",
+                "-c",
+                "set -e; docker image tag \"$1\" \"$3\"; \
+                 trap 'docker image rm \"$3\" >/dev/null' EXIT; \
+                 docker image save \"$3\" | docker exec -i \"$2\" docker image load",
+                "acceptance",
+                image_id,
+                &f.container("swarm-manager"),
+                &transfer_tag,
+            ])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        output.status.success(),
+        "image transfer: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    nested(
+        f,
+        "swarm-manager",
+        &[
+            "tag",
+            &transfer_tag,
+            "registry:5000/citadel-agent:acceptance-native",
+        ],
+    )
+    .await;
+    let loaded = nested(
+        f,
+        "swarm-manager",
+        &[
+            "image",
+            "inspect",
+            "registry:5000/citadel-agent:acceptance-native",
+        ],
+    )
+    .await;
+    let loaded: Value = serde_json::from_str(&loaded).unwrap();
+    for field in ["Architecture", "Os", "Variant", "RootFS"] {
+        assert_eq!(
+            loaded[0][field], source[0][field],
+            "Transferred Agent image changed {field}"
+        );
+    }
+    // Older Docker APIs include empty/default Config fields that newer APIs omit.
+    let config = |image: &Value| {
+        let mut config = image[0]["Config"].as_object().unwrap().clone();
+        config.retain(|_, value| {
+            !value.is_null()
+                && value != false
+                && value != ""
+                && value.as_array().is_none_or(|items| !items.is_empty())
+                && value.as_object().is_none_or(|items| !items.is_empty())
+        });
+        config
+    };
+    assert_eq!(
+        config(&loaded),
+        config(&source),
+        "Transferred Agent image changed Config"
+    );
+}
+
 async fn operation(f: &Fixture, platform: &str, action: &str) {
     let path = format!("/api/v1/platforms/{platform}/node-agents");
     let (method, path) = if action == "remove" {
@@ -64,41 +143,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         .await;
         nodes.push(nested(f, role, &["info", "--format", "{{.Swarm.NodeID}}"]).await);
     }
-    // Transfer only the candidate image into the disposable manager, then publish
-    // it to the private fixture registry so the installer can resolve its digest.
-    let output = tokio::time::timeout(
-        Duration::from_secs(120),
-        tokio::process::Command::new("bash")
-            .args([
-                "-o",
-                "pipefail",
-                "-c",
-                "docker image save \"$1\" | docker exec -i \"$2\" docker image load",
-                "acceptance",
-                image,
-                &f.container("swarm-manager"),
-            ])
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert!(
-        output.status.success(),
-        "image transfer: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    nested(
-        f,
-        "swarm-manager",
-        &[
-            "tag",
-            image,
-            "registry:5000/citadel-agent:acceptance-native",
-        ],
-    )
-    .await;
+    stage_agent_image(f, image).await;
     nested(
         f,
         "swarm-manager",
@@ -365,4 +410,57 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             "Swarm {connector}: Core install, pinned image, worker routing, volume browsing, manager/worker recovery, repair, upgrade and removal passed"
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "requires Docker; transfers a digest-pinned image into a disposable daemon"]
+async fn stages_digest_pinned_image_without_registry_digest_metadata() {
+    // A small multi-platform image exercises the same archive path as a released Agent.
+    let image = "alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6";
+    docker(&["pull", image]).await;
+    let mut f = Fixture::new();
+    docker(&["network", "create", &f.name]).await;
+    f.daemon("swarm-manager").await;
+    // The daemon readiness setup pulls Alpine; remove it so registry metadata
+    // cannot hide a broken save/load transfer.
+    nested(&f, "swarm-manager", &["image", "rm", "alpine:3.24"]).await;
+    assert!(
+        nested(&f, "swarm-manager", &["image", "ls", "-q"])
+            .await
+            .is_empty()
+    );
+    stage_agent_image(&f, image).await;
+    assert_eq!(
+        nested(
+            &f,
+            "swarm-manager",
+            &[
+                "run",
+                "--rm",
+                "--pull=never",
+                "--network=none",
+                "registry:5000/citadel-agent:acceptance-native",
+                "cat",
+                "/etc/alpine-release",
+            ],
+        )
+        .await,
+        docker(&[
+            "run",
+            "--rm",
+            "--pull=never",
+            "--network=none",
+            image,
+            "cat",
+            "/etc/alpine-release",
+        ])
+        .await,
+        "Transferred image must run without fetching it again"
+    );
+    assert!(
+        docker(&["image", "ls", "--quiet", &format!("{}:transfer", f.name)])
+            .await
+            .is_empty(),
+        "Temporary transfer tag was not removed"
+    );
 }

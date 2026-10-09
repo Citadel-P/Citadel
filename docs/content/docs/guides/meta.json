@@ -2,6 +2,9 @@
   "title": "Guides",
   "pages": [
     "index",
+    "finding-resources",
+    "profile-and-sessions",
+    "application-updates",
     "access-control",
     "service-accounts",
     "variables-and-secrets",

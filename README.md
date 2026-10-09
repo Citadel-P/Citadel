@@ -20,7 +20,21 @@ Citadel is a self-hosted Docker management platform for developers and teams. Bu
 | [Preview](https://preview.citadelplane.com/) | Explore development releases and upcoming changes |
 | [Documentation](https://docs.citadelplane.com/) | Installation, resources, guides, and API reference |
 
-**Demo sign-in:** username `demo` · password `demodemo`.
+**Stable demo sign-in:** username `demo` · password `citadel-demo-2026`.
+
+**Preview sign-in:** username `demo` · password `demodemo`.
+
+Both sites include Nginx, Whoami and Forgejo Deployments, two Git Stacks from a
+shared monorepo, and a Web Editor Stack with a persistent counter. Visitor
+accounts have read-only access.
+
+Browse the example Compose monorepo in Forgejo:
+[stable demo](https://demo.citadelplane.com/forgejo/examples/demo-stacks) ·
+[development preview](https://preview.citadelplane.com/forgejo/examples/demo-stacks).
+No sign-in is required to browse or clone these repositories.
+
+Open the WordPress example: [stable demo](https://demo.citadelplane.com/wordpress/)
+· [development preview](https://preview.citadelplane.com/wordpress/).
 
 ## Screenshots
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """VPS-side deployment, sent over SSH by demo.py. Requires Python 3.10+."""
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import subprocess
 import sys
@@ -89,7 +91,39 @@ def deployment_state(directory, channel):
     return attempted
 
 
-def compose_override(channel):
+def rootless_target(directory, channel):
+    """Bind an operator-provisioned target to its account and Docker engine."""
+    marker = directory / ".rootless-deployment.json"
+    account = pwd.getpwuid(os.geteuid()).pw_name
+    if not marker.exists():
+        if account in ("citadel-preview", "citadel-demo"):
+            raise ValueError("Missing rootless deployment configuration")
+        return None
+    target = json.loads(marker.read_text())
+    expected = "citadel-preview" if channel == "dev" else "citadel-demo"
+    if (set(target) not in ({"user", "uid", "dockerId"}, {"user", "uid", "dockerId", "network"}) or target["user"] != expected
+            or account != expected or type(target["uid"]) is not int
+            or target["uid"] != os.geteuid() or target["uid"] <= 0):
+        raise ValueError("Rootless deployment account does not match target")
+    if "network" in target:
+        network = target["network"]
+        if not isinstance(network, dict) or set(network) != {"subnet", "gateway"}:
+            raise ValueError("Invalid rootless network configuration")
+        subnet, gateway = ipaddress.IPv4Network(network["subnet"]), ipaddress.IPv4Address(network["gateway"])
+        if (not subnet.is_private or subnet.is_loopback or gateway not in subnet
+                or gateway in (subnet.network_address, subnet.broadcast_address)):
+            raise ValueError("Invalid rootless network gateway")
+    socket = f"unix:///run/user/{target['uid']}/docker.sock"
+    info = json.loads(subprocess.check_output(
+        ["docker", "--host", socket, "info", "--format", "{{json .}}"], text=True, timeout=30))
+    if (not target["dockerId"] or info.get("ID") != target["dockerId"]
+            or "name=rootless" not in info.get("SecurityOptions", [])
+            or info.get("DockerRootDir") != f"/home/{expected}/.local/share/docker"):
+        raise ValueError("Docker engine does not match the pinned rootless target")
+    return target
+
+
+def compose_override(channel, rootless=None):
     # Memory is unlimited by default. Keep CPU ceilings independently tunable
     # through the operator-owned .env without CI rewriting configuration.
     core_cpus, database_cpus = ("1.0", "0.5") if channel == "dev" else ("2.0", "1.0")
@@ -104,7 +138,21 @@ def compose_override(channel):
     services["server"]["environment"] = {
         "CITADEL_EDGE_AGENT_IMAGE": "${CITADEL_EDGE_AGENT_IMAGE:?Missing Agent digest}",
     }
-    # JSON is valid YAML and avoids hand-building nested Compose configuration.
+    if rootless:
+        # Replace the full mount list: never inherit the host socket or / mount.
+        # Compose 2.24.4+ supports !override (required by operator provisioning).
+        home = f"/home/{rootless['user']}"
+        mounts = [f"/run/user/{rootless['uid']}/docker.sock:/var/run/docker.sock",
+                  "citadel_data:/app/data",
+                  f"{home}/.local/share/docker:/host{home}/.local/share/docker:ro"]
+        services["server"]["volumes"] = "__ROOTLESS_MOUNTS__"
+        override = {"services": services}
+        if "network" in rootless:
+            # Preserve the bridge gateway already trusted by the reverse proxy
+            # configuration in the operator-owned .env, including on recreation.
+            override["networks"] = {"default": {"ipam": {"config": [rootless["network"]]}}}
+        return json.dumps(override, indent=2).replace(
+            '"__ROOTLESS_MOUNTS__"', "!override " + json.dumps(mounts)) + "\n"
     return json.dumps({"services": services}, indent=2) + "\n"
 
 
@@ -117,6 +165,7 @@ def deploy(directory, payload):
     os.umask(0o077)
     with (directory / ".deployment.lock").open("a") as lock:
         acquire_lock(lock)
+        rootless = rootless_target(directory, payload["channel"])
         previous = deployment_state(directory, payload["channel"])
         attempted = directory / "deployment-attempt.json"
         identity = {key: payload[key] for key in IDENTITY}
@@ -125,14 +174,15 @@ def deploy(directory, payload):
                 return {"status": "skipped-older-release", **identity}
             if previous["version"] == payload["version"] and previous != identity:
                 raise ValueError("Existing version has different image digests")
-        compose = ["docker", "compose", "--env-file", ".env", "--env-file", ".release.env",
+        docker = ["docker"] if rootless is None else ["docker", "--host", f"unix:///run/user/{rootless['uid']}/docker.sock"]
+        compose = [*docker, "compose", "--env-file", ".env", "--env-file", ".release.env",
                    "-f", "docker-compose.yml", "-f", "demo.override.yml"]
         env = dict(os.environ, CITADEL_IMAGE=payload["core"], CITADEL_EDGE_AGENT_IMAGE=payload["agent"])
         def run(*args, timeout):
             subprocess.run([*compose, *args], cwd=directory, env=env, check=True,
                            stdout=sys.stderr, timeout=timeout)
         atomic(directory / "docker-compose.yml", payload["compose"])
-        atomic(directory / "demo.override.yml", compose_override(payload["channel"]))
+        atomic(directory / "demo.override.yml", compose_override(payload["channel"], rootless))
         atomic(directory / ".release.env", f"CITADEL_IMAGE={payload['core']}\nCITADEL_EDGE_AGENT_IMAGE={payload['agent']}\n")
         run("config", "--quiet", timeout=30)
         run("pull", timeout=600)

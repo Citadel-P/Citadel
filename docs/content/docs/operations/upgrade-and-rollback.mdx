@@ -3,14 +3,26 @@ title: "Upgrade and rollback"
 description: "Update Citadel while keeping a way to recover your accounts and settings."
 ---
 
-These steps update an installation using published Citadel images.
+These steps update Core in an existing installation using published Citadel
+images. Plan for a brief interruption to the UI, API, live updates, and Core
+jobs while the container is replaced. Running Docker workloads normally continue.
 
 ## Before an upgrade
 
 1. Read the target [release notes](https://github.com/Citadel-P/Citadel/releases).
-2. Back up PostgreSQL and `citadel_data` together. Check that you can retrieve the backup.
-3. Record the current complete Core and Agent image addresses, including their versions or digests.
-4. Confirm the current installation is healthy.
+2. Confirm that sign-in, PostgreSQL, Platform connections, and important
+   applications are healthy. Wait for active deployments, builds, backups, and
+   restores to finish; arrange a maintenance window for scheduled operations.
+3. Run a **Citadel backup** policy and wait for success. Record its snapshot ID
+   and verify that you can export it using credentials stored outside Citadel.
+   Follow [control-plane recovery](/docs/operations/control-plane-recovery#create-a-backup).
+4. Keep the current Compose files, overlays, private `.env`, external recovery
+   keys, and exact Core and Agent image references with the recovery record.
+   Rehearse recovery before relying on this as your rollback plan.
+
+The control-plane bundle protects Citadel configuration and keys. Application
+data needs its own [workload backups](/docs/resources/backups); recovering Core
+does not revert application databases or volume contents.
 
 ## Upgrade
 
@@ -24,26 +36,57 @@ or changing `COMPOSE_PROJECT_NAME` can start a separate installation instead of
 upgrading the existing one. Apply any Compose changes required by the release
 notes to your existing files.
 
-From your installation directory, run:
+From your installation directory, check the configuration and pull Core before
+replacing the running container:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose config --quiet
+docker compose pull server
+docker compose up -d --no-deps --wait server
 docker compose ps
+docker compose logs --tail=100 server
 ```
 
-Include your TLS overlay in these commands if you use it. Citadel updates its
-database during startup. Check sign-in, Platform connectivity, and a normal
-application operation before removing the old backup. Update Agents using the
-new generated setup command when the release notes require it.
+Use the same `-p` project option and `-f` overlay options as your installation
+in every command. This sequence requires the existing PostgreSQL service to be
+healthy and updates only Core. If the release requires a PostgreSQL or Compose
+change, follow that release's migration instructions as well.
+
+Citadel applies database migrations during startup. If startup fails, read the
+logs before trying another image. A healthy container confirms that Core
+responds; complete the checks below before ending maintenance.
+
+## Verify the upgrade
+
+1. Confirm the intended Citadel version is running and an administrator can sign in.
+2. Check expected Platform and Agent connections, then open fresh container
+   logs or statistics to verify live updates.
+3. Confirm that stored credentials still work, for example by syncing a known
+   Git repository when its hooks and automatic deployments are appropriate.
+4. Check important application endpoints and inspect recent **Activities** and
+   **Alerts** for new failures. Review scheduled jobs as they resume.
+
+Update Agents using the generated installation commands when the release
+requires it. Check each connection after replacement; keep Agent image references
+with the corresponding Core version. Retain the pre-upgrade backup until the
+installation and its normal operations have been verified.
 
 ## Rollback
 
-Changing the image back does **not** undo database changes. Use an earlier image
-without restoring data only when the release notes confirm it is compatible.
-Otherwise stop Core and restore the matched pre-upgrade PostgreSQL and
-`citadel_data` backup before starting the previous image. Follow
-[control-plane recovery](/docs/operations/control-plane-recovery).
+Changing the image back does **not** undo database changes.
+
+| Situation | Recovery path |
+| --- | --- |
+| Image pull failed before the running container was replaced | Correct the image address or registry access; the running installation has not been upgraded. |
+| The earlier image is explicitly compatible with the current database | Pin the earlier image and repeat the Core update commands above, then verify it. |
+| Database compatibility is unknown or a migration prevents downgrade | Stop Core and restore the pre-upgrade control-plane bundle into a clean environment using its recorded image. |
+
+For data recovery, follow the complete
+[control-plane recovery procedure](/docs/operations/control-plane-recovery#restore-into-a-clean-environment).
+Keep the failed installation's volumes intact until recovery is verified.
+Restoring an earlier snapshot loses Citadel configuration and history recorded
+after that snapshot. Workloads may have changed independently, so compare their
+actual state with the recovered configuration before deploying again.
 
 Use exact patch versions or digests when you need a repeatable installation.
 Core releases publish `latest` alongside patch, minor, and major aliases.

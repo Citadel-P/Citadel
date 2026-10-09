@@ -4,6 +4,7 @@
     "upgrade-and-rollback",
     "control-plane-recovery",
     "tls-and-secure-agent-transport",
+    "reverse-proxy-caddy",
     "agent",
     "edge-agent",
     "platform-monitoring",

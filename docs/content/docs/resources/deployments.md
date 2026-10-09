@@ -24,21 +24,6 @@ You need an online Docker Standalone Platform and an image name.
 For a complete example, follow [your first Deployment](/docs/getting-started/first-deployment).
 The sections below explain the other settings. Saving alone does not update the running container.
 
-## Basic Setup
-
-Create a deployment and choose:
-
-- Name: an internal name for the workload
-- Platform: the Docker platform where the container should run
-- Image source: `External`, `Local`, or `Build`
-- Networks: one or more Docker networks to attach the container to
-- Ports: optional host-to-container port mappings
-- Volumes: optional named volumes or bind mounts
-- Container variables: optional environment variables injected into the container
-- Auto update: how Citadel should react to image updates
-
-After saving the deployment, use **Deploy** to create the container. Editing a deployment changes the saved definition, but the running container is not changed until you deploy or redeploy it.
-
 ## Image Source
 
 External images are pulled from a registry during deploy.
@@ -84,6 +69,8 @@ Build images use `Redeploy On Build` instead of registry auto update.
 
 Select the Docker networks the container should join. The networks must already exist on the target platform.
 
+To create one first, follow [Networks](/docs/resources/docker/networks).
+
 Use the same network for containers that need to communicate with each other. Use a public or proxy network when a reverse proxy needs to reach the deployment.
 
 ## Ports
@@ -114,6 +101,8 @@ app_data:/data
 
 Use Docker named volumes for application data you want Citadel to track for backup policies.
 
+See [Volumes](/docs/resources/docker/volumes) to create storage or browse its contents.
+
 Bind mounts are valid Docker mounts, but Citadel deployment backups only include Docker named volumes. Host paths such as `/srv/app/config:/etc/app` are not included in deployment volume backups.
 
 ## Container Variables
@@ -142,7 +131,7 @@ For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets)
 
 Auto update checks external image tags for new digests.
 
-- `Disabled`: do not check for updates.
+- `Disabled`: disable periodic checks; manual checks remain available.
 - `Notify Only`: record update availability and emit an alert.
 - `Auto Deploy`: pull the updated image and redeploy the container automatically.
 
@@ -166,6 +155,9 @@ Platform filter. Deployments that have not been checked or whose last check
 failed are not shown as having an available update.
 
 Use `Notify Only` for production deployments until the image tag and rollback process are proven. Use explicit version tags for predictable updates.
+
+Follow [Update applications](/docs/guides/application-updates) for the complete
+check, deploy, verify, and recovery workflow.
 
 ## Resources
 
@@ -306,4 +298,3 @@ Use stacks for:
 - shared Compose networks and volumes
 - Compose overrides or advanced Compose syntax
 - Git-backed deployment workflows
-

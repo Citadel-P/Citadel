@@ -164,7 +164,7 @@ For deployment setup, see [Deployments](/docs/resources/deployments).
 ## Using Registries In Web Editor Stacks
 
 Select a Registry when creating a Web Editor Stack. Citadel uses its credentials
-for deployment and, on Docker Standalone, for service-image update checks.
+for deployment and service-image update checks on Docker Standalone and Swarm.
 The selected Platform determines whether deployment uses Docker Compose or a
 native Swarm Stack. The Compose definition or Build Images bindings determine
 the images used by its services.
@@ -196,7 +196,8 @@ ghcr.io/acme/platform/api:main-a4c8e3c1d420
 ghcr.io/acme/platform/api:latest
 ```
 
-For private repositories or pushes, make sure the registry credentials have write permission.
+Private image pulls need read access. Publishing Build output also needs push
+access to the destination repository.
 
 For build setup, see [Builds](/docs/resources/builds).
 
@@ -222,7 +223,24 @@ Use least-privilege tokens:
 - GitHub Container Registry: token with package read or write access, depending on use
 - Custom registry: read-only credentials for pull-only use, or write credentials for builds
 
-Rotate registry tokens regularly. After updating a registry token, redeploy affected workloads if they need to pull images again.
+To rotate a token, issue a replacement at the provider, update the Registry in
+Citadel, and save. Verify a pull on an intended Platform, or a Build push if the
+Registry is a build destination, before revoking the old token. Updating
+credentials does not recreate running containers.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Unauthorized or denied | Token validity, repository/package access, and whether the operation needs pull or push permission. Git source credentials and Registry credentials are separate. |
+| Image or manifest not found | Registry host, namespace, repository, and exact tag or digest. A private registry may also hide an unauthorized repository this way. |
+| Save succeeds but a pull or push fails | Connectivity and certificate trust on the executing Docker host or builder. Core credential validation does not verify every execution host. |
+| Registry missing from a selector | Registry status, provider support for that operation, and your access. |
+| No image update is detected | The deployed source must be a supported tag with a known applied digest; digest pins and Build artifacts use different update paths. |
+
+Inspect the failed operation's logs before retrying. Confirm the resulting image
+reference and application health after a successful deployment; see
+[Update applications](/docs/guides/application-updates).
 
 ## Choosing A Registry
 

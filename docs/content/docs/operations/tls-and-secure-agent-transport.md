@@ -38,7 +38,7 @@ Choose public addresses for:
 Citadel Core keeps two internal listeners:
 
 ```text
-8000  UI, API, SignalR, OIDC, webhooks, and health
+8000  UI, API, WebSocket live updates, OIDC, webhooks, and health
 8001  Edge Agent bidirectional gRPC
 ```
 
@@ -57,6 +57,9 @@ that clients actually use.
 
 Use this mode when you already run Caddy, Traefik, nginx, HAProxy, or another
 TLS-capable proxy.
+
+For a complete Compose overlay, proxy configuration, and verification steps,
+follow [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).
 
 The topology is:
 
@@ -90,7 +93,7 @@ Configure at least one known proxy or known network.
 
 The proxy must:
 
-- send UI, API, SignalR, OIDC, webhook, and health traffic to Core port `8000`;
+- send UI, API, WebSocket, OIDC, webhook, and health traffic to Core port `8000`;
 - send Edge Agent gRPC traffic to Core port `8001` using HTTP/2/h2c;
 - support WebSocket upgrades;
 - preserve the public `Host`/HTTP2 `:authority`;

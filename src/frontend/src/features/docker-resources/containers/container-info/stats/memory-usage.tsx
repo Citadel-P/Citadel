@@ -96,8 +96,7 @@ const MemoryUsage = ({
                   />
                   {chartConfig[name as keyof typeof chartConfig]?.label || name}
                   <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                    {((value as number) / 1024 / 1024).toFixed(2)}
-                    <span className="font-normal text-muted-foreground">MB</span>
+                    {byteTransform(value as number, 2)}
                   </div>
                 </>
               )}
@@ -142,7 +141,7 @@ const MemoryUsageHeader = ({ container, windowHours, controls }: MemoryUsageHead
   return (
     <StatsPanelHeader
       title="Memory Usage"
-      description={`Showing total memory usage for the past ${windowHours} hours`}
+      description={`Memory usage excluding file cache for the past ${windowHours} hours. Cache is shown separately.`}
       controls={controls}>
       {renderStat('Usage', container?.containerStat?.memoryActive)}
       {renderStat('Cache', container?.containerStat?.memoryCache)}

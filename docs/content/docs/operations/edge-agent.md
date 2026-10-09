@@ -43,7 +43,9 @@ Edge-agent platforms can run Citadel build projects over the outbound edge-agent
 
 Citadel Core resolves the Git repository, packages the selected build context, and sends it through the edge-agent stream. The edge agent then streams the context to Docker and pushes the configured image tags.
 
-The packaged context must stay under the current `16 MB` envelope limit. Add a `.dockerignore` file to the build context and prefer narrow monorepo service directories over repository-root contexts.
+Core's current archive step is limited to **12 MiB**, before the 16 MiB transport
+envelope. It does not apply `.dockerignore`; choose a narrow committed context
+with its Dockerfile inside it. See [Build Context Size](/docs/resources/builds#build-context-size).
 
 Because edge agents use an outbound command channel, cancelling a build closes the active build stream and the Docker Engine API build is cancelled when Docker observes the dropped request.
 
@@ -274,4 +276,3 @@ The Edge Agent gRPC endpoint is probably being served through an HTTP/1.1-only r
 - Keep the agent data volume private.
 - Revoke an agent if its host or data volume is compromised.
 - Do not expose the Docker socket to containers you do not trust.
-

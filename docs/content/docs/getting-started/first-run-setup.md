@@ -24,6 +24,8 @@ Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
 The password should be unique to Citadel and stored in a password manager.
+After setup, use [Profile](/docs/guides/profile-and-sessions) for personal settings,
+password changes, and active browser sessions.
 
 ### Configure password length
 

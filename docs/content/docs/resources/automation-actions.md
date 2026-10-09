@@ -18,34 +18,73 @@ Actions run through Citadel permissions. They are not raw shell scripts and they
 
 ## Run a prepared action
 
-An Action is a small script. Ask your application's maintainer to prepare and
-review it if you do not write TypeScript.
+This example checks access to one Stack, then lets you explicitly enable its
+deployment. Ask the application's maintainer to review scripts you do not maintain.
 
-1. Open **Automation** and add an Action.
-2. Enter its code and choose an enabled **Run As** account with only the access it needs.
-3. Save it, run a test, and review the logs before using it for a live operation.
-4. Start an enabled Action manually and check its **Runs** tab.
+### 1. Prepare the Action and identity
 
-A test can perform real operations allowed by its permissions; use a safe
-target. The sections below are for the person maintaining the script.
+1. Open **Automation** and select **Add Action**.
+2. Enter a name and choose an enabled **Run as** User or Service Account under
+   **Execution → Runtime**. The initial check needs Read access to the selected
+   Stack; deploying it also requires Execute and Apply. See [access control](/docs/guides/access-control).
+3. Leave the Action, schedule, and webhook disabled while preparing the example.
+4. Set **Default Args** to the following object, replacing the ID with your
+   Stack's ID:
+
+```json
+{
+  "stackId": "019f0000-0000-7000-9000-000000000000",
+  "dryRun": true
+}
+```
+
+Selecting a Service Account requires **Use** permission on that account and
+Team's **Custom access control** capability. The person testing or running the
+Action also needs Execute access to the Action itself.
+
+### 2. Add the script and test
+
+Paste this into **Code**, save the Action, then select **Test**:
+
+```ts
+const stackId = args.stackId;
+if (typeof stackId !== "string" || !stackId) {
+  throw new Error("Set stackId to the Stack's ID in Default Args.");
+}
+
+await citadel.api.getStack(stackId);
+
+if (args.dryRun !== false) {
+  console.log("Access check passed; no deployment requested.");
+} else {
+  await citadel.api.applyStack({ id: stackId });
+  console.log("Apply returned successfully; check the Stack's operation and health.");
+}
+```
+
+Keep the progress sheet connected until completion. Confirm **Succeeded** and
+the access-check message in **Runs**. This checks Read access only; it does not
+prove that the identity can deploy the Stack.
+
+`dryRun` is a convention implemented by this script. **Test** itself can perform
+real operations, including with unsaved editor changes. Citadel does not simulate
+or undo an Action's API calls.
+
+### 3. Run the operation
+
+Set `dryRun` to `false` only when you intend to deploy the selected Stack. Enable
+the Action, save, then select **Run**. Check the Action's result and the Stack's
+operation history, running services, and application endpoint.
+
+After verifying the manual operation, configure a [schedule](#schedule) or
+[webhook](#webhook) if needed. These triggers require **Automated Operations**.
+Save reviewed code and arguments before enabling them; webhook payloads must
+supply the fields the script expects.
 
 ## Open Actions
 
-Open:
-
-```text
-Automation
-```
-
-The list shows:
-
-- action name and status
-- schedule state
-- webhook state
-- latest run
-- row actions
-
-The status dot near the name reflects whether the action is enabled and whether the latest run is active or failed.
+Open **Automation** to see each Action's enabled state, triggers, latest run,
+and available operations. Open an Action for its configuration and run history.
 
 ## Create An Action
 
@@ -132,31 +171,15 @@ alias suggested by some editor completions; use the operation names above.
 
 ## Arguments
 
-Default args must be a JSON object.
+**Default Args** must be a JSON object, not an array or a plain string. Validate
+required fields before calling an API, as in the [prepared Action](#run-a-prepared-action).
+Use an explicit check such as `args.dryRun !== false` when an absent field should
+leave an operation disabled.
 
-Example:
-
-```json
-{
-  "stackId": "019f0000-0000-7000-9000-000000000000",
-  "dryRun": true
-}
-```
-
-Use them in code:
-
-```ts
-const stackId = args.stackId;
-if (typeof stackId !== "string" || !stackId) {
-  throw new Error("Set stackId to the Stack's ID in Default Args.");
-}
-
-if (args.dryRun) {
-  console.log("Dry run only");
-} else {
-  await citadel.api.applyStack({ id: stackId });
-}
-```
+Path parameters are positional in the runtime helper, for example
+`citadel.api.getStack(stackId)`. Request bodies are objects, for example
+`citadel.api.applyStack({ id: stackId })`. Use the endpoint's request shape;
+an accepted request may queue work that must be checked separately.
 
 ## Test Run
 
@@ -166,11 +189,13 @@ Test runs:
 
 - create an action run with trigger `Test`
 - can run even when the action is disabled
-- use the saved action code and default args
-- use the configured **Run As** identity
+- use the current editor code and **Default Args**, including unsaved changes
+- use the saved **Run as** identity; save identity changes before testing
 - write logs to the Runs tab
 
-Use test runs before enabling schedules or webhooks.
+Testing does not save draft code. Save the reviewed version before a normal Run,
+schedule, or webhook should use it. A disabled Action can still be tested, so
+disabling it is not a way to make tests read-only.
 
 ## Manual Run
 
@@ -189,7 +214,8 @@ completed. Check the Runs tab before retrying.
 
 Schedules require Team's `Automated Operations` capability.
 
-Enable `Schedule` to run an action automatically.
+Save and enable the Action, then enable **Schedule** to run it automatically.
+The schedule uses saved code, arguments, and the configured execution identity.
 
 Set:
 
@@ -321,9 +347,19 @@ Callers need permission to:
 - delete actions
 - run or test actions
 
-An action runs as its configured **Run As** User or Service Account. Citadel
-checks that Actor's current roles, enabled Team memberships, resource access,
+An Action runs as its configured **Run as** User or Service Account. Citadel
+checks that identity's current Roles, enabled Team memberships, resource access,
 and license capabilities when the Action calls Citadel APIs.
+
+| Identity | What it controls |
+| --- | --- |
+| Person or integration starting a run | Must have Execute permission on the Action |
+| Saved **Run as** identity | Supplies access to the resources and operations called by the script |
+| Editor selecting a Service Account | Needs **Use** permission on that account |
+
+An administrator clicking Run does not make the script administrative when its
+Run-as identity has narrower permissions. Conversely, Execute access to an
+Action allows a caller to invoke its saved operation under that identity.
 
 Manual and API-triggered run history distinguishes the identity that requested
 the run from the identity that executed it. For example:
@@ -335,8 +371,9 @@ Ran as production-deployer
 
 Selecting a Service Account or changing executable Action configuration under
 that account requires permission to **Use** it. Running an already saved Action
-requires Execute permission on the Action. The run request cannot replace its
-saved code or run-as identity.
+requires Execute permission on the Action. Normal run requests cannot replace
+its saved code or run-as identity. Test requests can supply draft code; see
+[Test Run](#test-run).
 
 Using a Service Account requires Team's **Custom access control** capability.
 Schedules and webhook-triggered execution under that account additionally

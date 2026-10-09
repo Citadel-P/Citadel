@@ -5,6 +5,21 @@ description: "Resolve reusable variables and protected secrets into managed work
 
 Citadel bindings let you attach variables and secret keys to stacks and deployments without hard-coding values in compose files or deployment forms.
 
+## Supply a secret to an application
+
+1. Open the Stack or Deployment's **Bindings** tab and select **Create stored secret**.
+   Create a local secret with a descriptive name, such as `production-api-token`.
+2. Select **Add secret key**, name it `API_TOKEN`, and choose that stored secret.
+   Use **Environment variable** delivery.
+3. Reference `API_TOKEN: ${API_TOKEN}` under the Compose service's `environment`,
+   or enter `API_TOKEN` in a Deployment's **Container Variables**.
+4. Save and deploy. Verify the application's authenticated operation without
+   printing the secret in logs or a terminal.
+
+Saving a binding does not change an existing container's environment. Reapply
+the consuming workload when you intend to use the new value. Use global bindings
+only when the value should be inherited by multiple resources.
+
 ## Variables
 
 Use a variable for non-sensitive values.
@@ -59,7 +74,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 ```
 
-At deploy time, Citadel resolves `POSTGRES_PASSWORD` from the stored secret `prod-db-password`. The plaintext value is never shown in the UI after creation and is redacted from logs and activity output.
+At deploy time, Citadel resolves `POSTGRES_PASSWORD` from the stored secret
+`prod-db-password`. Citadel masks secret metadata and redacts resolved values
+from its operation output. The application still receives plaintext; Docker
+inspection, application logs, or commands inside the container can expose it.
 
 ## Manual Stack Env Files
 
@@ -289,7 +307,10 @@ Set it with:
 Secrets__EncryptionKey=
 ```
 
-When the value is empty, Citadel generates a key and stores it in the data volume at `./data/secret-encryption-key`. Keep this file backed up with your Citadel data.
+When the value is empty, Citadel generates a key at
+`/app/data/secret-encryption-key` in the supplied container. A custom
+`CITADEL_DATA_ROOT` changes that directory. Preserve the key with the database
+using [control-plane backups](/docs/operations/control-plane-recovery).
 
 You can also provide your own base64-encoded 32-byte key:
 
@@ -309,9 +330,42 @@ Or with OpenSSL:
 openssl rand -base64 32
 ```
 
-Keep this key outside source control and back it up with your Citadel data. Losing or changing the configured key or generated `./data/secret-encryption-key` file makes existing local stored secrets and provider tokens undecryptable.
+Keep this key outside source control and back it up with your Citadel data.
+Losing or replacing it makes existing local stored secrets and provider tokens
+undecryptable. Changing this key is not a way to rotate an application's password.
 
 This key is intentionally separate from `Jwt__Key`. JWT signing keys may be rotated without breaking stored secrets.
+
+## Rotate an application secret
+
+For a local secret, create a replacement stored secret, then edit the runtime
+secret key to reference it. Keep the runtime name stable so Compose or container
+configuration does not need to change. The current editor supports editing
+external references; it does not edit an existing local secret's plaintext value.
+
+For an external secret, update its value in the provider. An unpinned reference
+uses the latest version at the next apply; a reference with **Version** set
+continues using that version until you edit it. Test the reference after changing
+its provider, path, key, or version.
+
+Review every consuming resource before changing a shared reference. Deploy the
+affected workloads, verify their authenticated operations, then revoke the old
+credential at the external service when no consumer needs it. Follow the
+application's own password-rotation procedure: changing an environment variable
+does not necessarily change an existing database user's password.
+
+Stack rollback resolves secret references again. Keep a separate recovery plan
+for credentials; an older release does not restore an old secret value.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Missing or unresolved binding | Runtime key spelling, resource/global scope, and whether the workload references that key. |
+| A changed value is not in a running container | Save the binding and reapply the consuming workload; saving alone does not update it. |
+| External secret fails to resolve | Provider connectivity, token access to the exact KV v2 path, key name, and pinned version. Test the reference as well as the provider. |
+| Local secrets fail after recovery | Restore the original encryption key; generating another key cannot decrypt the database's existing values. |
+| Mounted file is rejected | Use the supported delivery path described under [Delivery Mode](#delivery-mode). |
 
 ## Scope And Overrides
 

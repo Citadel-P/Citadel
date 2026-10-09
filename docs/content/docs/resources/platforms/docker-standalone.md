@@ -22,8 +22,13 @@ remote connection, follow [Agent setup](/docs/operations/agent) or
 
 ## Explore Docker resources
 
-The Platform exposes **Containers**, **Images**, **Networks**, and **Volumes**.
-Use the resource's detail page for its available inspection and runtime tools.
+| Page | Common tasks |
+| --- | --- |
+| [Containers](/docs/resources/docker/containers) | Read logs, inspect configuration, open a terminal, and manage state |
+| [Images](/docs/resources/docker/images) | Pull an image and inspect its layers and container usage |
+| [Networks](/docs/resources/docker/networks) | Create networks and inspect attached containers |
+| [Volumes](/docs/resources/docker/volumes) | Create storage, browse files, and download contents |
+
 Your permissions and the Platform connection determine which actions are available.
 
 Existing Docker resources can be visible before they are managed as Citadel

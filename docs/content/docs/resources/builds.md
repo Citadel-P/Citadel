@@ -3,16 +3,13 @@ title: "Build Projects"
 description: "Build container images from Git repositories and publish them through Citadel."
 ---
 
-Builds let Citadel build Docker images from Git repositories and push the generated tags to a configured registry.
+Build Projects turn source from a Git repository into Docker images. A project
+defines the source, builder, image tags, and optional Registry destination;
+each run records its commit, output, and logs.
 
-Use builds when:
-
-- the Dockerfile lives in a Git repository managed by Citadel
-- you want operators to run image builds from Citadel
-- the output image should be pushed to DockerHub, GitHub Container Registry, or a custom registry
-- you need persisted run history, live logs, cancellation, and basic retention
-
-Builds are not automation actions. Automation actions may call the Build API, but build projects do not run arbitrary TypeScript or shell scripts.
+Use a Build Project for Dockerfile builds. Use
+[Automation Actions](/docs/resources/automation-actions) for scripts that call
+Citadel APIs or coordinate operational tasks.
 
 ## Build your first image
 
@@ -20,14 +17,46 @@ You need a synced [repository](/docs/resources/git-repositories), a Dockerfile,
 an online builder Platform, and a [registry](/docs/resources/registries) that can
 accept image pushes. Ask the application's maintainer for the build paths.
 
-1. Open **Build Projects** and select **Add Build**.
-2. Choose the repository and branch, Dockerfile path, and build context.
-3. Select the builder Platform, destination Registry, image repository, and tag.
-4. Save the project and start a manual build.
-5. Check the run's logs and published image before using **Build** as an application's image source.
+1. Open **Build Projects**, select **Add Build**, and enter a name.
+2. Choose the repository and branch. For a repository with a Dockerfile at its
+   root, set **Context** to `.` and **Dockerfile** to `Dockerfile`.
+3. Under **Builder**, select **Docker platform** and an online Platform. Check
+   [context limits](#build-context-size) before choosing a remote builder.
+4. Enable **Push to registry**, select the Registry, and enter an **Image repository**
+   such as `team/api`. Use `{branch}-{shortSha}` as the tag template to identify
+   the source revision. The Registry supplies the hostname.
+5. Save, select **Build**, and open **Runs**. Wait for **Succeeded**, then check
+   the resolved commit, image reference, digest if available, and run logs.
 
-A successful build creates an image; it does not start an application by itself.
-You can begin with a connected Platform instead of setting up a Build Pool.
+The image is now available in the Registry. A Build Project does not start an
+application until a Deployment or Stack uses its output.
+
+### Deploy the image
+
+1. Create or open a [Deployment](/docs/resources/deployments) on a Docker Standalone Platform.
+2. Choose **Build** as its image source and select this Build Project. Configure
+   the application's networks, ports, storage, and bindings.
+3. Leave **Redeploy On Build** disabled for the first deployment. Save, then
+   select **Deploy** or **Redeploy**.
+4. Check the container's logs and application endpoint. Confirm the applied
+   artifact matches the build you intended to run.
+
+For Compose applications, use [Stack Build Images bindings](#stacks) instead.
+The target host must be able to pull the published image with the configured
+Registry access.
+
+### Automate later builds
+
+After the manual path works, enable a [build webhook](#webhooks) to build on
+relevant Git changes and **Redeploy On Build** on the intended consumers. These
+triggers require **Automated Operations**; external Build Pool execution also
+requires **Elastic Build Execution**.
+
+Push a small application change and verify both the Build run and the resulting
+Deployment or Stack operation. Build success and deployment success are separate
+outcomes. Use this built-in flow when it fits; an Automation script is only needed
+for additional coordination. A queued build response does not mean its image is
+ready to deploy.
 
 ## License Availability
 
@@ -64,7 +93,9 @@ Builds can run on Docker platforms connected through:
 
 Local builds stream the build context from Citadel Core to the local Docker daemon.
 
-Agent and edge-agent builds package the resolved build context in Citadel Core, send that archive to the selected agent, and let the agent stream it to its Docker daemon. The transferred archive must fit within the current agent message envelope limit of `16 MB`.
+Agent and Edge Agent builds package the committed context on Core and transfer
+it to the builder. The current archive step is limited to **12 MiB**, before
+the **16 MiB** transport envelope; see [Build Context Size](#build-context-size).
 
 Build Pool builds run on a reusable build pool instead of a Docker platform. For a self-managed VM pool, Citadel either connects to a dedicated inbound Agent endpoint or uses a pool-scoped Edge Agent connection. In both modes, the builder host's Docker daemon performs the build and push.
 
@@ -74,20 +105,12 @@ not.
 
 ## Prerequisites
 
-Before creating a build, configure:
-
-- a Git repository that contains the Dockerfile and build context
-- a Docker platform or Build Pool where the build can run
-- a registry where Citadel can push the built image
-- optional Citadel secrets when your Dockerfile uses BuildKit secret mounts
-
-For repository setup, see [Git repositories and accounts](/docs/resources/git-repositories).
-
-For registry setup, see [Registries](/docs/resources/registries).
-
-For secrets, see [Variables and secrets](/docs/guides/variables-and-secrets).
-
-For Agent and self-managed Build Pool setup, see [Regular Agent](/docs/operations/agent).
+Connect the [Git repository](/docs/resources/git-repositories), an online
+[Platform](/docs/resources/platforms) or [Build Pool](/docs/resources/build-pools),
+and a [Registry with push access](/docs/resources/registries). Prepare any
+[stored secrets](/docs/guides/variables-and-secrets) required by the Dockerfile.
+Keep Git credentials, Registry credentials, and Dockerfile secret mounts separate:
+they authorize different parts of the build.
 
 ## Create A Build
 
@@ -108,6 +131,7 @@ Set:
 - Dockerfile: Dockerfile path relative to the repository root.
 - Target stage: optional Dockerfile stage for multi-stage builds.
 - Builder: Docker platform or Build Pool that runs the build.
+- Push to registry: publish the output; disable only when an image local to the builder is sufficient.
 - Registry: registry Citadel pushes tags to.
 - Image repository: repository path under the selected registry, such as `team/api`.
 - Tags: comma-separated tag templates.
@@ -147,9 +171,16 @@ The build context is the directory sent to Docker. Keep it small and explicit.
 
 For local builds, a large context slows the Docker API upload and can make logs appear delayed.
 
-For agent and edge-agent builds, Citadel first packages the context and transfers it to the agent. The packaged context must be under `16 MB`. If it is larger, the run fails before Docker starts.
+For Agent, Edge Agent, and remote Build Pool execution, Core creates a Git tar
+archive of the selected context with a **12 MiB** output limit. This happens
+before transfer through the 16 MiB Agent envelope. An oversized archive fails
+before Docker starts, and the Dockerfile must be inside the selected context.
 
-Add a `.dockerignore` file in the context directory to exclude files that are not needed by the Dockerfile.
+The archive step does not apply `.dockerignore`. Reduce the selected context or
+remove unnecessary tracked files to reduce the transfer size. A `.dockerignore`
+file alone does not fix an oversized remote archive.
+
+Use `.dockerignore` to control the files Docker needs for a local directory build.
 
 Common exclusions:
 
@@ -197,6 +228,14 @@ latest, {shortSha}
 ```
 
 Citadel resolves the final image references when the run resolves the Git commit.
+
+### Build without publishing
+
+Disable **Push to registry** to keep the output on the selected builder. Registry
+and image-repository settings are then cleared. The run records its local image
+references, but another Platform cannot pull those images automatically. Builder
+cleanup can remove them, especially on ephemeral infrastructure. Keep publishing
+enabled for the build-to-deployment workflow above.
 
 ## Using Build Output
 
@@ -271,13 +310,18 @@ Build secrets are not raw `name/value` pairs. Configure them by selecting an exi
 The Dockerfile consumes the secret with BuildKit syntax:
 
 ```dockerfile
-RUN --mount=type=secret,id=npmrc \
-    cp /run/secrets/npmrc ~/.npmrc && npm ci
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    npm ci
 ```
 
-Secret values are resolved only when a run starts and are served to the Docker daemon through a BuildKit session. Citadel does not store secret values in build project snapshots, run snapshots, logs, or image references.
+This example assumes the install step runs as root. Adjust the mount path and
+ownership for another build user. Keep the credential on the temporary mount;
+copying it into the image filesystem can persist it in an image layer. See
+[Docker's secret mounts](https://docs.docker.com/build/building/secrets/#secret-mounts).
 
-Each resolved build secret must be no larger than `60 KiB`. Larger values are rejected before Docker starts. Do not move sensitive values to build arguments as a workaround.
+Citadel resolves stored secrets during execution and passes them to BuildKit.
+Keep values small and do not print them from the Dockerfile. Log redaction cannot
+prevent a Dockerfile from writing a credential into the output image.
 
 ## Run A Build
 
@@ -291,7 +335,7 @@ A run:
 4. validates the context and Dockerfile paths
 5. resolves build args, resolves Citadel-backed build secret mappings, and resolves registry credentials
 6. builds the image on the selected builder
-7. pushes all generated image tags to the registry
+7. pushes generated image tags when **Push to registry** is enabled
 8. updates deployment and stack build-image consumers when the build succeeds
 9. redeploys supported consumers that have `Redeploy On Build` enabled
 10. stores run status, image references, digest when available, and logs
@@ -341,7 +385,7 @@ Run statuses:
 - `Queued`: waiting for the build worker.
 - `Preparing`: worker claimed the run and is preparing source, secrets, and registry auth.
 - `Running`: Docker build or push is active.
-- `Succeeded`: build and push completed.
+- `Succeeded`: build completed, including push when enabled.
 - `Failed`: build, push, validation, or setup failed.
 - `TimedOut`: the run exceeded its timeout.
 - `Cancelled`: a user cancelled the run.
@@ -399,11 +443,10 @@ If the build fails before Docker starts:
 - check that Context exists in the repository
 - check that Dockerfile exists
 - confirm paths are relative to the repository root
-- for agent and edge-agent builds, reduce the context below `16 MB` with `.dockerignore`
+- for remote builds, keep the committed context tar within the 12 MiB archive limit; `.dockerignore` is not applied by the archive step
 - for build-pool Edge Agent builds, confirm the pool's Edge Agent is connected and uses a build-capable Agent version
 - confirm the selected registry has push credentials when required
 - if build secrets are configured, confirm each BuildKit id maps to an existing Citadel secret selected in the build form
-- if build secrets are configured, confirm each resolved secret is no larger than `60 KiB`
 
 If Docker reports `NotFound: secret not found` while resolving the build graph, one of the Dockerfile `RUN --mount=type=secret,id=...` entries does not have a matching build secret mapping, or the selected Citadel secret is no longer available to the run.
 
@@ -411,7 +454,7 @@ If the push fails:
 
 - confirm the registry host and image repository are correct
 - confirm the registry token has push permission
-- confirm the Citadel host can reach the registry
+- confirm the selected builder can reach the registry
 
 If a deployment or stack does not update after a successful build:
 

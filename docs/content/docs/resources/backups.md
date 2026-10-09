@@ -9,38 +9,121 @@ volumes, with snapshots stored in restic-compatible repositories.
 ## Make your first backup
 
 A backup needs a **repository** (where it is stored) and a **policy** (what it saves).
+This workflow backs up application data and restores a separate copy for testing.
+For Citadel's database and security keys, use a separate **Citadel backup** policy
+and follow [control-plane recovery](/docs/operations/control-plane-recovery).
 
-1. Open **Backups** and create a backup repository. For recovery from host failure, use storage away from that host.
-2. For a new repository, select **Initialize**, then **Validate** to confirm it is ready.
-3. Create a policy for the Citadel control plane or for the application's named Docker volumes.
-4. Start the backup manually and wait for its run to finish successfully.
-5. Check that the snapshot appears and record how to access the repository.
-6. Plan a restore test before relying on the backup.
+You need an online Platform, a Docker named volume, and permission to manage
+backup repositories and policies. Confirm the application's data actually lives
+in that volume: bind mounts and container writable layers are not included.
 
-A control-plane backup saves Citadel's own installation. It does not replace
-backups of application volumes. Volume restore is available in Citadel;
-control-plane recovery follows the separate [recovery guide](/docs/operations/control-plane-recovery).
-Keep the repository password safe: it is needed to recover encrypted snapshots.
+### 1. Prepare the repository
+
+1. Open **Backups** and create a backup repository.
+2. Choose storage supported by the connection in the table below. For recovery
+   from host failure, keep the repository away from that host.
+3. Select a **Password Secret** for restic's repository encryption. For S3, also
+   supply the endpoint, bucket, and credential secrets. See
+   [repository settings](#s3-compatible-repository-settings).
+4. Save, select **Initialize** for a new repository, then **Validate**. For an
+   existing repository, use its original password and validate it.
+
+| Backup execution | Supported repository |
+| --- | --- |
+| Citadel control plane or Local-connector workload | Core filesystem or S3-compatible |
+| Local-connector workload with a repository path on that Docker host | Platform filesystem |
+| Regular Agent, Edge Agent, or Swarm Node Agent | S3-compatible |
+
+The S3 endpoint must be reachable from the target's backup helper, not just your
+browser or Core. Keep the repository password separately accessible for recovery;
+S3 credentials alone cannot decrypt the snapshots.
+
+### 2. Create and run the policy
+
+1. Create a policy and choose **Docker volume** under **Source → Type**.
+2. Select the Platform and volume. For Swarm, select its Node and check
+   [Swarm backup requirements](#docker-swarm) first.
+3. On Standalone, keep **Consistency → Live**. Prepare an application-specific
+   dump or maintenance window if the application needs coordinated writes;
+   see [backup consistency](#backup-consistency) before copying live database files.
+4. Select the repository under **Destination** and configure retention. Leave
+   scheduled and webhook execution disabled for this first manual run.
+5. Save, select **Run**, and wait for completion. Open **Runs** and inspect the
+   snapshot status and logs, including warnings.
+
+For a whole Stack or Deployment, select that source instead and review the
+resolved named volumes before saving. Each volume has its own snapshot and
+result; the run is not an atomic snapshot of the entire application.
+
+Continue with a restore test below before relying on the policy. **Protected**
+means a volume has backup coverage; it does not prove a backup succeeded.
+
+### Backup consistency
+
+The form offers **Stop attached containers**, but the current backup execution
+path does not stop or restart workload containers. Use **Live** and arrange
+application consistency separately. Do not rely on that setting to pause writes.
+
+For Standalone workloads that require downtime, stop the relevant application
+through its normal controls before starting the backup and restart it afterward.
+For databases, follow the application's backup procedure and include its dump in
+the protected volume. Swarm workload backups require running, stable Tasks and
+support Live consistency only; see [Swarm requirements](#docker-swarm).
+
+## Restores
+
+Docker volume snapshots can be restored from a backup run into a Docker named volume.
+
+### Restore a separate copy
+
+1. Open the policy's **Runs** tab and select **Restore volume** on an available
+   backup run. For a run containing several volumes, select the successful
+   **Snapshot Volume** you want to recover.
+2. Choose **Target Platform**. Check the repository rules below; on Swarm, also
+   select **Target Node**.
+3. Replace the pre-filled **Target Volume** with a new name, such as
+   `application_data_recovered`. Leave **Overwrite existing target volume** disabled.
+4. Select **Restore** and wait for completion. Check **Restore runs** and open
+   the run's logs if it reports a failure or warning.
+5. On the target Platform, open **Volumes** and use **Browse** to check the restored
+   files. Then attach the restored volume to an isolated test instance of the
+   application, using the expected image version and mount path. Check that it
+   starts and can read representative data before declaring the backup usable.
+
+Keep the test instance separate from production ports, networks, and external
+integrations. File presence alone does not verify database or application
+recovery. Record the snapshot tested, application version, and result.
+
+[![Restore Volume dialog selecting an application data snapshot, the target Docker Platform, and a new recovery volume with overwrite disabled](/screenshots/backup-restore-selection.png)](/screenshots/backup-restore-selection.png)
+
+This demo backup contains two volume snapshots. **Snapshot Volume** selects the
+one to restore; **Target Platform** and **Target Volume** specify where it goes.
+The example restores `application_data` as `application_data_recovered`. Review
+all three before selecting **Restore**.
+
+Overwrite restore is destructive. When **Overwrite existing target volume** is enabled, Citadel deletes and recreates the target volume before restoring the snapshot. The UI requires you to type the exact target volume name before the restore can start. Citadel rejects overwrite when the target volume is currently in use.
+
+Restore history is shown in the same **Runs** tab under **Restore runs**. Use the log action on a restore run to inspect the restore output after the progress sheet is closed.
+
+Repository and platform rules for restore:
+
+- A Core filesystem repository can restore to the local platform only.
+- A Platform filesystem repository restores on the same local platform that owns that repository path. Agent-based filesystem restore is not supported.
+- An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
+- A Swarm child snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
+- Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
+
+For the PostgreSQL dump, security assets, clean-environment restore sequence,
+and recovery drill requirements, see
+[Control-plane recovery](/docs/operations/control-plane-recovery).
 
 ## Backup Repositories
 
 A backup repository is the destination where snapshots are stored.
 
-Supported repository types:
-
-- **Filesystem**: stores snapshots in a folder.
-- **S3 compatible**: stores snapshots in an S3-compatible bucket such as MinIO, AWS S3, or another compatible service.
-
-For filesystem repositories:
-
-- **Core** location stores backups on the Citadel Core host or container volume.
-- **Platform** location stores backups on the selected Docker host when it uses the **Local** connector.
-
-Choose the repository location based on where the backup runs:
-
-- Use **Core filesystem** for Citadel backups and Docker volume backups from a local platform.
-- Use **Platform filesystem** for local-platform workload backups when the repository folder is on that Docker host.
-- Use **S3 compatible** when backups should be independent of the Core host and platform host filesystem.
+**Filesystem** repositories store snapshots in a folder; **S3-compatible**
+repositories use a bucket, such as MinIO or AWS S3. Choose a supported execution
+location using the table in [Prepare the repository](#1-prepare-the-repository).
 
 Remote regular Agent, Edge Agent, and Swarm Node Agent backup execution currently
 requires **S3-compatible storage**. Filesystem repository fields may appear in
@@ -50,14 +133,6 @@ for Citadel control-plane backups or workloads reached through the Local connect
 ### S3-Compatible Repository Settings
 
 S3-compatible repositories use restic over an S3-compatible API. The bucket stores restic's encrypted repository layout, not plain backup files.
-
-Common repository objects include:
-
-- `config`: repository metadata
-- `keys/`: encrypted restic key material
-- `data/`: encrypted content packs
-- `index/`: content indexes
-- `snapshots/`: snapshot metadata
 
 When creating an S3-compatible repository, configure:
 
@@ -93,23 +168,6 @@ platform stores the restic repository on that Docker host. The repository contai
 folders such as `config`, `data`, `index`, `keys`, `locks`, and `snapshots`.
 
 When Citadel runs against Docker Desktop on Windows, Linux-style paths such as `/srv/backup-01` are usually inside Docker Desktop's Linux VM filesystem. They will not appear as `C:\srv\backup-01` or `D:\srv\backup-01` in Windows Explorer unless that path is explicitly backed by a shared Windows bind mount.
-
-To inspect a local Platform filesystem repository, run this from your Citadel
-installation directory on the same Docker host. It uses the running Core's
-actual image, even when `CITADEL_IMAGE` is blank in `.env`:
-
-```bash
-core_image=$(docker inspect --format '{{.Image}}' "$(docker compose ps -q server)")
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup,readonly "$core_image"
-```
-
-Then inside the container:
-
-```sh
-ls -la /backup
-```
-
-Check the path carefully. `/srv/backup-01` and `/serv/backup-01` are different paths.
 
 After creating a repository:
 
@@ -190,20 +248,11 @@ on `PATH`.
 
 ## Docker Platform Backups
 
-Backups can run against:
-
-- Local platforms
-- Regular agent platforms
-- Edge agent platforms
-- Docker Swarm Nodes covered by Citadel Node Agents
-
-For Docker volume, stack, deployment, and Swarm Service backups:
-
-- S3-compatible repositories run from the target platform and upload directly to the bucket.
-- Platform filesystem repositories are supported through the Local connector and write to the configured host path.
-- Core filesystem repositories are only valid for Citadel backups and local-platform backups.
-
-This means Citadel mounts Docker named volumes through the platform's Docker daemon, then runs restic in the backup helper container. For regular agent and edge agent platforms, this avoids routing remote volume contents through Citadel Core. For local Docker Desktop platforms, it also avoids relying on Docker's internal `/var/lib/docker/volumes/...` paths being visible to the host.
+Citadel reads named volumes through the target's Docker daemon using a backup
+helper. S3 backups upload from that target directly to the bucket, so the S3
+address and credentials must work from the helper's network. Remote volume
+contents do not pass through Core. For supported repository locations, see
+[Prepare the repository](#1-prepare-the-repository).
 
 ### Docker Swarm
 
@@ -290,54 +339,30 @@ The **Keep last successful** setting controls how many successful snapshots Cita
 
 When retention is enabled, Citadel runs restic retention after the backup completes. A retention failure is reported as a warning so the backup snapshot itself is still recorded.
 
-## Restores
-
-Docker volume snapshots can be restored from a backup run into a Docker named volume.
-
-Open a backup policy, go to **Runs**, and select the restore action on an available Docker volume backup run. Citadel opens a restore dialog and then streams progress in a sheet.
-
-The target name is pre-filled from the selected source volume. Enter a **new Target Volume**
-name to restore a separate copy, and leave **Overwrite existing target volume**
-disabled. This keeps the original volume untouched.
-
-[![Restore Volume dialog selecting an application data snapshot, the target Docker Platform, and a new recovery volume with overwrite disabled](/screenshots/backup-restore-selection.png)](/screenshots/backup-restore-selection.png)
-
-This demo backup contains two volume snapshots. **Snapshot Volume** selects the
-one to restore; **Target Platform** and **Target Volume** specify where it goes.
-The example restores `application_data` as `application_data_recovered`. Review
-all three before selecting **Restore**.
-
-Overwrite restore is destructive. When **Overwrite existing target volume** is enabled, Citadel deletes and recreates the target volume before restoring the snapshot. The UI requires you to type the exact target volume name before the restore can start. Citadel rejects overwrite when the target volume is currently in use.
-
-Restore history is shown in the same **Runs** tab under **Restore runs**. Use the log action on a restore run to inspect the restore output after the progress sheet is closed.
-
-Repository and platform rules for restore:
-
-- A Core filesystem repository can restore to the local platform only.
-- A Platform filesystem repository restores on the same local platform that owns that repository path. Agent-based filesystem restore is not supported.
-- An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
-- A Swarm child snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
-- Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
-
-For the PostgreSQL dump, security assets, clean-environment restore sequence,
-and recovery drill requirements, see
-[Control-plane recovery](/docs/operations/control-plane-recovery).
-
 ## Alerts
 
-Backup policies can alert on failure when **Alert on failure** is enabled. Delivery is configured through Alert Rules and Alert Channels.
+The policy form exposes **Alert on failure**, but the current backup execution
+path does not emit failure alerts from that setting. Review **Runs**, its logs,
+and **Activities** for failed or interrupted backups. Do not rely on the absence
+of a notification as evidence that a backup succeeded.
 
 ## Practical Recommendations
 
-Use S3-compatible storage for remote platforms, edge agents, and Docker Swarm. It keeps the backup path independent from where Citadel Core is running and avoids requiring shared host folders.
+Keep repository credentials and external encryption keys accessible outside the
+installation they protect. Repeat a restore test after material storage or
+application changes. On Swarm, record the source Node as well as the volume
+name: identical names on different Nodes can contain different data.
 
-For Swarm, volume names alone do not identify the data: two nodes can have
-different local volumes with the same name. Citadel uses the selected node for
-backup and restore. If that node's connection is unavailable, the operation fails
-instead of reading or restoring a same-named volume on another node.
+## Troubleshooting
 
-Use filesystem repositories for simple local setups. Use S3-compatible storage
-when execution goes through an Agent, even if that Agent runs on the Core host.
+| Symptom | Next step |
+| --- | --- |
+| Repository test fails | Verify the destination, restic password, storage credentials, and connectivity from the configured execution location. |
+| Policy has no eligible data | Preview coverage and confirm it contains the intended named volumes. Bind mounts are not included in workload-volume backups. |
+| Remote filesystem repository is rejected | Use S3-compatible storage for Agent, Edge Agent, or Swarm Node execution. |
+| A run failed or its progress connection closed | Inspect its entry in Runs and the logs before retrying; check whether it already completed. |
+| Restore target is rejected | Check target Platform/Node access and existing-volume restrictions under [Restores](#restores). |
+| Restored files exist but the application fails | Check application consistency, ownership, image/configuration compatibility, and the application's recovery steps. A file restore alone does not verify application recovery. |
 
 ## License Availability
 

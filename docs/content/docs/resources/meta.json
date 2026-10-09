@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "platforms",
+    "docker",
     "deployments",
     "stacks",
     "swarm-services",

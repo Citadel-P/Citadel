@@ -22,6 +22,11 @@ description: "Plain-language meanings for the names you see in the interface."
 | Drift | A difference between saved configuration and what is running |
 | Adopt | Bring an existing Docker workload under Citadel management |
 | Build Project | Instructions for turning source files into an image |
+| Build Pool | Dedicated builder infrastructure selected by a Build Project |
+| Release | A recorded Stack deployment and its configuration snapshot |
+| Image digest | Identifier for specific image content, unlike a tag that can move |
+| Service Account | A machine identity with scoped Citadel permissions |
+| Run as | The identity whose permissions an operation uses during execution |
 | Control-plane backup | A matched backup of Citadel's database and local data needed to recover the installation |
 
 See [choose a task](/docs/guides) when you are ready to use these features.

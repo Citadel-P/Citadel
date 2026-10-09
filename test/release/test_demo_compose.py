@@ -13,11 +13,11 @@ from test_release import ROOT
 
 @unittest.skipUnless(shutil.which("docker"), "Docker Compose is needed to render installation files")
 class PublicDeploymentComposeTests(unittest.TestCase):
-    def render(self, channel, project, port, extra=""):
+    def render(self, channel, project, port, extra="", rootless=None):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / "docker-compose.yml").write_text((ROOT / "deploy/install/docker-compose.yml").read_text())
-            (path / "demo.override.yml").write_text(remote.compose_override(channel))
+            (path / "demo.override.yml").write_text(remote.compose_override(channel, rootless))
             (path / ".env").write_text(
                 f"COMPOSE_PROJECT_NAME={project}\nCITADEL_HTTP_PORT={port}\nCITADEL_EDGE_PORT={port + 1}\n"
                 "PG_USER=fixture\nPG_PASSWORD=fixture-password\nPG_DATABASE=fixture\n" + extra)
@@ -59,6 +59,26 @@ class PublicDeploymentComposeTests(unittest.TestCase):
                             "CITADEL_CORE_MEMORY_LIMIT=1536m\nCITADEL_CORE_CPUS=0.75\n")
         self.assertEqual(int(value["services"]["server"]["mem_limit"]), 1536 * 1024**2)
         self.assertEqual(float(value["services"]["server"]["cpus"]), 0.75)
+
+    def test_rootless_targets_never_inherit_host_socket_or_host_root(self):
+        for channel, user, uid in (("dev", "citadel-preview", 1101), ("latest", "citadel-demo", 1102)):
+            with self.subTest(channel=channel):
+                value = self.render(channel, user, 18000, rootless={"user": user, "uid": uid})
+                mounts = value["services"]["server"]["volumes"]
+                self.assertEqual(len(mounts), 3)
+                sources = {m["target"]: m["source"] for m in mounts}
+                self.assertEqual(sources["/var/run/docker.sock"], f"/run/user/{uid}/docker.sock")
+                self.assertNotIn("/host", sources)
+                self.assertNotIn("/", sources.values())
+                data = f"/home/{user}/.local/share/docker"
+                self.assertEqual(sources["/host" + data], data)
+                self.assertTrue(next(m for m in mounts if m["source"] == data)["read_only"])
+
+    def test_rootless_recreation_preserves_trusted_proxy_gateway(self):
+        network = {"subnet": "172.19.0.0/16", "gateway": "172.19.0.1"}
+        value = self.render("latest", "citadel-stable", 28000,
+                            rootless={"user": "citadel-demo", "uid": 1102, "network": network})
+        self.assertEqual(value["networks"]["default"]["ipam"]["config"], [network])
 
 
 if __name__ == "__main__":

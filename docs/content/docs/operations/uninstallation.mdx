@@ -11,6 +11,7 @@ docker compose -f docker-compose.yml down
 ```
 
 Include `-f compose.direct-tls.yml` if your installation uses that overlay.
+Keep the same project name and all other installation overlays as well.
 
 This does not remove workloads that Citadel previously deployed. Decide whether
 those Docker resources should remain before removing the control plane.
@@ -19,6 +20,12 @@ The `citadel_data` and `postgres_data` volumes contain the recoverable Citadel
 control plane. Back them up before deletion. Deleting those volumes is permanent
 and removes configuration, identity, history, encryption material, and database
 state; it is not a normal uninstall or upgrade step.
+
+Keep the original Compose files, private `.env`, external recovery keys, and
+image reference with a [control-plane backup](/docs/operations/control-plane-recovery).
+To resume an installation whose volumes remain intact, use its original
+configuration and `docker compose up -d`; changing the project name can select
+different volumes.
 
 Remove reverse-proxy routes, DNS, TLS files, Agent or Edge Agent installations,
 and firewall rules separately after confirming no other service uses them.

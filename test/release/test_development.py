@@ -186,6 +186,54 @@ class DemoTests(unittest.TestCase):
         self.payload = dict(channel="dev", version="1.2.3-dev.10", core="ghcr.io/citadel-p/citadel@sha256:" + "a" * 64,
                             agent="ghcr.io/citadel-p/citadel.agent@sha256:" + "b" * 64, compose="services: {}\n")
 
+    def test_rootless_deployment_pins_engine_and_account(self):
+        target = dict(user="citadel-preview", uid=1101, dockerId="preview-engine")
+        (self.directory / ".rootless-deployment.json").write_text(json.dumps(target))
+        info = dict(ID="preview-engine", SecurityOptions=["name=rootless"],
+                    DockerRootDir="/home/citadel-preview/.local/share/docker")
+        with patch.object(remote.os, "geteuid", return_value=1101), \
+             patch.object(remote.pwd, "getpwuid") as account, \
+             patch.object(remote.subprocess, "check_output", return_value=json.dumps(info)) as inspect, \
+             patch.object(remote.subprocess, "run") as run:
+            account.return_value.pw_name = "citadel-preview"
+            remote.deploy(self.directory, self.payload)
+            self.assertEqual(inspect.call_args.args[0][:3], ["docker", "--host", "unix:///run/user/1101/docker.sock"])
+            for call in run.call_args_list:
+                self.assertEqual(call.args[0][:4], ["docker", "--host", "unix:///run/user/1101/docker.sock", "compose"])
+            self.assertEqual((self.directory / ".env").read_text(), "PG_PASSWORD=private\n")
+            for changes in [dict(ID="different-engine"), dict(SecurityOptions=[]), dict(DockerRootDir="/var/lib/docker")]:
+                run.reset_mock()
+                inspect.return_value = json.dumps(dict(info, **changes))
+                with self.assertRaisesRegex(ValueError, "pinned rootless target"):
+                    remote.deploy(self.directory, self.payload)
+                run.assert_not_called()
+            account.return_value.pw_name = "citadel-demo"
+            with self.assertRaisesRegex(ValueError, "account does not match"):
+                remote.deploy(self.directory, self.payload)
+
+    def test_rootless_account_cannot_fall_back_to_host_engine(self):
+        with patch.object(remote.pwd, "getpwuid") as account, patch.object(remote.subprocess, "run") as run:
+            account.return_value.pw_name = "citadel-preview"
+            with self.assertRaisesRegex(ValueError, "Missing rootless deployment"):
+                remote.deploy(self.directory, self.payload)
+            run.assert_not_called()
+
+    def test_rootless_network_gateway_must_belong_to_private_subnet(self):
+        target = dict(user="citadel-preview", uid=1101, dockerId="preview-engine")
+        for network in [dict(subnet="172.18.0.0/16", gateway="172.19.0.1"),
+                        dict(subnet="172.18.0.0/16", gateway="172.18.0.0"),
+                        dict(subnet="8.8.8.0/24", gateway="8.8.8.1"),
+                        dict(subnet="127.0.0.0/8", gateway="127.0.0.1")]:
+            with self.subTest(network=network):
+                (self.directory / ".rootless-deployment.json").write_text(json.dumps(dict(target, network=network)))
+                with patch.object(remote.os, "geteuid", return_value=1101), \
+                     patch.object(remote.pwd, "getpwuid") as account, \
+                     patch.object(remote.subprocess, "check_output") as inspect:
+                    account.return_value.pw_name = "citadel-preview"
+                    with self.assertRaisesRegex(ValueError, "network gateway"):
+                        remote.rootless_target(self.directory, "dev")
+                    inspect.assert_not_called()
+
     def test_deploy_pins_both_images_and_preserves_env_and_newer_version(self):
         with patch.object(remote.subprocess, "run") as run:
             self.assertEqual(remote.deploy(self.directory, self.payload)["status"], "deployed")

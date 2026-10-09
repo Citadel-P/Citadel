@@ -101,7 +101,10 @@ Regular Agent platforms can run Citadel build projects.
 
 For builds, Citadel Core resolves the configured Git repository and branch, packages the selected build context, and sends that archive to the Agent. The Agent streams the archive to its local Docker daemon and pushes the configured image tags to the selected registry.
 
-Keep build contexts small. Agent build context archives must fit within the current `16 MB` message envelope. Use `.dockerignore` in the context directory to exclude `.git`, dependency folders, build outputs, and logs.
+Keep build contexts small. Core's current archive step is limited to **12 MiB**
+and does not apply `.dockerignore`, before transfer through the 16 MiB Agent
+envelope. Use a narrow context and keep its Dockerfile inside that directory;
+see [Build Context Size](/docs/resources/builds#build-context-size).
 
 The Agent version should be updated together with Citadel Core when build protocol fields change.
 

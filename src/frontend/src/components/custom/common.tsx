@@ -1407,7 +1407,7 @@ export const MemoryUsageCell = ({
     return <div className="text-muted-foreground">0B / 0B</div>;
   }
   return (
-    <span className="text-[13px]">
+    <span className="text-[13px]" title="Memory usage excluding file cache / memory limit">
       {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
     </span>
   );
