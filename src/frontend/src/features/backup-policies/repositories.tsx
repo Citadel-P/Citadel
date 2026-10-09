@@ -136,7 +136,7 @@ export function BackupRepositoriesSection() {
       <RepositoryDialog
         open={open}
         onOpenChange={setOpen}
-        editing={editing}
+        editing={editing && (repositories.find((repository) => repository.id === editing.id) ?? editing)}
         setEditing={setEditing}
         input={input}
         setInput={setInput}
@@ -187,7 +187,7 @@ function RepositoryCard({
     successMessage: string,
     _failureMessage: string,
   ) => {
-    if (operating) return;
+    if (operating || (operation === 'initialize' && repository.status === BackupRepositoryStatus.Ready)) return;
 
     onPendingOperationChange(repository.id, operation);
     try {
@@ -211,7 +211,11 @@ function RepositoryCard({
     readyOnly = false,
   ) => {
     const loading = pendingOperation === operation;
-    const disabled = !canExecute || operating || (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
+    const disabled =
+      !canExecute ||
+      operating ||
+      (operation === 'initialize' && repository.status === BackupRepositoryStatus.Ready) ||
+      (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
     return (
       <DropdownActionButton
         title={title}
@@ -398,7 +402,8 @@ function RepositoryDialog({
     successMessage: string,
     _failureMessage: string,
   ) => {
-    if (!editing) return;
+    if (!editing || operating || (operation === 'initialize' && editing.status === BackupRepositoryStatus.Ready))
+      return;
 
     setPendingOperation(operation);
     try {
@@ -664,7 +669,7 @@ function RepositoryDialog({
                   icon={<DatabaseBackup className="size-3.5" />}
                   label="Initialize"
                   description="Create the Restic repository in an empty destination."
-                  disabled={formDisabled || operating}
+                  disabled={formDisabled || operating || editing.status === BackupRepositoryStatus.Ready}
                   loading={pendingOperation === 'initialize'}
                   onClick={() =>
                     runOperation('initialize', initialize, 'Repository initialized', 'Failed to initialize repository.')

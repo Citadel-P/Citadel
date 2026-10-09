@@ -167,6 +167,40 @@ pub(super) async fn after_ready(
     let id = repository["id"].as_str().unwrap();
     let path = format!("/api/v1/backupRepositories/{id}");
     // BackupEntitiesTests.BackupRepository_ShouldRejectLocationChangeAfterReady.
+    let store = PostgresBackupPersistence::new(pool.clone());
+    let repo_id = Uuid::parse_str(id).unwrap();
+    let before = store.get_repository(repo_id).await.unwrap();
+    for _ in 0..2 {
+        let response = request(
+            app,
+            Method::POST,
+            &format!("{path}/initialize"),
+            Some(admin.clone()),
+            Some(json!({"location":"Core","platformId":null})),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let problem: Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            problem["detail"]
+                .as_str()
+                .unwrap()
+                .contains("Use Validate or Check")
+        );
+    }
+    let after = store.get_repository(repo_id).await.unwrap();
+    assert_eq!(after.status, citadel_backups::BackupRepositoryStatus::Ready);
+    assert_eq!(after.last_checked_at, before.last_checked_at);
+    assert_eq!(after.row_version, before.row_version);
+    let lease_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM backuprepositoryleases WHERE backuprepositoryid=$1",
+    )
+    .bind(repo_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(lease_count, 0);
     let mut spec = repository["spec"].clone();
     spec["path"] = json!("/other");
     assert_eq!(

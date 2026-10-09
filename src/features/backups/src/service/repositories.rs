@@ -39,6 +39,15 @@ impl BackupService {
                 return Err(error);
             }
         };
+        if operation == "Initialize" && repository.status == BackupRepositoryStatus::Ready {
+            self.store
+                .release_repository_operation(id, operation_id)
+                .await?;
+            return Err(BackupError::Conflict(
+                "Backup Repository is already ready. Use Validate or Check instead of Initialize."
+                    .into(),
+            ));
+        }
         let result = self
             .executor
             .repository(&repository, operation, location, platform_id, cancellation)

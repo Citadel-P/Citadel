@@ -5,6 +5,8 @@
     "control-plane-recovery",
     "tls-and-secure-agent-transport",
     "reverse-proxy-caddy",
+    "reverse-proxy-nginx",
+    "reverse-proxy-nginx-host",
     "agent",
     "edge-agent",
     "platform-monitoring",

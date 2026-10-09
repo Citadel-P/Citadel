@@ -1,4 +1,4 @@
-import { BackupRepositoryView } from '@/api/generated/api.types';
+import { BackupRepositoryStatus, BackupRepositoryView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -35,12 +35,16 @@ const useRepositoryOperation = (
   const { selected, multiSelect } = singleSelection(resources);
   const queryClient = useQueryClient();
   const mutation = useMutate(mutationKey);
+  const canExecute =
+    !!selected &&
+    !multiSelect &&
+    !(mutationKey === 'initializeBackupRepository' && selected.status === BackupRepositoryStatus.Ready);
 
   return {
-    canExecute: !!selected && !multiSelect,
+    canExecute,
     isPending: mutation.isPending,
     run: async () => {
-      if (!selected || multiSelect) return;
+      if (!canExecute) return;
 
       try {
         await mutation.mutateAsync({ id: selected.id, data: getRepositoryOperationContext(selected) } as any);

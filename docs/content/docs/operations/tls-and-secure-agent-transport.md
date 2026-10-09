@@ -58,8 +58,17 @@ that clients actually use.
 Use this mode when you already run Caddy, Traefik, nginx, HAProxy, or another
 TLS-capable proxy.
 
-For a complete Compose overlay, proxy configuration, and verification steps,
-follow [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).
+Choose the guide that matches where your proxy runs:
+
+| Setup | Guide |
+| --- | --- |
+| Caddy in Docker, with automatic HTTPS | [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy) |
+| Nginx in Docker, on a private proxy network | [Nginx in Docker](/docs/operations/reverse-proxy-nginx) |
+| Nginx installed directly on the Docker host | [Nginx on the host](/docs/operations/reverse-proxy-nginx-host) |
+
+Preserve API error responses through the proxy so Citadel can display their
+details. For nginx, use `proxy_intercept_errors off;` in the Citadel proxy
+location. Do not replace API failures with a maintenance page or an HTML fallback.
 
 The topology is:
 
