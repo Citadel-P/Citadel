@@ -53,6 +53,7 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | --- | --- | --- |
 | `Passwords__MinimumLength` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
 | `Mfa__Policy` | `Optional` | Require two-factor authentication for administrators or all users |
+| `Updates__Enabled` | `true` | Allow Core to check for new stable Citadel releases |
 | `EnableSwagger` | `false` | Show API reference pages on your installation |
 | `JobConfiguration__MonitoringInterval` | `10` | Collect metrics every 10 seconds |
 | `JobConfiguration__FlashInterval` | `60` | Save buffered metrics every 60 seconds |
@@ -69,6 +70,33 @@ with PostgreSQL so these keys remain available during recovery.
 For additional options, use the [environment variable reference](/docs/reference/environment-variables).
 Unattended administrator setup is explained in
 [first-run setup](/docs/getting-started/first-run-setup).
+
+## Allow update checks
+
+Update checks are **on by default**. To disable them, set this in `.env` and
+[apply the setting change](#apply-a-setting-change):
+
+```dotenv
+Updates__Enabled=false
+```
+
+Core checks Citadel's public GitHub release information at startup and every
+six hours. Administrators see a small dot beside the sidebar version and a
+notice on Home when a newer stable release is available. Open either for
+release notes and the [upgrade guide](/docs/operations/upgrade-and-rollback).
+Checks do not install updates. Set `Updates__Enabled=true` to re-enable them
+after opting out. Agents and Edge Agents do not make these requests.
+
+**No telemetry is collected by Citadel through update checks.** Requests send no
+installed version, instance identifiers, configuration, credentials, or usage
+data. Version comparison happens inside Core. GitHub receives normal HTTPS
+connection information, including your server's outbound IP address. The browser
+only reads Core's cached result; opening release notes or the guide visits the
+linked website.
+
+Checks require outbound HTTPS to `api.github.com`. A failed or rate-limited
+request does not interrupt Citadel; the last successful result is kept until the
+next successful check or a Core restart.
 
 ## Apply a setting change
 

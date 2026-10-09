@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 mod bounded_queue;
+mod buffers;
+pub use buffers::reset_stream_buffer;
 mod supervisor;
 pub use bounded_queue::{
     BoundedReceiver, BoundedSender, QueueOverflowPolicy, QueueSendError, bounded_channel,

@@ -56,6 +56,13 @@ pub async fn spawn_all(
     } = jobs;
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     supervisor.spawn(
+        "update-checker",
+        state
+            .updates
+            .clone()
+            .run(config.updates_enabled, cancellation.child_token()),
+    );
+    supervisor.spawn(
         "service-account-last-used",
         last_used_worker.run(cancellation.child_token()),
     );

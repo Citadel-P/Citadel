@@ -44,6 +44,17 @@ docker compose up -d server
 Keep the installation's project and overlay options on that command. A container
 restart alone does not load a changed Compose environment.
 
+## Update checks
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `Updates__Enabled` | `true` | Allow Core to check public stable releases at startup and every six hours; no automatic installation |
+
+No Citadel telemetry or instance data is sent. GitHub receives normal connection
+information, including the outbound IP address. See
+[update checks and privacy](/docs/getting-started/configuration#allow-update-checks)
+for details and how to turn checks on or off.
+
 ## Database and persistent paths
 
 Core chooses its database connection in this order:

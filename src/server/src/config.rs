@@ -52,6 +52,7 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub updates_enabled: bool,
     pub execution: execution::ExecutionConfig,
     pub listen_address: SocketAddr,
     pub database_url: String,
@@ -190,6 +191,7 @@ pub struct RealtimeConfig {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectiveConfig {
+    pub updates_enabled: bool,
     pub password_minimum_length: usize,
     pub service_account_limits: citadel_identity::ServiceAccountLimitsDetails,
     pub service_account_last_used_interval_seconds: u64,
@@ -298,6 +300,7 @@ impl Config {
         let identity = identity_config(&transport)?;
 
         Ok(Self {
+            updates_enabled: parse_env("Updates__Enabled", true)?,
             execution,
             listen_address,
             database_url,
@@ -376,6 +379,7 @@ impl Config {
             message: error.to_string(),
         })?;
         Ok(EffectiveConfig {
+            updates_enabled: self.updates_enabled,
             service_account_limits: self.identity.service_account_limits,
             service_account_last_used_interval_seconds: self
                 .identity

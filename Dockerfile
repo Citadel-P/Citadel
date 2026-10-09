@@ -63,7 +63,9 @@ WORKDIR /app
 COPY LICENSE /app/LICENSE
 COPY src/features/alerts/LICENSE.unicode /app/third-party-notices/Unicode-3.0.txt
 COPY src/features/identity/src/authentication/common-passwords.LICENSE /app/third-party-notices/Common-Passwords-MIT.txt
-ENV HOME=/app \
+# Keep large temporary allocations from accumulating in glibc heap arenas.
+ENV MALLOC_MMAP_THRESHOLD_=131072 \
+    HOME=/app \
     DENO_DIR=/app/.cache/deno
 ARG TARGETARCH
 ARG VERSION

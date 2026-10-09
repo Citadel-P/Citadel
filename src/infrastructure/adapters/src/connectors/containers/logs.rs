@@ -203,12 +203,19 @@ pub(crate) fn decode_frames(
     cancel: CancellationToken,
 ) -> RuntimeLogStream {
     Box::pin(async_stream::try_stream! {
-        let mut pending=bytes::BytesMut::new();
+        let mut pending=Vec::new();
         loop {
             let next=tokio::select!{biased;()=cancel.cancelled()=>break,next=input.next()=>next};
             let Some(next)=next else {if !pending.is_empty(){Err(failure("Docker log stream ended in a partial frame."))?;}break;};
             let mut chunk=next.map_err(crate::connectors::docker::runtime::normalize_docker_error)?;
-            if tty {for piece in chunk.chunks(16*1024) {yield piece.to_vec();}continue;}
+            if tty {
+                while !chunk.is_empty() {
+                    let output=chunk.split_to(chunk.len().min(16*1024)).to_vec();
+                    if chunk.is_empty() {chunk=bytes::Bytes::new();}
+                    yield output;
+                }
+                continue;
+            }
             while !chunk.is_empty() {
                 let wanted=if pending.len()<8 {8} else {
                     if !matches!(pending[0],0..=2)||pending[1..4]!=[0,0,0] {Err(failure("Invalid Docker log frame header."))?;}
@@ -220,8 +227,10 @@ pub(crate) fn decode_frames(
                 pending.extend_from_slice(&chunk.split_to(amount));
                 if pending.len()==wanted && wanted>=8 && (wanted>8 || pending[4..8]==[0,0,0,0]) {
                     if !matches!(pending[0],0..=2)||pending[1..4]!=[0,0,0] {Err(failure("Invalid Docker log frame header."))?;}
-                    if pending.len()>8 {yield pending[8..].to_vec();}
-                    pending.clear();
+                    let output = (pending.len()>8).then(|| pending[8..].to_vec());
+                    citadel_runtime::reset_stream_buffer(&mut pending);
+                    if chunk.is_empty() { chunk=bytes::Bytes::new(); }
+                    if let Some(output)=output {yield output;}
                 }
             }
         }
@@ -289,6 +298,17 @@ mod tests {
         }
     }
     #[tokio::test]
+    async fn large_frames_can_be_released_without_losing_following_frames() {
+        let payload = vec![b'x'; MAX_LOG_FRAME];
+        let mut data = frame(1, &payload);
+        data.extend(frame(2, b"next\n"));
+        let mut decoded = stream(vec![data], false);
+        assert_eq!(decoded.next().await.unwrap().unwrap(), payload);
+        assert_eq!(decoded.next().await.unwrap().unwrap(), b"next\n");
+        assert!(decoded.next().await.is_none());
+    }
+
+    #[tokio::test]
     async fn tty_logs_are_raw_and_output_chunks_are_bounded() {
         let data = vec![b'x'; 50_000];
         let output: Vec<_> = stream(vec![data.clone()], true).collect().await;
@@ -304,6 +324,47 @@ mod tests {
                 .collect::<Vec<_>>(),
             data
         );
+    }
+    #[tokio::test]
+    async fn consumed_input_is_released_before_yielding_the_last_output() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        struct TrackedChunk(Vec<u8>, Arc<AtomicBool>);
+        impl AsRef<[u8]> for TrackedChunk {
+            fn as_ref(&self) -> &[u8] {
+                &self.0
+            }
+        }
+        impl Drop for TrackedChunk {
+            fn drop(&mut self) {
+                self.1.store(true, Ordering::SeqCst);
+            }
+        }
+
+        for tty in [false, true] {
+            let payload = vec![b'x'; 32 * 1024];
+            let data = if tty {
+                payload.clone()
+            } else {
+                frame(1, &payload)
+            };
+            let released = Arc::new(AtomicBool::new(false));
+            let chunk = Bytes::from_owner(TrackedChunk(data, released.clone()));
+            let input =
+                futures_util::stream::iter([Ok(chunk)]).chain(futures_util::stream::pending());
+            let mut decoded = decode_frames(Box::pin(input), tty, CancellationToken::new());
+            let mut output = decoded.next().await.unwrap().unwrap();
+            if tty {
+                assert!(!released.load(Ordering::SeqCst));
+                output.extend(decoded.next().await.unwrap().unwrap());
+            }
+            assert_eq!(output, payload);
+            // Do not poll again: a slow consumer can leave the stream suspended here.
+            assert!(released.load(Ordering::SeqCst), "tty={tty}");
+        }
     }
     #[tokio::test]
     async fn truncated_invalid_and_oversized_frames_fail() {

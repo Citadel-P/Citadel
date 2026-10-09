@@ -7,6 +7,18 @@ These steps update Core in an existing installation using published Citadel
 images. Plan for a brief interruption to the UI, API, live updates, and Core
 jobs while the container is replaced. Running Docker workloads normally continue.
 
+## Release notifications
+
+[Update checks](/docs/getting-started/configuration#allow-update-checks) are enabled
+by default. Set `Updates__Enabled=false` to disable them. Administrators see newer stable releases on
+Home and beside the sidebar version. Checks use completed public GitHub releases,
+which Citadel publishes after verifying its Core and Agent images; pushing an
+image tag alone does not trigger a notification. Development releases are not
+advertised. A development installation can be notified of a newer stable version.
+
+Updates remain manual. With checks disabled, follow the
+[release notes](https://github.com/Citadel-P/Citadel/releases) yourself.
+
 ## Before an upgrade
 
 1. Read the target [release notes](https://github.com/Citadel-P/Citadel/releases).

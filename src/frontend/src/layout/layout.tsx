@@ -6,6 +6,7 @@ import { useLayoutContext } from '../lib/context/layout-context';
 import { LayoutProvider } from '../lib/context/layout.provider';
 import { AppProvider } from '@/lib/context/app-provider';
 import { Sidebar } from './sidebar/sidebar';
+import { UpdateNotice } from './update-notice';
 import { LicenseReminder } from './license-reminder';
 import { Header } from './header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -27,6 +28,7 @@ const LayoutPage = () => {
         <ActivityTaskSheet />
         <div id="main-scroll-container" className="min-h-0 grow overflow-auto bg-muted/15">
           <LicenseReminder />
+          {location.pathname === '/' && <UpdateNotice />}
           <ErrorBoundary key={location.pathname}>
             <Suspense fallback={<Loader />}>
               <Outlet />

@@ -98,3 +98,5 @@ mod tests {
 pub(crate) mod token_safety;
 
 pub mod tasks;
+
+pub mod updates;

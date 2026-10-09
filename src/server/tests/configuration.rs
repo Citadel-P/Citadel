@@ -244,3 +244,33 @@ fn password_minimum_is_configurable_and_rejects_invalid_values() {
     }
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn update_checks_default_to_enabled_and_allow_opt_out() {
+    let root =
+        std::env::temp_dir().join(format!("citadel-updates-config-{}", uuid::Uuid::now_v7()));
+    for (overrides, expected) in [
+        (vec![], true),
+        (vec![("Updates__Enabled", "true")], true),
+        (vec![("Updates__Enabled", "false")], false),
+    ] {
+        let result = run(&root, &overrides, &["print-effective-config"]);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let config: Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(config["updatesEnabled"], expected);
+    }
+    assert!(
+        !run(
+            &root,
+            &[("Updates__Enabled", "invalid")],
+            &["print-effective-config"]
+        )
+        .status
+        .success()
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

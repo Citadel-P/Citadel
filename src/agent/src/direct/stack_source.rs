@@ -9,6 +9,8 @@ use std::{
 };
 use tonic::Status;
 
+const MAX_SOURCE_BYTES: usize = 12 * 1024 * 1024;
+
 pub(super) struct Prepared {
     pub root: PathBuf,
     pub source: StackApplySource,
@@ -33,7 +35,7 @@ impl Prepared {
         // Only remove a directory previously recorded by this Agent, never
         // unrelated files in a caller-provided generated-files directory.
         let marker = self.persistent_root.join(".citadel-mounted-secrets");
-        let previous = std::fs::read_to_string(&marker).ok();
+        let previous = read_text(&marker, 128).ok();
         let current = self
             .secret_directory
             .as_ref()
@@ -52,6 +54,22 @@ impl Prepared {
 }
 fn io(error: std::io::Error) -> Status {
     Status::internal(format!("Stack source I/O failed: {error}"))
+}
+fn read_text(path: &Path, limit: usize) -> Result<String, Status> {
+    use std::io::Read;
+    let mut content = Vec::new();
+    std::fs::File::open(path)
+        .map_err(io)?
+        .take(limit as u64 + 1)
+        .read_to_end(&mut content)
+        .map_err(io)?;
+    if content.len() > limit {
+        return Err(Status::resource_exhausted(
+            "Stack source file exceeds its byte budget",
+        ));
+    }
+    String::from_utf8(content)
+        .map_err(|error| io(std::io::Error::new(std::io::ErrorKind::InvalidData, error)))
 }
 fn relative(value: &str) -> Result<PathBuf, Status> {
     if value.trim().is_empty()
@@ -130,11 +148,12 @@ pub(super) fn prepare(r: &StackApplyRequest, base: &Path) -> Result<Prepared, St
         ));
     }
     if r.source_files.len() > 512
+        || r.source_env_file_paths.len() > 512
         || r.source_files
             .iter()
             .map(|v| v.content.len())
             .sum::<usize>()
-            > 12 * 1024 * 1024
+            > MAX_SOURCE_BYTES
     {
         return Err(Status::resource_exhausted(
             "Stack source exceeds 512 files or 12 MiB",
@@ -228,15 +247,29 @@ pub(super) fn prepare(r: &StackApplyRequest, base: &Path) -> Result<Prepared, St
             p.persistent_root = PathBuf::from(resolve(path)?);
         }
     }
+    let mut remaining = MAX_SOURCE_BYTES;
     for path in &p.source.env_file_paths {
-        let content = std::fs::read_to_string(path).map_err(io)?;
+        let content = read_text(Path::new(path), remaining)?;
+        remaining -= content.len();
         for line in content.lines().filter(|v| !v.trim_start().starts_with('#')) {
             if line.split_once('=').is_some() {
+                remaining = remaining
+                    .checked_sub(std::mem::size_of::<String>())
+                    .ok_or_else(|| {
+                        Status::resource_exhausted("Stack environment exceeds its byte budget")
+                    })?;
                 p.environment.push(line.trim().to_owned());
             }
         }
     }
-    p.environment.extend(r.environment_variables.clone());
+    for value in &r.environment_variables {
+        remaining = remaining
+            .checked_sub(value.len().saturating_add(std::mem::size_of::<String>()))
+            .ok_or_else(|| {
+                Status::resource_exhausted("Stack environment exceeds its byte budget")
+            })?;
+        p.environment.push(value.clone());
+    }
     if let Some(path) = r.environment_file_path.as_deref().filter(|v| !v.is_empty()) {
         let path = p.root.join(relative(path)?);
         write(&path, p.environment.join("\n").as_bytes())?;
@@ -382,6 +415,40 @@ mod tests {
             compose_file_content: Some("services: {cache: {image: redis}}".into()),
             ..Default::default()
         }
+    }
+    #[test]
+    fn local_environment_files_share_a_bounded_read_budget() {
+        let fixture = Fixture::new();
+        std::fs::create_dir_all(&fixture.0).unwrap();
+        let path = fixture.0.join("large.env");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len((MAX_SOURCE_BYTES / 2 + 1) as u64).unwrap();
+        let mut r = request();
+        r.source_working_directory = Some(fixture.0.display().to_string());
+        r.source_compose_file_paths = vec!["compose.yml".into()];
+        r.source_env_file_paths = vec![path.display().to_string(); 2];
+        assert_eq!(
+            prepare(&r, &fixture.0).err().unwrap().code(),
+            tonic::Code::ResourceExhausted
+        );
+        file.set_len(MAX_SOURCE_BYTES as u64 + 1).unwrap();
+        r.source_env_file_paths.truncate(1);
+        assert_eq!(
+            prepare(&r, &fixture.0).err().unwrap().code(),
+            tonic::Code::ResourceExhausted
+        );
+    }
+    #[test]
+    fn bounded_text_checks_size_before_decoding_a_split_utf8_character() {
+        let fixture = Fixture::new();
+        std::fs::create_dir_all(&fixture.0).unwrap();
+        let path = fixture.0.join("unicode.env");
+        std::fs::write(&path, "A=é").unwrap();
+        assert_eq!(read_text(&path, 4).unwrap(), "A=é");
+        assert_eq!(
+            read_text(&path, 2).unwrap_err().code(),
+            tonic::Code::ResourceExhausted
+        );
     }
     #[test]
     fn transported_paths_counts_duplicates_and_escaping_are_rejected_before_writes() {

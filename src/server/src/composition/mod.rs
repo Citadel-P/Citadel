@@ -58,6 +58,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub updates: citadel_server::updates::UpdateChecker,
     pub docker: DockerClient,
     pub pool: PgPool,
     pub cancellation: CancellationToken,
@@ -282,6 +283,7 @@ impl ServerComponents {
         };
         Ok((
             Self {
+                updates: citadel_server::updates::UpdateChecker::default(),
                 docker,
                 pool,
                 cancellation,

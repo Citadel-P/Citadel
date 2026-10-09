@@ -30,6 +30,7 @@ pub fn router(
 ) -> Result<Routers, Box<dyn std::error::Error>> {
     let ServerComponents {
         docker,
+        updates,
         pool,
         cancellation,
         readiness,
@@ -96,7 +97,7 @@ pub fn router(
         allowed_return_origins: config.transport.cors_origins.clone(),
         secure_cookies: config.transport.mode != citadel_server::config::TransportMode::Disabled,
     }))
-    .merge(application_info_http::router())
+    .merge(application_info_http::router(updates))
     .merge(citadel_server::api::routes::search::router(search))
     .merge(citadel_server::api::routes::actors::router(actors))
     .merge(license_http::router(license_http::LicenseHttpState {

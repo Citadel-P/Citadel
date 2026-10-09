@@ -1334,6 +1334,7 @@ export interface AlertRuleView {
 }
 
 export interface ApplicationInfoView {
+  availableUpdate?: null | AvailableUpdate;
   informationalVersion: string;
   name: string;
   realtimeTransport: string;
@@ -1516,6 +1517,11 @@ export interface AutomationRunView {
   trigger: AutomationRunTrigger;
   /** @format uuid */
   triggeredByActorId: string | null;
+}
+
+export interface AvailableUpdate {
+  releaseUrl: string;
+  version: string;
 }
 
 export interface AwsEc2BuildAgentPoolProviderSpec {

@@ -1,6 +1,6 @@
 ---
 title: "Explore the demo"
-description: "Sign in to the read-only demo and explore example applications and Git stacks."
+description: "Explore example applications, Git stacks, and a verified backup and restore in the read-only demo."
 ---
 
 ## Stable demo
@@ -25,6 +25,25 @@ You can browse or clone them:
 You can also open the WordPress example on the
 [stable demo](https://demo.citadelplane.com/wordpress/) or
 [development preview](https://preview.citadelplane.com/wordpress/).
+
+## Backup and restore with RustFS
+
+The stable demo includes a manual backup of the Nginx sample's `example-welcome`
+volume, stored in a private RustFS S3-compatible repository.
+
+- Open [RustFS demo backups](https://demo.citadelplane.com/backup-repositories/edit/01a120ed-81a7-7ca3-956f-9e9971d2cd5c)
+  to inspect the repository settings.
+- Open [Welcome volume to RustFS](https://demo.citadelplane.com/backup-policies/edit/01a120ee-97e4-7003-8baa-056d076efd3f)
+  and select **Runs** to see the successful backup and restore history.
+
+The restore created a separate `example-welcome-restored` volume. Its sample page
+was verified to match the original byte-for-byte; the running application was
+unchanged. Visitors can inspect the records but cannot start backups or restores.
+
+Manual backup and restore are Community capabilities; this example has no schedule
+or webhook. RustFS shares the demo host, so this demonstrates the workflow rather
+than protection from host loss. See [Backups](/docs/resources/backups) to configure
+storage and recovery for your own installation.
 
 ## Development preview
 

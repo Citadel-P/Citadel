@@ -1382,6 +1382,16 @@
       },
       "ApplicationInfoView": {
         "properties": {
+          "availableUpdate": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AvailableUpdate"
+              }
+            ]
+          },
           "informationalVersion": {
             "type": "string"
           },
@@ -2138,6 +2148,21 @@
           "exitCode",
           "logs",
           "errorMessage"
+        ],
+        "type": "object"
+      },
+      "AvailableUpdate": {
+        "properties": {
+          "releaseUrl": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "releaseUrl"
         ],
         "type": "object"
       },

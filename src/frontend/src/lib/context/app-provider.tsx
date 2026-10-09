@@ -57,7 +57,7 @@ const AppProviderContent: React.FC<{
 };
 
 export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { data: applicationInfo } = useRead('getApplicationInfo');
+  const { data: applicationInfo } = useRead('getApplicationInfo', undefined, { refetchInterval: 6 * 60 * 60 * 1000 });
 
   return (
     <RealtimeProvider realtimeTransport={applicationInfo?.data.realtimeTransport}>

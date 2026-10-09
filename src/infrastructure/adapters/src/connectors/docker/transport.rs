@@ -649,23 +649,26 @@ where
         let mut chunks = response.bytes_stream();
         let mut line = Vec::with_capacity(8 * 1024);
         while let Some(chunk) = chunks.next().await {
-            let chunk: Bytes = chunk?;
-            let mut start = 0;
-            for (index, byte) in chunk.iter().enumerate() {
-                if *byte != b'\n' {
-                    continue;
-                }
-                append_bounded(&mut line, &chunk[start..index], limit)?;
+            let mut chunk: Bytes = chunk?;
+            while let Some(index) = chunk.iter().position(|byte| *byte == b'\n') {
+                let segment = chunk.split_to(index + 1);
+                append_bounded(&mut line, &segment[..index], limit)?;
+                drop(segment);
+                if chunk.is_empty() { chunk = Bytes::new(); }
                 if !line.iter().all(u8::is_ascii_whitespace) {
-                    yield serde_json::from_slice(&line)?;
+                    let item = serde_json::from_slice(&line)?;
+                    citadel_runtime::reset_stream_buffer(&mut line);
+                    yield item;
+                } else {
+                    citadel_runtime::reset_stream_buffer(&mut line);
                 }
-                line.clear();
-                start = index + 1;
             }
-            append_bounded(&mut line, &chunk[start..], limit)?;
+            append_bounded(&mut line, &chunk, limit)?;
         }
         if !line.iter().all(u8::is_ascii_whitespace) {
-            yield serde_json::from_slice(&line)?;
+            let item = serde_json::from_slice(&line)?;
+            drop(line);
+            yield item;
         }
     };
     Box::pin(output)

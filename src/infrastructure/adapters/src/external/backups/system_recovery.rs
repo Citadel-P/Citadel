@@ -20,6 +20,9 @@ use zeroize::Zeroizing;
 type ProcessEnvironment = Vec<(OsString, OsString)>;
 type PgDumpRequest = (Vec<OsString>, ProcessEnvironment);
 
+const MAX_RECOVERY_METADATA_BYTES: u64 = 64 * 1024;
+const MAX_RECOVERY_KEY_BYTES: u64 = 16 * 1024;
+
 #[derive(Clone)]
 pub struct PgDumpSystemBackupBuilder {
     pool: PgPool,
@@ -235,15 +238,10 @@ async fn copy_recovery_assets(
         }
         let root = assets.core_data_path.canonicalize().map_err(storage)?;
         let source = checked_bundle_file(&root, name).await?;
-        if tokio::fs::metadata(&source).await.map_err(storage)?.len() > 16 * 1024 {
-            return Err(BackupError::Validation(format!(
-                "Recovery key '{name}' is too large."
-            )));
-        }
         let relative = format!("recovery/{name}");
         let target = directory.join(&relative);
         ensure_private_root(target.parent().expect("recovery subdirectory")).await?;
-        let bytes = Zeroizing::new(tokio::fs::read(source).await.map_err(storage)?);
+        let bytes = read_recovery_file(&source, MAX_RECOVERY_KEY_BYTES).await?;
         tokio::fs::write(&target, bytes.as_slice())
             .await
             .map_err(storage)?;
@@ -452,7 +450,7 @@ async fn validate_recovery_bundle(root: &Path) -> Result<PathBuf, BackupError> {
     let root = root.canonicalize().map_err(storage)?;
     let manifest_path = checked_bundle_file(&root, "manifest.json").await?;
     let checksums_path = checked_bundle_file(&root, "checksums.json").await?;
-    let manifest_bytes = tokio::fs::read(&manifest_path).await.map_err(storage)?;
+    let manifest_bytes = read_recovery_file(&manifest_path, MAX_RECOVERY_METADATA_BYTES).await?;
     let manifest: RecoveryManifest<'_> =
         serde_json::from_slice(&manifest_bytes).map_err(|error| {
             BackupError::Validation(format!("Recovery manifest is invalid: {error}"))
@@ -468,7 +466,7 @@ async fn validate_recovery_bundle(root: &Path) -> Result<PathBuf, BackupError> {
         ));
     }
     let checksums: BTreeMap<String, String> = serde_json::from_slice(
-        &tokio::fs::read(&checksums_path).await.map_err(storage)?,
+        &read_recovery_file(&checksums_path, MAX_RECOVERY_METADATA_BYTES).await?,
     )
     .map_err(|error| BackupError::Validation(format!("Recovery checksums are invalid: {error}")))?;
     if manifest
@@ -547,6 +545,25 @@ async fn checked_bundle_file(root: &Path, relative: &str) -> Result<PathBuf, Bac
         ));
     }
     Ok(canonical)
+}
+
+async fn read_recovery_file(path: &Path, limit: u64) -> Result<Zeroizing<Vec<u8>>, BackupError> {
+    // Bound the read itself: a file can grow after a metadata size check. Keys
+    // must also be cleared when a partial read or size validation fails.
+    let mut bytes = Zeroizing::new(Vec::new());
+    tokio::fs::File::open(path)
+        .await
+        .map_err(storage)?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(storage)?;
+    if bytes.len() as u64 > limit {
+        return Err(BackupError::Validation(format!(
+            "Recovery file exceeds the {limit}-byte size limit."
+        )));
+    }
+    Ok(bytes)
 }
 
 async fn validate_dump(path: &Path) -> Result<(), BackupError> {
@@ -654,6 +671,42 @@ mod parity_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn oversized_recovery_manifest_is_rejected_before_parsing() {
+        let root = std::env::temp_dir().join(format!("citadel-recovery-limit-{}", Uuid::now_v7()));
+        tokio::fs::create_dir(&root).await.unwrap();
+        let file = tokio::fs::File::create(root.join("manifest.json"))
+            .await
+            .unwrap();
+        file.set_len(1024 * 1024 * 1024).await.unwrap();
+        drop(file);
+        tokio::fs::write(root.join("checksums.json"), b"{}")
+            .await
+            .unwrap();
+        let error = validate_recovery_bundle(&root).await.unwrap_err();
+        assert!(matches!(error, BackupError::Validation(_)));
+        assert!(error.to_string().contains("size limit"));
+        tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recovery_key_read_accepts_the_limit_and_rejects_an_extra_byte() {
+        let path = std::env::temp_dir().join(format!("citadel-recovery-key-{}", Uuid::now_v7()));
+        let file = tokio::fs::File::create(&path).await.unwrap();
+        file.set_len(MAX_RECOVERY_KEY_BYTES).await.unwrap();
+        let key = read_recovery_file(&path, MAX_RECOVERY_KEY_BYTES)
+            .await
+            .unwrap();
+        assert_eq!(key.len() as u64, MAX_RECOVERY_KEY_BYTES);
+        file.set_len(MAX_RECOVERY_KEY_BYTES + 1).await.unwrap();
+        assert!(matches!(
+            read_recovery_file(&path, MAX_RECOVERY_KEY_BYTES).await,
+            Err(BackupError::Validation(_))
+        ));
+        drop(file);
+        tokio::fs::remove_file(path).await.unwrap();
+    }
 
     #[tokio::test]
     async fn file_backed_keys_are_archived_and_external_keys_are_never_copied() {

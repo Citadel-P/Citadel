@@ -273,16 +273,22 @@ fn log_lines(
     Box::pin(async_stream::try_stream! {
         let mut line=Vec::new();
         while let Some(chunk)=input.next().await {
-            for segment in chunk.map_err(failure)?.split_inclusive(|b|*b==b'\n') {
+            let mut chunk=bytes::Bytes::from(chunk.map_err(failure)?);
+            while !chunk.is_empty() {
+                let count=chunk.iter().position(|b|*b==b'\n').map_or(chunk.len(),|index|index+1);
+                let segment=chunk.split_to(count);
                 if line.len()+segment.len()>citadel_platforms::logs::MAX_LOG_FRAME {Err(failure("Log line exceeds the limit."))?;}
-                line.extend_from_slice(segment);
+                line.extend_from_slice(&segment);
+                drop(segment);
+                if chunk.is_empty(){chunk=bytes::Bytes::new();}
                 if line.last()==Some(&b'\n') {
-                    yield log_event(&line,name.as_deref());
-                    line.clear();
+                    let event=log_event(&line,name.as_deref());
+                    citadel_runtime::reset_stream_buffer(&mut line);
+                    yield event;
                 }
             }
         }
-        if !line.is_empty(){line.push(b'\n');yield log_event(&line,name.as_deref());}
+        if !line.is_empty(){line.push(b'\n');let event=log_event(&line,name.as_deref());drop(line);yield event;}
     })
 }
 

@@ -17,17 +17,22 @@ const VERSION: &str = env!("CITADEL_BUILD_VERSION");
 
 const INFORMATIONAL_VERSION: &str = env!("CITADEL_BUILD_INFORMATIONAL_VERSION");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationInfoView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub available_update: Option<crate::updates::AvailableUpdate>,
     pub name: &'static str,
     pub version: &'static str,
     pub informational_version: &'static str,
     pub realtime_transport: &'static str,
 }
 
-pub fn router() -> Router {
-    documented_routes().split_for_parts().0
+pub fn router(updates: crate::updates::UpdateChecker) -> Router {
+    documented_routes()
+        .split_for_parts()
+        .0
+        .layer(Extension(updates))
 }
 
 #[utoipa::path(
@@ -45,17 +50,23 @@ pub fn router() -> Router {
 )]
 async fn get_application_info(
     principal: Option<Extension<ActorPrincipal>>,
+    Extension(updates): Extension<crate::updates::UpdateChecker>,
     headers: HeaderMap,
 ) -> Response {
-    let Some(Extension(_principal)) = principal else {
+    let Some(Extension(principal)) = principal else {
         return error_response(IdentityError::Unauthenticated, &headers);
     };
-    no_store(Json(application_info()).into_response())
+    let mut info = application_info();
+    if principal.is_administrator() {
+        info.available_update = updates.available().await;
+    }
+    no_store(Json(info).into_response())
 }
 
 #[must_use]
 pub const fn application_info() -> ApplicationInfoView {
     ApplicationInfoView {
+        available_update: None,
         name: NAME,
         version: VERSION,
         informational_version: INFORMATIONAL_VERSION,
