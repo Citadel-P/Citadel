@@ -25,22 +25,15 @@ again during onboarding, see [Adopt existing workloads](/docs/guides/adopting-ex
 Try [your first Stack](/docs/getting-started/first-stack) if you do not have a Compose file yet.
 On Swarm, Citadel checks whether the Compose fields can be represented by native Swarm services.
 
-## Basic Setup
+## Compose example
 
-Create a stack and choose:
-
-- Source: `Web Editor`
-- Platform: the Docker platform where the stack should run
-- Compose file: the Docker Compose YAML for this stack
-- Registry: the registry Citadel should use when checking image updates
-- Update behavior: how Citadel should react to image updates
-
-Example Compose file:
+This example publishes a web service on port `8080` and keeps its content in a
+named volume:
 
 ```yaml
 services:
   app:
-    image: nginx:1.27
+    image: nginx:alpine
     ports:
       - "8080:80"
     volumes:
@@ -50,7 +43,9 @@ volumes:
   app_data:
 ```
 
-After saving the stack, use **Deploy** to deploy it. Editing the Compose file changes the stack definition, but the platform is not changed until the stack is applied again.
+Saving changes does not update the running application. Select **Deploy** or
+**Redeploy** to apply them. Use [volume browsing](/docs/resources/docker/volumes#browse-and-download-files)
+to inspect the named volume's contents.
 
 ## Compose File
 
@@ -216,6 +211,11 @@ Use drift detection when operators may change containers outside Citadel and you
 Manual drift checks remain available in Community. Continuous drift monitoring
 and automatic safe reconciliation require Team's `Operational Guardrails`
 capability.
+
+The manual **Reconcile drift** action also requires Operational Guardrails and
+an enabled drift policy. Inspect the report first: an intentionally stopped
+container should not be restarted merely to clear a warning. See
+[handling drift](/docs/guides/application-updates#handle-drift-separately).
 
 ## Rollback
 

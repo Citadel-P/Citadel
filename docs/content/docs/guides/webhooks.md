@@ -397,9 +397,3 @@ Provider cannot reach Citadel:
 - Confirm `/listener/*` is reachable from the provider.
 - Confirm reverse proxy routing allows POST requests to `/listener/*`.
 - Confirm request bodies up to 1 MB are allowed.
-
-## Documentation Website Note
-
-These docs are plain Markdown so they can be moved into a docs website later.
-
-If Citadel adopts Docusaurus or Fumadocs, keep each resource guide as a separate page and add a Webhooks section under an Operations or Integrations category. The current file structure already maps cleanly to that kind of navigation.

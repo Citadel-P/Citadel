@@ -1,0 +1,4 @@
+{
+  "title": "Docker resources",
+  "pages": ["containers", "images", "networks", "volumes"]
+}

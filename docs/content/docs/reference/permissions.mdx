@@ -11,11 +11,45 @@ Use **Access > Roles** to view the permission matrix for the running release.
 It is the authoritative list because Citadel adds resource types and specific
 operations as features are implemented.
 
-General permission levels progress from no access through read and mutation
-capabilities. Some operations, such as logs, terminal access, statistics,
-deployment, restore, or administrative identity management, also require a
-specific permission. Resource overrides should be exceptional and narrowly
-scoped.
+## Levels and capabilities
+
+| Level | What it grants |
+| --- | --- |
+| None | No grant from this entry. Other assignments can still grant access. |
+| Read | Read operations, subject to any additional capability required. |
+| Write | Read plus configuration operations. |
+| Execute | Read and Write plus execution operations, which can include deletion. |
+
+Capabilities such as **Logs**, **Terminal**, **Apply**, and **Restore** are
+additional checks. A higher level does not automatically select every capability.
+Requirements differ by resource; for example, applying a Deployment and applying
+a Stack use different base levels.
+
+| Operation | Requirement on the named resource |
+| --- | --- |
+| Read Stack or Deployment logs | Read + Logs |
+| Open a Stack or Deployment terminal | Read + Terminal |
+| Edit Stack or Deployment bindings | Write + Resource Bindings |
+| Deploy a Deployment | Read + Apply |
+| Deploy or roll back a Stack | Execute + Apply |
+| View Stack releases | Read + Releases |
+| Delete a Stack or Deployment | Execute |
+| Restore a Backup Policy snapshot | Execute + Restore |
+
+Dependent-resource access, resource state, and license capabilities can impose
+further requirements. Use the running release's matrix and action explanation
+when diagnosing a denial.
+
+## Additive access
+
+Citadel combines direct Roles, enabled Team grants, and resource-specific access.
+An override grants access; it cannot deny access inherited elsewhere. Reducing
+one entry to None does not remove another Role's grant. To restrict a person,
+review all sources of access, including Admin assignments.
+
+Follow the [single-resource access example](/docs/guides/access-control#grant-access-to-one-resource)
+and test using the affected account, including an unrelated resource that should
+remain inaccessible.
 
 Service Accounts use the same authorization model as users but cannot use an
 interactive browser session. Avoid the built-in Admin Role for integrations;

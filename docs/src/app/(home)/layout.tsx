@@ -1,6 +1,21 @@
-import { HomeLayout } from 'fumadocs-ui/layouts/home';
-import { baseOptions } from '@/lib/layout.shared';
+import { HomeLayout } from "fumadocs-ui/layouts/home";
+import { baseOptions } from "@/lib/layout.shared";
 
-export default function Layout({ children }: LayoutProps<'/'>) {
-  return <HomeLayout {...baseOptions()}>{children}</HomeLayout>;
+export default function Layout({ children }: LayoutProps<"/">) {
+  return (
+    <HomeLayout
+      {...baseOptions()}
+      links={[
+        { text: "Documentation", url: "/docs" },
+        { text: "Resources", url: "/docs/resources" },
+        {
+          text: "Live demo",
+          url: "https://demo.citadelplane.com",
+          external: true,
+        },
+      ]}
+    >
+      {children}
+    </HomeLayout>
+  );
 }

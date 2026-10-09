@@ -117,6 +117,9 @@ Two-factor authentication cannot be disabled when the active Citadel policy requ
 
 ## If You Lose Access
 
+If the lost device also had a signed-in browser, review and revoke that session
+under [Profile → Security](/docs/guides/profile-and-sessions#review-active-sessions).
+
 If you lose access to both your authenticator app and recovery codes, contact a Citadel administrator.
 
 An administrator can reset your two-factor authentication. This removes your existing TOTP setup, invalidates existing recovery codes, clears outstanding MFA challenges, and signs out existing sessions.
@@ -140,5 +143,4 @@ If recovery-code verification fails:
 - Make sure the code was not already used.
 
 If the setup page expires, sign in again and restart setup.
-
 

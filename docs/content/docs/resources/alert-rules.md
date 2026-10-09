@@ -3,7 +3,9 @@ title: "Alert rules"
 description: "Configure alert rules, delivery channels, evaluation, and recovery behavior."
 ---
 
-Alert rules let Citadel record alert events and send notifications when platform, deployment, stack, webhook, or automation conditions match.
+Alert rules record operational events and notify the people responsible for the
+affected resources. Start with the built-in rules, then tune them when you know
+which conditions need attention.
 
 Notifications are delivered through notification channels. The Citadel server image includes notification delivery support, so normal Docker installs do not need any extra notification service.
 
@@ -12,13 +14,48 @@ Notifications are delivered through notification channels. The Citadel server im
 1. Open **Settings → Alert Rules**.
 2. Add a **Notification Channel** for your preferred destination.
 3. Use **Send Test Notification**, confirm it arrives, then **Save** the channel.
-4. Assign the channel to a suitable built-in rule and enable the rule.
-5. Use **Alerts** to review events and delivery results.
+4. Assign the channel to a suitable built-in rule, such as **Platform Unreachable**,
+   enable the rule, and save it.
+5. When a matching condition occurs, find its event in **Alerts** and confirm
+   the message arrives at the destination.
+
+A channel test checks delivery using the dialog's values. It does not exercise
+the rule's scope, thresholds, or cooldown. Verify those separately; there is no
+need to interrupt a production Platform to test a channel.
 
 Community includes the built-in system rules and notification channels. Creating
 custom rules and changing advanced rule behavior require Advanced Alerting.
 The provider setup below explains where to obtain each destination URL. See
 [License Availability](#license-availability) for the full feature breakdown.
+
+## Respond to an alert
+
+1. Open **Alerts**, leave **Unresolved only** enabled, and select the alert type
+   in a row to open its details.
+2. Read the affected resource, recorded time, and **Info**. Follow the resource
+   link and inspect its current state, operation history, and relevant logs.
+3. Select **Acknowledge** while investigating. The event remains unresolved.
+4. Correct the cause, then verify recovery on the resource: fresh Platform
+   readings, a successful operation, or a working application endpoint.
+5. Select **Resolve** if the event remains open after recovery. Turn off
+   **Unresolved only** to find resolved events later.
+
+| Status | Meaning |
+| --- | --- |
+| Active | The event is open and has not been acknowledged. |
+| Acknowledged | Someone has acknowledged it; investigation or recovery may still be needed. |
+| Resolved | The event was closed manually or by a recovery observation. |
+
+Acknowledge and Resolve update the alert record; they do not restart workloads,
+retry failed jobs, or change a rule. For monitored conditions such as Platform
+availability, resource pressure, and Build Pool availability, Citadel can resolve
+the incident when it observes recovery. A historical failed operation can still
+need manual resolution after a successful retry.
+
+Use [Platform monitoring](/docs/operations/platform-monitoring) to investigate
+capacity alerts and [Troubleshooting](/docs/operations/troubleshooting) for
+connection or application failures. Alert details describe the condition; they
+are not a per-channel delivery receipt.
 
 ## Before You Start
 
@@ -315,7 +352,7 @@ Community administrators can configure a rule installed by Citadel:
 4. Select one or more notification channels.
 5. Save the rule.
 
-The rule continues creating in-app alert events when it has no channel.
+An enabled rule continues creating in-app alert events when it has no channel.
 Selecting an active channel also enables external delivery.
 
 Changing severity, cooldown, thresholds, required matches, quiet hours, or
@@ -350,14 +387,31 @@ Alert events are still recorded in Citadel even when no notification channel is 
 
 They require:
 
-- `Threshold`: percentage that must be exceeded.
+- `Threshold`: percentage that must be reached or exceeded.
 - `Required Matches`: number of consecutive checks required before the alert fires.
 
-Use required matches to reduce noise. For example, CPU above `90` with `Required Matches` set to `3` only fires after three consecutive high CPU checks.
+For example, a threshold of `90` with **Required Matches** set to `3` requires
+three consecutive evaluated readings at or above 90%. CPU and RAM evaluations
+use smoothed samples; the count is not a duration in seconds or a count of
+browser chart updates. A reading below the threshold resets the count.
+
+### Overlapping rules and cooldown
+
+For the same alert type and resource, Citadel selects the highest-severity
+matching rule. Only that rule can trigger for that observation; a rule still
+waiting for required matches or cooldown does not fall back to a lower-severity
+match. Attach the intended channels to each severity you use.
+
+An existing open incident prevents duplicate events for the same condition.
+**Cooldown** limits how soon a new event can be created for the rule and resource;
+it is not a reminder interval for an unresolved alert.
 
 ## Quiet Hours
 
-Quiet hours suppress alerts during planned maintenance or noisy time windows.
+Quiet hours skip rule evaluation during planned maintenance or noisy time windows.
+They suppress new in-app events as well as external notifications. Existing
+events remain visible, and automatic recovery is evaluated after quiet hours
+end when a new observation arrives.
 
 Each quiet hour has:
 
@@ -371,50 +425,25 @@ Quiet hours are evaluated using the selected timezone. Overlapping quiet-hour wi
 
 ## Alert Types
 
-Platform alerts:
+Choose a type based on the condition you need to investigate:
 
-- `PlatformCpuHigh`
-- `PlatformRamHigh`
-- `PlatformDiskHigh`
-- `PlatformUnreachable`
-- `PlatformVersionMismatch`
-- `UnmanagedContainerCreated`
+| Area | Alert types |
+| --- | --- |
+| Platform capacity | `PlatformCpuHigh`, `PlatformRamHigh`, `PlatformDiskHigh` |
+| Platform availability and inventory | `PlatformUnreachable`, `PlatformVersionMismatch`, `UnmanagedContainerCreated` |
+| Deployment | `DeploymentImageUpdateAvailable`, `DeploymentAutoUpdated`, `DeploymentAutoDeployFailed`, `DeploymentConfigurationResolutionFailed` |
+| Swarm Service | `SwarmServiceOperationFailed` |
+| Stack images and services | `StackImageUpdateAvailable`, `StackAutoUpdated`, `StackAutoDeployFailed`, `StackServiceAutoUpdated`, `StackServiceAutoDeployFailed` |
+| Stack drift | `StackDriftDetected`, `StackDriftAutoReconciled` |
+| Stack Git and configuration | `StackGitUpdateAvailable`, `StackGitAutoUpdated`, `StackGitAutoDeployFailed`, `StackConfigurationResolutionFailed` |
+| Webhook | `WebhookAuthenticationFailed`, `WebhookDispatchFailed`, `WebhookGitRepoSyncFailed`, `WebhookStackGitDeployFailed` |
+| Automation | `AutomationActionRunFailed` |
+| Builds | `BuildRunFailed`, `BuildAgentPoolUnavailable` |
+| License | `LicenseEnteredGracePeriod`, `LicenseExpired` |
 
-Deployment alerts:
-
-- `DeploymentImageUpdateAvailable`
-- `DeploymentAutoUpdated`
-- `DeploymentAutoDeployFailed`
-- `DeploymentConfigurationResolutionFailed`
-
-Swarm Service alerts:
-
-- `SwarmServiceOperationFailed`
-
-Stack alerts:
-
-- `StackImageUpdateAvailable`
-- `StackAutoUpdated`
-- `StackAutoDeployFailed`
-- `StackServiceAutoUpdated`
-- `StackServiceAutoDeployFailed`
-- `StackDriftDetected`
-- `StackDriftAutoReconciled`
-- `StackGitUpdateAvailable`
-- `StackGitAutoUpdated`
-- `StackGitAutoDeployFailed`
-- `StackConfigurationResolutionFailed`
-
-Webhook alerts:
-
-- `WebhookAuthenticationFailed`
-- `WebhookDispatchFailed`
-- `WebhookGitRepoSyncFailed`
-- `WebhookStackGitDeployFailed`
-
-Automation alerts:
-
-- `AutomationActionRunFailed`
+`BuildAgentPoolUnavailable` uses an **Unavailable grace period (seconds)** threshold,
+rather than a percentage. See [Build Pool availability](/docs/resources/build-pools#build-pool-connection-and-availability)
+for the built-in rule's grace period and recovery behavior.
 
 ## Recommended Rules
 
@@ -472,18 +501,24 @@ If the test notification fails:
 
 If Citadel records alert events but sends no notification:
 
-- Make sure the rule has at least one notification channel selected.
-- Make sure the selected channel is active.
-- Check whether the rule is inside quiet hours.
-- Check whether the cooldown has not elapsed yet.
-- Review Citadel server logs for notification delivery errors.
+- Check that the rule had the intended active channel assigned when the event
+  was created. Assigning a channel later does not resend existing events.
+- Test the channel again and check the destination's delivery or workflow logs.
+- Delivery is asynchronous and failed sends are retried, up to eight attempts.
+  An event in **Alerts** does not prove that the external message arrived.
+- Check Citadel server logs for delivery-worker errors if channel tests succeed
+  but new matching events still produce no messages.
 
 If a rule does not trigger:
 
 - Make sure the rule is enabled.
 - Check that the selected resources in `Applies to` include the resource you expect.
-- For CPU, RAM, and disk rules, confirm the threshold and required match count are reachable.
+- Check quiet hours, cooldown, and whether the same condition already has an
+  open incident. A higher-severity matching rule can also take precedence.
+- For CPU, RAM, and disk rules, confirm fresh readings meet the threshold and
+  required match count. Missing metrics are not evidence of recovery.
 - For stack, deployment, webhook, and automation rules, confirm the underlying feature is enabled and producing events.
+- For custom rules, confirm **Advanced Alerting** is available.
 
 If alerts are too noisy:
 

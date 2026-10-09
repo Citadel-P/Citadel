@@ -28,3 +28,24 @@ The full schema used by Citadel's web UI is internal and is not the external
 contract. Read the release notes before upgrading an integration.
 
 </details>
+
+## Verify an integration
+
+Start with a read operation using a dedicated identity, as shown in
+[Service Account API access](/docs/guides/service-accounts#call-the-citadel-api).
+Verify both the resources it can read and an unrelated resource it should not
+access before adding mutation calls. Use the installed instance's public schema
+for request shapes and supported operations.
+
+| Response | What to check |
+| --- | --- |
+| 401 Unauthorized | Token validity, expiration or revocation, enabled account, and Service Account license availability. |
+| 403 Forbidden | Required Roles, resource access, operation capabilities, and license requirements. |
+| 404 Not Found | Resource ID and visibility; inaccessible resources may be hidden. |
+| 400 Bad Request | Request body and parameters against the matching public schema. |
+| 409 Conflict | Current resource state or an operation already in progress; inspect it before retrying. |
+
+For queued work, inspect the resulting run or operation until it completes.
+An accepted request does not prove that a build, backup, or deployment succeeded.
+After a timeout or interrupted connection, check the resource's history before
+repeating a mutation that may already have started.

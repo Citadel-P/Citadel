@@ -105,7 +105,7 @@ be inspected and corrected.
 
 ## Image checks and automatic updates
 
-For Web Editor stacks, **Check Updates** compares each supported image tag with
+For Web Editor stacks, **Check for updates** compares each supported image tag with
 the image digest recorded in its Swarm Service on the manager. Tasks do not need
 to run on the manager, and node-agent coverage is not required for this check.
 Select a Registry with access to the images. If a deployed Service has no resolved
@@ -127,8 +127,9 @@ their build completion settings separately from registry image checks.
 ## Permissions
 
 Importing an external Docker Stack requires Stack Write plus Platform Read and
-Inspect. Deploy, rollback, and delete use the Stack Apply, Releases, and Execute
-permissions respectively, together with Platform visibility.
+Inspect. Deploy and rollback require Stack **Execute + Apply**. Viewing release
+history requires **Read + Releases**, and deletion requires **Execute**. Platform
+visibility is also required; see [permissions](/docs/reference/permissions).
 
 ## Related resources
 

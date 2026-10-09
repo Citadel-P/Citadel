@@ -9,6 +9,8 @@ contains the settings needed to start Citadel. Add optional settings from this
 reference as needed. The defaults are for local HTTP; configure TLS before
 sharing an installation.
 
+## Installation and transport
+
 | Setting | Required when | Purpose |
 | --- | --- | --- |
 | `CITADEL_IMAGE` | Optional | Blank or unset uses `ghcr.io/citadel-p/citadel:latest`; set a complete image address to override |
@@ -31,6 +33,57 @@ sharing an installation.
 | `Passwords__MinimumLength` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
 | `EnableSwagger` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
-See [Docker Compose configuration](/docs/getting-started/configuration) for
-defaults, bootstrap settings, automation, monitoring intervals, and safe key
-handling.
+`CITADEL_IMAGE`, `COMPOSE_PROJECT_NAME`, and host port settings control Compose.
+The application settings must reach the Core container; the supplied Compose
+file reads `.env` for this purpose. Recreate Core after editing it:
+
+```bash
+docker compose up -d server
+```
+
+Keep the installation's project and overlay options on that command. A container
+restart alone does not load a changed Compose environment.
+
+## Database and persistent paths
+
+Core chooses its database connection in this order:
+
+1. `DATABASE_URL`, if set.
+2. `ConnectionStrings__Postgres`, if set.
+3. `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, and `PG_DATABASE`.
+
+Remove unused overrides instead of leaving them blank. The supplied Compose
+PostgreSQL service still requires its `PG_*` credentials. Changing the initial
+database password in `.env` does not reset the password of an existing database.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `PG_PORT` | `5432` | PostgreSQL port used with the `PG_*` connection settings |
+| `CITADEL_DATA_ROOT` | `/app/data` | Persistent Core data and generated recovery keys; match the container's data mount |
+| `CITADEL_HOST_ROOT` | `/host` | Read-only host mount used for Docker storage filesystem metrics |
+| `Backups__PostgresDumpPath` | `pg_dump` | PostgreSQL dump executable for control-plane backups |
+| `CITADEL_PG_RESTORE_PATH` | `pg_restore` | PostgreSQL restore executable used by offline `restore-system` |
+
+Preserve original keys and verify the database target before
+[control-plane recovery](/docs/operations/control-plane-recovery). A new Compose
+project does not isolate an external database configured by an override.
+
+## Jobs and diagnostics
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `JobConfiguration__MonitoringInterval` | `10` | Platform metric collection interval, in seconds |
+| `JobConfiguration__FlashInterval` | `60` | Metric persistence interval, in seconds; `Flash` is the supported setting name |
+| `Automations__Enabled` | `true` | Enables Automation Action execution |
+| `Automations__MaxParallelRuns` | `4` | Maximum concurrent Automation Action runs |
+| `Automations__DefaultTimeoutSeconds` | `300` | Default Action timeout |
+| `Automations__MaxTimeoutSeconds` | `1800` | Maximum Action timeout |
+| `LogFormat` | `Text` | Core log format: `Text` or `Json` |
+
+These settings do not override resource permissions, enabled states, or license
+requirements. Resource schedules are configured on the resource itself.
+
+For first-run password-file bootstrap, use the complete
+[unattended setup procedure](/docs/getting-started/first-run-setup#unattended-setup).
+For common configuration changes, see
+[Docker Compose configuration](/docs/getting-started/configuration).

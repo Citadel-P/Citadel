@@ -18,6 +18,14 @@ secret-encryption key makes stored local secrets and provider credentials
 undecryptable. Losing the Core Ed25519 private key prevents existing regular Agents
 from trusting Core requests.
 
+For an upgrade, create and export a bundle before replacing Core. For a lost or
+unusable installation, start with [Required Inputs](#required-inputs), then
+[export the bundle](#export-a-recovery-bundle) and restore it offline.
+
+This procedure restores Citadel's management state. It does not restore Docker
+workload volumes, application databases, or the hosts themselves. Protect those
+separately with [workload backups](/docs/resources/backups).
+
 ## System Containers
 
 On the local Docker Platform, Citadel marks its Core and PostgreSQL containers
@@ -87,6 +95,7 @@ secure system. It will not exist as a file in `/app/data`.
 Also retain:
 
 - the exact Citadel image tag or digest;
+- the PostgreSQL image reference used by the installation;
 - the Compose file and non-secret configuration;
 - PostgreSQL connection settings;
 - the password for every restic repository, stored outside Citadel;
@@ -99,10 +108,13 @@ the original external systems.
 ## Create A Backup
 
 1. Create or select a Core filesystem or S3-compatible backup repository.
-2. Store its restic password outside Citadel as part of the recovery plan.
+2. Store its restic password, repository location, and any storage credentials
+   outside Citadel as part of the recovery plan. A repository on the same host
+   needs an independently recoverable copy if that host is lost.
 3. Create a backup policy with **Citadel backup** as its source.
 4. Select **Run** and wait for the run to succeed.
-5. Record the backup run ID and snapshot ID shown in the run details.
+5. Record the backup run ID, snapshot ID, and Core image reference. Export the
+   bundle below to verify that you can retrieve it without signing into Citadel.
 
 Citadel runs `pg_dump --format=custom --no-owner --no-privileges` without
 putting the database password in process arguments. It stages the dump and
@@ -179,6 +191,12 @@ at `PG_HOST=pg_db` and project-scoped volumes. A different project name does
 not isolate an external database or explicitly shared volumes. If you changed
 those settings, configure separate recovery storage before continuing.
 
+Check for `DATABASE_URL` and `ConnectionStrings__Postgres` overrides in the
+copied environment: they take precedence over `PG_HOST` and the other `PG_*`
+settings. Remove them to use the example's new `pg_db`, or point them explicitly
+at an empty recovery database. Likewise, the commands below assume the default
+data path `/app/data`; adapt them if you use `CITADEL_DATA_ROOT`.
+
 1. Prepare a separate recovery installation directory with copies of your
    Compose file and private `.env`. Pin `CITADEL_IMAGE` to the exact image
    recorded when the backup was created; compare it with `coreVersion` in
@@ -237,11 +255,13 @@ before continuing.
 ```bash
 docker compose -p "$recovery_project" up -d --wait server
 docker compose -p "$recovery_project" ps
+docker compose -p "$recovery_project" logs --tail=100 server
 ```
 
 Include your TLS overlay in all Compose commands if configured. Keep using the
 recovery project name for later commands. Leave the original Core stopped while
-checking the recovered instance.
+checking the recovered instance. Starting Core also starts its background
+workers and schedules; review the restored automation settings as part of recovery.
 
 Confirm that:
 
@@ -253,6 +273,28 @@ Confirm that:
   schedules are present;
 - Agents reconnect without re-enrollment;
 - a new harmless operation, such as creating and deleting a tag, succeeds.
+
+Compare current workloads with the restored configuration before running a
+deployment or automatic reconciliation. Changes made after the snapshot are
+absent from Citadel's recovered history, even if they are still running on Docker.
+
+## Rehearse recovery
+
+Use a separate test host with its own Docker engine, database, data volume, and
+private access URL. Before starting the recovered Core, isolate it from
+production Agents, external service APIs, and notification destinations. The
+restored database contains real credentials, schedules, and resource addresses;
+changing the Compose project name alone does not isolate those connections.
+
+Use the export and offline restore steps above against that test installation.
+Keep production Core running only when the test environment is isolated in this
+way. Verify sign-in, resource records, and a harmless write. Expect production
+Agents to remain disconnected in the drill; test those connections only during
+a controlled recovery or against separate test Agents.
+
+Record the snapshot, image versions, required external keys, and time taken to
+recover. An offline restore success validates the bundle and database import;
+sign-in and functional checks establish whether the recovered instance is usable.
 
 ## Failure Rules
 
@@ -267,4 +309,3 @@ Do not start Core when:
 
 Keep the failed target isolated, correct the recovery inputs, and repeat the
 procedure with a new empty target. Preserve the original installation and backup.
-
