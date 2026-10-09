@@ -5,6 +5,8 @@ export const gitConfig = {
   user: 'Citadel-P',
   repo: 'Citadel',
   branch: 'main',
+  // Keep license links pinned to the reviewed ELv2 terms adopted in PR #47.
+  licenseRef: 'd42c63cf3a340078ede7530f07ab36d416a0f0f2',
 };
 
 const localSiteUrl = 'http://localhost:3000';

@@ -3,18 +3,30 @@ title: "Licensing"
 description: "Understand Citadel source licensing, Community and Team capabilities, and product-license behavior."
 ---
 
-Citadel works without an installed paid product license. An installation
-without a product key runs as the Community edition under the source license.
+Citadel is source-available under **Elastic License 2.0 (ELv2)**, not
+OSI-approved open source. **Community is free for personal self-hosting and
+internal business production use**, without a paid product key or
+product-license-enforced resource-count quotas. **Team** adds paid capabilities;
+Enterprise is not currently generally available.
 
-A paid product license is needed only for paid capabilities. Citadel does not
-license ordinary resource counts such as platforms, stacks, deployments,
-builds, backup definitions, or automation definitions.
+- [Source license and restrictions](#source-licensing-and-product-entitlements)
+- [Edition comparison](#edition-comparison)
+- [Community commitment](#community-commitment)
+- [Install or manage a product key](#install-or-replace-a-license)
+
+Three separate concepts apply:
+
+| Concept | What it governs |
+| --- | --- |
+| Source license | ELv2 governs the covered software. Public source access does not mean unrestricted use. |
+| Product key | A signed key activates its included paid capabilities. Community needs no paid key. |
+| Community commitment | A product policy protecting established free workflows, transparency, and user control. It is not a new source license. |
 
 ## Source Licensing and Product Entitlements
 
 Unless separately identified, Citadel-authored Core, Agent, frontend and feature
 implementations in this revision are offered under the
-[Elastic License 2.0](https://github.com/Citadel-P/Citadel/blob/main/LICENSE)
+[Elastic License 2.0](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/LICENSE)
 (`Elastic-2.0`). Citadel is **source-available, not OSI-approved open source**.
 ELv2 permits use, modification and redistribution subject to its conditions.
 In particular, it restricts:
@@ -37,17 +49,17 @@ hosted-service rights. The source license does not provide a signed Team key.
 
 Consultant setup work and internal use by service providers are not the same
 as selling customer access to substantial Citadel functionality as a hosted
-service. See [commercial plans and partner scenarios](https://github.com/Citadel-P/Citadel/blob/main/COMMERCIAL-LICENSING.md)
+service. See [commercial plans and partner scenarios](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/COMMERCIAL-LICENSING.md)
 for examples and separately negotiated permissions. A Team key alone is not
 a hosting or reseller agreement.
 
 The official project welcomes Community fixes and reserves paid-feature and
 licensing changes for maintainer review. Review approval alone does not waive
-ELv2. See [CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/main/CONTRIBUTING.md).
+ELv2. See [CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/CONTRIBUTING.md).
 
 Third-party material retains its own licenses. Known bundled-data notices
-include [Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/main/src/features/alerts/LICENSE.unicode)
-and [MIT](https://github.com/Citadel-P/Citadel/blob/main/src/features/identity/src/authentication/common-passwords.LICENSE).
+include [Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/src/features/alerts/LICENSE.unicode)
+and [MIT](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/src/features/identity/src/authentication/common-passwords.LICENSE).
 Official Core and Agent images carry the root license and these known notices;
 they are not a complete inventory of third-party obligations.
 
@@ -55,7 +67,7 @@ Source and license links remain available on the sign-in/setup screens and
 in the account menu. Commit-specific source links are retained for transparency,
 not as a network-source-disclosure requirement imposed by ELv2. Third-party
 license obligations still apply. This update does not revoke rights already
-granted for earlier copies; see the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/main/docs/LEGAL-RELEASE-CHECKLIST.md)
+granted for earlier copies; see the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/docs/LEGAL-RELEASE-CHECKLIST.md)
 for ownership, earlier public snapshots and release review.
 
 ## Edition Comparison
@@ -63,7 +75,7 @@ for ownership, earlier public snapshots and release review.
 | Area | Community | Team | Enterprise |
 | --- | --- | --- | --- |
 | Availability | Included without a paid product key | Paid license | Not currently generally available |
-| Intended for | Individuals, evaluation, labs, and manually operated environments | Teams operating shared or production environments | Organizations requiring centralized governance, resilience, and formal assurance |
+| Intended for | Personal self-hosting and internal business production use with manual operation | Teams needing unattended operations or advanced collaboration | Future organizational governance, resilience, and formal assurance |
 | Resource counts | No license-enforced limits | No license-enforced limits | No license-enforced limits |
 | Users and teams | Included | Included | Included |
 | Custom access control | Existing custom access and retained Service Accounts remain visible and removable after downgrade, but expansion, machine authentication, and run-as use are unavailable | Custom roles, scoped access, non-human identities, API tokens, and run-as execution | Team capability plus future organizational identity and access governance |
@@ -81,6 +93,17 @@ for ownership, earlier public snapshots and release review.
 Enterprise entries describe the intended edition boundary, not currently
 released features. The License page shows only capabilities implemented by the
 running Citadel version and included in the installed license.
+
+## Community Commitment
+
+Established Community capabilities stay free in later supported releases.
+The [Community commitment](/docs/overview/community-commitment) records the
+protected baseline, change-notice rules, security and upstream-retirement
+qualifications, and portability limitations. It is a separate product policy;
+it does not amend ELv2 or promise future open-source conversion.
+
+Scheduled backups and webhook-triggered deployments still require Team.
+The commitment does not change those entitlements.
 
 ## How Citadel Decides Access
 
@@ -229,10 +252,10 @@ collaboration.
 A Team license can contain a subset of these capabilities. The License page is
 the authority for what is included in the installed license.
 
-A standard Team subscription may include one production installation and one
-non-production installation for upgrade and recovery testing. Each installation
-has a different instance-bound license; one license value cannot be reused
-across both installations.
+Subscription scope, duration, support, and renewal are set by the applicable
+order or agreement, as explained in the [commercial plan guidance](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/COMMERCIAL-LICENSING.md#community-and-team).
+Each installation has a different instance-bound license; one license value
+cannot be reused across installations.
 
 ### Enterprise
 
@@ -425,6 +448,11 @@ will fail instance validation.
 
 ## Offline Operation And Privacy
 
+Community needs no vendor-hosted Citadel account, paid activation, or online
+license validation. You still set up a local administrator account and sign in
+to your own installation. Pulling images and using configured Git repositories,
+registries, OIDC providers, or other integrations can require network access.
+
 Citadel does not call a licensing server to validate an installed license.
 
 The license is verified locally using a public signing key embedded in Citadel
@@ -495,5 +523,4 @@ Citadel intentionally returns the same Unauthorized response for invalid and
 license-suspended machine credentials. An administrator can see the exact
 license state from **Settings > License** and inspect retained accounts under
 **Settings > Access > Service Accounts**.
-
 
