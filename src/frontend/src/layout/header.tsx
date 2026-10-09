@@ -17,8 +17,9 @@ import { getInitials } from '@/features/profile/utils';
 import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { sourceAndLicenseLinks } from '@/lib/source-license';
 import { jwtDecode } from 'jwt-decode';
-import { ArrowRight, Bell, BellOff, LogOut, User } from 'lucide-react';
+import { ArrowRight, Bell, BellOff, Code2, LogOut, Scale, User } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { BreadcrumbTrail } from './breadcrumb';
@@ -53,6 +54,10 @@ export function Header() {
 function HeaderAccountMenu() {
   const navigate = useNavigate();
   const { logout, accessToken } = useAuthContext();
+  const { applicationInfo } = useAppContext();
+  const { sourceUrl, licenseUrl } = sourceAndLicenseLinks({
+    informationalVersion: applicationInfo?.informationalVersion,
+  });
   const { data: cachedProfileData } = useRead('getCurrentProfile', undefined, { enabled: false });
   const tokenProfile = useMemo(() => getTokenProfile(accessToken), [accessToken]);
   const profile = cachedProfileData?.data ?? tokenProfile;
@@ -83,6 +88,24 @@ function HeaderAccountMenu() {
           <User className="size-4" />
           My Profile
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+            <Code2 className="size-4" />
+            Source code
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href={licenseUrl} target="_blank" rel="noopener noreferrer">
+            <Scale className="size-4" />
+            Elastic License 2.0
+          </a>
+        </DropdownMenuItem>
+        <p className="px-2 py-2 text-xs leading-relaxed text-muted-foreground">
+          © Citadel authors and contributors. Source-available under Elastic License 2.0.
+          Use, modification and redistribution are subject to the license terms. Provided without warranty.
+        </p>
+        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={logout}>
           <LogOut className="size-4" />
           Log out

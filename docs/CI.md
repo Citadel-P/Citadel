@@ -158,3 +158,11 @@ Run type generation and the Next.js build sequentially because both write to
 For Rust, use the pinned toolchain and prerequisites in the workflows. Keep all
 formatting, lint, generated-artifact, database, and Agent checks enabled. Regenerate
 API artifacts with `cargo run --locked -p xtask -- openapi`; never hand-edit them.
+
+## License and release compliance
+
+The release-test suite checks the canonical Elastic License 2.0 text, source
+and license links, image metadata and known bundled-data notices. These are
+baseline regression checks, not a complete third-party license inventory or
+legal compliance certification. Follow the
+[legal distribution checklist](LEGAL-RELEASE-CHECKLIST.md) before publication.

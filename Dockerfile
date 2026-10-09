@@ -6,6 +6,12 @@ RUN npm ci
 COPY src/frontend/ ./
 ENV NODE_OPTIONS=--max-old-space-size=4096 \
     VITE_API_BASE_URL=""
+# Embed the immutable source revision for unauthenticated legal notices.
+# Modified builds can point the links to their own source for provenance.
+ARG SOURCE_REVISION
+ARG VITE_CITADEL_SOURCE_REPOSITORY_URL=""
+ENV VITE_CITADEL_BUILD_SHA="${SOURCE_REVISION}" \
+    VITE_CITADEL_SOURCE_REPOSITORY_URL="${VITE_CITADEL_SOURCE_REPOSITORY_URL}"
 RUN npm run build:image
 
 FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust-source
@@ -54,6 +60,9 @@ RUN apk add --no-cache binutils \
 FROM docker.io/denoland/deno@sha256:aa665f8777136863b5b8a0445a5cdfccff8103b5f40c9a877de5276b04facb1e AS runtime-base
 
 WORKDIR /app
+COPY LICENSE /app/LICENSE
+COPY src/features/alerts/LICENSE.unicode /app/third-party-notices/Unicode-3.0.txt
+COPY src/features/identity/src/authentication/common-passwords.LICENSE /app/third-party-notices/Common-Passwords-MIT.txt
 ENV HOME=/app \
     DENO_DIR=/app/.cache/deno
 ARG TARGETARCH
@@ -64,6 +73,7 @@ ARG PRODUCT_VERSION
 LABEL org.opencontainers.image.source="https://github.com/Citadel-P/Citadel" \
       org.opencontainers.image.version="${PRODUCT_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="Elastic-2.0" \
       com.citadel.informational-version="${INFORMATIONAL_VERSION}"
 LABEL com.citadel.system="true" \
       com.citadel.system-role="core"

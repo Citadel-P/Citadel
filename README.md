@@ -122,8 +122,30 @@ The [API reference](https://docs.citadelplane.com/docs/reference/api/) includes 
 
 For integrations, use the [public OpenAPI schema](schema/public-v1.json) from the tag matching your installed version. The public API is currently labeled **API Preview**; the full schema used by the web UI is internal.
 
-## Editions and support
+## License and editions
 
-Community runs without an installed product license. See the [edition comparison](https://docs.citadelplane.com/docs/overview/licensing/) for included and paid capabilities.
+Citadel-authored source in this revision is available under the
+[Elastic License 2.0](LICENSE) (`Elastic-2.0`). Citadel is **source-available,
+not OSI-approved open source**. Use, modification and redistribution are subject
+to ELv2, including its license-key, hosted-service and notice restrictions.
 
-For source development, see the [development guide](docs/DEVELOPMENT.md). Report bugs and request features through [GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
+Community is free for personal self-hosting and internal business production
+use under ELv2. Team adds paid capabilities enabled by a signed product key.
+See the [edition comparison](https://docs.citadelplane.com/docs/overview/licensing/)
+and [commercial licensing explanation](COMMERCIAL-LICENSING.md). A Team key
+does not itself grant hosted-service or other rights beyond the source license.
+
+Our [Community commitment](docs/content/docs/overview/community-commitment.md)
+protects established free workflows from becoming paid-only in later supported
+releases. It covers advance change notices, non-destructive expiry and control
+of your data. This is a product policy, not an amendment to ELv2 or a promise
+of eventual open-source conversion.
+
+Third-party material retains its own licenses and notices. This update does
+not revoke rights already granted for earlier copies. Source and license links
+remain available in the UI; see the [release checklist](docs/LEGAL-RELEASE-CHECKLIST.md)
+and [trademark policy](TRADEMARKS.md) for distribution guidance.
+
+For source development, see the [development guide](docs/DEVELOPMENT.md) and
+[contribution policy](CONTRIBUTING.md). Report bugs and request features through
+[GitHub Issues](https://github.com/Citadel-P/Citadel/issues).
