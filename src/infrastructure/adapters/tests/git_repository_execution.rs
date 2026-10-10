@@ -176,6 +176,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .execute(&pool)
         .await
         .unwrap();
+    let mut completed = service.subscribe_completion();
     service
         .request_sync(ActorId::new(request_actor), repository_id, Some("main"))
         .await
@@ -193,6 +194,24 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     .fetch_one(&pool)
     .await
     .unwrap();
+    assert!(
+        completed.has_changed().unwrap(),
+        "committed sync wakes consumers"
+    );
+    completed.borrow_and_update();
+    assert_eq!(
+        service
+            .synchronized_ref(repository_id, "main")
+            .await
+            .unwrap()
+            .resolved_commit_sha
+            .as_deref(),
+        Some(expected.trim())
+    );
+    assert!(
+        !completed.has_changed().unwrap(),
+        "reading stored refs does not trigger another sync"
+    );
     assert_eq!(persisted.0, "Healthy");
     assert_eq!(persisted.1.as_deref(), Some(expected.trim()));
     assert!(persisted.2.is_none());

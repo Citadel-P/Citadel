@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use citadel_execution::{OutputLimitPolicy, ProcessError, ProcessLimits, ProcessRequest};
+use citadel_execution::{
+    OutputLimitPolicy, ProcessChunk, ProcessError, ProcessLimits, ProcessRequest,
+};
 use citadel_processes::run;
 use tokio_util::sync::CancellationToken;
 
@@ -29,7 +31,7 @@ fn process_helper() {
         }
         Ok("wait") => std::thread::sleep(Duration::from_secs(20)),
         Ok("stream-wait") => {
-            std::io::stdout().write_all(b"ready-for-cancel").unwrap();
+            writeln!(std::io::stdout(), "child-pid={}", std::process::id()).unwrap();
             std::io::stdout().flush().unwrap();
             std::thread::sleep(Duration::from_secs(20));
         }
@@ -46,21 +48,60 @@ async fn delivers_output_before_exit_and_cancellation_reaps_the_child() {
         &cancellation,
     );
     let observe = async {
-        let mut received = Vec::new();
-        while !String::from_utf8_lossy(&received).contains("ready-for-cancel") {
-            let chunk = receiver.recv().await.expect("child is still running");
-            assert!(chunk.bytes.len() <= 8192);
-            received.extend(chunk.bytes);
-        }
+        let pid = child_pid(&mut receiver).await;
         cancellation.cancel();
         while receiver.recv().await.is_some() {}
+        pid
     };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+    let (result, _pid) = tokio::time::timeout(Duration::from_secs(5), async {
         tokio::join!(execution, observe)
     })
     .await
     .unwrap();
     assert!(matches!(result, Err(ProcessError::Cancelled)));
+    #[cfg(target_os = "linux")]
+    assert!(!std::path::Path::new(&format!("/proc/{_pid}")).exists());
+}
+
+async fn child_pid(receiver: &mut tokio::sync::mpsc::Receiver<ProcessChunk>) -> u32 {
+    let mut received = Vec::new();
+    loop {
+        let chunk = receiver.recv().await.expect("child is still running");
+        assert!(chunk.bytes.len() <= 8192);
+        received.extend(chunk.bytes);
+        for line in received.split_inclusive(|byte| *byte == b'\n') {
+            if line.ends_with(b"\n")
+                && let Some(pid) = line.strip_prefix(b"child-pid=")
+            {
+                return std::str::from_utf8(pid).unwrap().trim().parse().unwrap();
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn aborting_the_runner_kills_and_eventually_reaps_its_child() {
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+    let task = tokio::spawn(async move {
+        run(
+            helper("stream-wait", ProcessLimits::default()).output(sender),
+            &CancellationToken::new(),
+        )
+        .await
+    });
+    let pid = tokio::time::timeout(Duration::from_secs(5), child_pid(&mut receiver))
+        .await
+        .unwrap();
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("Tokio must reap a child whose runner was dropped");
 }
 
 #[tokio::test]
@@ -80,6 +121,61 @@ async fn a_full_output_channel_does_not_prevent_timeout_cleanup() {
     .await
     .unwrap();
     assert!(matches!(result, Err(ProcessError::Timeout(_))));
+}
+
+#[tokio::test]
+async fn timeout_still_applies_when_an_exited_child_has_undelivered_output() {
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    sender
+        .send(ProcessChunk {
+            stream: "stdout",
+            bytes: b"occupied".to_vec(),
+        })
+        .await
+        .unwrap();
+    let limits = ProcessLimits {
+        timeout: Duration::from_millis(200),
+        ..ProcessLimits::default()
+    };
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        run(
+            helper("exit", limits).output(sender),
+            &CancellationToken::new(),
+        ),
+    )
+    .await
+    .expect("pipe collection must obey the process deadline");
+    assert!(matches!(result, Err(ProcessError::Timeout(_))));
+}
+
+#[tokio::test]
+async fn cancellation_still_applies_when_an_exited_child_has_undelivered_output() {
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    sender
+        .send(ProcessChunk {
+            stream: "stdout",
+            bytes: b"occupied".to_vec(),
+        })
+        .await
+        .unwrap();
+    let cancellation = CancellationToken::new();
+    let cancel = async {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        cancellation.cancel();
+    };
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(2), async {
+        tokio::join!(
+            run(
+                helper("exit", ProcessLimits::default()).output(sender),
+                &cancellation
+            ),
+            cancel,
+        )
+    })
+    .await
+    .expect("pipe collection must remain cancellable");
+    assert!(matches!(result, Err(ProcessError::Cancelled)));
 }
 
 #[tokio::test]

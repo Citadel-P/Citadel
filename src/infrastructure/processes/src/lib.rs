@@ -4,7 +4,7 @@ use citadel_execution::{
     ProcessRunner,
 };
 use futures_util::future::BoxFuture;
-use std::process::{ExitStatus, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
@@ -22,14 +22,6 @@ impl ProcessRunner for SystemProcess {
         Box::pin(run(request, cancellation))
     }
 }
-#[derive(Debug, Clone, Copy)]
-enum Completion {
-    Exited(ExitStatus),
-    OutputLimit(&'static str, usize),
-    Timeout,
-    Cancelled,
-}
-
 /// Runs one child process with bounded output, timeout, and cooperative
 /// cancellation. On every non-exit completion path the child is killed and
 /// reaped before this method returns.
@@ -104,48 +96,39 @@ pub async fn run(
 
     let timeout = tokio::time::sleep(request.limits.timeout);
     tokio::pin!(timeout);
-    let completion = tokio::select! {
+    // The deadline includes pipe collection: descendants may inherit the pipes,
+    // or an output consumer may stop reading even after the child has exited.
+    let result = tokio::select! {
         biased;
-        () = cancellation.cancelled() => Completion::Cancelled,
-        Some((stream, limit)) = limit_receiver.recv() => Completion::OutputLimit(stream, limit),
-        () = &mut timeout => Completion::Timeout,
-        result = child.wait() => {
-            Completion::Exited(result.map_err(ProcessError::Io)?)
-        }
+        () = cancellation.cancelled() => Err(ProcessError::Cancelled),
+        Some((stream, limit)) = limit_receiver.recv() => Err(ProcessError::OutputLimit { stream, limit }),
+        () = &mut timeout => Err(ProcessError::Timeout(request.limits.timeout)),
+        result = async {
+            let status = child.wait().await.map_err(ProcessError::Io)?;
+            if let Some(writer) = stdin_writer {
+                writer.await
+                    .map_err(|error| ProcessError::Io(std::io::Error::other(error.to_string())))?
+                    .map_err(ProcessError::Io)?;
+            }
+            let (stdout, stdout_truncated) = join_reader(stdout_reader).await?;
+            let (stderr, stderr_truncated) = join_reader(stderr_reader).await?;
+            Ok(ProcessOutput {
+                exit_code: status.code(),
+                stdout,
+                stderr,
+                stdout_truncated,
+                stderr_truncated,
+            })
+        } => result,
     };
 
-    if !matches!(completion, Completion::Exited(_)) {
+    if result.is_err() {
         output_cancellation.cancel();
         let _ = child.start_kill();
         child.wait().await.map_err(ProcessError::Io)?;
     }
-
-    if let Some(writer) = stdin_writer {
-        match writer.await {
-            Ok(Ok(())) => {}
-            // A killed or early-exiting child commonly closes stdin first.
-            Ok(Err(_)) if !matches!(completion, Completion::Exited(_)) => {}
-            Ok(Err(error)) => return Err(ProcessError::Io(error)),
-            Err(error) => {
-                return Err(ProcessError::Io(std::io::Error::other(error.to_string())));
-            }
-        }
-    }
-    let (stdout, stdout_truncated) = join_reader(stdout_reader).await?;
-    let (stderr, stderr_truncated) = join_reader(stderr_reader).await?;
-
-    match completion {
-        Completion::Exited(status) => Ok(ProcessOutput {
-            exit_code: status.code(),
-            stdout,
-            stderr,
-            stdout_truncated,
-            stderr_truncated,
-        }),
-        Completion::OutputLimit(stream, limit) => Err(ProcessError::OutputLimit { stream, limit }),
-        Completion::Timeout => Err(ProcessError::Timeout(request.limits.timeout)),
-        Completion::Cancelled => Err(ProcessError::Cancelled),
-    }
+    // PipeTasks aborts any readers/writer still blocked on inherited pipes.
+    result
 }
 
 fn validate_limits(limits: ProcessLimits) -> Result<(), ProcessError> {

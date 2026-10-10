@@ -53,7 +53,11 @@ for attempt in {1..60}; do
   sleep 1
 done
 docker exec "$core" /usr/local/bin/citadel-entrypoint healthcheck
-docker exec "$core" sh -c 'grep -Eq "^Uid:[[:space:]]+65532[[:space:]]" /proc/1/status'
+docker exec "$core" sh -ec 'test "$(cat /proc/1/comm)" = tini; pids=$(pidof citadel-server); test -n "$pids"; for pid in $pids; do grep -Eq "^Uid:[[:space:]]+65532[[:space:]]" /proc/$pid/status || exit 1; done'
+# Orphaned grandchildren from Git/Compose/scripts must be reaped by init.
+docker exec --user 65532:0 "$core" sh -c 'sleep 0.1 &'
+sleep 1
+docker exec "$core" sh -c 'for status in /proc/[0-9]*/status; do if grep -Eq "^State:.*Z" "$status" 2>/dev/null; then echo "Unreaped process: $status" >&2; exit 1; fi; done'
 docker exec --user 65532:0 -i "$core" sh -s <<'SH'
 set -eu
 wget -qO /tmp/index.html http://127.0.0.1:8000/

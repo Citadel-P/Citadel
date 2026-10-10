@@ -94,7 +94,7 @@ COPY --chmod=0755 src/tools/container/docker-entrypoint.sh /usr/local/bin/citade
 EXPOSE 8000 8001
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=3s \
     CMD ["/usr/local/bin/citadel-entrypoint", "healthcheck"]
-ENTRYPOINT ["/usr/local/bin/citadel-entrypoint"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/citadel-entrypoint"]
 CMD ["serve"]
 
 # Development stages the locally built binary and mounts it into runtime-base.

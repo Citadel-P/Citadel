@@ -138,8 +138,8 @@ try {
             cpuPercent = [double]::Parse($dockerStats, [Globalization.CultureInfo]::InvariantCulture)
             healthLatencyMilliseconds = [math]::Round($latency.Elapsed.TotalMilliseconds, 3)
             processCount = [int]$cgroup.pids
-            fileDescriptorCount = [int](& docker exec citadel-rust-measurement sh -c 'find /proc/1/fd -maxdepth 1 -type l | wc -l')
-            unixSocketCount = [int](& docker exec citadel-rust-measurement sh -c 'tail -n +2 /proc/1/net/unix | wc -l')
+            fileDescriptorCount = [int](& docker exec citadel-rust-measurement sh -c 'pid=$(pgrep -o -x citadel-server); find /proc/$pid/fd -maxdepth 1 -type l | wc -l')
+            unixSocketCount = [int](& docker exec citadel-rust-measurement sh -c 'pid=$(pgrep -o -x citadel-server); tail -n +2 /proc/$pid/net/unix | wc -l')
             activeTasks = Get-Metric $metricText 'citadel_active_tasks'
             postgresPoolSize = Get-Metric $metricText 'citadel_postgres_pool_size'
             postgresPoolIdle = Get-Metric $metricText 'citadel_postgres_pool_idle'

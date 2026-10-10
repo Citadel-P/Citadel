@@ -650,16 +650,26 @@ pub(crate) async fn collect_process(
         .ok_or_else(|| StackError::Runtime("Process stderr was not captured.".into()))?;
     // Poll both pipes and process completion together. Dropping this future also
     // drops the readers and kills the child; there are no detached reader tasks.
-    let (stdout, stderr, status) = tokio::select! {
+    let result = tokio::select! {
         biased;
-        () = cancellation.cancelled() => return Err(StackError::Cancelled),
+        () = cancellation.cancelled() => Err(StackError::Cancelled),
         result = async {
             tokio::try_join!(
                 read_process_output(stdout, StackApplyEventType::StdOut, progress),
                 read_process_output(stderr, StackApplyEventType::StdErr, progress),
                 async { child.wait().await.map_err(runtime_io) },
             )
-        } => result?,
+        } => result,
+    };
+    let (stdout, stderr, status) = match result {
+        Ok(output) => output,
+        Err(error) => {
+            // Cooperative cancellation and pipe failures must reap the direct
+            // child before returning, without waiting for Tokio's orphan queue.
+            let _ = child.start_kill();
+            child.wait().await.map_err(runtime_io)?;
+            return Err(error);
+        }
     };
     let mut messages = stdout;
     append_messages_bounded(&mut messages, stderr);

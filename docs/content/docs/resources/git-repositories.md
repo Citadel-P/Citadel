@@ -90,6 +90,12 @@ Creating a repository queues an initial sync. Editing the repository URL, defaul
 
 Repository webhooks are separate from sync mode. A repository can be manual-only and still accept provider webhooks, or it can use interval polling and webhooks together.
 
+Git Stack update monitoring uses the repository's synchronized branch refs.
+A completed sync wakes the Stack checks; stacks sharing a repository do not
+start their own periodic fetches. A five-minute reconciliation checks stored
+refs if a notification was missed. Explicit Stack update checks, Apply, and
+Build runs can still request a fresh synchronization.
+
 ## Browsing Repository Source
 
 Open a repository and select **Browse Repo** from the action bar to inspect

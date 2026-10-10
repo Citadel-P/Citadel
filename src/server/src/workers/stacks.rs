@@ -18,12 +18,21 @@ const DRIFT_EVENT_MAX_PENDING: usize = 256;
 pub(super) async fn stack_updates(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
+    mut completed: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = super::schedule::interval("stack-updates", Duration::from_secs(30));
+    let mut ticker = super::schedule::interval("stack-updates", Duration::from_secs(5 * 60));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_images = Some(tokio::time::Instant::now());
     loop {
-        tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Ok(()),
+            result = completed.changed() => if result.is_err() { return Ok(()); },
+            _ = ticker.tick() => {},
+        }
+        // Coalesce completed syncs before scanning; changes during the scan
+        // remain pending. The timer only reconciles stored observations.
+        completed.borrow_and_update();
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackUpdates.start();
         let images = last_images.is_none_or(|last: tokio::time::Instant| {
             last.elapsed() >= Duration::from_secs(2 * 60 * 60)

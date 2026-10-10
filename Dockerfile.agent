@@ -62,7 +62,7 @@ LABEL com.citadel.system="true" \
       com.citadel.system-role="agent"
 COPY --from=glibc /usr/local/lib/glibc/ /usr/local/lib/glibc/
 COPY --from=glibc /etc/ld.so.cache /etc/ld.so.cache
-RUN apk add --no-cache bash ca-certificates git openssh-client restic \
+RUN apk add --no-cache bash ca-certificates git openssh-client restic tini \
     && mkdir -p /lib64 \
     && for loader in /usr/local/lib/glibc/ld-linux-*.so.*; do \
         ln -s "$loader" "/lib/$(basename "$loader")"; \
@@ -74,7 +74,7 @@ COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec
 COPY --from=volume-helper-build /tmp/citadel-volume-helper /usr/local/bin/citadel-volume-helper
 RUN ln -s /usr/local/bin/citadel-volume-helper /app/Citadel.Agent.VolumeHelper
 EXPOSE 9000
-ENTRYPOINT ["/app/citadel-agent"]
+ENTRYPOINT ["/sbin/tini", "--", "/app/citadel-agent"]
 
 FROM agent-runtime-base AS agent
 COPY --from=agent-build /tmp/citadel-agent /app/citadel-agent

@@ -7,8 +7,11 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 const RELEASE_URL: &str = "https://api.github.com/repos/Citadel-P/Citadel/releases/latest";
+const DEVELOPMENT_RELEASES_URL: &str =
+    "https://api.github.com/repos/Citadel-P/Citadel/releases?per_page=100";
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
+const MAX_RELEASE_LIST_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -35,11 +38,12 @@ impl UpdateChecker {
             cancellation.cancelled().await;
             return Ok(());
         }
+        let current = env!("CITADEL_BUILD_VERSION");
         loop {
             tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
-                () = self.check(RELEASE_URL, env!("CITADEL_BUILD_VERSION")) => {}
+                () = self.check(release_endpoint(current), current) => {}
             }
             tokio::select! {
                 () = cancellation.cancelled() => return Ok(()),
@@ -49,10 +53,17 @@ impl UpdateChecker {
     }
 
     async fn check(&self, endpoint: &str, current: &str) {
-        match fetch_release(endpoint)
-            .await
-            .and_then(|release| available_update(current, release))
-        {
+        let result = async {
+            if is_development(&Version::parse(current.trim_start_matches('v'))?) {
+                let releases = fetch_release(endpoint, MAX_RELEASE_LIST_BYTES).await?;
+                development_update(current, releases)
+            } else {
+                let release = fetch_release(endpoint, MAX_RESPONSE_BYTES).await?;
+                available_update(current, release)
+            }
+        }
+        .await;
+        match result {
             Ok(update) => *self.0.write().await = update,
             // Keep the last successful result; an unavailable endpoint does not
             // mean that the installation is up to date.
@@ -70,7 +81,22 @@ struct Release {
 
 type CheckError = Box<dyn std::error::Error + Send + Sync>;
 
-async fn fetch_release(endpoint: &str) -> Result<Release, CheckError> {
+fn is_development(version: &Version) -> bool {
+    version.pre.as_str().starts_with("dev.")
+}
+
+fn release_endpoint(current: &str) -> &'static str {
+    if Version::parse(current.trim_start_matches('v')).is_ok_and(|v| is_development(&v)) {
+        DEVELOPMENT_RELEASES_URL
+    } else {
+        RELEASE_URL
+    }
+}
+
+async fn fetch_release<T: serde::de::DeserializeOwned>(
+    endpoint: &str,
+    maximum_bytes: usize,
+) -> Result<T, CheckError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
@@ -86,7 +112,7 @@ async fn fetch_release(endpoint: &str) -> Result<Release, CheckError> {
         .error_for_status()?;
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await? {
-        if chunk.len() > MAX_RESPONSE_BYTES.saturating_sub(body.len()) {
+        if chunk.len() > maximum_bytes.saturating_sub(body.len()) {
             return Err("release response exceeds size limit".into());
         }
         body.extend_from_slice(&chunk);
@@ -105,11 +131,12 @@ fn available_update(
             .strip_prefix('v')
             .unwrap_or(&release.tag_name),
     )?;
-    if release.draft
-        || release.prerelease
-        || !latest.pre.is_empty()
-        || !latest.cmp_precedence(&current).is_gt()
-    {
+    let same_channel = if is_development(&current) {
+        release.prerelease && is_development(&latest)
+    } else {
+        !release.prerelease && latest.pre.is_empty()
+    };
+    if release.draft || !same_channel || !latest.cmp_precedence(&current).is_gt() {
         return Ok(None);
     }
     Ok(Some(AvailableUpdate {
@@ -120,6 +147,21 @@ fn available_update(
             release.tag_name
         ),
     }))
+}
+
+fn development_update(
+    current: &str,
+    releases: Vec<Release>,
+) -> Result<Option<AvailableUpdate>, CheckError> {
+    Version::parse(current.trim_start_matches('v'))?;
+    // GitHub orders by creation time, which need not match version precedence.
+    // Ignore unrelated/non-version tags without hiding a valid newer release.
+    Ok(releases
+        .into_iter()
+        .filter_map(|release| available_update(current, release).ok().flatten())
+        .filter_map(|update| Version::parse(&update.version).ok().map(|v| (v, update)))
+        .max_by(|(a, _), (b, _)| a.cmp_precedence(b))
+        .map(|(_, update)| update))
 }
 
 #[cfg(test)]

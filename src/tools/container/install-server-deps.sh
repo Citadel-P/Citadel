@@ -15,7 +15,7 @@ case "${TARGETARCH:-$(uname -m)}" in
 esac
 
 apk add --no-cache \
-  bash ca-certificates git openssh-client postgresql18-client restic setpriv
+  bash ca-certificates git openssh-client postgresql18-client restic setpriv tini
 apk add --no-cache --virtual .fetch-deps curl
 
 archive_path=$(mktemp)

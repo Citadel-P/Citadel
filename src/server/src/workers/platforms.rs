@@ -204,6 +204,7 @@ pub async fn register(
         "stack-event-drift",
         super::stacks::event_drift(cancellation.child_token(), stacks.clone(), drift_listener),
     );
+    let git_completed = git.subscribe_completion();
     supervisor.spawn(
         "git-repository-sync",
         super::git::git_repository_sync(
@@ -359,7 +360,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-updates",
-        super::stacks::stack_updates(cancellation.child_token(), stacks.clone()),
+        super::stacks::stack_updates(cancellation.child_token(), stacks.clone(), git_completed),
     );
     supervisor.spawn(
         "unmanaged-container-alerts",

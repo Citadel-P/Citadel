@@ -53,7 +53,7 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | --- | --- | --- |
 | `Passwords__MinimumLength` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
 | `Mfa__Policy` | `Optional` | Require two-factor authentication for administrators or all users |
-| `Updates__Enabled` | `true` | Allow Core to check for new stable Citadel releases |
+| `Updates__Enabled` | `true` | Allow Core to check for new Citadel releases in its installed channel |
 | `EnableSwagger` | `false` | Show API reference pages on your installation |
 | `JobConfiguration__MonitoringInterval` | `10` | Collect metrics every 10 seconds |
 | `JobConfiguration__FlashInterval` | `60` | Save buffered metrics every 60 seconds |
@@ -82,7 +82,9 @@ Updates__Enabled=false
 
 Core checks Citadel's public GitHub release information at startup and every
 six hours. Administrators see a small dot beside the sidebar version and a
-notice on Home when a newer stable release is available. Open either for
+notice on Home when a newer release in the installed channel is available.
+Stable installations track stable releases; development versions such as
+`0.1.4-dev.1` track development releases. Open either notification for
 release notes and the [upgrade guide](/docs/operations/upgrade-and-rollback).
 Checks do not install updates. Set `Updates__Enabled=true` to re-enable them
 after opting out. Agents and Edge Agents do not make these requests.

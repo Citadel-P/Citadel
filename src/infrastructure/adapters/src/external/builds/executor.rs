@@ -504,6 +504,10 @@ impl LocalDockerBuildExecutor {
         let commit_output = run(
             ProcessRequest::new("git")
                 .args([
+                    OsString::from("-c"),
+                    OsString::from("maintenance.autoDetach=false"),
+                    OsString::from("-c"),
+                    OsString::from("gc.autoDetach=false"),
                     OsString::from("-C"),
                     repository.as_os_str().to_owned(),
                     OsString::from("rev-parse"),
@@ -626,6 +630,10 @@ impl LocalDockerBuildExecutor {
         let cloned = run(
             ProcessRequest::new("git")
                 .args([
+                    OsString::from("-c"),
+                    OsString::from("maintenance.autoDetach=false"),
+                    OsString::from("-c"),
+                    OsString::from("gc.autoDetach=false"),
                     OsString::from("clone"),
                     OsString::from("--shared"),
                     OsString::from("--no-checkout"),
@@ -651,6 +659,10 @@ impl LocalDockerBuildExecutor {
         let checked_out = run(
             ProcessRequest::new("git")
                 .args([
+                    OsString::from("-c"),
+                    OsString::from("maintenance.autoDetach=false"),
+                    OsString::from("-c"),
+                    OsString::from("gc.autoDetach=false"),
                     OsString::from("-C"),
                     workspace.as_os_str().to_owned(),
                     OsString::from("checkout"),
@@ -746,6 +758,10 @@ async fn resolve_build_commit(
     let output = run(
         ProcessRequest::new("git")
             .args([
+                OsString::from("-c"),
+                OsString::from("maintenance.autoDetach=false"),
+                OsString::from("-c"),
+                OsString::from("gc.autoDetach=false"),
                 OsString::from("-C"),
                 repository.as_os_str().to_owned(),
                 OsString::from("rev-parse"),
@@ -803,6 +819,10 @@ async fn archive_build_context(
     let output = run(
         ProcessRequest::new("git")
             .args([
+                OsString::from("-c"),
+                OsString::from("maintenance.autoDetach=false"),
+                OsString::from("-c"),
+                OsString::from("gc.autoDetach=false"),
                 OsString::from("-C"),
                 repository.as_os_str().to_owned(),
                 OsString::from("archive"),

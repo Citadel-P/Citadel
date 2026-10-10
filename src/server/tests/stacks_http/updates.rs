@@ -7,6 +7,7 @@ pub(super) struct Scanner {
     pool: sqlx::PgPool,
     mode: AtomicU8,
     calls: std::sync::atomic::AtomicUsize,
+    cached_calls: std::sync::atomic::AtomicUsize,
     entered: tokio::sync::Notify,
     release: tokio::sync::Notify,
 }
@@ -16,12 +17,21 @@ impl Scanner {
             pool,
             mode: AtomicU8::new(0),
             calls: Default::default(),
+            cached_calls: Default::default(),
             entered: Default::default(),
             release: Default::default(),
         }
     }
 }
 impl StackUpdateScanner for Scanner {
+    fn scan_cached<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.cached_calls.fetch_add(1, Ordering::SeqCst);
+        self.scan(stack, cancel)
+    }
     fn scan<'a>(
         &'a self,
         stack: &'a citadel_stacks::Stack,
@@ -235,6 +245,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
     let stack = store.create(admin.actor_id, true, &input).await.unwrap();
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
+    let scanner = Arc::new(Scanner::new(pool.clone()));
     let service = StackService::new(
         Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
@@ -245,7 +256,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         Arc::new(NoopStackChangeNotifier),
         CancellationToken::new(),
     )
-    .with_update_scanner(Arc::new(Scanner::new(pool.clone())))
+    .with_update_scanner(scanner.clone())
     .with_source_materializer(Arc::new(GitSource))
     .with_entitlements(Arc::new(Entitlements {
         automatic: true.into(),
@@ -271,10 +282,16 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
             .store(u8::from(failed), Ordering::Relaxed);
         alerts.0.lock().unwrap().clear();
         let calls = runtime.apply_calls.lock().unwrap().len();
+        let cached_before = scanner.cached_calls.load(Ordering::SeqCst);
         service
             .run_update_checks(false, &CancellationToken::new())
             .await
             .unwrap();
+        assert_eq!(
+            scanner.cached_calls.load(Ordering::SeqCst),
+            cached_before + 1,
+            "scheduled Git checks must use stored refs"
+        );
         let persisted = store
             .get_authorized(admin.actor_id, true, stack.id)
             .await

@@ -1078,20 +1078,33 @@ mod tests {
         let mut command = Command::new("/bin/sh");
         command
             .arg("-c")
-            .arg("while :; do printf 'progress\\n'; done")
+            .arg("printf '%s\\n' \"$$\"; while :; do printf 'progress\\n'; done")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let process = collect_process(command, &cancellation, Some(&progress));
         let cancel = async {
-            receiver.recv().await.unwrap();
+            let pid: u32 = receiver
+                .recv()
+                .await
+                .unwrap()
+                .message
+                .unwrap()
+                .parse()
+                .unwrap();
             cancellation.cancel();
+            pid
         };
-        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+        let (result, _pid) = tokio::time::timeout(Duration::from_secs(5), async {
             tokio::join!(process, cancel)
         })
         .await
         .unwrap();
         assert!(matches!(result, Err(StackError::Cancelled)));
+        #[cfg(target_os = "linux")]
+        assert!(
+            !std::path::Path::new(&format!("/proc/{_pid}")).exists(),
+            "child must already be reaped"
+        );
     }
 
     #[test]

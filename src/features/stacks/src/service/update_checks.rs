@@ -119,7 +119,7 @@ impl StackService {
                 }
                 let result = async {
                     let checked = self
-                        .check_updates_mode(actor, true, id, images, cancellation)
+                        .check_updates_mode(actor, true, id, true, cancellation)
                         .await?;
                     let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
                         StackSpec::Git {

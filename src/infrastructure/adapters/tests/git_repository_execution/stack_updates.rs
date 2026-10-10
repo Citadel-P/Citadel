@@ -56,6 +56,32 @@ pub async fn verify(
             };
         }
         let token = CancellationToken::new();
+        // Scheduled checks on multiple consumers of the same repository only
+        // read its committed observation: no worker or remote fetch is needed.
+        let observed = git.synchronized_ref(repository, "main").await.unwrap();
+        for _ in 0..2 {
+            let cached =
+                tokio::time::timeout(Duration::from_secs(2), scanner.scan_cached(&stack, &token))
+                    .await
+                    .unwrap()
+                    .unwrap();
+            let StackUpdateState::Git {
+                recreate_stack_on_new_commit_state: cached,
+                ..
+            } = cached
+            else {
+                panic!("Expected Git update state");
+            };
+            assert_eq!(
+                cached.remote_commit_sha.as_deref(),
+                relevant.then_some(remote)
+            );
+            assert_eq!(cached.last_checked_at, observed.last_synced_at);
+            assert!(
+                !git.process_one(&token).await.unwrap(),
+                "cached checks must not queue a sync"
+            );
+        }
         let check = scanner.scan(&stack, &token);
         let worker = async {
             while !git.process_one(&token).await.unwrap() {
@@ -80,6 +106,37 @@ pub async fn verify(
             relevant.then_some(remote)
         );
     }
+    // Unavailable observations must not silently fetch or advertise stale commits.
+    for status in ["Pending", "Syncing", "Degraded"] {
+        sqlx::query(
+            "UPDATE gitrepositoryrefs SET status=$2 WHERE gitrepositoryid=$1 AND branch='main'",
+        )
+        .bind(repository)
+        .bind(status)
+        .execute(pool)
+        .await
+        .unwrap();
+        assert!(
+            scanner
+                .scan_cached(&stack, &CancellationToken::new())
+                .await
+                .is_err()
+        );
+        let queued: bool =
+            sqlx::query_scalar("SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1")
+                .bind(repository)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        assert!(!queued);
+    }
+    sqlx::query(
+        "UPDATE gitrepositoryrefs SET status='Healthy' WHERE gitrepositoryid=$1 AND branch='main'",
+    )
+    .bind(repository)
+    .execute(pool)
+    .await
+    .unwrap();
     if let Some(StackSpec::Git { commit_sha, .. }) = &mut stack.resource.spec {
         *commit_sha = Some(applied.into());
     }

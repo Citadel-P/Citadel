@@ -731,9 +731,20 @@ impl GitCli {
 
     async fn success(
         &self,
-        request: ProcessRequest,
+        mut request: ProcessRequest,
         cancellation: &CancellationToken,
     ) -> Result<ProcessOutput, GitError> {
+        // Git must wait for maintenance instead of orphaning a detached child.
+        request.arguments.splice(
+            0..0,
+            [
+                "-c",
+                "maintenance.autoDetach=false",
+                "-c",
+                "gc.autoDetach=false",
+            ]
+            .map(OsString::from),
+        );
         let output = self.process.run(request, cancellation).await?;
         if output.succeeded() {
             return Ok(output);
@@ -1190,6 +1201,17 @@ mod tests {
         {
             let calls = process.arguments.lock().unwrap();
             assert_eq!(calls.len(), 5);
+            for call in calls.iter() {
+                assert_eq!(
+                    &call[..4],
+                    &[
+                        "-c",
+                        "maintenance.autoDetach=false",
+                        "-c",
+                        "gc.autoDetach=false"
+                    ]
+                );
+            }
             assert!(calls[0].iter().any(|value| value == "set-url"));
             assert!(calls[1].iter().any(|value| value == "fetch"));
             assert!(calls[3].iter().any(|value| value == "reset"));

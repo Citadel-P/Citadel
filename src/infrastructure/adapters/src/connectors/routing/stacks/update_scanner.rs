@@ -75,16 +75,33 @@ impl StackUpdateRuntime {
                             "The Stack has no applied Git commit to compare.".into(),
                         )
                     })?;
-                let remote = self
-                    .git
-                    .synchronize_commit(
-                        ActorId::new(Uuid::from_u128(1)),
-                        *git_repo_id,
-                        branch,
-                        cancel,
+                let (remote, checked_at) = if scheduled {
+                    let reference = self
+                        .git
+                        .synchronized_ref(*git_repo_id, branch)
+                        .await
+                        .map_err(git_failure)?;
+                    // Use the observation's timestamp so a concurrent sync is
+                    // still eligible for the next check.
+                    (
+                        reference.resolved_commit_sha.ok_or_else(|| {
+                            git_failure(citadel_git::GitRepositoryExecutionError::NotSynchronized)
+                        })?,
+                        reference.last_synced_at,
                     )
-                    .await
-                    .map_err(git_failure)?;
+                } else {
+                    let remote = self
+                        .git
+                        .synchronize_commit(
+                            ActorId::new(Uuid::from_u128(1)),
+                            *git_repo_id,
+                            branch,
+                            cancel,
+                        )
+                        .await
+                        .map_err(git_failure)?;
+                    (remote, chrono::Utc::now())
+                };
                 let relevant = if remote.eq_ignore_ascii_case(&source.resolved_commit_sha) {
                     false
                 } else {
@@ -115,7 +132,7 @@ impl StackUpdateRuntime {
                 recreate_stack_on_new_commit_state.current_commit_sha =
                     source.resolved_commit_sha.clone();
                 recreate_stack_on_new_commit_state.remote_commit_sha = relevant.then_some(remote);
-                recreate_stack_on_new_commit_state.last_checked_at = chrono::Utc::now();
+                recreate_stack_on_new_commit_state.last_checked_at = checked_at;
                 return Ok(next);
             }
             let checks = build_manual_stack_checks(stack, scheduled)?;

@@ -7,7 +7,6 @@ services:
       context: ..
       dockerfile: Dockerfile
       target: runtime-base
-    init: true
     restart: unless-stopped
     user: "${CITADEL_DEV_UID:?}:${CITADEL_DEV_GID:?}"
     group_add:

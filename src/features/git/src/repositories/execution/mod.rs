@@ -56,6 +56,11 @@ impl GitRepositoryExecutionService {
         self
     }
 
+    /// Coalescing wake-up after synchronization has committed to storage.
+    pub fn subscribe_completion(&self) -> tokio::sync::watch::Receiver<()> {
+        self.completion.subscribe()
+    }
+
     pub(super) fn changed(&self) {
         if let Some(on_change) = &self.on_change {
             on_change();

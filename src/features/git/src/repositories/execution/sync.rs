@@ -39,6 +39,29 @@ impl GitRepositoryExecutionService {
         completion::bounded(cancellation, wait).await
     }
 
+    /// Read a completed branch observation without scheduling network work.
+    pub async fn synchronized_ref(
+        &self,
+        id: Uuid,
+        branch: &str,
+    ) -> Result<GitRepositoryRef, GitRepositoryExecutionError> {
+        validate_branch_input(branch)?;
+        let reference = self
+            .store
+            .get_ref(id, branch)
+            .await?
+            .filter(|reference| reference.status == crate::GitRepositoryRefStatus::Healthy)
+            .ok_or(GitRepositoryExecutionError::NotSynchronized)?;
+        if !reference
+            .resolved_commit_sha
+            .as_deref()
+            .is_some_and(is_full_object_id)
+        {
+            return Err(GitRepositoryExecutionError::NotSynchronized);
+        }
+        Ok(reference)
+    }
+
     pub async fn list_refs(
         &self,
         id: Uuid,
