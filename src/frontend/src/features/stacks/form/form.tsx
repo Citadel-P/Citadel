@@ -1579,8 +1579,8 @@ export const StackForm = ({
                 defineField<StackInput, 'spec.registryId'>({
                   key: 'spec.registryId',
                   label: 'Registry',
-                  required: true,
-                  description: 'Select the registry to pull the images from.',
+                  description:
+                    'Optional registry credentials for pulling private images. Public images do not require a registry.',
                   render: (val, set) => {
                     return (
                       <ResourceSelectorField
@@ -1592,7 +1592,7 @@ export const StackForm = ({
                           set((prev) => ({
                             spec: {
                               ...prev.spec!,
-                              registryId: v.id,
+                              registryId: v?.id ?? null,
                             },
                           }))
                         }
