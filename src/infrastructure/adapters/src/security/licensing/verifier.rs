@@ -41,7 +41,7 @@ MCowBQYDK2VwAyEA1lCChB1fwbhdK3a844AtpzUfCeGwn+o8+Al+OOHrCGQ=
 -----END PUBLIC KEY-----"#;
 
 const DEVELOPMENT_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAiKohdkN3GouALrVhfXvUHN/v4vZ4c5FNXVUHGaxxzzI=
+MCowBQYDK2VwAyEA0soUgSf8Bu4xvD4/BgKfxUyqreZRuYnYi8n/HqejyfE=
 -----END PUBLIC KEY-----"#;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -61,7 +61,7 @@ impl Default for Ed25519LicenseVerifier {
     fn default() -> Self {
         Self::from_public_key_pems([
             ("citadel-license-2026-01", PRODUCTION_KEY),
-            ("citadel-license-dev-2026-01", DEVELOPMENT_KEY),
+            ("citadel-license-dev-2026-02", DEVELOPMENT_KEY),
         ])
         .expect("embedded Citadel license public keys are valid")
     }
@@ -363,6 +363,17 @@ fn hex_digest(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
+
+    #[test]
+    fn embedded_trust_contains_only_the_production_and_current_development_keys() {
+        let verifier = Ed25519LicenseVerifier::default();
+        assert!(verifier.keys.contains_key("citadel-license-2026-01"));
+        assert!(!verifier.keys.contains_key("citadel-license-dev-2026-01"));
+        assert_eq!(verifier.keys.len(), 2);
+        assert!(verifier.keys.contains_key("citadel-license-dev-2026-02"));
+        assert!(!verifier.keys.contains_key("citadel-web-fixture"));
+        assert!(!verifier.keys.contains_key("citadel-web-key-check"));
+    }
 
     #[test]
     fn temporal_status_distinguishes_future_valid_grace_and_expired() {
