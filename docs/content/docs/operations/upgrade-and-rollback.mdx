@@ -33,8 +33,10 @@ Updates remain manual. With checks disabled, follow the
    keys, and exact Core and Agent image references with the recovery record.
    Rehearse recovery before relying on this as your rollback plan.
 
-The control-plane bundle protects Citadel configuration and keys. Application
-data needs its own [workload backups](/docs/resources/backups); recovering Core
+The control-plane bundle includes the PostgreSQL dump, Citadel configuration and
+required recovery keys. Keep an exported copy and its recovery credentials outside
+the installation being upgraded. GitHub release attachments describe the published
+images; they do not contain a backup of your installation. Application data needs its own [workload backups](/docs/resources/backups); recovering Core
 does not revert application databases or volume contents.
 
 ## Upgrade

@@ -121,7 +121,10 @@ unlimited default memory and CPU settings without starting containers.
 
 Release notes use checksum-pinned git-cliff, without a separate release service.
 Public releases contain a manifest and checksums; accepted binaries, documentation
-and append-only journals stay in permanent internal drafts. See
+and append-only journals stay in internal drafts until verified publication succeeds.
+The publisher then removes the draft; the public manifest records completed
+publication, so retries skip builds and can resume deployment. Failed publication
+keeps its recovery files beyond the 30-day Actions artifact retention. See
 [release publication and recovery](release-publication.md) for retention, review
 and retry rules.
 

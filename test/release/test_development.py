@@ -486,13 +486,17 @@ class DeploymentWorkflowTests(unittest.TestCase):
             block = jobs[job]
             self.assertIn(f"needs: [version, {dependency}]", block)
             condition = re.search(r"^    if: (.+)$", block, re.M).group(1)
-            self.assertEqual(condition, f"needs.version.outputs.{output} == 'true' && vars.{toggle} == 'true'")
+            self.assertEqual(condition, f"always() && !cancelled() && needs.version.result == 'success' && needs.version.outputs.{output} == 'true' && vars.{toggle} == 'true' && (needs.{dependency}.result == 'success' || needs.version.outputs.completed == 'true')")
             self.assertIn(f"environment:\n      name: {environment}\n", block)
             self.assertNotIn("CITADEL_DEMO_CHANNEL", block)
             self.assertIn("ref: ${{ needs.version.outputs.revision }}", block)
             self.assertIn("uses: ./.github/actions/deploy-demo", block)
             self.assertIn(f"channel: {channel}", block)
             self.assertNotIn("ssh ", block)
+        for job in ('rust-checks', 'rust-tests', 'rust-openapi', 'frontend-tests', 'candidates', 'documentation', 'publish', 'publish-development'):
+            condition = re.search(r"^    if: (.+)$", jobs[job], re.M).group(1)
+            self.assertIn("needs.version.outputs.completed != 'true'", condition)
+        self.assertIn('completed: ${{ steps.preflight.outputs.completed }}', jobs['version'])
         action = (ROOT / ".github/actions/deploy-demo/action.yml").read_text()
         self.assertIn('--channel "$CHANNEL"', action)
         self.assertIn("if: always()", action)

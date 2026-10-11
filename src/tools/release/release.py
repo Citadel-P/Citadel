@@ -3,7 +3,8 @@
 
 Requires gh, skopeo and cosign. Candidate artifacts are retained in a draft GitHub
 recovery release before registry writes. Public releases contain a manifest and
-its checksum. Recovery drafts never expire automatically. Journals are append-only.
+its checksum. Recovery drafts are removed only after verified successful
+publication. Journals are append-only.
 """
 import argparse
 from contextlib import contextmanager
@@ -156,6 +157,14 @@ class Backend:
     def prepare(self, metadata, compatibility):
         """Reserve one original build run before any candidates can be accepted."""
         tag = "v" + metadata["displayVersion"]
+        published = self.release(tag)
+        if published and not published["draft"]:
+            record = self.load(tag)
+            if record["metadata"] != metadata or record["status"] != "complete":
+                raise ValueError("Completed release identity differs")
+            if record.get("publicManifest"):
+                self.cleanup(metadata)
+            return True
         existing = self.reservation(metadata)
         if existing:
             if existing["compatibility"] != compatibility:
@@ -169,8 +178,8 @@ class Backend:
         # A draft can refer to a non-existent internal tag. Never publish it or
         # create a Git ref: product tags and NBGV history remain unchanged.
         payload = dict(tag_name=RECOVERY_PREFIX + tag, target_commitish=metadata["sourceRevision"],
-                       draft=True, name=f"Recovery {tag} — do not publish or delete",
-                       body="Permanent internal recovery storage. Not a product release.")
+                       draft=True, name=f"Publishing {tag} — temporary recovery files",
+                       body="Temporary publication recovery files. Removed automatically after successful publication; retain while incomplete.")
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "request.json"
             path.write_text(json.dumps(payload))
@@ -183,6 +192,13 @@ class Backend:
         self.reservation(metadata)
 
     def load(self, tag):
+        published = self.release(tag)
+        if (published and not published["draft"]
+                and any(a["name"] == "release-manifest.json" for a in published["assets"])):
+            return published_record(self, published)
+        return self.load_journal(tag)
+
+    def load_journal(self, tag):
         internal = self.recovery_release(tag)
         release = internal or self.release(tag)
         if release is None:
@@ -199,6 +215,27 @@ class Backend:
             if record["tag"] != tag or (internal and record.get("recoveryTag") != internal["tag_name"]):
                 raise ValueError("Recovery journal location or tag differs")
             return record
+
+    def cleanup(self, metadata):
+        """Delete only an internal draft whose completed public replacement verifies."""
+        tag = "v" + metadata["displayVersion"]
+        completed = published_record(self, self.release(tag), metadata)
+        draft = self.recovery_release(tag)
+        if draft is None:
+            return dict(tag=tag, deleted=False, reason="already-clean")
+        record = self.load_journal(tag)
+        if (not record or record["status"] != "complete" or record["metadata"] != metadata
+                or record.get("recoveryTag") != RECOVERY_PREFIX + tag
+                or record["indexes"] != completed["indexes"]
+                or any(record["steps"].get(key) != value for key, value in completed["steps"].items())):
+            raise ValueError("Recovery journal does not match the completed public manifest; keep recovery files")
+        release_id = draft["id"]
+        if type(release_id) is not int or release_id <= 0:
+            raise ValueError("Invalid recovery release ID")
+        if self.apply:
+            self.command("gh", "api", f"repos/{self.repository}/releases/{release_id}",
+                         "--method", "DELETE", write=True)
+        return dict(tag=tag, recoveryReleaseId=release_id, deleted=self.apply, dryRun=not self.apply)
 
     def save(self, record):
         if not self.apply:
@@ -657,6 +694,8 @@ def recover(backend, tag, directory, durable_only=False):
     record = backend.load(tag)
     if record is None:
         return None
+    if record.get("publicManifest"):
+        raise ValueError("Release is already published; skip build and publication jobs, never rebuild accepted binaries")
     release = backend.release(record.get("recoveryTag", tag))
     directory.mkdir(parents=True, exist_ok=True)
     available = {a["name"] for a in release["assets"]}
@@ -703,6 +742,56 @@ def validate_evidence(directory, metadata, compatibility):
                 raise ValueError("Candidate was changed after acceptance")
 
 
+def published_record(backend, published, metadata=None):
+    """Read completion evidence without depending on private recovery storage."""
+    if not published or published["draft"]:
+        raise ValueError("Cleanup and completed-release reads require a published release")
+    tag = published["tag_name"]
+    with tempfile.TemporaryDirectory() as temporary:
+        path = Path(temporary) / "release-manifest.json"
+        checksums = Path(temporary) / "SHA256SUMS"
+        backend.asset(published, path.name, path)
+        backend.asset(published, checksums.name, checksums)
+        if checksums.read_text().strip() != version.sha256(path) + "  " + path.name:
+            raise ValueError("Published manifest checksum differs")
+        manifest = json.loads(path.read_text())
+    expected = metadata
+    metadata = manifest["metadata"]
+    if (tag != "v" + metadata["displayVersion"] or not version.SHA.fullmatch(metadata["sourceRevision"])
+            or published.get("prerelease") is not development(metadata)
+            or (expected is not None and metadata != expected)):
+        raise ValueError("Published manifest identity differs")
+    identity = f"https://github.com/{backend.repository}/.github/workflows/ci.yml@refs/tags/{tag}"
+    if (manifest.get("schemaVersion") != 1 or manifest.get("tag") != tag or manifest.get("metadata") != metadata
+            or manifest.get("architectures") != POLICY["architectures"]
+            or manifest.get("upgradeOrder") != ["agent", "core"]
+            or manifest.get("signatures") != dict(tool="cosign", certificateIdentity=identity,
+                certificateOidcIssuer="https://token.actions.githubusercontent.com")):
+        raise ValueError("Published manifest identity differs")
+    indexes, steps = {}, {}
+    for component, destinations in repositories(metadata).items():
+        images = manifest["images"][component]
+        if len(images) != len(destinations):
+            raise ValueError("Published image inventory differs")
+        for image, repository in zip(images, destinations):
+            ref = repository + ":" + metadata["displayVersion"]
+            prefix = repository + "@"
+            if image["tag"] != ref or not image["digest"].startswith(prefix):
+                raise ValueError("Published image repository differs")
+            digest = image["digest"][len(prefix):]
+            if (not re.fullmatch(r"sha256:[a-f0-9]{64}", digest)
+                    or manifest["verifiedSignatures"].get(ref) != digest
+                    or indexes.get(component, digest) != digest):
+                raise ValueError("Missing verified signature checkpoint or inconsistent image digest")
+            indexes[component] = digest
+            steps["signed:" + ref] = digest
+    # Older manifests omitted compatibility. Completed retries skip all builds;
+    # future release baselines need only the verified immutable image indexes.
+    return dict(tag=tag, metadata=metadata, status="complete", indexes=indexes, steps=steps,
+                compatibility=manifest.get("compatibility") or {"completed": True},
+                artifacts={}, publicManifest=True)
+
+
 def public_files(record, directory):
     """Small, deterministic public provenance; no operational journals or tarballs."""
     signed = {}
@@ -713,7 +802,7 @@ def public_files(record, directory):
                 raise ValueError("Missing verified signature checkpoint for public manifest")
             signed[reference] = record["indexes"][component]
     manifest = dict(schemaVersion=1, tag=record["tag"], metadata=record["metadata"],
-                    verifiedSignatures=signed,
+                    verifiedSignatures=signed, compatibility=record["compatibility"],
                     architectures=POLICY["architectures"], upgradeOrder=["agent", "core"],
                     images={component: [dict(tag=repo + ":" + record["metadata"]["displayVersion"],
                                              digest=repo + "@" + record["indexes"][component])
@@ -764,7 +853,7 @@ def prepare_presentation(backend, record, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["preflight", "prepare", "retain-validation", "recover", "promote", "docs", "finalize"])
+    parser.add_argument("command", choices=["preflight", "prepare", "retain-validation", "recover", "promote", "docs", "finalize", "cleanup"])
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--repository", required=True)
@@ -775,7 +864,7 @@ def main():
     backend = Backend(args.repository, args.apply)
     check_metadata(metadata)
     tag = "v" + metadata["displayVersion"]
-    if args.apply:
+    if args.apply and args.command != "cleanup":
         if (os.environ.get("GITHUB_EVENT_NAME") != "push" or os.environ.get("GITHUB_REF") != "refs/tags/" + tag
                 or os.environ.get("GITHUB_SHA") != metadata["sourceRevision"]):
             raise ValueError("Writes require the validated release-tag push context; manual runs are read-only")
@@ -783,6 +872,9 @@ def main():
             raise ValueError("Publication requires an annotated tag")
         if version.git(ROOT, "rev-parse", f"refs/tags/{tag}^{{commit}}") != metadata["sourceRevision"]:
             raise ValueError("Tag identity changed")
+    if args.command == "cleanup":
+        print(json.dumps(backend.cleanup(metadata), indent=2))
+        return
     if args.command == "retain-validation":
         if not args.apply or not args.artifact:
             raise ValueError("Retention requires --apply and --artifact")
@@ -801,7 +893,8 @@ def main():
     if args.command == "prepare":
         if not args.apply:
             raise ValueError("Reservation requires --apply")
-        backend.prepare(metadata, compatibility)
+        completed = backend.prepare(metadata, compatibility)
+        print(json.dumps({"completed": bool(completed)}))
         return
     if args.command == "preflight":
         print(json.dumps(compatibility, indent=2))
@@ -809,7 +902,9 @@ def main():
     record = backend.load(tag)
     published = backend.release(tag) if record and record["status"] == "complete" else None
     if published and not published["draft"] and args.command in ["promote", "finalize"]:
-        # Completed historical releases are immutable to this workflow.
+        # Public releases are immutable; only the verified internal draft can go.
+        if args.apply and record.get("publicManifest"):
+            backend.cleanup(metadata)
         print(json.dumps(record, indent=2))
         return
     if args.command == "docs":
@@ -838,11 +933,15 @@ def main():
         if development(metadata):
             backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",
                             "--prerelease", "--latest=false", "--title", f"Citadel {tag}", *presentation_args, write=True)
+            if record.get("recoveryTag"):
+                backend.cleanup(metadata)
             return
         published = [r["tag_name"][1:] for r in backend.releases() if not r["draft"] and version.STABLE.fullmatch(r["tag_name"][1:])]
         newest = not any(semver(v) > semver(metadata["productVersion"]) for v in published)
         backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",
                         "--title", f"Citadel {tag}", "--latest=" + str(newest).lower(), *presentation_args, write=True)
+        if record.get("recoveryTag"):
+            backend.cleanup(metadata)
         return
     if record:
         if record["metadata"] != metadata or record["compatibility"] != compatibility:

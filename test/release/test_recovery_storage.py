@@ -1,5 +1,6 @@
 """Exercise the real journal/retention implementation against an in-memory GitHub."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -14,6 +15,7 @@ class MemoryGitHub(release.Backend):
         super().__init__('Citadel-P/Citadel', apply=True)
         self.items, self.bytes, self.operations = {}, {}, []
         self.fail_upload = None
+        self.fail_delete = False
 
     def releases(self):
         return copy.deepcopy(list(self.items.values()))
@@ -33,15 +35,22 @@ class MemoryGitHub(release.Backend):
         if not self.apply:
             raise RuntimeError('External mutation blocked: dry run')
         self.operations.append(args)
-        if args[:2] == ('gh', 'api'):
+        if args[:2] == ('gh', 'api') and args[-1] == 'DELETE':
+            if self.fail_delete:
+                raise RuntimeError('Interrupted cleanup')
+            release_id = int(args[2].rsplit('/', 1)[1])
+            tag = next(t for t, item in self.items.items() if item['id'] == release_id)
+            del self.items[tag]
+            self.bytes = {k: v for k, v in self.bytes.items() if k[0] != tag}
+        elif args[:2] == ('gh', 'api'):
             data = json.loads(Path(args[-1]).read_text())
             tag = data['tag_name']
             if tag in self.items:
                 raise ValueError('Duplicate release')
-            self.items[tag] = dict(data, assets=[])
+            self.items[tag] = dict(data, assets=[], id=len(self.items) + 1, prerelease=False)
         elif args[:3] == ('gh', 'release', 'create'):
             tag = args[3]
-            self.items[tag] = dict(tag_name=tag, draft=True, assets=[])
+            self.items[tag] = dict(tag_name=tag, draft=True, assets=[], id=len(self.items) + 1, prerelease=False)
         elif args[:3] == ('gh', 'release', 'upload'):
             tag, path = args[3], Path(args[4])
             if path.name == self.fail_upload:
@@ -52,6 +61,7 @@ class MemoryGitHub(release.Backend):
             self.items[tag]['assets'].append(dict(name=path.name))
         elif args[:3] == ('gh', 'release', 'edit'):
             self.items[args[3]]['draft'] = False
+            self.items[args[3]]['prerelease'] = '--prerelease' in args
         else:
             raise AssertionError('Unexpected mutation: ' + repr(args))
         return '{}'
@@ -67,6 +77,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.backend = MemoryGitHub()
         self.value = record()
         self.data = self.value['metadata']
+        self.value['signingIdentity'] = f"https://github.com/{self.backend.repository}/.github/workflows/ci.yml@refs/tags/{self.value['tag']}"
         self.storage = 'citadel-recovery/' + self.value['tag']
         self.env = patch.dict(release.os.environ, {'GITHUB_RUN_ID': '42'}, clear=True)
         self.env.start(); self.addCleanup(self.env.stop)
@@ -171,7 +182,7 @@ class RecoveryStorageTests(unittest.TestCase):
 
     def test_missing_recovery_store_with_public_release_never_rebuilds(self):
         self.backend.items = {self.value['tag']: dict(tag_name=self.value['tag'], draft=False, assets=[dict(name='release-manifest.json')])}
-        with self.assertRaisesRegex(RuntimeError, 'without a recovery journal'):
+        with self.assertRaisesRegex(RuntimeError, 'Missing durable release artifact'):
             self.backend.load(self.value['tag'])
 
     def presentation(self):
@@ -227,6 +238,20 @@ class RecoveryStorageTests(unittest.TestCase):
         self.assertEqual(self.backend.load(self.value['tag']), self.value)
 
     def test_finalization_exposes_only_the_product_after_public_assets_are_verified(self):
+        self.finalize_and_check_cleanup()
+
+    def test_development_finalization_cleans_only_its_own_recovery_draft(self):
+        from test_development import dev_record
+        self.value = dev_record()
+        self.data = self.value['metadata']
+        self.storage = 'citadel-recovery/' + self.value['tag']
+        self.value['signingIdentity'] = f"https://github.com/{self.backend.repository}/.github/workflows/ci.yml@refs/tags/{self.value['tag']}"
+        self.backend.prepare(self.data, self.value['compatibility'])
+        self.finalize_and_check_cleanup()
+        self.assertTrue(self.backend.release(self.value['tag'])['prerelease'])
+        self.assertIn('citadel-recovery/v1.2.3', self.backend.items)
+
+    def finalize_and_check_cleanup(self):
         self.presentation()
         self.value["status"] = "images-verified"; self.backend.save(self.value)
         path = self.root / "version.json"; path.write_text(json.dumps(self.data))
@@ -242,7 +267,7 @@ class RecoveryStorageTests(unittest.TestCase):
                 "--metadata", str(path), "--directory", str(self.root)]):
             release.main()
         self.assertFalse(self.backend.release(self.value["tag"])["draft"])
-        self.assertTrue(self.backend.release(self.storage)["draft"])
+        self.assertIsNone(self.backend.release(self.storage))
         self.assertEqual(self.backend.load(self.value["tag"])["status"], "complete")
         edits = [op for op in self.backend.operations if op[:3] == ("gh", "release", "edit")]
         self.assertEqual(len(edits), 1)
@@ -253,6 +278,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.presentation()
         self.value['status'] = 'complete'; self.backend.save(self.value)
         self.backend.items[self.value['tag']]['draft'] = False
+        self.backend.cleanup(self.data)
         path = self.root / 'version.json'; path.write_text(json.dumps(self.data))
         for command in ['promote', 'finalize']:
             count = len(self.backend.operations)
@@ -264,3 +290,122 @@ class RecoveryStorageTests(unittest.TestCase):
                     '--metadata', str(path), '--directory', str(self.root)]), patch('builtins.print'):
                 release.main()
             self.assertEqual(count, len(self.backend.operations))
+
+    def complete(self):
+        self.presentation()
+        self.value['status'] = 'complete'; self.backend.save(self.value)
+        self.backend.items[self.value['tag']]['draft'] = False
+
+    def test_cleanup_is_dry_run_by_default_and_only_deletes_internal_draft(self):
+        self.complete()
+        public = copy.deepcopy(self.backend.items[self.value['tag']])
+        public_bytes = {k: v for k, v in self.backend.bytes.items() if k[0] == self.value['tag']}
+        self.backend.items['unrelated'] = dict(id=99, tag_name='unrelated', draft=True, assets=[])
+        count = len(self.backend.operations)
+        self.backend.apply = False
+        self.assertTrue(self.backend.cleanup(self.data)['dryRun'])
+        self.assertEqual(len(self.backend.operations), count)
+        self.backend.apply = True
+        self.assertTrue(self.backend.cleanup(self.data)['deleted'])
+        self.assertIsNone(self.backend.release(self.storage))
+        self.assertIn('unrelated', self.backend.items)
+        self.assertEqual(self.backend.items[self.value['tag']], public)
+        self.assertTrue(all(self.backend.bytes[k] == v for k, v in public_bytes.items()))
+        self.assertEqual(self.backend.cleanup(self.data)['reason'], 'already-clean')
+        self.assertEqual(len(self.backend.operations), count + 1)
+
+    def test_cleanup_requires_published_release_and_completed_matching_journal(self):
+        self.presentation()
+        with self.assertRaisesRegex(ValueError, 'require a published release'):
+            self.backend.cleanup(self.data)
+        self.backend.items[self.value['tag']]['draft'] = False
+        with self.assertRaisesRegex(ValueError, 'keep recovery files'):
+            self.backend.cleanup(self.data)
+        self.value['status'] = 'complete'
+        for field, replacement in [('indexes', dict(agent='sha256:' + 'f' * 64, core=self.value['indexes']['core'])),
+                                   ('metadata', dict(self.data, sourceRevision='b' * 40)), ('steps', {})]:
+            with self.subTest(field=field):
+                original = self.value[field]
+                self.value[field] = replacement; self.backend.save(self.value)
+                with self.assertRaisesRegex(ValueError, 'keep recovery files'):
+                    self.backend.cleanup(self.data)
+                self.value[field] = original
+        self.assertIsNotNone(self.backend.release(self.storage))
+        self.assertFalse(any(op[-1] == 'DELETE' for op in self.backend.operations))
+
+    def test_corrupt_public_manifest_never_allows_cleanup_or_completed_retry(self):
+        self.complete()
+        key = self.value['tag'], 'release-manifest.json'
+        self.backend.bytes[key] += b' '
+        for action in [lambda: self.backend.cleanup(self.data),
+                       lambda: self.backend.prepare(self.data, self.value['compatibility'])]:
+            with self.assertRaisesRegex(ValueError, 'checksum differs'):
+                action()
+        self.assertIsNotNone(self.backend.release(self.storage))
+
+    def test_interrupted_cleanup_retries_without_rebuilding_or_republishing(self):
+        self.complete()
+        self.backend.fail_delete = True
+        with self.assertRaisesRegex(RuntimeError, 'Interrupted cleanup'):
+            self.backend.cleanup(self.data)
+        self.assertIsNotNone(self.backend.release(self.storage))
+        self.backend.fail_delete = False
+        count = len(self.backend.operations)
+        self.assertTrue(self.backend.prepare(self.data, self.value['compatibility']))
+        self.assertEqual(len(self.backend.operations), count + 1)
+        self.assertIsNone(self.backend.release(self.storage))
+        count = len(self.backend.operations)
+        self.assertTrue(self.backend.prepare(self.data, self.value['compatibility']))
+        self.assertEqual(len(self.backend.operations), count)
+        with self.assertRaisesRegex(ValueError, 'already published'):
+            release.recover(self.backend, self.value['tag'], self.root / 'retry')
+
+    def test_completed_manifest_remains_available_without_recovery_artifacts(self):
+        self.complete(); self.backend.cleanup(self.data)
+        completed = self.backend.load(self.value['tag'])
+        self.assertEqual(completed['indexes'], self.value['indexes'])
+        self.assertEqual(completed['compatibility'], self.value['compatibility'])
+        self.assertTrue(completed['publicManifest'])
+        # Releases published before cleanup was implemented omitted compatibility.
+        key = self.value['tag'], 'release-manifest.json'
+        manifest = json.loads(self.backend.bytes[key]); del manifest['compatibility']
+        self.backend.bytes[key] = json.dumps(manifest).encode()
+        self.backend.bytes[self.value['tag'], 'SHA256SUMS'] = (hashlib.sha256(self.backend.bytes[key]).hexdigest() + '  release-manifest.json\n').encode()
+        self.assertEqual(self.backend.load(self.value['tag'])['indexes'], self.value['indexes'])
+        self.assertTrue(self.backend.prepare(self.data, {'completed': True}))
+
+    def test_next_release_accepts_cleaned_public_manifest_as_compatibility_baseline(self):
+        self.complete(); self.backend.cleanup(self.data)
+        env = dict(CITADEL_RUST_AGENT_RELEASE_ENABLED='true', DOCS_SITE_URL='https://docs.example.invalid',
+                   DOCKERHUB_NAMESPACE='citadelplane', DOCKERHUB_USERNAME='test', DOCKERHUB_TOKEN='test',
+                   CITADEL_AGENT_ROLLBACK_IMAGE='ghcr.io/citadel-p/citadel.agent@' + self.value['indexes']['agent'],
+                   CITADEL_CORE_ROLLBACK_IMAGE='ghcr.io/citadel-p/citadel@' + self.value['indexes']['core'])
+        with patch.object(self.backend, 'manifest', return_value=json.dumps(dict(manifests=[
+                dict(platform=dict(os='linux', architecture=a)) for a in release.POLICY['architectures']]))):
+            result = release.preflight(metadata('1.2.4'), self.backend, env)
+        self.assertFalse(result['bootstrap'])
+        self.assertEqual(result['agent'], env['CITADEL_AGENT_ROLLBACK_IMAGE'])
+        self.assertEqual(result['core'], env['CITADEL_CORE_ROLLBACK_IMAGE'])
+
+    def test_missing_signature_checkpoint_blocks_cleanup_even_with_valid_checksum(self):
+        self.complete()
+        key = self.value['tag'], 'release-manifest.json'
+        manifest = json.loads(self.backend.bytes[key]); manifest['verifiedSignatures'] = {}
+        self.backend.bytes[key] = json.dumps(manifest).encode()
+        self.backend.bytes[self.value['tag'], 'SHA256SUMS'] = (hashlib.sha256(self.backend.bytes[key]).hexdigest() + '  release-manifest.json\n').encode()
+        with self.assertRaisesRegex(ValueError, 'Missing verified signature checkpoint'):
+            self.backend.cleanup(self.data)
+        self.assertIsNotNone(self.backend.release(self.storage))
+
+    def test_manual_cleanup_command_requires_apply_for_deletion(self):
+        self.complete()
+        path = self.root / 'version.json'; path.write_text(json.dumps(self.data))
+        for apply in [False, True]:
+            self.backend.apply = apply
+            args = ['release.py', 'cleanup', '--repository', self.backend.repository,
+                    '--metadata', str(path), '--directory', str(self.root)]
+            with patch.object(release, 'Backend', return_value=self.backend), \
+                 patch.object(release.sys, 'argv', args + (['--apply'] if apply else [])), \
+                 patch('builtins.print'):
+                release.main()
+            self.assertEqual(self.backend.release(self.storage) is None, apply)

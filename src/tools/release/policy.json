@@ -17,9 +17,9 @@
   },
   "agentFirstUpgrades": true,
   "recovery": {
-    "storage": "permanent-github-draft",
+    "storage": "github-draft-until-published",
     "tagPrefix": "citadel-recovery/",
-    "automaticDeletion": false,
+    "automaticDeletion": "after-verified-publication",
     "actionsRetentionDays": 30
   }
 }
