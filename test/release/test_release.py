@@ -53,6 +53,9 @@ class FakeBackend:
         value['sequence'] += 1
         self.records[value['tag']] = copy.deepcopy(value)
 
+    def reservation(self, metadata):
+        return None
+
     def load(self, tag):
         return copy.deepcopy(self.records.get(tag))
 
@@ -346,6 +349,8 @@ class ArtifactTests(unittest.TestCase):
 
     def test_prepublication_retry_reuses_artifacts_or_stops_if_lost(self):
         backend=release.Backend('Citadel-P/Citadel')
+        self.patch_accepted = patch.object(backend, 'recover_accepted', return_value=False)
+        self.patch_accepted.start(); self.addCleanup(self.patch_accepted.stop)
         env=dict(GITHUB_RUN_ID='42',GITHUB_RUN_ATTEMPT='1')
         with patch.dict(release.os.environ,env,clear=True), patch.object(backend,'command',return_value='[{"artifacts":[]}]'):
             self.assertFalse(backend.recover_validation_artifact('candidates-amd64',self.root,metadata()))

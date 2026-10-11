@@ -119,9 +119,18 @@ Operators can tune these values in each server-owned `.env` through
 and `CITADEL_DATABASE_CPUS`. Compose rendering tests verify target separation and
 unlimited default memory and CPU settings without starting containers.
 
-Run the release regression suite with
-`python3 -m unittest discover -s test/release -v`. The tests use the Python standard
-library and do not require VPS or publication access. Actionlint 1.7.12 does not
+Release notes use checksum-pinned git-cliff, without a separate release service.
+Public releases contain a manifest and checksums; accepted binaries, documentation
+and append-only journals stay in permanent internal drafts. See
+[release publication and recovery](release-publication.md) for retention, review
+and retry rules.
+
+On Linux amd64, install the pinned notes tool with
+`python3 src/tools/release/notes.py install`, then run the existing release suite
+with `python3 -m unittest discover -s test/release -v`. The suite needs no VPS or
+publication access. Changelog tests use real temporary Git histories and the pinned
+binary; they skip locally if it is absent. CI installs it before the existing test
+step. No additional test job is introduced. Actionlint 1.7.12 does not
 recognize the newer [`concurrency.queue` setting](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency);
 validate that setting against GitHub's schema when using this version, and retain
 all other workflow diagnostics.

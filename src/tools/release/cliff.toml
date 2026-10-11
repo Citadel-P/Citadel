@@ -1,0 +1,36 @@
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.extra.breaking %}**Breaking:** {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/Citadel-P/Citadel/commit/{{ commit.id }})){% if commit.extra.breakingDescription %} — {{ commit.extra.breakingDescription }}{% endif %}
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+format = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+# The caller supplies an explicit predecessor..tagged-SHA range. Intermediate
+# development tags must never divide a stable release's changelog.
+tag_pattern = "^$"
+sort_commits = "oldest"
+commit_preprocessors = [
+  # GitHub merge commits carry the PR title in their body. Keep any additional
+  # body/footer text, including BREAKING CHANGE, available to the parser.
+  { pattern = '^Merge pull request #[0-9]+ from [^\n]+\n\n', replace = "" },
+]
+commit_parsers = [
+  { message = '^feat(?:\([^)]*\))?!?:', group = "<!-- 1 -->Features" },
+  { message = '^fix(?:\([^)]*\))?!?:', group = "<!-- 2 -->Fixes" },
+  { message = '^perf(?:\([^)]*\))?!?:', group = "<!-- 3 -->Performance" },
+  { message = '^(refactor|improve)(?:\([^)]*\))?!?:', group = "<!-- 4 -->Improvements" },
+  { message = '^(ci|build|chore|deps|test|style|docs)(?:\([^)]*\))?!?:', skip = true },
+  { message = '.*', group = "<!-- 5 -->Changes to review" },
+]

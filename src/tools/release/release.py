@@ -2,7 +2,8 @@
 """Coordinated, journaled promotion. No external writes unless --apply is passed.
 
 Requires gh, skopeo and cosign. Candidate artifacts are retained in a draft GitHub
-release before registry writes. Each journal revision is an append-only asset.
+recovery release before registry writes. Public releases contain a manifest and
+its checksum. Recovery drafts never expire automatically. Journals are append-only.
 """
 import argparse
 from contextlib import contextmanager
@@ -23,6 +24,7 @@ spec = importlib.util.spec_from_file_location("citadel_version", ROOT / "src/too
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
 POLICY = json.loads(Path(__file__).with_name("policy.json").read_text())
+RECOVERY_PREFIX = POLICY["recovery"]["tagPrefix"]
 IMAGE = re.compile(r"[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}\Z")
 
 
@@ -133,22 +135,77 @@ class Backend:
             subprocess.run(["gh", "api", "-H", "Accept: application/octet-stream",
                             f"repos/{self.repository}/releases/assets/{item['id']}"], stdout=stream, check=True)
 
+    def recovery_release(self, tag):
+        release = self.release(RECOVERY_PREFIX + tag)
+        if release is not None and not release["draft"]:
+            raise ValueError("Recovery storage must remain a draft; inspect manually")
+        return release
+
+    def reservation(self, metadata):
+        draft = self.recovery_release("v" + metadata["displayVersion"])
+        if draft is None:
+            return None
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "reservation.json"
+            self.asset(draft, path.name, path)
+            data = json.loads(path.read_text())
+        if data["metadata"] != metadata:
+            raise ValueError("Reserved release identity differs from current inputs")
+        return data
+
+    def prepare(self, metadata, compatibility):
+        """Reserve one original build run before any candidates can be accepted."""
+        tag = "v" + metadata["displayVersion"]
+        existing = self.reservation(metadata)
+        if existing:
+            if existing["compatibility"] != compatibility:
+                raise ValueError("Reserved compatibility differs")
+            return
+        if self.release(tag) is not None:
+            # Legacy journals continue to recover in place. Never migrate history.
+            self.load(tag)
+            return
+        data = dict(metadata=metadata, compatibility=compatibility, sourceRunId=os.environ["GITHUB_RUN_ID"])
+        # A draft can refer to a non-existent internal tag. Never publish it or
+        # create a Git ref: product tags and NBGV history remain unchanged.
+        payload = dict(tag_name=RECOVERY_PREFIX + tag, target_commitish=metadata["sourceRevision"],
+                       draft=True, name=f"Recovery {tag} — do not publish or delete",
+                       body="Permanent internal recovery storage. Not a product release.")
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "request.json"
+            path.write_text(json.dumps(payload))
+            self.command("gh", "api", f"repos/{self.repository}/releases", "--method", "POST",
+                         "--input", str(path), write=True)
+            path = Path(temporary) / "reservation.json"
+            path.write_bytes(canonical(data))
+            self.upload(RECOVERY_PREFIX + tag, path)
+        # If interrupted between creation and reservation, fail closed on retry.
+        self.reservation(metadata)
+
     def load(self, tag):
-        release = self.release(tag)
+        internal = self.recovery_release(tag)
+        release = internal or self.release(tag)
         if release is None:
             return None
         records = sorted(a["name"] for a in release["assets"] if re.fullmatch(r"release-record-[0-9]{6}\.json", a["name"]))
+        if not records and internal:
+            return None  # Reserved, but promotion has not started.
         if not records:
             raise RuntimeError("Release exists without a recovery journal; inspect manually before proceeding")
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / records[-1]
             self.asset(release, records[-1], path)
-            return json.loads(path.read_text())
+            record = json.loads(path.read_text())
+            if record["tag"] != tag or (internal and record.get("recoveryTag") != internal["tag_name"]):
+                raise ValueError("Recovery journal location or tag differs")
+            return record
 
     def save(self, record):
         if not self.apply:
             raise RuntimeError("Journal mutation blocked: dry run")
-        tag = record["tag"]
+        tag = record.get("recoveryTag", record["tag"])
+        if record.get("recoveryTag") and self.recovery_release(record["tag"]) is None:
+            raise ValueError("Missing reserved recovery storage")
         record["sequence"] = record.get("sequence", 0) + 1
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / f"release-record-{record['sequence']:06}.json"
@@ -168,7 +225,8 @@ class Backend:
         # Only needed if draft asset retention was interrupted before registry
         # publication. The original run is immutable input; never use a retry's
         # newly built output. Expired/missing artifacts stop recovery.
-        artifact = ("candidates-" + name.split("-")[1].split(".")[0]
+        artifact = ("release-inputs" if name in ["release-notes.md", "release-review.json"] else
+                    "candidates-" + name.split("-")[1].split(".")[0]
                     if name.startswith(("core-", "agent-", "evidence-")) else "release-documentation")
         with tempfile.TemporaryDirectory() as temporary:
             self.command("gh", "run", "download", str(record["sourceRunId"]), "--repo", self.repository,
@@ -178,8 +236,91 @@ class Backend:
                 raise ValueError(f"Original artifact unavailable: {name}; do not rebuild this release")
             shutil.copyfile(source, destination)
 
+    def validation_files(self, name, directory, metadata):
+        manifest_name = ("documentation-inputs.json" if name == "release-documentation"
+                         else f"evidence-{name.removeprefix('candidates-')}.json")
+        manifest = json.loads((directory / manifest_name).read_text())
+        if manifest["metadata"] != metadata:
+            raise ValueError("Previous validation artifact metadata differs")
+        if name == "release-documentation":
+            hashes = manifest["artifacts"]
+            if set(hashes) != {"docs.tar", "api-docs.tar"}:
+                raise ValueError("Incomplete documentation artifacts")
+        else:
+            if manifest.get("passed") is not True:
+                raise ValueError("Candidate acceptance failed")
+            arch = name.removeprefix("candidates-")
+            hashes = {f"{c}-{arch}.oci.tar": manifest["artifacts"][c] for c in ["agent", "core"]}
+        for filename, expected in hashes.items():
+            if Path(filename).name != filename or version.sha256(directory / filename) != expected:
+                raise ValueError("Previous validation artifact identity differs")
+        return dict(hashes, **{manifest_name: version.sha256(directory / manifest_name)})
+
+    def retain_validation(self, name, directory, metadata):
+        reservation = self.reservation(metadata)
+        if reservation is None:
+            # Existing legacy journals already retain their full original inputs.
+            if self.load("v" + metadata["displayVersion"]):
+                return
+            raise ValueError("Recovery reservation required before acceptance retention")
+        tag = RECOVERY_PREFIX + "v" + metadata["displayVersion"]
+        hashes = self.validation_files(name, directory, metadata)
+        marker = directory / f"accepted-{name}.json"
+        draft = self.recovery_release("v" + metadata["displayVersion"])
+        if (reservation["sourceRunId"] != os.environ["GITHUB_RUN_ID"]
+                and not any(a["name"] == marker.name for a in draft["assets"])):
+            raise ValueError("Only the original run can first retain accepted artifacts")
+        marker.write_bytes(canonical(dict(metadata=metadata, artifacts=hashes)))
+        # Retain the identity first. Incomplete uploads can only be repaired with
+        # identical original bytes; neither clobber nor rebuilding is allowed.
+        for path in [marker, *(directory / n for n in hashes)]:
+            draft = self.recovery_release("v" + metadata["displayVersion"])
+            if any(a["name"] == path.name for a in draft["assets"]):
+                with tempfile.TemporaryDirectory() as temporary:
+                    check = Path(temporary) / path.name
+                    self.asset(draft, path.name, check)
+                    if version.sha256(check) != version.sha256(path):
+                        raise ValueError("Previously accepted artifact differs; do not substitute binaries")
+            else:
+                self.upload(tag, path)
+        with tempfile.TemporaryDirectory() as temporary:
+            self.recover_accepted(name, Path(temporary), metadata)
+
+    def recover_accepted(self, name, directory, metadata):
+        reservation = self.reservation(metadata)
+        if reservation is None:
+            return False
+        draft = self.recovery_release("v" + metadata["displayVersion"])
+        marker_name = f"accepted-{name}.json"
+        available = {a["name"] for a in draft["assets"]}
+        if marker_name not in available:
+            if reservation["sourceRunId"] != os.environ["GITHUB_RUN_ID"]:
+                raise ValueError("Original validation not durably retained; rerun the original run, never rebuild in a new run")
+            return False
+        directory.mkdir(parents=True, exist_ok=True)
+        marker = directory / marker_name
+        self.asset(draft, marker_name, marker)
+        accepted = json.loads(marker.read_text())
+        if accepted["metadata"] != metadata:
+            raise ValueError("Accepted release identity differs")
+        for filename, expected in accepted["artifacts"].items():
+            if Path(filename).name != filename:
+                raise ValueError("Invalid accepted artifact name")
+            path = directory / filename
+            if filename in available:
+                self.asset(draft, filename, path)
+            else:
+                self.action_artifact(reservation, filename, path)
+            if version.sha256(path) != expected:
+                raise ValueError("Accepted artifact identity lost; do not rebuild this release")
+        if self.validation_files(name, directory, metadata) != accepted["artifacts"]:
+            raise ValueError("Incomplete accepted artifact inventory")
+        return True
+
     def recover_validation_artifact(self, name, directory, metadata):
         """Reuse accepted pre-publication outputs when rerunning the same run."""
+        if self.recover_accepted(name, directory, metadata):
+            return True
         run_id = os.environ["GITHUB_RUN_ID"]
         pages = json.loads(self.command("gh", "api", "--paginate", "--slurp",
                                        f"repos/{self.repository}/actions/runs/{run_id}/artifacts?per_page=100"))
@@ -300,6 +441,9 @@ def preflight(metadata, backend, environ):
         # Baselines/bootstrap are frozen once candidates are accepted. Changing
         # repository variables for a later release must not change an old retry.
         return recorded["compatibility"]
+    reserved = backend.reservation(metadata)
+    if reserved:
+        return reserved["compatibility"]
     agent, core = environ.get("CITADEL_AGENT_ROLLBACK_IMAGE", ""), environ.get("CITADEL_CORE_ROLLBACK_IMAGE", "")
     bootstrap = environ.get("CITADEL_FIRST_RUST_RELEASE", "") == metadata["productVersion"]
     current = "v" + metadata["productVersion"]
@@ -492,7 +636,8 @@ def promote(backend, record, directory):
 
 def retain(backend, record, directory):
     """Fill missing draft assets after an interrupted upload, before promotion."""
-    draft = backend.release(record["tag"])
+    storage = record.get("recoveryTag", record["tag"])
+    draft = backend.release(storage)
     if draft is None:
         raise ValueError("Release journal is not visible; retry the original workflow before publishing")
     available = {a["name"] for a in draft["assets"]}
@@ -501,7 +646,7 @@ def retain(backend, record, directory):
         if version.sha256(path) != expected:
             raise ValueError(f"Artifact checksum mismatch before retention: {name}")
         if name not in available:
-            backend.upload(record["tag"], path)
+            backend.upload(storage, path)
     # Independently download and hash retained bytes before any registry write.
     with tempfile.TemporaryDirectory() as temporary:
         recover(backend, record["tag"], Path(temporary), durable_only=True)
@@ -512,7 +657,7 @@ def recover(backend, tag, directory, durable_only=False):
     record = backend.load(tag)
     if record is None:
         return None
-    release = backend.release(tag)
+    release = backend.release(record.get("recoveryTag", tag))
     directory.mkdir(parents=True, exist_ok=True)
     available = {a["name"] for a in release["assets"]}
     deferred = []
@@ -558,9 +703,68 @@ def validate_evidence(directory, metadata, compatibility):
                 raise ValueError("Candidate was changed after acceptance")
 
 
+def public_files(record, directory):
+    """Small, deterministic public provenance; no operational journals or tarballs."""
+    signed = {}
+    for component, repos in repositories(record["metadata"]).items():
+        for repo in repos:
+            reference = repo + ":" + record["metadata"]["displayVersion"]
+            if record["steps"].get("signed:" + reference) != record["indexes"][component]:
+                raise ValueError("Missing verified signature checkpoint for public manifest")
+            signed[reference] = record["indexes"][component]
+    manifest = dict(schemaVersion=1, tag=record["tag"], metadata=record["metadata"],
+                    verifiedSignatures=signed,
+                    architectures=POLICY["architectures"], upgradeOrder=["agent", "core"],
+                    images={component: [dict(tag=repo + ":" + record["metadata"]["displayVersion"],
+                                             digest=repo + "@" + record["indexes"][component])
+                                        for repo in repos]
+                            for component, repos in repositories(record["metadata"]).items()},
+                    signatures=dict(tool="cosign", certificateIdentity=record["signingIdentity"],
+                                    certificateOidcIssuer="https://token.actions.githubusercontent.com"),
+                    releaseNotesSha256=record["artifacts"]["release-notes.md"])
+    path = directory / "release-manifest.json"
+    path.write_text(json.dumps(manifest, indent=2) + "\n")
+    checksums = directory / "SHA256SUMS"
+    checksums.write_text(f"{version.sha256(path)}  {path.name}\n")
+    return [path, checksums]
+
+
+def prepare_presentation(backend, record, directory):
+    """Verify a clean public draft completely before its single visibility flip."""
+    notes = directory / "release-notes.md"
+    recovery = backend.release(record["recoveryTag"])
+    backend.asset(recovery, notes.name, notes)
+    if version.sha256(notes) != record["artifacts"][notes.name]:
+        raise ValueError("Retained release notes identity differs")
+    paths = public_files(record, directory)
+    tag = record["tag"]
+    draft = backend.release(tag)
+    if draft is None:
+        backend.command("gh", "release", "create", tag, "--repo", backend.repository,
+                        "--verify-tag", "--draft", "--title", f"Citadel {tag}",
+                        "--notes-file", str(notes), write=True)
+        draft = backend.release(tag)
+    if not draft or not draft["draft"]:
+        raise ValueError("Public release is no longer a draft; inspect manually")
+    allowed = {path.name for path in paths}
+    if any(a["name"] not in allowed for a in draft["assets"]):
+        raise ValueError("Unexpected public release assets; inspect manually, never auto-delete")
+    for path in paths:
+        if not any(a["name"] == path.name for a in draft["assets"]):
+            backend.upload(tag, path)
+    draft = backend.release(tag)
+    with tempfile.TemporaryDirectory() as temporary:
+        for path in paths:
+            check = Path(temporary) / path.name
+            backend.asset(draft, path.name, check)
+            if version.sha256(check) != version.sha256(path):
+                raise ValueError("Public release artifact identity differs")
+    return notes
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["preflight", "recover", "promote", "docs", "finalize"])
+    parser.add_argument("command", choices=["preflight", "prepare", "retain-validation", "recover", "promote", "docs", "finalize"])
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--repository", required=True)
@@ -579,6 +783,11 @@ def main():
             raise ValueError("Publication requires an annotated tag")
         if version.git(ROOT, "rev-parse", f"refs/tags/{tag}^{{commit}}") != metadata["sourceRevision"]:
             raise ValueError("Tag identity changed")
+    if args.command == "retain-validation":
+        if not args.apply or not args.artifact:
+            raise ValueError("Retention requires --apply and --artifact")
+        backend.retain_validation(args.artifact, args.directory, metadata)
+        return
     if args.command == "recover":
         data = recover(backend, tag, args.directory)
         if data and data["metadata"] != metadata:
@@ -589,10 +798,20 @@ def main():
         print(json.dumps({"recovered": restored}))
         return
     compatibility = preflight(metadata, backend, os.environ)
+    if args.command == "prepare":
+        if not args.apply:
+            raise ValueError("Reservation requires --apply")
+        backend.prepare(metadata, compatibility)
+        return
     if args.command == "preflight":
         print(json.dumps(compatibility, indent=2))
         return
     record = backend.load(tag)
+    published = backend.release(tag) if record and record["status"] == "complete" else None
+    if published and not published["draft"] and args.command in ["promote", "finalize"]:
+        # Completed historical releases are immutable to this workflow.
+        print(json.dumps(record, indent=2))
+        return
     if args.command == "docs":
         if not record or record["status"] not in ["images-verified", "complete"]:
             raise ValueError("Documentation requires verified exact images")
@@ -611,31 +830,44 @@ def main():
             raise ValueError("Latest release requires a successful documentation deployment to DOCS_SITE_URL")
         if not eligible and result != "skipped-older-release":
             raise ValueError("Older release must not replace default documentation")
+        notes = prepare_presentation(backend, record, args.directory) if record.get("recoveryTag") else None
+        presentation_args = ["--notes-file", str(notes)] if notes else []
         record["status"] = "complete"
         record["steps"]["documentation"] = result
         backend.save(record)
         if development(metadata):
             backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",
-                            "--prerelease", "--latest=false", "--title", f"Citadel {tag}", write=True)
+                            "--prerelease", "--latest=false", "--title", f"Citadel {tag}", *presentation_args, write=True)
             return
         published = [r["tag_name"][1:] for r in backend.releases() if not r["draft"] and version.STABLE.fullmatch(r["tag_name"][1:])]
         newest = not any(semver(v) > semver(metadata["productVersion"]) for v in published)
         backend.command("gh", "release", "edit", tag, "--repo", args.repository, "--draft=false",
-                        "--title", f"Citadel {tag}", "--latest=" + str(newest).lower(), write=True)
+                        "--title", f"Citadel {tag}", "--latest=" + str(newest).lower(), *presentation_args, write=True)
         return
     if record:
         if record["metadata"] != metadata or record["compatibility"] != compatibility:
             raise ValueError("Release inputs differ from durable record")
         recover(backend, tag, args.directory)
     else:
+        if args.apply:
+            for artifact in ["candidates-amd64", "candidates-arm64", "release-documentation"]:
+                if not backend.recover_accepted(artifact, args.directory, metadata):
+                    raise ValueError("Acceptance must be durably retained before promotion")
+        review = json.loads((args.directory / "release-review.json").read_text())
+        if review["metadata"] != metadata:
+            raise ValueError("Release notes metadata differs from tagged release")
         indexes = {component: assemble(component, args.directory) for component in ["agent", "core"]}
         required = [f"{c}-{a}.oci.tar" for c in ["agent", "core"] for a in POLICY["architectures"]]
-        required += ["agent.oci.tar", "core.oci.tar", "docs.tar", "api-docs.tar"]
+        required += ["agent.oci.tar", "core.oci.tar", "docs.tar", "api-docs.tar",
+                     "documentation-inputs.json", "release-notes.md", "release-review.json"]
         required += [f"evidence-{a}.json" for a in POLICY["architectures"]]
         validate_evidence(args.directory, metadata, compatibility)
-        record = dict(schemaVersion=1, sequence=0, tag=tag, metadata=metadata,
+        reservation = backend.reservation(metadata)
+        if args.apply and reservation is None:
+            raise ValueError("Prepare durable recovery storage before building")
+        record = dict(schemaVersion=2, recoveryTag=RECOVERY_PREFIX + tag, sequence=0, tag=tag, metadata=metadata,
                       compatibility=compatibility, indexes=indexes, status="prepared", steps={},
-                      sourceRunId=os.environ.get("GITHUB_RUN_ID"),
+                      sourceRunId=reservation["sourceRunId"] if reservation else os.environ.get("GITHUB_RUN_ID"),
                       evidence={a: json.loads((args.directory / f"evidence-{a}.json").read_text()) for a in POLICY["architectures"]},
                       artifacts={name: version.sha256(args.directory / name) for name in required},
                       signingIdentity=f"https://github.com/{args.repository}/.github/workflows/ci.yml@refs/tags/{tag}")

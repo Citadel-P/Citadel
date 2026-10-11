@@ -15,7 +15,7 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write # Retain accepted bytes in the internal recovery draft.
   packages: read
   actions: read
 
@@ -183,3 +183,12 @@ jobs:
             ${{ runner.temp }}/candidates/evidence-${{ matrix.arch }}.json
           if-no-files-found: error
           retention-days: 30
+      - name: Retain accepted candidates in permanent recovery storage
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin "+$GITHUB_REF:$GITHUB_REF"
+          python3 src/tools/release/release.py retain-validation --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/candidates/version.json" --directory "$RUNNER_TEMP/candidates" \
+            --artifact candidates-${{ matrix.arch }}

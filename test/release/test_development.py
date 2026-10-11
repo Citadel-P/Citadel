@@ -133,6 +133,36 @@ class DeploymentPayloadTests(unittest.TestCase):
                 self.assertEqual(payload["compose"], (ROOT / "deploy/install/docker-compose.yml").read_text())
                 self.assertNotIn(("ghcr.io/citadel-p/citadel.agent", "latest"), backend.images)
 
+    def test_public_manifest_deploys_both_channels_without_private_journal_access(self):
+        for channel in ("dev", "latest"):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as temporary:
+                backend, value, published = self.published(channel)
+                value["artifacts"]["release-notes.md"] = "a" * 64
+                value["signingIdentity"] = f"https://github.com/{backend.repository}/.github/workflows/ci.yml@refs/tags/{value['tag']}"
+                for component, repos in release.repositories(value["metadata"]).items():
+                    for repo in repos:
+                        value["steps"]["signed:" + repo + ":" + value["metadata"]["displayVersion"]] = value["indexes"][component]
+                paths = release.public_files(value, Path(temporary))
+                for path in paths:
+                    backend.upload(value["tag"], path)
+                published.update(tag_name=value["tag"], assets=[dict(name=p.name) for p in paths])
+                with patch.object(backend, "release", return_value=published), \
+                     patch.object(backend, "load", side_effect=AssertionError("Read-only deployment cannot read recovery drafts")):
+                    payload = demo.deployment_payload(value["metadata"], backend, channel)
+                    self.assertEqual(payload["core"], "ghcr.io/citadel-p/citadel@" + value["indexes"]["core"])
+                    key = value["tag"], "release-manifest.json"
+                    backend.assets[key] = b"tampered"
+                    with self.assertRaisesRegex(ValueError, "checksum"):
+                        demo.deployment_payload(value["metadata"], backend, channel)
+                    # Even a matching checksum cannot substitute an unsigned digest.
+                    manifest = json.loads(paths[0].read_text())
+                    manifest["verifiedSignatures"] = {}
+                    raw = json.dumps(manifest).encode()
+                    backend.assets[key] = raw
+                    backend.assets[value["tag"], "SHA256SUMS"] = (release.digest(raw).split(":")[1] + "  release-manifest.json\n").encode()
+                    with self.assertRaisesRegex(ValueError, "signature"):
+                        demo.deployment_payload(value["metadata"], backend, channel)
+
     def test_rejects_unpublished_mismatched_incomplete_or_unsigned_records(self):
         for channel in ("dev", "latest"):
             for case in ("draft", "wrong-prerelease", "missing-release", "incomplete", "missing-record",

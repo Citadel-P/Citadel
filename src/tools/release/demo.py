@@ -8,12 +8,53 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 import release
+
+
+def published_record(metadata, backend, published):
+    """Deployment tokens read public provenance, never private recovery drafts."""
+    tag = "v" + metadata["displayVersion"]
+    if not any(a["name"] == "release-manifest.json" for a in published.get("assets", [])):
+        return backend.load(tag)  # Historical public journals remain supported.
+    with tempfile.TemporaryDirectory() as temporary:
+        path = Path(temporary) / "release-manifest.json"
+        checksums = Path(temporary) / "SHA256SUMS"
+        backend.asset(published, path.name, path)
+        backend.asset(published, checksums.name, checksums)
+        if checksums.read_text().strip() != release.version.sha256(path) + "  " + path.name:
+            raise ValueError("Published manifest checksum differs")
+        manifest = json.loads(path.read_text())
+    identity = f"https://github.com/{backend.repository}/.github/workflows/ci.yml@refs/tags/{tag}"
+    if (manifest.get("schemaVersion") != 1 or manifest.get("tag") != tag or manifest.get("metadata") != metadata
+            or manifest.get("architectures") != release.POLICY["architectures"]
+            or manifest.get("upgradeOrder") != ["agent", "core"]
+            or manifest.get("signatures") != dict(tool="cosign", certificateIdentity=identity,
+                certificateOidcIssuer="https://token.actions.githubusercontent.com")):
+        raise ValueError("Published manifest identity differs")
+    indexes, steps = {}, {}
+    for component, repositories in release.repositories(metadata).items():
+        images = manifest["images"][component]
+        if len(images) != len(repositories):
+            raise ValueError("Published image inventory differs")
+        for image, repository in zip(images, repositories):
+            ref = repository + ":" + metadata["displayVersion"]
+            prefix = repository + "@"
+            if image["tag"] != ref or not image["digest"].startswith(prefix):
+                raise ValueError("Published image repository differs")
+            digest = image["digest"][len(prefix):]
+            if (not re.fullmatch(r"sha256:[a-f0-9]{64}", digest)
+                    or manifest["verifiedSignatures"].get(ref) != digest
+                    or indexes.get(component, digest) != digest):
+                raise ValueError("Missing verified signature checkpoint or inconsistent image digest")
+            indexes[component] = digest
+            steps["signed:" + ref] = digest
+    return dict(metadata=metadata, status="complete", indexes=indexes, steps=steps)
 
 
 def deployment_payload(metadata, backend, channel):
@@ -24,8 +65,10 @@ def deployment_payload(metadata, backend, channel):
             or channel == "latest" and not metadata["releaseEligible"]):
         raise ValueError("Release metadata does not match the deployment channel")
     tag = "v" + metadata["displayVersion"]
-    record = backend.load(tag)
     published = backend.release(tag)
+    if not published or published["draft"] or published.get("prerelease") is not (channel == "dev"):
+        raise ValueError("Demo requires a completed, published release for the selected channel")
+    record = published_record(metadata, backend, published)
     if (not record or record["metadata"] != metadata or record["status"] != "complete"
             or not published or published["draft"]
             or published.get("prerelease") is not (channel == "dev")):

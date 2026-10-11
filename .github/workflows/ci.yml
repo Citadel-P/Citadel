@@ -20,6 +20,10 @@ permissions:
 jobs:
   version:
     name: Resolve identity and release preflight
+    permissions:
+      contents: write # Reserve internal recovery storage on validated tag pushes only.
+      packages: read
+      actions: read
     runs-on: ubuntu-24.04
     env:
       DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
@@ -40,7 +44,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/citadel-tools
-          key: nbgv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/tools/build/nbgv-pin.json', 'rust-toolchain.toml') }}
+          key: nbgv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/tools/build/nbgv-pin.json', 'src/tools/release/git-cliff-pin.json', 'rust-toolchain.toml') }}
       - name: Install and verify pinned native NBGV
         run: python3 src/tools/build/version.py install
       - name: Resolve build identity once
@@ -65,6 +69,8 @@ jobs:
           password: ${{ env.DOCKERHUB_TOKEN }}
       - name: Pull OCI transport registry fixture with retries
         run: bash .github/scripts/pull-images-with-retry.sh registry@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0
+      - name: Install checksum-pinned git-cliff
+        run: python3 src/tools/release/notes.py install
       - name: Check version mapping and embedding
         run: CITADEL_TEST_OCI_TRANSPORT=1 python3 -m unittest discover -s test/release -v
       - name: Validate coordinated publication prerequisites
@@ -88,6 +94,15 @@ jobs:
           python3 src/tools/release/release.py preflight --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs" \
             > "$RUNNER_TEMP/release-inputs/compatibility.json"
+          python3 src/tools/release/release.py prepare --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs"
+      - name: Generate tagged release notes with pinned git-cliff
+        if: steps.version.outputs.publicationEligible == 'true'
+        env:
+          DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+        run: |
+          python3 src/tools/release/notes.py generate --metadata "$RUNNER_TEMP/release-inputs/version.json" \
+            --directory "$RUNNER_TEMP/release-inputs"
       - name: Non-publishing validation context
         if: steps.version.outputs.publicationEligible != 'true'
         run: |
@@ -306,6 +321,10 @@ jobs:
   candidates:
     # Build and test images in parallel; publication still requires every gate.
     needs: version
+    permissions:
+      contents: write
+      packages: read
+      actions: read
     uses: ./.github/workflows/agent.yml
     with:
       release: ${{ needs.version.outputs.publication == 'true' }}
@@ -315,6 +334,10 @@ jobs:
 
   documentation:
     name: Validate and retain release documentation
+    permissions:
+      contents: write
+      packages: read
+      actions: read
     needs: version
     runs-on: ubuntu-24.04
     env:
@@ -374,6 +397,15 @@ jobs:
             ${{ runner.temp }}/documentation/documentation-inputs.json
           if-no-files-found: error
           retention-days: 30
+      - name: Retain accepted documentation in permanent recovery storage
+        if: needs.version.outputs.publication == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin "+$GITHUB_REF:$GITHUB_REF"
+          python3 src/tools/release/release.py retain-validation --apply --repository "$GITHUB_REPOSITORY" \
+            --metadata "$RUNNER_TEMP/documentation/version.json" --directory "$RUNNER_TEMP/documentation" \
+            --artifact release-documentation
 
   publish:
     name: Promote verified product and documentation
@@ -454,7 +486,7 @@ jobs:
       - name: Link recovery record even after failure
         if: always()
         run: |
-          echo "Release/recovery record: https://github.com/$GITHUB_REPOSITORY/releases/tag/v${{ needs.version.outputs.product }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Internal recovery draft: https://github.com/$GITHUB_REPOSITORY/releases/tag/citadel-recovery/v${{ needs.version.outputs.product }}" >> "$GITHUB_STEP_SUMMARY"
 
   publish-development:
     name: Publish tested development images and documentation
@@ -526,7 +558,7 @@ jobs:
         if: always()
         env:
           DISPLAY_VERSION: ${{ needs.version.outputs.display }}
-        run: echo "Development release/recovery record https://github.com/$GITHUB_REPOSITORY/releases/tag/v$DISPLAY_VERSION" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Internal development recovery draft https://github.com/$GITHUB_REPOSITORY/releases/tag/citadel-recovery/v$DISPLAY_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-preview:
     name: Deploy published dev release to preview
