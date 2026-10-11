@@ -89,10 +89,18 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
             visible,
             "Automation level {raw}"
         );
-        assert_eq!(
-            automation.permissions(reader, &[action.id]).await.unwrap()[&action.id],
-            level
-        );
+        let permissions = automation.permissions(reader, &[action.id]).await;
+        if matches!(raw, 3 | 7) {
+            // Lists filter corrupt grants out; loading explicit capabilities
+            // rejects invalid persisted enum values instead of granting access.
+            assert!(matches!(
+                permissions,
+                Err(citadel_automation::AutomationError::Storage(message))
+                    if message.contains("unknown persisted PermissionLevel")
+            ));
+        } else {
+            assert_eq!(permissions.unwrap()[&action.id], level);
+        }
     }
     pool.close().await;
 }

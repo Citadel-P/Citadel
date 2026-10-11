@@ -44,6 +44,12 @@ pub(super) fn map_git_repository(row: PgRow) -> Result<GitRepository, GitReposit
             .map(serde_json::from_value)
             .transpose()
             .map_err(storage)?,
+        sync_status: row
+            .try_get::<Option<Value>, _>("sync_status")
+            .map_err(storage)?
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(storage)?,
         tags: serde_json::from_value(row.try_get("tags").map_err(storage)?).map_err(storage)?,
     })
 }
@@ -53,7 +59,7 @@ pub(super) async fn get_git_repository(
     id: Uuid,
 ) -> Result<GitRepository, GitRepositoryError> {
     let q = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2"
+        "SELECT resource.*, {SYNC_STATUS}, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2"
     );
     sqlx::query(AssertSqlSafe(q.as_str()))
         .bind(TaggableResourceType::GitRepository.as_database_str())
@@ -72,7 +78,7 @@ pub(super) async fn get_git_repository_tx(
 ) -> Result<GitRepository, GitRepositoryError> {
     let lock_clause = if lock { " FOR UPDATE OF resource" } else { "" };
     let query = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2{lock_clause}"
+        "SELECT resource.*, {SYNC_STATUS}, {TAG_SUMMARIES}, {LATEST_GIT_ACTIVITY} FROM gitrepositories resource WHERE resource.id=$2{lock_clause}"
     );
     sqlx::query(AssertSqlSafe(query.as_str()))
         .bind(TaggableResourceType::GitRepository.as_database_str())
@@ -89,7 +95,7 @@ pub(super) async fn load_git_repositories_tx(
     ids: &[Uuid],
 ) -> Result<Vec<GitRepository>, GitRepositoryError> {
     let q = format!(
-        "SELECT resource.*, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id"
+        "SELECT resource.*, {SYNC_STATUS}, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id"
     );
     sqlx::query(AssertSqlSafe(q.as_str()))
         .bind(TaggableResourceType::GitRepository.as_database_str())

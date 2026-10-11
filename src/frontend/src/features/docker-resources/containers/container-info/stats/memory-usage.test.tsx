@@ -30,7 +30,6 @@ it('shows the same non-cache usage in the stats tab and Memory column without su
         stats={[sample]}
         container={{ state: ContainerStateStatus.Running, containerStat: sample }}
         isLoading={false}
-        windowHours={1}
       />
     </>,
   );
@@ -39,7 +38,7 @@ it('shows the same non-cache usage in the stats tab and Memory column without su
   expect(screen.getByText('94 MB')).toBeVisible();
   expect(screen.getByText('167 MB')).toBeVisible();
   expect(screen.getByTitle('Memory usage excluding file cache / memory limit')).toBeVisible();
-  expect(screen.getByText(/Memory usage excluding file cache for the past 1 hours/)).toBeVisible();
+  expect(screen.getByText(/Memory usage excluding file cache over the selected period/)).toBeVisible();
 });
 
 it('does not show a stopped container’s last usage as current memory', () => {

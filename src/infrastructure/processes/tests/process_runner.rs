@@ -6,6 +6,10 @@ use citadel_execution::{
 use citadel_processes::run;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(target_os = "linux")]
+#[path = "process_runner/descendants.rs"]
+mod descendants;
+
 fn helper(mode: &str, limits: ProcessLimits) -> ProcessRequest {
     ProcessRequest::new(std::env::current_exe().expect("test executable is available"))
         .args(["--exact", "process_helper", "--nocapture"])
@@ -34,6 +38,17 @@ fn process_helper() {
             writeln!(std::io::stdout(), "child-pid={}", std::process::id()).unwrap();
             std::io::stdout().flush().unwrap();
             std::thread::sleep(Duration::from_secs(20));
+        }
+        Ok(mode @ ("descendant-wait" | "descendant-exit")) => {
+            let mut descendant = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "process_helper", "--nocapture"])
+                .env("CITADEL_PROCESS_HELPER", "stream-wait")
+                .spawn()
+                .unwrap();
+            if mode == "descendant-exit" {
+                std::process::exit(0);
+            }
+            descendant.wait().unwrap();
         }
         _ => {}
     }

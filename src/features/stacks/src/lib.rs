@@ -64,7 +64,7 @@ pub use runtime::{
 
 pub use updates::{
     ManualStackImageCheck, ManualStackUpdateEvaluation, StackImageKey, StackImageUpdateItem,
-    build_manual_stack_checks, evaluate_manual_stack_updates, state_key,
+    build_manual_stack_checks, build_stack_image_checks, evaluate_manual_stack_updates, state_key,
 };
 
 pub use webhooks::{

@@ -24,7 +24,8 @@ impl ProcessRunner for SystemProcess {
 }
 /// Runs one child process with bounded output, timeout, and cooperative
 /// cancellation. On every non-exit completion path the child is killed and
-/// reaped before this method returns.
+/// reaped before this method returns. On Unix, cleanup also kills helpers in
+/// the child's process group; the container init reaps orphaned descendants.
 pub async fn run(
     request: ProcessRequest,
     cancellation: &CancellationToken,
@@ -40,6 +41,8 @@ pub async fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
     if request.stdin.is_some() {
         command.stdin(Stdio::piped());
     } else {
@@ -53,6 +56,12 @@ pub async fn run(
     }
 
     let mut child = command.spawn().map_err(ProcessError::Spawn)?;
+    #[cfg(unix)]
+    let mut group = ProcessGroup(child.id().and_then(|id| {
+        i32::try_from(id)
+            .ok()
+            .and_then(rustix::process::Pid::from_raw)
+    }));
     let stdout = child.stdout.take().expect("piped stdout is available");
     let stderr = child.stderr.take().expect("piped stderr is available");
     let (limit_sender, mut limit_receiver) = mpsc::channel(1);
@@ -104,7 +113,6 @@ pub async fn run(
         Some((stream, limit)) = limit_receiver.recv() => Err(ProcessError::OutputLimit { stream, limit }),
         () = &mut timeout => Err(ProcessError::Timeout(request.limits.timeout)),
         result = async {
-            let status = child.wait().await.map_err(ProcessError::Io)?;
             if let Some(writer) = stdin_writer {
                 writer.await
                     .map_err(|error| ProcessError::Io(std::io::Error::other(error.to_string())))?
@@ -112,6 +120,13 @@ pub async fn run(
             }
             let (stdout, stdout_truncated) = join_reader(stdout_reader).await?;
             let (stderr, stderr_truncated) = join_reader(stderr_reader).await?;
+            // Keep the leader unreaped while inherited pipes are open. Its PID
+            // cannot be reused as an unrelated process group during cleanup.
+            let status = child.wait().await.map_err(ProcessError::Io)?;
+            #[cfg(unix)]
+            {
+                group.0 = None;
+            }
             Ok(ProcessOutput {
                 exit_code: status.code(),
                 stdout,
@@ -124,11 +139,34 @@ pub async fn run(
 
     if result.is_err() {
         output_cancellation.cancel();
+        #[cfg(unix)]
+        group.kill();
         let _ = child.start_kill();
         child.wait().await.map_err(ProcessError::Io)?;
     }
     // PipeTasks aborts any readers/writer still blocked on inherited pipes.
     result
+}
+
+#[cfg(unix)]
+struct ProcessGroup(Option<rustix::process::Pid>);
+
+#[cfg(unix)]
+impl ProcessGroup {
+    fn kill(&mut self) {
+        if let Some(pid) = self.0.take() {
+            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        // This guard is dropped before Child, so the leader still owns its PID
+        // when the caller aborts/drops the run future.
+        self.kill();
+    }
 }
 
 fn validate_limits(limits: ProcessLimits) -> Result<(), ProcessError> {

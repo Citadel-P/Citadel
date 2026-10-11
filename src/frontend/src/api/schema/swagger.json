@@ -9338,6 +9338,22 @@
         ],
         "type": "string"
       },
+      "GitRepositorySyncStatusView": {
+        "properties": {
+          "lastSyncedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitRepositoryRefStatus"
+          }
+        },
+        "required": [
+          "status",
+          "lastSyncedAt"
+        ],
+        "type": "object"
+      },
       "GitRepositoryView": {
         "properties": {
           "controlState": {
@@ -9417,6 +9433,17 @@
           "syncMode": {
             "$ref": "#/components/schemas/GitRepositorySyncMode"
           },
+          "syncStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRepositorySyncStatusView",
+                "description": "Latest check of the default branch, including unchanged scheduled checks."
+              }
+            ]
+          },
           "tags": {
             "items": {
               "$ref": "#/components/schemas/resources.tags.TagSummary"
@@ -9454,6 +9481,7 @@
           "createdByActorId",
           "controlState",
           "latestActivityView",
+          "syncStatus",
           "tags"
         ],
         "type": "object"
@@ -21199,9 +21227,12 @@
       "StatsHours": {
         "default": 24,
         "enum": [
+          1,
+          6,
           24,
           48,
-          72
+          72,
+          168
         ],
         "type": "integer"
       },
@@ -39749,6 +39780,37 @@
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
             }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -42467,6 +42529,37 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
+            }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -50841,6 +50934,37 @@
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
             }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -54658,6 +54782,37 @@
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
             }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -55369,6 +55524,37 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
+            }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -66913,6 +67099,37 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/StatsHours"
+            }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start time in Unix seconds, within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end time in Unix seconds; defaults to now when from is supplied",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],

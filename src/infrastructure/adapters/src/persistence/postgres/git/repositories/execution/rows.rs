@@ -162,19 +162,13 @@ pub(super) async fn finish_sync(
     .execute(&mut *transaction)
     .await
     .map_err(storage)?;
-    let record_activity = if claim.trigger != "Poll" {
-        true
-    } else if let Some(result) = result {
-        result.cloned
-            // Recovery is meaningful even when the remote commit did not change.
-            || claim.previous_error.is_some()
-            || !claim
-                .previous_commit
-                .as_deref()
-                .is_some_and(|previous| previous.eq_ignore_ascii_case(&result.commit))
-    } else {
-        claim.previous_error.as_deref() != error
-    };
+    // Only explicit repository actions need a success activity. Polls, webhooks
+    // and stack/build cache refreshes still persist refs and publish realtime
+    // status, but must not fill history with successful background pulls.
+    // Some system workflows use the manual queue, so check the actor as well.
+    let manual =
+        claim.trigger == "Manual" && claim.actor_id.value() != citadel_identity::SYSTEM_ACTOR_ID;
+    let record_activity = manual || (error.is_some() && claim.previous_error.as_deref() != error);
     if record_activity {
         let activity_result = GitRepositorySyncActivitySnapshot {
             commit_sha: commit.map(str::to_owned),

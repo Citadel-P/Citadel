@@ -87,9 +87,13 @@ mod validation;
 #[path = "execution_resources_http/backup_contract.rs"]
 mod backup_contract;
 
+// These fixtures share a global work queue in their disposable database.
+static FIXTURE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 #[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
+    let _fixture = FIXTURE_LOCK.lock().await;
     let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&database_url).await.unwrap();
     let pool = PgPoolOptions::new()
@@ -1529,6 +1533,7 @@ impl AlertDelivery for FakeAlertDelivery {
 #[tokio::test]
 #[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn build_run_api_preserves_queued_resource_snapshots() {
+    let _fixture = FIXTURE_LOCK.lock().await;
     let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();
     let pool = PgPoolOptions::new()
@@ -1563,6 +1568,9 @@ async fn build_run_api_preserves_queued_resource_snapshots() {
         .await
         .unwrap();
     let persisted = store.get_run(queued.id).await.unwrap();
+    // This snapshot-only fixture must not leave work for the lifecycle test's
+    // global queue worker to claim instead of its own webhook run.
+    assert!(store.cancel_queued(queued.id).await.unwrap());
     for run in [queued, persisted] {
         let response = serde_json::to_value(
             citadel_server::api::resources::builds::views::BuildRunView::try_from(run).unwrap(),

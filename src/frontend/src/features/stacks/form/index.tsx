@@ -43,7 +43,8 @@ import {
 } from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
 import { StackLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { StackInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
 import { StackExec, TerminalTargetSelect } from '@/features/docker-resources/containers/container-info/container-exec';
@@ -366,18 +367,21 @@ const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
       />
       {services.length > 0 && (
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="w-fit max-w-full overflow-x-auto">
-            <TabsTrigger value="logs" disabled={!canViewLogs}>
-              Logs
-            </TabsTrigger>
-            <TabsTrigger value="inspect" disabled={!canInspect}>
-              Inspect
-            </TabsTrigger>
-            <TabsTrigger value="terminal" disabled={tasks.length === 0}>
-              Terminal
-            </TabsTrigger>
-            <TabsTrigger value="stats">Stats</TabsTrigger>
-          </TabsList>
+          <div className="flex min-w-0 items-center gap-2 border-b">
+            <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
+              <TabsTrigger value="logs" disabled={!canViewLogs}>
+                Logs
+              </TabsTrigger>
+              <TabsTrigger value="inspect" disabled={!canInspect}>
+                Inspect
+              </TabsTrigger>
+              <TabsTrigger value="terminal" disabled={tasks.length === 0}>
+                Terminal
+              </TabsTrigger>
+              <TabsTrigger value="stats">Stats</TabsTrigger>
+            </TabsList>
+            <TabActionsSlot />
+          </div>
           <TabsContent value="logs" className="mt-2 w-full">
             <StackLogs key={stack.id} stackId={stack.id} containers={containerNames} />
           </TabsContent>
@@ -825,12 +829,16 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
         <span className="min-w-0">{details}</span>
         <div className="flex shrink-0 items-center gap-2">
           {report.hasStructuralDrift && <span className="text-xs">Reapply required</span>}
-          {!report.hasStructuralDrift && actionable && !hasLicenseCapability(LicenseCapability.OperationalGuardrails) && (
-            <span className="text-xs">Activate Operational Guardrails to reconcile</span>
-          )}
-          {!report.hasStructuralDrift && !actionable && report.drifts.some((drift) => drift.$type === 'ExtraContainer') && (
-            <span className="text-xs">Extra-container removal requires opt-in in Config</span>
-          )}
+          {!report.hasStructuralDrift &&
+            actionable &&
+            !hasLicenseCapability(LicenseCapability.OperationalGuardrails) && (
+              <span className="text-xs">Activate Operational Guardrails to reconcile</span>
+            )}
+          {!report.hasStructuralDrift &&
+            !actionable &&
+            report.drifts.some((drift) => drift.$type === 'ExtraContainer') && (
+              <span className="text-xs">Extra-container removal requires opt-in in Config</span>
+            )}
         </div>
       </div>
     </AlertMessage>
@@ -866,18 +874,21 @@ const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers:
 
   return (
     <Tabs defaultValue={defaultValue} className="w-full">
-      <TabsList className="w-fit max-w-full overflow-x-auto">
-        <TabsTrigger value="logs" disabled={!canViewLogs}>
-          Logs
-        </TabsTrigger>
-        <TabsTrigger value="inspect" disabled={!canInspect || !hasContainers}>
-          Inspect
-        </TabsTrigger>
-        <TabsTrigger value="terminal" disabled={!canOpenTerminal || !hasContainers}>
-          Terminal
-        </TabsTrigger>
-        <TabsTrigger value="stats">Stats</TabsTrigger>
-      </TabsList>
+      <div className="flex min-w-0 items-center gap-2 border-b">
+        <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
+          <TabsTrigger value="logs" disabled={!canViewLogs}>
+            Logs
+          </TabsTrigger>
+          <TabsTrigger value="inspect" disabled={!canInspect || !hasContainers}>
+            Inspect
+          </TabsTrigger>
+          <TabsTrigger value="terminal" disabled={!canOpenTerminal || !hasContainers}>
+            Terminal
+          </TabsTrigger>
+          <TabsTrigger value="stats">Stats</TabsTrigger>
+        </TabsList>
+        <TabActionsSlot />
+      </div>
       {canViewLogs && (
         <TabsContent value="logs" className="mt-2 w-full">
           <StackLogs key={stack.id} stackId={stack.id} containers={containerNames} />

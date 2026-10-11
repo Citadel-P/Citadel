@@ -307,3 +307,10 @@ impl PostgresGitRepositoryPersistence {
         Self { pool }
     }
 }
+
+// The unique (gitrepositoryid, branch) index bounds this lookup to one ref.
+const SYNC_STATUS: &str = r#"
+(SELECT jsonb_build_object('status', reference.status, 'lastSyncedAt', reference.lastsyncedat)
+ FROM gitrepositoryrefs reference
+ WHERE reference.gitrepositoryid=resource.id AND reference.branch=resource.defaultbranch) AS sync_status
+"#;

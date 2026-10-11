@@ -48,7 +48,9 @@ describe('platform current statistics', () => {
     stats: [current],
   };
 
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(120_000);
     vi.mocked(useRead).mockReturnValue({
       data: { data: { stats: [historical] } },
       isLoading: false,
@@ -63,7 +65,8 @@ describe('platform current statistics', () => {
     expect(screen.getByText('819.2 MB')).toBeVisible();
     expect(screen.queryByText('0.51%')).not.toBeInTheDocument();
     const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
-    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 95]);
+    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 90, 95]);
+    expect(samples[1]).toEqual({ created: 90 });
   });
 
   it('updates live readings and discards the previous platform samples when switching platforms', () => {
@@ -78,7 +81,8 @@ describe('platform current statistics', () => {
     );
     expect(screen.getByText('3.00%')).toBeVisible();
     const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
-    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 120]);
+    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60, 90, 120]);
+    expect(samples[1]).toEqual({ created: 90 });
   });
 
   it('does not present history as a current reading when the current sample is unavailable or offline', () => {
@@ -400,7 +404,7 @@ describe('platform disk statistics', () => {
       ],
     } as PlatformView;
 
-    render(<DiskUsageChart platform={platform} stats={[]} isLoading={false} windowHours={24} />);
+    render(<DiskUsageChart platform={platform} stats={[]} isLoading={false} />);
 
     expect(screen.getByText('No historical disk readings yet.')).toBeVisible();
     expect(screen.queryByText('Disk metrics unavailable')).not.toBeInTheDocument();

@@ -41,6 +41,7 @@ pub struct ImageScanner {
     pool: PgPool,
     runtime: Arc<dyn ImageScanRuntime>,
     cache: Arc<ImageDigestCache>,
+    git: Option<Arc<citadel_git::GitRepositoryExecutionService>>,
 }
 impl ImageScanner {
     pub fn new(
@@ -52,7 +53,12 @@ impl ImageScanner {
             pool,
             runtime,
             cache,
+            git: None,
         }
+    }
+    pub fn with_git(mut self, git: Arc<citadel_git::GitRepositoryExecutionService>) -> Self {
+        self.git = Some(git);
+        self
     }
     pub async fn run_cycle(&self, cancel: &CancellationToken) -> Result<usize, sqlx::Error> {
         let tasks = self.load_tasks(cancel).await?;
@@ -112,8 +118,15 @@ impl ImageScanner {
                         "Stack" => {
                             if let Ok(view) = stacks.get_authorized(actor, true, id).await
                                 && let Some(platform) = view.platform_id
-                                && let Ok(checks) =
-                                    citadel_stacks::build_manual_stack_checks(&view, true)
+                                && let Ok(checks) = match &self.git {
+                                    Some(git) => {
+                                        super::super::stacks::update_scanner::stack_image_checks(
+                                            git, &view, true, cancel,
+                                        )
+                                        .await
+                                    }
+                                    None => citadel_stacks::build_manual_stack_checks(&view, true),
+                                }
                             {
                                 tasks.extend(checks.into_iter().map(|check| ImageScanTask {
                                     platform,

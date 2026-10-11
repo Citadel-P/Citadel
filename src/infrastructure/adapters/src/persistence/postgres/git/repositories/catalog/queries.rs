@@ -1,3 +1,5 @@
+use super::SYNC_STATUS;
+
 const AUTHORIZED_CTE: &str = r#"
 WITH actor_scope AS (
     SELECT actor.id AS actorid
@@ -22,7 +24,7 @@ WITH actor_scope AS (
 pub(super) fn authorized_list() -> String {
     format!(
         r#"{AUTHORIZED_CTE}
-SELECT resource.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',tag.id,'name',tag.name,'color',tag.color) ORDER BY tag.name,tag.id)
+SELECT resource.*, {SYNC_STATUS}, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',tag.id,'name',tag.name,'color',tag.color) ORDER BY tag.name,tag.id)
  FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$5 AND link.resourceid=resource.id),'[]'::jsonb) AS tags,
  NULL::jsonb AS latest_activity
 FROM gitrepositories resource WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (

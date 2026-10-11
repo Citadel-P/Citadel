@@ -7,7 +7,6 @@ import {
   ActivityStatus,
   GitRepositoryStatus,
   AuthorizedGitRepositoryView,
-  LatestActivityView,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
@@ -19,6 +18,7 @@ import { GitCommitHorizontalIcon } from 'lucide-react';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { GitRepositoryBrowseAction } from '../browser/browser-dialog';
+import { GitRepositorySyncStatus } from './sync-status';
 
 const title = 'Repository';
 export const GitRepoFormComponents: RequiredFormComponents = {
@@ -62,13 +62,17 @@ export const GitRepoFormComponents: RequiredFormComponents = {
         />
       ),
     },
-    SubHeader: ({ resource }: { resource: AuthorizedGitRepositoryView }) => (
-      <GitRepoSubHeader latestActivity={resource.latestActivityView} status={resource.status} />
-    ),
+    SubHeader: ({ resource }: { resource: AuthorizedGitRepositoryView }) => <GitRepoSubHeader resource={resource} />,
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource, metadataChanged }: { resource: AuthorizedGitRepositoryView; metadataChanged?: boolean }) => {
+        Content: ({
+          resource,
+          metadataChanged,
+        }: {
+          resource: AuthorizedGitRepositoryView;
+          metadataChanged?: boolean;
+        }) => {
           return (
             <GitRepoForm
               mode="edit"
@@ -92,26 +96,27 @@ export const GitRepoFormComponents: RequiredFormComponents = {
   },
 };
 
-function GitRepoSubHeader({
-  latestActivity,
-  status,
-}: {
-  latestActivity: LatestActivityView | null;
-  status: GitRepositoryStatus;
-}) {
+function GitRepoSubHeader({ resource }: { resource: AuthorizedGitRepositoryView }) {
+  const { latestActivityView: latestActivity, status } = resource;
+  const checkDetails = <GitRepositorySyncStatus repository={resource} />;
   const info = latestActivity?.info;
-  if (!info || (info.$type !== 'GitRepoCloned' && info.$type !== 'GitRepoPulled')) return null;
+  if (!info || (info.$type !== 'GitRepoCloned' && info.$type !== 'GitRepoPulled')) return checkDetails;
   // Activity history can retain an earlier failure after the repository recovers.
-  if (status === GitRepositoryStatus.Healthy && latestActivity.status === ActivityStatus.Failure) return null;
+  if (status === GitRepositoryStatus.Healthy && latestActivity.status === ActivityStatus.Failure) return checkDetails;
 
   if (latestActivity.status === ActivityStatus.Success) {
     const commitSha = info.result?.commitSha;
-    if (!commitSha) return null;
+    if (!commitSha) return checkDetails;
 
     return (
-      <AlertMessage date={latestActivity.createdAt} type={'success'}>
+      <AlertMessage
+        date={latestActivity.createdAt}
+        type={'success'}
+        title="Last update activity"
+        className="flex-wrap gap-y-2 sm:flex-nowrap"
+        action={checkDetails}>
         <div className="flex flex-wrap gap-2 items-center ">
-          Repository updated successfully to commit <GitCommitHorizontalIcon width={13} height={13} />
+          Synced to commit <GitCommitHorizontalIcon width={13} height={13} />
           {truncate(commitSha, 12, 'right', true)}
         </div>
       </AlertMessage>
@@ -123,6 +128,7 @@ function GitRepoSubHeader({
       activity={latestActivity as any}
       title="Sync Error"
       date={latestActivity?.createdAt}
+      action={checkDetails}
     />
   );
 }

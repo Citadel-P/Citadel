@@ -72,7 +72,8 @@ pub(super) fn build(
                     .with_runtime_router(container_runtime.runtime_router()),
             ),
             image_cache.clone(),
-        ),
+        )
+        .with_git(git_execution.clone()),
     );
     let deployments = Arc::new(
         DeploymentService::new(

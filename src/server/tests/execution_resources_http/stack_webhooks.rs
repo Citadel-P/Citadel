@@ -140,13 +140,7 @@ pub async fn verify(
     assert_eq!(
         severities,
         [
-            "Failure",
-            "Warning",
-            "Warning",
-            "Information",
-            "Failure",
-            "Success",
-            "Success"
+            "Failure", "Warning", "Warning", "Failure", "Success", "Success"
         ]
     );
     assert_eq!(

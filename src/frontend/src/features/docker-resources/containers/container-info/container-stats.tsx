@@ -1,5 +1,7 @@
 import { ContainerStateStatus, ContainerStatView, ContainerRuntimeView } from '@/api/generated/api.types';
-import { StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
+import { StatsChartRange } from '@/components/custom/stats-chart-range';
+import { useStatsRange, type StatsRangeState } from '@/hooks/useStatsRange';
+import { filterStatsRange } from '@/lib/stats-range';
 import { useRead } from '@/lib/hooks';
 import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -10,47 +12,36 @@ import type { ContainerStatsResource } from './stats/types';
 
 type StatsPanelProps = {
   resource: ContainerStatsResource | undefined;
-  memory: StatsQueryState;
-  cpu: StatsQueryState;
-  network: StatsQueryState;
+  query: StatsQueryState;
   liveStats: Omit<ContainerStatView, 'containerId'>[];
 };
 
 export type StatsQueryState = {
   baseStats: Omit<ContainerStatView, 'containerId'>[];
   isLoading: boolean;
-  windowHours: StatsWindowHours;
-  onWindowHoursChange: (hours: StatsWindowHours) => void;
+  error?: unknown;
+  range: StatsRangeState;
 };
 
-export const ContainerStatsCharts = ({ resource, memory, cpu, network, liveStats }: StatsPanelProps) => {
-  const memoryStats = useCombinedStats(memory.baseStats, liveStats);
-  const cpuStats = useCombinedStats(cpu.baseStats, liveStats);
-  const networkStats = useCombinedStats(network.baseStats, liveStats);
-
+export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelProps) => {
+  const combined = useCombinedStats(query.baseStats, query.range.live ? liveStats : []);
+  const stats = filterStatsRange(combined, query.range.bounds);
+  const chartResource = query.range.live ? resource : { ...resource, state: 'Running', containerStat: stats.at(-1) };
   return (
-    <div className="flex flex-col gap gap-y-4">
-      <MemoryUsage
-        container={resource}
-        stats={memoryStats}
-        isLoading={memory.isLoading}
-        windowHours={memory.windowHours}
-        controls={<StatsWindowSelect value={memory.windowHours} onChange={memory.onWindowHoursChange} />}
-      />
-      <CpuUsage
-        container={resource}
-        stats={cpuStats}
-        isLoading={cpu.isLoading}
-        windowHours={cpu.windowHours}
-        controls={<StatsWindowSelect value={cpu.windowHours} onChange={cpu.onWindowHoursChange} />}
-      />
-      <NetworkUsage
-        container={resource}
-        stats={networkStats}
-        isLoading={network.isLoading}
-        windowHours={network.windowHours}
-        controls={<StatsWindowSelect value={network.windowHours} onChange={network.onWindowHoursChange} />}
-      />
+    <div className="flex flex-col gap-4">
+      <StatsChartRange range={query.range} error={query.error}>
+        {!query.isLoading && stats.length === 0 ? (
+          <div className="rounded-md border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+            No metrics recorded in this range. Try another time range.
+          </div>
+        ) : (
+          <>
+            <MemoryUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
+            <CpuUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
+            <NetworkUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
+          </>
+        )}
+      </StatsChartRange>
     </div>
   );
 };
@@ -94,38 +85,36 @@ const useCombinedStats = (
 ) => useMemo(() => mergeStatsByCreated(baseStats ?? [], liveStats), [baseStats, liveStats]);
 
 const useContainerStatsWindow = (containerId: string | undefined): StatsQueryState => {
-  const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
-  const readArgs = useMemo(() => ({ id: containerId, query: { hours: windowHours } }), [containerId, windowHours]);
-  const { data, isLoading } = useRead('getContainerStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
+  const range = useStatsRange();
+  const readArgs = useMemo(() => ({ id: containerId, query: range.query }), [containerId, range.query]);
+  const { data, isLoading, error } = useRead('getContainerStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
 
   return {
     baseStats: data?.data?.stats ?? [],
     isLoading,
-    windowHours,
-    onWindowHoursChange: setWindowHours,
+    error,
+    range,
   };
 };
 
 const useDeploymentStatsWindow = (deploymentId: string): StatsQueryState => {
-  const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
-  const readArgs = useMemo(() => ({ id: deploymentId, query: { hours: windowHours } }), [deploymentId, windowHours]);
-  const { data, isLoading } = useRead('getDeploymentStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
+  const range = useStatsRange();
+  const readArgs = useMemo(() => ({ id: deploymentId, query: range.query }), [deploymentId, range.query]);
+  const { data, isLoading, error } = useRead('getDeploymentStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
 
   return {
     baseStats: data?.data?.stats ?? [],
     isLoading,
-    windowHours,
-    onWindowHoursChange: setWindowHours,
+    error,
+    range,
   };
 };
 
 export const ContainerStats = ({ resource }: { resource: ContainerRuntimeView | undefined }) => {
   const liveStats = useLiveStats(resource);
-  const memory = useContainerStatsWindow(resource?.id);
-  const cpu = useContainerStatsWindow(resource?.id);
-  const network = useContainerStatsWindow(resource?.id);
+  const query = useContainerStatsWindow(resource?.id);
 
-  return <ContainerStatsCharts resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
+  return <ContainerStatsCharts resource={resource} query={query} liveStats={liveStats} />;
 };
 
 export const DeploymentStats = ({
@@ -136,9 +125,7 @@ export const DeploymentStats = ({
   deploymentId: string;
 }) => {
   const liveStats = useLiveStats(resource);
-  const memory = useDeploymentStatsWindow(deploymentId);
-  const cpu = useDeploymentStatsWindow(deploymentId);
-  const network = useDeploymentStatsWindow(deploymentId);
+  const query = useDeploymentStatsWindow(deploymentId);
 
-  return <ContainerStatsCharts resource={resource} memory={memory} cpu={cpu} network={network} liveStats={liveStats} />;
+  return <ContainerStatsCharts resource={resource} query={query} liveStats={liveStats} />;
 };

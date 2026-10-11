@@ -39,12 +39,12 @@ pub async fn verify(app: &Router, pool: &sqlx::PgPool, fixture: &FixtureIds) {
         (
             json!({"branch":"main","repository":{"full_name":"unrelated/project"}}),
             "Repository identity mismatch",
-            "Warning",
+            Some("Warning"),
         ),
         (
             json!({"branch":"other-branch"}),
             "Branch filter did not match",
-            "Information",
+            None,
         ),
     ] {
         let response = app
@@ -63,8 +63,8 @@ pub async fn verify(app: &Router, pool: &sqlx::PgPool, fixture: &FixtureIds) {
         assert_eq!(response.status(), StatusCode::ACCEPTED);
         let result = response_json(response).await;
         assert_eq!(result["reason"], expected_reason);
-        let status: String = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND info::jsonb->>'RequestId'=$2")
-            .bind(id).bind(result["requestId"].as_str().unwrap()).fetch_one(pool).await.unwrap();
-        assert_eq!(status, severity);
+        let status: Option<String> = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND info::jsonb->>'RequestId'=$2")
+            .bind(id).bind(result["requestId"].as_str().unwrap()).fetch_optional(pool).await.unwrap();
+        assert_eq!(status.as_deref(), severity);
     }
 }

@@ -17,7 +17,8 @@ import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ActivitiesTab } from '@/features/activities';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
 import { LogViewer, type LogEntry } from '@/components/custom/common';
 import { MonacoEditor } from '@/lib/monaco';
 import { useRead } from '@/lib/hooks';
@@ -301,18 +302,21 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
         taskContainers={taskContainers}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-fit">
-          <TabsTrigger value="logs" disabled={!canLogs}>
-            Logs
-          </TabsTrigger>
-          <TabsTrigger value="inspect" disabled={!canInspect}>
-            Inspect
-          </TabsTrigger>
-          <TabsTrigger value="terminal">Terminal</TabsTrigger>
-          <TabsTrigger value="stats" disabled={!canViewStats}>
-            Stats
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex min-w-0 items-center gap-2 border-b">
+          <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
+            <TabsTrigger value="logs" disabled={!canLogs}>
+              Logs
+            </TabsTrigger>
+            <TabsTrigger value="inspect" disabled={!canInspect}>
+              Inspect
+            </TabsTrigger>
+            <TabsTrigger value="terminal">Terminal</TabsTrigger>
+            <TabsTrigger value="stats" disabled={!canViewStats}>
+              Stats
+            </TabsTrigger>
+          </TabsList>
+          <TabActionsSlot />
+        </div>
         <TabsContent value="logs" className="mt-2">
           <LogViewer
             logs={visibleLogs}

@@ -305,11 +305,11 @@ Managed Service webhooks trigger the same bounded Registry digest check used by 
 - `Auto deploy` starts the normal durable Service Apply path only when the digest changed and the required license capabilities are available.
 - Build-backed Services use the Build Project webhook instead; digest-pinned images cannot be checked for a newer tag.
 
-Service webhook deliveries create `SwarmServiceWebhookReceived` activities. Applying an available image continues through the normal Service operation and reconciliation activities.
+Service webhook deliveries that queue work or need attention create `SwarmServiceWebhookReceived` activities. An up-to-date image does not create an activity. Applying an available image continues through the normal Service operation and reconciliation activities.
 
 ## Activities, Runs, And Alerts
 
-All supported webhook targets write delivery activities:
+All supported webhook targets use the same delivery activity policy:
 
 - `GitRepoWebhookReceived`
 - `StackWebhookReceived`
@@ -320,14 +320,20 @@ All supported webhook targets write delivery activities:
 
 Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.
 
+Routine no-ops do not create activities: unchanged commits or images, unrelated
+paths, filtered branches, and unsupported provider events. Their HTTP response
+still includes `status: "noop"`, a request id, and the reason, which can be checked
+in the provider's delivery history. Resource check status still updates where
+applicable.
+
 Execution results remain in their resource's run or operation history.
 
 Every delivery activity uses the same severity rules:
 
 - **Success**: work was queued or the configured update notification was handled.
   This is delivery success, not a successful build, deployment, script, or backup.
-- **Information**: an expected skip, such as an unchanged source or image, a filtered
-  branch or event, disabled updates, or a stack pinned to a commit.
+- **Information**: a configuration skip, such as disabled updates or a stack pinned
+  to a commit.
 - **Warning**: delivery could not proceed because of a repository mismatch, missing
   entitlement, busy resource, changed configuration, or unavailable dependency.
   Unrecognized skip reasons also produce warnings.

@@ -1,3 +1,7 @@
+import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
+import { StatsChartRange, useStatsChartBounds } from '@/components/custom/stats-chart-range';
+import { useStatsRange } from '@/hooks/useStatsRange';
+import { filterStatsRange, statsAxis } from '@/lib/stats-range';
 import {
   PlatformBackupSummary,
   PlatformConnectorType,
@@ -8,7 +12,7 @@ import {
   SwarmOverviewView,
 } from '@/api/generated/api.types';
 import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
-import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
+import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import {
   ChartConfig,
   ChartContainer,
@@ -41,7 +45,7 @@ import {
 } from 'lucide-react';
 import { ReactNode, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   getContainerStates,
   getDeploymentStates,
@@ -64,55 +68,36 @@ type PlatformStatsDatum = {
   diskUsage: number | null;
 };
 
-type StatsQueryState = {
-  baseStats: PlatformStatView[];
-  isLoading: boolean;
-  windowHours: StatsWindowHours;
-  onWindowHoursChange: (hours: StatsWindowHours) => void;
-};
-
 export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
+  const range = useStatsRange();
   const liveStats = useLiveStats(platform);
   const normalizedLiveStats = useMemo(() => normalizePlatformStats(liveStats), [liveStats]);
-  const cpu = usePlatformStatsWindow(platform.id);
-  const memory = usePlatformStatsWindow(platform.id);
-  const disk = usePlatformStatsWindow(platform.id);
-  const network = usePlatformStatsWindow(platform.id);
-  const cpuStats = useCombinedStats(cpu.baseStats, normalizedLiveStats);
-  const memoryStats = useCombinedStats(memory.baseStats, normalizedLiveStats);
-  const diskStats = useCombinedStats(disk.baseStats, normalizedLiveStats);
-  const networkStats = useCombinedStats(network.baseStats, normalizedLiveStats);
-
+  const readArgs = useMemo(() => ({ id: platform.id, query: range.query }), [platform.id, range.query]);
+  const { data, isLoading, error } = useRead('getPlatformStats', readArgs, {
+    ...STREAMED_STATS_QUERY_OPTIONS,
+    enabled: Boolean(platform.id),
+  });
+  const combined = useCombinedStats(data?.data?.stats ?? [], range.live ? normalizedLiveStats : []);
+  const stats = filterStatsRange(combined, range.bounds);
+  const chartPlatform = range.live
+    ? platform
+    : { ...platform, status: PlatformStatus.Online, stats: stats.length ? [stats[stats.length - 1]] : [] };
   return (
     <div className="flex flex-col gap-4">
-      <CpuUsageChart
-        platform={platform}
-        stats={cpuStats}
-        isLoading={cpu.isLoading}
-        windowHours={cpu.windowHours}
-        controls={<StatsWindowSelect value={cpu.windowHours} onChange={cpu.onWindowHoursChange} />}
-      />
-      <MemoryUsageChart
-        platform={platform}
-        stats={memoryStats}
-        isLoading={memory.isLoading}
-        windowHours={memory.windowHours}
-        controls={<StatsWindowSelect value={memory.windowHours} onChange={memory.onWindowHoursChange} />}
-      />
-      <DiskUsageChart
-        platform={platform}
-        stats={diskStats}
-        isLoading={disk.isLoading}
-        windowHours={disk.windowHours}
-        controls={<StatsWindowSelect value={disk.windowHours} onChange={disk.onWindowHoursChange} />}
-      />
-      <NetworkUsageChart
-        platform={platform}
-        stats={networkStats}
-        isLoading={network.isLoading}
-        windowHours={network.windowHours}
-        controls={<StatsWindowSelect value={network.windowHours} onChange={network.onWindowHoursChange} />}
-      />
+      <StatsChartRange range={range} error={error}>
+        {!isLoading && stats.length === 0 ? (
+          <div className="rounded-md border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+            No metrics recorded in this range. Try another time range.
+          </div>
+        ) : (
+          <>
+            <CpuUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
+            <MemoryUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
+            <DiskUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
+            <NetworkUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
+          </>
+        )}
+      </StatsChartRange>
     </div>
   );
 };
@@ -258,13 +243,11 @@ const CpuUsageChart = ({
   platform,
   stats,
   isLoading,
-  windowHours,
   controls,
 }: {
   platform: PlatformView;
   stats: PlatformStatsDatum[];
   isLoading: boolean;
-  windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
   // Summary values are current samples; chart history contains bucket averages.
@@ -283,7 +266,7 @@ const CpuUsageChart = ({
   return (
     <StatsChartCard
       title="CPU Usage"
-      description={`Showing container CPU usage as a share of platform capacity for the past ${windowHours} hours`}
+      description="Showing container CPU usage as a share of platform capacity over the selected period"
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -292,7 +275,6 @@ const CpuUsageChart = ({
         {
           key: 'cpuUsage',
           gradientId: 'fillPlatformCpuUsage',
-          stackId: 'a',
           formatter: (value) => formatPercent(Number(value)),
         },
       ]}>
@@ -308,13 +290,11 @@ const MemoryUsageChart = ({
   platform,
   stats,
   isLoading,
-  windowHours,
   controls,
 }: {
   platform: PlatformView;
   stats: PlatformStatsDatum[];
   isLoading: boolean;
-  windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
   // Summary values are current samples; chart history contains bucket averages.
@@ -333,7 +313,7 @@ const MemoryUsageChart = ({
   return (
     <StatsChartCard
       title="Memory Usage"
-      description={`Showing container working-set memory for the past ${windowHours} hours`}
+      description="Showing container working-set memory over the selected period"
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -342,7 +322,6 @@ const MemoryUsageChart = ({
         {
           key: 'memoryUsage',
           gradientId: 'fillPlatformMemoryUsage',
-          stackId: 'a',
           formatter: (value) => formatPercent(Number(value)),
         },
       ]}>
@@ -367,13 +346,11 @@ const NetworkUsageChart = ({
   platform,
   stats,
   isLoading,
-  windowHours,
   controls,
 }: {
   platform: PlatformView;
   stats: PlatformStatsDatum[];
   isLoading: boolean;
-  windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
   // Summary values are current samples; chart history contains bucket averages.
@@ -396,7 +373,7 @@ const NetworkUsageChart = ({
   return (
     <StatsChartCard
       title="Network Usage"
-      description={`Showing total network usage for the past ${windowHours} hours`}
+      description="Showing total network usage over the selected period"
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -405,13 +382,11 @@ const NetworkUsageChart = ({
         {
           key: 'rxBytes',
           gradientId: 'fillPlatformRxBytes',
-          stackId: 'a',
           formatter: (value) => byteTransform(value, 2),
         },
         {
           key: 'txBytes',
           gradientId: 'fillPlatformTxBytes',
-          stackId: 'a',
           formatter: (value) => byteTransform(value, 2),
         },
       ]}>
@@ -431,13 +406,11 @@ export const DiskUsageChart = ({
   platform,
   stats,
   isLoading,
-  windowHours,
   controls,
 }: {
   platform: PlatformView;
   stats: PlatformStatsDatum[];
   isLoading: boolean;
-  windowHours: StatsWindowHours;
   controls?: ReactNode;
 }) => {
   const current = getCurrentDiskUsage(platform);
@@ -467,7 +440,7 @@ export const DiskUsageChart = ({
   return (
     <StatsChartCard
       title="Disk Usage"
-      description={`Showing Docker storage filesystem usage for the past ${windowHours} hours`}
+      description="Showing Docker storage filesystem usage over the selected period"
       controls={controls}
       chartConfig={chartConfig}
       stats={stats}
@@ -492,7 +465,6 @@ export const DiskUsageChart = ({
 type StatsChartArea = {
   key: keyof Omit<PlatformStatsDatum, 'created'>;
   gradientId: string;
-  stackId?: string;
   formatter: (value: unknown) => ReactNode;
 };
 
@@ -519,13 +491,14 @@ const StatsChartCard = ({
   notice?: ReactNode;
   emptyState?: ReactNode;
 }) => {
+  const bounds = useStatsChartBounds();
   const gradientDefs = useMemo(
     () => (
       <defs>
         {areas.map((area) => (
           <linearGradient key={area.gradientId} id={area.gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={`var(--color-${area.key})`} stopOpacity={0.8} />
-            <stop offset="95%" stopColor={`var(--color-${area.key})`} stopOpacity={0.1} />
+            <stop offset="5%" stopColor={`var(--color-${area.key})`} stopOpacity={0.18} />
+            <stop offset="95%" stopColor={`var(--color-${area.key})`} stopOpacity={0.02} />
           </linearGradient>
         ))}
       </defs>
@@ -535,20 +508,23 @@ const StatsChartCard = ({
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={stats} accessibilityLayer>
+      <AreaChart data={statsChartData(stats, bounds)} accessibilityLayer>
         {gradientDefs}
-        <CartesianGrid vertical={true} />
+        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+        <YAxis {...statsValueAxis(areas[0]?.key === 'rxBytes' ? 'bytes' : 'percent')} />
         <XAxis
+          {...statsAxis(bounds)}
           dataKey="created"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
           minTickGap={32}
-          tickFormatter={formatTick}
+          tickFormatter={(timestamp) =>
+            dayjs(Number(timestamp) * 1000).format(bounds && bounds.to - bounds.from > 86400 ? 'MMM D HH:mm' : 'HH:mm')
+          }
         />
         <ChartTooltip
           cursor={false}
-          defaultIndex={1}
           content={
             <ChartTooltipContent
               indicator="dot"
@@ -571,17 +547,17 @@ const StatsChartCard = ({
           <Area
             key={area.key}
             dataKey={area.key}
-            type="natural"
+            type="linear"
+            isAnimationActive={false}
+            connectNulls={false}
             fill={`url(#${area.gradientId})`}
             stroke={`var(--color-${area.key})`}
-            stackId={area.stackId}
-            connectNulls={false}
           />
         ))}
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [areas, chartConfig, gradientDefs, stats],
+    [areas, chartConfig, gradientDefs, stats, bounds],
   );
 
   return isLoading ? (
@@ -713,22 +689,6 @@ const ChartValue = ({
   </>
 );
 
-const usePlatformStatsWindow = (platformId: string | undefined): StatsQueryState => {
-  const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
-  const readArgs = useMemo(() => ({ id: platformId, query: { hours: windowHours } }), [platformId, windowHours]);
-  const { data, isLoading } = useRead('getPlatformStats', readArgs, {
-    ...STREAMED_STATS_QUERY_OPTIONS,
-    enabled: Boolean(platformId),
-  });
-
-  return {
-    baseStats: data?.data?.stats ?? [],
-    isLoading,
-    windowHours,
-    onWindowHoursChange: setWindowHours,
-  };
-};
-
 const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
   const latestStat = platform.status === PlatformStatus.Online ? platform.stats?.at(0) : undefined;
   const [live, setLive] = useState(() => ({
@@ -837,8 +797,7 @@ const DiskChartState = ({ compact, title, children }: { compact: boolean; title:
 );
 
 const formatPercent = (value: number) => `${toFixedNumber(value, undefined, 2)}%`;
-const formatTick = (timestamp: number) => dayjs(timestamp * 1000).format('HH:mm:ss');
 const formatTooltipLabel = (_: unknown, payload: any[]) => {
   const created = Number(payload.at(0)?.payload?.created ?? 0);
-  return <span className="text-foreground">{created ? dayjs(created * 1000).format('HH:mm:ss') : '-'}</span>;
+  return <span className="text-foreground">{created ? dayjs(created * 1000).format('MMM D, HH:mm:ss') : '-'}</span>;
 };

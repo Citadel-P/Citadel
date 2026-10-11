@@ -129,7 +129,9 @@ async fn receive(
         &body,
     )
     .await;
-    if let (Some(audit), Some(resource)) = (&state.audit, audit_resource(&resource_type)) {
+    if let (Some(audit), Some(resource)) = (&state.audit, audit_resource(&resource_type))
+        && !result.as_ref().is_ok_and(WebhookDispatch::is_routine_noop)
+    {
         let (status, reason) = match &result {
             Ok(outcome) => (
                 if outcome.reason.is_some() {
@@ -222,6 +224,23 @@ struct WebhookDispatch {
 }
 
 impl WebhookDispatch {
+    // Quiet only known, authenticated no-change outcomes. Queued work, rejected
+    // requests and skips that need attention must still be audited. The HTTP
+    // response retains the no-op reason for provider delivery diagnostics.
+    fn is_routine_noop(&self) -> bool {
+        matches!(
+            self.reason,
+            Some(
+                "Unsupported event type"
+                    | "Branch filter did not match"
+                    | "Branch mismatch"
+                    | "No relevant path changes"
+                    | "No new commit"
+                    | "Service image is up to date."
+            )
+        )
+    }
+
     fn noop(reason: &'static str) -> Self {
         Self {
             reason: Some(reason),
@@ -1027,6 +1046,27 @@ mod audit_tests {
             assert_eq!(audit_resource(&alias.to_uppercase()), Some(resource));
         }
         assert_eq!(audit_resource("unsupported"), None);
+        for reason in [
+            "Unsupported event type",
+            "Branch filter did not match",
+            "Branch mismatch",
+            "No relevant path changes",
+            "No new commit",
+            "Service image is up to date.",
+        ] {
+            assert!(WebhookDispatch::noop(reason).is_routine_noop(), "{reason}");
+        }
+        assert!(!WebhookDispatch::queued("main", None).is_routine_noop());
+        for reason in [
+            "Repository identity mismatch",
+            "Build Project is disabled.",
+            "Automated operations require an active license entitlement.",
+            "Image scanner is unavailable.",
+            "Stack update notification queued.",
+            "An unknown skip reason",
+        ] {
+            assert!(!WebhookDispatch::noop(reason).is_routine_noop(), "{reason}");
+        }
     }
 
     #[test]

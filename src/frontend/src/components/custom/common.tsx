@@ -94,14 +94,6 @@ import { StateIndicator } from './state-indicator';
 import { getContainerSeriesColor } from './container-series-colors';
 import { useFormFieldAccessibility } from './form-field-accessibility';
 
-export type StatsWindowHours = 24 | 48 | 72;
-
-export const STATS_WINDOWS = [
-  { value: 24, label: 'Last 24 hours' },
-  { value: 48, label: 'Last 48 hours' },
-  { value: 72, label: 'Last 72 hours' },
-] as const satisfies readonly { value: StatsWindowHours; label: string }[];
-
 export const OverflowCountBadge = ({
   count,
   className,
@@ -122,26 +114,6 @@ export const OverflowCountBadge = ({
   );
 };
 
-export const StatsWindowSelect = ({
-  value,
-  onChange,
-}: {
-  value: StatsWindowHours;
-  onChange: (hours: StatsWindowHours) => void;
-}) => (
-  <Select value={String(value)} onValueChange={(nextValue) => onChange(Number(nextValue) as StatsWindowHours)}>
-    <SelectTrigger className="h-8 w-36 rounded-sm bg-background shadow-none">
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent className="bg-background">
-      {STATS_WINDOWS.map((option) => (
-        <SelectItem key={option.value} value={String(option.value)}>
-          {option.label}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-);
 
 export const StatsPanelHeader = ({
   title,

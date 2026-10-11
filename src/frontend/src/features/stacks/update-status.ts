@@ -60,6 +60,13 @@ export type StackImageUpdateCheckMessage = {
 export const getStackImageUpdateCheckMessage = (stack: StackView): StackImageUpdateCheckMessage => {
   const states = getStackImageUpdateStates(stack);
   const updateCount = states.filter((state) => state.updateAvailable).length;
+  if (states.length === 0) {
+    return {
+      kind: 'info',
+      title: 'No service images checked',
+      description: 'There are no supported tagged service images to check.',
+    };
+  }
 
   if (updateCount > 0) {
     return {
@@ -92,11 +99,9 @@ export const getStackUpdateStatus = (stack: StackView): AutoUpdateStatus => {
     return AutoUpdateStatus.UpdateAvailable;
   }
 
-  if (gitState?.currentCommitSha) return AutoUpdateStatus.UpToDate;
-
   const states = getStackImageUpdateStates(stack);
-  if (states.length === 0) return AutoUpdateStatus.Unknown;
   if (states.some((state) => state.updateAvailable)) return AutoUpdateStatus.UpdateAvailable;
+  if (states.length === 0 && !gitState?.currentCommitSha) return AutoUpdateStatus.Unknown;
   return AutoUpdateStatus.UpToDate;
 };
 

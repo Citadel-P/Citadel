@@ -17,7 +17,8 @@ import {
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
 import { DeploymentInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
 import { formatId, normalizeDockerId } from '@/lib/utils';
 import { DeploymentContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
@@ -334,18 +335,21 @@ const RuntimeTabs = ({
 
   return (
     <Tabs defaultValue={defaultValue} className="w-full">
-      <TabsList className="w-fit max-w-full overflow-x-auto">
-        <TabsTrigger value="logs" disabled={!canViewLogs}>
-          Logs
-        </TabsTrigger>
-        <TabsTrigger value="inspect" disabled={!canInspect}>
-          Inspect
-        </TabsTrigger>
-        <TabsTrigger value="terminal" disabled={terminalDisabled}>
-          Terminal
-        </TabsTrigger>
-        <TabsTrigger value="stats">Stats</TabsTrigger>
-      </TabsList>
+      <div className="flex min-w-0 items-center gap-2 border-b">
+        <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
+          <TabsTrigger value="logs" disabled={!canViewLogs}>
+            Logs
+          </TabsTrigger>
+          <TabsTrigger value="inspect" disabled={!canInspect}>
+            Inspect
+          </TabsTrigger>
+          <TabsTrigger value="terminal" disabled={terminalDisabled}>
+            Terminal
+          </TabsTrigger>
+          <TabsTrigger value="stats">Stats</TabsTrigger>
+        </TabsList>
+        <TabActionsSlot />
+      </div>
       {canViewLogs && (
         <TabsContent value="logs" className="mt-2 w-full">
           <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />

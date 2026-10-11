@@ -1,4 +1,7 @@
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
+import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
+import { statsAxis } from '@/lib/stats-range';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   ChartConfig,
   ChartContainer,
@@ -20,15 +23,14 @@ const MemoryUsage = ({
   stats,
   container,
   isLoading,
-  windowHours,
   controls,
 }: {
   stats: Omit<ContainerStatView, 'containerId'>[];
   container: ContainerStatsResource | undefined;
   isLoading: boolean;
-  windowHours: number;
   controls?: ReactNode;
 }) => {
+  const bounds = useStatsChartBounds();
   const chartConfig = useMemo(
     () =>
       ({
@@ -48,12 +50,12 @@ const MemoryUsage = ({
     () => (
       <defs>
         <linearGradient id="fillmemoryActive" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-memoryActive)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-memoryActive)" stopOpacity={0.1} />
+          <stop offset="5%" stopColor="var(--color-memoryActive)" stopOpacity={0.18} />
+          <stop offset="95%" stopColor="var(--color-memoryActive)" stopOpacity={0.02} />
         </linearGradient>
         <linearGradient id="fillmemoryCache" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-memoryCache)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-memoryCache)" stopOpacity={0.1} />
+          <stop offset="5%" stopColor="var(--color-memoryCache)" stopOpacity={0.18} />
+          <stop offset="95%" stopColor="var(--color-memoryCache)" stopOpacity={0.02} />
         </linearGradient>
       </defs>
     ),
@@ -62,27 +64,30 @@ const MemoryUsage = ({
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={stats} accessibilityLayer>
+      <AreaChart data={statsChartData(stats, bounds)} accessibilityLayer>
         {gradientDefs}
-        <CartesianGrid vertical={true} />
+        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+        <YAxis {...statsValueAxis('bytes')} />
         <XAxis
+          {...statsAxis(bounds)}
           dataKey="created"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
           minTickGap={32}
-          tickFormatter={(timestamp) => dayjs(timestamp * 1000).format('HH:mm:ss')}
+          tickFormatter={(timestamp) =>
+            dayjs(timestamp * 1000).format(bounds && bounds.to - bounds.from > 86400 ? 'MMM D HH:mm' : 'HH:mm')
+          }
         />
         <ChartTooltip
           cursor={false}
-          defaultIndex={1}
           content={
             <ChartTooltipContent
               nameKey="stats"
               indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as ContainerStatView).created as number;
-                return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
+                return <span className="text-foreground">{dayjs(created * 1000).format('MMM D, HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (
                 <>
@@ -103,19 +108,33 @@ const MemoryUsage = ({
             />
           }
         />
-        <Area dataKey="memoryActive" type="natural" fill="url(#fillmemoryActive)" stroke="var(--color-memoryActive)" />
-        <Area dataKey="memoryCache" type="natural" fill="url(#fillmemoryCache)" stroke="var(--color-memoryCache)" />
+        <Area
+          dataKey="memoryActive"
+          type="linear"
+          isAnimationActive={false}
+          connectNulls={false}
+          fill="url(#fillmemoryActive)"
+          stroke="var(--color-memoryActive)"
+        />
+        <Area
+          dataKey="memoryCache"
+          type="linear"
+          isAnimationActive={false}
+          connectNulls={false}
+          fill="url(#fillmemoryCache)"
+          stroke="var(--color-memoryCache)"
+        />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [stats, gradientDefs, chartConfig],
+    [stats, gradientDefs, chartConfig, bounds],
   );
 
   return isLoading ? (
     <Skeleton className="h-56.26 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <MemoryUsageHeader container={container} windowHours={windowHours} controls={controls} />
+      <MemoryUsageHeader container={container} controls={controls} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}
@@ -126,11 +145,10 @@ const MemoryUsage = ({
 };
 interface MemoryUsageHeaderProps {
   container: ContainerStatsResource | undefined;
-  windowHours: number;
   controls?: ReactNode;
 }
 
-const MemoryUsageHeader = ({ container, windowHours, controls }: MemoryUsageHeaderProps) => {
+const MemoryUsageHeader = ({ container, controls }: MemoryUsageHeaderProps) => {
   const renderStat = (label: string, value: string | number | null | undefined) => (
     <StatsSummaryItem
       label={label}
@@ -141,7 +159,7 @@ const MemoryUsageHeader = ({ container, windowHours, controls }: MemoryUsageHead
   return (
     <StatsPanelHeader
       title="Memory Usage"
-      description={`Memory usage excluding file cache for the past ${windowHours} hours. Cache is shown separately.`}
+      description="Memory usage excluding file cache over the selected period. Cache is shown separately."
       controls={controls}>
       {renderStat('Usage', container?.containerStat?.memoryActive)}
       {renderStat('Cache', container?.containerStat?.memoryCache)}

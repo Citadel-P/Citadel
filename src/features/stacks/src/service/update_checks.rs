@@ -4,6 +4,13 @@ use crate::StackUpdateState;
 use citadel_primitives::AuthorizedResource;
 use sha2::Digest;
 
+#[derive(Clone, Copy)]
+enum CheckMode {
+    Manual,
+    Git,
+    Images,
+}
+
 pub trait StackUpdateScanner: Send + Sync {
     fn scan_cached<'a>(
         &'a self,
@@ -11,6 +18,13 @@ pub trait StackUpdateScanner: Send + Sync {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         self.scan(stack, cancellation)
+    }
+    fn scan_images_cached<'a>(
+        &'a self,
+        stack: &'a crate::Stack,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_cached(stack, cancellation)
     }
     fn scan<'a>(
         &'a self,
@@ -31,7 +45,7 @@ impl StackService {
         id: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
-        self.check_updates_mode(actor, administrator, id, false, cancellation)
+        self.check_updates_mode(actor, administrator, id, CheckMode::Manual, cancellation)
             .await
     }
     async fn check_updates_mode(
@@ -39,7 +53,7 @@ impl StackService {
         actor: ActorId,
         administrator: bool,
         id: Uuid,
-        scheduled: bool,
+        mode: CheckMode,
         cancellation: &CancellationToken,
     ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         let _permit = self
@@ -73,10 +87,10 @@ impl StackService {
             .ok_or_else(|| StackError::Runtime("Stack update checks are unavailable.".into()))?;
         let cancel = cancellation.child_token();
         let _guard = cancel.clone().drop_guard();
-        let scan = if scheduled {
-            scanner.scan_cached(&snapshot, &cancel)
-        } else {
-            scanner.scan(&snapshot, &cancel)
+        let scan = match mode {
+            CheckMode::Manual => scanner.scan(&snapshot, &cancel),
+            CheckMode::Git => scanner.scan_cached(&snapshot, &cancel),
+            CheckMode::Images => scanner.scan_images_cached(&snapshot, &cancel),
         };
         let next = tokio::select! {
             ()=cancel.cancelled()=>return Err(StackError::Cancelled),
@@ -101,6 +115,18 @@ impl StackService {
         images: bool,
         cancellation: &CancellationToken,
     ) -> Result<(), StackError> {
+        self.run_update_check_pass(false, cancellation).await?;
+        if images {
+            self.run_update_check_pass(true, cancellation).await?;
+        }
+        Ok(())
+    }
+
+    async fn run_update_check_pass(
+        &self,
+        images: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<(), StackError> {
         // Detection/Notify is available in Community. Gate only automatic Apply.
         let actor = ActorId::new(Uuid::from_u128(1));
         let mut after = Uuid::nil();
@@ -119,7 +145,7 @@ impl StackService {
                 }
                 let result = async {
                     let checked = self
-                        .check_updates_mode(actor, true, id, true, cancellation)
+                        .check_updates_mode(actor, true, id, if images { CheckMode::Images } else { CheckMode::Git }, cancellation)
                         .await?;
                     let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
                         StackSpec::Git {
@@ -129,29 +155,18 @@ impl StackService {
                             update_behavior, ..
                         } => *update_behavior,
                     };
-                    let available = match &checked.stack_update_state {
-                        StackUpdateState::Git {
-                            recreate_stack_on_new_commit_state,
-                            ..
-                        } => recreate_stack_on_new_commit_state
-                            .remote_commit_sha
-                            .as_deref()
-                            .is_some_and(|remote| {
-                                !remote.eq_ignore_ascii_case(
-                                    &recreate_stack_on_new_commit_state.current_commit_sha,
-                                )
-                            }),
-                        StackUpdateState::WebEditor {
-                            recreate_stack_on_new_image_state,
-                        } => recreate_stack_on_new_image_state
-                            .auto_update_states
-                            .iter()
-                            .any(|image| image.update_available),
+                    let available = if images {
+                        let (StackUpdateState::Git { recreate_stack_on_new_image_state, .. }
+                            | StackUpdateState::WebEditor { recreate_stack_on_new_image_state }) = &checked.stack_update_state;
+                        recreate_stack_on_new_image_state.auto_update_states.iter().any(|image| image.update_available)
+                    } else {
+                        matches!(&checked.stack_update_state, StackUpdateState::Git { recreate_stack_on_new_commit_state: commit, .. }
+                            if commit.remote_commit_sha.as_deref().is_some_and(|remote| !remote.eq_ignore_ascii_case(&commit.current_commit_sha)))
                     };
                     if !available {
                         return Ok(());
                     }
-                    let git = matches!(checked.spec, Some(StackSpec::Git { .. }));
+                    let git = !images;
                     let service_only_supported = checked.spec.as_ref().is_some_and(|spec| {
                         spec.supports_service_auto_deploy(checked.platform_type)
                     });
@@ -201,14 +216,17 @@ impl StackService {
                         };
                     let applied = async {
                         let mut output = self
-                            .apply_selected(
+                            .start_apply_versioned(
                                 actor,
                                 true,
                                 id,
+                                None,
+                                None,
                                 crate::StackApplyOptions {
                                     expected_version: Some(checked.row_version),
                                     service_names,
                                 },
+                                if images { checked.source.as_ref().map(|source| source.resolved_commit_sha.clone()).filter(|sha| !sha.is_empty()) } else { None },
                             )
                             .await?;
                         let mut success = false;
@@ -258,7 +276,7 @@ impl StackService {
                     if success && !git {
                         // Observe the images actually pulled, which may differ from
                         // the digest seen before Apply; never invent a new baseline.
-                        self.check_updates(actor, true, id, cancellation).await?;
+                        self.check_updates_mode(actor, true, id, CheckMode::Images, cancellation).await?;
                     }
                     Ok::<_, StackError>(())
                 }
@@ -276,18 +294,25 @@ impl StackService {
             return;
         };
         let state = &stack.stack_update_state;
-        let identity = match state {
+        let images = match state {
             StackUpdateState::Git {
-                recreate_stack_on_new_commit_state,
-                ..
-            } => recreate_stack_on_new_commit_state
-                .remote_commit_sha
-                .clone()
-                .unwrap_or_default(),
-            StackUpdateState::WebEditor {
                 recreate_stack_on_new_image_state,
-            } => recreate_stack_on_new_image_state
-                .auto_update_states
+                ..
+            }
+            | StackUpdateState::WebEditor {
+                recreate_stack_on_new_image_state,
+            } => &recreate_stack_on_new_image_state.auto_update_states,
+        };
+        let identity = if kind.starts_with("StackGit") {
+            match state {
+                StackUpdateState::Git {
+                    recreate_stack_on_new_commit_state: commit,
+                    ..
+                } => commit.remote_commit_sha.clone().unwrap_or_default(),
+                _ => String::new(),
+            }
+        } else {
+            images
                 .iter()
                 .filter(|image| image.update_available)
                 .map(|image| {
@@ -298,16 +323,7 @@ impl StackService {
                     )
                 })
                 .collect::<Vec<_>>()
-                .join("|"),
-        };
-        let images = match state {
-            StackUpdateState::Git {
-                recreate_stack_on_new_image_state,
-                ..
-            }
-            | StackUpdateState::WebEditor {
-                recreate_stack_on_new_image_state,
-            } => &recreate_stack_on_new_image_state.auto_update_states,
+                .join("|")
         };
         let updates = images.iter().filter(|image| image.update_available).map(|image|serde_json::json!({
             "ServiceName":image.service_name,"ImageName":image.image_name,"CurrentDigest":image.current_digest,"LatestDigest":image.remote_digest,

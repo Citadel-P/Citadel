@@ -23,7 +23,7 @@ use crate::connectors::agent::client::AgentStackRegistry;
 use crate::connectors::docker::DockerClient;
 use crate::persistence::postgres::stacks::release_resources;
 mod import;
-mod update_scanner;
+pub(crate) mod update_scanner;
 pub use update_scanner::StackUpdateRuntime;
 
 use crate::external::stacks::run_docker;

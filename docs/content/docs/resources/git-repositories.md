@@ -96,6 +96,14 @@ start their own periodic fetches. A five-minute reconciliation checks stored
 refs if a notification was missed. Explicit Stack update checks, Apply, and
 Build runs can still request a fresh synchronization.
 
+Successful background syncs (scheduled checks, webhooks, and Stack/Build cache
+refreshes) do not create activity entries, even when the commit changes.
+Explicit repository syncs and initial syncs requested by a user remain in the
+activity history. Background failures are recorded when the error changes or
+recurs after recovery; identical consecutive failures are not repeated.
+The **Checks** popover shows the live check status and timestamp independently
+of activity history.
+
 ## Browsing Repository Source
 
 Open a repository and select **Browse Repo** from the action bar to inspect

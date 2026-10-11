@@ -40,7 +40,7 @@ pub use error::GitRepositoryExecutionError;
 mod commands;
 pub mod webhooks;
 pub use commands::{CreateGitRepository, GitRepositoryMutationKind, GitRepositoryPatch};
-pub use model::{GitRepository, RepoCommand};
+pub use model::{GitRepository, GitRepositorySyncStatus, RepoCommand};
 pub use repository::GitRepositoryPersistence;
 mod service;
 pub use error::GitRepositoryError;

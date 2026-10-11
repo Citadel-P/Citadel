@@ -1,5 +1,5 @@
 import { ContainerStatView } from '@/api/generated/api.types';
-import { StatsWindowHours } from '@/components/custom/common';
+import { useStatsRange } from '@/hooks/useStatsRange';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
@@ -19,10 +19,10 @@ export type SwarmServiceStatsQueryState = StatsQueryState & {
 const EMPTY_STATS: ContainerStatView[] = [];
 
 export const useServiceStatsWindow = (platformId: string, serviceId: string): SwarmServiceStatsQueryState => {
-  const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
+  const range = useStatsRange();
   const args = useMemo(
-    () => ({ platformId, resourceId: serviceId, query: { hours: windowHours } }),
-    [platformId, serviceId, windowHours],
+    () => ({ platformId, resourceId: serviceId, query: range.query }),
+    [platformId, serviceId, range.query],
   );
   const query = useRead('getSwarmServiceStats', args, { ...STREAMED_STATS_QUERY_OPTIONS, retry: false });
   const result = query.data?.data;
@@ -36,8 +36,7 @@ export const useServiceStatsWindow = (platformId: string, serviceId: string): Sw
     observedContainerProjectionIds: result?.observedContainerProjectionIds ?? [],
     error: query.error,
     isLoading: query.isLoading,
-    windowHours,
-    onWindowHoursChange: setWindowHours,
+    range,
   };
 };
 

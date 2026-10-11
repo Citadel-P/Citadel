@@ -1,5 +1,6 @@
 import { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { StatsChartRange } from '@/components/custom/stats-chart-range';
 import { ContainerStatsCharts } from '@/features/docker-resources/containers/container-info/container-stats';
 import { SwarmServiceInfoView } from '../hooks/useServicesGroup';
 import { useServiceStatsStream, useServiceStatsWindow } from '../hooks/useServiceStats';
@@ -22,9 +23,13 @@ export const ServiceStats = ({
 
   if (problem) {
     return (
-      <AlertMessage title={problem.title ?? 'Service stats unavailable'} type="info">
-        {problem.detail ?? 'Citadel could not return stats for this Service.'}
-      </AlertMessage>
+      <div className="flex flex-col gap-3">
+        <StatsChartRange range={stats.range}>
+          <AlertMessage title={problem.title ?? 'Service stats unavailable'} type="info">
+            {problem.detail ?? 'Citadel could not return stats for this Service.'}
+          </AlertMessage>
+        </StatsChartRange>
+      </div>
     );
   }
 
@@ -35,7 +40,7 @@ export const ServiceStats = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {!stats.isLoading && !complete && (
+      {stats.range.live && !stats.isLoading && !complete && (
         <AlertMessage title="Partial Service statistics" type="warning">
           {`Showing ${observedTasks} of ${stats.expectedTasks} current Tasks${
             missingNodes ? `. Missing node data: ${missingNodes}.` : '.'
@@ -44,9 +49,7 @@ export const ServiceStats = ({
       )}
       <ContainerStatsCharts
         resource={{ state: Number(service.runningTaskCount) > 0 ? 'Running' : 'Offline', containerStat: latestStat }}
-        memory={stats}
-        cpu={stats}
-        network={stats}
+        query={stats}
         liveStats={live.stats}
       />
     </div>

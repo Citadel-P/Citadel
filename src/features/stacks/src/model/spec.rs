@@ -527,6 +527,14 @@ impl StackUpdateState {
         else {
             return false;
         };
+        // Reapplying the same source (for example, an image-only update) is
+        // not a new observation of the branch. Preserve pending Git updates.
+        if recreate_stack_on_new_commit_state
+            .current_commit_sha
+            .eq_ignore_ascii_case(resolved_commit_sha)
+        {
+            return false;
+        }
         recreate_stack_on_new_commit_state.current_commit_sha = resolved_commit_sha.to_owned();
         recreate_stack_on_new_commit_state.remote_commit_sha = None;
         recreate_stack_on_new_commit_state.last_checked_at = observed_at;

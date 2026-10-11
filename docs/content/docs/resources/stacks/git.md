@@ -206,20 +206,30 @@ Add shared paths only when changes there should mark the Stack outdated; leave
 
 For branch-tracking Git stacks, Citadel stores the exact deployed commit in the stack release source metadata.
 
-- **Notify Only**: mark the stack outdated and emit a Git update alert.
-- **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change.
+- **Notify Only**: mark the stack outdated and emit an alert for relevant Git changes or newer service image digests.
+- **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change or a newer service image digest is detected.
 - **Auto Deploy Services**: unavailable for Git Stacks. A Git commit can affect networks, volumes, env files, and dependencies.
 - **Disabled**: disable periodic checks; manual checks remain available.
 
 `Notify` and update detection remain available in Community. Automatic
-deployment caused by continuously observed repository changes requires
+deployment caused by repository or image changes requires
 `Operational Guardrails` and `Automated Operations`. Deployment caused by an external webhook requires
 `Automated Operations`.
 
-Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook deploys are ignored.
+Image checks run every two hours, like Deployments, using the shared registry
+scanner and the Compose files at the applied Git commit. Configure a Registry on
+the Stack to check tagged service images. Digest-pinned images, unresolved image
+variables, and services supplied by Citadel Builds are excluded. Image-triggered
+automatic updates pull images while retaining the applied Git revision; they do
+not fetch the branch. Git synchronization remains controlled by the repository's
+sync policy, including Manual mode.
+
+Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook
+deploys are ignored, but their tagged images can still receive updates.
 
 Use **Check for updates** on a Git Stack to query the Git remote immediately
-and compare relevant paths with the deployed commit. The
+and compare relevant paths with the deployed commit, and inspect supported service
+images immediately. Pinned stacks check only images. The
 check records update state for that Stack only; it does not apply the Stack,
 run repository hooks, emit an alert, or process other Stacks that use the same
 repository. It remains available when periodic update behavior is disabled.
@@ -274,11 +284,11 @@ For Git stacks, webhook deploy still validates:
 - stack is not pinned
 - changed paths, when the provider payload includes them
 
-If the provider payload includes changed paths and they only touch unrelated monorepo paths, Citadel records a webhook activity as a no-op and does not deploy.
+If the provider payload includes changed paths and they only touch unrelated monorepo paths, Citadel returns a no-op response without deploying or creating an activity entry.
 
 If the provider payload does not include changed paths, Citadel syncs the repository branch, diffs the running release commit against the new branch head, and applies the same watch-path decision. This keeps Git providers or proxy payloads that omit file lists usable without blindly redeploying every stack in a monorepo.
 
-Webhook activities show whether the request was queued, rejected, or skipped. The activity details include the request id, provider event, delivery id, branch, commit, repository identity, and no-op reason when one exists.
+Webhook activities record queued work, rejected requests, and configuration skips. Routine checks with no new commit or relevant changes, filtered branches, and unsupported events stay out of activity history; their reason remains in the webhook response. Recorded activity details include the request id, provider event, delivery id, branch, commit, repository identity, and skip reason when one exists.
 
 ### Forgejo and Gitea
 

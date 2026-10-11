@@ -4643,11 +4643,22 @@ fn window(
     headers: &HeaderMap,
 ) -> HttpResult<StatsWindow> {
     let Query(query) = api_result(query.map_err(invalid_query), headers)?;
-    api_result(
-        StatsWindow::new(query.hours)
-            .ok_or_else(|| ApiError::Validation("Hours must be 24, 48, or 72.".into())),
-        headers,
-    )
+    let now = chrono::Utc::now().timestamp();
+    let selected = match (query.hours, query.minutes, query.from, query.to) {
+        (None, None, None, None) => StatsWindow::new(24),
+        (Some(hours), None, None, None) => StatsWindow::new(hours),
+        (None, Some(minutes), None, None) => StatsWindow::minutes(minutes),
+        (None, None, Some(from), to) => {
+            // Today can begin in the current second; keep that open-ended range valid.
+            // The window validator still bounds clock skew and retained history.
+            let to = to.unwrap_or_else(|| now.max(from.saturating_add(1)));
+            StatsWindow::between(from, to, now)
+        }
+        _ => None,
+    };
+    api_result(selected.ok_or_else(|| ApiError::Validation(
+        "Choose minutes (15, 60, 360, 1440, 10080), legacy hours (1, 6, 24, 48, 72, 168), or from/to Unix seconds within the last 7 days. Do not mix ranges; from must precede to.".into()
+    )), headers)
 }
 
 fn storage(error: RuntimeCapabilityError) -> ApiError {
@@ -4664,7 +4675,7 @@ fn storage(error: RuntimeCapabilityError) -> ApiError {
         (status = 200, description = "Success", body = TaskHistory, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
-    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -4780,7 +4791,7 @@ async fn task_statistics(
         (status = 200, description = "Success", body = crate::api::resources::schema_models::platforms::ServiceStatisticsSchema, content_type = "application/json"),
         crate::openapi::errors::ExternalRuntimeErrors
     ),
-    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("platformId" = uuid::Uuid, Path), ("resourceId" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -4868,7 +4879,7 @@ async fn service_statistics(
         (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::ContainerStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceMutationErrors
     ),
-    params(("id" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("id" = String, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -4920,7 +4931,7 @@ async fn container(
         (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::PlatformStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -4970,7 +4981,7 @@ async fn platform(
         (status = 200, description = "Success", body = History<crate::api::resources::schema_models::platforms::ContainerStatSnapshotSchema>, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("id" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -5002,7 +5013,7 @@ async fn deployment(
         (status = 200, description = "Success", body = StackHistory, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("stackId" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query)),
+    params(("stackId" = uuid::Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start time in Unix seconds, within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end time in Unix seconds; defaults to now when from is supplied")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

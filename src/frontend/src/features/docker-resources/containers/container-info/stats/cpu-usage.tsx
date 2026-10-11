@@ -1,4 +1,7 @@
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
+import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
+import { statsAxis } from '@/lib/stats-range';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   ChartConfig,
   ChartContainer,
@@ -17,16 +20,14 @@ import type { ContainerStatsResource } from './types';
 
 const CpuUsageHeader = ({
   container,
-  windowHours,
   controls,
 }: {
   container: ContainerStatsResource | undefined;
-  windowHours: number;
   controls?: ReactNode;
 }) => (
   <StatsPanelHeader
     title="CPU Usage"
-    description={`Showing total CPU usage for the past ${windowHours} hours`}
+    description="Showing total CPU usage over the selected period"
     controls={controls}>
     <StatsSummaryItem
       label="Usage"
@@ -43,15 +44,14 @@ const CpuUsage = ({
   stats,
   container,
   isLoading,
-  windowHours,
   controls,
 }: {
   stats: Omit<ContainerStatView, 'containerId'>[];
   container: ContainerStatsResource | undefined;
   isLoading: boolean;
-  windowHours: number;
   controls?: ReactNode;
 }) => {
+  const bounds = useStatsChartBounds();
   const chartConfig = useMemo(
     () =>
       ({
@@ -67,8 +67,8 @@ const CpuUsage = ({
     () => (
       <defs>
         <linearGradient id="fillcpuUsage" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-cpuUsage)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-cpuUsage)" stopOpacity={0.1} />
+          <stop offset="5%" stopColor="var(--color-cpuUsage)" stopOpacity={0.18} />
+          <stop offset="95%" stopColor="var(--color-cpuUsage)" stopOpacity={0.02} />
         </linearGradient>
       </defs>
     ),
@@ -77,27 +77,30 @@ const CpuUsage = ({
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={stats} accessibilityLayer>
+      <AreaChart data={statsChartData(stats, bounds)} accessibilityLayer>
         {gradientDefs}
-        <CartesianGrid vertical={true} />
+        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+        <YAxis {...statsValueAxis('percent')} />
         <XAxis
+          {...statsAxis(bounds)}
           dataKey="created"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
           minTickGap={32}
-          tickFormatter={(timestamp) => dayjs(timestamp * 1000).format('HH:mm:ss')}
+          tickFormatter={(timestamp) =>
+            dayjs(timestamp * 1000).format(bounds && bounds.to - bounds.from > 86400 ? 'MMM D HH:mm' : 'HH:mm')
+          }
         />
         <ChartTooltip
           cursor={false}
-          defaultIndex={1}
           content={
             <ChartTooltipContent
               nameKey="stats"
               indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as ContainerStatView).created as number;
-                return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
+                return <span className="text-foreground">{dayjs(created * 1000).format('MMM D, HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (
                 <>
@@ -119,18 +122,26 @@ const CpuUsage = ({
             />
           }
         />
-        <Area dataKey="cpuUsage" type="natural" fill="url(#fillcpuUsage)" stroke="var(--color-cpuUsage)" stackId="a" />
+        <Area
+          dataKey="cpuUsage"
+          type="linear"
+          isAnimationActive={false}
+          connectNulls={false}
+          fill="url(#fillcpuUsage)"
+          stroke="var(--color-cpuUsage)"
+          stackId="a"
+        />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [stats, gradientDefs, chartConfig],
+    [stats, gradientDefs, chartConfig, bounds],
   );
 
   return isLoading ? (
     <Skeleton className="h-56.25 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <CpuUsageHeader container={container} windowHours={windowHours} controls={controls} />
+      <CpuUsageHeader container={container} controls={controls} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}

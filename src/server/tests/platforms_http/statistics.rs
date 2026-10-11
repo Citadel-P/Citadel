@@ -31,7 +31,7 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
             send(&f, &path, Some(denied.clone())).await.status(),
             StatusCode::FORBIDDEN
         );
-        for invalid in ["0", "1", "25", "96", "-1", "abc"] {
+        for invalid in ["0", "2", "25", "96", "-1", "abc"] {
             assert_eq!(
                 send(
                     &f,
@@ -41,6 +41,53 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
                 .await
                 .status(),
                 StatusCode::BAD_REQUEST
+            );
+        }
+        for query in [
+            "minutes=0".to_owned(),
+            "minutes=30".to_owned(),
+            "minutes=10081".to_owned(),
+            "hours=24&minutes=60".to_owned(),
+            "minutes=15&from=1".to_owned(),
+            format!("to={now}"),
+            format!("from={now}&to={now}"),
+            format!("from={}&to={}", now - 100, now + 120),
+            format!("from={}&to={now}", now - 8 * 86400),
+        ] {
+            assert_eq!(
+                send(
+                    &f,
+                    &format!("{path}?{query}"),
+                    Some(f.administrator.clone())
+                )
+                .await
+                .status(),
+                StatusCode::BAD_REQUEST,
+                "{query}"
+            );
+        }
+        for (query, expected_count) in [
+            ("minutes=15".to_owned(), 0),
+            (format!("from={now}"), 0),
+            ("minutes=10080".to_owned(), 5),
+            (
+                format!("from={}&to={}", now - 48 * 3600, now - 24 * 3600),
+                2,
+            ),
+            (format!("from={}", now - 26 * 3600), 2),
+        ] {
+            let response = send(
+                &f,
+                &format!("{path}?{query}"),
+                Some(f.administrator.clone()),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK, "{query}");
+            let body = json_body(response).await;
+            assert_eq!(
+                body["stats"].as_array().unwrap().len(),
+                expected_count,
+                "{query}"
             );
         }
         for (hours, count) in [(24, 1), (48, 3), (72, 4)] {
@@ -347,7 +394,7 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
     assert_eq!(
         send(
             &f,
-            &format!("{path}?hours=1"),
+            &format!("{path}?hours=2"),
             Some(f.administrator.clone())
         )
         .await

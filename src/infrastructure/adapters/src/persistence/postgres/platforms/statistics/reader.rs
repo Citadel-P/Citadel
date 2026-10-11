@@ -165,9 +165,9 @@ impl StatisticsReader for PostgresStatisticsReader {
             let rows=sqlx::query(r#"SELECT containerid,MIN(created) AS created,COALESCE(AVG(cpuusage),0) AS cpuusage,
                 COALESCE(AVG(memoryactive),0) AS memoryactive,COALESCE(AVG(memorycache),0) AS memorycache,
                 COALESCE(AVG(memorylimit),0) AS memorylimit,COALESCE(AVG(rxbytes),0) AS rxbytes,COALESCE(AVG(txbytes),0) AS txbytes
-                FROM containerstats WHERE containerid=ANY($1) AND created>$2 AND created<=$4
+                FROM containerstats WHERE containerid=ANY($1) AND created>=$2 AND created<=$4
                 GROUP BY containerid,(created/$3) ORDER BY MIN(created),containerid LIMIT 65537"#)
-                .bind(ids).bind(window.since(now)).bind(window.bucket_seconds()).bind(now).fetch_all(&self.pool).await.map_err(storage)?;
+                .bind(ids).bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?;
             if rows.len() > 65_536 {
                 return Err(capacity("History exceeds 65536 samples; request individual Container history."));
             }
@@ -185,8 +185,8 @@ impl StatisticsReader for PostgresStatisticsReader {
             let rows=sqlx::query(r#"SELECT MIN(created) AS created,AVG(cpuusage) AS cpuusage,AVG(memoryusage) AS memoryusage,
                 AVG(rxbytes) AS rxbytes,AVG(txbytes) AS txbytes,ROUND(AVG(diskusedbytes))::bigint AS diskusedbytes,
                 ROUND(AVG(disktotalbytes))::bigint AS disktotalbytes,AVG(diskusage) AS diskusage
-                FROM platformstats WHERE platformid=$1 AND created>$2 AND created<=$4 GROUP BY (created/$3) ORDER BY MIN(created)"#)
-                .bind(id).bind(window.since(now)).bind(window.bucket_seconds()).bind(now).fetch_all(&self.pool).await.map_err(storage)?;
+                FROM platformstats WHERE platformid=$1 AND created>=$2 AND created<=$4 GROUP BY (created/$3) ORDER BY MIN(created)"#)
+                .bind(id).bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?;
             rows.into_iter()
                 .map(|row| {
                     Ok(PlatformStatSnapshot {
@@ -217,7 +217,7 @@ impl StatisticsReader for PostgresStatisticsReader {
                 SELECT taskkey,(created/$7) AS bucket,MIN(created) AS created,AVG(cpuusage) AS cpuusage,
                     AVG(memoryactive) AS memoryactive,AVG(memorycache) AS memorycache,AVG(memorylimit) AS memorylimit,
                     AVG(rxbytes) AS rxbytes,AVG(txbytes) AS txbytes FROM swarmservicestats
-                WHERE created>$6 AND created<=$8 AND (
+                WHERE created>=$6 AND created<=$8 AND (
                     ($3::uuid IS NOT NULL AND (swarmserviceid=$3 OR (swarmserviceid IS NULL AND stackid IS NULL AND platformid=$1 AND dockerserviceid=$2))) OR
                     ($3 IS NULL AND $4::uuid IS NOT NULL AND ((stackid=$4 AND servicename=$5) OR (swarmserviceid IS NULL AND stackid IS NULL AND platformid=$1 AND dockerserviceid=$2))) OR
                     ($3 IS NULL AND $4 IS NULL AND platformid=$1 AND dockerserviceid=$2))
@@ -227,7 +227,7 @@ impl StatisticsReader for PostgresStatisticsReader {
                     SUM(memorylimit) AS memorylimit,SUM(rxbytes) AS rxbytes,SUM(txbytes) AS txbytes
                 FROM task_buckets GROUP BY bucket ORDER BY bucket"#)
                 .bind(id.platform_id).bind(id.docker_service_id).bind(id.managed_service_id).bind(id.stack_id).bind(id.service_name)
-                .bind(window.since(now)).bind(window.bucket_seconds()).bind(now).fetch_all(&self.pool).await.map_err(storage)?
+                .bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?
                 .into_iter().map(map_container).collect()
         }.boxed()
     }

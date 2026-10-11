@@ -274,6 +274,14 @@ impl From<citadel_git::GitChangedPath> for GitChangedPath {
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct GitRepositorySyncStatusView {
+    #[schema(value_type = crate::api::resources::schema_models::git::GitRepositoryRefStatusSchema)]
+    pub status: GitRepositoryRefStatus,
+    pub last_synced_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct GitRepositoryView {
     pub id: Uuid,
     pub name: String,
@@ -300,6 +308,9 @@ pub struct GitRepositoryView {
     pub control_state: ResourceControlState,
     #[schema(required = true)]
     pub latest_activity_view: Option<LatestActivityView>,
+    /// Latest check of the default branch, including unchanged scheduled checks.
+    #[schema(required = true)]
+    pub sync_status: Option<GitRepositorySyncStatusView>,
     pub tags: Vec<TagSummary>,
 }
 
@@ -324,6 +335,10 @@ impl TryFrom<citadel_git::GitRepository> for GitRepositoryView {
             created_by_actor_id: value.audit.created_by_actor_id.value(),
             control_state: value.control_state,
             latest_activity_view: value.latest_activity.map(LatestActivityView::from),
+            sync_status: value.sync_status.map(|state| GitRepositorySyncStatusView {
+                status: state.status,
+                last_synced_at: state.last_synced_at,
+            }),
             tags: value.tags.into_iter().map(Into::into).collect(),
         })
     }

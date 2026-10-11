@@ -114,12 +114,11 @@ pub(crate) struct ContentQuery {
 
 #[derive(Deserialize)]
 pub(crate) struct Hours {
-    #[serde(default = "default_hours", alias = "Hours")]
-    pub(crate) hours: u16,
-}
-
-const fn default_hours() -> u16 {
-    24
+    #[serde(alias = "Hours")]
+    pub hours: Option<u16>,
+    pub minutes: Option<u32>,
+    pub from: Option<i64>,
+    pub to: Option<i64>,
 }
 
 const fn default_tail() -> u16 {

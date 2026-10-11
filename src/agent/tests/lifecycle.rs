@@ -111,7 +111,14 @@ async fn health_is_unsigned_and_shutdown_releases_the_listener_in_both_modes() {
             .build()
             .unwrap();
         let base = format!("http://127.0.0.1:{}", address.port());
-        let health = client.get(format!("{base}/health")).send().await.unwrap();
+        // Make the server close first: the accepted connection can remain in
+        // TIME_WAIT, which must not prevent restarting the Agent on this port.
+        let health = client
+            .get(format!("{base}/health"))
+            .header(reqwest::header::CONNECTION, "close")
+            .send()
+            .await
+            .unwrap();
         assert_eq!(health.status(), 200);
         assert_eq!(
             health.json::<serde_json::Value>().await.unwrap()["Status"],
@@ -135,11 +142,13 @@ async fn health_is_unsigned_and_shutdown_releases_the_listener_in_both_modes() {
             .unwrap()
             .unwrap()
             .unwrap();
-        assert!(
-            TcpListener::bind(address).is_ok(),
-            "listener must be released"
-        );
         assert!(!probe(&values, address.port()).await);
+        let mut restart_config = config(&values);
+        restart_config.port = address.port();
+        let restarted = Agent::bind(restart_config)
+            .await
+            .expect("a stopped Agent must immediately rebind its port");
+        assert_eq!(restarted.local_addr().unwrap(), address);
     }
 }
 

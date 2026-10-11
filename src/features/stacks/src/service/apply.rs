@@ -119,6 +119,7 @@ impl StackService {
             rollback,
             webhook_job_id,
             Default::default(),
+            None,
         )
         .await
     }
@@ -149,10 +150,11 @@ impl StackService {
         id: Uuid,
         options: crate::StackApplyOptions,
     ) -> Result<mpsc::Receiver<StackProgressItem>, StackError> {
-        self.start_apply_versioned(actor, administrator, id, None, None, options)
+        self.start_apply_versioned(actor, administrator, id, None, None, options, None)
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn start_apply_versioned(
         &self,
         actor: ActorId,
@@ -161,6 +163,7 @@ impl StackService {
         rollback: Option<Uuid>,
         webhook_job_id: Option<Uuid>,
         options: crate::StackApplyOptions,
+        image_update_commit: Option<String>,
     ) -> Result<mpsc::Receiver<StackProgressItem>, StackError> {
         let permit = self.operations.clone().try_acquire_owned().map_err(|_| {
             StackError::Conflict("Too many Stack operations are already running.".to_owned())
@@ -194,6 +197,7 @@ impl StackService {
                     alerts,
                     actor,
                     claim,
+                    image_update_commit,
                     cancellation,
                     timeout,
                     sender,
@@ -352,6 +356,7 @@ pub(super) async fn execute_apply(
     alerts: Option<Arc<dyn AlertEventSink>>,
     actor: ActorId,
     mut claim: StackOperationClaim,
+    image_update_commit: Option<String>,
     cancellation: CancellationToken,
     timeout: Duration,
     sender: mpsc::Sender<StackProgressItem>,
@@ -384,7 +389,15 @@ pub(super) async fn execute_apply(
                 )
                 .await;
             };
-            match materializer.materialize(&claim, &cancellation).await {
+            // Pin only the materialization request. Keep the user's branch-following
+            // specification intact when the release is persisted.
+            let mut source_claim = claim.clone();
+            if let Some(commit) = image_update_commit
+                && let StackSpec::Git { commit_sha, .. } = &mut source_claim.spec
+            {
+                *commit_sha = Some(commit);
+            }
+            match materializer.materialize(&source_claim, &cancellation).await {
                 Ok(source) => source,
                 Err(error) => {
                     return fail_apply_before_runtime(

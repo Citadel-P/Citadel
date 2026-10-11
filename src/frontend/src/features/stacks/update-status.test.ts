@@ -92,6 +92,15 @@ describe('Stack update status', () => {
     expect(hasStackUpdateAvailable(relevant)).toBe(true);
   });
 
+  it('reports Git stack image updates even when the applied commit is current', () => {
+    const stack = createGitStack(null);
+    stack.stackUpdateState!.recreateStackOnNewImageState.autoUpdateStates = [createImageState('web', true)];
+    expect(getStackUpdateStatus(stack)).toBe(AutoUpdateStatus.UpdateAvailable);
+    expect(getStackImageUpdateCheckMessage(stack).kind).toBe('info');
+    stack.stackUpdateState!.recreateStackOnNewImageState.autoUpdateStates = [createImageState('web', false)];
+    expect(getStackUpdateStatus(stack)).toBe(AutoUpdateStatus.UpToDate);
+  });
+
   it('excludes an uninitialized state', () => {
     const stack = createStack({
       $type: 'WebEditor',

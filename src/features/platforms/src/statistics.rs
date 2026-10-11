@@ -5,17 +5,53 @@ use futures_util::future::BoxFuture;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StatsWindow(u16);
+pub struct StatsWindow {
+    seconds: i64,
+    end: Option<i64>,
+}
 impl StatsWindow {
-    pub const HOURS: [u16; 3] = [24, 48, 72];
+    pub const HOURS: [u16; 6] = [1, 6, 24, 48, 72, 168];
+    pub const MINUTES: [u32; 5] = [15, 60, 360, 1440, 10080];
+    pub const MAX_SECONDS: i64 = 7 * 24 * 3600;
+
     pub fn new(hours: u16) -> Option<Self> {
-        Self::HOURS.contains(&hours).then_some(Self(hours))
+        Self::HOURS.contains(&hours).then_some(Self {
+            seconds: i64::from(hours) * 3600,
+            end: None,
+        })
+    }
+    pub fn minutes(minutes: u32) -> Option<Self> {
+        Self::MINUTES.contains(&minutes).then_some(Self {
+            seconds: i64::from(minutes) * 60,
+            end: None,
+        })
+    }
+    /// Absolute Unix-second bounds; tolerate up to a minute of client clock skew.
+    pub fn between(from: i64, to: i64, now: i64) -> Option<Self> {
+        let seconds = to.checked_sub(from)?;
+        (seconds > 0
+            && seconds <= Self::MAX_SECONDS
+            && from >= now.saturating_sub(Self::MAX_SECONDS + 60)
+            && to <= now.saturating_add(60))
+        .then_some(Self {
+            seconds,
+            end: Some(to),
+        })
+    }
+    pub fn until(self, now: i64) -> i64 {
+        self.end.unwrap_or(now)
     }
     pub fn since(self, now: i64) -> i64 {
-        now.saturating_sub(i64::from(self.0) * 3600)
+        self.until(now).saturating_sub(self.seconds)
     }
     pub fn bucket_seconds(self) -> i64 {
-        if self.0 == 24 { 60 } else { 300 }
+        match self.seconds {
+            ..=3600 => 10,
+            ..=21600 => 30,
+            ..=86400 => 60,
+            ..=259200 => 300,
+            _ => 900,
+        }
     }
 }
 
@@ -178,11 +214,24 @@ pub fn validate_running_task<'a>(
 mod tests {
     use super::*;
     #[test]
-    fn windows_and_bucket_sizes_match_dotnet() {
-        for invalid in [0, 1, 23, 25, 49, 73, u16::MAX] {
+    fn windows_validate_relative_and_absolute_bounds() {
+        for invalid in [0, 23, 25, 49, 73, u16::MAX] {
             assert!(StatsWindow::new(invalid).is_none());
         }
-        for (hours, bucket) in [(24, 60), (48, 300), (72, 300)] {
+        let now = 1_000_000;
+        assert_eq!(StatsWindow::minutes(15).unwrap().bucket_seconds(), 10);
+        assert_eq!(StatsWindow::minutes(10080).unwrap().bucket_seconds(), 900);
+        assert!(StatsWindow::minutes(0).is_none());
+        assert!(StatsWindow::between(now, now, now).is_none());
+        assert!(StatsWindow::between(now, now - 1, now).is_none());
+        assert!(StatsWindow::between(now - 10, now + 61, now).is_none());
+        assert!(
+            StatsWindow::between(now - StatsWindow::MAX_SECONDS - 61, now - 100, now).is_none()
+        );
+        let fixed = StatsWindow::between(now - 7200, now - 3600, now).unwrap();
+        assert_eq!(fixed.since(now + 100), now - 7200);
+        assert_eq!(fixed.until(now + 100), now - 3600);
+        for (hours, bucket) in [(1, 10), (6, 30), (24, 60), (48, 300), (72, 300), (168, 900)] {
             let window = StatsWindow::new(hours).unwrap();
             assert_eq!(window.bucket_seconds(), bucket);
             assert_eq!(window.since(1_000_000), 1_000_000 - i64::from(hours) * 3600);

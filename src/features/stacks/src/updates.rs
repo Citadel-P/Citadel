@@ -47,22 +47,34 @@ pub fn build_manual_stack_checks(
     stack: &crate::Stack,
     scheduled: bool,
 ) -> Result<Vec<ManualStackImageCheck>, StackError> {
+    let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
+    let StackSpec::WebEditor { compose_file, .. } = spec else {
+        return Err(validation(
+            "Git Stack image checks require the applied Compose files.",
+        ));
+    };
+    build_stack_image_checks(stack, scheduled, std::slice::from_ref(compose_file))
+}
+
+/// Builds image checks from the applied Compose definition, regardless of source.
+pub fn build_stack_image_checks(
+    stack: &crate::Stack,
+    scheduled: bool,
+    compose_files: &[String],
+) -> Result<Vec<ManualStackImageCheck>, StackError> {
     if stack.control_state == citadel_primitives::ResourceControlState::Processing {
         return Err(StackError::Conflict(
-            "The Stack is currently processing another operation.".to_owned(),
+            "The Stack is currently processing another operation.".into(),
         ));
     }
     let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
-    let StackSpec::WebEditor {
-        compose_file,
-        update_behavior,
-        common,
-    } = spec
-    else {
-        return Err(validation(
-            "Only Web Editor Stacks support image update checks.",
-        ));
-    };
+    let (StackSpec::Git {
+        update_behavior, ..
+    }
+    | StackSpec::WebEditor {
+        update_behavior, ..
+    }) = spec;
+    let common = spec.common();
     if scheduled && *update_behavior == StackUpdateBehavior::Disabled {
         return Err(validation(
             "Scheduled update checks are disabled for this Stack.",
@@ -91,7 +103,7 @@ pub fn build_manual_stack_checks(
         .registry_id
         .filter(|id| !id.is_nil())
         .ok_or_else(|| validation("The Stack has no Registry configured."))?;
-    let model = parse_compose(std::slice::from_ref(compose_file))?;
+    let model = parse_compose(compose_files)?;
     let build_services = common
         .build_image_bindings
         .iter()
@@ -115,11 +127,6 @@ pub fn build_manual_stack_checks(
             })
         })
         .collect::<Vec<_>>();
-    if checks.is_empty() {
-        return Err(validation(
-            "The Stack has no supported tagged Service images to check.",
-        ));
-    }
     Ok(checks)
 }
 
@@ -196,12 +203,19 @@ pub fn evaluate_manual_stack_updates(
             available.push(item);
         }
     }
+    let mut state = previous.clone();
+    let (StackUpdateState::Git {
+        recreate_stack_on_new_image_state,
+        ..
+    }
+    | StackUpdateState::WebEditor {
+        recreate_stack_on_new_image_state,
+    }) = &mut state;
+    *recreate_stack_on_new_image_state = RecreateStackOnNewImageState {
+        auto_update_states: next,
+    };
     ManualStackUpdateEvaluation {
-        state: StackUpdateState::WebEditor {
-            recreate_stack_on_new_image_state: RecreateStackOnNewImageState {
-                auto_update_states: next,
-            },
-        },
+        state,
         available_updates: available,
         newly_detected_updates: newly_detected,
         baselines_created: baselines,
@@ -213,7 +227,7 @@ pub fn state_key(service: &str, image: &str) -> String {
 }
 
 fn split_tagged_image(image: &str) -> Option<(String, String)> {
-    if image.contains('@') {
+    if image.contains('@') || image.contains('$') {
         return None;
     }
     let last_slash = image.rfind('/');
@@ -361,6 +375,68 @@ mod tests {
         );
         assert_eq!(repeated.available_updates.len(), 1);
         assert!(repeated.newly_detected_updates.is_empty());
+    }
+
+    #[test]
+    fn git_images_use_supplied_compose_and_preserve_commit_observation() {
+        let mut stack = stack(StackUpdateBehavior::Notify, "services: {}", true);
+        let common = stack.spec.as_ref().unwrap().common().clone();
+        let mut spec: StackSpec = serde_json::from_value(serde_json::json!({
+            "$type":"Git", "gitRepoId":Uuid::now_v7(), "branch":"main",
+            "commitSha":"a".repeat(40), "composePaths":["compose.yml"], "updateBehavior":"Notify"
+        }))
+        .unwrap();
+        *spec.common_mut() = common;
+        stack.stack_source = StackSource::Git;
+        stack.stack_update_state = StackUpdateState::new(&spec);
+        stack
+            .stack_update_state
+            .record_applied_commit(&"a".repeat(40), Utc::now());
+        stack.spec = Some(spec);
+        let original = stack.stack_update_state.clone();
+        let checks = build_stack_image_checks(&stack, true, &[
+            "services:\n  api:\n    image: app:latest\n  web:\n    image: nginx:old\n  pinned:\n    image: redis@sha256:abc\n  variable:\n    image: ${IMAGE}\n".into(),
+            "services:\n  web:\n    image: nginx:alpine\n".into(),
+        ]).unwrap();
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].image_name, "nginx:alpine");
+        let remote = BTreeMap::from([(checks[0].key.clone(), "sha256:new".into())]);
+        let deployed = BTreeMap::from([(state_key("web", "nginx:alpine"), "sha256:old".into())]);
+        let result =
+            evaluate_manual_stack_updates(&original, &checks, &remote, Utc::now(), Some(&deployed));
+        let StackUpdateState::Git {
+            recreate_stack_on_new_commit_state,
+            recreate_stack_on_new_image_state,
+        } = result.state
+        else {
+            panic!("must retain Git state")
+        };
+        let StackUpdateState::Git {
+            recreate_stack_on_new_commit_state: expected,
+            ..
+        } = original
+        else {
+            unreachable!()
+        };
+        assert_eq!(recreate_stack_on_new_commit_state, expected);
+        assert!(recreate_stack_on_new_image_state.auto_update_states[0].update_available);
+        assert_eq!(result.baselines_created, 0);
+    }
+
+    #[test]
+    fn image_only_reapply_preserves_pending_git_update() {
+        let now = Utc::now();
+        let mut state = StackUpdateState::Git {
+            recreate_stack_on_new_image_state: Default::default(),
+            recreate_stack_on_new_commit_state: crate::RecreateStackOnNewCommitState {
+                current_commit_sha: "old".into(),
+                remote_commit_sha: Some("new".into()),
+                last_checked_at: now,
+            },
+        };
+        let expected = state.clone();
+        assert!(!state.record_applied_commit("old", now + chrono::Duration::hours(2)));
+        assert_eq!(state, expected);
     }
 
     fn stack(update_behavior: StackUpdateBehavior, compose: &str, build_api: bool) -> crate::Stack {

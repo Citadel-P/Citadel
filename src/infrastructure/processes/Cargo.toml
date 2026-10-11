@@ -10,5 +10,8 @@ futures-util.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["process"] }
+
 [lints]
 workspace = true

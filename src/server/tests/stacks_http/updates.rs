@@ -32,6 +32,39 @@ impl StackUpdateScanner for Scanner {
         self.cached_calls.fetch_add(1, Ordering::SeqCst);
         self.scan(stack, cancel)
     }
+    fn scan_images_cached<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        if !matches!(stack.spec, Some(citadel_stacks::StackSpec::Git { .. })) {
+            return self.scan_cached(stack, cancel);
+        }
+        Box::pin(async move {
+            self.cached_calls.fetch_add(1, Ordering::SeqCst);
+            let mut state = stack.stack_update_state.clone();
+            let StackUpdateState::Git {
+                recreate_stack_on_new_image_state,
+                ..
+            } = &mut state
+            else {
+                unreachable!()
+            };
+            recreate_stack_on_new_image_state.auto_update_states =
+                vec![citadel_stacks::ImageUpdateState {
+                    service_name: "web".into(),
+                    image_name: "nginx:alpine".into(),
+                    current_digest: "sha256:old".into(),
+                    remote_digest: Some(format!(
+                        "sha256:new-{}",
+                        self.mode.load(Ordering::Relaxed)
+                    )),
+                    last_checked_at: chrono::Utc::now(),
+                    update_available: true,
+                }];
+            Ok(state)
+        })
+    }
     fn scan<'a>(
         &'a self,
         stack: &'a citadel_stacks::Stack,
@@ -206,6 +239,16 @@ impl citadel_stacks::StackSourceMaterializerPort for GitSource {
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackApplySource, StackError>> {
         Box::pin(async move {
+            if claim.name.starts_with("git-images-") {
+                let citadel_stacks::StackSpec::Git { commit_sha, .. } = &claim.spec else {
+                    panic!("expected Git")
+                };
+                assert_eq!(
+                    commit_sha.as_deref(),
+                    Some("c".repeat(40).as_str()),
+                    "image Apply must materialize the applied commit"
+                );
+            }
             if claim.operation == "Drift" {
                 let citadel_stacks::StackSpec::Git { commit_sha, .. } = &claim.spec else {
                     panic!("expected Git")
@@ -325,6 +368,78 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
             assert_eq!(runtime.apply_calls.lock().unwrap().len(), calls);
         }
     }
+    // Image checks are independent of Git sync state and preserve branch tracking.
+    sqlx::query("UPDATE gitrepositoryrefs SET status='Degraded' WHERE gitrepositoryid=$1")
+        .bind(repo)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE stacks SET name=$2 WHERE id=$1")
+        .bind(stack.id)
+        .bind(format!("git-images-{repo}"))
+        .execute(pool)
+        .await
+        .unwrap();
+    runtime.apply_failure.store(0, Ordering::Relaxed);
+    let registry = Uuid::from_u128(0x100);
+    let mut image_identities = Vec::new();
+    for (mode, behavior, pin, alert_type) in [
+        (0, "Disabled", false, None),
+        (1, "Notify", false, Some("StackImageUpdateAvailable")),
+        (2, "Notify", true, Some("StackImageUpdateAvailable")),
+        (3, "StackAutoDeploy", false, Some("StackAutoUpdated")),
+    ] {
+        let spec: StackSpec = serde_json::from_value(json!({"$type":"Git","gitRepoId":repo,"branch":"main","composePaths":["compose.yml"],"updateBehavior":behavior,"registryId":registry,
+            "commitSha":pin.then(|| "c".repeat(40))})).unwrap();
+        sqlx::query("UPDATE stackreleases SET status='Healthy',spec=$2 WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
+            .bind(stack.id).bind(spec.to_storage_value().unwrap()).execute(pool).await.unwrap();
+        scanner.mode.store(mode, Ordering::Relaxed);
+        alerts.0.lock().unwrap().clear();
+        let before = runtime.apply_calls.lock().unwrap().len();
+        service
+            .run_update_checks(true, &CancellationToken::new())
+            .await
+            .unwrap();
+        let observations = alerts.0.lock().unwrap().clone();
+        let matching = observations
+            .iter()
+            .filter(|a| a.resource_id == stack.id)
+            .collect::<Vec<_>>();
+        if let Some(kind) = alert_type {
+            let observation = matching.iter().find(|a| a.alert_type == kind).expect(kind);
+            assert_eq!(
+                observation.info["Updates"][0]["LatestDigest"],
+                format!("sha256:new-{mode}")
+            );
+            image_identities.push(observation.deduplication_component.clone());
+        } else {
+            assert!(matching.is_empty());
+        }
+        assert_eq!(
+            runtime.apply_calls.lock().unwrap().len(),
+            before + usize::from(behavior == "StackAutoDeploy")
+        );
+        let view = store
+            .get_authorized(admin.actor_id, true, stack.id)
+            .await
+            .unwrap();
+        let Some(StackSpec::Git { commit_sha, .. }) = &view.spec else {
+            panic!("expected Git")
+        };
+        assert_eq!(
+            commit_sha.is_some(),
+            pin,
+            "image Apply must not pin the saved specification"
+        );
+        assert_eq!(
+            view.source.as_ref().unwrap().resolved_commit_sha,
+            "c".repeat(40)
+        );
+    }
+    assert_ne!(
+        image_identities[0], image_identities[1],
+        "new digests must have distinct alert identities"
+    );
     sqlx::query("DELETE FROM stacks WHERE id=$1")
         .bind(stack.id)
         .execute(pool)
@@ -350,6 +465,9 @@ impl citadel_stacks::StackEntitlements for Entitlements {
     }
 }
 pub(super) async fn verify_update_producers(pool: &sqlx::PgPool, id: Uuid, swarm: bool) {
+    // Scheduled image checks require a configured Registry, as the real scanner does.
+    sqlx::query("UPDATE stackreleases SET spec=jsonb_set(spec::jsonb,'{RegistryId}',to_jsonb($2::text))::json WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
+        .bind(id).bind("00000000-0000-0000-0000-000000000100").execute(pool).await.unwrap();
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let entitlements = Arc::new(Entitlements {

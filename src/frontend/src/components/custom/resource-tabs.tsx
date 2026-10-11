@@ -1,5 +1,6 @@
 import { useLocalStorage, useStickySentinel } from '@/lib/hooks';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { TabsWithActions as Tabs, TabActionsSlot } from './tab-actions';
 import { cn } from '@/lib/utils';
 import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
@@ -61,10 +62,10 @@ export const ResourceTabs = <T extends RequiredFormFields>({
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(
-          'sticky top-0 right-0 left-0 z-30 min-w-0 overflow-hidden rounded-lg border bg-card transition-shadow duration-200',
+          'flex items-center gap-2 sticky top-0 right-0 left-0 z-30 min-w-0 overflow-hidden rounded-lg border bg-card transition-shadow duration-200',
           isStuck && 'shadow-sm',
         )}>
-        <TabsList aria-label="Resource sections" className="h-auto w-full gap-1 overflow-x-auto border-0">
+        <TabsList aria-label="Resource sections" className="h-auto min-w-0 flex-1 gap-1 overflow-x-auto border-0">
           {tabs.map((tab) => (
             <TabsTrigger
               key={tab.label}
@@ -75,6 +76,7 @@ export const ResourceTabs = <T extends RequiredFormFields>({
             </TabsTrigger>
           ))}
         </TabsList>
+        <TabActionsSlot className="pr-2" />
       </div>
 
       {tabs

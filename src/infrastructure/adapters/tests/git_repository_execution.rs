@@ -127,7 +127,11 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     git(&remote, &["init", "--initial-branch=main"]);
     git(&remote, &["config", "user.email", "citadel@example.test"]);
     git(&remote, &["config", "user.name", "Citadel Test"]);
-    std::fs::write(remote.join("compose.yaml"), b"services: {}\n").unwrap();
+    std::fs::write(
+        remote.join("compose.yaml"),
+        b"services:\n  web:\n    image: nginx:alpine\n",
+    )
+    .unwrap();
     std::fs::create_dir_all(remote.join("config")).unwrap();
     std::fs::write(remote.join("config/app.conf"), b"mode=production\n").unwrap();
     git(&remote, &["add", "compose.yaml", "config/app.conf"]);
@@ -506,6 +510,13 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
             .unwrap()
     }
     assert_eq!(count(&pool, id).await, 1);
+    let catalog = PostgresGitRepositoryPersistence::new(pool.clone());
+    let before = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
+        .await
+        .unwrap()
+        .sync_status
+        .unwrap()
+        .last_synced_at;
     let claim = poll(&store, &pool, actor, id, "main").await;
     store
         .complete(
@@ -522,6 +533,89 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         1,
         "unchanged poll is silent, including SHA casing"
     );
+    let state = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
+        .await
+        .unwrap()
+        .sync_status
+        .unwrap();
+    assert_eq!(state.status, citadel_git::GitRepositoryRefStatus::Healthy);
+    assert!(
+        state.last_synced_at > before,
+        "silent polls advance the realtime check summary"
+    );
+    let listed = citadel_git::GitRepositoryPersistence::list_git_repositories(
+        &catalog,
+        ActorId::new(actor),
+        true,
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .find(|repo| repo.id == id)
+    .unwrap();
+    assert_eq!(
+        listed.sync_status.unwrap().last_synced_at,
+        state.last_synced_at
+    );
+
+    // Background work stays silent even when it changes the commit or rebuilds
+    // the cache. Apply may carry a human actor; system calls may use Manual.
+    for (trigger, sync_actor, cloned) in [
+        ("Poll", actor, false),
+        ("Poll", actor, true),
+        ("Apply", actor, false),
+        ("Manual", citadel_identity::SYSTEM_ACTOR_ID, false),
+    ] {
+        if trigger == "Apply" {
+            store
+                .enqueue_apply(ActorId::new(sync_actor), id, "main")
+                .await
+                .unwrap();
+        } else {
+            store
+                .enqueue_sync(ActorId::new(sync_actor), id, Some("main"))
+                .await
+                .unwrap();
+            sqlx::query("UPDATE gitrepositoryrefs SET synctrigger=$2 WHERE gitrepositoryid=$1")
+                .bind(id)
+                .bind(trigger)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let claim = store
+            .claim_next(Utc::now() - chrono::Duration::minutes(10))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claim.trigger, trigger);
+        let commit = if cloned {
+            "c".repeat(40)
+        } else {
+            "b".repeat(40)
+        };
+        store
+            .complete(
+                &claim,
+                &SyncResult {
+                    commit: commit.clone(),
+                    cloned,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(count(&pool, id).await, 1, "{trigger} success is silent");
+        let reference = store.get_ref(id, "main").await.unwrap().unwrap();
+        assert_eq!(
+            reference.resolved_commit_sha.as_deref(),
+            Some(commit.as_str())
+        );
+        assert_eq!(
+            reference.status,
+            citadel_git::GitRepositoryRefStatus::Healthy
+        );
+    }
+
     for expected in [2, 2] {
         let claim = poll(&store, &pool, actor, id, "main").await;
         store.fail(&claim, "same transport error").await.unwrap();
@@ -545,8 +639,8 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
             .unwrap();
         assert_eq!(
             count(&pool, id).await,
-            3,
-            "recovery at the same commit records success once; later unchanged polls stay silent"
+            2,
+            "background recovery and subsequent polls stay silent"
         );
         let repository = citadel_git::GitRepositoryPersistence::get_git_repository(
             &PostgresGitRepositoryPersistence::new(pool.clone()),
@@ -557,7 +651,8 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         assert_eq!(repository.status, citadel_git::GitRepositoryStatus::Healthy);
         assert_eq!(
             repository.latest_activity.as_ref().unwrap().status,
-            citadel_activities::ActivityStatus::Success
+            citadel_activities::ActivityStatus::Failure,
+            "recovery updates live status without rewriting historical failures"
         );
     }
     // Editing a source after a polling failure must not inherit the silent Poll trigger.
@@ -582,6 +677,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         .unwrap()
         .unwrap();
     assert_eq!(claim.trigger, "Manual");
+    let before_manual = count(&pool, id).await;
     store
         .complete(
             &claim,
@@ -592,6 +688,11 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         )
         .await
         .unwrap();
+    assert_eq!(
+        count(&pool, id).await,
+        before_manual + 1,
+        "manual pulls remain audited"
+    );
     let repository = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
         .await
         .unwrap();
@@ -622,6 +723,17 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         status, "Healthy",
         "secondary polling failure does not degrade default branch"
     );
+    let state = citadel_git::GitRepositoryPersistence::get_git_repository(&catalog, id)
+        .await
+        .unwrap()
+        .sync_status
+        .unwrap();
+    assert_eq!(
+        state.status,
+        citadel_git::GitRepositoryRefStatus::Healthy,
+        "the streamed summary belongs to the default branch, not the last branch checked"
+    );
+
     let webhook = serde_json::json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"test"});
     sqlx::query("UPDATE gitrepositories SET webhook=$2 WHERE id=$1")
         .bind(id)
@@ -630,6 +742,48 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         .await
         .unwrap();
     let expected = store.get_webhook(id).await.unwrap().unwrap();
+    let before = count(&pool, id).await;
+    for (error, increment) in [
+        (Some("background transport error"), 1),
+        (Some("background transport error"), 1),
+        (None, 1),
+        (Some("background transport error"), 2),
+    ] {
+        store
+            .enqueue_webhook(ActorId::new(actor), id, "main", &expected)
+            .await
+            .unwrap();
+        let claim = store
+            .claim_next(Utc::now() - chrono::Duration::minutes(10))
+            .await
+            .unwrap()
+            .unwrap();
+        if let Some(error) = error {
+            store.fail(&claim, error).await.unwrap();
+        } else {
+            store
+                .complete(
+                    &claim,
+                    &SyncResult {
+                        commit: "d".repeat(40),
+                        cloned: false,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            count(&pool, id).await,
+            before + increment,
+            "webhook success is silent; failures deduplicate until recovery"
+        );
+    }
+    // Keep the alert snapshot assertions below scoped to their own failure.
+    sqlx::query("DELETE FROM alertobservations WHERE payload->>'resource_id'=$1")
+        .bind(id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
     let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
     listener.listen("citadel_job_alerts").await.unwrap();
     store

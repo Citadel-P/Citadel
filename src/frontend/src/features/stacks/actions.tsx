@@ -26,7 +26,7 @@ import {
   getStackUpdateCheckDisabledReason,
   getStackGitUpdateState,
   getStackImageUpdateCheckMessage,
-  hasStackUpdateAvailable,
+  getStackImageUpdateStates,
 } from './update-status';
 
 export const useVariables = (resources: StackView | StackView[]) =>
@@ -66,10 +66,7 @@ export const deployAction: ActionConfig<StackView, any> = {
 
       return {
         canExecute:
-          !!selected &&
-          selected.status !== StackReleaseStatus.Applying &&
-          !isProcessing(selected) &&
-          !multiSelect,
+          !!selected && selected.status !== StackReleaseStatus.Applying && !isProcessing(selected) && !multiSelect,
         run: () => openSheet({ kind: 'stack', payload: { id: selected.id, name: selected.name } }),
       };
     },
@@ -87,10 +84,7 @@ export const deployAction: ActionConfig<StackView, any> = {
 
       return {
         canExecute:
-          !!selected &&
-          selected.status !== StackReleaseStatus.Applying &&
-          !isProcessing(selected) &&
-          !multiSelect,
+          !!selected && selected.status !== StackReleaseStatus.Applying && !isProcessing(selected) && !multiSelect,
         run: () =>
           openSheet({
             kind: 'stack',
@@ -130,7 +124,11 @@ export const syncAction: ActionConfig<StackView, any> = {
     const multiSelect = Array.isArray(resources) && resources.length > 1;
     const canCheck = !!selected && !multiSelect && canCheckDrift(selected);
     // Observe the report loaded by the stack page without issuing extra checks per table row.
-    const { data, error, isFetching, refetch } = useRead('getStackDrift', { stackId: selected?.id ?? '' }, { enabled: false });
+    const { data, error, isFetching, refetch } = useRead(
+      'getStackDrift',
+      { stackId: selected?.id ?? '' },
+      { enabled: false },
+    );
     const { mutateAsync, isPending } = useMutate('reconcileStack');
     const { hasCapability } = useLicenseEntitlements();
     const licensed = hasCapability(LicenseCapability.OperationalGuardrails);
@@ -201,16 +199,17 @@ export const checkUpdatesAction: ActionConfig<StackView, any> = {
           const result = await mutateAsync({ stackId: selected.id });
           const updated = result.data;
 
-          if (updated.stackSource === StackSource.Git) {
-            if (hasStackUpdateAvailable(updated) && getStackGitUpdateState(updated)?.remoteCommitSha) {
-              toast.info('Git update available', {
-                description: 'A newer relevant commit is available.',
-              });
-            } else {
-              toast.success('Stack source is up to date', {
-                description: 'No newer relevant commit was found.',
-              });
-            }
+          const gitState = getStackGitUpdateState(updated);
+          if (gitState?.remoteCommitSha && gitState.remoteCommitSha !== gitState.currentCommitSha) {
+            toast.info('Git update available', {
+              description: getStackImageUpdateStates(updated).some((state) => state.updateAvailable)
+                ? 'A newer relevant commit and service images are available.'
+                : 'A newer relevant commit is available.',
+            });
+          } else if (updated.stackSource === StackSource.Git && getStackImageUpdateStates(updated).length === 0) {
+            toast.success('Stack source is up to date', {
+              description: 'No newer relevant commit was found. No supported service images were checked.',
+            });
           } else {
             const message = getStackImageUpdateCheckMessage(updated);
             toast[message.kind](message.title, { description: message.description });

@@ -110,6 +110,40 @@ optional Docker and Agent probes are `docker-smoke` and `agent-smoke`.
 `realtime-client.mjs` takes its token from `CITADEL_REALTIME_TEST_TOKEN` and connects
 to the URL supplied through `--url`; the Core endpoint is `/api/v1/realtime`.
 
+## Focused release regressions
+
+Run these locally when changing process cleanup, authentication dependencies, or
+the persistence fixtures; they do not add work to CI:
+
+```bash
+cargo test --locked -p citadel-processes --test process_runner -- --include-ignored
+cargo test --locked -p citadel-agent --test lifecycle
+cargo test --locked -p citadel-adapters --test oidc_protocol
+# Set the corresponding disposable database URLs from the table above first.
+cargo test --locked -p citadel-adapters --test authorized_read --test resource_metadata_persistence --test resource_permissions -- --ignored --test-threads=1
+cargo test --locked -p citadel-server --test execution_resources_http --test users_http --test oidc_http -- --ignored --test-threads=1
+npm --prefix src/frontend run test:run -- --maxWorkers=1
+npm --prefix src/frontend run build:prod
+npm --prefix src/frontend audit
+# Requires cargo-audit installed locally.
+cargo audit
+```
+
+The new Linux process tests are opt-in to keep CI runtime unchanged. They cover
+helpers inheriting pipes after their parent exits,
+including timeout, cancellation, and a dropped runner future. Unix cleanup kills
+the command's process group and reaps the direct child; the packaged init process
+reaps orphaned descendants. Helpers that deliberately create another session or
+process group are outside that group cleanup.
+
+Dependency updates must preserve login/refresh and signed OIDC token verification.
+The DOMPurify override keeps Monaco and API-generation tooling on the patched
+sanitizer until their upstream dependency pins catch up. JWTs use the AWS-LC
+backend to avoid the unpatched RSA dependency of the alternative backend.
+
+These focused checks supplement exact-image Core/Agent acceptance and an overnight
+workload soak; a short passing test run does not establish long-term memory stability.
+
 ## foundation
 
 Run `./test/scripts/Test-Foundation.ps1` from the repository root to

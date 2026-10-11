@@ -363,14 +363,15 @@ Only one run per build project can be active at a time. If a webhook arrives whi
 **Build Webhook Received** activities show the delivery outcome:
 
 - **Success**: the build was queued. This does not mean the build has succeeded.
-- **Information**: an expected skip, such as no relevant changes, no new commit,
-  a filtered branch or event type, or a disabled build project.
+- **Information**: a configuration skip, such as a disabled build project.
 - **Warning**: a build could not be queued because the repository did not match,
   a required entitlement was unavailable, another run was active, or the
   configuration changed during dispatch. Other unexplained skips are warnings too.
 - **Failure**: authentication, request validation, or dispatch failed.
 
-The activity summary includes the outcome reason.
+The activity summary includes the outcome reason. Routine no-ops (no relevant
+changes, no new commit, or a filtered branch or event) do not create activity
+entries; the webhook response still contains the reason.
 
 For the shared listener URL format and provider setup, see [Webhooks](/docs/guides/webhooks).
 

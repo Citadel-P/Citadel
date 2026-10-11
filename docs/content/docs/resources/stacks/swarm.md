@@ -105,7 +105,7 @@ be inspected and corrected.
 
 ## Image checks and automatic updates
 
-For Web Editor stacks, **Check for updates** compares each supported image tag with
+For Web Editor and Git stacks, **Check for updates** compares each supported image tag with
 the image digest recorded in its Swarm Service on the manager. Tasks do not need
 to run on the manager, and node-agent coverage is not required for this check.
 Select a Registry with access to the images. If a deployed Service has no resolved
@@ -119,10 +119,11 @@ to a digest and services linked to Citadel Builds are excluded from tag checks.
 | **Auto Deploy Stack** | Deploy the complete stack when an update is found, using Swarm's rollout configuration. Requires the automation and operational guardrails entitlements. |
 | **Auto Deploy Services** | Unavailable for Swarm stacks; service-scoped Stack deployment is not supported. |
 
-Git stacks check changes to their tracked source rather than registry image tags.
-Use **Notify Only** or **Auto Deploy Stack** for that source. A stack pinned to a
-Git commit cannot follow new commits automatically. Build-linked services use
-their build completion settings separately from registry image checks.
+Git stacks also check relevant changes to their tracked source. Registry image
+checks run every two hours independently of repository synchronization. An
+image-triggered update retains the applied Git revision. A stack pinned to a Git
+commit cannot follow new commits automatically, but can still update tagged
+images. Build-linked services use their build completion settings separately.
 
 ## Permissions
 

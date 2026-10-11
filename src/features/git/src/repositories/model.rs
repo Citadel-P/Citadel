@@ -48,6 +48,7 @@ pub struct GitRepository {
     // Related data populated by full resource reads.
     pub tags: Vec<citadel_tags::TagSummary>,
     pub latest_activity: Option<citadel_activities::ActivitySummary>,
+    pub sync_status: Option<GitRepositorySyncStatus>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,4 +79,12 @@ pub struct RepoCommand {
 
 fn default_repo_command_path() -> String {
     "./".to_owned()
+}
+
+/// Latest persisted check of the configured default branch.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositorySyncStatus {
+    pub status: crate::GitRepositoryRefStatus,
+    pub last_synced_at: DateTime<Utc>,
 }

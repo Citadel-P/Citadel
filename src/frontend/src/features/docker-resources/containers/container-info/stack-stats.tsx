@@ -1,6 +1,10 @@
+import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
+import { StatsChartRange, useStatsChartBounds } from '@/components/custom/stats-chart-range';
+import { useStatsRange } from '@/hooks/useStatsRange';
+import { statsAxis, statsBucketSeconds } from '@/lib/stats-range';
 import { ContainerRuntimeView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { NETWORK_CHART_COLORS, type ThemedChartColor } from '@/components/custom/chart-series-colors';
-import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
+import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import { getContainerSeriesColor } from '@/components/custom/container-series-colors';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
@@ -17,7 +21,7 @@ import {
 import { normalizeDockerId } from '@/lib/utils';
 import dayjs from 'dayjs';
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 type ContainerSelection = 'all' | string;
 type MetricKind = 'memory' | 'cpu' | 'network';
@@ -61,7 +65,6 @@ type ChartDatum = {
 
 const ALL_CONTAINERS = 'all';
 type MetricViewState = {
-  windowHours: StatsWindowHours;
   selectedContainer: ContainerSelection;
 };
 
@@ -167,17 +170,18 @@ export const StackStats = (props: StackStatsProps) => <StackStatsContent key={pr
 const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
   const [liveStats, setLiveStats] = useState<Record<string, ContainerStatView[]>>({});
   const [metricViews, setMetricViews] = useState<Record<MetricKind, MetricViewState>>({
-    memory: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
-    cpu: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
-    network: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
+    memory: { selectedContainer: ALL_CONTAINERS },
+    cpu: { selectedContainer: ALL_CONTAINERS },
+    network: { selectedContainer: ALL_CONTAINERS },
   });
   const lastStatRef = useRef<Record<string, ContainerStatView | undefined>>({});
-  const longestWindow = Math.max(...Object.values(metricViews).map((view) => view.windowHours)) as StatsWindowHours;
-  const readArgs = useMemo(() => ({ stackId, query: { hours: longestWindow } }), [longestWindow, stackId]);
-  const { data, isLoading } = useRead('getStackStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
+  const range = useStatsRange();
+  const longestWindow = range.hours;
+  const readArgs = useMemo(() => ({ stackId, query: range.query }), [range.query, stackId]);
+  const { data, isLoading, error } = useRead('getStackStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
   const series = useMemo(
-    () => buildContainerSeries(data?.data?.containers ?? [], containers, liveStats),
-    [containers, data?.data?.containers, liveStats],
+    () => buildContainerSeries(data?.data?.containers ?? [], containers, range.live ? liveStats : {}),
+    [containers, data?.data?.containers, liveStats, range.live],
   );
 
   useEffect(() => {
@@ -215,21 +219,21 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      {STACK_STAT_METRICS.map((metric) => {
-        const view = metricViews[metric.kind];
-        return (
-          <StackMetricCard
-            key={metric.kind}
-            series={series}
-            isLoading={isLoading}
-            metric={metric}
-            windowHours={view.windowHours}
-            onWindowHoursChange={(windowHours) => updateMetricView(metric.kind, { windowHours })}
-            selectedContainer={view.selectedContainer}
-            onSelectedContainerChange={(selectedContainer) => updateMetricView(metric.kind, { selectedContainer })}
-          />
-        );
-      })}
+      <StatsChartRange range={range} error={error}>
+        {STACK_STAT_METRICS.map((metric) => {
+          const view = metricViews[metric.kind];
+          return (
+            <StackMetricCard
+              key={metric.kind}
+              series={series}
+              isLoading={isLoading}
+              metric={metric}
+              selectedContainer={view.selectedContainer}
+              onSelectedContainerChange={(selectedContainer) => updateMetricView(metric.kind, { selectedContainer })}
+            />
+          );
+        })}
+      </StatsChartRange>
     </div>
   );
 };
@@ -238,16 +242,12 @@ const StackMetricCard = ({
   series,
   isLoading,
   metric,
-  windowHours,
-  onWindowHoursChange,
   selectedContainer,
   onSelectedContainerChange,
 }: {
   series: ContainerSeries[];
   isLoading: boolean;
   metric: MetricConfig;
-  windowHours: StatsWindowHours;
-  onWindowHoursChange: (hours: StatsWindowHours) => void;
   selectedContainer: ContainerSelection;
   onSelectedContainerChange: (container: ContainerSelection) => void;
 }) => {
@@ -258,10 +258,11 @@ const StackMetricCard = ({
         : ALL_CONTAINERS,
     [selectedContainer, series],
   );
-  const chartData = useMemo(() => {
-    const range = getTimeRange(windowHours);
-    return buildMetricChartData(series, metric, effectiveContainer, range, windowHours);
-  }, [effectiveContainer, metric, series, windowHours]);
+  const bounds = useStatsChartBounds()!;
+  const chartData = useMemo(
+    () => buildMetricChartData(series, metric, effectiveContainer, { start: bounds.from, end: bounds.to }),
+    [effectiveContainer, metric, series, bounds.from, bounds.to],
+  );
   const chartConfig = useMemo(() => buildChartConfig(metric), [metric]);
   const latest = chartData.at(-1);
 
@@ -274,8 +275,6 @@ const StackMetricCard = ({
         description={metric.description}
         controls={
           <StackMetricControls
-            windowHours={windowHours}
-            onWindowHoursChange={onWindowHoursChange}
             selectedContainer={effectiveContainer}
             onSelectedContainerChange={onSelectedContainerChange}
             containers={series}
@@ -292,7 +291,7 @@ const StackMetricCard = ({
       <CardContent className="px-2 sm:px-6">
         {chartData.length > 0 ? (
           <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
-            <AreaChart data={chartData} accessibilityLayer>
+            <AreaChart data={statsChartData(chartData, bounds)} accessibilityLayer>
               <defs>
                 {metric.fields.map((field) => (
                   <linearGradient
@@ -302,20 +301,22 @@ const StackMetricCard = ({
                     y1="0"
                     x2="0"
                     y2="1">
-                    <stop offset="5%" stopColor={`var(--color-${field.key})`} stopOpacity={0.8} />
-                    <stop offset="95%" stopColor={`var(--color-${field.key})`} stopOpacity={0.1} />
+                    <stop offset="5%" stopColor={`var(--color-${field.key})`} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={`var(--color-${field.key})`} stopOpacity={0.02} />
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid vertical={true} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <YAxis {...statsValueAxis(metric.kind === 'cpu' ? 'percent' : 'bytes')} />
               <XAxis
+                {...statsAxis(bounds)}
                 dataKey="created"
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={32}
                 tickFormatter={(timestamp) =>
-                  dayjs(Number(timestamp) * 1000).format(windowHours > 24 ? 'MMM D HH:mm' : 'HH:mm')
+                  dayjs(Number(timestamp) * 1000).format(bounds.to - bounds.from > 86400 ? 'MMM D HH:mm' : 'HH:mm')
                 }
               />
               <ChartTooltip
@@ -354,7 +355,9 @@ const StackMetricCard = ({
                 <Area
                   key={field.key}
                   dataKey={field.key}
-                  type="natural"
+                  type="linear"
+                  isAnimationActive={false}
+                  connectNulls={false}
                   fill={`url(#${getGradientId(metric.kind, field.key)})`}
                   stroke={`var(--color-${field.key})`}
                   stackId={metric.stacked ? metric.kind : undefined}
@@ -374,21 +377,16 @@ const StackMetricCard = ({
 };
 
 const StackMetricControls = ({
-  windowHours,
-  onWindowHoursChange,
   selectedContainer,
   onSelectedContainerChange,
   containers,
 }: {
-  windowHours: StatsWindowHours;
-  onWindowHoursChange: (hours: StatsWindowHours) => void;
   selectedContainer: ContainerSelection;
   onSelectedContainerChange: (container: ContainerSelection) => void;
   containers: ContainerSeries[];
 }) => {
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-      <StatsWindowSelect value={windowHours} onChange={onWindowHoursChange} />
       <Select value={selectedContainer} onValueChange={onSelectedContainerChange}>
         <SelectTrigger className="h-8 w-48 rounded-sm bg-background shadow-none">
           <SelectValue />
@@ -450,14 +448,13 @@ const buildMetricChartData = (
   metric: MetricConfig,
   selectedContainer: ContainerSelection,
   range: { start: number; end: number },
-  windowHours: StatsWindowHours,
 ) => {
   const selectedContainers =
     selectedContainer === ALL_CONTAINERS
       ? containers
       : containers.filter((container) => container.id === selectedContainer);
   const fields = uniqueFields([...metric.fields, ...metric.summaryFields]);
-  const bucketSeconds = windowHours > 24 ? 300 : 60;
+  const bucketSeconds = statsBucketSeconds({ from: range.start, to: range.end });
 
   if (selectedContainer === ALL_CONTAINERS) {
     return buildAggregatedMetricChartData(selectedContainers, fields, range, bucketSeconds);
@@ -572,14 +569,6 @@ const uniqueFields = (fields: MetricField[]) => {
     seen.add(field.key);
     return true;
   });
-};
-
-const getTimeRange = (windowHours: StatsWindowHours) => {
-  const end = Math.floor(Date.now() / 1000);
-  return {
-    start: end - windowHours * 60 * 60,
-    end,
-  };
 };
 
 const getContainerLabel = (name: string | undefined | null, id: string) => {

@@ -25,6 +25,8 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal) {
         "webhook":{"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"fixture-secret","branchFilter":"main"}
     }))).await).await;
     assert_eq!(created["controlState"], "Queued");
+    assert_eq!(created["syncStatus"]["status"], "Pending");
+    assert!(created["syncStatus"]["lastSyncedAt"].is_string());
     let id = created["id"].as_str().unwrap();
     let path = format!("/api/v1/gitRepositories/{id}");
     let cfg_path = format!("{path}/_cfg");
@@ -34,6 +36,9 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal) {
             response_json(request(app, Method::GET, get_path, Some(admin.clone()), None).await)
                 .await;
         assert_eq!(read["webhook"], created["webhook"]);
+        if get_path == &path {
+            assert_eq!(read["syncStatus"], created["syncStatus"]);
+        }
     }
     let omitted = response_json(
         request(

@@ -74,6 +74,7 @@ fn repository() -> citadel_git::GitRepository {
         },
 
         latest_activity: None,
+        sync_status: None,
         tags: vec![],
     }
 }
@@ -83,6 +84,20 @@ fn repository_views_validate_stored_vocabulary() {
     let view = GitRepositoryView::try_from(repository()).unwrap();
     assert_eq!(view.status, GitRepositoryStatus::Healthy);
     assert_eq!(view.control_state, ResourceControlState::Idle);
+    assert!(view.sync_status.is_none());
+    let mut resource = repository();
+    let checked_at = chrono::Utc::now();
+    resource.sync_status = Some(citadel_git::GitRepositorySyncStatus {
+        status: citadel_git::GitRepositoryRefStatus::Healthy,
+        last_synced_at: checked_at,
+    });
+    let view = GitRepositoryView::try_from(resource).unwrap();
+    let state = view.sync_status.as_ref().unwrap();
+    assert_eq!(state.last_synced_at, checked_at);
+    assert_eq!(
+        serde_json::to_value(view).unwrap()["syncStatus"]["status"],
+        "Healthy"
+    );
     for control_state in ["Idle", "Queued", "Processing"] {
         let mut resource = repository();
         resource.control_state = control_state.parse().unwrap();

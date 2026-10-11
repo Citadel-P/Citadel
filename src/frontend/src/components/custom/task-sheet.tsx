@@ -819,6 +819,7 @@ export function ActivityAlertZone({
   activity,
   title,
   date,
+  action,
 }: {
   info:
     | InfoOf<'GitRepoPulled'>
@@ -831,11 +832,16 @@ export function ActivityAlertZone({
   activity: ActivityView | null | undefined;
   title?: string;
   date?: any;
+  action?: ReactNode;
 }) {
   if (!activity || !info) return null;
   if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return null;
   return (
-    <AlertMessage title={title} date={date} type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
+    <AlertMessage
+      title={title}
+      date={date}
+      action={action}
+      type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
       <span className="whitespace-pre-wrap break-words">{info.result?.message}</span>
     </AlertMessage>
   );

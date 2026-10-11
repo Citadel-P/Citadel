@@ -56,7 +56,7 @@
     "cmdk": "^1.1.1",
     "dayjs": "^1.11.13",
     "jotai": "^2.19.1",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.2",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.25.0",
     "monaco-editor": "^0.55.1",
@@ -67,13 +67,16 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router": "^7.14.2",
+    "react-router": "^7.18.4",
     "react-top-loading-bar": "^3.0.2",
     "recharts": "^2.15.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "yaml": "^2.9.0"
+  },
+  "overrides": {
+    "dompurify": "3.4.16"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.5",
@@ -92,7 +95,7 @@
     "@typescript-eslint/eslint-plugin": "^8.59.2",
     "@typescript-eslint/parser": "^8.59.2",
     "@vitejs/plugin-react-swc": "^3.11.0",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "dotenv": "^17.2.1",
     "eslint": "^9.39.4",
     "eslint-plugin-jsx-a11y": "^6.10.2",
@@ -103,7 +106,6 @@
     "jsdom": "29.1.1",
     "msw": "2.15.0",
     "postcss": "^8.5.14",
-    "postcss-cli": "^11.0.1",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "swagger-typescript-api": "^13.12.3",
     "tailwindcss": "^4.1.11",
@@ -114,6 +116,6 @@
     "vite": "^7.3.2",
     "vite-plugin-svgr": "^5.2.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }

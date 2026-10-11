@@ -59,16 +59,34 @@ pub async fn verify(
     );
     assert!(builds.store().get(id).await.unwrap().latest_run.is_none());
     entitlement.0.store(true, Ordering::Relaxed);
-    for payload in [
-        json!({"changedPaths":["docs/readme.md"]}),
-        json!({"branch":"other","changedPaths":["src/main.rs"]}),
-        json!({"repository":"https://example.test/unrelated.git","changedPaths":["src/main.rs"]}),
-    ] {
-        assert_eq!(
-            response_json(send(app, hub, &url, Some("Bearer build-hook-test"), payload).await)
-                .await["status"],
-            "noop"
-        );
+    // Repeated routine deliveries stay quiet; identity mismatches remain visible.
+    for (payload, records_activity) in [
+        (json!({"changedPaths":["docs/readme.md"]}), false),
+        (
+            json!({"branch":"other","changedPaths":["src/main.rs"]}),
+            false,
+        ),
+        (
+            json!({"repository":"https://example.test/unrelated.git","changedPaths":["src/main.rs"]}),
+            true,
+        ),
+    ].into_iter().cycle().take(6) {
+        let result = response_json(
+            send_with_activity(
+                app,
+                hub,
+                &url,
+                Some("Bearer build-hook-test"),
+                payload,
+                records_activity,
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(result["status"], "noop");
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND info::jsonb->>'RequestId'=$2")
+            .bind(id).bind(result["requestId"].as_str().unwrap()).fetch_one(pool).await.unwrap();
+        assert_eq!(count, i64::from(records_activity));
         assert!(builds.store().get(id).await.unwrap().latest_run.is_none());
     }
     let payload =
@@ -178,6 +196,17 @@ async fn send(
     token: Option<&str>,
     body: Value,
 ) -> axum::response::Response {
+    send_with_activity(app, hub, url, token, body, true).await
+}
+
+async fn send_with_activity(
+    app: &Router,
+    hub: &RealtimeHub,
+    url: &str,
+    token: Option<&str>,
+    body: Value,
+    records_activity: bool,
+) -> axum::response::Response {
     let mut notifications = hub.subscribe();
     let mut request = Request::builder().method(Method::POST).uri(url);
     if let Some(token) = token {
@@ -199,6 +228,13 @@ async fn send(
         if event.resource_type() == "Build" {
             latest = Some(event);
         }
+    }
+    if !records_activity {
+        assert!(
+            latest.is_none(),
+            "routine no-ops must not wake activity subscribers"
+        );
+        return response;
     }
     let event = latest.expect("webhook realtime update");
     let id = url.split('/').nth(4).unwrap();

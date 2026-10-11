@@ -170,9 +170,12 @@ export enum StopSignal {
 
 /** @default 24 */
 export enum StatsHours {
+  Value1 = 1,
+  Value6 = 6,
   Value24 = 24,
   Value48 = 48,
   Value72 = 72,
+  Value168 = 168,
 }
 
 export enum StackUpdateBehavior {
@@ -3295,6 +3298,12 @@ export interface GitRepositorySyncActivitySnapshot {
   message?: string | null;
 }
 
+export interface GitRepositorySyncStatusView {
+  /** @format date-time */
+  lastSyncedAt: string;
+  status: GitRepositoryRefStatus;
+}
+
 export interface GitRepositoryView {
   controlState: ResourceControlState;
   /** @format date-time */
@@ -3315,6 +3324,8 @@ export interface GitRepositoryView {
   /** @format int32 */
   syncIntervalMinutes: number | null;
   syncMode: GitRepositorySyncMode;
+  /** Latest check of the default branch, including unchanged scheduled checks. */
+  syncStatus: null | GitRepositorySyncStatusView;
   tags: ResourcesTagsTagSummary[];
   url: string;
   webhook: null | WebhookConfig;
@@ -11131,6 +11142,22 @@ export class Api<
       id: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -11789,6 +11816,22 @@ export class Api<
       id: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -13885,6 +13928,22 @@ export class Api<
       id: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -14839,6 +14898,22 @@ export class Api<
       resourceId: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -15022,6 +15097,22 @@ export class Api<
       resourceId: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -17975,6 +18066,22 @@ export class Api<
       stackId: string,
       query?: {
         hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start time in Unix seconds, within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end time in Unix seconds; defaults to now when from is supplied
+         * @format int64
+         */
+        to?: number;
       },
       params: RequestParams = {},
     ) =>

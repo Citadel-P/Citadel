@@ -146,6 +146,130 @@ pub async fn verify(
             .await
             .is_err()
     );
+    // A pinned Stack with a Registry is an image candidate even when its Git
+    // observation is unavailable. Discovery uses the applied local tree only.
+    let registry = Uuid::from_u128(0x100);
+    stack
+        .resource
+        .spec
+        .as_mut()
+        .unwrap()
+        .common_mut()
+        .registry_id = Some(registry);
+    sqlx::query("UPDATE stackreleases SET spec=$2 WHERE id=$1")
+        .bind(stack.current_stack_release_id)
+        .bind(stack.spec.as_ref().unwrap().to_storage_value().unwrap())
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE gitrepositoryrefs SET status='Degraded' WHERE gitrepositoryid=$1")
+        .bind(repository)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .update_check_candidates(Uuid::nil(), true, 100)
+            .await
+            .unwrap()
+            .contains(&stack.id)
+    );
+    assert!(
+        !store
+            .update_check_candidates(Uuid::nil(), false, 100)
+            .await
+            .unwrap()
+            .contains(&stack.id)
+    );
+    let cache = Arc::new(
+        citadel_adapters::connectors::registries::digest_cache::ImageDigestCache::default(),
+    );
+    let image_scanner = citadel_adapters::connectors::routing::images::scanner::ImageScanner::new(
+        pool.clone(),
+        Arc::new(ImageInspector),
+        cache.clone(),
+    )
+    .with_git(git.clone());
+    assert_eq!(
+        image_scanner
+            .run_cycle(&CancellationToken::new())
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        cache.get(registry, "nginx:alpine").unwrap().digest,
+        "sha256:remote"
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let owner = stack.id.to_string();
+    let api = axum::Router::new().fallback(move |uri: axum::http::Uri| {
+        let owner = owner.clone();
+        async move {
+            let value = if uri.path().ends_with("/version") {
+                json!({"ApiVersion":"1.49","MinAPIVersion":"1.24","Version":"28.0.0"})
+            } else if uri.path().ends_with("/containers/json") {
+                json!([{"Id":"container","Names":["/web"],"Image":"nginx:alpine","ImageID":"sha256:fixture","Created":1,
+                    "Labels":{"com.citadel.stack-id":owner,"com.docker.compose.service":"web"},"State":"running","Status":"Up"}])
+            } else if uri.path().ends_with("/images/json") {
+                json!([{"Id":"sha256:fixture","RepoTags":["nginx:alpine"],"RepoDigests":["nginx@sha256:deployed"],"Created":1,"Size":10,"Labels":{},"Containers":1}])
+            } else { panic!("Unexpected Docker request: {uri}") };
+            axum::Json(value)
+        }
+    });
+    let server = tokio::spawn(async move { axum::serve(listener, api).await.unwrap() });
+    let image_runtime = StackUpdateRuntime::new(
+        StackRuntimeRouter::new(
+            pool.clone(),
+            DockerClient::with_endpoint(
+                format!("http://{address}").parse().unwrap(),
+                Duration::from_secs(2),
+                "/host",
+            )
+            .unwrap(),
+            None,
+        )
+        .with_image_cache(cache),
+        git.clone(),
+    );
+    let state = image_runtime
+        .scan_images_cached(&stack, &CancellationToken::new())
+        .await
+        .unwrap();
+    let StackUpdateState::Git {
+        recreate_stack_on_new_image_state,
+        recreate_stack_on_new_commit_state,
+    } = state
+    else {
+        panic!("expected Git state")
+    };
+    let image = &recreate_stack_on_new_image_state.auto_update_states[0];
+    assert!(image.update_available);
+    assert_eq!(image.current_digest, "sha256:deployed");
+    assert_eq!(image.remote_digest.as_deref(), Some("sha256:remote"));
+    let StackUpdateState::Git {
+        recreate_stack_on_new_commit_state: prior,
+        ..
+    } = &stack.stack_update_state
+    else {
+        unreachable!()
+    };
+    assert_eq!(&recreate_stack_on_new_commit_state, prior);
+    server.abort();
+    let _ = server.await;
+    let queued: bool =
+        sqlx::query_scalar("SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1")
+            .bind(repository)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert!(!queued, "image discovery must not queue a Git sync");
+    sqlx::query("UPDATE gitrepositoryrefs SET status='Healthy' WHERE gitrepositoryid=$1")
+        .bind(repository)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM stacks WHERE id=$1")
         .bind(stack.id)
         .execute(pool)
@@ -161,4 +285,18 @@ pub async fn verify(
         .execute(pool)
         .await
         .unwrap();
+}
+
+struct ImageInspector;
+impl citadel_adapters::connectors::routing::images::scanner::ImageScanRuntime for ImageInspector {
+    fn inspect<'a>(
+        &'a self,
+        task: &'a citadel_adapters::connectors::routing::images::scanner::ImageScanTask,
+        _: &'a CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, Result<String, String>> {
+        Box::pin(async move {
+            assert_eq!(task.reference, "nginx:alpine");
+            Ok("sha256:remote".into())
+        })
+    }
 }

@@ -25,8 +25,11 @@ pub struct Agent {
 impl Agent {
     pub async fn bind(config: AgentConfig) -> Result<Self, AgentError> {
         let components = composition::build(&config).await?;
-        let listener = TcpListener::bind(config.listen_address())?;
-        listener.set_nonblocking(true)?;
+        // Tokio enables SO_REUSEADDR on Unix so recently closed connections
+        // do not prevent a restart. It retains exclusive binding on Windows.
+        let listener = tokio::net::TcpListener::bind(config.listen_address())
+            .await?
+            .into_std()?;
         Ok(Self {
             config,
             components,

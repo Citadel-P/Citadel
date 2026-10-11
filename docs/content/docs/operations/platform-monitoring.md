@@ -12,6 +12,29 @@ for an individual workload. If the header reports interrupted live updates,
 displayed information may be outdated; follow
 [connection troubleshooting](/docs/operations/troubleshooting#live-updates-stop).
 
+## Choose a time range
+
+The shared History dropdown keeps all charts on the same timeline. **1 hour** is
+selected initially. Quick ranges include **15 minutes**, **6 hours**,
+**24 hours**, **48 hours**, **7 days**, **Today**, and **Yesterday**.
+
+Chart times use your browser's timezone. Relative ranges and Today follow
+incoming live samples; Yesterday stays fixed. Historical summaries use the last
+sample in the selected range.
+Charts use straight segments and leave gaps where readings are missing. The Y
+axis shows percentages or byte units. Metrics are retained for seven days; a new
+or disconnected resource may have less history.
+
+History uses averages: 10-second buckets up to one hour, 30-second buckets up
+to six hours, one-minute buckets up to one day, five-minute buckets up to three
+days, and 15-minute buckets for longer ranges. These averages can smooth brief
+spikes; narrow the range for finer detail.
+
+Statistics API endpoints accept `minutes=15|60|360|1440|10080`, or inclusive Unix
+second bounds `from` and `to`. Omitting `to` uses the current time. Existing
+`hours=24|48|72` requests remain supported, and omitting all range parameters
+keeps the API's 24-hour default. Do not combine range formats.
+
 ## Investigate resource pressure
 
 1. Open the affected Platform and check that it is connected and receiving

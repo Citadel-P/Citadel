@@ -84,7 +84,8 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
     .unwrap();
     assert_eq!(activity_status, "Success");
     assert!(activity_info.contains("\"Configuration\""));
-    assert!(activity_info.contains("****************"));
+    let activity: serde_json::Value = serde_json::from_str(&activity_info).unwrap();
+    assert_eq!(activity["Registry"]["Configuration"]["Password"], "******");
     assert!(!activity_info.contains("\"Password\":\"secret\""));
 
     let missing_tag = Uuid::now_v7();

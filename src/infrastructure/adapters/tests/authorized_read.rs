@@ -66,7 +66,7 @@ async fn actor_authorized_platform_read_preserves_direct_and_team_scope() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO Platforms (Id, Name, Address, Status, ConnectorType) VALUES ($1, 'direct', 'unix:///direct', 'Healthy', 'Local'), ($2, 'team', 'unix:///team', 'Healthy', 'Local'), ($3, 'denied', 'unix:///denied', 'Healthy', 'Local')")
+    sqlx::query("INSERT INTO Platforms (Id, Name, Address, Status, ConnectorType) VALUES ($1, 'direct', 'unix:///direct', 'Online', 'Local'), ($2, 'team', 'unix:///team', 'Online', 'Local'), ($3, 'denied', 'unix:///denied', 'Online', 'Local')")
         .bind(direct_platform_id)
         .bind(team_platform_id)
         .bind(denied_platform_id)

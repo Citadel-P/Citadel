@@ -1,7 +1,7 @@
 use super::*;
 use citadel_primitives::ActorId;
 use citadel_stacks::{
-    StackSpec, StackUpdateScanner, StackUpdateState, build_manual_stack_checks,
+    StackSpec, StackUpdateScanner, StackUpdateState, build_stack_image_checks,
     evaluate_manual_stack_updates, stack_git_path_matches, state_key,
 };
 use std::{
@@ -27,7 +27,23 @@ impl StackUpdateScanner for StackUpdateRuntime {
         stack: &'a citadel_stacks::Stack,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
-        self.scan_mode(stack, false, cancel)
+        Box::pin(async move {
+            let mut checked = stack.clone();
+            if matches!(&stack.spec, Some(StackSpec::Git { commit_sha, .. }) if commit_sha.as_deref().is_none_or(|sha| sha.trim().is_empty()))
+            {
+                checked.stack_update_state = self.scan_mode(stack, false, cancel).await?;
+            }
+            if checked.spec.as_ref().is_some_and(|spec| {
+                matches!(spec, StackSpec::WebEditor { .. }) || spec.common().registry_id.is_some()
+            }) {
+                self.scan_images(&checked, false, cancel).await
+            } else if matches!(&stack.spec, Some(StackSpec::Git { commit_sha, .. }) if commit_sha.as_deref().is_some_and(|sha| !sha.trim().is_empty()))
+            {
+                Err(StackError::Validation("The Stack is pinned to a Git commit and has no Registry configured for image checks.".into()))
+            } else {
+                Ok(checked.stack_update_state)
+            }
+        })
     }
     fn scan_cached<'a>(
         &'a self,
@@ -35,6 +51,13 @@ impl StackUpdateScanner for StackUpdateRuntime {
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
         self.scan_mode(stack, true, cancel)
+    }
+    fn scan_images_cached<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_images(stack, true, cancel)
     }
 }
 impl StackUpdateRuntime {
@@ -135,7 +158,29 @@ impl StackUpdateRuntime {
                 recreate_stack_on_new_commit_state.last_checked_at = checked_at;
                 return Ok(next);
             }
-            let checks = build_manual_stack_checks(stack, scheduled)?;
+            self.scan_images(stack, scheduled, cancel).await
+        })
+    }
+
+    fn scan_images<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        scheduled: bool,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        Box::pin(async move {
+            let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
+            let checks = stack_image_checks(&self.git, stack, scheduled, cancel).await?;
+            if checks.is_empty() {
+                return Ok(evaluate_manual_stack_updates(
+                    &stack.stack_update_state,
+                    &checks,
+                    &BTreeMap::new(),
+                    chrono::Utc::now(),
+                    None,
+                )
+                .state);
+            }
             if checks.len() > 256 {
                 return Err(StackError::Validation(
                     "Too many Stack images to check in one operation.".into(),
@@ -290,6 +335,79 @@ impl StackUpdateRuntime {
         })
     }
 }
+/// Reads only the applied revision from the local Git cache. This never synchronizes a branch.
+pub(crate) async fn stack_image_checks(
+    git: &citadel_git::GitRepositoryExecutionService,
+    stack: &citadel_stacks::Stack,
+    scheduled: bool,
+    cancel: &CancellationToken,
+) -> Result<Vec<citadel_stacks::ManualStackImageCheck>, StackError> {
+    let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
+    let (StackSpec::Git {
+        update_behavior, ..
+    }
+    | StackSpec::WebEditor {
+        update_behavior, ..
+    }) = spec;
+    if scheduled && *update_behavior == citadel_stacks::StackUpdateBehavior::Disabled {
+        return Ok(Vec::new());
+    }
+    if spec.common().registry_id.is_none_or(|id| id.is_nil()) {
+        return Err(StackError::Validation(
+            "The Stack has no Registry configured.".into(),
+        ));
+    }
+    let files = match spec {
+        StackSpec::WebEditor { compose_file, .. } => vec![compose_file.clone()],
+        StackSpec::Git {
+            git_repo_id,
+            branch,
+            compose_paths,
+            ..
+        } => {
+            let source = stack
+                .source
+                .as_ref()
+                .filter(|source| {
+                    source.source_type == citadel_stacks::StackSource::Git
+                        && source.git_repository_id == Some(*git_repo_id)
+                        && source.branch.as_deref() == Some(branch)
+                        && source.compose_paths == *compose_paths
+                        && !source.resolved_commit_sha.is_empty()
+                })
+                .ok_or_else(|| {
+                    StackError::Conflict("Apply the Stack before checking its images.".into())
+                })?;
+            let snapshot = git
+                .stack_snapshot_files(
+                    *git_repo_id,
+                    Some(&source.resolved_commit_sha),
+                    Some(&source.compose_paths),
+                    cancel,
+                )
+                .await
+                .map_err(git_failure)?;
+            source
+                .compose_paths
+                .iter()
+                .map(|path| {
+                    let file = snapshot
+                        .files
+                        .iter()
+                        .find(|file| file.relative_path == *path)
+                        .ok_or_else(|| {
+                            StackError::Conflict("An applied Compose file is unavailable.".into())
+                        })?;
+                    String::from_utf8(file.content.clone()).map_err(|_| {
+                        StackError::Validation("The Compose file is not UTF-8.".into())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        }
+    };
+    build_stack_image_checks(stack, scheduled, &files)
+}
+
 fn runtime_failure(_: citadel_platforms::RuntimeCapabilityError) -> StackError {
     StackError::Runtime("Could not inspect the Stack's deployed images.".into())
 }
