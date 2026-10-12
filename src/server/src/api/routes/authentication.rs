@@ -2,13 +2,13 @@ use crate::{
     Readiness,
     api::{
         error::{error_response, no_store},
+        request_validation::ValidatedJson,
         resources::authentication::{
             requests::{InitializeCitadelRequest, LoginRequest},
             views::AccessTokenResponse,
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::ValidatedJson,
 };
 
 use axum::{

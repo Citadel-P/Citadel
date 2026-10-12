@@ -226,7 +226,7 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
     let cancel = CancellationToken::new();
     let worker = tokio::spawn(super::stats_alerts::run(
         cancel.clone(),
-        pool.clone(),
+        crate::workers::test_support::metrics(&pool),
         capture.clone(),
         Duration::from_millis(100),
         200,

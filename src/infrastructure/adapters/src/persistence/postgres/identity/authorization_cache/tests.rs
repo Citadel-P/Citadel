@@ -81,7 +81,13 @@ async fn authorization_read_fence_blocks_acl_mutation_until_claim_finishes() {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
-async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
+async fn cancelled_commits_preserve_acl_fencing_and_session_notifications() {
+    for sessions in [false, true] {
+        cancelled_commit(sessions).await;
+    }
+}
+
+async fn cancelled_commit(sessions: bool) {
     use citadel_primitives::ActorId;
     let url = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -91,6 +97,12 @@ async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
         .unwrap();
     let cache = AuthorizationCache::attach(&pool);
     let actor = Uuid::now_v7();
+    // Session-only commits must finish even while an unrelated ACL read is held.
+    let _reader = if sessions {
+        Some(cache.read_fence().await)
+    } else {
+        None
+    };
     let mut changes = cache.subscribe(actor);
     let mut blocker = pool.acquire().await.unwrap();
     let key = (actor.as_u128() & i64::MAX as u128) as i64;
@@ -102,8 +114,16 @@ async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
     let (started, ready) = tokio::sync::oneshot::channel();
     let task_pool = pool.clone();
     let caller = tokio::spawn(async move {
-        let mutation = Mutation::enter(&task_pool).await;
+        let mutation = if sessions {
+            None
+        } else {
+            Some(Mutation::enter(&task_pool).await)
+        };
         let mut tx = task_pool.begin().await.unwrap();
+        if sessions {
+            sqlx::query("CREATE TEMP TABLE users ON COMMIT DROP AS SELECT $1::uuid AS id, $1::uuid AS actorid")
+                .bind(actor).execute(&mut *tx).await.unwrap();
+        }
         let sql = format!(
             "CREATE TEMP TABLE authorization_commit_probe (id int) ON COMMIT DROP; CREATE FUNCTION pg_temp.authorization_commit_pause() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock({key}::bigint); RETURN NEW; END $$; CREATE CONSTRAINT TRIGGER commit_pause AFTER INSERT ON authorization_commit_probe DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pg_temp.authorization_commit_pause(); INSERT INTO authorization_commit_probe VALUES (1)"
         );
@@ -112,10 +132,16 @@ async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
             .await
             .unwrap();
         started.send(()).unwrap();
-        mutation
-            .commit(tx, Impact::Actors(vec![actor]))
-            .await
-            .unwrap();
+        if let Some(mutation) = mutation {
+            mutation
+                .commit(tx, Impact::Actors(vec![actor]))
+                .await
+                .unwrap();
+        } else {
+            commit_session_creation(&task_pool, tx, Some(actor))
+                .await
+                .unwrap();
+        }
     });
     ready.await.unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
@@ -128,9 +154,10 @@ async fn cancelled_commit_retains_gate_and_publishes_invalidation() {
     }).await.unwrap();
     caller.abort();
     assert!(caller.await.unwrap_err().is_cancelled());
-    assert!(
+    assert_eq!(
         cache.gate.try_read().is_err(),
-        "detached COMMIT must retain its write guard"
+        !sessions,
+        "ACL commits retain their write guard; session commits do not acquire it"
     );
     assert!(
         !changes.has_changed().unwrap(),

@@ -77,6 +77,81 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
         .status(),
         StatusCode::FORBIDDEN
     );
+    let downloader = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        downloader.actor_id.value(),
+        citadel_primitives::ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    super::lookup::grant(
+        &f,
+        downloader.actor_id.value(),
+        citadel_primitives::ResourceType::Volume,
+        f.platform_id,
+        (citadel_primitives::SpecificPermission::Browse as i32)
+            | (citadel_primitives::SpecificPermission::Download as i32),
+    )
+    .await;
+    // Protected volumes and older Agents must stop before creating a helper,
+    // even for administrators and direct file/archive download URLs.
+    for (allowed, expected) in [
+        (Some(false), StatusCode::FORBIDDEN),
+        (None, StatusCode::CONFLICT),
+    ] {
+        for suffix in [
+            "?path=%2F",
+            "/download?path=%2Fjwtsecret",
+            "/download?path=%2Fkeys",
+        ] {
+            for actor in [f.administrator.clone(), reader.clone(), downloader.clone()] {
+                // Reader has Browse but not Download; use it to exercise listing.
+                if suffix.starts_with("/download") && actor.actor_id == reader.actor_id {
+                    continue;
+                }
+                let calls = async {
+                    let response = send(
+                        &f,
+                        &format!("{base}{suffix}&dockerNodeId=node-1"),
+                        Some(actor),
+                    )
+                    .await;
+                    assert_eq!(response.status(), expected);
+                };
+                let peer = async {
+                    let envelope = commands.recv().await.unwrap();
+                    let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                    let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                        panic!("expected command")
+                    };
+                    assert_eq!(command.kind, Kind::VolumeInspect as i32);
+                    session.output(
+                        id,
+                        VolumeResponse {
+                            name: "data".into(),
+                            driver: "local".into(),
+                            content_access_allowed: allowed,
+                            ..Default::default()
+                        }
+                        .encode_to_vec(),
+                    );
+                    session.complete(id, true);
+                };
+                tokio::time::timeout(StdDuration::from_secs(15), async {
+                    tokio::join!(calls, peer);
+                })
+                .await
+                .unwrap();
+                assert!(
+                    commands.try_recv().is_err(),
+                    "denied content access must never create or execute a helper"
+                );
+                assert!(wrong.try_recv().is_err());
+            }
+        }
+    }
     for case in ["list", "fallback", "symlink", "download", "interrupted"] {
         let url = if matches!(case, "list" | "fallback" | "symlink") {
             format!("{base}?path=%2F&dockerNodeId=node-1")
@@ -163,6 +238,7 @@ async fn volume_content_endpoints_authorize_route_bound_and_audit_completed_down
                         session.output(
                             id,
                             VolumeResponse {
+                                content_access_allowed: Some(true),
                                 name: "data".into(),
                                 driver: "local".into(),
                                 ..Default::default()

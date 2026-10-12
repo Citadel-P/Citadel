@@ -41,7 +41,7 @@ class DocumentationTests(unittest.TestCase):
             self.assertLess(block.index("uses: ./.github/actions/publish-docs"), block.index("release.py finalize"))
             self.assertIn("CITADEL_DOCS_RESULT: ${{ steps.documentation.outputs.result }}", block)
         action = (ROOT / ".github/actions/publish-docs/action.yml").read_text()
-        self.assertIn("uses: actions/deploy-pages@v4", action)
+        self.assertRegex(action, r"uses: actions/deploy-pages@[0-9a-f]{40} # v4")
         self.assertIn("if: steps.order.outputs.eligible == 'true'", action)
 
 

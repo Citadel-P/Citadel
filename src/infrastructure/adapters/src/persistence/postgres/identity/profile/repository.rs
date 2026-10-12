@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
 use citadel_identity::{
     CurrentProfileRecord, IdentityError, PasswordChangeOutcome, ProfileRepository,
@@ -332,6 +333,7 @@ SET timezone = EXCLUDED.timezone,
         actor_id: ActorId,
     ) -> BoxFuture<'a, Result<PasswordChangeOutcome, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let row = sqlx::query(
                 r#"
@@ -409,7 +411,10 @@ WHERE userid = $1
             )
             .map_err(invalid_activity)?;
             insert_activity(&mut transaction, &activity).await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, Impact::Users(vec![user_id]))
+                .await
+                .map_err(storage)?;
             Ok(PasswordChangeOutcome::Changed)
         })
     }

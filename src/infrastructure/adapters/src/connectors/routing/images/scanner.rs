@@ -90,8 +90,11 @@ impl ImageScanner {
                 if cancel.is_cancelled() {
                     return Ok(tasks);
                 }
-                let ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM (SELECT d.id,'Deployment' kind FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE p.platformdescriptor->>'$type'='Docker' AND p.status='Online' AND d.controlstate='Idle' UNION ALL SELECT s.id,'Stack' FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid JOIN platforms p ON p.id=r.platformid WHERE p.platformdescriptor->>'$type' IN ('Docker','DockerStandalone','DockerSwarm') AND p.status='Online' AND s.controlstate='Idle' UNION ALL SELECT s.id,'SwarmService' FROM swarmservices s JOIN platforms p ON p.id=s.platformid WHERE p.platformdescriptor->>'$type'='DockerSwarm' AND p.status='Online' AND s.controlstate='Idle') candidates WHERE kind=$1 AND id>$2 ORDER BY id LIMIT 100")
-                    .bind(kind).bind(after).fetch_all(&self.pool).await?;
+                let ids: Vec<Uuid> =
+                    crate::persistence::postgres::platforms::image_scan::candidates(
+                        &self.pool, kind, after,
+                    )
+                    .await?;
                 if ids.is_empty() {
                     break;
                 }

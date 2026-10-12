@@ -85,17 +85,7 @@ impl Mutation {
             // must not leave the write guard in the cancellable caller future.
             let mutation = self;
             let result = tx.commit().await;
-            if result.is_ok()
-                || result.as_ref().is_err_and(|error| {
-                    matches!(
-                        error,
-                        sqlx::Error::Io(_)
-                            | sqlx::Error::Tls(_)
-                            | sqlx::Error::Protocol(_)
-                            | sqlx::Error::WorkerCrashed
-                    )
-                })
-            {
+            if commit_may_have_succeeded(&result) {
                 // A lost acknowledgement can mean COMMIT succeeded. Fail closed
                 // in that uncertain case; explicit rollback never publishes.
                 mutation.cache.invalidate(mutation.affected.iter().copied());
@@ -106,4 +96,42 @@ impl Mutation {
         .await
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))?
     }
+}
+
+fn commit_may_have_succeeded(result: &Result<(), sqlx::Error>) -> bool {
+    result.is_ok()
+        || result.as_ref().is_err_and(|error| {
+            matches!(
+                error,
+                sqlx::Error::Io(_)
+                    | sqlx::Error::Tls(_)
+                    | sqlx::Error::Protocol(_)
+                    | sqlx::Error::WorkerCrashed
+            )
+        })
+}
+
+/// Session creation changes no permissions. Publish eviction after COMMIT without
+/// holding the global ACL gate across SQL. Bearer authentication reads sessions
+/// directly; the generation notification closes existing realtime connections.
+/// Keep publication cancellation-safe, including an uncertain commit outcome.
+pub(crate) async fn commit_session_creation(
+    pool: &PgPool,
+    mut tx: Transaction<'static, Postgres>,
+    evicted_user: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    let cache = AuthorizationCache::attach(pool);
+    let affected = match evicted_user {
+        Some(user) => Impact::Users(vec![user]).resolve(&mut tx).await?,
+        None => BTreeSet::new(),
+    };
+    tokio::spawn(async move {
+        let result = tx.commit().await;
+        if commit_may_have_succeeded(&result) {
+            cache.invalidate(affected);
+        }
+        result
+    })
+    .await
+    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?
 }

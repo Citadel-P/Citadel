@@ -81,7 +81,7 @@ pub fn router(
         citadel_server::diagnostics_http::DiagnosticsHttpState {
             readiness: Arc::clone(&readiness),
             metrics,
-            pool: pool.clone(),
+            database: Arc::new(citadel_adapters::persistence::postgres::connection::PostgresDatabaseHealth(pool.clone())),
             docker,
         },
     )

@@ -13,6 +13,8 @@ const REQUEST_ID: &str = "x-request-id";
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ApiError {
+    #[error("Too many authentication attempts. Try again later.")]
+    RateLimited,
     #[error(transparent)]
     Runtime(citadel_platforms::RuntimeCapabilityError),
     #[error("invalid credentials")]
@@ -56,6 +58,7 @@ impl From<citadel_identity::IdentityError> for ApiError {
     fn from(error: citadel_identity::IdentityError) -> Self {
         use citadel_identity::IdentityError;
         match error {
+            IdentityError::RateLimited => Self::RateLimited,
             IdentityError::InvalidCredentials => Self::InvalidCredentials,
             IdentityError::Unauthenticated => Self::Unauthenticated,
             IdentityError::Forbidden => Self::Forbidden,
@@ -126,6 +129,12 @@ fn render_error(error: ApiError, request_id: String) -> Response {
                 message.to_owned(),
             )
         }
+        ApiError::RateLimited => (
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limit_exceeded",
+            "Too many requests",
+            "Too many authentication attempts. Try again later.".to_owned(),
+        ),
         ApiError::InvalidCredentials | ApiError::Unauthenticated => (
             StatusCode::UNAUTHORIZED,
             "authentication_required",
@@ -189,7 +198,7 @@ fn render_error(error: ApiError, request_id: String) -> Response {
     } else {
         (Some(request_id), None)
     };
-    render_problem(
+    let mut response = render_problem(
         status,
         ProblemDetails {
             r#type: problem_type,
@@ -203,7 +212,14 @@ fn render_error(error: ApiError, request_id: String) -> Response {
             license_status: None,
             effective_edition: None,
         },
-    )
+    );
+    if status == StatusCode::TOO_MANY_REQUESTS {
+        response.headers_mut().insert(
+            axum::http::header::RETRY_AFTER,
+            HeaderValue::from_static("60"),
+        );
+    }
+    response
 }
 
 pub(crate) type HttpResult<T = Response> = Result<T, HttpError>;

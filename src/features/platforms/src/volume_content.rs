@@ -81,3 +81,20 @@ pub trait VolumeContentPort: Send + Sync {
         cancel: &'a tokio_util::sync::CancellationToken,
     ) -> futures_util::future::BoxFuture<'a, Result<VolumeDownload, RuntimeCapabilityError>>;
 }
+
+/// Applies even to administrators; this browser is not a secret export mechanism.
+pub fn require_content_access(allowed: Option<bool>) -> Result<(), RuntimeCapabilityError> {
+    match allowed {
+        Some(true) => Ok(()),
+        Some(false) => Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::PermissionDenied,
+            "File browsing and downloads are disabled for protected or unsupported Volume storage.",
+            false,
+        )),
+        None => Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::Unavailable,
+            "Volume storage protection could not be verified. Update the owning Agent before browsing files.",
+            false,
+        )),
+    }
+}

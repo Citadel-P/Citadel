@@ -9,7 +9,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub(super) async fn observe(
     session: Arc<EdgeSession>,
-    pool: PgPool,
+    stores: EdgeObservationStores,
     realtime: Option<RealtimeHub>,
     scans: IoBudget,
     settings: InventorySettings,
@@ -19,7 +19,7 @@ pub(super) async fn observe(
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let store = PostgresEdgeStore::new(pool.clone()).with_node_policy(settings.node_policy.clone());
+    let store = stores.edge.clone();
     // Session-local completion state is bounded to five resource kinds. A failed
     // scope retains its own retry and cannot declare the entire node fresh.
     let completion = tokio::sync::Mutex::new(
@@ -37,7 +37,7 @@ pub(super) async fn observe(
             let runtime = &runtime;
             let scans = &scans;
             let session = &session;
-            let pool = &pool;
+            let projections = &stores.projections;
             async move {
                 let budget = scans.measured_as(refresh_metric(request.refresh));
                 let Some(permit) = budget.enter(cancellation).await else {
@@ -65,8 +65,9 @@ pub(super) async fn observe(
                     Ok(snapshot) => snapshot,
                     Err(error) => {
                         if request.refresh == EventRefresh::Swarm && !cancellation.is_cancelled() {
-                            citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())
-                                .mark_swarm_stale(request.platform_id, started).await?;
+                            projections
+                                .mark_swarm_stale(request.platform_id, started)
+                                .await?;
                         }
                         return Err(Error::from(error));
                     }
@@ -174,7 +175,7 @@ pub(super) async fn observe(
     tokio::select! {
         () = cancellation.cancelled() => Ok(()),
         () = session.closed() => Ok(()),
-        result = observe_events(session.clone(), pool.clone(), realtime.clone(), settings, cancellation, sender.clone()) => result,
+        result = observe_events(session.clone(), stores.clone(), realtime.clone(), settings, cancellation, sender.clone()) => result,
         () = scopes => Ok(()),
         () = safety => Ok(()),
     }

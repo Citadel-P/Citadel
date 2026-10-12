@@ -504,13 +504,13 @@ async fn delete(
 
 fn user_path<T>(path: Result<Path<T>, PathRejection>) -> Result<T, crate::api::error::ApiError> {
     path.map(|Path(value)| value)
-        .map_err(crate::request_validation::invalid_path)
+        .map_err(crate::api::request_validation::invalid_path)
 }
 
 fn user_json<T>(payload: Result<Json<T>, JsonRejection>) -> Result<T, crate::api::error::ApiError> {
     payload
         .map(|Json(value)| value)
-        .map_err(crate::request_validation::invalid_json)
+        .map_err(crate::api::request_validation::invalid_json)
 }
 
 fn user_query<T>(
@@ -518,7 +518,7 @@ fn user_query<T>(
 ) -> Result<T, crate::api::error::ApiError> {
     query
         .map(|Query(value)| value)
-        .map_err(crate::request_validation::invalid_query)
+        .map_err(crate::api::request_validation::invalid_query)
 }
 
 async fn authorize_administrator(

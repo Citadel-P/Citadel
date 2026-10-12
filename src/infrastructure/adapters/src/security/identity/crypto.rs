@@ -141,7 +141,7 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             sub: claims.subject_id.to_string(),
             actor_id: Some(claims.actor_id.value()),
             principal_type: Some(claims.principal_type),
-            session_id: None,
+            session_id: claims.session_id,
             iss: self.issuer.clone(),
             aud: self.audience.clone(),
             iat: claims.issued_at.timestamp(),
@@ -155,6 +155,7 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
     fn decode_access(&self, token: &str) -> Result<AccessTokenClaims, IdentityError> {
         let claims = self.decode(token, "access")?;
         Ok(AccessTokenClaims {
+            session_id: claims.session_id,
             subject_id: Uuid::parse_str(&claims.sub).map_err(|_| IdentityError::Credential)?,
             actor_id: ActorId::new(claims.actor_id.ok_or(IdentityError::Credential)?),
             principal_type: claims.principal_type.ok_or(IdentityError::Credential)?,
@@ -392,6 +393,7 @@ mod tests {
         let now = Utc::now();
         let access = codec
             .encode_access(&AccessTokenClaims {
+                session_id: None,
                 subject_id: Uuid::now_v7(),
                 actor_id: ActorId::new(Uuid::now_v7()),
                 principal_type: AuthenticatedPrincipalType::User,
@@ -406,6 +408,7 @@ mod tests {
         let run_id = Uuid::now_v7();
         let automation = codec
             .encode_access(&AccessTokenClaims {
+                session_id: None,
                 subject_id: Uuid::now_v7(),
                 actor_id: ActorId::new(Uuid::now_v7()),
                 principal_type: AuthenticatedPrincipalType::ServiceAccount,

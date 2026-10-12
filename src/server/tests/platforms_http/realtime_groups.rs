@@ -46,10 +46,14 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
                     realtime: f.lookup_state.platforms.realtime.clone(),
     }
 }
-pub(super) fn token(p: &ActorPrincipal) -> String {
+pub(super) async fn token(f: &Fixture, p: &ActorPrincipal) -> String {
+    let session_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO refreshtokens (id,createdat,expiresat,lastseenat,userid) VALUES ($1,NOW(),NOW()+INTERVAL '1 hour',NOW(),$2)")
+        .bind(session_id).bind(p.subject_id).execute(&f.pool).await.unwrap();
     JwtSessionTokenCodec::new(&[7; 32], "fixture".into(), "fixture".into())
         .unwrap()
         .encode_access(&AccessTokenClaims {
+            session_id: Some(session_id),
             subject_id: p.subject_id,
             actor_id: p.actor_id,
             principal_type: p.principal_type,
@@ -138,7 +142,7 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     for (reference, shell) in [(id.to_string(), "bash"), (docker_id[..12].to_owned(), "sh")] {
         let group = format!("container-exec:{reference}:browser-session");
@@ -585,7 +589,7 @@ async fn container_logs_flow_while_another_group_snapshot_is_pending() {
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     let group = format!("container-log:{id}");
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
@@ -705,7 +709,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &principal).await}).to_string().into())).await.unwrap();
     receive(&mut socket).await;
     let start = json!([id, "browser-session", "sh"]);
     assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_string());
@@ -738,7 +742,7 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &principal).await}).to_string().into())).await.unwrap();
     receive(&mut second).await;
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_null());
     assert!(
@@ -1128,7 +1132,7 @@ async fn container_logs_route_to_the_owning_node_and_cancel_on_leave_or_permissi
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&principal)}).to_string().into())).await.unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &principal).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     assert!(
         invoke(&mut socket, "StartDeploymentLogs", &deployment.to_string()).await["error"]
@@ -1356,7 +1360,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f.administrator)}).to_string().into())).await.unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
     let group = format!("containers:{}", f.platform_id);
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
@@ -1365,7 +1369,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&restricted)}).to_string().into())).await.unwrap();
+    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &restricted).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut second).await["kind"], "subscribed");
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_string());
     grant(
@@ -1386,7 +1390,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&restricted)}).to_string().into())).await.unwrap();
+    second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &restricted).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut second).await["kind"], "subscribed");
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_null());
     assert_eq!(

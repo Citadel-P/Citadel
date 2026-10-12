@@ -43,6 +43,9 @@ pub struct RuntimeNetworkSummary {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RuntimeVolumeSummary {
+    /// Fresh owner-daemon storage policy; absent on older Agents/projections.
+    #[serde(default)]
+    pub content_access_allowed: Option<bool>,
     pub name: String,
     pub in_use: bool,
     pub scope: String,

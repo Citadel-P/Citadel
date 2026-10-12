@@ -1,6 +1,7 @@
 //! One-time composition graph, consumed into narrow HTTP states and owned jobs.
 mod alerts;
 mod automation;
+pub(crate) mod background;
 mod backups;
 mod builds;
 mod catalog;
@@ -58,7 +59,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
-    pub updates: citadel_server::updates::UpdateChecker,
+    pub updates: citadel_server::release_updates::UpdateChecker,
     pub docker: DockerClient,
     pub pool: PgPool,
     pub cancellation: CancellationToken,
@@ -115,7 +116,7 @@ impl ServerComponents {
     /// The database schema must have been migrated first.
     pub async fn build(
         config: &Config,
-    ) -> Result<(Self, crate::jobs::Jobs), Box<dyn std::error::Error>> {
+    ) -> Result<(Self, background::BackgroundServices), Box<dyn std::error::Error>> {
         let pool = connect_database(config).await?;
         let docker = DockerClient::with_host_root(
             &config.docker_socket,
@@ -270,7 +271,7 @@ impl ServerComponents {
             )
         });
 
-        let jobs = crate::jobs::Jobs {
+        let background_services = background::BackgroundServices {
             docker: docker.clone(),
             agent,
             volume_content,
@@ -283,7 +284,7 @@ impl ServerComponents {
         };
         Ok((
             Self {
-                updates: citadel_server::updates::UpdateChecker::default(),
+                updates: citadel_server::release_updates::UpdateChecker::default(),
                 docker,
                 pool,
                 cancellation,
@@ -331,7 +332,7 @@ impl ServerComponents {
                 lookup,
                 audit,
             },
-            jobs,
+            background_services,
         ))
     }
 }

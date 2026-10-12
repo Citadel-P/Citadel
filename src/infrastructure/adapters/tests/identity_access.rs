@@ -329,6 +329,14 @@ VALUES ($1, $2, $3, $4, 'other@example.test', 'other-user', NULL)
     .execute(&pool)
     .await
     .unwrap();
+    session_creation_does_not_block_authorization(
+        &pool,
+        identity_store.clone(),
+        owner.actor_id,
+        foreign_user_id,
+        foreign_actor_id,
+    )
+    .await;
     let platform_override_id = Uuid::now_v7();
     sqlx::query(
         r#"
@@ -421,8 +429,24 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
             .await,
         Err(IdentityError::NotFound)
     ));
+    let revocation = identity.authorization_changes(owner.actor_id).unwrap();
+    identity
+        .authenticate_bearer(&renamed_session.access_token)
+        .await
+        .unwrap();
     profiles
         .revoke_session(&owner, Some(&session.refresh_token), other_session_id)
+        .await
+        .unwrap();
+    assert!(revocation.has_changed().unwrap());
+    assert!(
+        identity
+            .authenticate_bearer(&renamed_session.access_token)
+            .await
+            .is_err()
+    );
+    identity
+        .authenticate_bearer(&session.access_token)
         .await
         .unwrap();
     assert!(
@@ -533,6 +557,16 @@ VALUES ($1, $2, $3, '127.0.0.2', $2, 'foreign-session', $4)
         .unwrap();
     identity
         .refresh(&session.refresh_token, metadata())
+        .await
+        .unwrap();
+    assert!(
+        identity
+            .authenticate_bearer(&password_other_session.access_token)
+            .await
+            .is_err()
+    );
+    identity
+        .authenticate_bearer(&session.access_token)
         .await
         .unwrap();
     assert!(
@@ -953,6 +987,94 @@ VALUES
     ));
 
     pool.close().await;
+}
+
+async fn session_creation_does_not_block_authorization(
+    pool: &sqlx::PgPool,
+    store: Arc<PostgresIdentityStore>,
+    other_actor: ActorId,
+    user: Uuid,
+    actor: Uuid,
+) {
+    let mut changes = store.authorization_changes(ActorId::new(actor)).unwrap();
+    let mut blocker = pool.begin().await.unwrap();
+    let blocker_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *blocker)
+        .await
+        .unwrap();
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let now = Utc::now();
+    let first = NewSession {
+        id: Uuid::now_v7(),
+        user_id: user,
+        created_at: now,
+        expires_at: now + Duration::days(1),
+        metadata: metadata(),
+    };
+    let first_id = first.id;
+    let creating_store = store.clone();
+    let creating =
+        tokio::spawn(async move { creating_store.create_session(&first, None, 1).await });
+    // Wait until session creation is actually blocked in SQL, not merely scheduled.
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+            )
+            .bind(blocker_pid)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if blocked {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        store.authorization_snapshot(other_actor),
+    )
+    .await
+    .expect("a blocked login must not block other users' authorization")
+    .unwrap();
+    blocker.commit().await.unwrap();
+    creating.await.unwrap().unwrap();
+    assert!(
+        !changes.has_changed().unwrap(),
+        "ordinary login must not disconnect existing sessions"
+    );
+    let second = NewSession {
+        id: Uuid::now_v7(),
+        user_id: user,
+        created_at: now + Duration::seconds(1),
+        expires_at: now + Duration::days(1),
+        metadata: metadata(),
+    };
+    store.create_session(&second, None, 1).await.unwrap();
+    assert!(
+        changes.has_changed().unwrap(),
+        "eviction must notify realtime subscribers before returning"
+    );
+    changes.borrow_and_update();
+    assert!(
+        store
+            .active_session_id(first_id, user, now)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        store.active_session_id(second.id, user, now).await.unwrap(),
+        Some(second.id)
+    );
+    store.delete_session(second.id).await.unwrap();
 }
 
 fn metadata() -> SessionMetadata {

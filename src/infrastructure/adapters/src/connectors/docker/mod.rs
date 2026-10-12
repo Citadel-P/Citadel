@@ -6,6 +6,7 @@ mod mutations;
 pub(crate) mod runtime;
 mod storage_usage;
 mod transport;
+mod volume_content_policy;
 pub use endpoint::DockerEndpoint;
 
 mod finite;

@@ -3,13 +3,13 @@ use crate::api::resources::activities::authorized::activity_access;
 use crate::{
     api::{
         error::{ApiError, error_response, no_store},
+        request_validation::ApiPath,
         resources::activities::{
             requests::ActivityFilterQuery,
             views::{ActivitiesView, PagedActivityView, map_activity},
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::ApiPath,
 };
 
 use axum::{

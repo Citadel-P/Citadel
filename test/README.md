@@ -78,6 +78,22 @@ on the host linker.
 
 ## Source ownership and contracts
 
+Run the dependency guards locally (no database, Docker or network required after
+dependencies are installed):
+
+```bash
+cargo test --locked --offline -p citadel-server --test resource_structure --test resource_architecture --test workload_architecture --test multi_resource_architecture
+cargo test --locked --offline -p citadel-adapters --test architecture
+npm --prefix src/frontend run test:run -- src/test/architecture.test.ts
+```
+
+These inspect all workspace dependency declarations and production source boundaries.
+The Rust source checks parse grouped/renamed imports and skip test-only items without
+skipping production code later in the file. Feature guards also catch synchronous
+filesystem probes such as `Path::is_file()`. The frontend checks API/UI/routing import
+boundaries. Keep fixture exceptions confined to test modules. No additional CI job
+is needed to run these commands locally.
+
 Run `bash test/scripts/check-source-ownership.sh` to verify source ownership and
 `cargo test --locked -p citadel-contracts` from the repository root to check the protocol
 inventory. Database generation uses the Rust declarative schema; see

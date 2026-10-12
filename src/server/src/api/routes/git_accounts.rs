@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::invalid_json,
         resources::{
             capabilities::ResourceCapabilitiesView,
             git_accounts::{
@@ -11,7 +12,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::invalid_json,
 };
 
 use axum::{
@@ -324,7 +324,7 @@ fn principal_and_id(
 ) -> HttpResult<(ActorPrincipal, Uuid)> {
     let principal = api_result(require_actor(principal), headers)?;
     let Path(id) = api_result(
-        path.map_err(crate::request_validation::invalid_path),
+        path.map_err(crate::api::request_validation::invalid_path),
         headers,
     )?;
     Ok((principal, id))
@@ -429,7 +429,7 @@ async fn permission(
 fn account_error(error: GitAccountError) -> ApiError {
     match error {
         GitAccountError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         GitAccountError::NotFound => ApiError::NotFound,
         GitAccountError::Conflict(message) => ApiError::Conflict(message),

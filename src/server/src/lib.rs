@@ -15,7 +15,6 @@ pub mod metrics;
 pub mod openapi;
 pub mod realtime;
 pub mod realtime_groups;
-mod request_validation;
 
 pub mod transport;
 pub mod workers;
@@ -99,4 +98,8 @@ pub(crate) mod token_safety;
 
 pub mod tasks;
 
-pub mod updates;
+pub mod release_updates;
+
+pub mod composition {
+    pub mod workers;
+}

@@ -3,6 +3,7 @@ use crate::api::resources::backups::patch::typed_patch;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{ApiPath, ApiQuery, ValidatedJson},
         resources::backups::{
             patch::*,
             requests::{QueueInput, RepositoryLocationInput, RestoreInput, RunFilter, *},
@@ -11,7 +12,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson},
 };
 
 use axum::{
@@ -277,7 +277,7 @@ fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> HttpResult<T> {
     api_result(
         r.map_err(|e| match e {
             BackupError::LicenseRequired => ApiError::LicenseRequired("automated-operations"),
-            BackupError::Validation(m) => crate::request_validation::validation_error(m),
+            BackupError::Validation(m) => crate::api::request_validation::validation_error(m),
             BackupError::NotFound => ApiError::NotFound,
             BackupError::Conflict(m) => ApiError::Conflict(m),
             source @ BackupError::Storage(_) => ApiError::internal(source),
@@ -499,7 +499,10 @@ async fn update_policy(
         &h,
     )
     .await?;
-    let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(patch) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let patch = api_result(typed_patch::<UpdateBackupPolicyInput>(patch), &h)?;
     let current = result(s.backups.store().get_policy(id).await, &h)?;
     let input = result(
@@ -590,7 +593,10 @@ async fn rename_policy(
     body: Result<Json<RenameBackupPolicyInput>, axum::extract::rejection::JsonRejection>,
 ) -> HttpResult {
     let p = actor(p, &h)?;
-    let Json(input) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(input) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let mut input: citadel_backups::policies::metadata::RenameBackupPolicyInput = input.into();
     result(input.validate(), &h)?;
     auth(
@@ -660,7 +666,10 @@ async fn update_policy_metadata(
         &h,
     )
     .await?;
-    let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(patch) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let patch = api_result(typed_patch::<BackupMetadataPatch>(patch), &h)?;
     let description = result(
         citadel_backups::policies::metadata::description_patch(&patch),
@@ -946,7 +955,10 @@ async fn update_repository(
         &h,
     )
     .await?;
-    let Json(patch) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(patch) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let patch = api_result(typed_patch::<UpdateBackupRepositoryInput>(patch), &h)?;
     if patch.get("spec").is_some_and(|v| !v.is_null()) {
         let current = result(s.backups.store().get_repository(id).await, &h)?;
@@ -1890,7 +1902,10 @@ async fn run_backup(
         path.map_err(|_| ApiError::Validation("Policy ID must be a UUID.".into())),
         &h,
     )?;
-    let Json(input) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(input) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let progress = s.backups.subscribe_progress(); // Subscribe before enqueue: fast workers must not lose completion.
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
     Ok(response(
@@ -1931,7 +1946,10 @@ async fn run_restore(
         path.map_err(|_| ApiError::Validation("Backup Run ID must be a UUID.".into())),
         &h,
     )?;
-    let Json(input) = api_result(body.map_err(crate::request_validation::invalid_json), &h)?;
+    let Json(input) = api_result(
+        body.map_err(crate::api::request_validation::invalid_json),
+        &h,
+    )?;
     let progress = s.backups.subscribe_progress();
     let run = enqueue_restore(&s, &p, id, input, &h).await?;
     let source = result(s.backups.store().get_run(id).await, &h)?;

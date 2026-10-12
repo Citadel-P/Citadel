@@ -57,6 +57,8 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
     ));
     let (user, user_actor) = seed(&pool, false).await;
     let (account, account_actor) = seed(&pool, true).await;
+    sqlx::query("INSERT INTO refreshtokens (id,createdat,expiresat,lastseenat,userid) VALUES ($1,NOW(),NOW()+INTERVAL '1 hour',NOW(),$1)")
+        .bind(user).execute(&pool).await.unwrap();
     let human = jwt(user, user_actor, AuthenticatedPrincipalType::User, false);
     let run = jwt(user, user_actor, AuthenticatedPrincipalType::User, true);
     let account_run = jwt(
@@ -215,6 +217,7 @@ fn jwt(subject: Uuid, actor: Uuid, kind: AuthenticatedPrincipalType, run: bool) 
     let now = chrono::Utc::now();
     codec()
         .encode_access(&AccessTokenClaims {
+            session_id: (!run && kind == AuthenticatedPrincipalType::User).then_some(subject),
             subject_id: subject,
             actor_id: ActorId::new(actor),
             principal_type: kind,

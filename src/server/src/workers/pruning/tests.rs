@@ -73,7 +73,12 @@ std::sync::Arc::new(crate::tasks::platforms::TrackedContainerTasks::new(citadel_
     let events = crate::workers::listener(&pool, "citadel_swarm_prune")
         .await
         .unwrap();
-    let worker = tokio::spawn(run(token.clone(), pool.clone(), service, events));
+    let worker = tokio::spawn(run(
+        token.clone(),
+        crate::workers::test_support::containers(&pool),
+        service,
+        Box::new(events),
+    ));
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(runtime.0.lock().unwrap().is_empty());
     sqlx::query("UPDATE platforms SET prunehistoricalswarmtaskcontainers=true WHERE id=$1")

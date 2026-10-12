@@ -5,6 +5,7 @@ use crate::{
             parse_catalog_filters, principal_and_id,
         },
         error::{ApiError, HttpError, HttpResult, api_result, no_store},
+        request_validation::invalid_json,
         resource_access::{
             authorize_global, authorize_resource, capabilities, publish_resource_change,
             require_actor,
@@ -18,7 +19,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::invalid_json,
 };
 
 use axum::{
@@ -53,7 +53,7 @@ pub struct RegistriesHttpState {
 pub(crate) fn metadata_error(error: citadel_registries::RegistryError) -> ApiError {
     match error {
         citadel_registries::RegistryError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         citadel_registries::RegistryError::NotFound => ApiError::NotFound,
         citadel_registries::RegistryError::Conflict(message) => ApiError::Conflict(message),

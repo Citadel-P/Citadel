@@ -1,7 +1,7 @@
 //! Read-mostly connector snapshot and reusable channels, keyed only by persisted Platforms.
 //! No authorization data is cached. PostgreSQL and the periodic refresh are authoritative.
 use crate::connectors::agent::client::AgentClient;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{RwLock, watch};
 use tokio_util::sync::CancellationToken;
@@ -75,16 +75,15 @@ impl PlatformRuntimeRegistry {
             self.identities.rebuild().await?;
         }
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Targets.start();
-        let rows = sqlx::query("SELECT id,name,address,connectortype,COALESCE(platformdescriptor->>'$type','Docker') AS platformtype FROM platforms WHERE connectortype IN ('Local','Agent','EdgeAgent') ORDER BY id").fetch_all(&self.pool).await?;
+        let rows =
+            crate::persistence::postgres::platforms::connection::registered_targets(&self.pool)
+                .await?;
         let previous = self.snapshot().await;
         let mut next = Vec::with_capacity(rows.len());
         for row in rows {
-            let id = row.try_get("id")?;
-            let address: String = row.try_get("address")?;
-            let connector_type =
-                crate::persistence::postgres::platforms::classification::connector_kind(
-                    row.try_get("connectortype")?,
-                )?;
+            let id = row.id;
+            let address = row.address;
+            let connector_type = row.connector;
             let agent = if connector_type == citadel_platforms::ConnectorKind::Agent {
                 previous
                     .iter()
@@ -113,11 +112,8 @@ impl PlatformRuntimeRegistry {
                 address,
                 connector_type,
                 agent,
-                name: row.try_get("name")?,
-                platform_type:
-                    crate::persistence::postgres::platforms::classification::platform_kind(
-                        row.try_get("platformtype")?,
-                    )?,
+                name: row.name,
+                platform_type: row.kind,
             });
         }
         let changed = previous.len() != next.len()

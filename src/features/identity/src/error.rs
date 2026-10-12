@@ -1,5 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum IdentityError {
+    #[error("Too many authentication attempts. Try again later.")]
+    RateLimited,
     #[error("invalid credentials")]
     InvalidCredentials,
     #[error("authentication is required")]

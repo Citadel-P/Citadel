@@ -2,10 +2,10 @@
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
         resources::alerts::{patch::*, requests::*, views::*},
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
 };
 
 use axum::{
@@ -156,7 +156,7 @@ fn result<T>(r: Result<T, AlertError>, h: &HeaderMap) -> HttpResult<T> {
                 ApiError::ResourceNotFound("The provided alert rule does not exist")
             }
             AlertError::LicenseRequired => ApiError::LicenseRequired("advanced-alerting"),
-            AlertError::Validation(m) => crate::request_validation::validation_error(m),
+            AlertError::Validation(m) => crate::api::request_validation::validation_error(m),
             AlertError::NotFound => ApiError::NotFound,
             AlertError::Conflict(m) => ApiError::Conflict(m),
             source @ (AlertError::Storage(_) | AlertError::Delivery(_)) => {

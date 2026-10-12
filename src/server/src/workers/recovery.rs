@@ -4,9 +4,9 @@ use std::time::Duration;
 use tokio::{sync::watch, time::Instant};
 use tokio_util::sync::CancellationToken;
 
-pub(super) const FALLBACK: Duration = Duration::from_secs(5 * 60);
+pub(crate) const FALLBACK: Duration = Duration::from_secs(5 * 60);
 
-pub(super) struct ActiveWake {
+pub(crate) struct ActiveWake {
     signals: watch::Receiver<()>,
     ticker: tokio::time::Interval,
     pub active: bool,
@@ -47,7 +47,7 @@ impl ActiveWake {
     }
 }
 
-pub(super) struct RecoveryWake {
+pub(crate) struct RecoveryWake {
     signals: watch::Receiver<()>,
     ticker: tokio::time::Interval,
     delay: Duration,

@@ -37,3 +37,7 @@ pub use projection_change::ProjectionChange;
 
 mod resource_delta;
 pub use resource_delta::ResourceDelta;
+
+pub mod background;
+
+pub mod observations;

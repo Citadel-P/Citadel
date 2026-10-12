@@ -56,4 +56,10 @@ services:
 
 volumes:
   citadel_data:
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "core"
   postgres_data:
+    labels:
+      com.citadel.system: "true"
+      com.citadel.system-role: "database"

@@ -1,15 +1,15 @@
 use super::*;
 use citadel_platforms::jobs::{RecoveryReason, RuntimeRecoveryCoordinator};
 
-pub(super) struct InventoryReconciliationWorker {
-    pub(super) targets: Arc<PlatformRuntimeRegistry>,
-    pub(super) refreshes: EventRefreshSender,
-    pub(super) local_triggers: BoundedReceiver<()>,
-    pub(super) agent_triggers: BoundedReceiver<Option<uuid::Uuid>>,
-    pub(super) agent_overflow: Arc<std::sync::atomic::AtomicBool>,
+pub(crate) struct InventoryReconciliationWorker {
+    pub(crate) targets: Arc<PlatformRuntimeRegistry>,
+    pub(crate) refreshes: EventRefreshSender,
+    pub(crate) local_triggers: BoundedReceiver<()>,
+    pub(crate) agent_triggers: BoundedReceiver<Option<uuid::Uuid>>,
+    pub(crate) agent_overflow: Arc<std::sync::atomic::AtomicBool>,
 }
 
-pub(super) async fn inventory_reconciliation(
+pub(crate) async fn inventory_reconciliation(
     cancellation: CancellationToken,
     mut worker: InventoryReconciliationWorker,
 ) -> Result<(), std::convert::Infallible> {
@@ -102,7 +102,7 @@ pub(super) async fn inventory_reconciliation(
     }
 }
 
-pub(super) fn platform_reachable_observation(target: &ReconciliationTarget) -> AlertObservation {
+pub(crate) fn platform_reachable_observation(target: &ReconciliationTarget) -> AlertObservation {
     AlertObservation {
         alert_type: "PlatformUnreachable".to_owned(),
         info: serde_json::json!({
@@ -121,7 +121,7 @@ pub(super) fn platform_reachable_observation(target: &ReconciliationTarget) -> A
     }
 }
 
-pub(super) fn platform_unreachable_observation(
+pub(crate) fn platform_unreachable_observation(
     target: &ReconciliationTarget,
     error: &RuntimeCapabilityError,
 ) -> AlertObservation {

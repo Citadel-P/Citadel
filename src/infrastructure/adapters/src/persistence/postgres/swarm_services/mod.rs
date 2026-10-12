@@ -50,3 +50,5 @@ use activity::service_creation_activity;
 pub(crate) use activity::{activity_snapshot, insert_swarm_activity};
 
 pub mod bindings;
+
+pub(crate) mod runtime_observation;

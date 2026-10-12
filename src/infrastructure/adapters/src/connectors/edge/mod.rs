@@ -9,3 +9,5 @@ pub use runtime::EdgeRuntime;
 pub use sessions::{
     EdgeCommandStream, EdgeError, EdgeRegistry, EdgeSession, EdgeTarget, MAX_PAYLOAD,
 };
+
+pub mod observations;

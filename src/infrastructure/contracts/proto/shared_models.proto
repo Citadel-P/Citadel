@@ -298,6 +298,8 @@ message VolumeResponse {
   UsageDataMessage usageData = 10;
   bool inUse = 11;
   repeated ContainerVolumeResult containers = 12;
+  // Absent on older Agents: Core must deny generic content access.
+  optional bool contentAccessAllowed = 13;
 }
 
 message UsageDataMessage {

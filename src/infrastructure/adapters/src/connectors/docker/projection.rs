@@ -498,6 +498,9 @@ pub struct VolumeListResponse {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerVolume {
+    /// Computed locally, never accepted from the Docker wire response.
+    #[serde(skip)]
+    pub content_access_allowed: Option<bool>,
     #[serde(rename = "Name", default)]
     pub name: String,
     #[serde(rename = "Driver", default)]

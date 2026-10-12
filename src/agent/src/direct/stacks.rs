@@ -14,7 +14,21 @@ impl StackService for Runtime {
         r: Request<StackApplyRequest>,
     ) -> Result<Response<Self::ApplyStream>, Status> {
         let r = r.into_inner();
-        let mut prepared = stack_source::prepare(&r, std::path::Path::new("/app/data/stacks"))?;
+        let permit = self
+            .mutations
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| Status::resource_exhausted("Agent mutation limit reached"))?;
+        let (r, prepared) = tokio::task::spawn_blocking(move || {
+            let prepared = stack_source::prepare_admitted(
+                &r,
+                std::path::Path::new("/app/data/stacks"),
+                Some(permit),
+            )?;
+            Ok::<_, Status>((r, prepared))
+        })
+        .await
+        .map_err(|_| Status::internal("Stack preparation task failed"))??;
         let command = |v: citadel_contracts::citadel::stacks::v1::StackCommand| StackCommand {
             commands: v.commands,
             path: if v.path.trim().is_empty() {
@@ -67,7 +81,11 @@ impl StackService for Runtime {
             match outcome{
                 Ok(result)=>{
                     let status=if result.status==StackReleaseStatus::Healthy && r.orchestration_mode==0 {
-                        prepared.retain_secrets();
+                        let _retained = tokio::task::spawn_blocking(move || {
+                            let mut prepared = prepared;
+                            prepared.retain_secrets();
+                            prepared
+                        }).await.map_err(|_| Status::internal("Stack secret retention task failed"))?;
                         let settled=tokio::select! { ()=cancel.cancelled()=>Err(Status::cancelled("Stack apply cancelled")), ()=tokio::time::sleep(std::time::Duration::from_secs(4))=>Ok(()) };settled?;
                         observe_compose(&docker,&runtime.project_name).await.map(|v|v.as_str().to_owned())
                     } else {Some(result.status.as_str().into())};

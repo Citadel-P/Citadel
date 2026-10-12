@@ -60,3 +60,9 @@ pub(crate) mod connection;
 pub mod descriptor;
 
 pub mod images;
+
+pub mod background;
+
+pub(crate) mod image_scan;
+
+pub(crate) mod volume_helpers;

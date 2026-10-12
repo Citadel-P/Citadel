@@ -57,3 +57,5 @@ pub mod bindings;
 pub mod release_resources;
 
 pub mod build_images;
+
+pub(crate) mod runtime_inventory;

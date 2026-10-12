@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 const OBSERVABLE_AFTER: Duration = Duration::from_secs(11 * 60);
 const MAXIMUM_BATCH: i64 = 25;
 
-pub(super) async fn swarm_service_image_updates(
+pub(crate) async fn swarm_service_image_updates(
     cancellation: CancellationToken,
     services: Arc<SwarmServiceService>,
 ) -> Result<(), std::convert::Infallible> {
@@ -28,7 +28,7 @@ pub(super) async fn swarm_service_image_updates(
     }
 }
 
-pub(super) async fn swarm_service_operation_reconciliation(
+pub(crate) async fn swarm_service_operation_reconciliation(
     cancellation: CancellationToken,
     services: Arc<SwarmServiceService>,
     signals: tokio::sync::watch::Receiver<()>,
@@ -55,7 +55,7 @@ pub(super) async fn swarm_service_operation_reconciliation(
 
 /// Accepted rollouts get short follow-ups; empty deployments do no periodic
 /// five-second work. The fixed notification is a hint, SQL remains authoritative.
-pub(super) async fn observe_active_operations(
+pub(crate) async fn observe_active_operations(
     cancellation: CancellationToken,
     services: Arc<SwarmServiceService>,
     signals: tokio::sync::watch::Receiver<()>,

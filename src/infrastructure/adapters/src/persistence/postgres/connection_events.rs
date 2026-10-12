@@ -1,30 +1,11 @@
 //! Connection transitions are delivered by PostgreSQL only after commit. They
 //! are notifications, not durable work: subscribers reconcile after a gap.
-use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 pub const CHANNEL: &str = "citadel_connection_events";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ConnectionResource {
-    Platform,
-    BuildAgentPool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ConnectionState {
-    Online,
-    Offline,
-    Revoked,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConnectionEvent {
-    pub resource: ConnectionResource,
-    pub resource_id: Uuid,
-    pub state: ConnectionState,
-}
+pub use citadel_runtime::notifications::{ConnectionEvent, ConnectionResource, ConnectionState};
 
 pub(crate) async fn publish(
     tx: &mut Transaction<'_, Postgres>,

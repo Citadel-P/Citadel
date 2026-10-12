@@ -58,3 +58,11 @@ pub struct AlertDeliveryClaim {
     pub channel: AlertChannel,
     pub event: AlertEvent,
 }
+
+/// Durable job observations are claimed and acknowledged by their persistence owner.
+pub trait PendingAlertObservations: Send + Sync {
+    fn process_pending_observation(
+        &self,
+        owner: uuid::Uuid,
+    ) -> futures_util::future::BoxFuture<'_, Result<bool, crate::AlertError>>;
+}

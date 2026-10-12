@@ -3,6 +3,7 @@ use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{WorkloadQuery, invalid_json, invalid_path, invalid_query},
         resources::stacks::{
             requests::{
                 ImportDraftQuery, ImportRequest, StackDriftPolicyInput, SwarmPreflightInput,
@@ -13,7 +14,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{WorkloadQuery, invalid_json, invalid_path, invalid_query},
 };
 
 use axum::{
@@ -316,7 +316,9 @@ async fn authorize<P: PermissionPolicy>(
 
 fn stack_error(error: StackError) -> ApiError {
     match error {
-        StackError::Validation(message) => crate::request_validation::validation_error(message),
+        StackError::Validation(message) => {
+            crate::api::request_validation::validation_error(message)
+        }
         StackError::NotFound => ApiError::NotFound,
         StackError::Forbidden => ApiError::Forbidden,
         StackError::LicenseRequired(capability) => ApiError::LicenseRequired(capability),

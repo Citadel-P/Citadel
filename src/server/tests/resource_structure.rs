@@ -185,8 +185,70 @@ fn architectural_groups_enforce_inward_dependencies() {
         let manifest = Path::new(package["manifest_path"].as_str().unwrap());
         let owner = manifest.parent().unwrap().canonicalize().unwrap();
         for dependency in package["dependencies"].as_array().unwrap() {
+            // Cargo resolves dependency renames, workspace inheritance and target-specific
+            // tables. Check build/dev edges too; a test must not invert the crate graph.
+            let name = dependency["name"].as_str().unwrap();
+            if owner.starts_with(&agent) && dependency["kind"] != "dev" {
+                assert!(
+                    ![
+                        "citadel-database",
+                        "sqlx",
+                        "diesel",
+                        "sea-orm",
+                        "rusqlite",
+                        "tokio-postgres"
+                    ]
+                    .contains(&name),
+                    "Agent must execute without a database: {name}"
+                );
+            }
+            if owner.starts_with(&features) {
+                assert!(
+                    ![
+                        "sqlx",
+                        "axum",
+                        "utoipa",
+                        "reqwest",
+                        "hyper",
+                        "tonic",
+                        "prost",
+                        "diesel",
+                        "sea-orm",
+                        "rusqlite",
+                        "tokio-postgres"
+                    ]
+                    .contains(&name),
+                    "{} depends on external I/O or presentation package {name}",
+                    manifest.display()
+                );
+            }
+            // Small infrastructure utilities must not grow dependencies on business
+            // features or adapters. Process execution implements its one feature port.
+            let package_name = package["name"].as_str().unwrap();
+            let foundational = [
+                "citadel-runtime",
+                "citadel-contracts",
+                "citadel-docker-api",
+                "citadel-database",
+                "citadel-volume-helper",
+                "citadel-processes",
+            ]
+            .contains(&package_name);
+            if foundational && name.starts_with("citadel-") {
+                assert!(
+                    package_name == "citadel-processes" && name == "citadel-execution",
+                    "{package_name} is foundational infrastructure but depends on {name}"
+                );
+            }
             if let Some(path) = dependency["path"].as_str() {
                 let target = Path::new(path).canonicalize().unwrap();
+                if foundational {
+                    assert!(
+                        package_name == "citadel-processes" && target == features.join("execution"),
+                        "{package_name} must not depend on {}",
+                        target.display()
+                    );
+                }
                 if owner.starts_with(&features) {
                     assert!(
                         target.starts_with(&features),
@@ -197,8 +259,8 @@ fn architectural_groups_enforce_inward_dependencies() {
                 }
                 if owner.starts_with(&infrastructure) {
                     assert!(
-                        !target.starts_with(&server) && !target.starts_with(&agent),
-                        "{} depends on an executable host",
+                        target.starts_with(&features) || target.starts_with(&infrastructure),
+                        "{} points outside features/infrastructure",
                         manifest.display()
                     );
                 }
@@ -331,7 +393,7 @@ fn server_resources_live_under_api_and_composition_has_no_hidden_configuration()
     for worker_only in ["runtime_targets", "image_scanner", "alert_deliveries"] {
         assert!(
             !graph.contains(worker_only),
-            "{worker_only} belongs to Jobs"
+            "{worker_only} belongs to BackgroundServices"
         );
     }
 }

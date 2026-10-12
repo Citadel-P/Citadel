@@ -1,3 +1,4 @@
+use citadel_runtime::notifications::{NotificationError, NotificationSource, RuntimeNotification};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,7 +16,7 @@ const DRIFT_MONITOR_BATCH: i64 = 100;
 const DRIFT_EVENT_COALESCE_WINDOW: Duration = Duration::from_millis(50);
 const DRIFT_EVENT_MAX_PENDING: usize = 256;
 
-pub(super) async fn stack_updates(
+pub(crate) async fn stack_updates(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     mut completed: tokio::sync::watch::Receiver<()>,
@@ -48,7 +49,7 @@ pub(super) async fn stack_updates(
     }
 }
 
-pub(super) async fn stack_webhooks(
+pub(crate) async fn stack_webhooks(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     mut signals: tokio::sync::watch::Receiver<()>,
@@ -78,7 +79,7 @@ pub(super) async fn stack_webhooks(
     }
 }
 
-pub(super) async fn stack_operation_reconciliation(
+pub(crate) async fn stack_operation_reconciliation(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     signals: tokio::sync::watch::Receiver<()>,
@@ -98,7 +99,7 @@ pub(super) async fn stack_operation_reconciliation(
     Ok(())
 }
 
-pub(super) async fn stack_drift_monitor(
+pub(crate) async fn stack_drift_monitor(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
@@ -146,16 +147,17 @@ pub(super) async fn stack_drift_monitor(
 
 /// The drift monitor consumes stop/pause events. Notifications are
 /// transactional and originate from the shared Local/Direct/Edge event store.
-pub(super) async fn event_drift(
+pub(crate) async fn event_drift(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
-    mut listener: sqlx::postgres::PgListener,
+    mut listener: Box<dyn NotificationSource>,
 ) -> Result<(), std::convert::Infallible> {
     loop {
         let result = async {
             loop {
-                let Some(pending) = receive_drift_batch(&mut listener, &cancellation).await? else {
-                    return Ok::<(), sqlx::Error>(());
+                let Some(pending) = receive_drift_batch(listener.as_mut(), &cancellation).await?
+                else {
+                    return Ok::<(), NotificationError>(());
                 };
                 for id in pending {
                     if let Err(error) = stacks.monitor_container_event(id).await {
@@ -176,15 +178,17 @@ pub(super) async fn event_drift(
 }
 
 async fn receive_drift_batch(
-    listener: &mut sqlx::postgres::PgListener,
+    listener: &mut dyn NotificationSource,
     cancellation: &CancellationToken,
-) -> Result<Option<std::collections::BTreeSet<uuid::Uuid>>, sqlx::Error> {
+) -> Result<Option<std::collections::BTreeSet<uuid::Uuid>>, NotificationError> {
     let first = tokio::select! {
         () = cancellation.cancelled() => return Ok(None),
         notification = listener.recv() => notification?,
     };
     let mut pending = std::collections::BTreeSet::new();
-    insert_drift_id(&mut pending, first.payload());
+    if let RuntimeNotification::StackDrift(id) = first {
+        pending.insert(id);
+    }
     let deadline = tokio::time::Instant::now() + DRIFT_EVENT_COALESCE_WINDOW;
     while pending.len() < DRIFT_EVENT_MAX_PENDING {
         tokio::select! {
@@ -192,47 +196,75 @@ async fn receive_drift_batch(
             _ = tokio::time::sleep_until(deadline) => break,
             notification = listener.recv() => {
                 let notification = notification?;
-                insert_drift_id(&mut pending, notification.payload());
+                if let RuntimeNotification::StackDrift(id) = notification { pending.insert(id); }
             }
         }
     }
     Ok(Some(pending))
 }
 
-fn insert_drift_id(pending: &mut std::collections::BTreeSet<uuid::Uuid>, payload: &str) -> bool {
-    let Ok(id) = uuid::Uuid::parse_str(payload) else {
-        return false;
-    };
-    if pending.contains(&id) {
-        return true;
-    }
-    if pending.len() == DRIFT_EVENT_MAX_PENDING {
-        return false;
-    }
-    pending.insert(id)
-}
-
 #[cfg(test)]
 mod drift_event_tests {
     use super::*;
-
-    #[test]
-    fn drift_notifications_are_deduplicated_and_pending_work_is_bounded() {
-        let mut pending = std::collections::BTreeSet::new();
-        let first = uuid::Uuid::now_v7();
-        assert!(insert_drift_id(&mut pending, &first.to_string()));
-        assert!(insert_drift_id(&mut pending, &first.to_string()));
-        for _ in 1..DRIFT_EVENT_MAX_PENDING {
-            assert!(insert_drift_id(
-                &mut pending,
-                &uuid::Uuid::now_v7().to_string()
-            ));
+    struct Events(std::collections::VecDeque<RuntimeNotification>);
+    impl NotificationSource for Events {
+        fn recv(
+            &mut self,
+        ) -> futures_util::future::BoxFuture<'_, Result<RuntimeNotification, NotificationError>>
+        {
+            Box::pin(async move {
+                match self.0.pop_front() {
+                    Some(event) => Ok(event),
+                    None => std::future::pending().await,
+                }
+            })
         }
-        assert_eq!(pending.len(), DRIFT_EVENT_MAX_PENDING);
-        assert!(!insert_drift_id(
-            &mut pending,
-            &uuid::Uuid::now_v7().to_string()
-        ));
-        assert!(!insert_drift_id(&mut pending, "invalid"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn drift_notifications_are_deduplicated_and_pending_work_is_bounded() {
+        let first = uuid::Uuid::now_v7();
+        let mut events = Events(std::collections::VecDeque::from([
+            RuntimeNotification::StackDrift(first),
+            RuntimeNotification::StackDrift(first),
+            RuntimeNotification::Resync,
+        ]));
+        for _ in 0..DRIFT_EVENT_MAX_PENDING {
+            events
+                .0
+                .push_back(RuntimeNotification::StackDrift(uuid::Uuid::now_v7()));
+        }
+        let cancel = CancellationToken::new();
+        let batch = receive_drift_batch(&mut events, &cancel)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(batch.len(), DRIFT_EVENT_MAX_PENDING);
+        assert!(batch.contains(&first));
+        assert_eq!(
+            events.0.len(),
+            1,
+            "overflow remains available for the next batch"
+        );
+        let start = tokio::time::Instant::now();
+        assert_eq!(
+            receive_drift_batch(&mut events, &cancel)
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            tokio::time::Instant::now() - start,
+            DRIFT_EVENT_COALESCE_WINDOW
+        );
+        cancel.cancel();
+        assert!(
+            receive_drift_batch(&mut events, &cancel)
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }

@@ -1,3 +1,4 @@
+use citadel_runtime::notifications::NotificationSource;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -71,10 +72,10 @@ async fn wait_for_work(
 }
 
 /// Notifications wake a durable queue; startup and fallback recover missed wakes.
-pub(super) async fn observations(
+pub(crate) async fn observations(
     cancel: CancellationToken,
-    alerts: Arc<citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository>,
-    mut listener: sqlx::postgres::PgListener,
+    alerts: Arc<dyn citadel_alerts::PendingAlertObservations>,
+    mut listener: Box<dyn NotificationSource>,
 ) -> Result<(), std::convert::Infallible> {
     let owner = uuid::Uuid::now_v7();
     loop {

@@ -177,7 +177,7 @@ async fn lifecycle_observations_inspect_one_resource_and_tombstones_perform_no_i
     let path = temp_socket();
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
-        for _ in 0..6 {
+        for _ in 0..7 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = vec![];
             let mut buffer = [0; 4096];
@@ -193,6 +193,8 @@ async fn lifecycle_observations_inspect_one_resource_and_tombstones_perform_no_i
                 r#"{"Id":"net","Name":"bridge"}"#
             } else if request.starts_with("GET /v1.49/volumes/data ") {
                 r#"{"Name":"data"}"#
+            } else if request.starts_with("GET /v1.49/containers/json?all=true&size=false ") {
+                r#"[]"#
             } else if request.starts_with("GET /v1.49/system/df?type=volume ") {
                 r#"{"Volumes":[]}"#
             } else if request.starts_with("GET /v1.49/images/img/json ") {

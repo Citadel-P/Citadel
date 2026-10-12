@@ -26,3 +26,5 @@ mod activity;
 use activity::*;
 mod repository;
 pub use repository::PostgresRegistryRepository;
+
+pub(crate) mod pull_configuration;

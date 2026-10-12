@@ -23,8 +23,6 @@ use citadel_processes::run;
 
 use futures_util::future::BoxFuture;
 
-use serde_json::Value;
-
 use sqlx::PgPool;
 
 use tokio_util::sync::CancellationToken;
@@ -138,8 +136,10 @@ impl BuildExecutor for PlatformBuildExecutor {
                         "Build has no selected Agent Pool.".into(),
                     ));
                 };
-                let spec = sqlx::query_scalar::<_, Value>("SELECT providerspec FROM buildagentpools WHERE id=$1 AND enabled AND archivedat IS NULL")
-                    .bind(id).fetch_optional(&self.pool).await;
+                let spec = crate::persistence::postgres::builds::execution_target::pool_spec(
+                    &self.pool, id,
+                )
+                .await;
                 let target = match spec {
                     Ok(Some(spec)) => match citadel_builds::pool_target(&spec) {
                         Ok(target) => target,
@@ -175,11 +175,10 @@ impl BuildExecutor for PlatformBuildExecutor {
                     "Platform Build has no selected Platform.".to_owned(),
                 ));
             };
-            let target = sqlx::query_as::<_, (String, String, String)>(
-                "SELECT connectortype,address,status FROM platforms WHERE id=$1",
+            let target = crate::persistence::postgres::platforms::connection::execution_target(
+                &self.pool,
+                platform_id,
             )
-            .bind(platform_id)
-            .fetch_optional(&self.pool)
             .await;
             let (connector, address, status) = match target {
                 Ok(Some(target)) => target,
@@ -950,6 +949,7 @@ fn image_references(claim: &BuildClaim, commit: &str) -> Result<Vec<String>, Bui
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
     use zeroize::Zeroizing;
     #[test]
     fn digest_parser_is_strict() {

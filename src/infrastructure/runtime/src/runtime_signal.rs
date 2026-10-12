@@ -1,5 +1,5 @@
 //! Fixed, coalescing wakeup topics. Payloads and durable work remain in PostgreSQL.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RuntimeSignal {
     Targets,
     Automation,

@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 /// Composition of existing application services; all Apply ownership and Docker
 /// routing remain in those services, including their progress and recovery.
-pub(super) struct BuildConsumers {
+pub(crate) struct BuildConsumers {
     pub deployments: Arc<DeploymentService>,
     pub stacks: Arc<StackService>,
     pub realtime: Option<crate::realtime::RealtimeHub>,

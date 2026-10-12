@@ -58,3 +58,5 @@ pub use repository::PostgresBackupPersistence;
 pub mod secrets;
 
 pub mod source_planner;
+
+pub(crate) mod instance_identity;

@@ -1,6 +1,7 @@
 use super::*;
 use base64::Engine;
 use citadel_adapters::connectors::edge::EdgeTarget;
+use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore;
 use citadel_contracts::citadel::{
     containers::v1::ListContainersResponse,
     edge::v1::{EnrollmentRequest, core_envelope},
@@ -11,6 +12,7 @@ use citadel_contracts::citadel::{
     shared_models::v1::{ContainerMessage, PlatformInfoResponse},
 };
 use prost::Message;
+use sqlx::PgPool;
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -213,7 +215,7 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
     let worker = tokio::spawn(async move {
         observe(
             worker_session,
-            worker_pool,
+            crate::workers::test_support::edge(&worker_pool),
             None,
             IoBudget::new(
                 2.try_into().unwrap(),
@@ -221,7 +223,6 @@ async fn run_scoped_edge_failure(concurrent_image: bool, stale_read: bool) {
             ),
             InventorySettings {
                 monitoring_interval: Duration::from_secs(10),
-                node_policy: Default::default(),
                 reconciliation_interval: Duration::from_secs(3600),
             },
             &worker_cancel,
@@ -372,11 +373,10 @@ async fn edge_six_lifecycle_events_share_one_commit_and_notification() {
     let worker = tokio::spawn(async move {
         observe_events(
             worker_session,
-            worker_pool,
+            crate::workers::test_support::edge(&worker_pool),
             Some(hub),
             InventorySettings {
                 monitoring_interval: Duration::from_secs(10),
-                node_policy: Default::default(),
                 reconciliation_interval: Duration::from_secs(3600),
             },
             &worker_cancel,

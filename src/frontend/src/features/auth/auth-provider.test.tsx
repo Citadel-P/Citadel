@@ -4,7 +4,7 @@ import { LoginNextStep } from '@/api/generated/api.types';
 import { createQueryClient } from '@/query-client-wrapper';
 import { server } from '@/test/server';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { useAuthContext } from './auth-context';
@@ -40,11 +40,12 @@ function AuthProbe() {
             emailOrName: 'admin@example.com',
             password: 'password',
           })
-        }
-      >
+        }>
         login
       </button>
       <button onClick={auth.logout}>logout</button>
+      <button onClick={() => auth.completeLogin(createValidToken('other'))}>switch account</button>
+      <button onClick={() => auth.completeLogin(createValidToken('logout'))}>renew token</button>
     </>
   );
 }
@@ -142,9 +143,7 @@ describe('AuthProvider', () => {
     let loginRequest: unknown;
     const loginToken = createValidToken('login');
     server.use(
-      http.get(refreshUrl, () =>
-        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
-      ),
+      http.get(refreshUrl, () => HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 })),
       http.post(logoutUrl, () => new HttpResponse(null, { status: 204 })),
       http.post(loginUrl, async ({ request }) => {
         loginRequest = await request.json();
@@ -180,14 +179,68 @@ describe('AuthProvider', () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const { user } = renderAuthProvider();
+    const { user, queryClient } = renderAuthProvider();
 
     await screen.findByText('authenticated');
+    queryClient.setQueryData(['listProfileSessions', {}], { data: 'private sessions' });
+    const mutation = queryClient.getMutationCache().build(queryClient, {});
+    mutation.state.data = 'private mutation result';
     await user.click(screen.getByRole('button', { name: 'logout' }));
+    expect(queryClient.getQueryData(['listProfileSessions', {}])).toBeUndefined();
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
 
     expect(screen.getByTestId('auth-status')).toHaveTextContent('unauthenticated');
     await waitFor(() => {
       expect(logoutRequests).toBe(1);
     });
+  });
+  it('clears private data on account switches but retains it on same-account token renewal', async () => {
+    server.use(http.get(refreshUrl, () => HttpResponse.json({ accessToken: createValidToken('logout') })));
+    const { user, queryClient } = renderAuthProvider();
+    await screen.findByText('authenticated');
+    queryClient.setQueryData(['private'], 'old account');
+    await user.click(screen.getByRole('button', { name: 'renew token' }));
+    expect(queryClient.getQueryData(['private'])).toBe('old account');
+    let resolve!: (value: string) => void;
+    const pending = queryClient
+      .fetchQuery({
+        queryKey: ['pending-private'],
+        queryFn: () =>
+          new Promise<string>((done) => {
+            resolve = done;
+          }),
+      })
+      .catch(() => undefined);
+    await user.click(screen.getByRole('button', { name: 'switch account' }));
+    resolve('late old account response');
+    await pending;
+    expect(queryClient.getQueryData(['private'])).toBeUndefined();
+    expect(queryClient.getQueryData(['pending-private'])).toBeUndefined();
+  });
+
+  it('does not restore authentication from a refresh completed after logout', async () => {
+    let release!: () => void;
+    let started = false;
+    const blocked = new Promise<void>((done) => {
+      release = done;
+    });
+    server.use(
+      http.get(refreshUrl, async () => {
+        started = true;
+        await blocked;
+        return HttpResponse.json({ accessToken: createValidToken('late') });
+      }),
+      http.post(logoutUrl, () => new HttpResponse(null, { status: 204 })),
+    );
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { user } = renderAuthProvider();
+    await waitFor(() => expect(started).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'logout' }));
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(errors).toHaveBeenCalled());
+    expect(screen.getByTestId('auth-status')).toHaveTextContent('unauthenticated');
+    expect(screen.getByTestId('access-token')).toHaveTextContent('none');
   });
 });

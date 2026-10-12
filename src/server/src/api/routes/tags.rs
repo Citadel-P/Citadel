@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::invalid_json,
         resource_access::{
             authorize_global, authorize_resource, capabilities, publish_resource_change,
             require_actor,
@@ -12,7 +13,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::invalid_json,
 };
 
 use axum::{
@@ -45,7 +45,7 @@ pub struct TagsHttpState {
 pub(crate) fn metadata_error(error: citadel_tags::TagError) -> ApiError {
     match error {
         citadel_tags::TagError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         citadel_tags::TagError::NotFound => ApiError::NotFound,
         citadel_tags::TagError::Conflict(message) => ApiError::Conflict(message),

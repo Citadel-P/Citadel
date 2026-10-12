@@ -57,3 +57,15 @@ impl PostgresEdgeStore {
         Ok(())
     }
 }
+
+impl citadel_builds::BuildPoolConnections for super::store::PostgresEdgeStore {
+    fn expire_connections(
+        &self,
+    ) -> futures_util::future::BoxFuture<'_, Result<(), citadel_builds::BuildError>> {
+        Box::pin(async move {
+            self.expire_build_pool_connections()
+                .await
+                .map_err(|e| citadel_builds::BuildError::Storage(e.to_string()))
+        })
+    }
+}

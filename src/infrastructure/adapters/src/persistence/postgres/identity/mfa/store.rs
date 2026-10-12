@@ -1,3 +1,4 @@
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use chrono::{DateTime, Utc};
 
 use citadel_identity::{
@@ -187,6 +188,7 @@ impl MfaStore for PostgresMfaStore {
         commit: ProfileEnrollmentCommit,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             if !consume_setup_session(
                 &mut transaction,
@@ -213,7 +215,10 @@ impl MfaStore for PostgresMfaStore {
             )
             .await?;
             insert_activity(&mut transaction, &commit.activity).await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, Impact::Users(vec![commit.settings.user_id]))
+                .await
+                .map_err(storage)?;
             Ok(true)
         })
     }
@@ -223,6 +228,7 @@ impl MfaStore for PostgresMfaStore {
         commit: MandatoryEnrollmentCommit,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             if !consume_setup_session(
                 &mut transaction,
@@ -250,7 +256,10 @@ impl MfaStore for PostgresMfaStore {
             )
             .await?;
             insert_activity(&mut transaction, &commit.activity).await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, Impact::Users(vec![commit.settings.user_id]))
+                .await
+                .map_err(storage)?;
             Ok(true)
         })
     }
@@ -260,6 +269,7 @@ impl MfaStore for PostgresMfaStore {
         commit: ChallengeCompletionCommit,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let active = sqlx::query_scalar::<_, Uuid>(
                 "SELECT id FROM mfachallenges WHERE id = $1 AND userid = $2 AND consumedat IS NULL AND expiresat > $3 AND failedattempts < $4 FOR UPDATE",
@@ -296,7 +306,7 @@ impl MfaStore for PostgresMfaStore {
             if consumed != 1 {
                 return Ok(false);
             }
-            insert_session(
+            let evicted = insert_session(
                 &mut transaction,
                 &commit.prepared_session.session,
                 commit.prepared_session.expected_password_hash.as_deref(),
@@ -306,7 +316,17 @@ impl MfaStore for PostgresMfaStore {
             if let Some(activity) = &commit.activity {
                 insert_activity(&mut transaction, activity).await?;
             }
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(
+                    transaction,
+                    Impact::Users(if evicted {
+                        vec![commit.user_id]
+                    } else {
+                        vec![]
+                    }),
+                )
+                .await
+                .map_err(storage)?;
             Ok(true)
         })
     }
@@ -341,6 +361,7 @@ impl MfaStore for PostgresMfaStore {
 
     fn disable(&self, commit: DisableMfaCommit) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             if !accept_credential(
                 &mut transaction,
@@ -356,7 +377,10 @@ impl MfaStore for PostgresMfaStore {
             revoke_other_sessions(&mut transaction, commit.user_id, commit.current_session_id)
                 .await?;
             insert_activity(&mut transaction, &commit.activity).await?;
-            transaction.commit().await.map_err(storage)?;
+            authorization
+                .commit(transaction, Impact::Users(vec![commit.user_id]))
+                .await
+                .map_err(storage)?;
             Ok(true)
         })
     }
@@ -390,6 +414,7 @@ impl MfaStore for PostgresMfaStore {
 
     fn reset(&self, commit: ResetMfaCommit) -> BoxFuture<'_, Result<(), IdentityError>> {
         Box::pin(async move {
+            let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let exists =
                 sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id = $1 FOR UPDATE")
@@ -407,7 +432,10 @@ impl MfaStore for PostgresMfaStore {
                 .await
                 .map_err(storage)?;
             insert_activity(&mut transaction, &commit.activity).await?;
-            transaction.commit().await.map_err(storage)
+            authorization
+                .commit(transaction, Impact::Users(vec![commit.user_id]))
+                .await
+                .map_err(storage)
         })
     }
 }

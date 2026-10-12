@@ -64,6 +64,14 @@ the `ProcessRunner` interface. Concrete process execution belongs in infrastruct
 The architecture tests inspect Cargo dependencies as well as source boundaries:
 [resource_structure.rs](../src/server/tests/resource_structure.rs) and
 [resource_architecture.rs](../src/server/tests/resource_architecture.rs).
+They discover every workspace crate, including target-specific, renamed, build and
+development dependencies. Features cannot import database, HTTP or protocol
+implementations. Foundational infrastructure stays independent of business features;
+the process runner's dependency on the Execution port is intentional.
+Source checks cover all features, HTTP/realtime handlers, workers and Agent code,
+and keep SQL execution and row mapping in PostgreSQL persistence modules. Test-only
+fixtures may use concrete implementations. These guards detect dependency regressions;
+they do not replace review of authorization, transactions or business ownership.
 
 ## Organizing a feature
 
@@ -81,7 +89,13 @@ feature needs; split a large file into a module when that makes navigation clear
 | `permissions` | Named operation requirements |
 | `jobs`, `adoption`, `webhooks` | Feature-specific workflows |
 
-Keep `lib.rs` and `mod.rs` focused on module declarations and deliberate exports.
+Keep crate roots and module facades focused on declarations and deliberate exports.
+Use `name.rs` for a single-file module. When a source module needs child files,
+keep its entry point at `name/mod.rs` alongside those children, including private
+unit tests in `name/tests.rs`. A cohesive implementation can live in that entry
+point; do not add a forwarding file solely to keep `mod.rs` empty. Larger modules
+should split by responsibility. Integration tests retain Cargo's `tests/name.rs`
+entry points and may keep their supporting modules in `tests/name/`.
 Do not introduce empty services or generic base entities just to make every
 feature look identical.
 
@@ -101,9 +115,28 @@ or transient state, and `Reader` for read-only queries. Keep claims, row-version
 checks, idempotency and multi-resource transactions in cohesive operations.
 Do not replace one atomic operation with several unrelated repository calls.
 
+Worker dependency construction lives in `server/src/composition/workers.rs`.
+Executable background-task startup lives in `server/src/composition/background.rs`;
+worker implementations remain in `server/src/workers/`. HTTP extraction and
+validation belong to `server/src/api/request_validation/`. Citadel release
+notifications live in `server/src/release_updates/`, separate from workload updates.
+Running workers receive feature persistence interfaces or typed notification sources,
+never SQLx pools, rows or listeners. PostgreSQL notification decoding and dedicated
+LISTEN connections live in the persistence adapters; reconnect events trigger resync
+and durable queues retain their fallback scans. Edge observation persistence keeps
+session fencing inside the adapter. Alert sample flushing preserves its advisory
+lock and tuple-revision acknowledgement as one adapter operation, while threshold
+and version evaluation belongs to the Alerts feature.
+
+SQLx remains available to the Server composition root and database test fixtures.
+Do not move SQL into hosting code to avoid adding a narrow feature interface.
+
 SQL and row mapping live under `adapters/src/persistence/postgres/`. Repositories
 return feature models, not API views. Catalog queries apply authorization in SQL;
 loading an unrestricted catalog and filtering it in memory is not acceptable.
+Infrastructure routers may compose persistence helpers from the same adapter crate,
+but those helpers return typed data rather than SQLx rows. Do not add a feature port
+solely to wrap a private query shared by infrastructure implementations.
 
 ### HTTP and realtime presentation
 
@@ -204,6 +237,12 @@ schemas or generated client types.
 Shared resource pages and UI components own layout, status badges, loading states
 and actions. Appearance uses CSS variables and shared density/radius tokens.
 Semantic health colors keep their meaning regardless of the selected accent.
+
+Frontend API modules and UI primitives must not import resource screens or the
+application router. Features may consume shared resource page templates and their
+types; `pages/` is not exclusively a routing layer. The frontend architecture test
+checks static imports, re-exports and literal dynamic imports using the existing
+TypeScript parser, including relative paths and the `@/` alias.
 
 The Agent protobuf inventory and Docker API generation inputs have their own
 contract checks. Changes to either require verification of the generated output

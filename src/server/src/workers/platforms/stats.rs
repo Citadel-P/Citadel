@@ -1,7 +1,7 @@
 use super::*;
 use citadel_platforms::PlatformInfoPort;
 
-pub(super) async fn local_container_stats(
+pub(crate) async fn local_container_stats(
     cancellation: CancellationToken,
     docker: DockerClient,
     context: StatsWorkerContext,
@@ -74,7 +74,7 @@ pub(super) async fn local_container_stats(
     }
 }
 
-pub(super) async fn agent_container_stats(
+pub(crate) async fn agent_container_stats(
     cancellation: CancellationToken,
     platform: uuid::Uuid,
     _agent: AgentClient,

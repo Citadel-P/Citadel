@@ -13,3 +13,5 @@ pub mod registries;
 pub mod routing;
 
 pub mod swarm;
+
+pub(crate) mod vault;

@@ -474,6 +474,7 @@ impl DockerClient {
                 }
             }
         }
+        self.apply_volume_content_policy(&mut volumes).await?;
         Ok(volumes)
     }
     pub(super) async fn system_data_usage(
@@ -521,6 +522,8 @@ impl DockerClient {
         if volume.usage_data.is_none() {
             volume.usage_data = self.volume_usage().await?.remove(&volume.name);
         }
+        self.apply_volume_content_policy(std::slice::from_mut(&mut volume))
+            .await?;
         Ok(volume)
     }
     pub async fn create_volume(

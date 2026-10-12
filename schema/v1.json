@@ -25218,6 +25218,12 @@
             },
             "type": "array"
           },
+          "contentAccessAllowed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string"
           },
@@ -25299,6 +25305,7 @@
           }
         },
         "required": [
+          "contentAccessAllowed",
           "id",
           "name",
           "inUse",

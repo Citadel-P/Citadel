@@ -81,6 +81,17 @@ impl PostgresEdgeStore {
         self
     }
 
+    pub async fn session_platform_kind(
+        &self,
+        platform: Uuid,
+        agent: Uuid,
+        connected_at: DateTime<Utc>,
+    ) -> Result<citadel_platforms::PlatformKind, EdgeStoreError> {
+        let (kind, _daemon): (String, String) = sqlx::query_as("SELECT COALESCE(platform.platformdescriptor::jsonb->>'$type','Docker'),binding.dockerdaemonid FROM platforms platform JOIN edgeagentbindings binding ON binding.platformid=platform.id WHERE platform.id=$1 AND binding.agentid=$2 AND binding.lastconnectedatutc=$3 AND binding.revokedatutc IS NULL")
+            .bind(platform).bind(agent).bind(connected_at).fetch_one(&self.pool).await?;
+        super::super::classification::platform_kind(&kind).map_err(EdgeStoreError::Storage)
+    }
+
     pub async fn status(&self, target: &EdgeTarget) -> Result<EdgeStatus, EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
         validate_target(&mut tx, target).await?;

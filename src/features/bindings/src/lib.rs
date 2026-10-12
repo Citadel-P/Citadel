@@ -13,7 +13,7 @@ pub use commands::{
     SecretProviderInput, SecretProviderPatch, StoredSecretProviderInput, StoredSecretProviderPatch,
 };
 mod validation;
-pub use validation::{validate_binding, validate_provider};
+pub use validation::{validate_binding, validate_provider, validate_provider_token_reuse};
 
 pub(crate) use validation::validate_external_secret;
 
@@ -21,7 +21,7 @@ mod repository;
 pub use repository::BindingRepository;
 mod error;
 use citadel_primitives::PatchField;
-pub use error::BindingError;
+pub use error::{BindingError, SecretValueError};
 mod name_validation;
 use name_validation::validate_name;
 pub use repository::SecretProtector;

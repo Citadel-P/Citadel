@@ -47,3 +47,5 @@ pub use repository::PostgresDeploymentRepository;
 use rows::*;
 const DEPLOYMENT_RESOURCE_TYPE: i32 = 1;
 const PLATFORM_RESOURCE_TYPE: i32 = 0;
+
+pub(crate) mod runtime_images;

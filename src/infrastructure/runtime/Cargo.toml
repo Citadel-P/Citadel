@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 [dependencies]
+futures-util.workspace = true
+serde.workspace = true
+uuid.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

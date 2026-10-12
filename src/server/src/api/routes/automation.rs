@@ -3,6 +3,7 @@ use crate::api::resources::automation::authorized::{authorized_actions, map_erro
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{ApiPath, ApiQuery, ValidatedJson},
         resources::automation::{
             capabilities::{capabilities, granted},
             patch::{UpdateAutomationActionInput, UpdateAutomationActionMetadata},
@@ -11,7 +12,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson},
 };
 
 use axum::{
@@ -449,7 +449,7 @@ async fn update_action(
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Write, &headers).await?;
     let patch = api_result(
-        patch.map_err(crate::request_validation::invalid_json),
+        patch.map_err(crate::api::request_validation::invalid_json),
         &headers,
     )?;
     let current = api_result(

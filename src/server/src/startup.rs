@@ -25,35 +25,15 @@ pub async fn run(state: &ServerComponents) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-/// Immediate abandoned-run recovery assumes one Core dispatching against a DB.
-/// Keep an advisory lease for the entire lifecycle so another Core cannot
-/// classify live executions as abandoned during its startup.
-pub async fn acquire_job_lease(config: &Config) -> Result<sqlx::PgConnection, sqlx::Error> {
-    use sqlx::Connection;
-    let mut connection = sqlx::PgConnection::connect(&config.database_url).await?;
-    let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(4848495441444547)")
-        .fetch_one(&mut connection)
-        .await?;
-    if !acquired {
-        return Err(sqlx::Error::Protocol("Another Citadel Core owns the background jobs for this database. Stop that instance before starting another.".into()));
-    }
-    Ok(connection)
+pub use citadel_adapters::persistence::postgres::job_lease::CoreJobLease;
+
+pub async fn acquire_job_lease(config: &Config) -> Result<CoreJobLease, sqlx::Error> {
+    CoreJobLease::acquire(&config.database_url).await
 }
 
 pub async fn watch_job_lease(
-    mut connection: sqlx::PgConnection,
+    lease: CoreJobLease,
     token: tokio_util::sync::CancellationToken,
-) -> Result<sqlx::PgConnection, sqlx::Error> {
-    loop {
-        tokio::select! {
-            ()=token.cancelled()=>return Ok(connection),
-            _=tokio::time::sleep(std::time::Duration::from_secs(5))=>{}
-        }
-        tokio::select! {
-            ()=token.cancelled()=>return Ok(connection),
-            result=tokio::time::timeout(std::time::Duration::from_secs(2),sqlx::query("SELECT 1").execute(&mut connection))=>{
-                result.map_err(|_|sqlx::Error::Protocol("Core job lease connection timed out".into()))??;
-            }
-        }
-    }
+) -> Result<CoreJobLease, sqlx::Error> {
+    lease.watch(token).await
 }

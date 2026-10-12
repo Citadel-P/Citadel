@@ -40,3 +40,5 @@ use validation::*;
 mod configuration;
 
 pub mod observations;
+
+pub mod platform_metrics;

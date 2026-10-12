@@ -403,3 +403,22 @@ Use an `https://` Agent endpoint, or set
 a trusted private network or VPN.
 
 Citadel does not provide a certificate-validation bypass.
+
+## Request and login limits
+
+Core limits each client IP to 600 requests per minute by default, configurable
+with `CITADEL_RUST_REQUESTS_PER_MINUTE`. Login, initial setup and public MFA
+requests also share a 20-attempt per-client minute budget. Password verification
+allows five attempts per account per minute; a successful verification resets
+that account's budget. Username and email aliases share the same account limit.
+These bounded, in-memory limits reset when Core restarts. Authentication failures
+return generic errors and throttled requests return HTTP 429 with `Retry-After`.
+
+Forwarded client addresses are used only behind configured trusted proxies,
+walking the forwarded chain from the nearest hop. Configure the proxy to append
+or replace `X-Forwarded-For` correctly. Clients behind one NAT share an IP budget.
+A global ceiling of 100 times the configured client budget also protects Core
+from aggregate overload. `/health` liveness probes are exempt from these traffic
+budgets. `/ready` dependency probes use the normal limits and allow at most four
+concurrent checks; excess concurrent probes receive HTTP 503 without querying
+PostgreSQL or Docker.

@@ -122,6 +122,7 @@ pub(super) fn volume(value: DockerVolume) -> VolumeResponse {
         ref_count: Some(data["RefCount"].as_i64().unwrap_or(-1)),
     });
     VolumeResponse {
+        content_access_allowed: value.content_access_allowed,
         name: value.name,
         driver: value.driver,
         labels: value.labels,

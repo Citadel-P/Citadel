@@ -6,6 +6,7 @@ use crate::{
             parse_catalog_filters, principal_and_id,
         },
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{ApiQuery, invalid_json},
         resource_access::{
             authorize_global, authorize_resource, publish_resource_change, require_actor,
         },
@@ -25,7 +26,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::{ApiQuery, invalid_json},
 };
 use citadel_primitives::PatchField;
 
@@ -445,7 +445,7 @@ async fn authorize(
 fn execution_error(error: GitRepositoryExecutionError) -> ApiError {
     match error {
         GitRepositoryExecutionError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         GitRepositoryExecutionError::NotFound => ApiError::NotFound,
         GitRepositoryExecutionError::NotSynchronized => {
@@ -989,7 +989,7 @@ pub(crate) fn metadata_error(
 ) -> crate::api::error::ApiError {
     match error {
         citadel_git::GitRepositoryError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         citadel_git::GitRepositoryError::NotFound => crate::api::error::ApiError::NotFound,
         citadel_git::GitRepositoryError::Conflict(message) => {

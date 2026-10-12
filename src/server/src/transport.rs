@@ -21,10 +21,11 @@ use axum::{
 use axum_server::{Handle, tls_rustls::RustlsConfig};
 use serde::Serialize;
 use std::{
+    collections::HashMap,
     net::{IpAddr, SocketAddr},
     str::FromStr,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -45,6 +46,7 @@ struct SecurityState {
     transport: Arc<TransportConfig>,
     readiness: Arc<Readiness>,
     rate_limit: Arc<FixedWindowRateLimit>,
+    clients: Arc<ClientRateLimits>,
 }
 
 struct FixedWindowRateLimit {
@@ -116,7 +118,13 @@ pub fn secure_router_with_grpc(
     let security = SecurityState {
         transport: Arc::new(transport.clone()),
         readiness,
-        rate_limit: Arc::new(FixedWindowRateLimit::new(transport.requests_per_minute)),
+        rate_limit: Arc::new(FixedWindowRateLimit::new(
+            transport
+                .requests_per_minute
+                .saturating_mul(100)
+                .min(u64::from(u32::MAX)),
+        )),
+        clients: Arc::new(ClientRateLimits::default()),
     };
     router = router.layer(RequestBodyLimitLayer::new(transport.body_limit_bytes));
     // gRPC bounds each decoded message, not the aggregate bytes transferred
@@ -244,11 +252,27 @@ async fn security_middleware(
             request_id,
         );
     }
-    if !state.rate_limit.admit() {
+    // Liveness must not fail because public HTTP traffic exhausted its budget.
+    let health_probe = request.uri().path() == "/health";
+    let authentication = matches!(
+        request.uri().path(),
+        "/api/v1/authentication/login" | "/api/v1/setup/initialize"
+    ) || request
+        .uri()
+        .path()
+        .starts_with("/api/v1/authentication/mfa/");
+    if !health_probe
+        && (!state.clients.admit(
+            client_ip(&state.transport, &request),
+            authentication,
+            state.transport.requests_per_minute,
+            current_minute(),
+        ) || !state.rate_limit.admit())
+    {
         let mut response = problem(
             StatusCode::TOO_MANY_REQUESTS,
             "Rate limit exceeded",
-            "The global foundation request limit was exceeded.",
+            "The request limit was exceeded. Try again later.",
             request_id,
         );
         response.headers_mut().insert(
@@ -340,6 +364,76 @@ fn trusted_forwarding(transport: &TransportConfig, request: &Request<Body>) -> b
     forwarded_proto
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.eq_ignore_ascii_case("https"))
+}
+
+// Walk from the socket toward the client, trusting only configured proxy hops.
+// trusted_forwarding has already validated the header syntax and hop limit.
+fn client_ip(transport: &TransportConfig, request: &Request<Body>) -> IpAddr {
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|connect| connect.0.ip())
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    if transport.mode != TransportMode::ReverseProxy || !is_trusted_peer(transport, peer) {
+        return peer;
+    }
+    let mut address = peer;
+    if let Some(header) = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+    {
+        for hop in header.split(',').rev() {
+            if !is_trusted_peer(transport, address) {
+                break;
+            }
+            let Ok(parsed) = hop.trim().parse() else {
+                return peer;
+            };
+            address = parsed;
+        }
+    }
+    address
+}
+
+#[derive(Default)]
+struct ClientRateLimits(Mutex<ClientWindows>);
+#[derive(Default)]
+struct ClientWindows {
+    minute: u64,
+    entries: HashMap<IpAddr, ClientWindow>,
+}
+struct ClientWindow {
+    requests: u64,
+    authentication: u64,
+}
+impl ClientRateLimits {
+    fn admit(&self, ip: IpAddr, authentication: bool, limit: u64, minute: u64) -> bool {
+        const MAX_CLIENTS: usize = 10_000;
+        let mut state = self.0.lock().expect("client rate limit poisoned");
+        // All clients use the same fixed window. Expire it once, rather than
+        // scanning a full map on every admitted or rejected request.
+        if state.minute != minute {
+            state.entries.clear();
+            state.minute = minute;
+        }
+        let entries = &mut state.entries;
+        if entries.len() >= MAX_CLIENTS && !entries.contains_key(&ip) {
+            return false;
+        }
+        let entry = entries.entry(ip).or_insert(ClientWindow {
+            requests: 0,
+            authentication: 0,
+        });
+        if entry.requests >= limit || (authentication && entry.authentication >= 20) {
+            return false;
+        }
+        entry.requests += 1;
+        if authentication {
+            entry.authentication += 1;
+        }
+        true
+    }
 }
 
 fn is_trusted_peer(transport: &TransportConfig, peer: IpAddr) -> bool {
@@ -440,6 +534,103 @@ mod tests {
         assert!(limiter.admit());
         assert!(limiter.admit());
         assert!(!limiter.admit());
+    }
+
+    #[test]
+    fn client_and_authentication_budgets_are_isolated() {
+        let limits = ClientRateLimits::default();
+        let alice = "192.0.2.1".parse().unwrap();
+        let bob = "192.0.2.2".parse().unwrap();
+        for _ in 0..20 {
+            assert!(limits.admit(alice, true, 600, 10));
+        }
+        assert!(!limits.admit(alice, true, 600, 10));
+        assert!(limits.admit(alice, false, 600, 10));
+        assert!(limits.admit(bob, true, 600, 10));
+        assert!(limits.admit(alice, true, 600, 11));
+        for _ in 1..600 {
+            assert!(limits.admit(alice, false, 600, 11));
+        }
+        assert!(!limits.admit(alice, false, 600, 11));
+        assert!(limits.admit(bob, false, 600, 11));
+    }
+
+    #[test]
+    fn saturated_client_window_preserves_limits_and_reopens_on_the_next_minute() {
+        let limits = ClientRateLimits::default();
+        let ip = |i| IpAddr::V4(std::net::Ipv4Addr::from(i));
+        for i in 0..10_000_u32 {
+            assert!(limits.admit(ip(i), false, 1, 10));
+        }
+        assert!(!limits.admit(ip(0), false, 1, 10));
+        assert!(!limits.admit(ip(10_000), false, 1, 10));
+        assert!(limits.admit(ip(10_000), false, 1, 11));
+        assert!(limits.admit(ip(0), false, 1, 11));
+        assert_eq!(limits.0.lock().unwrap().entries.len(), 2);
+    }
+
+    #[test]
+    fn forwarded_client_identity_stops_at_the_first_untrusted_hop() {
+        let mut transport = fixture_transport();
+        transport.mode = TransportMode::ReverseProxy;
+        transport.known_proxies = vec!["127.0.0.1".parse().unwrap()];
+        transport.known_networks.clear();
+        let mut request = Request::builder()
+            .header("x-forwarded-for", "192.0.2.99, 192.0.2.1")
+            .body(Body::empty())
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(ConnectInfo("127.0.0.1:1234".parse::<SocketAddr>().unwrap()));
+        assert_eq!(
+            client_ip(&transport, &request),
+            "192.0.2.1".parse::<IpAddr>().unwrap()
+        );
+        request
+            .extensions_mut()
+            .insert(ConnectInfo("192.0.2.5:1234".parse::<SocketAddr>().unwrap()));
+        assert_eq!(
+            client_ip(&transport, &request),
+            "192.0.2.5".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn exhausted_client_cannot_block_another_client_or_liveness() {
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let mut transport = fixture_transport();
+        transport.requests_per_minute = 1;
+        let app = secure_router(
+            Router::new()
+                .route("/api/v1/test", get(|| async { "ok" }))
+                .route("/health", get(|| async { "ok" }))
+                .route("/ready", get(|| async { "ok" })),
+            &transport,
+            readiness,
+        )
+        .unwrap();
+        for (peer, path, status) in [
+            ("192.0.2.1:1234", "/api/v1/test", StatusCode::OK),
+            (
+                "192.0.2.1:1234",
+                "/api/v1/test",
+                StatusCode::TOO_MANY_REQUESTS,
+            ),
+            ("192.0.2.2:1234", "/api/v1/test", StatusCode::OK),
+            ("192.0.2.1:1234", "/health", StatusCode::OK),
+            ("192.0.2.1:1234", "/ready", StatusCode::TOO_MANY_REQUESTS),
+            ("192.0.2.3:1234", "/ready", StatusCode::OK),
+            ("192.0.2.3:1234", "/ready", StatusCode::TOO_MANY_REQUESTS),
+        ] {
+            let mut request = Request::builder().uri(path).body(Body::empty()).unwrap();
+            request
+                .extensions_mut()
+                .insert(ConnectInfo(peer.parse::<SocketAddr>().unwrap()));
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), status, "{peer} {path}");
+        }
     }
 
     #[tokio::test]

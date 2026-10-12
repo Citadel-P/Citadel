@@ -480,8 +480,12 @@ async fn realtime_transition_notification_is_authenticated_versioned_and_metadat
     )
     .unwrap();
     let now = Utc::now();
+    let session_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO refreshtokens (id,createdat,expiresat,lastseenat,userid) VALUES ($1,NOW(),NOW()+INTERVAL '1 hour',NOW(),$2)")
+        .bind(session_id).bind(fixture.administrator.subject_id).execute(&fixture.pool).await.unwrap();
     let token = codec
         .encode_access(&AccessTokenClaims {
+            session_id: Some(session_id),
             subject_id: fixture.administrator.subject_id,
             actor_id: fixture.administrator.actor_id,
             principal_type: AuthenticatedPrincipalType::User,

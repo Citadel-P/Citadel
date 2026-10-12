@@ -1,3 +1,8 @@
+mod support {
+    pub mod source_dependencies;
+}
+use support::source_dependencies::Dependencies;
+
 use std::path::{Path, PathBuf};
 
 fn sources(directory: &Path) -> Vec<PathBuf> {
@@ -234,6 +239,149 @@ fn sensitive_workspace_io_belongs_to_infrastructure() {
             "citadel_adapters",
         ] {
             assert!(!production.contains(forbidden), "{relative}: {forbidden}");
+        }
+    }
+}
+
+fn fixture(path: &Path) -> bool {
+    let stem = path.file_stem().unwrap().to_string_lossy();
+    stem == "tests"
+        || stem == "test_support"
+        || stem.ends_with("_tests")
+        || path.components().any(|part| part.as_os_str() == "tests")
+}
+
+fn assert_no_dependencies(path: &Path, forbidden: &[&str]) {
+    let dependencies = Dependencies::parse(&std::fs::read_to_string(path).unwrap());
+    for dependency in forbidden {
+        assert!(
+            !dependencies.contains(dependency),
+            "{} depends on {dependency}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn every_feature_keeps_external_io_and_transport_implementations_out() {
+    let features = Path::new(env!("CARGO_MANIFEST_DIR")).join("../features");
+    for path in sources(&features).into_iter().filter(|path| !fixture(path)) {
+        let dependencies = Dependencies::parse(&std::fs::read_to_string(&path).unwrap());
+        assert!(
+            dependencies.filesystem_probe().is_none(),
+            "{} performs filesystem probe {:?}; use a workspace port",
+            path.display(),
+            dependencies.filesystem_probe()
+        );
+        assert_no_dependencies(
+            &path,
+            &[
+                "sqlx",
+                "axum",
+                "utoipa",
+                "reqwest",
+                "tonic",
+                "citadel_adapters",
+                "citadel_contracts",
+                "citadel_docker_api",
+                "citadel_processes",
+                "citadel_runtime",
+                "std::fs",
+                "tokio::fs",
+                "std::process",
+                "tokio::process",
+                "std::net::TcpStream",
+                "std::net::TcpListener",
+                "std::net::UdpSocket",
+                "tokio::net",
+                "std::env::var",
+                "std::env::var_os",
+            ],
+        );
+    }
+}
+
+#[test]
+fn server_database_handles_stay_in_composition_and_startup() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for path in sources(&root).into_iter().filter(|path| !fixture(path)) {
+        // These are the executable composition/lifecycle roots, never route or worker code.
+        let relative = path.strip_prefix(&root).unwrap();
+        let wiring = relative.starts_with("composition")
+            || ["app.rs", "cli.rs", "startup.rs", "router.rs"]
+                .iter()
+                .any(|allowed| relative == Path::new(allowed));
+        if !wiring {
+            assert_no_dependencies(&path, &["sqlx", "citadel_adapters::persistence"]);
+        }
+    }
+}
+
+#[test]
+fn all_http_and_realtime_handlers_consume_ports_not_concrete_adapters() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for area in ["api", "realtime", "realtime_groups"] {
+        for path in sources(&root.join(area))
+            .into_iter()
+            .filter(|path| !fixture(path))
+        {
+            assert_no_dependencies(
+                &path,
+                &[
+                    "citadel_adapters",
+                    "citadel_contracts",
+                    "citadel_docker_api",
+                    "sqlx",
+                ],
+            );
+        }
+    }
+}
+
+#[test]
+fn agent_has_no_database_access() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../agent/src");
+    for path in sources(&root).into_iter().filter(|path| !fixture(path)) {
+        assert_no_dependencies(
+            &path,
+            &["sqlx", "citadel_database", "citadel_adapters::persistence"],
+        );
+    }
+}
+
+#[test]
+fn sql_execution_and_row_mapping_belong_to_postgres_persistence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for area in ["server/src", "agent/src", "infrastructure/adapters/src"] {
+        for path in sources(&root.join(area))
+            .into_iter()
+            .filter(|path| !fixture(path))
+        {
+            if path.starts_with(root.join("infrastructure/adapters/src/persistence/postgres")) {
+                continue;
+            }
+            let dependencies = Dependencies::parse(&std::fs::read_to_string(&path).unwrap());
+            assert!(
+                dependencies.sqlx_implementation().is_none(),
+                "{} uses SQLx implementation {:?}; only pool/error wiring is allowed here",
+                path.display(),
+                dependencies.sqlx_implementation()
+            );
+            assert_no_dependencies(
+                &path,
+                &[
+                    "sqlx::query",
+                    "sqlx::query_as",
+                    "sqlx::query_scalar",
+                    "sqlx::raw_sql",
+                    "sqlx::QueryBuilder",
+                    "sqlx::Row",
+                    "sqlx::FromRow",
+                    "sqlx::Executor",
+                    "sqlx::postgres::PgRow",
+                    "sqlx::postgres::PgListener",
+                ],
+            );
         }
     }
 }

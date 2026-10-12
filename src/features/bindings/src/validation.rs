@@ -176,6 +176,44 @@ pub fn validate_provider(name: &str, address: &str, mount_path: &str) -> Result<
     Ok(())
 }
 
+/// Stored credentials may only be reused for their configured endpoint, including
+/// its scheme and path. Require an explicit credential when moving the provider.
+pub fn validate_provider_token_reuse(
+    current: &str,
+    requested: &str,
+    replacement_supplied: bool,
+) -> Result<(), BindingError> {
+    if !replacement_supplied
+        && current.trim().trim_end_matches('/') != requested.trim().trim_end_matches('/')
+    {
+        return Err(BindingError::Validation(
+            "Enter a Vault token when changing the provider address.".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod provider_credential_tests {
+    use super::*;
+
+    #[test]
+    fn stored_credentials_are_bound_to_the_entire_endpoint() {
+        let current = "https://vault.example/team";
+        assert!(
+            validate_provider_token_reuse(current, " https://vault.example/team/ ", false).is_ok()
+        );
+        for other in [
+            "https://other.example/team",
+            "http://vault.example/team",
+            "https://vault.example/other",
+        ] {
+            assert!(validate_provider_token_reuse(current, other, false).is_err());
+            assert!(validate_provider_token_reuse(current, other, true).is_ok());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

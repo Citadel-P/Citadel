@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::invalid_json,
         resource_access::{
             authorize_global, authorize_resource, capabilities, publish_resource_change,
             require_actor,
@@ -19,7 +20,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::invalid_json,
 };
 
 use axum::{
@@ -52,7 +52,7 @@ pub struct BindingsHttpState {
 pub(crate) fn metadata_error(error: citadel_bindings::BindingError) -> ApiError {
     match error {
         citadel_bindings::BindingError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         citadel_bindings::BindingError::NotFound => ApiError::NotFound,
         citadel_bindings::BindingError::Conflict(message) => ApiError::Conflict(message),

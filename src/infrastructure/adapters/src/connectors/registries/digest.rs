@@ -6,7 +6,7 @@ use citadel_contracts::citadel::{
     images::v1::{DistributionInspectRequest, DistributionInspectResponse},
 };
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -21,16 +21,14 @@ pub(crate) async fn inspect(
     reference: &str,
     cancel: &CancellationToken,
 ) -> Result<String, &'static str> {
-    let row = sqlx::query(
-        "SELECT registryhost,configuration FROM registries WHERE id=$1 AND status<>'Disabled'",
-    )
-    .bind(registry)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_| CHECK_FAILED)?
-    .ok_or("The configured Registry does not exist or is disabled.")?;
-    let host: String = row.try_get("registryhost").map_err(|_| CHECK_FAILED)?;
-    let configuration: Value = row.try_get("configuration").map_err(|_| CHECK_FAILED)?;
+    let configuration =
+        crate::persistence::postgres::registries::pull_configuration::load(pool, registry)
+            .await
+            .map_err(|_| CHECK_FAILED)?
+            .filter(|registry| registry.status != "Disabled")
+            .ok_or("The configured Registry does not exist or is disabled.")?;
+    let host = configuration.host;
+    let configuration = configuration.configuration;
     let image = crate::connectors::routing::deployments::qualify_image_reference(&host, reference)
         .map_err(|_| CHECK_FAILED)?;
     let auth =

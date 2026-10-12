@@ -22,7 +22,7 @@ use futures_util::future::BoxFuture;
 
 use serde_json::Value;
 
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
 use tokio_util::sync::CancellationToken;
 
@@ -1116,16 +1116,17 @@ impl DockerResticBackupExecutor {
         node_id: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<BackupExecutionTarget, String> {
-        let row = sqlx::query("SELECT connectortype,address,status FROM platforms WHERE id=$1")
-            .bind(platform_id)
-            .fetch_optional(self.targets.pool())
+        let (connector, address, status) =
+            crate::persistence::postgres::platforms::connection::execution_target(
+                self.targets.pool(),
+                platform_id,
+            )
             .await
             .map_err(|error| format!("Platform lookup failed: {error}"))?
             .ok_or_else(|| "The selected Platform was not found.".to_owned())?;
-        if row.try_get::<String, _>("status").map_err(storage_text)? != "Online" {
+        if status != "Online" {
             return Err("The selected Platform is disconnected or unavailable.".to_owned());
         }
-        let connector: String = row.try_get("connectortype").map_err(storage_text)?;
         if let Some(node_id) = node_id {
             let target = EdgeTarget::node(platform_id, node_id.to_owned());
             if let Ok(session) = self.edge.get(&target) {
@@ -1180,7 +1181,6 @@ impl DockerResticBackupExecutor {
                 "Platform connector '{connector}' does not support backup execution."
             ));
         }
-        let address: String = row.try_get("address").map_err(storage_text)?;
         let agent = self
             .agent
             .as_ref()
@@ -1849,10 +1849,6 @@ fn agent_output_logs(
         }
     }
     logs
-}
-
-fn storage_text(error: impl std::fmt::Display) -> String {
-    format!("Platform data could not be read: {error}")
 }
 
 fn redact(value: &str) -> String {

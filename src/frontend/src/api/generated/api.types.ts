@@ -7171,6 +7171,7 @@ export interface VolumeView {
   capabilities: null | VolumeCapabilitiesView;
   clusterVolume: any;
   containers: VolumeContainerView[];
+  contentAccessAllowed: boolean | null;
   createdAt: string;
   dockerNodeId: string | null;
   driver: string;

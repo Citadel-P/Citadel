@@ -1,3 +1,4 @@
+use super::login_throttle::LoginThrottle;
 use super::*;
 
 pub const MAXIMUM_SESSIONS_PER_USER: i64 = 10;
@@ -22,6 +23,7 @@ pub struct IdentityService {
     refresh_token_lifetime: Duration,
     credential_workers: Arc<Semaphore>,
     password_policy: PasswordPolicy,
+    login_throttle: LoginThrottle,
     last_used_tracker: Arc<dyn ServiceAccountLastUsedTracker>,
 }
 
@@ -50,6 +52,7 @@ impl IdentityService {
             refresh_token_lifetime,
             credential_workers: Arc::new(Semaphore::new(2)),
             password_policy: PasswordPolicy::default(),
+            login_throttle: LoginThrottle::default(),
             last_used_tracker,
         }
     }
@@ -151,6 +154,13 @@ impl IdentityService {
             .store
             .find_user_for_login(request.email_or_name.trim())
             .await?;
+        let throttle_key = LoginThrottle::key(
+            user.as_ref().map(|user| user.user_id),
+            &request.email_or_name,
+        );
+        if !self.login_throttle.admit(throttle_key, self.clock.now()) {
+            return Err(IdentityError::RateLimited);
+        }
         let hash = user
             .as_ref()
             .and_then(|user| user.password_hash.clone())
@@ -162,6 +172,7 @@ impl IdentityService {
         if !password_valid {
             return Err(IdentityError::InvalidCredentials);
         }
+        self.login_throttle.succeeded(throttle_key);
         Ok(user)
     }
 
@@ -241,6 +252,7 @@ impl IdentityService {
             return Err(IdentityError::InvalidCredentials);
         }
         let access = self.tokens.encode_access(&AccessTokenClaims {
+            session_id: Some(claims.session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,
             principal_type: AuthenticatedPrincipalType::User,
@@ -349,6 +361,21 @@ impl IdentityService {
         {
             return Err(IdentityError::InvalidCredentials);
         }
+        // Browser access is bound to its revocable refresh session. Automation
+        // tokens retain their separately scoped run lifetime and authorization.
+        if claims.principal_type == AuthenticatedPrincipalType::User
+            && claims.automation_run_id.is_none()
+        {
+            let session_id = claims.session_id.ok_or(IdentityError::InvalidCredentials)?;
+            if self
+                .store
+                .active_session_id(session_id, claims.subject_id, self.clock.now())
+                .await?
+                .is_none()
+            {
+                return Err(IdentityError::InvalidCredentials);
+            }
+        }
         let principal = self
             .store
             .load_principal(
@@ -444,6 +471,7 @@ impl IdentityService {
         }
         let issued_at = self.clock.now();
         self.tokens.encode_access(&AccessTokenClaims {
+            session_id: None,
             subject_id: target.subject_id,
             actor_id: target.actor_id,
             principal_type: target.principal_type,
@@ -645,6 +673,7 @@ impl IdentityService {
         let expires_at = now + self.refresh_token_lifetime;
         let session_id = Uuid::now_v7();
         let access_token = self.tokens.encode_access(&AccessTokenClaims {
+            session_id: Some(session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,
             principal_type: AuthenticatedPrincipalType::User,
@@ -690,9 +719,8 @@ impl IdentityService {
     pub(crate) async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
         let password = zeroize::Zeroizing::new(password);
         let permit = Arc::clone(&self.credential_workers)
-            .acquire_owned()
-            .await
-            .map_err(|_| IdentityError::Credential)?;
+            .try_acquire_owned()
+            .map_err(|_| IdentityError::RateLimited)?;
         let passwords = Arc::clone(&self.passwords);
         // Accepted blocking boundary: the bounded credential permit stays inside
         // the hash job if HTTP is cancelled. This closure has no database/session
@@ -711,9 +739,8 @@ impl IdentityService {
         encoded_hash: String,
     ) -> Result<bool, IdentityError> {
         let permit = Arc::clone(&self.credential_workers)
-            .acquire_owned()
-            .await
-            .map_err(|_| IdentityError::Credential)?;
+            .try_acquire_owned()
+            .map_err(|_| IdentityError::RateLimited)?;
         let passwords = Arc::clone(&self.passwords);
         // Accepted blocking boundary: the bounded credential permit stays inside
         // the hash job if HTTP is cancelled. This closure has no database/session

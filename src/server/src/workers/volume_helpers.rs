@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-pub(super) async fn reconcile(
+pub(crate) async fn reconcile(
     cancellation: CancellationToken,
     volumes: Arc<VolumeContentAdapter>,
 ) -> Result<(), std::convert::Infallible> {

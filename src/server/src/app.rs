@@ -1,5 +1,9 @@
 //! Executable lifecycle: initialization, supervised serving, and bounded shutdown.
-use crate::{cli, composition::ServerComponents, jobs, router as api, startup};
+use crate::{
+    cli,
+    composition::{ServerComponents, background},
+    router as api, startup,
+};
 use axum::Router;
 use citadel_server::{
     config::{Config, LogFormat},
@@ -49,12 +53,12 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     }
     startup::migrate(&config).await?;
     let job_lease = startup::acquire_job_lease(&config).await?;
-    let (state, pending_jobs) = ServerComponents::build(&config).await?;
+    let (state, background_services) = ServerComponents::build(&config).await?;
     startup::run(&state).await?;
     let cancellation = state.cancellation.clone();
     let pool = state.pool.clone();
     let dynamic_tasks = state.dynamic_tasks.clone();
-    let mut supervisor = jobs::spawn_all(&state, pending_jobs, &config).await?;
+    let mut supervisor = background::spawn_all(&state, background_services, &config).await?;
     // The watcher owns the connection by value. Return it on cancellation so
     // the advisory lease remains held through worker/dynamic-task cleanup.
     let (lease_return, lease_retained) = tokio::sync::oneshot::channel();

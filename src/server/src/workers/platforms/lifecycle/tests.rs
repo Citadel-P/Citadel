@@ -292,7 +292,7 @@ async fn committed_lifecycle_retries_alert_without_repeating_online_recovery() {
     let mut updates = hub.subscribe();
     let worker = LifecycleWorker {
         targets: targets.clone(),
-        pool: pool.clone(),
+        store: crate::workers::test_support::projections(&pool),
         refreshes,
         realtime: Some(hub),
         alerts: alerts.clone(),
@@ -449,7 +449,7 @@ async fn local_health_monitor_emits_transition_while_all_database_connections_ar
         HealthWorker {
             docker,
             targets,
-            pool: pool.clone(),
+            edge: Arc::new(citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone())),
             transitions,
         },
     ));

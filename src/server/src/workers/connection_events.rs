@@ -1,19 +1,17 @@
 //! Central connection-event fanout. Consumers subscribe before producers start.
 //! Database state is authoritative; reconnects and slow subscribers trigger resync.
-use citadel_adapters::persistence::postgres::connection_events::{
-    ConnectionEvent, ConnectionResource,
-};
+use citadel_runtime::notifications::{ConnectionEvent, ConnectionResource};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum ConnectionNotification {
+pub(crate) enum ConnectionNotification {
     Changed(ConnectionEvent),
     Resync,
 }
 
 #[derive(Clone)]
-pub(super) struct ConnectionEventHub {
+pub(crate) struct ConnectionEventHub {
     sender: broadcast::Sender<ConnectionNotification>,
 }
 
@@ -33,7 +31,7 @@ impl ConnectionEventHub {
     }
 }
 
-pub(super) async fn realtime_updates(
+pub(crate) async fn realtime_updates(
     mut events: broadcast::Receiver<ConnectionNotification>,
     realtime: Option<crate::realtime::RealtimeHub>,
     cancellation: CancellationToken,
@@ -74,7 +72,7 @@ pub(super) async fn realtime_updates(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_adapters::persistence::postgres::connection_events::ConnectionState;
+    use citadel_runtime::notifications::ConnectionState;
     use std::sync::Arc;
 
     #[tokio::test]

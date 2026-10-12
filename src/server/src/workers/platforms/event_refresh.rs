@@ -8,30 +8,28 @@ pub(crate) struct ScopedEventRequest {
     pub refresh: EventRefresh,
 }
 
-pub(super) struct EventRefreshWorker {
+pub(crate) struct EventRefreshWorker {
     pub targets: Arc<PlatformRuntimeRegistry>,
     pub refreshes: EventRefreshSender,
     pub docker: DockerClient,
-    pub pool: PgPool,
+    pub store: Arc<dyn RuntimeProjectionStore>,
     pub realtime: Option<RealtimeHub>,
-    pub node_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub retry_delay: Duration,
     pub swarm_interval: Duration,
 }
 
 /// Every resource has an independent bounded scheduling lane.
-pub(super) async fn event_resource_refresh(
+pub(crate) async fn event_resource_refresh(
     cancellation: CancellationToken,
     receivers: EventRefreshReceivers,
     worker: EventRefreshWorker,
 ) -> Result<(), std::convert::Infallible> {
-    let store = PostgresInventoryProjectionStore::new(worker.pool.clone())
-        .with_node_policy(worker.node_policy.clone());
+    let store = worker.store.clone();
     let refresh = run_refresh_workers(
         &cancellation,
         receivers,
         worker.retry_delay,
-        |request| refresh_event_scope(&worker, &store, request, &cancellation),
+        |request| refresh_event_scope(&worker, store.as_ref(), request, &cancellation),
         |request, observation: ScopedObservation| {
             let store = &store;
             let worker = &worker;
@@ -108,7 +106,7 @@ pub(crate) struct ScopedObservation {
 
 async fn refresh_event_scope(
     worker: &EventRefreshWorker,
-    store: &PostgresInventoryProjectionStore,
+    store: &dyn RuntimeProjectionStore,
     request: ScopedEventRequest,
     cancellation: &CancellationToken,
 ) -> Result<Option<ScopedObservation>, RuntimeCapabilityError> {

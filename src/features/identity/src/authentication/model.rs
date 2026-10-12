@@ -34,6 +34,8 @@ pub struct PreparedSession {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessTokenClaims {
+    #[serde(default)]
+    pub session_id: Option<Uuid>,
     pub subject_id: Uuid,
     pub actor_id: ActorId,
     pub principal_type: AuthenticatedPrincipalType,

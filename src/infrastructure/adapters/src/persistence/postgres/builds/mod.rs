@@ -52,3 +52,5 @@ pub mod completion;
 pub use repository::PostgresBuildRepository;
 
 pub mod credentials;
+
+pub(crate) mod execution_target;

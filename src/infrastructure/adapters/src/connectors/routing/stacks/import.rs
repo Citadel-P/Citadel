@@ -1,7 +1,7 @@
 use super::*;
 use crate::connectors::containers::ownership::{Owner, owner};
 use citadel_platforms::ContainerInventoryPort;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 impl StackRuntimeRouter {
     pub(super) async fn orphaned_stack_owner(
@@ -21,11 +21,8 @@ impl StackRuntimeRouter {
                 "The project contains mixed Citadel owners or unmanaged workloads.".into(),
             ));
         }
-        if sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM stacks WHERE id=$1)")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(storage)?
+        if crate::persistence::postgres::stacks::runtime_inventory::stack_exists(&self.pool, *id)
+            .await?
         {
             return Err(StackError::Conflict(
                 "The project is owned by an existing Citadel Stack.".into(),
@@ -68,39 +65,13 @@ impl StackRuntimeRouter {
         if containers.is_empty() {
             return Err(StackError::NotFound);
         }
-        let rows = sqlx::query("SELECT dockercontainerid,issystem,isswarmtask,deploymentid,stackid,controlstate FROM containers WHERE platformid=$1 AND stack=$2")
-            .bind(platform_id).bind(project).fetch_all(&self.pool).await.map_err(storage)?;
-        let persisted = rows
-            .iter()
-            .map(|r| r.try_get::<String, _>("dockercontainerid").map_err(storage))
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        if persisted != containers.iter().map(|c| c.id.clone()).collect() {
-            return Err(StackError::Conflict(
-                "Compose project membership changed. Refresh the Platform and retry.".into(),
-            ));
-        }
-        for row in &rows {
-            if row.try_get::<bool, _>("issystem").map_err(storage)?
-                || row.try_get::<bool, _>("isswarmtask").map_err(storage)?
-                || row
-                    .try_get::<Option<Uuid>, _>("deploymentid")
-                    .map_err(storage)?
-                    .is_some()
-                || row
-                    .try_get::<Option<Uuid>, _>("stackid")
-                    .map_err(storage)?
-                    .is_some()
-                || row
-                    .try_get::<Option<String>, _>("controlstate")
-                    .map_err(storage)?
-                    .as_deref()
-                    == Some("Processing")
-            {
-                return Err(StackError::Conflict(
-                    "Compose project contains system, managed or processing containers.".into(),
-                ));
-            }
-        }
+        crate::persistence::postgres::stacks::runtime_inventory::validate_import_containers(
+            &self.pool,
+            platform_id,
+            project,
+            containers.iter().map(|c| c.id.clone()).collect(),
+        )
+        .await?;
         let mut owners = Vec::new();
         let mut grouped = BTreeMap::<String, ComposeProjectRuntimeService>::new();
         let mut hash = Sha256::new();

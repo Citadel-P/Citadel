@@ -46,3 +46,6 @@ pub mod permissions;
 
 mod status;
 pub use status::{BuildAgentPoolValidationStatus, BuildRunStatus};
+
+mod pool_connections;
+pub use pool_connections::BuildPoolConnections;

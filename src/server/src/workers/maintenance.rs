@@ -1,11 +1,12 @@
 use crate::realtime::RealtimeHub;
-use sqlx::PgPool;
+use citadel_runtime::maintenance::{MaintenanceError, MaintenanceStore};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-pub(super) async fn run(
+pub(crate) async fn run(
     token: CancellationToken,
-    pool: PgPool,
+    store: Arc<dyn MaintenanceStore>,
     realtime: Option<RealtimeHub>,
     build_retention_days: Option<i32>,
     retention_interval: Duration,
@@ -16,7 +17,7 @@ pub(super) async fn run(
         let mut tick = super::schedule::interval("recovery", super::recovery::FALLBACK);
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            match citadel_adapters::persistence::postgres::maintenance::reconcile(&pool).await {
+            match store.reconcile().await {
                 Ok(changed) => {
                     if let Some(hub) = &realtime {
                         for resource in changed {
@@ -32,9 +33,7 @@ pub(super) async fn run(
         let mut tick = super::schedule::interval("lease-expiry", Duration::from_secs(30));
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            if let Err(error) =
-                citadel_adapters::persistence::postgres::maintenance::expire_leases(&pool).await
-            {
+            if let Err(error) = store.expire_leases().await {
                 tracing::warn!(%error, "Lease expiry failed");
             }
         }
@@ -47,17 +46,11 @@ pub(super) async fn run(
                 // Drain backlogs with short commits, at most 128 passes / ten seconds.
                 // One pass deletes at most 5,000 rows per historical table (1,000 builds).
                 for _ in 0..128 {
-                    if citadel_adapters::persistence::postgres::maintenance::cleanup(
-                        &pool,
-                        build_retention_days,
-                    )
-                    .await?
-                        == 0
-                    {
+                    if store.cleanup(build_retention_days).await? == 0 {
                         break;
                     }
                 }
-                Ok::<_, sqlx::Error>(())
+                Ok::<_, MaintenanceError>(())
             };
             tokio::select! {
                 () = token.cancelled() => break,

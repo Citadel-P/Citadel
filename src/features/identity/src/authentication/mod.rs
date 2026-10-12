@@ -52,3 +52,5 @@ mod password_policy;
 pub use password_policy::{
     MAXIMUM_PASSWORD_CHARACTERS, MINIMUM_PASSWORD_CHARACTERS, PasswordPolicy,
 };
+
+mod login_throttle;

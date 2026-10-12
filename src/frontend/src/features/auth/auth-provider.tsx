@@ -1,4 +1,6 @@
-import { useEffect, useCallback, useReducer } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { jwtDecode } from 'jwt-decode';
+import { useEffect, useCallback, useReducer, useRef } from 'react';
 import { useApiClientContext } from '@/api/api-client-context';
 import { AuthContext } from './auth-context';
 import { useHTTPErrorHandler, useMutate } from '@/lib/hooks';
@@ -32,6 +34,9 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
+  const queryClient = useQueryClient();
+  const identityRef = useRef<string | undefined>(undefined);
+  const authEpoch = useRef(0);
   const { isSetupReady, requiresSetup, error: setupError } = useSetupContext();
   const { mutate: requestLogout } = useMutate('logout');
   const { mutateAsync: requestLogin, isPending, validationErrors } = useMutate('login');
@@ -44,6 +49,19 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
   const applyToken = useCallback(
     (token?: string) => {
+      let identity: string | undefined;
+      if (token) {
+        const claims = jwtDecode<{ sub: string; iss?: string }>(token);
+        identity = JSON.stringify([apiClient.baseUrl, claims.iss, claims.sub]);
+      }
+      if (!token || identity !== identityRef.current) {
+        authEpoch.current += 1;
+        identityRef.current = identity;
+        // Cancellation takes effect synchronously. Removing the cache also prevents
+        // late responses from repopulating entries observed by the next account.
+        void queryClient.cancelQueries();
+        queryClient.clear();
+      }
       apiClient.setSecurityData(token);
       if (token) {
         dispatch({ type: 'SET_TOKEN', token });
@@ -51,11 +69,13 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
         dispatch({ type: 'LOGOUT' });
       }
     },
-    [apiClient],
+    [apiClient, queryClient],
   );
 
   const requestRefreshToken = useCallback(async () => {
+    const epoch = authEpoch.current;
     const response = await requestRefresh({});
+    if (epoch !== authEpoch.current) throw new Error('Authentication changed during refresh.');
     const accessToken = response.data.accessToken;
     resetRefresh();
     return accessToken;
@@ -70,7 +90,9 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
   const login = useCallback(
     async (request: LoginRequest): Promise<LoginResponse | undefined> => {
+      const epoch = authEpoch.current;
       const response = await requestLogin({ data: request });
+      if (epoch !== authEpoch.current) return undefined;
       if (response.data.nextStep === LoginNextStep.Completed && response.data.accessToken) {
         applyToken(response.data.accessToken);
       }

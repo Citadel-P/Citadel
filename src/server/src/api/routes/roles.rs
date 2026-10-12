@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
+        request_validation::ApiPath,
         resources::roles::{
             requests::{
                 CreateRoleRequest, DeleteRolesRequest, PatchRolePermissionsRequest,
@@ -11,7 +12,6 @@ use crate::{
         routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::ApiPath,
 };
 
 use axum::{
@@ -276,7 +276,7 @@ async fn delete(
 fn role_json<T>(payload: Result<Json<T>, JsonRejection>) -> Result<T, crate::api::error::ApiError> {
     payload
         .map(|Json(value)| value)
-        .map_err(crate::request_validation::invalid_json)
+        .map_err(crate::api::request_validation::invalid_json)
 }
 
 async fn authorize(

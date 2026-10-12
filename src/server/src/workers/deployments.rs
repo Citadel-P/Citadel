@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 const STALE_AFTER: Duration = Duration::from_secs(11 * 60);
 const MAXIMUM_BATCH: i64 = 10;
 
-pub(super) async fn image_updates(
+pub(crate) async fn image_updates(
     cancellation: CancellationToken,
     deployments: Arc<DeploymentService>,
 ) -> Result<(), std::convert::Infallible> {
@@ -22,7 +22,7 @@ pub(super) async fn image_updates(
     }
 }
 
-pub(super) async fn deployment_apply_reconciliation(
+pub(crate) async fn deployment_apply_reconciliation(
     cancellation: CancellationToken,
     deployments: Arc<DeploymentService>,
     signals: tokio::sync::watch::Receiver<()>,

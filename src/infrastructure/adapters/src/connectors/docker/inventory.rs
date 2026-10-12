@@ -346,6 +346,7 @@ fn map_network(value: DockerNetwork) -> RuntimeNetworkSummary {
 
 pub(super) fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
     RuntimeVolumeSummary {
+        content_access_allowed: value.content_access_allowed,
         name: value.name,
         in_use: value
             .usage_data

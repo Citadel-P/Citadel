@@ -155,8 +155,12 @@ Provider fields:
 
 Do not include `/v1` or `/data` in the mount path.
 
+Changing the provider address, including its protocol or path, requires an
+explicit token. Citadel will not reuse a stored token for a different endpoint,
+either when testing the connection or saving the change.
+
 Use **Test connection** before saving. When editing a provider, leave the token
-empty to keep its stored token. Test an external secret reference as well: a valid
+empty to keep its stored token when the address is unchanged. Test an external secret reference as well: a valid
 token does not necessarily have permission to read every path. The test reports
 whether the reference resolves without displaying its value.
 

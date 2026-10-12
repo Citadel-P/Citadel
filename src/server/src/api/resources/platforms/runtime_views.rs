@@ -76,9 +76,12 @@ pub(crate) fn map_node_volume(
 
 pub(crate) fn map_volume(
     volume: RuntimeVolumeSummary,
-    capabilities: VolumeCapabilitiesView,
+    mut capabilities: VolumeCapabilitiesView,
 ) -> Result<VolumeView, serde_json::Error> {
+    capabilities.can_browse &= volume.content_access_allowed == Some(true);
+    capabilities.can_download &= volume.content_access_allowed == Some(true);
     Ok(VolumeView {
+        content_access_allowed: volume.content_access_allowed,
         backup_coverage: None,
         id: volume.name.clone(),
         name: volume.name,

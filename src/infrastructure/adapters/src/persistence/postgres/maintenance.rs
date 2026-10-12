@@ -131,3 +131,45 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
         .map_err(protocol)?;
     tx.commit().await
 }
+
+pub struct PostgresMaintenanceStore(pub PgPool);
+impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore {
+    fn reconcile(
+        &self,
+    ) -> futures_util::future::BoxFuture<
+        '_,
+        Result<Vec<&'static str>, citadel_runtime::maintenance::MaintenanceError>,
+    > {
+        Box::pin(async move {
+            reconcile(&self.0)
+                .await
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+        })
+    }
+    fn expire_leases(
+        &self,
+    ) -> futures_util::future::BoxFuture<
+        '_,
+        Result<(), citadel_runtime::maintenance::MaintenanceError>,
+    > {
+        Box::pin(async move {
+            expire_leases(&self.0)
+                .await
+                .map(|_| ())
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+        })
+    }
+    fn cleanup(
+        &self,
+        days: Option<i32>,
+    ) -> futures_util::future::BoxFuture<
+        '_,
+        Result<u64, citadel_runtime::maintenance::MaintenanceError>,
+    > {
+        Box::pin(async move {
+            cleanup(&self.0, days)
+                .await
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+        })
+    }
+}

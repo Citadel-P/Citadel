@@ -113,7 +113,7 @@ async fn all_direct_agents_subscribe_and_permanent_rejections_do_not_exit_core_w
     let stats = crate::workers::statistics::register(
         &mut stats_supervisor,
         &token,
-        pool.clone(),
+        crate::workers::test_support::stats(&pool),
         None,
         32,
         20,
@@ -249,4 +249,21 @@ async fn health_probe_times_out_an_unresponsive_agent() {
     drop(client);
     token.cancel();
     server.await.unwrap();
+}
+
+async fn edge_health(
+    pool: &sqlx::PgPool,
+    platform: uuid::Uuid,
+) -> Result<Option<bool>, citadel_platforms::RuntimeCapabilityError> {
+    use citadel_platforms::jobs::background::EdgeHealthReader;
+    let store =
+        citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
+            pool.clone(),
+        );
+    Ok(store
+        .health(&[platform])
+        .await?
+        .into_iter()
+        .next()
+        .map(|(_, healthy)| healthy))
 }

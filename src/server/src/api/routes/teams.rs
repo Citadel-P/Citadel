@@ -2,6 +2,7 @@ use crate::api::resources::resource_access::ResourceAccessInput;
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
+        request_validation::{ApiPath, ValidatedJson},
         resources::{
             common::PagedResult,
             teams::{
@@ -16,7 +17,6 @@ use crate::{
         routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ValidatedJson},
 };
 
 use axum::{
@@ -604,5 +604,5 @@ fn team_query<T>(
 ) -> Result<T, crate::api::error::ApiError> {
     query
         .map(|Query(value)| value)
-        .map_err(crate::request_validation::invalid_query)
+        .map_err(crate::api::request_validation::invalid_query)
 }

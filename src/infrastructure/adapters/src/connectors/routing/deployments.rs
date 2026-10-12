@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 use base64::Engine;
 use citadel_deployments::{
     ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntime,
-    PreparedDeploymentImage, ResolvedDeploymentBuild, RuntimeContainerState,
-    RuntimeDeploymentCommand, RuntimeDeploymentResult, StopSignal,
+    PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
+    RuntimeDeploymentResult, StopSignal,
 };
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use serde_json::{Value, json};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -109,19 +109,13 @@ impl DeploymentRuntimeRouter {
         let id = Uuid::parse_str(image_id).map_err(|_| {
             DeploymentError::Validation("The selected local image is invalid.".to_owned())
         })?;
-        let docker_image_id = sqlx::query_scalar::<_, String>(
-            "SELECT dockerimageid FROM images WHERE id=$1 AND platformid=$2",
-        )
-        .bind(id)
-        .bind(platform_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(storage)?
-        .ok_or_else(|| {
-            DeploymentError::Validation(
-                "The selected local image is not available on this platform.".to_owned(),
+        let docker_image_id =
+            crate::persistence::postgres::deployments::runtime_images::local_image(
+                &self.pool,
+                platform_id,
+                id,
             )
-        })?;
+            .await?;
         Ok(PreparedDeploymentImage {
             docker_image_id,
             digest: None,
@@ -136,53 +130,18 @@ impl DeploymentRuntimeRouter {
         resolved_build_run_id: Option<Uuid>,
         cancellation: &CancellationToken,
     ) -> Result<PreparedDeploymentImage, DeploymentError> {
-        let row = sqlx::query(
-            r#"SELECT (run.registrysnapshot->>'id')::uuid AS registryid,run.id,run.imagereferences,run.imagedigest
-FROM buildprojects project
-JOIN LATERAL (
-    SELECT candidate.id,candidate.imagereferences,candidate.imagedigest,candidate.registrysnapshot
-    FROM buildruns candidate
-    WHERE candidate.buildprojectid=project.id
-      AND candidate.status='Succeeded'
-      AND candidate.registrysnapshot <> 'null'::jsonb
-      AND ($2::uuid IS NULL OR candidate.id=$2)
-    ORDER BY candidate.completedat DESC NULLS LAST,candidate.id DESC
-    LIMIT 1
-) run ON TRUE
-WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
-        )
-        .bind(build_project_id)
-        .bind(resolved_build_run_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(storage)?
-        .ok_or_else(|| {
-            DeploymentError::Validation(
-                "The selected Build Project has no successful Build Run to deploy.".to_owned(),
+        let (registry_id, build) =
+            crate::persistence::postgres::deployments::runtime_images::build_image(
+                &self.pool,
+                build_project_id,
+                resolved_build_run_id,
             )
-        })?;
-        let references: Value = row.try_get("imagereferences").map_err(storage)?;
-        let reference = references
-            .as_array()
-            .and_then(|values| values.first())
-            .and_then(Value::as_str)
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| {
-                DeploymentError::Validation(
-                    "The selected Build Run has no deployable image reference.".to_owned(),
-                )
-            })?
-            .to_owned();
-        let build = ResolvedDeploymentBuild {
-            image_reference: reference.clone(),
-            digest: row.try_get("imagedigest").map_err(storage)?,
-            build_run_id: row.try_get("id").map_err(storage)?,
-        };
+            .await?;
         let mut prepared = self
             .prepare_external_image(
                 platform_id,
-                row.try_get("registryid").map_err(storage)?,
-                &reference,
+                registry_id,
+                &build.image_reference,
                 cancellation,
             )
             .await?;
@@ -195,23 +154,22 @@ WHERE project.id=$1 AND project.enabled AND project.archivedat IS NULL"#,
         registry_id: Uuid,
         image_tag: &str,
     ) -> Result<RegistryPull, DeploymentError> {
-        let row =
-            sqlx::query("SELECT registryhost,configuration,status FROM registries WHERE id=$1")
-                .bind(registry_id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(storage)?
-                .ok_or_else(|| {
-                    DeploymentError::Validation("The selected Registry was not found.".to_owned())
-                })?;
-        let status: String = row.try_get("status").map_err(storage)?;
-        if status.eq_ignore_ascii_case("Disabled") {
+        let registry = crate::persistence::postgres::registries::pull_configuration::load(
+            &self.pool,
+            registry_id,
+        )
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| {
+            DeploymentError::Validation("The selected Registry was not found.".to_owned())
+        })?;
+        if registry.status.eq_ignore_ascii_case("Disabled") {
             return Err(DeploymentError::Validation(
                 "The selected Registry is disabled.".to_owned(),
             ));
         }
-        let host: String = row.try_get("registryhost").map_err(storage)?;
-        let configuration: Value = row.try_get("configuration").map_err(storage)?;
+        let host = registry.host;
+        let configuration = registry.configuration;
         let image = qualify_image_reference(&host, image_tag)?;
         let auth = registry_auth(registry_id, &host, &configuration)?;
         Ok(RegistryPull { image, auth })

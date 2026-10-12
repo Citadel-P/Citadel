@@ -1066,6 +1066,13 @@ mod tests {
 
     struct TestWorkspace;
     impl crate::workspace::GitWorkspacePort for TestWorkspace {
+        fn has_file<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, bool> {
+            Box::pin(async move {
+                tokio::fs::metadata(path)
+                    .await
+                    .is_ok_and(|metadata| metadata.is_file())
+            })
+        }
         fn exists<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, std::io::Result<bool>> {
             Box::pin(tokio::fs::try_exists(path))
         }

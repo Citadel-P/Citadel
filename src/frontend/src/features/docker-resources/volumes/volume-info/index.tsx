@@ -1,3 +1,4 @@
+import { AlertMessage } from '@/components/custom/alert-message';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { HardDrive } from 'lucide-react';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
@@ -50,6 +51,13 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<VolumeView> = {
 const InspectVolumeWrapper = ({ resource }: { resource: VolumeView }) => {
   return (
     <div className="flex flex-col gap-(--section-gap)">
+      {resource.contentAccessAllowed !== true && (
+        <AlertMessage type="info" title="File access unavailable">
+          {resource.contentAccessAllowed === false
+            ? 'Browsing and downloads are disabled for Citadel system storage and volumes with custom storage drivers or options, including for administrators.'
+            : 'Storage protection has not been verified. Refresh this volume; if this persists on a remote platform, update the owning Agent.'}
+        </AlertMessage>
+      )}
       <DetailSection
         title="Volume configuration"
         description="Storage location, driver, and capacity reported by Docker."

@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{error_response, no_store},
+        request_validation::ApiPath,
         resources::oidc::requests::{
             BeginLoginQuery, CallbackQuery, CreateOidcProviderRequest,
             PatchOidcProviderMetadataRequest, PatchOidcProviderRequest, RenameOidcProviderRequest,
@@ -11,7 +12,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::ApiPath,
 };
 
 use axum::{
@@ -553,11 +553,14 @@ fn redirect(location: String, headers: &HeaderMap) -> Response {
 }
 
 fn invalid_json(error: JsonRejection, headers: &HeaderMap) -> Response {
-    error_response(crate::request_validation::invalid_json(error), headers)
+    error_response(crate::api::request_validation::invalid_json(error), headers)
 }
 
 fn invalid_query(error: QueryRejection, headers: &HeaderMap) -> Response {
-    error_response(crate::request_validation::invalid_query(error), headers)
+    error_response(
+        crate::api::request_validation::invalid_query(error),
+        headers,
+    )
 }
 
 #[cfg(test)]

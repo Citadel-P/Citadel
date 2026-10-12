@@ -13,6 +13,7 @@ use crate::api::resources::platforms::runtime_views::*;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{invalid_json, invalid_path, invalid_query},
         resources::platforms::{
             requests::{
                 ContentQuery, CreateNetworkInput, CreatePlatformInput, CreateRuntimeNetwork,
@@ -35,7 +36,6 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
     realtime::RealtimeHub,
-    request_validation::{invalid_json, invalid_path, invalid_query},
 };
 use citadel_platforms::edge_management::EdgeTarget;
 use citadel_primitives::PatchField;
@@ -2077,7 +2077,7 @@ fn platform_error(error: AuthorizedReadError) -> ApiError {
 fn platform_registration_error(error: PlatformRegistrationError) -> ApiError {
     match error {
         PlatformRegistrationError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         PlatformRegistrationError::Conflict(message) => ApiError::Conflict(message),
         source @ PlatformRegistrationError::Storage(_) => ApiError::internal(source),
@@ -4391,7 +4391,9 @@ async fn update(
     // Decode partial fields only after scoped authorization, preserving PATCH omission/null semantics.
     let patch: crate::api::resources::platforms::patch::PlatformPatch = api_result(
         serde_path_to_error::deserialize(input).map_err(|error| {
-            crate::request_validation::validation_error(format!("Invalid Platform patch: {error}"))
+            crate::api::request_validation::validation_error(format!(
+                "Invalid Platform patch: {error}"
+            ))
         }),
         &headers,
     )?;
@@ -6286,6 +6288,41 @@ mod tests {
     }
 
     use crate::api::routes::platforms::*;
+
+    #[test]
+    fn volume_storage_policy_restricts_even_administrator_capabilities() {
+        for allowed in [Some(true), Some(false), None] {
+            let view = map_volume(
+                RuntimeVolumeSummary {
+                    content_access_allowed: allowed,
+                    ..Default::default()
+                },
+                VolumeCapabilitiesView {
+                    can_browse: true,
+                    can_download: true,
+                    can_read: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let capabilities = view.capabilities.unwrap();
+            assert_eq!(capabilities.can_browse, allowed == Some(true));
+            assert_eq!(capabilities.can_download, allowed == Some(true));
+            assert!(capabilities.can_read);
+        }
+        let view = map_volume(
+            RuntimeVolumeSummary {
+                content_access_allowed: Some(true),
+                ..Default::default()
+            },
+            VolumeCapabilitiesView::default(),
+        )
+        .unwrap();
+        assert!(
+            !view.capabilities.unwrap().can_browse,
+            "storage safety must not grant permissions"
+        );
+    }
 
     #[test]
     fn volume_usage_is_serialized_with_the_existing_ui_field_names() {

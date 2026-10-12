@@ -18,14 +18,31 @@ pub(super) struct Prepared {
     pub secret_directory: Option<PathBuf>,
     persistent_root: PathBuf,
     keep_secrets: bool,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
 }
 impl Drop for Prepared {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
-        if !self.keep_secrets
-            && let Some(path) = &self.secret_directory
-        {
-            let _ = std::fs::remove_dir_all(path);
+        let root = std::mem::take(&mut self.root);
+        let secret_directory = (!self.keep_secrets)
+            .then(|| self.secret_directory.take())
+            .flatten();
+        let permit = self.permit.take();
+        let cleanup = move || {
+            // Keep the operation's admission slot until cleanup finishes. Tokio
+            // owns this finite blocking work even if the request is cancelled.
+            let _permit = permit;
+            for path in std::iter::once(root).chain(secret_directory) {
+                if let Err(error) = std::fs::remove_dir_all(path)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                {
+                    tracing::warn!(%error, "Stack workspace cleanup failed");
+                }
+            }
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn_blocking(cleanup);
+        } else {
+            cleanup();
         }
     }
 }
@@ -120,7 +137,16 @@ fn add_override(prepared: &mut Prepared, name: &str, value: &Value) -> Result<()
         .push(path.display().to_string());
     Ok(())
 }
+#[cfg(test)]
 pub(super) fn prepare(r: &StackApplyRequest, base: &Path) -> Result<Prepared, Status> {
+    prepare_admitted(r, base, None)
+}
+
+pub(super) fn prepare_admitted(
+    r: &StackApplyRequest,
+    base: &Path,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
+) -> Result<Prepared, Status> {
     if r.stack_name.trim().is_empty() {
         return Err(Status::invalid_argument("Stack name is required"));
     }
@@ -175,6 +201,7 @@ pub(super) fn prepare(r: &StackApplyRequest, base: &Path) -> Result<Prepared, St
         persistent_root,
         secret_directory: None,
         keep_secrets: false,
+        permit,
         environment: Vec::new(),
         source: StackApplySource {
             files: vec![],
@@ -416,6 +443,45 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn async_drop_keeps_admission_until_blocking_cleanup_finishes() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let fixture = Fixture::new();
+        let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+        let prepared = prepare_admitted(
+            &request(),
+            &fixture.0,
+            Some(slots.clone().try_acquire_owned().unwrap()),
+        )
+        .unwrap();
+        let root = prepared.root.clone();
+        runtime.block_on(async {
+            let (release, wait) = std::sync::mpsc::channel();
+            let (started, running) = tokio::sync::oneshot::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                started.send(()).unwrap();
+                wait.recv().unwrap();
+            });
+            running.await.unwrap();
+            drop(prepared);
+            // Cleanup is queued behind the blocker. Dropping must not touch the
+            // filesystem or release admission on this async thread.
+            assert!(root.exists());
+            assert_eq!(slots.available_permits(), 0);
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            let _permit = tokio::time::timeout(std::time::Duration::from_secs(5), slots.acquire())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(!root.exists());
+        });
+    }
+
     #[test]
     fn local_environment_files_share_a_bounded_read_budget() {
         let fixture = Fixture::new();

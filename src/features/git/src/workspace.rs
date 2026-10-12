@@ -12,6 +12,8 @@ pub trait GitStagingDirectory: Send + Sync {
 }
 pub trait GitWorkspacePort: Send + Sync {
     fn exists<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, io::Result<bool>>;
+    /// Like `Path::is_file`: follows links and returns false for missing/unreadable paths.
+    fn has_file<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, bool>;
     fn stage<'a>(
         &'a self,
         target: &'a Path,

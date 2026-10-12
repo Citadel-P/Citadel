@@ -3,6 +3,7 @@ use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{WorkloadQuery, invalid_json, invalid_path},
         resources::deployments::{
             adoption_views::ContainerAdoptionDraft,
             requests::{AdoptContainerInput, *},
@@ -10,7 +11,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{WorkloadQuery, invalid_json, invalid_path},
 };
 
 use axum::{
@@ -635,7 +635,7 @@ async fn delete_deployments(
 fn deployment_error(error: DeploymentError) -> ApiError {
     match error {
         DeploymentError::Validation(message) => {
-            crate::request_validation::validation_error(message)
+            crate::api::request_validation::validation_error(message)
         }
         DeploymentError::NotFound => ApiError::NotFound,
         DeploymentError::Forbidden => ApiError::Forbidden,

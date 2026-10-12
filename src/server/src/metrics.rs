@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
-use sqlx::PgPool;
+use citadel_runtime::database_health::DatabasePoolUsage;
 
 #[derive(Default)]
 pub struct Metrics {
@@ -117,7 +117,7 @@ impl Metrics {
     }
 
     #[must_use]
-    pub fn render(&self, pool: &PgPool) -> String {
+    pub fn render(&self, pool: DatabasePoolUsage) -> String {
         let mut output = format!(
             concat!(
                 "# TYPE citadel_active_tasks gauge\n",
@@ -177,8 +177,8 @@ impl Metrics {
             self.realtime_authorization_failures_total
                 .load(Ordering::Relaxed),
             self.realtime_send_timeouts_total.load(Ordering::Relaxed),
-            pool.size(),
-            pool.num_idle(),
+            pool.connections,
+            pool.idle,
         );
         citadel_runtime::runtime_metrics::render_runtime_metrics(&mut output);
         output.push_str(&format!(

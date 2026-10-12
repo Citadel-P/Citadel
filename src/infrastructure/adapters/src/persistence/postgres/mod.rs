@@ -32,3 +32,7 @@ pub mod licensing;
 pub mod maintenance;
 
 pub mod permissions;
+
+pub mod notifications;
+
+pub mod job_lease;

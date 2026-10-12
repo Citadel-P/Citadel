@@ -29,3 +29,7 @@ pub use service::AlertDeliveryService;
 pub use vocabulary::{AlertSeverity, AlertType};
 #[cfg(test)]
 mod tests;
+
+pub mod platform_metrics;
+
+pub use runtime::PendingAlertObservations;

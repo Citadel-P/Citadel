@@ -7,7 +7,12 @@ impl GitRepositoryExecutionService {
         workspace: &Path,
         cancellation: &CancellationToken,
     ) -> Result<(), GitRepositoryExecutionError> {
-        if !workspace.join(".gitmodules").is_file() {
+        if !self
+            .cli
+            .workspace
+            .has_file(&workspace.join(".gitmodules"))
+            .await
+        {
             return Ok(());
         }
         let source = self.store.get_source(id).await?;

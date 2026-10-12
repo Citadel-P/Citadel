@@ -4,6 +4,7 @@ use crate::api::resources::builds::patch::typed_patch;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
         resources::{
             builds::{
                 capabilities::{granted, pool_capabilities, project_capabilities},
@@ -15,7 +16,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ApiQuery, ValidatedJson, invalid_json},
 };
 
 use axum::{

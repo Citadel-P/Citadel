@@ -146,6 +146,37 @@ async fn local_volume_browser_uses_core_image_without_pulling_agent() {
                 .kind,
             RuntimeErrorKind::NotFound
         );
+        // Attaching this arbitrary volume to a stopped system container changes
+        // the fresh policy immediately. Neither file nor archive access may run
+        // a helper, even when the adapter is used without HTTP authorization.
+        let protected = Fixture(format!("{}-system", fixture.0));
+        docker(&[
+            "create",
+            "--name",
+            &protected.0,
+            "--label",
+            "com.citadel.system-role=core",
+            "-v",
+            &format!("{}:/app/data", fixture.0),
+            "--entrypoint",
+            "/usr/local/bin/citadel-volume-helper",
+            &image,
+            "idle",
+        ]);
+        assert_eq!(
+            browser
+                .list(platform, &fixture.0, "/", None, &cancel)
+                .await
+                .unwrap_err()
+                .kind,
+            RuntimeErrorKind::PermissionDenied
+        );
+        for path in ["/folder/file", "/folder"] {
+            let result = browser
+                .download(platform, &fixture.0, path, None, &cancel)
+                .await;
+            assert!(matches!(result, Err(e) if e.kind == RuntimeErrorKind::PermissionDenied));
+        }
     })
     .catch_unwind()
     .await;

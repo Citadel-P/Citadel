@@ -300,6 +300,15 @@ impl BindingRepository for PostgresBindingRepository {
                 BindingError::Storage("Secret provider configuration is invalid.".into())
             })?;
             if let Some(value) = input.address.as_ref() {
+                citadel_bindings::validate_provider_token_reuse(
+                    object
+                        .get("Address")
+                        .or_else(|| object.get("address"))
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                    value,
+                    input.protected_token.is_some(),
+                )?;
                 object.insert("Address".into(), Value::String(value.clone()));
             }
             if let Some(value) = input.mount_path.as_ref() {

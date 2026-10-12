@@ -161,6 +161,19 @@ async fn handle(mut socket: WebSocket, service: LicenseRealtimeService) {
             return;
         }
     };
+    let Ok(principal) =
+        crate::token_safety::authenticate_realtime(&service.identity, &access_token).await
+    else {
+        return;
+    };
+    let mut changes = service.identity.authorization_changes(principal.actor_id);
+    // Subscribe before revalidating so a concurrent revocation cannot be missed.
+    if crate::token_safety::authenticate_realtime(&service.identity, &access_token)
+        .await
+        .is_err()
+    {
+        return;
+    }
     let connection_id = Uuid::now_v7();
     let mut sequence = 1_u64;
     let mut receiver = service.hub.subscribe();
@@ -188,6 +201,13 @@ async fn handle(mut socket: WebSocket, service: LicenseRealtimeService) {
     authorization_recheck.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         let event = tokio::select! {
+            biased;
+            () = async {
+                match changes.as_mut() {
+                    Some(changes) => { let _ = changes.changed().await; }
+                    None => std::future::pending::<()>().await,
+                }
+            } => return,
             () = service.shutdown.cancelled() => return,
             incoming = socket.next() => match incoming {
                 Some(Ok(Message::Close(_))) | None => return,

@@ -30,11 +30,11 @@ runs:
       run: |
         mkdir -p "$RUNNER_TEMP/site"
         tar -xf "$DIRECTORY/docs.tar" -C "$RUNNER_TEMP/site"
-    - uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
       if: steps.order.outputs.eligible == 'true'
       with:
         path: ${{ runner.temp }}/site
     - name: Deploy release documentation
       id: deployment
       if: steps.order.outputs.eligible == 'true'
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Default)]
-pub(super) struct HealthState {
-    pub(super) online: Option<bool>,
-    pub(super) successes: u8,
-    pub(super) failures: u8,
+pub(crate) struct HealthState {
+    pub(crate) online: Option<bool>,
+    pub(crate) successes: u8,
+    pub(crate) failures: u8,
 }
 impl HealthState {
-    pub(super) fn observe(&mut self, healthy: bool) -> Option<bool> {
+    pub(crate) fn observe(&mut self, healthy: bool) -> Option<bool> {
         if healthy {
             self.failures = 0;
             self.successes = self.successes.saturating_add(1);
@@ -29,7 +29,7 @@ impl HealthState {
     }
 }
 
-pub(super) async fn probe_health(
+pub(crate) async fn probe_health(
     runtime: &dyn PlatformHealthPort,
     token: &CancellationToken,
     timeout: Duration,
@@ -40,38 +40,27 @@ pub(super) async fn probe_health(
     )
 }
 
-#[cfg(test)]
-pub(super) async fn edge_health(
-    pool: &PgPool,
-    platform: uuid::Uuid,
-) -> Result<Option<bool>, sqlx::Error> {
-    // No binding (pending enrollment) and revoked bindings must not raise an
-    // unreachable alert. Node bindings do not determine the manager's health.
-    sqlx::query_scalar("SELECT COALESCE(connectionstatus='Connected' AND lastheartbeatatutc>CURRENT_TIMESTAMP-INTERVAL '90 seconds',false) FROM edgeagentbindings WHERE platformid=$1 AND resourcetype='Platform' AND dockernodeid IS NULL AND revokedatutc IS NULL AND connectionstatus<>'Revoked'")
-        .bind(platform).fetch_optional(pool).await
-}
-
 #[derive(Clone)]
-pub(super) struct PlatformHealthTransition {
+pub(crate) struct PlatformHealthTransition {
     pub target: ReconciliationTarget,
     pub online: bool,
 }
 
-pub(super) struct HealthWorker {
-    pub(super) docker: DockerClient,
-    pub(super) targets: Arc<PlatformRuntimeRegistry>,
-    pub(super) pool: PgPool,
-    pub(super) transitions: BoundedSender<PlatformHealthTransition>,
+pub(crate) struct HealthWorker {
+    pub(crate) docker: DockerClient,
+    pub(crate) targets: Arc<PlatformRuntimeRegistry>,
+    pub(crate) edge: Arc<dyn citadel_platforms::jobs::background::EdgeHealthReader>,
+    pub(crate) transitions: BoundedSender<PlatformHealthTransition>,
 }
 
-pub(super) async fn platform_health_monitor(
+pub(crate) async fn platform_health_monitor(
     cancellation: CancellationToken,
     worker: HealthWorker,
 ) -> Result<(), std::convert::Infallible> {
     let HealthWorker {
         docker,
         targets: registry,
-        pool,
+        edge,
         transitions,
     } = worker;
     let budget = IoBudget::new(HEALTH_CONCURRENCY.try_into().unwrap(), RuntimeWork::Health);
@@ -94,7 +83,7 @@ pub(super) async fn platform_health_monitor(
         } else {
             let result = tokio::select! {
                 ()=cancellation.cancelled()=>return Ok(()),
-                result=sqlx::query_as::<_, (uuid::Uuid,bool)>("SELECT platformid,COALESCE(connectionstatus='Connected' AND lastheartbeatatutc>CURRENT_TIMESTAMP-INTERVAL '90 seconds',false) FROM edgeagentbindings WHERE platformid=ANY($1) AND resourcetype='Platform' AND dockernodeid IS NULL AND revokedatutc IS NULL AND connectionstatus<>'Revoked'").bind(&edge_ids).fetch_all(&pool)=>result,
+                result=edge.health(&edge_ids)=>result,
             };
             match result {
                 Ok(rows) => rows.into_iter().collect(),

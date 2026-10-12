@@ -59,3 +59,12 @@ impl PostgresAlertRepository {
         Ok(true)
     }
 }
+
+impl citadel_alerts::PendingAlertObservations for super::PostgresAlertRepository {
+    fn process_pending_observation(
+        &self,
+        owner: Uuid,
+    ) -> futures_util::future::BoxFuture<'_, Result<bool, AlertError>> {
+        Box::pin(self.process_pending_observation(owner))
+    }
+}

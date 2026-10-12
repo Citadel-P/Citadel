@@ -77,7 +77,7 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
             apply_container_event(
                 &event(action, "fixture", i),
                 &docker,
-                &pool,
+                crate::workers::test_support::projections(&pool).as_ref(),
                 None,
                 &cancel,
                 &targets
@@ -102,7 +102,7 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
         apply_container_event(
             &event("die", "fixture", 101),
             &docker,
-            &pool,
+            crate::workers::test_support::projections(&pool).as_ref(),
             None,
             &cancel,
             &targets
@@ -120,9 +120,16 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
     );
     let unknown = event("start", "missing", 105);
     assert!(
-        !apply_container_event(&unknown, &docker, &pool, None, &cancel, &targets)
-            .await
-            .unwrap()
+        !apply_container_event(
+            &unknown,
+            &docker,
+            crate::workers::test_support::projections(&pool).as_ref(),
+            None,
+            &cancel,
+            &targets
+        )
+        .await
+        .unwrap()
     );
     assert_eq!(
         event_decision(unknown.kind, false, false, DeltaOutcome::Unavailable),
@@ -134,7 +141,7 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
         apply_container_event(
             &event("destroy", "fixture", 105),
             &docker,
-            &pool,
+            crate::workers::test_support::projections(&pool).as_ref(),
             None,
             &cancel,
             &targets
@@ -148,7 +155,7 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
             apply_container_event(
                 &event(action, "fixture", 106),
                 &docker,
-                &pool,
+                crate::workers::test_support::projections(&pool).as_ref(),
                 None,
                 &cancel,
                 &targets
@@ -187,9 +194,16 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
     direct.source = ReconciliationTrigger::AgentEvent;
     direct.platform_id = Some(platform);
     assert!(
-        apply_container_event(&direct, &docker, &pool, None, &cancel, &targets)
-            .await
-            .unwrap()
+        apply_container_event(
+            &direct,
+            &docker,
+            crate::workers::test_support::projections(&pool).as_ref(),
+            None,
+            &cancel,
+            &targets
+        )
+        .await
+        .unwrap()
     );
     direct.kind = RuntimeEventKind::Container(ContainerChange::Running);
     direct.action = "start".into();
@@ -201,9 +215,16 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
         ..Default::default()
     });
     assert!(
-        apply_container_event(&direct, &docker, &pool, None, &cancel, &targets)
-            .await
-            .unwrap()
+        apply_container_event(
+            &direct,
+            &docker,
+            crate::workers::test_support::projections(&pool).as_ref(),
+            None,
+            &cancel,
+            &targets
+        )
+        .await
+        .unwrap()
     );
     let preserved: (String, String, String) =
         sqlx::query_as("SELECT name,dockerimageid,state FROM containers WHERE platformid=$1")
@@ -321,7 +342,7 @@ async fn local_and_direct_bursts_commit_once_and_publish_six_ids() {
                     event_refresh,
                     metrics,
                     docker,
-                    pool: pool.clone(),
+                    store: crate::workers::test_support::projections(&pool),
                     realtime: Some(hub),
                     targets,
                     local_reconciliation: local,

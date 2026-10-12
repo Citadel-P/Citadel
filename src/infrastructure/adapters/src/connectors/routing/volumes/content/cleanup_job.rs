@@ -1,5 +1,4 @@
 use super::*;
-use sqlx::Row;
 
 impl VolumeContentAdapter {
     /// Reconcile helpers left Created when Create succeeded but Start/cleanup
@@ -9,21 +8,24 @@ impl VolumeContentAdapter {
         after: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<Uuid, RuntimeCapabilityError> {
-        let rows = sqlx::query("SELECT id,platformid,dockercontainerid,dockernodeid FROM containers WHERE issystem AND systemrole='volume-helper' AND id>$1 AND created<$2 ORDER BY id LIMIT 25")
-            .bind(after).bind(chrono::Utc::now().timestamp()-1800).fetch_all(&self.pool).await
-            .map_err(|_|error(RuntimeErrorKind::Remote,"Could not read expired Volume helpers."))?;
+        let rows = crate::persistence::postgres::platforms::volume_helpers::expired(
+            &self.pool,
+            after,
+            chrono::Utc::now().timestamp() - 1800,
+        )
+        .await
+        .map_err(|_| {
+            error(
+                RuntimeErrorKind::Remote,
+                "Could not read expired Volume helpers.",
+            )
+        })?;
         let mut last = Uuid::nil();
-        for row in rows {
+        for target in rows {
             if cancellation.is_cancelled() {
                 break;
             }
-            last = row.get("id");
-            let target = ContainerTarget {
-                id: last,
-                platform_id: row.get("platformid"),
-                docker_id: row.get("dockercontainerid"),
-                node_id: row.get("dockernodeid"),
-            };
+            last = target.id;
             let Ok(permit) = self.slots.clone().try_acquire_owned() else {
                 break;
             };

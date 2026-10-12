@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) async fn event_source(
+pub(crate) async fn event_source(
     cancellation: CancellationToken,
     docker: DockerClient,
     sender: BoundedSender<InventoryEvent>,
@@ -145,7 +145,7 @@ pub(super) async fn event_source(
     }
 }
 
-pub(super) async fn agent_event_source(
+pub(crate) async fn agent_event_source(
     cancellation: CancellationToken,
     platform: uuid::Uuid,
     _agent: AgentClient,
@@ -259,18 +259,18 @@ pub(super) async fn agent_event_source(
     }
 }
 
-pub(super) struct EventWorker {
-    pub(super) event_refresh: EventRefreshSender,
-    pub(super) metrics: Arc<Metrics>,
-    pub(super) docker: DockerClient,
-    pub(super) pool: PgPool,
-    pub(super) realtime: Option<RealtimeHub>,
-    pub(super) targets: Arc<PlatformRuntimeRegistry>,
-    pub(super) local_reconciliation: BoundedSender<()>,
-    pub(super) agent_reconciliation: AgentReconciliationSignal,
+pub(crate) struct EventWorker {
+    pub(crate) event_refresh: EventRefreshSender,
+    pub(crate) metrics: Arc<Metrics>,
+    pub(crate) docker: DockerClient,
+    pub(crate) store: Arc<dyn RuntimeProjectionStore>,
+    pub(crate) realtime: Option<RealtimeHub>,
+    pub(crate) targets: Arc<PlatformRuntimeRegistry>,
+    pub(crate) local_reconciliation: BoundedSender<()>,
+    pub(crate) agent_reconciliation: AgentReconciliationSignal,
 }
 
-pub(super) async fn event_consumer(
+pub(crate) async fn event_consumer(
     cancellation: CancellationToken,
     receiver: BoundedReceiver<InventoryEvent>,
     worker: EventWorker,
@@ -279,7 +279,7 @@ pub(super) async fn event_consumer(
         event_refresh,
         metrics,
         docker,
-        pool,
+        store,
         realtime,
         targets,
         local_reconciliation,
@@ -324,7 +324,7 @@ pub(super) async fn event_consumer(
             }
             apply_state_batch(
                 batch,
-                &pool,
+                store.as_ref(),
                 realtime.as_ref(),
                 &targets,
                 &event_refresh,
@@ -341,7 +341,7 @@ pub(super) async fn event_consumer(
         let outcome = match apply_container_event(
             &event,
             &docker,
-            &pool,
+            store.as_ref(),
             realtime.as_ref(),
             &cancellation,
             &targets,
@@ -384,7 +384,7 @@ fn record_consumed(metrics: &Metrics, event: &InventoryEvent) {
 
 async fn apply_state_batch(
     batch: Vec<InventoryEvent>,
-    pool: &PgPool,
+    store: &dyn RuntimeProjectionStore,
     realtime: Option<&RealtimeHub>,
     targets: &PlatformRuntimeRegistry,
     sender: &EventRefreshSender,
@@ -431,11 +431,10 @@ async fn apply_state_batch(
     }) {
         let _event = RuntimeWork::ContainerEventApply.start();
         let _projection = RuntimeWork::ContainerEventProjection.start();
-        let unavailable = match citadel_adapters::persistence::postgres::platforms::status::container_state_deltas_committed(
-            pool, target.id, None, &deltas,
-        ).await {
+        let unavailable = match store.container_state_deltas(target.id, None, &deltas).await {
             Ok(results) => {
-                RuntimeWork::ContainerEventProjection.units(results.iter().filter(|r| r.changed).count() as u64);
+                RuntimeWork::ContainerEventProjection
+                    .units(results.iter().filter(|r| r.changed).count() as u64);
                 container_batch::publish(realtime, target.id, &results);
                 results.iter().any(|r| !r.accepted)
             }
@@ -456,16 +455,16 @@ async fn apply_state_batch(
     }
 }
 
-pub(super) async fn apply_container_event(
+pub(crate) async fn apply_container_event(
     event: &InventoryEvent,
     docker: &DockerClient,
-    pool: &PgPool,
+    store: &dyn RuntimeProjectionStore,
     realtime: Option<&RealtimeHub>,
     cancellation: &CancellationToken,
     targets: &PlatformRuntimeRegistry,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let RuntimeEventKind::Container(change) = event.kind else {
-        return apply_resource_event(event, docker, pool, realtime, cancellation, targets).await;
+        return apply_resource_event(event, docker, store, realtime, cancellation, targets).await;
     };
     let Some(id) = event.container_id.as_deref().filter(|id| !id.is_empty()) else {
         return Ok(false);
@@ -526,39 +525,48 @@ pub(super) async fn apply_container_event(
         let _projection = RuntimeWork::ContainerEventProjection.start();
         let updated = if let Some(state) = state_delta {
             use citadel_platforms::jobs::{ContainerStateDelta, ProjectionChange};
-            let result = citadel_adapters::persistence::postgres::platforms::status::container_state_deltas_committed(
-                pool, target.id, None, &[ContainerStateDelta {
-                    docker_id: id.to_owned(), state, observed_at,
-                    observed_at_millis: event.event_time_millis
-                        .and_then(|time| i64::try_from(time).ok())
-                        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
-                }],
-            ).await?.remove(0);
+            let result = store
+                .container_state_deltas(
+                    target.id,
+                    None,
+                    &[ContainerStateDelta {
+                        docker_id: id.to_owned(),
+                        state,
+                        observed_at,
+                        observed_at_millis: event
+                            .event_time_millis
+                            .and_then(|time| i64::try_from(time).ok())
+                            .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
+                    }],
+                )
+                .await?
+                .remove(0);
             if result.accepted {
                 ProjectionChange::committed(result.changed)
             } else {
                 ProjectionChange::Unavailable
             }
         } else if let Some(container) = &container {
-            citadel_adapters::persistence::postgres::platforms::status::container_observation_committed(
-                pool,
-                target.id,
-                None,
-                container,
-                observed_at,
-            )
-            .await?
+            store
+                .container_observation(target.id, None, container, observed_at)
+                .await?
         } else {
-            citadel_adapters::persistence::postgres::platforms::status::container_event_committed_at(
-                pool,
-                citadel_adapters::persistence::postgres::platforms::status::ContainerEvent {
-                    platform: target.id, node: None, docker_id: id,
-                    state: state.as_deref(), name: name.as_deref(), observed: observed_at,
-                },
-                event.event_time_millis.and_then(|time| i64::try_from(time).ok())
-                    .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
-            )
-            .await?
+            store
+                .container_event(
+                    citadel_platforms::jobs::observations::ContainerEvent {
+                        platform: target.id,
+                        node: None,
+                        docker_id: id,
+                        state: state.as_deref(),
+                        name: name.as_deref(),
+                        observed: observed_at,
+                    },
+                    event
+                        .event_time_millis
+                        .and_then(|time| i64::try_from(time).ok())
+                        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis()),
+                )
+                .await?
         };
         RuntimeWork::ContainerEventProjection.units(u64::from(updated.changed()));
         // A tombstone for an already absent row is handled without enumeration.
@@ -572,7 +580,7 @@ pub(super) async fn apply_container_event(
     Ok(handled)
 }
 
-pub(super) fn queue_stream_recovery(
+pub(crate) fn queue_stream_recovery(
     event: &InventoryEvent,
     local: &BoundedSender<()>,
     agent: &AgentReconciliationSignal,
@@ -666,7 +674,7 @@ async fn request_event_refresh(
 async fn apply_resource_event(
     event: &InventoryEvent,
     docker: &DockerClient,
-    pool: &PgPool,
+    store: &dyn RuntimeProjectionStore,
     realtime: Option<&RealtimeHub>,
     cancellation: &CancellationToken,
     targets: &PlatformRuntimeRegistry,
@@ -679,7 +687,6 @@ async fn apply_resource_event(
         _ => return Ok(false),
     };
     let snapshot = targets.snapshot().await;
-    let store = PostgresInventoryProjectionStore::new(pool.clone());
     let mut observed = event.resource.clone();
     let mut handled = false;
     for target in snapshot.iter().filter(|target| {

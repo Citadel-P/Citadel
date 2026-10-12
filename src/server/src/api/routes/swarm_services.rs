@@ -3,13 +3,13 @@ use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
+        request_validation::{WorkloadQuery, invalid_json, invalid_path},
         resources::swarm_services::{
             requests::{ServiceMetadataInput, *},
             views::*,
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{WorkloadQuery, invalid_json, invalid_path},
 };
 
 use axum::{
@@ -99,7 +99,9 @@ async fn authorize<P: PermissionPolicy>(
 
 pub(crate) fn service_error(error: SwarmServiceError) -> ApiError {
     match error {
-        SwarmServiceError::Validation(value) => crate::request_validation::validation_error(value),
+        SwarmServiceError::Validation(value) => {
+            crate::api::request_validation::validation_error(value)
+        }
         SwarmServiceError::NotFound => ApiError::NotFound,
         SwarmServiceError::Forbidden => ApiError::Forbidden,
         SwarmServiceError::Conflict(value)

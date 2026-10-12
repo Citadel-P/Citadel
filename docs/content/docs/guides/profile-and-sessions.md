@@ -44,8 +44,11 @@ session. Shared networks or proxies can make several sessions show the same IP.
   the current one.
 - Use the account menu's sign-out action to leave the current session.
 
-Revocation prevents further refreshes. An already issued access token can remain
-valid until expiration. This does not sign you out of an upstream OIDC provider;
+Revocation invalidates both the refresh session and its browser access tokens.
+Affected realtime connections close when the revocation commits; other active
+sessions can reconnect. Password changes and MFA resets apply the same revocation
+rules. Browser access tokens issued before session binding was introduced require
+a refresh or a new sign-in after upgrading. This does not sign you out of an upstream OIDC provider;
 manage that provider's sessions separately when needed.
 
 If **Sign Out Others** is unavailable, sign in again so Citadel can identify the

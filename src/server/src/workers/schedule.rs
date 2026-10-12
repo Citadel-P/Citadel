@@ -1,7 +1,7 @@
 //! Noncritical recurring work starts after one period plus a stable subsecond offset.
 use std::time::Duration;
 
-pub(super) fn interval(name: &str, period: Duration) -> tokio::time::Interval {
+pub(crate) fn interval(name: &str, period: Duration) -> tokio::time::Interval {
     let offset = name.bytes().fold(0_u64, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(u64::from(byte))
     }) % 997;

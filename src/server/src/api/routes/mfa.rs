@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{error_response, no_store},
+        request_validation::ApiPath,
         resources::mfa::requests::{
             ConfirmMandatoryMfaSetupInput, ConfirmProfileMfaSetupInput, DisableProfileMfaInput,
             MfaVerificationInput, RegenerateProfileMfaRecoveryCodesInput,
@@ -13,7 +14,6 @@ use crate::{
         },
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::ApiPath,
 };
 
 use axum::{
@@ -76,7 +76,10 @@ async fn verify_authentication(
     let input: MfaVerificationInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::MfaVerificationInput = input.into();
@@ -164,7 +167,10 @@ async fn confirm_mandatory_setup(
     let input: ConfirmMandatoryMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::ConfirmMandatoryMfaSetupInput = input.into();
@@ -255,7 +261,10 @@ async fn start_profile_setup(
     let input: StartProfileMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::StartProfileMfaSetupInput = input.into();
@@ -295,7 +304,10 @@ async fn confirm_profile_setup(
     let input: ConfirmProfileMfaSetupInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::ConfirmProfileMfaSetupInput = input.into();
@@ -339,7 +351,10 @@ async fn disable_profile_mfa(
     let input: DisableProfileMfaInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::DisableProfileMfaInput = input.into();
@@ -380,7 +395,10 @@ async fn regenerate_recovery_codes(
     let input: RegenerateProfileMfaRecoveryCodesInput = match input {
         Ok(Json(input)) => input,
         Err(error) => {
-            return error_response(crate::request_validation::invalid_json(error), &headers);
+            return error_response(
+                crate::api::request_validation::invalid_json(error),
+                &headers,
+            );
         }
     };
     let input: citadel_identity::RegenerateProfileMfaRecoveryCodesInput = input.into();

@@ -103,6 +103,14 @@ impl SecretService {
             input.address.as_deref().unwrap_or(&current.address),
             input.mount_path.as_deref().unwrap_or(&current.mount_path),
         )?;
+        validate_provider_token_reuse(
+            &current.address,
+            input.address.as_deref().unwrap_or(&current.address),
+            input
+                .token
+                .as_ref()
+                .is_some_and(|token| !token.trim().is_empty()),
+        )?;
         let stored = StoredSecretProviderPatch {
             name: input.name.map(|value| value.trim().to_owned()),
             address: input

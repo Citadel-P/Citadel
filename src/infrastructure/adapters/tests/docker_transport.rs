@@ -24,7 +24,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
         let mut usage_calls = 0;
-        for _ in 0..6 {
+        for _ in 0..8 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = Vec::new();
             let mut buffer = [0; 2048];
@@ -37,9 +37,11 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
             let body = if request.starts_with("GET /version ") {
                 r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#
             } else if request.starts_with("GET /v1.49/volumes ") {
-                r#"{"Volumes":[{"Name":"data"},{"Name":"empty"},{"Name":"unknown"}]}"#
+                r#"{"Volumes":[{"Name":"data","Driver":"local"},{"Name":"empty","Driver":"local"},{"Name":"unknown","Driver":"local"}]}"#
             } else if request.starts_with("GET /v1.49/volumes/data ") {
-                r#"{"Name":"data"}"#
+                r#"{"Name":"data","Driver":"local"}"#
+            } else if request.starts_with("GET /v1.49/containers/json?all=true&size=false ") {
+                r#"[{"Id":"core","State":"exited","Labels":{"com.citadel.system-role":"core"},"Mounts":[{"Type":"volume","Name":"data"}]}]"#
             } else if request.starts_with("GET /v1.49/system/df?type=volume ") {
                 usage_calls += 1;
                 if usage_calls == 1 {
@@ -78,6 +80,8 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
         .unwrap();
     assert_eq!(volumes[0].usage_data.as_ref().unwrap()["Size"], 4096);
     assert!(volumes[0].in_use);
+    assert_eq!(volumes[0].content_access_allowed, Some(false));
+    assert_eq!(volumes[1].content_access_allowed, Some(true));
     assert_eq!(volumes[1].usage_data.as_ref().unwrap()["Size"], 0);
     assert!(!volumes[1].in_use);
     assert!(volumes[2].usage_data.is_none());
@@ -85,6 +89,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
         citadel_platforms::VolumeObservationPort::inspect_volume(&client, "data", &cancel)
             .await
             .unwrap();
+    assert_eq!(inspected.content_access_allowed, Some(false));
     assert_eq!(inspected.usage_data.unwrap()["Size"], 8192);
     assert_eq!(inspected.containers[0]["state"], "Running");
     assert_eq!(
@@ -493,7 +498,7 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
     let listener = UnixListener::bind(&socket_path).unwrap();
     let server = tokio::spawn(async move {
         let mut requests = Vec::new();
-        for _ in 0..30 {
+        for _ in 0..32 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             let mut chunk = [0_u8; 1024];
@@ -707,8 +712,10 @@ async fn generated_subset_uses_versioned_unix_socket_requests_and_bounded_stream
             "/v1.49/images/json?all=true",
             "/v1.49/volumes",
             "/v1.49/system/df?type=volume",
+            "/v1.49/containers/json?all=true&size=false",
             "/v1.49/volumes/data",
             "/v1.49/system/df?type=volume",
+            "/v1.49/containers/json?all=true&size=false",
             "/v1.49/networks",
             "/v1.49/networks/network-1",
             "/v1.49/nodes",
@@ -737,7 +744,7 @@ fn response_for(path: &str) -> Vec<u8> {
         "/v1.49/info" => {
             r#"{"ID":"daemon-fixture","Containers":1,"ContainersRunning":1,"ContainersStopped":0,"ContainersPaused":0,"Images":1,"NCPU":2,"MemTotal":1073741824,"Swarm":{"LocalNodeState":"inactive","RemoteManagers":null}}"#
         }
-        "/v1.49/containers/json?all=true" => {
+        "/v1.49/containers/json?all=true" | "/v1.49/containers/json?all=true&size=false" => {
             r#"[{"Id":"container-fixture","Names":["/fixture"],"Image":"nginx:alpine","ImageID":"sha256:fixture","Created":1,"Labels":{},"State":"running","Status":"Up"}]"#
         }
         "/v1.49/containers/container-fixture/json" => {
@@ -968,7 +975,7 @@ async fn platform_metadata_is_narrow_while_live_stats_follow_visible_lists() {
             let body = match route {
                 "/version" => r#"{"Version":"fixture","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#.to_owned(),
                 "/v1.49/info" => r#"{"ID":"desktop","Images":33,"Containers":57,"ContainersRunning":47,"ContainersPaused":0,"ContainersStopped":10}"#.to_owned(),
-                "/v1.49/containers/json?all=true" => match server_phase.load(Ordering::Acquire) {
+                "/v1.49/containers/json?all=true" | "/v1.49/containers/json?all=true&size=false" => match server_phase.load(Ordering::Acquire) {
                     0 => serde_json::to_string(&[
                         "running", "running", "running", "running", "running", "running", "running", "running",
                         "exited", "exited", "exited", "exited", "exited", "exited", "exited", "exited", "exited",

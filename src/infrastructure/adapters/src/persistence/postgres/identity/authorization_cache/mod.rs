@@ -5,7 +5,7 @@ mod mutation;
 mod reads;
 #[cfg(test)]
 mod tests;
-pub(crate) use mutation::{Impact, Mutation};
+pub(crate) use mutation::{Impact, Mutation, commit_session_creation};
 
 use citadel_identity::{AuthorizationSnapshot, PermissionGrant};
 use sqlx::PgPool;

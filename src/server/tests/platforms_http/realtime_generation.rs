@@ -88,7 +88,7 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
             tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
                 .await
                 .unwrap();
-        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(actor)}).to_string().into())).await.unwrap();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, actor).await}).to_string().into())).await.unwrap();
         assert_eq!(receive(&mut socket).await["kind"], "subscribed");
         assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
         assert_eq!(
@@ -153,12 +153,38 @@ async fn realtime_generation_burst_shares_reads_and_revokes_only_committed_actor
         tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
             .await
             .unwrap();
-    denied.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&alice)}).to_string().into())).await.unwrap();
+    denied.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &alice).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut denied).await["kind"], "subscribed");
     assert!(invoke(&mut denied, "JoinGroup", &group).await["error"].is_string());
     denied.close(None).await.unwrap();
+    let session_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM refreshtokens WHERE userid=$1 LIMIT 1")
+            .bind(bob.subject_id)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert!(
+        f.lookup_state
+            .platforms
+            .identity
+            .revoke_owned_session(
+                session_id,
+                bob.subject_id,
+                None,
+                f.administrator.actor_id,
+                Utc::now()
+            )
+            .await
+            .unwrap()
+    );
     for client in &mut clients[2..] {
-        client.close(None).await.unwrap();
+        let next = tokio::time::timeout(StdDuration::from_secs(2), client.next())
+            .await
+            .unwrap();
+        assert!(
+            matches!(next, Some(Ok(Message::Close(_))) | None),
+            "session revocation did not close realtime: {next:?}"
+        );
     }
     cancellation.cancel();
     server.await.unwrap();

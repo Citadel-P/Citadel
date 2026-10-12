@@ -1,53 +1,45 @@
-mod alerts;
-mod automation;
-mod backups;
-mod build_consumers;
-mod builds;
-mod container_batch;
-mod containers;
-mod deployments;
+pub(crate) mod alerts;
+pub(crate) mod automation;
+pub(crate) mod backups;
+pub(crate) mod build_consumers;
+pub(crate) mod builds;
+pub(crate) mod container_batch;
+pub(crate) mod containers;
+pub(crate) mod deployments;
 pub mod edge;
-mod git;
-mod platforms;
-mod stacks;
-mod swarm_services;
-mod volume_helpers;
+pub(crate) mod git;
+pub(crate) mod platforms;
+pub(crate) mod stacks;
+pub(crate) mod swarm_services;
+pub(crate) mod volume_helpers;
 
-pub use platforms::{WorkerDependencies, WorkerSettings, register};
+pub use crate::composition::workers::{WorkerDependencies, WorkerSettings, register};
 
-mod disk;
+pub(crate) mod disk;
 
 #[cfg(test)]
-mod disk_tests;
+pub(crate) mod disk_tests;
 
-mod connection_events;
-mod maintenance;
-mod notifications;
-mod recovery;
-mod schedule;
-mod unmanaged;
+pub(crate) mod connection_events;
+pub(crate) mod maintenance;
+pub(crate) mod notifications;
+pub(crate) mod recovery;
+pub(crate) mod schedule;
+pub(crate) mod unmanaged;
 
-mod pruning;
+pub(crate) mod pruning;
 
-// LISTEN holds its connection for the stream lifetime. Keep that bounded
-// connection separate from the request/worker pool to avoid starving queries.
-async fn listener(
-    pool: &sqlx::PgPool,
-    channel: &str,
-) -> Result<sqlx::postgres::PgListener, sqlx::Error> {
-    let dedicated = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(1)
-        .connect_lazy_with((*pool.connect_options()).clone().application_name(channel));
-    let mut listener = sqlx::postgres::PgListener::connect_with(&dedicated).await?;
-    listener.listen(channel).await?;
-    Ok(listener)
-}
+#[cfg(test)]
+use test_support::listener;
 
 pub mod image_scanning;
 
-mod stats_alerts;
+pub(crate) mod stats_alerts;
 
 #[cfg(test)]
-mod runtime_persistence_tests;
+pub(crate) mod runtime_persistence_tests;
 
 pub mod statistics;
+
+#[cfg(test)]
+pub(crate) mod test_support;

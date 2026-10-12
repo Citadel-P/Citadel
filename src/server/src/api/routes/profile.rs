@@ -1,6 +1,7 @@
 use crate::{
     api::{
         error::{error_response, no_store},
+        request_validation::{ApiPath, ValidatedJson},
         resources::{
             profile::requests::{ChangeCurrentPasswordRequest, UpdateCurrentProfileRequest},
             users::requests::PatchUserPreferencesRequest,
@@ -8,7 +9,6 @@ use crate::{
         routes::authentication::current_refresh_token,
     },
     openapi::router::OpenApiRouterExt,
-    request_validation::{ApiPath, ValidatedJson},
 };
 
 use axum::{

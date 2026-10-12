@@ -1,5 +1,6 @@
 use super::*;
 use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
+use citadel_runtime::notifications::NotificationSource;
 use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -221,8 +222,9 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
         .await
         .unwrap()
         .unwrap();
-    let payload: serde_json::Value = serde_json::from_str(notification.payload()).unwrap();
-    assert_eq!(payload["container"], "observed-new");
+    assert!(
+        matches!(notification, citadel_runtime::notifications::RuntimeNotification::ContainerCreated(event) if event.container == "observed-new")
+    );
     let image: String = sqlx::query_scalar("SELECT dockerimageid FROM containers WHERE platformid=$1 AND dockercontainerid='observed-new'")
         .bind(platform).fetch_one(&pool).await.unwrap();
     assert_eq!(

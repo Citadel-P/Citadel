@@ -37,12 +37,12 @@ jobs:
       display: ${{ steps.version.outputs.displayVersion }}
       revision: ${{ steps.version.outputs.sourceRevision }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Install native tooling prerequisites
         run: bash .github/scripts/install-packages.sh pkg-config libssl-dev skopeo
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/citadel-tools
           key: nbgv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/tools/build/nbgv-pin.json', 'src/tools/release/git-cliff-pin.json', 'rust-toolchain.toml') }}
@@ -63,7 +63,7 @@ jobs:
             --output "$RUNNER_TEMP/release-inputs/version.json" --github-output "$GITHUB_OUTPUT"
       - name: Authenticate Docker Hub preflight pulls
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -111,7 +111,7 @@ jobs:
         if: steps.version.outputs.publicationEligible != 'true'
         run: |
           printf '%s\n' '{"bootstrap":false,"agent":null,"core":null,"protocolVersion":2,"architectures":["amd64","arm64"],"agentFirstUpgrades":true}' > "$RUNNER_TEMP/release-inputs/compatibility.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-inputs
           overwrite: true
@@ -137,7 +137,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: false
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Authenticate Docker Hub pulls
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -169,7 +169,7 @@ jobs:
           rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           shared-key: core-checks
           cache-workspace-crates: true
@@ -179,7 +179,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Set up Java for pinned Docker API generation
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '21'
@@ -211,7 +211,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: false
 
@@ -222,7 +222,7 @@ jobs:
 
       - name: Authenticate Docker Hub pulls
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -234,7 +234,7 @@ jobs:
           rustup toolchain install "$toolchain" --profile minimal
 
       - name: Cache Rust tests
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           shared-key: core-tests
           cache-workspace-crates: true
@@ -305,10 +305,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -352,8 +352,8 @@ jobs:
     env:
       NEXT_PUBLIC_DOCS_URL: ${{ vars.DOCS_SITE_URL || 'http://localhost:3000' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-inputs
           path: ${{ runner.temp }}/documentation
@@ -368,7 +368,7 @@ jobs:
             --artifact release-documentation \
             > "$RUNNER_TEMP/docs-recovery.json"
           echo "recovered=$(jq -r .recovered "$RUNNER_TEMP/docs-recovery.json")" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.recovery.outputs.recovered != 'true'
         with:
           node-version: 24
@@ -396,7 +396,7 @@ jobs:
                     "artifacts":{n:hashlib.sha256((directory/n).read_bytes()).hexdigest() for n in ['docs.tar','api-docs.tar']}}
           (directory/'documentation-inputs.json').write_text(json.dumps(manifest))
           PYDOC
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-documentation
           overwrite: true
@@ -448,29 +448,29 @@ jobs:
       DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
       API_DOCS_URL: ${{ vars.API_DOCS_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore annotated release tags
         # Every publishing job has its own checkout; preflight's refs are not shared.
         run: |
           git fetch origin +refs/heads/main:refs/remotes/origin/main '+refs/tags/*:refs/tags/*'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-inputs
           path: ${{ runner.temp }}/promotion
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: candidates-*
           path: ${{ runner.temp }}/promotion
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-documentation
           path: ${{ runner.temp }}/promotion
       - name: Install OCI transport
         run: bash .github/scripts/install-packages.sh skopeo
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Authenticate registry transport
         run: |
           printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
@@ -522,29 +522,29 @@ jobs:
       DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
       API_DOCS_URL: ${{ vars.API_DOCS_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore annotated release tags
         # Every publishing job has its own checkout; preflight's refs are not shared.
         run: |
           git fetch origin +refs/heads/main:refs/remotes/origin/main '+refs/tags/*:refs/tags/*'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-inputs
           path: ${{ runner.temp }}/promotion
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: candidates-*
           path: ${{ runner.temp }}/promotion
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-documentation
           path: ${{ runner.temp }}/promotion
       - name: Install OCI transport
         run: bash .github/scripts/install-packages.sh skopeo
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Authenticate GHCR transport
         run: |
           printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
@@ -588,7 +588,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.version.outputs.revision }}
       - uses: ./.github/actions/deploy-demo
@@ -622,7 +622,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.version.outputs.revision }}
       - uses: ./.github/actions/deploy-demo

@@ -48,6 +48,13 @@ impl GitStagingDirectory for Staging {
     }
 }
 impl GitWorkspacePort for LocalGitWorkspace {
+    fn has_file<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, bool> {
+        Box::pin(async move {
+            tokio::fs::metadata(path)
+                .await
+                .is_ok_and(|metadata| metadata.is_file())
+        })
+    }
     fn exists<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, io::Result<bool>> {
         Box::pin(tokio::fs::try_exists(path))
     }
@@ -97,5 +104,27 @@ impl GitWorkspacePort for LocalGitWorkspace {
             file.flush().await?;
             Ok(Box::new(guard) as Box<dyn GitCredentialFile>)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn optional_file_probe_distinguishes_files_from_directories_and_missing_paths() {
+        let root = std::env::temp_dir().join(format!("citadel-file-probe-{}", Uuid::now_v7()));
+        tokio::fs::create_dir(&root).await.unwrap();
+        let workspace = LocalGitWorkspace::new(citadel_runtime::DynamicTasks::new(
+            tokio_util::sync::CancellationToken::new(),
+        ));
+        let path = root.join(".gitmodules");
+        assert!(!workspace.has_file(&path).await);
+        tokio::fs::create_dir(&path).await.unwrap();
+        assert!(!workspace.has_file(&path).await);
+        tokio::fs::remove_dir(&path).await.unwrap();
+        tokio::fs::write(&path, "").await.unwrap();
+        assert!(workspace.has_file(&path).await);
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 }

@@ -57,7 +57,13 @@ async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() 
         node: None,
     };
     let alerts = Alerts::default();
-    observe(&pool, &alerts, &request).await.unwrap();
+    observe(
+        crate::workers::test_support::containers(&pool).as_ref(),
+        &alerts,
+        &request,
+    )
+    .await
+    .unwrap();
     assert_eq!(alerts.0.lock().unwrap().len(), 1);
     assert_eq!(alerts.0.lock().unwrap()[0].resource_id, platform);
     assert_eq!(alerts.0.lock().unwrap()[0].resource_type, "Platform");
@@ -66,7 +72,13 @@ async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() 
         .bind(rule).bind(citadel_identity::SYSTEM_ACTOR_ID).bind(serde_json::json!([{"resourceId": platform, "resourceType": "Platform"}])).execute(&pool).await.unwrap();
     let persisted =
         citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository::new(pool.clone());
-    observe(&pool, &persisted, &request).await.unwrap();
+    observe(
+        crate::workers::test_support::containers(&pool).as_ref(),
+        &persisted,
+        &request,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, Uuid>("SELECT resourceid FROM alertevents WHERE alertruleid=$1")
             .bind(rule)
@@ -82,7 +94,13 @@ async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() 
             .execute(&pool)
             .await
             .unwrap();
-        observe(&pool, &alerts, &request).await.unwrap();
+        observe(
+            crate::workers::test_support::containers(&pool).as_ref(),
+            &alerts,
+            &request,
+        )
+        .await
+        .unwrap();
         assert_eq!(alerts.0.lock().unwrap().len(), 1);
         let sql = format!("UPDATE containers SET {column}=false WHERE id=$1");
         sqlx::query(sqlx::AssertSqlSafe(sql))
@@ -100,13 +118,25 @@ async fn grace_recheck_suppresses_adopted_system_swarm_and_deleted_containers() 
         .execute(&pool)
         .await
         .unwrap();
-    observe(&pool, &alerts, &request).await.unwrap();
+    observe(
+        crate::workers::test_support::containers(&pool).as_ref(),
+        &alerts,
+        &request,
+    )
+    .await
+    .unwrap();
     sqlx::query("DELETE FROM containers WHERE id=$1")
         .bind(id)
         .execute(&pool)
         .await
         .unwrap();
-    observe(&pool, &alerts, &request).await.unwrap();
+    observe(
+        crate::workers::test_support::containers(&pool).as_ref(),
+        &alerts,
+        &request,
+    )
+    .await
+    .unwrap();
     assert_eq!(alerts.0.lock().unwrap().len(), 1);
     pool.close().await;
 }

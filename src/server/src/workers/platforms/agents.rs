@@ -1,7 +1,7 @@
 use super::*;
 
 // Own one pair of independently reconnecting streams per persisted Direct Agent.
-pub(super) async fn agent_subscriptions(
+pub(crate) async fn agent_subscriptions(
     cancellation: CancellationToken,
     base: AgentClient,
     sender: BoundedSender<InventoryEvent>,
@@ -97,7 +97,7 @@ pub(super) async fn agent_subscriptions(
     Ok(())
 }
 
-pub(super) async fn agent_subscription(
+pub(crate) async fn agent_subscription(
     targets: &PlatformRuntimeRegistry,
     platform: uuid::Uuid,
 ) -> Result<Option<(uuid::Uuid, AgentClient)>, RuntimeCapabilityError> {
