@@ -11,7 +11,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "f0a50b503c286a27c3f31b3b2c108720d6f7ac33ea4a995c53496d0e23910abc",
+            "b833d575fdb2dd1396052d697d6947add72c9a2012f9e319cc553674bed63ab7",
         ),
         (
             "platform_service.proto",
@@ -69,6 +69,27 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
 }
 
 // The accepted additions use new field numbers and preserve old-peer defaults.
+#[test]
+fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() {
+    use citadel_contracts::citadel::shared_models::v1::ContainerMessage;
+    use prost::Message;
+
+    let absent = ContainerMessage::decode(&[][..]).unwrap();
+    assert!(absent.mounts.is_empty());
+    assert!(!absent.mounts_observed);
+
+    let mut observed = ContainerMessage {
+        mounts_observed: true,
+        ..Default::default()
+    };
+    assert_eq!(observed.encode_to_vec(), [0xa8, 0x01, 1]); // field 21, bool
+    observed.mounts.push(Default::default());
+    assert_eq!(observed.encode_to_vec(), [0xa2, 0x01, 0, 0xa8, 0x01, 1]); // field 20, message
+    let round_trip = ContainerMessage::decode(observed.encode_to_vec().as_slice()).unwrap();
+    assert!(round_trip.mounts_observed);
+    assert_eq!(round_trip.mounts.len(), 1);
+}
+
 #[test]
 fn container_metadata_and_capture_time_are_additive_wire_fields() {
     use citadel_contracts::citadel::containers::v1::{
