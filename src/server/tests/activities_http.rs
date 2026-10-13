@@ -63,16 +63,17 @@ async fn failed_backup_filter_preserves_event_type_and_failure_status() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let filters = store.filters.lock().unwrap();
-    assert_eq!(
-        filters[0].event_type,
-        Some(citadel_activities::ActivityEventType::BackupRunCompleted)
-    );
-    assert_eq!(
-        filters[0].status,
-        Some(citadel_activities::ActivityStatus::Failure)
-    );
-    drop(filters);
+    {
+        let filters = store.filters.lock().unwrap();
+        assert_eq!(
+            filters[0].event_type,
+            Some(citadel_activities::ActivityEventType::BackupRunCompleted)
+        );
+        assert_eq!(
+            filters[0].status,
+            Some(citadel_activities::ActivityStatus::Failure)
+        );
+    }
     let (status, _) = get(&app, "/api/v1/activities?Status=Invalid").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(store.filters.lock().unwrap().len(), 1);
