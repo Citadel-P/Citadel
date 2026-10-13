@@ -1,3 +1,4 @@
+// Run against the frontend dev server: node docs/scripts/capture-guide-screenshots.mjs readme
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 const require = createRequire(
@@ -389,10 +390,18 @@ routes["/activities"] = {
   },
 };
 routes[`/activities/${failedActivity.id}`] = failedActivity;
+const readmeMode = process.argv.includes("readme");
+const { prepareReadme, captureReadme } = await import("./readme-screenshots.mjs");
+const readmeData = readmeMode
+  ? prepareReadme({
+      routes, lookups, fixture, id, caps,
+      version: JSON.parse(await fs.readFile(`${root}/version.json`, "utf8")).version,
+    })
+  : undefined;
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 1360, height: 2000 },
-  deviceScaleFactor: 2,
+  deviceScaleFactor: readmeMode ? 1 : 2,
   colorScheme: "light",
   reducedMotion: "reduce",
   timezoneId: "UTC",
@@ -463,6 +472,8 @@ async function capture(name, start, end = start) {
   }
 }
 try {
+  if (readmeMode)
+    await captureReadme({ page, context, origin, root, expect, data: readmeData });
   for (const [name, path] of [
     ["git", `stacks/edit/${id(2)}#config`],
     ["swarm", `platforms/edit/${id(1)}#config`],
@@ -573,7 +584,7 @@ try {
   expect([...unknown]).toEqual([]);
   expect(errors).toEqual([]);
   console.log(
-    "All guide screenshots captured without browser errors or unmatched API requests.",
+    "All screenshots captured without browser errors or unmatched API requests.",
   );
 } catch (error) {
   console.error({

@@ -29,9 +29,9 @@ Capabilities vary by edition; see the [Community and Team comparison](docs/conte
 
 ![Citadel Platforms page with an online standalone Docker host and an online Swarm host](docs/public/screenshots/platforms.png)
 
-![Citadel Docker platform with five running containers and live CPU and memory usage](docs/public/screenshots/platform-containers.png)
+![Citadel Docker platform with five running containers, resource usage, and backup coverage](docs/public/screenshots/platform-containers.png)
 
-![Citadel Swarm overview with three healthy services and their running replica counts](docs/public/screenshots/swarm-services.png)
+![Citadel Swarm Services table with replica counts, backup coverage, and filters](docs/public/screenshots/swarm-services.png)
 
 ![Citadel Swarm service configuration showing replica settings and deployment controls](docs/public/screenshots/swarm-service-config.png)
 
