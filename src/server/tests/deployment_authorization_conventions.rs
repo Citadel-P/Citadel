@@ -32,12 +32,13 @@ fn shared_entry_points_use_deployment_policies() {
                 [..],
         ),
         (
-            "realtime_groups/reader.rs",
+            "realtime_groups/reader/mod.rs",
             "async fn deployment_permission<",
             &["require_resource::<P>"][..],
         ),
     ] {
-        let source = std::fs::read_to_string(root.join(file)).unwrap();
+        let source = std::fs::read_to_string(root.join(file))
+            .unwrap_or_else(|error| panic!("failed to read {file}: {error}"));
         assert_policy_source(block(&source, marker), file, policies);
     }
 
