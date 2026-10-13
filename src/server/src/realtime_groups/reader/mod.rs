@@ -663,10 +663,9 @@ impl ApplicationGroupReader {
             },
             Topic::Stack(..) => {
                 let mut view = crate::api::resources::stacks::views::StackView::try_from(self.stacks.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
-                if let Some(service) = &self.backup_coverage {
-                    if let Some(platform) = view.platform_id {
+                if let Some(service) = &self.backup_coverage
+                    && let Some(platform) = view.platform_id {
                     view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::Stack, id.unwrap(), platform).await);
-                    }
                 }
                 rows("StackInfoUpdated", vec![view], RowStyle::Update)
             },

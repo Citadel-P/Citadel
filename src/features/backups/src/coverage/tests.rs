@@ -92,7 +92,7 @@ fn green_requires_runnable_schedule_and_matching_available_snapshot() {
     );
     let summary = snapshot.evaluate(
         target.target.platform_id,
-        &[target.clone()],
+        std::slice::from_ref(&target),
         None,
         true,
         false,
@@ -124,7 +124,7 @@ fn failures_dominate_manual_configuration_and_history_survives() {
         snapshot.policies[0].latest_run.as_mut().unwrap().status = failed;
         let summary = snapshot.evaluate(
             target.target.platform_id,
-            &[target.clone()],
+            std::slice::from_ref(&target),
             None,
             true,
             false,

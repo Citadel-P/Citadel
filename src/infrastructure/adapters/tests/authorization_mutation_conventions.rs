@@ -7,7 +7,7 @@ fn authorization_writers_use_the_committed_mutation_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/persistence/postgres");
     let audited: BTreeSet<_> = [
         "identity/actors/repository.rs",
-        "identity/authentication/store.rs",
+        "identity/authentication/store/mod.rs",
         "identity/oidc/store.rs",
         "identity/roles/repository.rs",
         "identity/service_accounts/repository.rs",

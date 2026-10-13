@@ -1222,19 +1222,19 @@ async fn get(
         StackView::try_from(value).map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage {
-        if let Some(platform) = view.platform_id {
-            view.backup_coverage = Some(
-                service
-                    .workload(
-                        &principal,
-                        citadel_backups::policies::read_models::BackupPreviewKind::Stack,
-                        id,
-                        platform,
-                    )
-                    .await,
-            );
-        }
+    if let Some(service) = &state.backup_coverage
+        && let Some(platform) = view.platform_id
+    {
+        view.backup_coverage = Some(
+            service
+                .workload(
+                    &principal,
+                    citadel_backups::policies::read_models::BackupPreviewKind::Stack,
+                    id,
+                    platform,
+                )
+                .await,
+        );
     }
     Ok(no_store(Json(view).into_response()))
 }

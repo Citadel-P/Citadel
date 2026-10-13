@@ -2206,6 +2206,23 @@ fn policy_tag(id: Uuid) -> String {
     format!("citadel-policy-{id}")
 }
 
+fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result<(), String> {
+    if let BackupRepositorySpec::FileSystem {
+        path: repository_path,
+        ..
+    } = &repository.spec
+    {
+        let source = std::path::Path::new(path);
+        let repository = std::path::Path::new(repository_path);
+        if repository.is_absolute()
+            && (source.starts_with(repository) || repository.starts_with(source))
+        {
+            return Err("Bind path and filesystem backup repository must not overlap.".into());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2386,27 +2403,4 @@ mod tests {
     fn redaction_preserves_lines_and_removes_credentials() {
         assert_eq!(redact("ok\npassword=abc\ndone"), "ok\n[redacted]\ndone");
     }
-}
-
-// Arguments are passed separately; neither host paths nor snapshot IDs are shell source.
-
-// Stage the snapshot before touching the destination. Existing destinations are
-// required: Docker must never silently create a mistyped host path. Directory
-// restores merge; overwrite explicitly permits replacing existing files.
-
-fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result<(), String> {
-    if let BackupRepositorySpec::FileSystem {
-        path: repository_path,
-        ..
-    } = &repository.spec
-    {
-        let source = std::path::Path::new(path);
-        let repository = std::path::Path::new(repository_path);
-        if repository.is_absolute()
-            && (source.starts_with(repository) || repository.starts_with(source))
-        {
-            return Err("Bind path and filesystem backup repository must not overlap.".into());
-        }
-    }
-    Ok(())
 }

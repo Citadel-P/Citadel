@@ -251,15 +251,15 @@ pub(crate) fn alert_resource_path(event: &citadel_alerts::AlertEvent) -> Option<
         _ => return None,
     };
     let mut path = format!("/{prefix}/edit/{id}");
-    if event.alert_type == "BackupRunFailed" && event.resource_type == "BackupPolicy" {
-        if let Some(run) = event
+    if event.alert_type == "BackupRunFailed"
+        && event.resource_type == "BackupPolicy"
+        && let Some(run) = event
             .info
             .get("RunId")
             .and_then(Value::as_str)
             .and_then(|id| Uuid::parse_str(id).ok())
-        {
-            path.push_str(&format!("?runId={run}#runs"));
-        }
+    {
+        path.push_str(&format!("?runId={run}#runs"));
     }
     Some(path)
 }
