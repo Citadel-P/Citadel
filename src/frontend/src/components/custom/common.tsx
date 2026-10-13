@@ -114,7 +114,6 @@ export const OverflowCountBadge = ({
   );
 };
 
-
 export const StatsPanelHeader = ({
   title,
   description,
@@ -232,6 +231,8 @@ const getLookupResourceName = (type: LookupResourceType | undefined) => {
 };
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
+  id,
+  'aria-label': ariaLabel,
   sourceType,
   targetType,
   selected,
@@ -247,12 +248,15 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   platformId,
   queryEnabled = true,
   allowClear = true,
+  clearLabel = 'None',
+  emptyMessage = 'No results found.',
+  isItemDisabled,
 }: {
+  id?: string;
+  'aria-label'?: string;
   sourceType?: LookupResourceType;
-  targetType: LookupResourceType;
   selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;
-  items?: T[];
   renderItem?: (item: T) => ReactNode;
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
@@ -263,7 +267,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   platformId?: string;
   queryEnabled?: boolean;
   allowClear?: boolean;
-}) {
+  clearLabel?: string;
+  emptyMessage?: ReactNode;
+  isItemDisabled?: (item: T) => boolean;
+} & ({ targetType: LookupResourceType; items?: T[] } | { targetType?: never; items: T[] })) {
   const accessibility = useFormFieldAccessibility();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -271,15 +278,17 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
   const read = useRead(
     `lookup`,
-    {
-      query: {
-        TargetResourceType: targetType,
-        SourceResourceType: sourceType,
-        SourceResourceId: sourceResourceId,
-        PlatformId: platformId,
-      },
-    },
-    { enabled: queryEnabled && providedItems === undefined },
+    targetType
+      ? {
+          query: {
+            TargetResourceType: targetType,
+            SourceResourceType: sourceType,
+            SourceResourceId: sourceResourceId,
+            PlatformId: platformId,
+          },
+        }
+      : undefined,
+    { enabled: queryEnabled && targetType !== undefined && providedItems === undefined },
   );
   const lookupItems = useMemo<T[]>(() => {
     const lookupData = read.data?.data as unknown;
@@ -328,12 +337,13 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           ref={triggerRef as any}
           disabled={disabled}
           variant="ghost"
           role="combobox"
           aria-expanded={open}
-          aria-label={accessibility?.label}
+          aria-label={ariaLabel ?? accessibility?.label}
           aria-describedby={accessibility?.describedBy}
           aria-invalid={accessibility?.invalid || undefined}
           data-placeholder={selectedItem ? undefined : ''}
@@ -360,7 +370,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
           />
 
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>{emptyMessage}</CommandEmpty>
 
             <CommandGroup>
               {allowClear && !search && (
@@ -368,7 +378,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                   value="__none__"
                   onSelect={() => handleSelect(undefined)}
                   className="flex items-center justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
-                  <span>None</span>
+                  <span>{clearLabel}</span>
                   <Check className={cn('h-4 w-4 transition-opacity', !selectedItem ? 'opacity-100' : 'opacity-0')} />
                 </CommandItem>
               )}
@@ -380,6 +390,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                   return (
                     <CommandItem
                       key={item.id}
+                      disabled={isItemDisabled?.(item)}
                       value={defaultDisplay(item)}
                       onSelect={() => handleSelect(item)}
                       className="flex items-start justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
@@ -1371,15 +1382,17 @@ function stripAnsiCodes(value: string) {
 export const MemoryUsageCell = ({
   state,
   stats,
+  className,
 }: {
   state: ContainerStateStatus;
   stats?: Partial<ContainerStatView> | null;
+  className?: string;
 }) => {
   if (state !== ContainerStateStatus.Running) {
-    return <div className="text-muted-foreground">0B / 0B</div>;
+    return <div className={cn('text-muted-foreground', className)}>0B / 0B</div>;
   }
   return (
-    <span className="text-[13px]" title="Memory usage excluding file cache / memory limit">
+    <span className={cn('text-[13px]', className)} title="Memory usage excluding file cache / memory limit">
       {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
     </span>
   );
@@ -1388,15 +1401,19 @@ export const MemoryUsageCell = ({
 export const CPUCell = ({
   state,
   stats,
+  className,
 }: {
   state: ContainerStateStatus;
   stats?: Partial<ContainerStatView> | null;
+  className?: string;
 }) => {
   if (state !== ContainerStateStatus.Running) {
-    return <div className="text-muted-foreground">0%</div>;
+    return <div className={cn('text-muted-foreground', className)}>0%</div>;
   }
   return (
-    <span className="text-[13px]">{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>
+    <span className={cn('text-[13px]', className)}>
+      {stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}
+    </span>
   );
 };
 

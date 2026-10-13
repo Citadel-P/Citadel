@@ -28,6 +28,29 @@ Use [Deployments](/docs/resources/deployments) for individual Standalone contain
 or [Swarm Services](/docs/resources/swarm-services) for independently managed
 Swarm Services.
 
+## Backup coverage
+
+The backup shield at the far right of the main tab bar is available from every
+tab. Hover, focus, or click it to see coverage for each resolved Docker volume
+and the most recent successful volume backup when available. Use **Configure backup** to open the central policy form with the Stack
+or an uncovered volume selected. Existing policy links also show coverage from
+shared-volume policies. See [Backups](/docs/resources/backups#coverage-on-resource-pages)
+for status meanings and configuration.
+
+On standalone Docker, Stack policies include the volume bindings recorded for the
+applied release: declared named volumes, external volumes, and anonymous volumes
+with generated names. On Swarm, coverage is limited to supported local volumes
+on their owning Nodes. Supported bind mounts discovered from owned containers
+are included in the same policy using actual host paths and exact Nodes.
+Host data requires Platform write access for both configuration and execution. Tmpfs, nested mounts, and
+container writable layers remain excluded.
+
+Use **Backup Filter** at the right of the resource header to filter by backup status.
+The resource table displays a **Backup** column. Hover over its shield to see
+the same coverage card as on the resource page. Manual-only or disabled policies
+show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
+all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+
 ## Get started
 
 - [Deploy your first Stack](/docs/getting-started/first-stack).

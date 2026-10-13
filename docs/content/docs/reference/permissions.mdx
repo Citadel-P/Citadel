@@ -7,7 +7,7 @@ Citadel evaluates access through the current actor, assigned Roles and Teams,
 resource-level access, and explicit overrides. A visible UI control is not the
 authorization boundary; the API evaluates permissions again.
 
-Use **Access > Roles** to view the permission matrix for the running release.
+Use **Access > Roles** to view the permission matrix for the running instance.
 It is the authoritative list because Citadel adds resource types and specific
 operations as features are implemented.
 
@@ -37,8 +37,36 @@ a Stack use different base levels.
 | Restore a Backup Policy snapshot | Execute + Restore |
 
 Dependent-resource access, resource state, and license capabilities can impose
-further requirements. Use the running release's matrix and action explanation
+further requirements. Use the running instance's matrix and action explanation
 when diagnosing a denial.
+
+## Permission scope
+
+Role permissions apply to a resource type and are granted directly or through
+an enabled Team. Resource overrides apply only to the existing resource selected
+in the grant.
+
+Creating a resource requires global **Write** permission for its type. Write
+access granted only through an override permits editing that resource, but does
+not permit creating others. For example, a Backup Repository override does not
+grant permission to create repositories or policies; creating a policy requires
+global Backup Policy Write permission and access to its dependencies.
+
+### Backup API capabilities
+
+The `/api/v1/backupPolicies` and `/api/v1/backupRepositories` list responses
+report permissions at two scopes:
+
+- Top-level `capabilities` describe global permissions for that resource type.
+  The UI uses `canWrite` here to enable **Add Policy** or **Add Repository**,
+  respectively.
+- Each resource's `capabilities` describe effective permissions for that resource,
+  including applicable overrides.
+
+A response can therefore have top-level `canWrite: false` while an individual
+resource has `canWrite: true`. This means the user can edit that resource but
+cannot create a new one. Top-level capabilities are not a summary of permissions
+on the returned resources.
 
 ## Additive access
 

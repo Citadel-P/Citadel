@@ -287,12 +287,32 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     ));
     let authorizer = IdentityBackupRunAuthorizer::new(identity);
     assert!(authorizer.authorize_backup(&guarded_claim).await.is_err());
+    let mut bind_item = BackupSourceItem::new(platform, String::new(), None, None);
+    bind_item.host_path = Some("/srv/application".into());
+    let bind_plan = BackupSourcePlan {
+        display_name: "Workload storage".into(),
+        items: vec![bind_item],
+        warnings: vec![],
+        local_directory: None,
+    };
+    // Host access depends on the immutable items, even when the policy itself
+    // is not a direct BindMount policy.
+    assert!(
+        authorizer
+            .authorize_plan(&guarded_claim, &bind_plan)
+            .await
+            .is_err()
+    );
     // Use the mutation boundary so the authorization cache observes the grant.
     use citadel_identity::UserRepository;
     citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository::new(pool.clone())
         .add_role(user, ADMIN_ROLE_ID, ActorId::new(SYSTEM_ACTOR_ID), Utc::now(), true)
         .await.unwrap();
     authorizer.authorize_backup(&guarded_claim).await.unwrap();
+    authorizer
+        .authorize_plan(&guarded_claim, &bind_plan)
+        .await
+        .unwrap();
     let planner = PostgresBackupSourcePlanner::new(pool.clone());
     let plan = planner
         .plan(&first_claim, &CancellationToken::new())
@@ -353,12 +373,72 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     );
     store.finish_backup(&first_claim, &result).await.unwrap();
     assert_run_activities(&pool, &first_claim.run, "Succeeded", "Success", true).await;
+    assert_backup_alert_count(&pool, first_claim.run.id, 0).await;
+    use citadel_backups::{coverage::CoverageReader, runs::read_models::VolumeCoverageReader};
+    let coverage_reader =
+        citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(
+            pool.clone(),
+        );
+    let keys = vec![(plan.items[0].volume_name.clone(), None)];
+    let coverage = coverage_reader
+        .volume_coverage(actor, true, platform, &keys, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        coverage[0].status,
+        citadel_backups::BackupCoverageStatus::Warning
+    );
+    assert!(coverage[0].last_successful_run_at.is_some());
+    assert!(
+        !coverage_reader
+            .snapshot(actor, true, &[platform])
+            .await
+            .unwrap()
+            .successes
+            .is_empty()
+    );
+    sqlx::query("UPDATE backuppolicies SET cron='0 0 * * *',timezone='UTC' WHERE id=$1")
+        .bind(first_claim.policy.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let coverage = coverage_reader
+        .volume_coverage(actor, true, platform, &keys, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        coverage[0].status,
+        citadel_backups::BackupCoverageStatus::Protected
+    );
+
+    let paused = coverage_reader
+        .volume_coverage(actor, true, platform, &keys, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        paused[0].status,
+        citadel_backups::BackupCoverageStatus::Warning
+    );
+    use citadel_backups::coverage::CoverageChangeSource;
+    let mut changes=citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::connect(&pool).await.unwrap();
+    store
+        .update_policy_description(actor, first_claim.policy.id, Some("Coverage notification"))
+        .await
+        .unwrap();
+    let change = tokio::time::timeout(std::time::Duration::from_secs(2), changes.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(change.platform_id, platform);
+
     store
         .enqueue_restore(citadel_backups::BackupRestoreRequest {
             actor,
             backup_run_id: first_claim.run.id,
             target_platform_id: platform,
             target_volume_name: "configured-lease-restore".into(),
+            target_host_path: None,
             overwrite_existing: false,
             target_docker_node_id: None,
             source_backup_run_item_id: Some(completed.items[0].id),
@@ -410,6 +490,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
     assert_run_activities(&pool, &late_claim.run, "Interrupted", "Failure", true).await;
+    assert_backup_alert_count(&pool, late_claim.run.id, 1).await;
 
     // The Activities tab reads this authorized, resource-scoped query.
     use citadel_activities::{
@@ -435,11 +516,43 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         )
         .await
         .unwrap();
-    assert_eq!(page.total_count, 4);
+    assert_eq!(page.total_count, 5); // Includes the metadata edit used to verify coverage notifications.
     assert!(
         page.items
             .iter()
             .all(|activity| activity.resource_id == Some(first_claim.policy.id))
+    );
+    let access = ActivityAccess {
+        actor_id: actor,
+        administrator: false,
+    };
+    let failures = activity_store
+        .list_authorized(
+            &access,
+            ActivityFilter {
+                resource_type: Some(ActivityResourceType::BackupPolicy),
+                event_type: Some(citadel_activities::ActivityEventType::BackupRunCompleted),
+                status: Some(citadel_activities::ActivityStatus::Failure),
+                page_size: Some(500),
+                ..Default::default()
+            }
+            .validated()
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(!failures.items.is_empty());
+    assert_eq!(failures.total_count, failures.items.len() as i64);
+    assert!(failures.items.iter().all(|activity| activity.event_type
+        == citadel_activities::ActivityEventType::BackupRunCompleted
+        && activity.status == citadel_activities::ActivityStatus::Failure));
+    // The shared SQL filter must also leave direct activity lookup intact.
+    assert!(
+        activity_store
+            .get_authorized(&access, failures.items[0].id)
+            .await
+            .unwrap()
+            .is_some()
     );
     assert!(
         store
@@ -485,6 +598,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     assert!(store.cancel_backup(scheduled.id).await.unwrap());
     assert!(!store.cancel_backup(scheduled.id).await.unwrap());
     assert_run_activities(&pool, &scheduled, "Cancelled", "Warning", false).await;
+    assert_backup_alert_count(&pool, scheduled.id, 0).await;
     sqlx::query("UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL WHERE id=$1")
         .bind(policies[0].id)
         .execute(&pool)
@@ -588,9 +702,26 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         result.status = outcome.parse().unwrap();
         result.snapshot_availability = citadel_backups::BackupSnapshotAvailability::Missing;
         result.error_message = Some("Test outcome".into());
+        // A disabled policy notification must not enqueue a failed-run alert.
+        sqlx::query("UPDATE backuppolicies SET alertonfailure=$2 WHERE id=$1")
+            .bind(claim.policy.id)
+            .bind(outcome != "Rejected")
+            .execute(&pool)
+            .await
+            .unwrap();
         store.finish_backup(&claim, &result).await.unwrap();
         store.finish_backup(&claim, &result).await.unwrap();
         assert_run_activities(&pool, &claim.run, outcome, activity_status, true).await;
+        assert_backup_alert_count(
+            &pool,
+            claim.run.id,
+            if matches!(outcome, "Failed" | "TimedOut") {
+                1
+            } else {
+                0
+            },
+        )
+        .await;
         if outcome != "SucceededWithWarnings" {
             store
                 .enqueue_backup(actor, claim.policy.id, "Manual")
@@ -598,6 +729,23 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
                 .unwrap();
         }
     }
+
+    let alerts =
+        citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository::new(pool.clone());
+    let owner = Uuid::now_v7();
+    while alerts.process_pending_observation(owner).await.unwrap() {}
+    assert!(!alerts.process_pending_observation(owner).await.unwrap());
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM alertevents WHERE type='BackupRunFailed' AND resourceid=ANY($1)",
+    )
+    .bind(policies.iter().map(|p| p.id).collect::<Vec<_>>())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        count, 3,
+        "interruption, failure and timeout each produce one alert"
+    );
 
     let webhook = json!({"enabled": true, "provider":"Generic", "authScheme":"BearerToken", "secret":"fixture-key"});
     sqlx::query("UPDATE backuppolicies SET webhook=$2 WHERE id=$1")
@@ -854,6 +1002,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 target_platform_id: platform,
                 target_docker_node_id: Some("restore-node".into()),
                 target_volume_name: "target".into(),
+                target_host_path: None,
                 overwrite_existing: false,
                 status: citadel_backups::BackupRestoreStatus::Running,
                 queued_at: Utc::now(),
@@ -1067,4 +1216,10 @@ async fn assert_run_activities(
     let info: serde_json::Value = serde_json::from_str(&events.last().unwrap().4).unwrap();
     assert_eq!(info["Status"], outcome);
     assert_eq!(info["DurationMs"].is_number(), started);
+}
+
+async fn assert_backup_alert_count(pool: &sqlx::PgPool, run: Uuid, expected: i64) {
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM alertobservations WHERE payload->>'alert_type'='BackupRunFailed' AND payload->'info'->>'RunId'=$1")
+        .bind(run.to_string()).fetch_one(pool).await.unwrap();
+    assert_eq!(count, expected, "failure observation count for run {run}");
 }

@@ -10,7 +10,8 @@
 **/api-out
 **/.source
 **/*.tsbuildinfo
-**/coverage
+/coverage/
+/src/frontend/coverage/
 **/playwright-report
 **/test-results
 .artifacts

@@ -133,3 +133,34 @@ it('does not refetch drift for processing or deleted stacks, but still refreshes
   expect(drift).toHaveBeenCalledTimes(2);
   expect(screen.getByText('Demo stack: ready')).toBeVisible();
 });
+
+it('updates backup coverage from the stack snapshot without a preview request', async () => {
+  const fake = new FakeRealtimeConnection();
+  const preview = vi.fn(() => HttpResponse.json({}));
+  server.use(
+    http.get('http://localhost/api/v1/stacks/:id', () => HttpResponse.json(initial)),
+    http.get('http://localhost/api/v1/stacks/:id/backup-source-preview', preview),
+  );
+  const { queryClient } = renderCitadel(<Probe />, {
+    groups: {
+      connectionFactory: () => fake.asRealtimeConnection(),
+      startConnection: (connection) => connection.start(),
+    },
+  });
+  await waitFor(() => expect(fake.listenerCount('StackInfoUpdated')).toBe(1));
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent(initial.status));
+  const coverage = {
+    platformId: 'p',
+    volumes: [],
+    policies: [],
+    warnings: ['No applied Swarm Stack was found.'],
+    unavailable: false,
+    canConfigure: false,
+    hasResourcePolicy: false,
+  };
+  act(() => fake.emit('StackInfoUpdated', { ...initial, backupCoverage: coverage }, 'update'));
+  expect(queryClient.getQueryData(['getStack', { stackId: initial.id }])).toMatchObject({
+    data: { backupCoverage: coverage },
+  });
+  expect(preview).not.toHaveBeenCalled();
+});

@@ -97,7 +97,7 @@ has recovered.
 ## Backup Summary
 
 The platform summary counts backup policies attached to that platform through a
-Docker volume, stack, deployment, or managed Swarm Service. Citadel control-plane backups are
+Docker volume, bind mount, stack, deployment, or managed Swarm Service. Citadel control-plane backups are
 instance-wide, so they are shown on the main **Backups** page and are not
 included in a platform's total. See
 [Backups](/docs/resources/backups#backup-counts) for details.
@@ -116,8 +116,8 @@ read-only, but it exposes host paths to the trusted Citadel process. Citadel
 does not browse or transfer host files through this feature.
 
 Removing the mount disables only disk metrics. CPU, memory, network, and Docker
-operations continue. Older Agent containers must be upgraded and recreated
-with the mount. Build-pool-only Edge Agents do not need it.
+operations continue. Include the mount when configuring Core and Platform
+Agent containers. Build-pool-only Edge Agents do not need it.
 
 Custom packaging can change the in-container mount location with:
 

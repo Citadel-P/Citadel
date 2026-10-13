@@ -1,3 +1,4 @@
+import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { Box, CirclePlay, CircleStop, CircleEllipsis } from 'lucide-react';
 import { ContainerStateStatus, type ContainerView } from '@/api/generated/api.types';
 import { ContainersTable } from './table';
@@ -104,14 +105,20 @@ export const ContainerComponents: RegularResourceComponents = {
       return unmanagedOnly ? visibleContainers.filter(isUnmanagedContainer) : visibleContainers;
     }, [containers, unmanagedOnly]);
 
-    return { error, refetch, isFetching, items, isLoading, capabilities };
+    const filteredItems = useBackupStatusFilter(items);
+    return { error, refetch, isFetching, items: filteredItems, isLoading, capabilities };
   },
   header: {
     subtitle: 'Monitor container state, resource usage, and workload operations.',
-    activeFilterParams: ['unmanaged'],
+    activeFilterParams: ['unmanaged', 'backupStatus'],
     showAdd: false,
     showSearch: true,
-    Extra: UnmanagedContainersFilter,
+    Extra: () => (
+      <>
+        <UnmanagedContainersFilter />
+        <BackupStatusFilter />
+      </>
+    ),
   },
   DropdownActions: ContainerDropdownActions,
   GroupActions: ({ items }) => (

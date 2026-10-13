@@ -68,7 +68,7 @@ pub fn router(
         deployments,
         swarm_services,
         stacks,
-        platform_state,
+        mut platform_state,
         realtime,
         license_realtime_service,
         search,
@@ -77,6 +77,14 @@ pub fn router(
         audit,
         ..
     } = state;
+    let backup_coverage = Arc::new(
+        citadel_server::api::resources::backups::coverage::BackupCoverageService {
+            backups: backups.clone(),
+            identity: identity.clone(),
+            volume_coverage: platform_state.volume_coverage.clone(),
+        },
+    );
+    platform_state.backup_coverage = Some(backup_coverage.clone());
     let app = citadel_server::diagnostics_http::router(
         citadel_server::diagnostics_http::DiagnosticsHttpState {
             readiness: Arc::clone(&readiness),
@@ -181,16 +189,19 @@ pub fn router(
         delivery: alert_delivery,
     }))
     .merge(deployments::router(deployments::DeploymentsHttpState {
+        backup_coverage: Some(backup_coverage.clone()),
         identity: Arc::clone(&identity),
         deployments: Arc::clone(&deployments),
     }))
     .merge(swarm_services_http::router(
         swarm_services_http::SwarmServicesHttpState {
+        backup_coverage: Some(backup_coverage.clone()),
             identity: Arc::clone(&identity),
             services: Arc::clone(&swarm_services),
         },
     ))
     .merge(stacks_http::router(stacks_http::StacksHttpState {
+        backup_coverage: Some(backup_coverage.clone()),
         platforms: Arc::clone(&platform_state.platforms),
         identity: Arc::clone(&identity),
         stacks,

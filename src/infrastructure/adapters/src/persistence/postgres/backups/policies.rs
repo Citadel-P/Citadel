@@ -41,6 +41,7 @@ impl PostgresBackupPersistence {
             )
             .await
             .map_err(storage)?;
+            coverage::changes::publish(&mut transaction, Some(policy.id), None).await?;
             transaction.commit().await.map_err(storage)?;
             self.attach_policy_summaries(vec![policy])
                 .await?
@@ -139,6 +140,7 @@ impl PostgresBackupPersistence {
             crate::persistence::postgres::activities::store::insert_activity(&mut tx, &activity)
                 .await
                 .map_err(storage)?;
+            coverage::changes::publish(&mut tx, Some(policy.id), None).await?;
             tx.commit().await.map_err(storage)?;
             self.attach_policy_summaries(vec![policy])
                 .await?
@@ -173,6 +175,7 @@ impl PostgresBackupPersistence {
                 ));
             }
             citadel_backups::policies::patch::guard(&old, input)?;
+            coverage::changes::publish(&mut tx, Some(id), None).await?;
             let row = sqlx::query("UPDATE backuppolicies SET description=$2,source=$3,backuprepositoryid=$4,enabled=$5,cron=$6,timezone=$7,webhook=$8,keeplastsuccessful=$9,timeoutseconds=$10,alertonfailure=$11,runasactorid=$12,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
                 .bind(id).bind(&input.description).bind(sqlx::types::Json(&input.source)).bind(input.backup_repository_id).bind(input.enabled).bind(&input.cron).bind(&input.time_zone).bind(input.webhook.as_ref().map(sqlx::types::Json)).bind(input.keep_last_successful).bind(input.timeout_seconds).bind(input.alert_on_failure).bind(input.run_as_actor_id)
                 .fetch_one(&mut *tx).await.map_err(storage)?;
@@ -191,6 +194,7 @@ impl PostgresBackupPersistence {
             crate::persistence::postgres::activities::store::insert_activity(&mut tx, &activity)
                 .await
                 .map_err(storage)?;
+            coverage::changes::publish(&mut tx, Some(policy.id), None).await?;
             tx.commit().await.map_err(storage)?;
             self.attach_policy_summaries(vec![policy])
                 .await?
@@ -236,6 +240,7 @@ impl PostgresBackupPersistence {
             crate::persistence::postgres::activities::store::insert_activity(&mut tx, &activity)
                 .await
                 .map_err(storage)?;
+            coverage::changes::publish(&mut tx, Some(policy.id), None).await?;
             tx.commit().await.map_err(storage)?;
             self.attach_policy_summaries(vec![policy])
                 .await?
@@ -248,12 +253,15 @@ impl PostgresBackupPersistence {
 impl PostgresBackupPersistence {
     pub(super) fn archive_policy_impl(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>> {
         Box::pin(async move {
-            let n=sqlx::query("UPDATE backuppolicies SET archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND controlstate='Idle'").bind(id).execute(&self.pool).await.map_err(storage)?.rows_affected();
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let n=sqlx::query("UPDATE backuppolicies SET archivedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 AND archivedat IS NULL AND controlstate='Idle'").bind(id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if n == 0 {
                 Err(BackupError::Conflict(
                     "Backup Policy is active or missing.".into(),
                 ))
             } else {
+                coverage::changes::publish(&mut tx, Some(id), None).await?;
+                tx.commit().await.map_err(storage)?;
                 Ok(())
             }
         })

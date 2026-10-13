@@ -194,6 +194,12 @@ pub enum BackupSourceSpecSchema {
         consistency: citadel_backups::spec::VolumeBackupConsistency,
     },
 
+    #[serde(rename_all = "camelCase")]
+    BindMount {
+        platform_id: Uuid,
+        host_path: String,
+        docker_node_id: Option<String>,
+    },
     CitadelSystem {},
     #[serde(rename_all = "camelCase")]
     Stack {
@@ -222,6 +228,15 @@ impl From<citadel_backups::spec::BackupSourceSpec> for BackupSourceSpecSchema {
                 volume_name,
                 docker_node_id,
                 consistency,
+            },
+            citadel_backups::spec::BackupSourceSpec::BindMount {
+                platform_id,
+                host_path,
+                docker_node_id,
+            } => Self::BindMount {
+                platform_id,
+                host_path,
+                docker_node_id,
             },
             citadel_backups::spec::BackupSourceSpec::CitadelSystem {} => Self::CitadelSystem {},
             citadel_backups::spec::BackupSourceSpec::Stack { stack_id } => Self::Stack { stack_id },

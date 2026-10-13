@@ -1,4 +1,7 @@
 //! Restricted node operations. Validate helper requests before any Docker mutation.
+use citadel_adapters::external::backups::bind_mount::{
+    BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT, validate_bind_path,
+};
 use citadel_contracts::citadel::{
     containers::v1::{CreateContainerRequest, ExecBinaryRequest},
     edge::v1::EdgeCommandKind,
@@ -79,6 +82,37 @@ fn mount(value: &Mount, target: &str, read_only: bool) -> bool {
         && value.volume_options.is_none()
         && value.consistency.as_deref().is_none_or(str::is_empty)
 }
+fn bind_mount(value: &Mount, target: &str, read_only: bool, probe: bool) -> bool {
+    value.r#type.as_deref() == Some("bind")
+        && value.source.as_deref().is_some_and(|path| {
+            if probe {
+                path == "/"
+            } else {
+                validate_bind_path(path).is_ok()
+            }
+        })
+        && value.target.as_deref() == Some(target)
+        && value.read_only == Some(read_only)
+        && value.volume_options.is_none()
+        && value.consistency.as_deref().is_none_or(str::is_empty)
+        && value.bind_options.as_ref().is_some_and(|options| {
+            options.propagation.as_deref() == Some("rprivate")
+                && options.non_recursive.unwrap_or(false) != probe
+                && options.create_mountpoint != Some(true)
+                && options.read_only_non_recursive != Some(true)
+                && options.read_only_force_recursive != Some(true)
+        })
+}
+fn backup_mount(value: &Mount, target: &str, read_only: bool) -> bool {
+    mount(value, target, read_only) || bind_mount(value, target, read_only, false)
+}
+fn host_probe(r: &CreateContainerRequest) -> bool {
+    r.mounts.len() == 1
+        && bind_mount(&r.mounts[0], "/source", true, true)
+        && r.readonly_rootfs == Some(true)
+        && r.network_mode.as_deref() == Some("none")
+}
+
 fn base(r: &CreateContainerRequest) -> bool {
     !r.image_id.trim().is_empty()
         && r.user.as_deref() == Some("0")
@@ -117,8 +151,9 @@ pub(super) fn backup_helper(r: &CreateContainerRequest, platform: Uuid) -> bool 
         && r.memory_swap == r.memory_limit
         && r.pids_limit == Some(128)
         && r.auto_remove == Some(true)
-        && r.readonly_rootfs != Some(true)
-        && r.network_mode.as_deref().is_none_or(str::is_empty)
+        && (host_probe(r)
+            || (r.readonly_rootfs != Some(true)
+                && r.network_mode.as_deref().is_none_or(str::is_empty)))
         && r.entry_point == ["/bin/sh"]
         && r.command.len() == 2
         && r.command[0] == "-c"
@@ -130,12 +165,14 @@ pub(super) fn backup_helper(r: &CreateContainerRequest, platform: Uuid) -> bool 
             || (r.cap_add.len() == 3
                 && r.cap_add.iter().any(|v| v == "CHOWN")
                 && r.mounts.len() == 1
-                && mount(&r.mounts[0], "/target", false)))
+                && backup_mount(&r.mounts[0], "/target", false)))
         && r.cap_add.iter().any(|v| v == "DAC_READ_SEARCH")
         && r.cap_add.iter().any(|v| v == "FOWNER")
-        && (r.mounts.is_empty()
+        && (host_probe(r)
+            || r.mounts.is_empty()
             || (r.mounts.len() == 1
-                && (mount(&r.mounts[0], "/source", true) || mount(&r.mounts[0], "/target", false))))
+                && (backup_mount(&r.mounts[0], "/source", true)
+                    || backup_mount(&r.mounts[0], "/target", false))))
 }
 pub(super) fn volume_exec(r: &ExecBinaryRequest) -> bool {
     let c = &r.cmd;
@@ -493,5 +530,191 @@ mod tests {
         let mut bad = good;
         bad.options.insert("device".into(), "/".into());
         assert!(!restore_create(&bad, platform));
+    }
+}
+
+/// Shell is admitted only for these byte-for-byte templates and bounded arguments.
+pub(super) fn bind_script_exec(r: &ExecBinaryRequest) -> bool {
+    let c = &r.cmd;
+    if r.tty || c.len() < 5 || c[0..2] != ["/bin/sh", "-c"] || c[3] != "sh" {
+        return false;
+    }
+    if c[2] == BIND_PATH_PROBE {
+        return c.len() == 5 && r.env.is_empty() && validate_bind_path(&c[4]).is_ok();
+    }
+    let mut restic = r.clone();
+    if c[2] == BIND_BACKUP_SCRIPT.replace("/data", "/source") && c[4] == "backup" {
+        restic.cmd = std::iter::once("restic".into())
+            .chain(c[4..].iter().cloned())
+            .collect();
+    } else if c[2] == BIND_RESTORE_SCRIPT
+        && c.len() == 6
+        && (8..=64).contains(&c[4].len())
+        && c[4].bytes().all(|c| c.is_ascii_hexdigit())
+        && matches!(c[5].as_str(), "true" | "false")
+    {
+        restic.cmd = vec![
+            "restic".into(),
+            "restore".into(),
+            c[4].clone(),
+            "--target".into(),
+            "/target".into(),
+        ];
+    } else {
+        return false;
+    }
+    backup_exec(&restic)
+}
+
+pub(super) fn backup_operation(
+    r: &ExecBinaryRequest,
+    helper: &CreateContainerRequest,
+    platform: Uuid,
+) -> bool {
+    if !backup_helper(helper, platform) {
+        return false;
+    }
+    if host_probe(helper) {
+        return bind_script_exec(r) && r.cmd[2] == BIND_PATH_PROBE;
+    }
+    if helper
+        .mounts
+        .first()
+        .is_some_and(|mount| mount.r#type.as_deref() == Some("bind"))
+    {
+        return bind_script_exec(r)
+            && ((r.cmd[2] == BIND_RESTORE_SCRIPT
+                && bind_mount(&helper.mounts[0], "/target", false, false))
+                || (r.cmd[2] == BIND_BACKUP_SCRIPT.replace("/data", "/source")
+                    && bind_mount(&helper.mounts[0], "/source", true, false)));
+    }
+    backup_exec(r)
+}
+
+#[cfg(test)]
+mod bind_tests {
+    use super::*;
+    use citadel_contracts::citadel::shared_models::v1::BindOptions;
+
+    fn helper(platform: Uuid, path: &str, restore: bool) -> CreateContainerRequest {
+        let probe = path == "/";
+        let mut helper = volume_request(platform);
+        helper.name = "citadel-backup-helper-bind".into();
+        helper.labels = HashMap::from([
+            ("citadel.backup-helper".into(), "true".into()),
+            ("citadel.platform-id".into(), platform.to_string()),
+        ]);
+        helper.working_dir = Some("/tmp".into());
+        helper.memory_limit = Some(512 * 1024 * 1024);
+        helper.memory_swap = helper.memory_limit;
+        helper.pids_limit = Some(128);
+        helper.readonly_rootfs = Some(probe);
+        helper.network_mode = probe.then(|| "none".into());
+        helper.entry_point = vec!["/bin/sh".into()];
+        helper.command = vec!["-c".into(), "trap 'exit 0' TERM INT; sleep 420".into()];
+        helper.cap_add = vec!["DAC_READ_SEARCH".into(), "FOWNER".into()];
+        if restore {
+            helper.cap_add.push("CHOWN".into());
+        }
+        helper.mounts = vec![Mount {
+            r#type: Some("bind".into()),
+            source: Some(path.into()),
+            target: Some(if restore { "/target" } else { "/source" }.into()),
+            read_only: Some(!restore),
+            bind_options: Some(BindOptions {
+                propagation: Some("rprivate".into()),
+                non_recursive: Some(!probe),
+                create_mountpoint: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }];
+        helper
+    }
+
+    fn command(script: String, args: &[&str], credentials: bool) -> ExecBinaryRequest {
+        let mut cmd = vec!["/bin/sh".into(), "-c".into(), script, "sh".into()];
+        cmd.extend(args.iter().map(|arg| arg.to_string()));
+        ExecBinaryRequest {
+            container_id: "helper".into(),
+            cmd,
+            env: if credentials {
+                HashMap::from([
+                    (
+                        "RESTIC_REPOSITORY".into(),
+                        "s3:http://fixture/bucket".into(),
+                    ),
+                    ("RESTIC_PASSWORD".into(), "fixture".into()),
+                    ("AWS_ACCESS_KEY_ID".into(), "fixture".into()),
+                    ("AWS_SECRET_ACCESS_KEY".into(), "fixture".into()),
+                ])
+            } else {
+                HashMap::new()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn host_probe_cannot_execute_backups_or_arbitrary_shell_commands() {
+        let platform = Uuid::now_v7();
+        let helper = helper(platform, "/", false);
+        let probe = command(BIND_PATH_PROBE.into(), &["/srv/data"], false);
+        assert!(backup_helper(&helper, platform));
+        assert!(backup_operation(&probe, &helper, platform));
+        let backup = command(
+            BIND_BACKUP_SCRIPT.replace("/data", "/source"),
+            &["backup", "--json", "/source"],
+            true,
+        );
+        assert!(!backup_operation(&backup, &helper, platform));
+        let mut raw = backup.clone();
+        raw.cmd = vec!["restic".into(), "backup".into(), "/source".into()];
+        assert!(!backup_operation(&raw, &helper, platform));
+        let mut bad = probe.clone();
+        bad.cmd[2].push_str("\ntouch /source/exploit");
+        assert!(!bind_script_exec(&bad));
+        let mut bad = probe;
+        bad.cmd[4] = "/".into();
+        assert!(!bind_script_exec(&bad));
+        let mut bad = helper;
+        bad.network_mode = None;
+        assert!(!backup_helper(&bad, platform));
+    }
+
+    #[test]
+    fn bind_commands_require_exact_script_mount_direction_and_bounded_arguments() {
+        let platform = Uuid::now_v7();
+        let source = helper(platform, "/srv/app data", false);
+        let target = helper(platform, "/srv/recovered", true);
+        let backup = command(
+            BIND_BACKUP_SCRIPT.replace("/data", "/source"),
+            &["backup", "--json", "/source"],
+            true,
+        );
+        let restore = command(BIND_RESTORE_SCRIPT.into(), &["abcdef12", "true"], true);
+        assert!(backup_operation(&backup, &source, platform));
+        assert!(backup_operation(&restore, &target, platform));
+        assert!(!backup_operation(&restore, &source, platform));
+        assert!(!backup_operation(&backup, &target, platform));
+        let mut bad = restore.clone();
+        bad.cmd[4] = "--target=/source".into();
+        assert!(!bind_script_exec(&bad));
+        let mut bad = restore;
+        bad.env.insert("LD_PRELOAD".into(), "evil".into());
+        assert!(!bind_script_exec(&bad));
+        for path in ["/", "/proc", "/srv/../etc"] {
+            assert!(!backup_helper(&helper(platform, path, true), platform));
+        }
+        let mut bad = target.clone();
+        bad.mounts[0].bind_options.as_mut().unwrap().non_recursive = Some(false);
+        assert!(!backup_helper(&bad, platform));
+        let mut bad = target;
+        bad.mounts[0]
+            .bind_options
+            .as_mut()
+            .unwrap()
+            .create_mountpoint = Some(true);
+        assert!(!backup_helper(&bad, platform));
     }
 }

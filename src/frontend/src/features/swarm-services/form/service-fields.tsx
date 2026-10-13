@@ -1,3 +1,4 @@
+import { ResourceSelectorField } from '@/components/custom/common';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   SwarmServiceConfigReference,
@@ -232,24 +233,26 @@ export const ServiceReferencesField = ({
     <div className="space-y-2">
       {value.map((reference, index) => (
         <div key={`${readId(reference)}-${index}`} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select
-            value={readId(reference)}
+          <ResourceSelectorField
+            aria-label={`${kind} ${index + 1}`}
+            items={resources}
+            selected={
+              resources.find((resource) => resource.id === readId(reference)) ?? {
+                id: readId(reference),
+                name:
+                  (kind === 'secret'
+                    ? (reference as SwarmServiceSecretReference).secretName
+                    : (reference as SwarmServiceConfigReference).configName) || readId(reference),
+              }
+            }
+            allowClear={false}
+            isItemDisabled={(resource) => selected.has(resource.id) && resource.id !== readId(reference)}
             disabled={disabled}
-            onValueChange={(resourceId) => updateResource(index, resourceId)}>
-            <SelectTrigger className="min-h-10 w-full min-w-0 max-w-100 sm:flex-1" aria-label={`${kind} ${index + 1}`}>
-              <SelectValue placeholder={`Select ${kind}`} />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              {resources.map((resource) => (
-                <SelectItem
-                  key={resource.id}
-                  value={resource.id}
-                  disabled={selected.has(resource.id) && resource.id !== readId(reference)}>
-                  {resource.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="min-h-10 w-full min-w-0 max-w-100 sm:flex-1"
+            placeholder={`Select ${kind}`}
+            searchPlaceholder={`Search ${kind}s...`}
+            onSelect={(resource) => resource && updateResource(index, resource.id)}
+          />
           <div className="flex w-full min-w-0 items-center gap-2 sm:flex-1">
             <Input
               className="min-w-0 max-w-100 flex-1"

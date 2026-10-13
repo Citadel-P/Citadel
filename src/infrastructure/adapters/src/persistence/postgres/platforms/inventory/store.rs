@@ -652,14 +652,14 @@ pub(super) async fn persist_container_set(
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
         id text, name text, image text, "imageId" text, created bigint, state text,
-        status text, labels jsonb, ports jsonb, stack text,
+        status text, labels jsonb, ports jsonb, mounts jsonb, stack text,
         "systemRole" text, "hasCitadelOwnershipLabels" boolean, "isSwarmTask" boolean,
         "isSystem" boolean)
 ), upserted AS (
     INSERT INTO containers (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
-        hascitadelownershiplabels, isswarmtask, ports, rowversion,
+        hascitadelownershiplabels, isswarmtask, ports, mounts, rowversion,
         projectionobservedat, dockernodeid, stackid, deploymentid, imageid)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name,
            CASE WHEN NOT $5::boolean AND incoming."imageId" = ''
@@ -667,7 +667,7 @@ WITH incoming AS (
            incoming.created, initcap(incoming.state), 'Idle', $3, incoming.stack,
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
-           COALESCE(incoming.ports, '[]'::jsonb)::json, 0, $3, $4,
+           COALESCE(incoming.ports, '[]'::jsonb)::json, incoming.mounts, 0, $3, $4,
            release.stackid, deployment.id, image.id
     FROM incoming
     LEFT JOIN images image
@@ -699,6 +699,7 @@ WITH incoming AS (
         hascitadelownershiplabels = EXCLUDED.hascitadelownershiplabels,
         isswarmtask = EXCLUDED.isswarmtask,
         ports = EXCLUDED.ports,
+        mounts = EXCLUDED.mounts,
         stackid = CASE WHEN containers.deploymentid IS NULL
             THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
         deploymentid = CASE WHEN containers.stackid IS NULL
@@ -710,12 +711,12 @@ WITH incoming AS (
     WHERE COALESCE(containers.projectionobservedat, 0) <= EXCLUDED.projectionobservedat
       AND (containers.name, containers.dockerimageid, containers.state, containers.stack,
            containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
-           containers.isswarmtask, containers.ports::jsonb, containers.stackid, containers.deploymentid,
+           containers.isswarmtask, containers.mounts, containers.ports::jsonb, containers.stackid, containers.deploymentid,
            containers.projectionstalesince, containers.projectionstalereason, containers.imageid)
           IS DISTINCT FROM
           (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
            EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
-           EXCLUDED.isswarmtask, EXCLUDED.ports::jsonb,
+           EXCLUDED.isswarmtask, EXCLUDED.mounts, EXCLUDED.ports::jsonb,
            CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
            CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
            NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid))

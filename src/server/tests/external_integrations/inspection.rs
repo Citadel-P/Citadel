@@ -65,6 +65,7 @@ pub async fn verify(
     let (id, docker_id) = &rows[0];
     let edge = EdgeRegistry::default();
     let app = platforms_http::router(PlatformsHttpState {
+        backup_coverage: None,
         node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), Default::default())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone()),edge:edge.clone()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge.clone()}),

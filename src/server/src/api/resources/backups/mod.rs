@@ -1,3 +1,4 @@
+pub mod coverage;
 pub mod patch;
 pub mod requests;
 pub mod spec;

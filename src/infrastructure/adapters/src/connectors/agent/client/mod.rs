@@ -2488,6 +2488,7 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
         value.image_id.clone()
     };
     RuntimeContainerSummary {
+        mounts: value.mounts_observed.then(|| serde_json::json!(value.mounts.iter().map(|m| serde_json::json!({"type":m.r#type,"name":m.name,"source":m.source,"destination":m.destination})).collect::<Vec<_>>())),
         id: value.id,
         name: value.name.trim_start_matches('/').to_owned(),
         image: value.image,

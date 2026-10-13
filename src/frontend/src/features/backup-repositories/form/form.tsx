@@ -9,7 +9,6 @@ import {
   PlatformView,
   ResourceType,
   S3BucketLookup,
-  SecretDefinitionView,
   UpdateBackupRepositoryInput,
   RepositoryLocationInput,
 } from '@/api/generated/api.types';
@@ -495,31 +494,21 @@ export function SecretSelector({
     },
   });
   const secrets = data?.data.secrets ?? [];
-  const noneValue = '__none';
-  const selectValue = value || (allowNone ? noneValue : undefined);
 
   return (
-    <Select
-      value={selectValue}
+    <ResourceSelectorField
+      items={secrets}
+      selected={value ? (secrets.find((secret) => secret.id === value) ?? { id: value, name: value }) : undefined}
+      allowClear={allowNone}
+      clearLabel="No session token"
       disabled={disabled || isLoading}
-      onValueChange={(next) => onChange(next === noneValue ? null : next)}>
-      <SelectTrigger className="w-full max-w-100">
-        <SelectValue placeholder={isLoading ? 'Loading secrets...' : 'Select a stored secret'} />
-      </SelectTrigger>
-      <SelectContent className="bg-background">
-        {allowNone && <SelectItem value={noneValue}>No session token</SelectItem>}
-        {secrets.map((secret: SecretDefinitionView) => (
-          <SelectItem key={secret.id} value={secret.id}>
-            <span className="font-medium">{secret.name}</span>
-          </SelectItem>
-        ))}
-        {secrets.length === 0 && (
-          <div className="px-2 py-2 text-xs text-muted-foreground">
-            No stored secrets found. Create one from Bindings first.
-          </div>
-        )}
-      </SelectContent>
-    </Select>
+      placeholder={isLoading ? 'Loading secrets...' : allowNone ? 'No session token' : 'Select a stored secret'}
+      searchPlaceholder="Search secrets..."
+      emptyMessage={
+        secrets.length === 0 ? 'No stored secrets found. Create one from Bindings first.' : 'No results found.'
+      }
+      onSelect={(secret) => onChange(secret?.id ?? null)}
+    />
   );
 }
 

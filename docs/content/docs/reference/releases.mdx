@@ -3,28 +3,30 @@ title: "Releases"
 description: "Find published versions and choose a repeatable installation."
 ---
 
+Citadel is in pre-release development. Development builds and demo deployments
+do not establish a supported public upgrade path.
+
 Use the [Citadel releases page](https://github.com/Citadel-P/Citadel/releases)
 to check which versions and images are available. Read the notes for the version
 you plan to install. Leaving `CITADEL_IMAGE` blank in your installation's `.env`
 uses `ghcr.io/citadel-p/citadel:latest`. You can set a complete image address to
 choose a specific version instead.
 
-New releases group features, fixes, performance changes and improvements, with
-breaking changes called out separately. Stable notes compare against the preceding
-stable version, including changes previously shipped in development builds.
+Release notes group features, fixes, performance changes and improvements, with
+breaking changes called out separately. When a preceding stable version exists,
+stable notes compare against it and include intervening development changes.
 
 Install Core and Agent from their container registries. The two release attachments
 are `release-manifest.json` (exact image digests, architectures and signing identity)
 and `SHA256SUMS` (the manifest checksum). GitHub also provides source archives.
 Internal build archives and recovery journals are not installation downloads.
-Historical releases keep their original attachments.
 
 ## Choose an image version
 
 Published images have aliases for the full version, the minor version, and the
 major version.
 
-For example, `0.1.2`, `0.1`, and `0` are three aliases of an initial publication.
+For a release numbered `0.1.2`, its version aliases are `0.1.2`, `0.1`, and `0`.
 Minor and major aliases can later move. Use an exact patch version or digest
 when you need a repeatable installation. Core releases also publish `latest`,
 the default for new installations. Pulling a newer image does not update a

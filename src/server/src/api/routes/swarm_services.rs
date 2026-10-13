@@ -40,6 +40,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct SwarmServicesHttpState {
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub identity: Arc<IdentityService>,
     pub services: Arc<SwarmServiceService>,
 }
@@ -702,15 +704,19 @@ async fn list(
             .map_err(service_error),
         &headers,
     )?;
+    let mut views = value
+        .into_iter()
+        .map(ManagedSwarmServiceView::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
+        })?;
+    if let Some(service) = &state.backup_coverage {
+        views = service.enrich_services(&principal, views).await;
+    }
     Ok(no_store(
         Json(ManagedSwarmServicesView {
-            swarm_services: value
-                .into_iter()
-                .map(ManagedSwarmServiceView::try_from)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| {
-                    crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
-                })?,
+            swarm_services: views,
             capabilities,
         })
         .into_response(),
@@ -748,11 +754,21 @@ async fn get(
             .map_err(service_error),
         &headers,
     )?;
-    Ok(no_store(
-        Json(api_result(
-            ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
-            &headers,
-        )?)
-        .into_response(),
-    ))
+    let mut view = api_result(
+        ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
+        &headers,
+    )?;
+    if let Some(service) = &state.backup_coverage {
+        view.backup_coverage = Some(
+            service
+                .workload(
+                    &principal,
+                    citadel_backups::policies::read_models::BackupPreviewKind::SwarmService,
+                    id,
+                    view.platform_id,
+                )
+                .await,
+        );
+    }
+    Ok(no_store(Json(view).into_response()))
 }

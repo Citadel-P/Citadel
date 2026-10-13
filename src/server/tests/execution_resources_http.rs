@@ -1436,6 +1436,14 @@ impl BackupRunAuthorizer for AllowBackupExecution {
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async { Ok(()) })
     }
+    fn authorize_plan<'a>(
+        &'a self,
+        _claim: &'a citadel_backups::BackupClaim,
+        _plan: &'a citadel_backups::BackupSourcePlan,
+    ) -> BoxFuture<'a, Result<(), citadel_backups::BackupError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn authorize_restore<'a>(
         &'a self,
         _: &'a RestoreClaim,

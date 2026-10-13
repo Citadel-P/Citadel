@@ -136,6 +136,14 @@ Helper requests validate ownership, image, mounts, privileges and exact commands
 Binary exec inspects the helper and executes by immutable container ID. Restore
 volume deletion checks for container references, including stopped containers.
 
+Bind-mount backups use separately validated helper mounts and exact shared shell
+templates for path probes, backup and restore. Host-root probes have no repository
+credentials, a read-only root filesystem and no network; they can only validate
+existing paths without symlink components. They cannot execute Restic. Data
+helpers mount only the selected validated host path with nested mounts disabled.
+Arbitrary shell commands, script changes, unsafe paths, credential-environment
+injection and mismatched backup/restore mount directions are rejected.
+
 Capability advertisements are discovery hints, not authorization. Ordinary Edge
 and Edge Build Pool advertise the same capabilities. Swarm-node advertises a
 smaller set; guarded restore-volume operations are intentionally available without
@@ -261,3 +269,9 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.volumes.v1.VolumeService/Create | citadel.volumes.v1.CreateVolumeRequest | citadel.shared_models.v1.VolumeResponse | unary | VOLUME_CREATE | 52 | restore-only | connectors/docker/finite.rs:create_volume | G1 |
 | citadel.volumes.v1.VolumeService/Remove | citadel.volumes.v1.RemoveVolumeRequest | citadel.volumes.v1.RemoveVolumeResponse | unary | VOLUME_DELETE | 53 | restore-only | connectors/docker/finite.rs:delete_volume | G1 |
 <!-- /operations -->
+
+Container inventory observations include mount points and an explicit
+`mountsObserved` flag. Core persists these observations with the container's
+owner-node identity and freshness fence for backup coverage reads. An observed
+empty mount list is distinct from missing inventory; coverage reads do not issue
+additional Container inspection commands.

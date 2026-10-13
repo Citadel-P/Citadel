@@ -712,11 +712,63 @@ async fn authorize_policy_dependencies(
             state,
             principal,
             resource_type,
-            PermissionLevel::Read,
+            if matches!(
+                input.source,
+                citadel_backups::spec::BackupSourceSpec::BindMount { .. }
+            ) {
+                PermissionLevel::Write
+            } else {
+                PermissionLevel::Read
+            },
             Some(resource_id),
             headers,
         )
         .await?;
+    }
+    use citadel_backups::{policies::read_models::BackupPreviewKind, spec::BackupSourceSpec};
+    let workload = match input.source {
+        BackupSourceSpec::Deployment { deployment_id } => {
+            Some((BackupPreviewKind::Deployment, deployment_id))
+        }
+        BackupSourceSpec::Stack { stack_id } => Some((BackupPreviewKind::Stack, stack_id)),
+        BackupSourceSpec::SwarmService { swarm_service_id } => {
+            Some((BackupPreviewKind::SwarmService, swarm_service_id))
+        }
+        _ => None,
+    };
+    if let Some((kind, id)) = workload {
+        let cancellation = state.cancellation.child_token();
+        let _guard = cancellation.clone().drop_guard();
+        let preview = result(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                state.backups.planner().preview(
+                    kind,
+                    id,
+                    principal.actor_id,
+                    principal.is_administrator(),
+                    &cancellation,
+                ),
+            )
+            .await
+            .unwrap_or_else(|_| {
+                Err(BackupError::External(
+                    "Backup source validation timed out.".into(),
+                ))
+            }),
+            headers,
+        )?;
+        if preview.volumes.iter().any(|item| item.kind == "BindMount") {
+            auth(
+                state,
+                principal,
+                ResourceType::Platform,
+                PermissionLevel::Write,
+                Some(preview.platform_id),
+                headers,
+            )
+            .await?;
+        }
     }
     Ok(())
 }
@@ -1334,6 +1386,7 @@ async fn enqueue_restore(
                 backup_run_id: id,
                 target_platform_id: i.target_platform_id,
                 target_volume_name: i.target_volume_name,
+                target_host_path: i.target_host_path,
                 overwrite_existing: i.overwrite_existing,
                 target_docker_node_id: i.target_docker_node_id,
                 source_backup_run_item_id: i.source_backup_run_item_id,

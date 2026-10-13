@@ -57,8 +57,8 @@ Volumes with custom drivers or options are excluded because they can alias host
 paths or backing storage that Citadel cannot safely verify. Metadata inspection
 remains available. Dedicated backup and recovery operations are unchanged.
 
-Core requires an explicit storage-safety result from the owning Agent. Older
-Agents cannot provide it, so browsing stays disabled until they are upgraded.
+Core requires an explicit storage-safety result from the owning Agent before
+enabling browsing. If that result is unavailable, browsing stays disabled.
 The same rule applies to direct Agents, Edge Agents and Swarm Node Agents.
 
 The installation Compose files label Citadel's data volumes with

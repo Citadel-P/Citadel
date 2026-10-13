@@ -1,3 +1,4 @@
+import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { DeploymentStatus, type DeploymentView } from '@/api/generated/api.types';
 import { Rocket, CircleCheck, TriangleAlert, CircleStop, ArrowUpCircle } from 'lucide-react';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
@@ -19,8 +20,13 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
-    Extra: UpdatesAvailableFilter,
-    activeFilterParams: ['updates'],
+    Extra: () => (
+      <>
+        <UpdatesAvailableFilter />
+        <BackupStatusFilter />
+      </>
+    ),
+    activeFilterParams: ['updates', 'backupStatus'],
   },
   overview: {
     label: 'Deployment overview',
@@ -80,7 +86,8 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { deployments, capabilities, isLoading, error, refetch, isFetching } = useDeploymentsGroup();
-    return { error, refetch, isFetching, items: deployments ?? EMPTY_DEPLOYMENTS, isLoading, capabilities };
+    const items = useBackupStatusFilter(deployments ?? EMPTY_DEPLOYMENTS);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

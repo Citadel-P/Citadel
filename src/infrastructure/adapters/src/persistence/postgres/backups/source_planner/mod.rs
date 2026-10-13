@@ -14,7 +14,9 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+mod bind_mounts;
 mod preview;
+use citadel_backups::policies::read_models::BackupPreviewKind;
 
 #[derive(Clone)]
 pub struct PostgresBackupSourcePlanner {
@@ -144,6 +146,7 @@ impl PostgresBackupSourcePlanner {
         deployment_id: Uuid,
         repository_type: Option<&str>,
         preview: bool,
+        cancellation: &tokio_util::sync::CancellationToken,
     ) -> Result<BackupSourcePlan, BackupError> {
         let row = sqlx::query(
             "SELECT d.name,d.platformid,d.spec,p.platformdescriptor,p.status FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=$1",
@@ -173,12 +176,7 @@ impl PostgresBackupSourcePlanner {
             .into_iter()
             .filter_map(|mount| named_deployment_volume(&mount))
             .collect::<BTreeSet<_>>();
-        if volumes.is_empty() && !preview {
-            return Err(BackupError::Validation(
-                "Deployment has no Docker named Volumes to back up.".into(),
-            ));
-        }
-        Ok(BackupSourcePlan {
+        self.include_bind_mounts(BackupSourcePlan {
             display_name: format!(
                 "Deployment {} ({} volume{})",
                 row.try_get::<String, _>("name").map_err(storage)?,
@@ -195,7 +193,7 @@ impl PostgresBackupSourcePlanner {
                 vec![]
             },
             local_directory: None,
-        })
+        }, BackupPreviewKind::Deployment, deployment_id, platform.id, !preview, cancellation).await
     }
 
     async fn plan_stack(
@@ -227,24 +225,28 @@ impl PostgresBackupSourcePlanner {
             .fetch_all(&self.pool)
             .await
             .map_err(storage)?;
-            if volumes.is_empty() {
-                return Err(BackupError::Validation(
-                    "Stack has no applied Docker Volume bindings to back up.".into(),
-                ));
-            }
-            return Ok(BackupSourcePlan {
-                display_name: format!(
-                    "Stack {name} ({} volume{})",
-                    volumes.len(),
-                    plural(volumes.len())
-                ),
-                items: volumes
-                    .into_iter()
-                    .map(|volume| BackupSourceItem::new(platform.id, volume, None, None))
-                    .collect(),
-                warnings: vec![],
-                local_directory: None,
-            });
+            return self
+                .include_bind_mounts(
+                    BackupSourcePlan {
+                        display_name: format!(
+                            "Stack {name} ({} volume{})",
+                            volumes.len(),
+                            plural(volumes.len())
+                        ),
+                        items: volumes
+                            .into_iter()
+                            .map(|volume| BackupSourceItem::new(platform.id, volume, None, None))
+                            .collect(),
+                        warnings: vec![],
+                        local_directory: None,
+                    },
+                    BackupPreviewKind::Stack,
+                    stack_id,
+                    platform.id,
+                    repository_type.is_some(),
+                    cancellation,
+                )
+                .await;
         }
 
         let spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)
@@ -252,16 +254,27 @@ impl PostgresBackupSourcePlanner {
         let compose_files = self.stack_compose_files(&spec, cancellation).await?;
         let model = parse_compose(&compose_files)
             .map_err(|error| BackupError::Validation(error.to_string()))?;
-        let namespace = sqlx::query_scalar::<_, String>(
-            "SELECT namespace FROM stackswarmnamespacereservations WHERE stackid=$1",
+        // Older normally-applied stacks did not create reservations. Resolve
+        // their namespace from owned, current service inventory, never a guess
+        // based on the editable stack name or Compose configuration.
+        let namespaces = sqlx::query_scalar::<_, String>(
+            "SELECT namespace FROM stackswarmnamespacereservations WHERE stackid=$1 AND platformid=$2 UNION SELECT dockerstacknamespace FROM swarmserviceprojections WHERE stackid=$1 AND platformid=$2 AND NOT isstale AND dockerstacknamespace IS NOT NULL",
         )
         .bind(stack_id)
-        .fetch_optional(&self.pool)
+        .bind(platform.id)
+        .fetch_all(&self.pool)
         .await
-        .map_err(storage)?
-        .ok_or_else(|| {
-            BackupError::Validation("Swarm Stack has no applied namespace reservation.".into())
-        })?;
+        .map_err(storage)?;
+        let namespace = match resolved_swarm_namespace(namespaces)? {
+            Some(namespace) => namespace,
+            None if repository_type.is_none() => return Ok(BackupSourcePlan {
+                display_name: format!("Stack {name}"),
+                items: vec![],
+                warnings: vec!["No applied Swarm Stack was found. Apply the Stack and synchronize its inventory before configuring backups.".into()],
+                local_directory: None,
+            }),
+            None => return Err(BackupError::Validation("Swarm Stack has no applied namespace or current owned Service inventory.".into())),
+        };
         let services = sqlx::query(
             "SELECT dockerserviceid,name,desiredtaskcount,runningtaskcount,isstale FROM swarmserviceprojections WHERE platformid=$1 AND stackid=$2 ORDER BY name",
         )
@@ -271,6 +284,13 @@ impl PostgresBackupSourcePlanner {
         .await
         .map_err(storage)?;
         if services.is_empty() {
+            if repository_type.is_none() {
+                return Ok(BackupSourcePlan {
+                    display_name: format!("Stack {name}"), items: vec![],
+                    warnings: vec!["No applied Swarm Services were found. Apply the Stack and synchronize its inventory before configuring backups.".into()],
+                    local_directory: None,
+                });
+            }
             return Err(BackupError::Validation(
                 "Swarm Stack has no current Service projections.".into(),
             ));
@@ -312,10 +332,16 @@ impl PostgresBackupSourcePlanner {
                 }
             }
         }
-        if items.is_empty() && repository_type.is_none() {
-            return Ok(empty_preview_plan(format!("Stack {name}")));
-        }
-        finish_swarm_plan(format!("Stack {name}"), items, counts)
+        let plan = finish_swarm_plan(format!("Stack {name}"), items, counts)?;
+        self.include_bind_mounts(
+            plan,
+            BackupPreviewKind::Stack,
+            stack_id,
+            platform.id,
+            repository_type.is_some(),
+            cancellation,
+        )
+        .await
     }
 
     async fn plan_swarm_service(
@@ -357,14 +383,6 @@ impl PostgresBackupSourcePlanner {
             .filter(|mount| mount.kind == MountKind::Volume && !mount.source.trim().is_empty())
             .map(|mount| mount.source)
             .collect::<BTreeSet<_>>();
-        if volumes.is_empty() && self.runtime.is_none() {
-            if repository_type.is_none() {
-                return Ok(empty_preview_plan(format!("Swarm Service {name}")));
-            }
-            return Err(BackupError::Validation(
-                "Swarm Service has no supported local named Volumes to back up.".into(),
-            ));
-        }
         let tasks = current_tasks(&self.pool, platform.id, &docker_service_id).await?;
         let desired: i32 = row.try_get("desiredtaskcount").map_err(storage)?;
         if tasks.len() != usize::try_from(desired).unwrap_or(usize::MAX) {
@@ -385,10 +403,16 @@ impl PostgresBackupSourcePlanner {
                 insert_task_volume(&mut items, &mut counts, platform.id, &task, volume.clone())?;
             }
         }
-        if items.is_empty() && repository_type.is_none() {
-            return Ok(empty_preview_plan(format!("Swarm Service {name}")));
-        }
-        finish_swarm_plan(format!("Swarm Service {name}"), items, counts)
+        let plan = finish_swarm_plan(format!("Swarm Service {name}"), items, counts)?;
+        self.include_bind_mounts(
+            plan,
+            BackupPreviewKind::SwarmService,
+            id,
+            platform.id,
+            repository_type.is_some(),
+            cancellation,
+        )
+        .await
     }
 
     async fn task_volumes(
@@ -486,8 +510,14 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
+            source.validate()?;
             match source {
-                BackupSourceSpec::DockerVolume {
+                BackupSourceSpec::BindMount {
+                    platform_id,
+                    docker_node_id,
+                    ..
+                }
+                | BackupSourceSpec::DockerVolume {
                     platform_id,
                     docker_node_id,
                     ..
@@ -497,8 +527,13 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
                     validate_repository(&platform.kind, &repository.repository_type)?;
                 }
                 BackupSourceSpec::Deployment { deployment_id } => {
-                    self.plan_deployment(*deployment_id, Some(&repository.repository_type), false)
-                        .await?;
+                    self.plan_deployment(
+                        *deployment_id,
+                        Some(&repository.repository_type),
+                        false,
+                        cancellation,
+                    )
+                    .await?;
                 }
                 BackupSourceSpec::Stack { stack_id } => {
                     self.plan_stack(*stack_id, Some(&repository.repository_type), cancellation)
@@ -524,12 +559,36 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
     ) -> BoxFuture<'a, Result<BackupSourcePlan, BackupError>> {
         Box::pin(async move {
             match &claim.run.source_snapshot {
+                BackupSourceSpec::BindMount {
+                    platform_id,
+                    host_path,
+                    docker_node_id,
+                } => {
+                    claim.run.source_snapshot.validate()?;
+                    let platform = self.platform(*platform_id).await?;
+                    validate_node_target(&platform.kind, docker_node_id.as_deref())?;
+                    validate_repository(&platform.kind, &claim.repository.repository_type)?;
+                    let mut item = BackupSourceItem::new(
+                        *platform_id,
+                        String::new(),
+                        docker_node_id.clone(),
+                        None,
+                    );
+                    item.host_path = Some(host_path.clone());
+                    Ok(BackupSourcePlan {
+                        display_name: format!("Bind mount {host_path}"),
+                        items: vec![item],
+                        warnings: vec![],
+                        local_directory: None,
+                    })
+                }
                 BackupSourceSpec::DockerVolume { .. } => self.plan_volume(claim).await,
                 BackupSourceSpec::Deployment { deployment_id } => {
                     self.plan_deployment(
                         *deployment_id,
                         Some(&claim.repository.repository_type),
                         false,
+                        cancellation,
                     )
                     .await
                 }
@@ -657,11 +716,6 @@ fn finish_swarm_plan(
     items: BTreeMap<(String, String), BackupSourceItem>,
     counts: BTreeMap<(String, String), usize>,
 ) -> Result<BackupSourcePlan, BackupError> {
-    if items.is_empty() {
-        return Err(BackupError::Validation(format!(
-            "{display} has no resolved Docker named Volumes to back up."
-        )));
-    }
     let warnings = counts
         .into_iter()
         .filter(|(_, count)| *count > 1)
@@ -676,15 +730,6 @@ fn finish_swarm_plan(
         warnings,
         local_directory: None,
     })
-}
-
-fn empty_preview_plan(display_name: String) -> BackupSourcePlan {
-    BackupSourcePlan {
-        display_name,
-        items: vec![],
-        warnings: vec!["No supported Docker named volumes were resolved for this resource.".into()],
-        local_directory: None,
-    }
 }
 
 fn platform_from_row(row: &sqlx::postgres::PgRow) -> Result<Platform, BackupError> {
@@ -755,7 +800,7 @@ fn validate_repository(kind: &str, repository_type: &str) -> Result<(), BackupEr
     Ok(())
 }
 
-fn named_deployment_volume(mount: &str) -> Option<String> {
+pub(super) fn named_deployment_volume(mount: &str) -> Option<String> {
     let source = mount.split(':').next()?.trim();
     if source.is_empty()
         || source.starts_with('.')
@@ -787,6 +832,16 @@ fn physical_swarm_volume(
             .unwrap_or_else(|| compose_name.to_owned())
     } else {
         format!("{namespace}_{compose_name}")
+    }
+}
+
+fn resolved_swarm_namespace(mut namespaces: Vec<String>) -> Result<Option<String>, BackupError> {
+    namespaces.sort();
+    namespaces.dedup();
+    match namespaces.len() {
+        0 => Ok(None),
+        1 => Ok(namespaces.pop()),
+        _ => Err(BackupError::Conflict("Swarm Stack namespace is ambiguous. Synchronize its inventory before backing up volumes.".into())),
     }
 }
 
@@ -828,6 +883,26 @@ fn storage(error: impl std::fmt::Display) -> BackupError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn swarm_namespace_supports_legacy_inventory_and_rejects_ambiguous_ownership() {
+        assert_eq!(resolved_swarm_namespace(vec![]).unwrap(), None);
+        assert_eq!(
+            resolved_swarm_namespace(vec!["app".into()])
+                .unwrap()
+                .as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            resolved_swarm_namespace(vec!["app".into(), "app".into()])
+                .unwrap()
+                .as_deref(),
+            Some("app")
+        );
+        assert!(matches!(
+            resolved_swarm_namespace(vec!["app".into(), "other".into()]),
+            Err(BackupError::Conflict(_))
+        ));
+    }
 
     #[test]
     fn deployment_mount_parser_excludes_bind_and_anonymous_mounts() {

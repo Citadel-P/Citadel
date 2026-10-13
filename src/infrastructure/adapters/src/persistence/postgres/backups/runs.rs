@@ -76,6 +76,9 @@ impl PostgresBackupPersistence {
                         docker_volume_policy_count: row
                             .try_get("dockervolumepolicycount")
                             .map_err(storage)?,
+                        bind_mount_policy_count: row
+                            .try_get("bindmountpolicycount")
+                            .map_err(storage)?,
                         stack_policy_count: row.try_get("stackpolicycount").map_err(storage)?,
                         deployment_policy_count: row
                             .try_get("deploymentpolicycount")
@@ -284,13 +287,10 @@ impl PostgresBackupPersistence {
                 ));
             }
             let aggregate_key = claim.run.source_snapshot.key();
+            let mut acquired_sources = std::collections::BTreeSet::new();
             for item in &plan.items {
-                let source_key = docker_volume_key(
-                    item.platform_id,
-                    item.docker_node_id.as_deref(),
-                    &item.volume_name,
-                );
-                if source_key != aggregate_key {
+                let source_key = item.source_key();
+                if source_key != aggregate_key && acquired_sources.insert(source_key.clone()) {
                     let leased = sqlx::query("INSERT INTO backupsourceleases(sourcekey,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Backup',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3*2+$4)) ON CONFLICT(sourcekey) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Backup',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backupsourceleases.expiresat<=CURRENT_TIMESTAMP")
                         .bind(&source_key)
                         .bind(claim.run.id)
@@ -307,13 +307,14 @@ impl PostgresBackupPersistence {
                         )));
                     }
                 }
-                sqlx::query("INSERT INTO backuprunitems(id,backuprunid,platformid,volumename,dockernodeid,nodehostname,status) VALUES($1,$2,$3,$4,$5,$6,'Queued')")
+                sqlx::query("INSERT INTO backuprunitems(id,backuprunid,platformid,volumename,dockernodeid,nodehostname,hostpath,status) VALUES($1,$2,$3,$4,$5,$6,$7,'Queued')")
                     .bind(item.id)
                     .bind(claim.run.id)
                     .bind(item.platform_id)
                     .bind(&item.volume_name)
                     .bind(&item.docker_node_id)
                     .bind(&item.node_hostname)
+                    .bind(&item.host_path)
                     .execute(&mut *tx)
                     .await
                     .map_err(storage)?;

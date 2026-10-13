@@ -1,3 +1,4 @@
+import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { StateBadge } from '@/components/custom/state-badge';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
@@ -134,6 +135,11 @@ const columns = (
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),
   },
+  backupColumn<StackView>((row) => ({
+    coverage: row.backupCoverage,
+    source: { $type: 'Stack', stackId: row.id },
+    returnTo: `/stacks/edit/${row.id}/`,
+  })),
   {
     id: 'actions',
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,

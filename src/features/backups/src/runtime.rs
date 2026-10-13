@@ -5,11 +5,26 @@ pub struct BackupSourceItem {
     pub id: Uuid,
     pub platform_id: Uuid,
     pub volume_name: String,
+    pub host_path: Option<String>,
     pub docker_node_id: Option<String>,
     pub node_hostname: Option<String>,
 }
 
 impl BackupSourceItem {
+    pub fn source_key(&self) -> String {
+        match &self.host_path {
+            Some(_) => crate::spec::bind_mount_execution_key(
+                self.platform_id,
+                self.docker_node_id.as_deref(),
+            ),
+            None => crate::spec::docker_volume_source_key(
+                self.platform_id,
+                self.docker_node_id.as_deref(),
+                &self.volume_name,
+            ),
+        }
+    }
+
     #[must_use]
     pub fn new(
         platform_id: Uuid,
@@ -21,6 +36,7 @@ impl BackupSourceItem {
             id: Uuid::now_v7(),
             platform_id,
             volume_name,
+            host_path: None,
             docker_node_id,
             node_hostname,
         }
@@ -116,6 +132,11 @@ pub trait BackupRunAuthorizer: Send + Sync {
     fn authorize_backup<'a>(
         &'a self,
         claim: &'a BackupClaim,
+    ) -> BoxFuture<'a, Result<(), BackupError>>;
+    fn authorize_plan<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+        plan: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>>;
     fn authorize_restore<'a>(
         &'a self,

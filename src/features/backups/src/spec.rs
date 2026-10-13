@@ -59,6 +59,12 @@ pub enum BackupSourceSpec {
         #[serde(default)]
         consistency: VolumeBackupConsistency,
     },
+    #[serde(rename_all = "camelCase")]
+    BindMount {
+        platform_id: Uuid,
+        host_path: String,
+        docker_node_id: Option<String>,
+    },
     CitadelSystem {},
     #[serde(rename_all = "camelCase")]
     Stack {
@@ -166,6 +172,7 @@ impl BackupSourceSpec {
     pub const fn kind(&self) -> &'static str {
         match self {
             Self::DockerVolume { .. } => "DockerVolume",
+            Self::BindMount { .. } => "BindMount",
             Self::CitadelSystem {} => "CitadelSystem",
             Self::Stack { .. } => "Stack",
             Self::Deployment { .. } => "Deployment",
@@ -187,6 +194,22 @@ impl BackupSourceSpec {
                     ));
                 }
             }
+            Self::BindMount {
+                platform_id,
+                host_path,
+                docker_node_id,
+            } => {
+                valid_id(*platform_id, "platformId")?;
+                validate_bind_path(host_path)?;
+                if docker_node_id
+                    .as_ref()
+                    .is_some_and(|node| node.trim().is_empty())
+                {
+                    return Err(crate::BackupError::Validation(
+                        "Swarm Node ID must not be empty.".into(),
+                    ));
+                }
+            }
             Self::CitadelSystem {} => {}
             Self::Stack { stack_id } => valid_id(*stack_id, "stackId")?,
             Self::Deployment { deployment_id } => valid_id(*deployment_id, "deploymentId")?,
@@ -200,7 +223,9 @@ impl BackupSourceSpec {
     pub fn resource(&self) -> Option<(citadel_primitives::ResourceType, Uuid)> {
         use citadel_primitives::ResourceType;
         match self {
-            Self::DockerVolume { platform_id, .. } => Some((ResourceType::Platform, *platform_id)),
+            Self::DockerVolume { platform_id, .. } | Self::BindMount { platform_id, .. } => {
+                Some((ResourceType::Platform, *platform_id))
+            }
             Self::Stack { stack_id } => Some((ResourceType::Stack, *stack_id)),
             Self::Deployment { deployment_id } => Some((ResourceType::Deployment, *deployment_id)),
             Self::SwarmService { swarm_service_id } => {
@@ -218,6 +243,11 @@ impl BackupSourceSpec {
                 docker_node_id,
                 ..
             } => docker_volume_source_key(*platform_id, docker_node_id.as_deref(), volume_name),
+            Self::BindMount {
+                platform_id,
+                host_path,
+                docker_node_id,
+            } => bind_mount_source_key(*platform_id, docker_node_id.as_deref(), host_path),
             Self::CitadelSystem {} => "citadel-system".into(),
             Self::Stack { stack_id } => format!("stack:{stack_id}"),
             Self::Deployment { deployment_id } => format!("deployment:{deployment_id}"),
@@ -396,5 +426,117 @@ mod tests {
             docker_volume_source_key(platform, Some("  "), "data"),
             docker_volume_source_key(platform, None, "data")
         );
+    }
+}
+
+/// Bind paths are explicit Linux host paths, never Docker short-mount expressions.
+pub fn validate_bind_path(path: &str) -> Result<(), crate::BackupError> {
+    let forbidden = [
+        "/proc",
+        "/sys",
+        "/dev",
+        "/run",
+        "/var/run",
+        "/var/lib/docker",
+    ];
+    if !path.starts_with('/')
+        || path == "/"
+        || path.ends_with('/')
+        || path
+            .split('/')
+            .skip(1)
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || path
+            .chars()
+            .any(|c| c.is_control() || matches!(c, ',' | ':' | '\\' | '"'))
+        || forbidden
+            .iter()
+            .any(|root| path == *root || path.starts_with(&format!("{root}/")))
+    {
+        return Err(crate::BackupError::Validation("Bind mount path must be a normalized absolute Linux host path, outside system/runtime directories; root, traversal, trailing slashes, commas, colons, quotes and control characters are not allowed.".into()));
+    }
+    Ok(())
+}
+
+/// Serialize components so host paths cannot collide with volume or node identities.
+pub fn bind_mount_source_key(platform: Uuid, node: Option<&str>, path: &str) -> String {
+    format!("bind:{}", serde_json::json!([platform, node, path]))
+}
+
+/// Serialize all host-path operations on a node, including overlapping paths.
+pub fn bind_mount_execution_key(platform: Uuid, node: Option<&str>) -> String {
+    format!("bind-execution:{}", serde_json::json!([platform, node]))
+}
+
+#[cfg(test)]
+mod bind_mount_tests {
+    use super::*;
+    #[test]
+    fn bind_paths_reject_ambiguous_or_unsafe_mount_expressions() {
+        for path in [
+            "",
+            "/",
+            "relative",
+            "/srv/../etc",
+            "/srv/./app",
+            "/srv//app",
+            "/srv/app/",
+            "/srv/a,b",
+            "/srv/a:b",
+            "/srv/a\n",
+            "/proc/self",
+            "/dev/sda",
+            "/var/run/docker.sock",
+            "/sys",
+            "/var/lib/docker/volumes",
+        ] {
+            assert!(validate_bind_path(path).is_err(), "{path:?}");
+        }
+        for path in [
+            "/srv/app/data",
+            "/srv/app config/settings.json",
+            "/data/.env",
+        ] {
+            validate_bind_path(path).unwrap();
+        }
+    }
+    #[test]
+    fn bind_mount_sources_round_trip_and_have_distinct_identities() {
+        let platform = Uuid::now_v7();
+        let source = BackupSourceSpec::BindMount {
+            platform_id: platform,
+            host_path: "/srv/app".into(),
+            docker_node_id: Some("node-a".into()),
+        };
+        source.validate().unwrap();
+        assert_eq!(
+            source.resource(),
+            Some((citadel_primitives::ResourceType::Platform, platform))
+        );
+        assert_eq!(source.kind(), "BindMount");
+        assert_eq!(
+            serde_json::from_value::<BackupSourceSpec>(serde_json::to_value(&source).unwrap())
+                .unwrap(),
+            source
+        );
+        assert_ne!(
+            source.key(),
+            docker_volume_source_key(platform, Some("node-a"), "/srv/app")
+        );
+        assert_ne!(
+            source.key(),
+            bind_mount_source_key(platform, Some("node-b"), "/srv/app")
+        );
+        assert_ne!(
+            source.key(),
+            bind_mount_source_key(platform, Some("node-a"), "/srv/other")
+        );
+        // Overlapping host paths still share the operation lease on that node.
+        let mut item =
+            crate::BackupSourceItem::new(platform, String::new(), Some("node-a".into()), None);
+        item.host_path = Some("/srv/app".into());
+        let key = item.source_key();
+        item.host_path = Some("/srv/app/data".into());
+        assert_eq!(item.source_key(), key);
     }
 }

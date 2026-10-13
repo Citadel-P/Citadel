@@ -24,6 +24,9 @@ export const usePlatformBackupSummaries = (platformIds: string[]) => {
 };
 
 export const getBackupSourceStates = (summary?: PlatformBackupSummary): WorkloadState[] => [
+  ...(Number(summary?.bindMountPolicyCount ?? 0) > 0
+    ? [{ label: 'Bind mount policies', value: summary?.bindMountPolicyCount, colorClassName: 'bg-teal-500' }]
+    : []),
   {
     label: 'Volume policies',
     value: summary?.dockerVolumePolicyCount,
@@ -65,6 +68,7 @@ export const getBackupMetric = (summary: PlatformBackupSummary | undefined, isLo
     detail,
     detailTitle: [
       `${Number(summary.dockerVolumePolicyCount)} volume`,
+      ...(Number(summary.bindMountPolicyCount ?? 0) > 0 ? [`${Number(summary.bindMountPolicyCount)} bind mount`] : []),
       `${Number(summary.stackPolicyCount)} stack`,
       `${Number(summary.deploymentPolicyCount)} deployment`,
     ].join(', '),

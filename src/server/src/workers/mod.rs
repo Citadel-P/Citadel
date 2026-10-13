@@ -1,5 +1,6 @@
 pub(crate) mod alerts;
 pub(crate) mod automation;
+pub(crate) mod backup_coverage;
 pub(crate) mod backups;
 pub(crate) mod build_consumers;
 pub(crate) mod builds;

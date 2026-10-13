@@ -115,6 +115,7 @@ server {
     ssl_certificate /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
     client_max_body_size 0;
 
     location ^~ /citadel.edge.v1.EdgeAgentService/ {
@@ -148,6 +149,17 @@ The [gRPC route](https://nginx.org/en/docs/http/ngx_http_grpc_module.html#grpc_p
 preserves the Edge service path and uses HTTP/2 to Core port `8001`.
 Browser traffic uses port `8000`, with WebSocket upgrades and response buffering
 disabled. Core enforces its own request size limits; Nginx adds no smaller limit.
+
+Nginx supplies HSTS because it terminates TLS; Core does not emit HSTS in
+`ReverseProxy` mode. The HTTPS server's `add_header` applies to both locations,
+including error responses. If you add location-level `add_header` directives,
+repeat HSTS there because those directives override parent header inheritance
+by default. If a CDN already sets HSTS, configure it in one place to avoid duplicates.
+
+Nginx forwards Core's browser security headers by default. Preserve them without
+adding duplicate `add_header` directives or hiding them with `proxy_hide_header`.
+See [Browser security headers](/docs/operations/tls-and-secure-agent-transport#browser-security-headers)
+for the report-only CSP and public-response verification.
 
 `X-Forwarded-For` contains the immediate client's address, matching Core's
 one-hop trust configuration. This example assumes Nginx is the public-facing

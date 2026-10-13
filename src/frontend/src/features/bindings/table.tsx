@@ -1,3 +1,4 @@
+import { ResourceSelectorField } from '@/components/custom/common';
 import {
   ExternalSecretInput,
   NewResourceBinding,
@@ -30,7 +31,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutate, useRead } from '@/lib/hooks';
 import { ActionData } from '@/pages/types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -352,21 +352,19 @@ const EntryEditorDialog = ({
             <div>
               <Label>Secret</Label>
               <div className="flex gap-2">
-                <Select
-                  value={input.secretId ?? ''}
+                <ResourceSelectorField
+                  aria-label="Secret"
+                  items={secrets}
+                  selected={
+                    selectedSecret ?? (input.secretId ? { id: input.secretId, name: input.secretId } : undefined)
+                  }
+                  allowClear={false}
                   disabled={secrets.length === 0}
-                  onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {secrets.map((secret) => (
-                      <SelectItem key={secret.id} value={secret.id}>
-                        {secret.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  className="flex-1"
+                  placeholder={secrets.length ? 'Select secret' : 'No secrets'}
+                  searchPlaceholder="Search secrets..."
+                  onSelect={(secret) => secret && onInputChange((prev) => ({ ...prev, secretId: secret.id }))}
+                />
                 {selectedSecret?.providerType === SecretProviderType.VaultCompatibleKvV2 && onEditStoredSecret && (
                   <Button type="button" variant="outline" onClick={() => onEditStoredSecret(selectedSecret)}>
                     Edit Stored Secret

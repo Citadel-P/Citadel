@@ -25,6 +25,28 @@ Open the container's detail page and choose the information you need:
 For memory accounting and host capacity, see
 [Platform monitoring](/docs/operations/platform-monitoring).
 
+In **Container overview**, each Docker-managed volume has a backup coverage indicator,
+including anonymous volumes with generated names. Hover or
+keyboard-focus the icon to see whether it is protected, unprotected, needs
+attention, or has unavailable coverage. See
+[Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+
+Deployment policies include declared named volumes and supported bind mounts.
+Runtime-only anonymous volumes need a direct volume policy or coverage through
+an applied standalone Stack's volume bindings. **Bind mounts** appear below
+**Volumes**, with at most two paths inline. Select **View all** to open the full
+list, coverage indicators, and policy links. Workload policies can cover these
+paths together; individual host-path policies are also available. Host-path
+backups require Platform write access and exact Node targeting on Swarm.
+Tmpfs, nested mounts, system/runtime paths, and writable layers remain excluded. See
+[Bind-mount backups and restores](/docs/resources/backups#bind-mount-backups-and-restores).
+
+Use **Backup Filter** at the right of the resource header to filter by backup status.
+The resource table displays a **Backup** column. Hover over its shield to see
+the same coverage card as on the resource page. Manual-only or disabled policies
+show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
+all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+
 ## Read logs
 
 1. Open the container and select **Logs**.

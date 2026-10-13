@@ -90,7 +90,7 @@ async fn get_by_id(
         (status = 200, description = "Success", body = crate::api::resources::activities::views::ActivitiesView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<crate::api::resources::vocabulary::ActivityResourceTypeSchema>, Query), ("EventType" = Option<crate::api::resources::vocabulary::ActivityEventTypeSchema>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
+    params(("ResourceId" = Option<uuid::Uuid>, Query), ("ResourceType" = Option<crate::api::resources::vocabulary::ActivityResourceTypeSchema>, Query), ("EventType" = Option<crate::api::resources::vocabulary::ActivityEventTypeSchema>, Query), ("Status" = Option<crate::api::resources::vocabulary::ActivityStatusSchema>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 500, extensions(("x-citadel-default" = json!(50))))),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

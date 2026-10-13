@@ -156,6 +156,7 @@ impl TryFrom<citadel_alerts::AlertEvent> for AlertEventView {
     type Error = citadel_alerts::AlertError;
 
     fn try_from(value: citadel_alerts::AlertEvent) -> Result<Self, Self::Error> {
+        let resource_path = alert_resource_path(&value);
         Ok(Self {
             id: value.id,
             alert_rule_id: value.alert_rule_id,
@@ -165,7 +166,7 @@ impl TryFrom<citadel_alerts::AlertEvent> for AlertEventView {
             message: value.message,
             info: value.info,
             resource_id: value.resource_id,
-            resource_path: alert_resource_path(&value.resource_type, value.resource_id),
+            resource_path,
             resource_name: value.resource_name,
             resource_type: decode(value.resource_type.into())?,
             acknowledged_by_actor_id: value.acknowledged_by_actor_id,
@@ -235,20 +236,32 @@ pub(crate) struct Count {
     pub(crate) count: i64,
 }
 
-fn alert_resource_path(kind: &str, id: Option<Uuid>) -> Option<String> {
-    let id = id?;
-    let prefix = match kind {
+pub(crate) fn alert_resource_path(event: &citadel_alerts::AlertEvent) -> Option<String> {
+    let id = event.resource_id?;
+    let prefix = match event.resource_type.as_str() {
         "Platform" => "platforms",
         "Deployment" => "deployments",
         "Stack" => "stacks",
         "GitRepository" => "git-repos",
         "AutomationAction" => "automation",
         "Build" => "builds",
+        "BackupPolicy" => "backup-policies",
         "SwarmService" => "swarm-services",
         "License" => return Some("/license".into()),
         _ => return None,
     };
-    Some(format!("/{prefix}/edit/{id}"))
+    let mut path = format!("/{prefix}/edit/{id}");
+    if event.alert_type == "BackupRunFailed" && event.resource_type == "BackupPolicy" {
+        if let Some(run) = event
+            .info
+            .get("RunId")
+            .and_then(Value::as_str)
+            .and_then(|id| Uuid::parse_str(id).ok())
+        {
+            path.push_str(&format!("?runId={run}#runs"));
+        }
+    }
+    Some(path)
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]

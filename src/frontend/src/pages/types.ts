@@ -63,11 +63,15 @@ export interface RequiredFormComponents<T = any> {
     Header?: {
       title?: string;
     };
+    /** Optional navigation above the header card. */
+    Navigation?: React.FC;
     /** The component responsible for rendering the main Add form. */
     Content?: React.FC;
   };
 
   EditForm?: {
+    /** Optional navigation above the header card. */
+    Navigation?: React.FC;
     Header: {
       canEditTitle?: boolean;
       canEditDescription?: boolean;
@@ -79,6 +83,8 @@ export interface RequiredFormComponents<T = any> {
     supportsHeaderRename?: boolean;
     /** Optional subheader */
     SubHeader?: React.FC<{ resource: T }>;
+    /** Persistent controls at the right of the resource tab bar. */
+    TabActions?: React.FC<{ resource: T }>;
     /** Tabs configuration */
     Tabs: ResourceTabElement<T>[];
     /** Main Data hook for this workload */

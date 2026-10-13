@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityView, PagedActivityView } from '@/api/generated/api.types';
+import { ActivityEventType, ActivityStatus, ActivityView, PagedActivityView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useActivityQuery } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
@@ -12,14 +12,24 @@ export const useActivitiesGroup = (
   pageSize?: number | undefined,
 ) => {
   const [query] = useActivityQuery();
+  const eventType =
+    query.eventType === 'BackupRunFailed'
+      ? ActivityEventType.BackupRunCompleted
+      : query.eventType === 'All'
+        ? undefined
+        : query.eventType;
+  const status = query.eventType === 'BackupRunFailed' ? ActivityStatus.Failure : undefined;
+  const selectedResourceType = resourceType ?? (query.resourceType === 'All' ? undefined : query.resourceType);
+  const selectedResourceId = resourceId ?? query.resourceId;
 
   const { data, isLoading, error, refetch, isFetching } = useRead('listActivities', {
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
-      ResourceType: resourceType ?? (query.resourceType === 'All' ? undefined : query.resourceType),
-      EventType: query.eventType === 'All' ? undefined : query.eventType,
-      ResourceId: resourceId ?? query.resourceId,
+      ResourceType: selectedResourceType,
+      EventType: eventType,
+      Status: status,
+      ResourceId: selectedResourceId,
     },
   });
 
@@ -29,20 +39,30 @@ export const useActivitiesGroup = (
     const base = data?.data?.pagedResult;
     if (!base) return undefined;
 
-    if (liveActivities.length === 0) return base;
+    const matchingLiveActivities = liveActivities.filter(
+      (activity) =>
+        (!eventType || activity.eventType === eventType) &&
+        (!status || activity.status === status) &&
+        (!selectedResourceType || activity.resourceType === selectedResourceType) &&
+        (!selectedResourceId || activity.resourceId === selectedResourceId),
+    );
+    if (matchingLiveActivities.length === 0) return base;
 
     const pageSize = Number(base.pageSize) || base.items?.length || 1;
     const baseItems = base.items || [];
     const liveIds = new Set(baseItems.map((item) => item.id));
 
-    const mergedItems = [...liveActivities.filter((act) => !liveIds.has(act.id)), ...baseItems].slice(0, pageSize);
+    const mergedItems = [...matchingLiveActivities.filter((act) => !liveIds.has(act.id)), ...baseItems].slice(
+      0,
+      pageSize,
+    );
 
     return {
       ...base,
       items: mergedItems,
-      totalCount: Number(base.totalCount) + liveActivities.filter((act) => !liveIds.has(act.id)).length,
+      totalCount: Number(base.totalCount) + matchingLiveActivities.filter((act) => !liveIds.has(act.id)).length,
     };
-  }, [data, liveActivities]);
+  }, [data, liveActivities, eventType, status, selectedResourceType, selectedResourceId]);
 
   const handleActivityEventReceived = useCallback((activity: ActivityView) => {
     setLiveActivities((prev) => {

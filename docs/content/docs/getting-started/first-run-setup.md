@@ -105,6 +105,6 @@ reopen first-run setup. The setup endpoint is not a password-recovery feature.
 Use another administrator account to restore access. Directly deleting or
 editing the setup-state database row is unsupported.
 
-For an older development database, check the target release's migration notes
-before upgrading. Preserve a matched database-and-keys backup before any migration
-or rebuild; deleting the database is not a password-recovery procedure.
+Development builds can have incompatible database baselines. Preserve a matched
+database-and-keys backup before changing builds or rebuilding an installation;
+deleting the database is not a password-recovery procedure.

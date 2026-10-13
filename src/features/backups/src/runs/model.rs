@@ -33,6 +33,7 @@ pub struct BackupRunItem {
     pub backup_run_id: Uuid,
     pub platform_id: Uuid,
     pub volume_name: String,
+    pub host_path: Option<String>,
     pub docker_node_id: Option<String>,
     pub node_hostname: Option<String>,
     pub status: BackupRunItemStatus,

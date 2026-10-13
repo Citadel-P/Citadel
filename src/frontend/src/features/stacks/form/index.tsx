@@ -1,3 +1,4 @@
+import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { requestErrorMessage } from '@/lib/request-error';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
@@ -122,6 +123,9 @@ export const StackFormComponents: RequiredFormComponents = {
     SubHeader: ({ resource }: { resource: StackView }) => {
       return <StackSubHeader latestActivity={resource.latestActivityView ?? null} stack={resource} />;
     },
+    TabActions: ({ resource }: { resource: StackView }) => (
+      <ResourceBackupIndicator source={{ $type: 'Stack', stackId: resource.id }} coverage={resource.backupCoverage} />
+    ),
     Tabs: [
       {
         label: 'Config',

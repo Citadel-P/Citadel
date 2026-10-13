@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 pub(super) struct AlertComponents {
     pub alert_store: Arc<PostgresAlertRepository>,
-    pub alert_delivery: Arc<ShoutrrrAlertDelivery>,
+    pub alert_delivery: Arc<dyn citadel_alerts::AlertDelivery>,
     pub alert_deliveries: Arc<AlertDeliveryService>,
 }
 
@@ -29,10 +29,14 @@ pub(super) fn build(
                 "Alert",
             )),
     );
-    let alert_delivery = Arc::new(ShoutrrrAlertDelivery::new(
-        config.execution.tools.shoutrrr.clone(),
-        Duration::from_secs(15),
-    ));
+    let alert_delivery: Arc<dyn citadel_alerts::AlertDelivery> =
+        Arc::new(citadel_server::alert_delivery::LinkedAlertDelivery::new(
+            Arc::new(ShoutrrrAlertDelivery::new(
+                config.execution.tools.shoutrrr.clone(),
+                Duration::from_secs(15),
+            )),
+            config.transport.public_url.to_string(),
+        ));
     let alert_deliveries = Arc::new(AlertDeliveryService::new(
         alert_store.clone(),
         alert_delivery.clone(),

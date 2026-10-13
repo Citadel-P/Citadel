@@ -20,6 +20,8 @@ const IMAGE: &str = "restic/restic:0.18.1";
 const PAYLOAD: &[u8] = b"Citadel restore must preserve the volume root.\n";
 const ACCESS_KEY_ID: Uuid = Uuid::from_u128(710001);
 const SECRET_KEY_ID: Uuid = Uuid::from_u128(710002);
+#[path = "backup_restic_acceptance/bind_mount.rs"]
+mod bind_mount;
 #[path = "backup_restic_acceptance/multinode.rs"]
 mod multinode;
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -252,7 +254,7 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         assert_eq!(persisted.items[0].restic_snapshot_id, completed.items[0].restic_snapshot_id);
         assert!(persisted.bytes_processed.unwrap() >= PAYLOAD.len() as i64);
         let queued = store.enqueue_restore(BackupRestoreRequest { actor, backup_run_id: run.id, target_platform_id: platform,
-            target_volume_name: target.clone(), overwrite_existing: false, target_docker_node_id: None, source_backup_run_item_id: None }).await.unwrap();
+            target_volume_name: target.clone(), target_host_path: None, overwrite_existing: false, target_docker_node_id: None, source_backup_run_item_id: None }).await.unwrap();
         let restore = store.claim_restore(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(restore.run.id, queued.id);
         let restored = executor.restore(&restore, &cancellation).await;

@@ -85,6 +85,7 @@ pub(super) fn build(
                 + i64::from(options.repository_lease_seconds),
         ))
         .with_entitlements(entitlements.clone())
+        .with_scheduling_enabled(config.backup_workers.enabled)
         .with_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
             "BackupPolicy",

@@ -46,6 +46,7 @@ WITH actor_scope AS (
     WHERE ($2::uuid IS NULL OR activity.resourceid = $2)
       AND ($3::text IS NULL OR activity.resourcetype = $3)
       AND ($4::text IS NULL OR activity.eventtype = $4)
+      AND ($6::text IS NULL OR activity.status = $6)
       AND (
           $5::boolean
           OR EXISTS (
@@ -116,7 +117,7 @@ impl ActivityQueryStore for PostgresActivityStore {
     ) -> BoxFuture<'a, Result<Option<ActivityRecord>, ActivityError>> {
         Box::pin(async move {
             let query = format!(
-                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} WHERE activity.id = $6 LIMIT 1"
+                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} WHERE activity.id = $7 LIMIT 1"
             );
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(principal.actor_id.value())
@@ -124,6 +125,7 @@ impl ActivityQueryStore for PostgresActivityStore {
                 .bind(Option::<String>::None)
                 .bind(Option::<String>::None)
                 .bind(principal.administrator)
+                .bind(Option::<String>::None)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await
@@ -146,6 +148,7 @@ impl ActivityQueryStore for PostgresActivityStore {
             let event_type = filter
                 .event_type
                 .map(|value| value.as_database_str().to_owned());
+            let status = filter.status.map(|value| value.as_database_str());
             let is_administrator = principal.administrator;
             let total_query =
                 format!("{AUTHORIZED_ACTIVITY_CTES} SELECT COUNT(*) FROM filtered_activities");
@@ -155,12 +158,13 @@ impl ActivityQueryStore for PostgresActivityStore {
                 .bind(resource_type.as_deref())
                 .bind(event_type.as_deref())
                 .bind(is_administrator)
+                .bind(status)
                 .fetch_one(&mut *transaction)
                 .await
                 .map_err(activity_storage)?;
 
             let page_query = format!(
-                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} ORDER BY activity.createdat DESC, activity.id DESC LIMIT $6 OFFSET $7"
+                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} ORDER BY activity.createdat DESC, activity.id DESC LIMIT $7 OFFSET $8"
             );
             let offset = i64::from(filter.page - 1) * i64::from(filter.page_size);
             let rows = sqlx::query(AssertSqlSafe(page_query.as_str()))
@@ -169,6 +173,7 @@ impl ActivityQueryStore for PostgresActivityStore {
                 .bind(resource_type.as_deref())
                 .bind(event_type.as_deref())
                 .bind(is_administrator)
+                .bind(status)
                 .bind(filter.page_size)
                 .bind(offset)
                 .fetch_all(&mut *transaction)

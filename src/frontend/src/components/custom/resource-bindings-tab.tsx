@@ -1,3 +1,4 @@
+import { ResourceSelectorField } from '@/components/custom/common';
 import {
   NewResourceBinding,
   ResourceBindingKind,
@@ -557,21 +558,19 @@ const ResourceBindingDialog = ({
               <div>
                 <Label>Secret</Label>
                 <div className="flex gap-2">
-                  <Select
-                    value={input.secretId ?? ''}
+                  <ResourceSelectorField
+                    aria-label="Secret"
+                    items={secrets}
+                    selected={
+                      selectedSecret ?? (input.secretId ? { id: input.secretId, name: input.secretId } : undefined)
+                    }
+                    allowClear={false}
                     disabled={secrets.length === 0}
-                    onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background">
-                      {secrets.map((secret) => (
-                        <SelectItem key={secret.id} value={secret.id}>
-                          {secret.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    className="flex-1"
+                    placeholder={secrets.length ? 'Select secret' : 'No secrets'}
+                    searchPlaceholder="Search secrets..."
+                    onSelect={(secret) => secret && onInputChange((prev) => ({ ...prev, secretId: secret.id }))}
+                  />
                   {selectedSecret?.providerType === SecretProviderType.VaultCompatibleKvV2 && onEditStoredSecret && (
                     <Button type="button" variant="outline" onClick={() => onEditStoredSecret(selectedSecret)}>
                       Edit Stored Secret
@@ -725,21 +724,19 @@ const ExternalSecretFields = ({
     />
     <div className="grid gap-1.5 text-sm">
       <span className="text-xs text-muted-foreground">Provider</span>
-      <Select
-        value={input.providerId}
+      <ResourceSelectorField
+        aria-label="Provider"
+        items={providers}
+        selected={
+          providers.find((provider) => provider.id === input.providerId) ??
+          (input.providerId ? { id: input.providerId, name: input.providerId } : undefined)
+        }
+        allowClear={false}
         disabled={providers.length === 0}
-        onValueChange={(providerId) => onInputChange((prev) => ({ ...prev, providerId }))}>
-        <SelectTrigger>
-          <SelectValue placeholder={providers.length ? 'Select provider' : 'No providers'} />
-        </SelectTrigger>
-        <SelectContent>
-          {providers.map((provider) => (
-            <SelectItem key={provider.id} value={provider.id}>
-              {provider.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder={providers.length ? 'Select provider' : 'No providers'}
+        searchPlaceholder="Search providers..."
+        onSelect={(provider) => provider && onInputChange((prev) => ({ ...prev, providerId: provider.id }))}
+      />
       <span className="text-xs text-muted-foreground">
         Create providers in the Secret Providers section. The secret value is fetched only during apply.
       </span>
@@ -1099,21 +1096,24 @@ export const CreateSecretDialog = ({
               />
               <div className="grid gap-1.5 text-sm">
                 <span className="text-xs text-muted-foreground">Provider</span>
-                <Select
-                  value={externalInput.providerId}
+                <ResourceSelectorField
+                  aria-label="Provider"
+                  items={providers}
+                  selected={
+                    providers.find((provider) => provider.id === externalInput.providerId) ??
+                    (externalInput.providerId
+                      ? { id: externalInput.providerId, name: externalInput.providerId }
+                      : undefined)
+                  }
+                  allowClear={false}
                   disabled={providers.length === 0}
-                  onValueChange={(providerId) => onExternalInputChange((prev) => ({ ...prev, providerId }))}>
-                  <SelectTrigger className="w-55">
-                    <SelectValue placeholder={providers.length ? 'Select provider' : 'No providers'} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {providers.map((provider) => (
-                      <SelectItem key={provider.id} value={provider.id}>
-                        {provider.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  className="w-55"
+                  placeholder={providers.length ? 'Select provider' : 'No providers'}
+                  searchPlaceholder="Search providers..."
+                  onSelect={(provider) =>
+                    provider && onExternalInputChange((prev) => ({ ...prev, providerId: provider.id }))
+                  }
+                />
                 <span className="text-xs text-muted-foreground">
                   Create providers in the Secret Providers section. The secret value is fetched only during apply.
                 </span>

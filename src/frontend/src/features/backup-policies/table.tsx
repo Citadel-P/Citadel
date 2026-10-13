@@ -120,6 +120,15 @@ const PolicyNameRow = ({ policy }: { policy: BackupPolicyView }) => (
 );
 
 const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
+  if (source.$type === 'BindMount')
+    return (
+      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
+        <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate" title={source.hostPath}>
+          Bind: {source.hostPath}
+        </span>
+      </span>
+    );
   if (source.$type === 'DockerVolume') {
     const dockerSource = source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>;
 
@@ -182,6 +191,7 @@ const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
 };
 
 const sourceText = (source: BackupSourceSpec) => {
+  if (source.$type === 'BindMount') return source.hostPath;
   if (source.$type === 'DockerVolume')
     return (source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).volumeName;
   if (source.$type === 'Stack') return (source as Extract<BackupSourceSpec, { $type: 'Stack' }>).stackId;

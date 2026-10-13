@@ -7,15 +7,42 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'_, Result<BackupRestoreRun, BackupError>> {
         let name = request.target_volume_name.trim().to_owned();
         Box::pin(async move {
-            if name.is_empty() {
+            if let Some(path) = &request.target_host_path {
+                citadel_backups::spec::validate_bind_path(path)?;
+                let platform_type = sqlx::query_scalar::<_, String>(
+                    "SELECT platformdescriptor->>'$type' FROM platforms WHERE id=$1",
+                )
+                .bind(request.target_platform_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .ok_or(BackupError::NotFound)?;
+                let node = request
+                    .target_docker_node_id
+                    .as_deref()
+                    .filter(|node| !node.trim().is_empty());
+                if (platform_type == "DockerSwarm") != node.is_some() {
+                    return Err(BackupError::Validation("Bind restore requires an exact Node for Swarm and no Node for standalone Docker.".into()));
+                }
+
+                if !name.is_empty() {
+                    return Err(BackupError::Validation(
+                        "Choose either a target host path or a target volume, not both.".into(),
+                    ));
+                }
+            }
+            if name.is_empty() && request.target_host_path.is_none() {
                 return Err(BackupError::Validation(
                     "Target Volume name is required.".into(),
                 ));
             }
             let source = self.get_run(request.backup_run_id).await?;
-            if source.status != citadel_backups::BackupRunStatus::Succeeded
-                || source.snapshot_availability
-                    != citadel_backups::BackupSnapshotAvailability::Available
+            if !matches!(
+                source.status,
+                citadel_backups::BackupRunStatus::Succeeded
+                    | citadel_backups::BackupRunStatus::SucceededWithWarnings
+            ) || source.snapshot_availability
+                != citadel_backups::BackupSnapshotAvailability::Available
             {
                 return Err(BackupError::Conflict(
                     "Backup snapshot is not available for restore.".into(),
@@ -45,9 +72,21 @@ impl PostgresBackupPersistence {
                     "The selected Backup Run Item has no available snapshot.".into(),
                 ));
             }
+            let bind_source = selected_item.map_or_else(
+                || {
+                    matches!(
+                        source.source_snapshot,
+                        citadel_backups::spec::BackupSourceSpec::BindMount { .. }
+                    )
+                },
+                |item| item.host_path.is_some(),
+            );
+            if bind_source != request.target_host_path.is_some() {
+                return Err(BackupError::Validation("Bind-mount snapshots restore to host paths; volume snapshots restore to Docker volumes.".into()));
+            }
             let id = Uuid::now_v7();
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,sourcebackuprunitemid,targetplatformid,targetdockernodeid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,'Queued',$9)").bind(id).bind(request.backup_run_id).bind(source.backup_repository_id).bind(selected_item.map(|item| item.id)).bind(request.target_platform_id).bind(request.target_docker_node_id).bind(name).bind(request.overwrite_existing).bind(request.actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,sourcebackuprunitemid,targetplatformid,targetdockernodeid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid,targethostpath) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,'Queued',$9,$10)").bind(id).bind(request.backup_run_id).bind(source.backup_repository_id).bind(selected_item.map(|item| item.id)).bind(request.target_platform_id).bind(request.target_docker_node_id).bind(name).bind(request.overwrite_existing).bind(request.actor.value()).bind(&request.target_host_path).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("SELECT pg_notify('citadel_restore_work','')")
                 .execute(&mut *tx)
                 .await
@@ -66,7 +105,7 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             recover_stale(&mut tx, stale_before).await?;
-            let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid AND l.expiresat>CURRENT_TIMESTAMP) ORDER BY r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
+            let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename,r.targethostpath FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid AND l.expiresat>CURRENT_TIMESTAMP) ORDER BY r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
             let Some(row) = row else {
                 tx.commit().await.map_err(storage)?;
                 return Ok(None);
@@ -79,8 +118,14 @@ impl PostgresBackupPersistence {
             let target_platform: Uuid = row.try_get("targetplatformid").map_err(storage)?;
             let target_node: Option<String> = row.try_get("targetdockernodeid").map_err(storage)?;
             let target_volume: String = row.try_get("targetvolumename").map_err(storage)?;
-            let source_key =
-                docker_volume_key(target_platform, target_node.as_deref(), &target_volume);
+            let target_path: Option<String> = row.try_get("targethostpath").map_err(storage)?;
+            let source_key = match target_path {
+                Some(_) => citadel_backups::spec::bind_mount_execution_key(
+                    target_platform,
+                    target_node.as_deref(),
+                ),
+                None => docker_volume_key(target_platform, target_node.as_deref(), &target_volume),
+            };
             let leased = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3)) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP").bind(repo_id).bind(id).bind(self.restore_timeout_seconds * 2 + self.repository_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if leased == 0 {
                 tx.rollback().await.map_err(storage)?;

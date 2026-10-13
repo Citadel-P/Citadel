@@ -1,4 +1,5 @@
 import {
+  BackupCoverageStatus,
   BackupSourceSpec,
   BackupRepositorySpec,
   BackupExecutionLocation,
@@ -36,9 +37,22 @@ import { ResourceTagSelector } from '@/features/tags/components';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Box, Database, Info, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
+import {
+  Rocket,
+  Database,
+  FolderOpen,
+  Info,
+  Layers,
+  LoaderCircle,
+  Network,
+  ServerCog,
+  TriangleAlert,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { backupReturnPath, backupSourceFromSearch } from '../navigation';
+import { isWorkloadBackupVolume, sourceKey } from '../coverage';
+import { invalidateBackupPolicyQueries } from '../actions';
 
 type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
@@ -51,27 +65,50 @@ type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
 const EMPTY_BACKUP_REPOSITORIES: BackupRepositoryView[] = [];
 
 const sourceTypes = {
-  CitadelSystem: {
-    label: 'Citadel backup',
-    description: "Back up Citadel's PostgreSQL database and required recovery keys.",
+  Deployment: {
+    label: 'Deployment storage',
+    icon: Rocket,
+    group: 'Application storage',
+    description:
+      'Back up declared named volumes and supported bind mounts discovered from this deployment. Host paths require platform write access.',
+  },
+  Stack: {
+    label: 'Stack storage',
+    icon: Layers,
+    group: 'Application storage',
+    description:
+      'Back up applied Docker volumes and supported bind mounts used by this stack. Host paths require platform write access.',
+  },
+  SwarmService: {
+    label: 'Swarm service storage',
+    icon: Network,
+    group: 'Application storage',
+    description:
+      'Back up local Docker volumes and supported bind mounts on the nodes running this service’s current tasks. Host paths require platform write access.',
   },
   DockerVolume: {
     label: 'Docker volume',
-    description: 'Back up one Docker volume from a selected platform.',
+    icon: Database,
+    group: 'Individual storage',
+    description: 'Back up one named or anonymous Docker volume.',
   },
-  Stack: {
-    label: 'Stack',
-    description: 'Back up all resolved named volumes used by a stack.',
+  BindMount: {
+    label: 'Host file or directory',
+    icon: FolderOpen,
+    group: 'Individual storage',
+    description: 'Back up a specific path on the selected host. Requires write access to the platform.',
   },
-  Deployment: {
-    label: 'Deployment',
-    description: 'Back up all resolved named volumes used by a deployment.',
-  },
-  SwarmService: {
-    label: 'Swarm service',
-    description: 'Back up local named volumes mounted by the current tasks of a managed Swarm service.',
+  CitadelSystem: {
+    label: 'Citadel system',
+    icon: ServerCog,
+    group: 'System recovery',
+    description: "Back up Citadel's database and recovery keys.",
   },
 } as const;
+
+const applicationSourceTypes = Object.fromEntries(
+  Object.entries(sourceTypes).filter(([type]) => type !== 'CitadelSystem'),
+);
 
 const consistencyTypes = {
   Live: {
@@ -113,20 +150,32 @@ export function BackupPolicyForm({
   metadataChanged?: boolean;
 }) {
   const { id } = useParams();
+  const [search] = useSearchParams();
+  const navigate = useNavigate();
+  const returnTo = backupReturnPath(search);
+  const initialSource = useMemo(() => (mode === 'add' ? backupSourceFromSearch(search) : undefined), [mode, search]);
+  const draftId = id ?? (initialSource ? `new:${sourceKey(initialSource)}` : 'new');
   const queryClient = useQueryClient();
   const createPolicy = useMutate('createBackupPolicy');
   const updatePolicy = useMutate('updateBackupPolicy');
   const [update, setUpdate] = useState<Partial<BackupPolicyFormValue>>({});
+  const { data: profileResponse } = useRead('getCurrentProfile');
+  const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;
+  const availableSourceTypes = mode === 'add' && !isAdministrator ? applicationSourceTypes : sourceTypes;
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
-  const original = useMemo(() => toFormValue(resource), [resource]);
+  const original = useMemo(() => {
+    const value = toFormValue(resource);
+    if (mode === 'add' && !isAdministrator) value.source = createDeploymentSource();
+    return initialSource ? { ...value, source: initialSource } : value;
+  }, [resource, initialSource, mode, isAdministrator]);
   const currentSource = useMemo(() => mergeSource(original.source, update.source), [original.source, update.source]);
   const currentSourceType = currentSource.$type ?? 'CitadelSystem';
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
   const currentPlatformId =
-    currentSource.$type === 'DockerVolume'
-      ? String((currentSource as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).platformId ?? '')
+    currentSource.$type === 'DockerVolume' || currentSource.$type === 'BindMount'
+      ? String(currentSource.platformId ?? '')
       : '';
   const currentStackId =
     currentSource.$type === 'Stack'
@@ -164,7 +213,7 @@ export function BackupPolicyForm({
     [repositories, currentBackupRepositoryId],
   );
   const currentSourcePlatformId =
-    currentSourceType === 'DockerVolume'
+    currentSourceType === 'DockerVolume' || currentSourceType === 'BindMount'
       ? currentPlatformId
       : currentSourceType === 'Stack'
         ? stackPreview.data?.data.platformId
@@ -176,6 +225,10 @@ export function BackupPolicyForm({
   const sourcePlatformArgs = useMemo(() => ({ id: currentSourcePlatformId ?? '' }), [currentSourcePlatformId]);
   const sourcePlatform = useRead('getPlatfom', sourcePlatformArgs, { enabled: Boolean(currentSourcePlatformId) });
   const isSwarmSourcePlatform = sourcePlatform.data?.data.type === PlatformType.DockerSwarm;
+  const bindNodesArgs = useMemo(() => ({ platformId: currentPlatformId }), [currentPlatformId]);
+  const bindNodes = useRead('listSwarmNodes', bindNodesArgs, {
+    enabled: currentSourceType === 'BindMount' && Boolean(currentPlatformId) && isSwarmSourcePlatform,
+  });
   const repositoryCompatibilityMessage = getRepositoryCompatibilityMessage(
     currentSourceType,
     selectedRepository,
@@ -184,14 +237,9 @@ export function BackupPolicyForm({
   );
 
   const refreshData = useCallback(() => {
-    localStorage.removeItem(`backup-policy:${id ?? 'new'}`);
-    queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-    queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
-    queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
-    if (id) {
-      queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
-    }
-  }, [id, queryClient]);
+    localStorage.removeItem(`backup-policy:${draftId}`);
+    void invalidateBackupPolicyQueries(queryClient, id);
+  }, [id, draftId, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;
@@ -270,27 +318,30 @@ export function BackupPolicyForm({
             items: [
               defineField<BackupPolicyFormValue, 'source.$type'>({
                 key: 'source.$type',
-                label: 'Type',
+                label: 'Back up',
                 required: true,
                 disabled: isSourceLocked(resource),
                 render: (value, set) => (
                   <div className="flex max-w-150 flex-col gap-2">
                     <ItemSelector
                       value={value ?? 'CitadelSystem'}
-                      collection={sourceTypes}
+                      collection={availableSourceTypes}
+                      descriptionPlacement="below"
                       disabled={disabled || isSourceLocked(resource)}
                       onChange={(nextType: BackupSourceSpec['$type']) =>
                         set({
                           source:
-                            nextType === 'DockerVolume'
-                              ? createDockerVolumeSource()
-                              : nextType === 'Stack'
-                                ? createStackSource()
-                                : nextType === 'Deployment'
-                                  ? createDeploymentSource()
-                                  : nextType === 'SwarmService'
-                                    ? createSwarmServiceSource()
-                                    : createCitadelSystemSource(),
+                            nextType === 'BindMount'
+                              ? { $type: 'BindMount', platformId: '', hostPath: '', dockerNodeId: null }
+                              : nextType === 'DockerVolume'
+                                ? createDockerVolumeSource()
+                                : nextType === 'Stack'
+                                  ? createStackSource()
+                                  : nextType === 'Deployment'
+                                    ? createDeploymentSource()
+                                    : nextType === 'SwarmService'
+                                      ? createSwarmServiceSource()
+                                      : createCitadelSystemSource(),
                         })
                       }
                     />
@@ -310,6 +361,85 @@ export function BackupPolicyForm({
                   </div>
                 ),
               }),
+              ...(currentSourceType === 'BindMount'
+                ? [
+                    defineField<BackupPolicyFormValue, 'source.platformId'>({
+                      key: 'source.platformId',
+                      label: 'Platform',
+                      required: true,
+                      disabled: isSourceLocked(resource),
+                      description: 'Host whose filesystem contains the bind mount. Platform write access is required.',
+                      render: (value, set) => (
+                        <ResourceSelectorField
+                          targetType={LookupResourceType.Platform}
+                          selected={value}
+                          disabled={disabled || isSourceLocked(resource)}
+                          placeholder="Select Platform"
+                          onSelect={(platform: PlatformView | undefined) =>
+                            set({
+                              source: {
+                                $type: 'BindMount',
+                                platformId: platform?.id ?? '',
+                                hostPath: '',
+                                dockerNodeId: null,
+                              },
+                            })
+                          }
+                        />
+                      ),
+                    }),
+                    defineField<BackupPolicyFormValue, 'source.hostPath'>({
+                      key: 'source.hostPath',
+                      label: 'Host path',
+                      required: true,
+                      disabled: isSourceLocked(resource),
+                      description:
+                        'Existing absolute Linux host file or directory, for example /srv/app/data. Backups run live. Nested mounts, tmpfs and container layers are excluded.',
+                      validate: (value) =>
+                        String(value ?? '').startsWith('/') && String(value).length > 1
+                          ? null
+                          : 'Enter an absolute host path below the filesystem root.',
+                      render: (value, set) => (
+                        <FieldInput
+                          value={value ?? ''}
+                          disabled={disabled || isSourceLocked(resource)}
+                          placeholder="/srv/app/data"
+                          onChange={(hostPath) => set({ source: { hostPath } as any })}
+                        />
+                      ),
+                    }),
+                    ...(isSwarmSourcePlatform
+                      ? [
+                          defineField<BackupPolicyFormValue, 'source.dockerNodeId'>({
+                            key: 'source.dockerNodeId',
+                            label: 'Swarm Node',
+                            required: true,
+                            disabled: isSourceLocked(resource),
+                            description:
+                              'The path is backed up only on this Node. The policy does not follow rescheduled tasks.',
+                            validate: (value) => (value ? null : 'Select the Node that owns this path.'),
+                            render: (value, set) => {
+                              const nodes = bindNodes.data?.data.items ?? [];
+                              const selectedNode = nodes.find((node) => node.id === value);
+                              return (
+                                <ResourceSelectorField
+                                  items={nodes
+                                    .filter((node) => !node.isStale && node.status.toLowerCase() === 'ready')
+                                    .map((node) => ({ id: node.id, name: node.hostname || node.id }))}
+                                  selected={value ? { id: value, name: selectedNode?.hostname || value } : undefined}
+                                  allowClear={false}
+                                  disabled={disabled || isSourceLocked(resource) || bindNodes.isLoading}
+                                  placeholder={bindNodes.isLoading ? 'Loading Nodes...' : 'Select a Node'}
+                                  searchPlaceholder="Search Nodes..."
+                                  onSelect={(node) => set({ source: { dockerNodeId: node?.id ?? null } as any })}
+                                />
+                              );
+                            },
+                          }),
+                        ]
+                      : []),
+                  ]
+                : []),
               ...(currentSourceType === 'DockerVolume'
                 ? [
                     defineField<BackupPolicyFormValue, 'source.platformId'>({
@@ -403,7 +533,7 @@ export function BackupPolicyForm({
                       label: 'Stack',
                       required: true,
                       disabled: isSourceLocked(resource),
-                      description: 'Stack whose Docker named volumes will be backed up together.',
+                      description: 'Stack whose resolved Docker volumes will be backed up together.',
                       validate: (value) =>
                         currentSourceType === 'Stack' && !String(value ?? '').trim() ? 'Stack is required' : null,
                       render: (value, set) => (
@@ -443,7 +573,7 @@ export function BackupPolicyForm({
                       label: 'Deployment',
                       required: true,
                       disabled: isSourceLocked(resource),
-                      description: 'Deployment whose Docker named volumes will be backed up together.',
+                      description: 'Deployment whose declared named volumes will be backed up together.',
                       validate: (value) =>
                         currentSourceType === 'Deployment' && !String(value ?? '').trim()
                           ? 'Deployment is required'
@@ -727,6 +857,9 @@ export function BackupPolicyForm({
       }),
     }),
     [
+      availableSourceTypes,
+      bindNodes.data?.data,
+      bindNodes.isLoading,
       currentPlatformId,
       currentDeploymentId,
       currentSwarmServiceId,
@@ -763,11 +896,15 @@ export function BackupPolicyForm({
       original={original}
       update={update}
       setUpdate={setUpdate}
-      onSave={handleSave}
+      onSave={async (payload) => {
+        await handleSave(payload);
+        if (mode === 'add') refreshData();
+        if (returnTo) navigate(returnTo);
+      }}
       disabled={disabled}
       mode={mode}
       pending={isPending}
-      draftKey={`backup-policy:${id ?? 'new'}`}
+      draftKey={`backup-policy:${draftId}`}
       draftVersion={resource?.rowVersion ?? 1}
     />
   );
@@ -857,12 +994,12 @@ function VolumeSelector({
         />
       ) : (
         <div className="rounded-sm border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-          No Docker named volumes were found on this platform.
+          No Docker volumes were found on this platform.
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        Only Docker named volumes can be backed up. Bind mounts such as ./data:/app/data or /host/path:/data are not
-        Docker volumes and will not appear here.
+        Select a Docker-managed volume, including an anonymous volume by its generated name. Bind mounts, tmpfs mounts,
+        and the container writable layer are not covered by volume backups.
       </p>
     </div>
   );
@@ -881,7 +1018,7 @@ function formatVolumeDescription(volume: VolumeView) {
   return [
     volume.driver || 'local',
     volume.inUse ? 'In use' : 'Not in use',
-    volume.backupCoverage ? 'Protected' : 'Not protected',
+    volume.backupCoverage?.status === BackupCoverageStatus.Protected ? 'Protected' : 'Not protected',
     volume.nodeHostname ?? volume.dockerNodeId,
     formatVolumeSize(volume.usageData?.size),
   ].join(' · ');
@@ -904,19 +1041,20 @@ function StackSourcePreview({
   hasSelection: boolean;
 }) {
   if (!hasSelection) {
-    return <div className="text-xs text-muted-foreground">Select a stack to preview resolved volumes.</div>;
+    return <div className="text-xs text-muted-foreground">Select a stack to preview resolved storage.</div>;
   }
 
   if (isLoading) {
     return (
       <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading stack volumes...
+        Loading stack storage...
       </div>
     );
   }
 
   if (!preview) return null;
+  const includedVolumes = preview.volumes.filter((volume) => isWorkloadBackupVolume('Stack', volume));
 
   return (
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
@@ -928,13 +1066,17 @@ function StackSourcePreview({
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
 
-        {preview.volumes.length > 0 ? (
+        {includedVolumes.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {preview.volumes.map((volume) => (
+            {includedVolumes.map((volume) => (
               <div
                 key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
                 className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
-                <Database className="size-3 shrink-0 text-muted-foreground" />
+                {volume.kind === 'BindMount' ? (
+                  <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}
                 </span>
@@ -952,15 +1094,17 @@ function StackSourcePreview({
                   </Badge>
                 )}
                 {volume.hasBackupCoverage && (
-                  <Badge className="h-5 rounded-sm bg-green-500/15 px-1.5 text-[10px] text-green-700 dark:text-green-300">
-                    Protected
+                  <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px]">
+                    {volume.kind === 'BindMount' ? 'Host-path policy configured' : 'Volume policy configured'}
                   </Badge>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground">No named Docker volumes were resolved for this stack.</div>
+          <div className="text-xs text-muted-foreground">
+            No supported volumes or bind mounts were resolved for this stack.
+          </div>
         )}
 
         {preview.warnings.length > 0 && (
@@ -978,7 +1122,7 @@ function StackSourcePreview({
   );
 }
 
-function DeploymentSourcePreview({
+export function DeploymentSourcePreview({
   preview,
   isLoading,
   hasSelection,
@@ -988,37 +1132,44 @@ function DeploymentSourcePreview({
   hasSelection: boolean;
 }) {
   if (!hasSelection) {
-    return <div className="text-xs text-muted-foreground">Select a deployment to preview resolved volumes.</div>;
+    return <div className="text-xs text-muted-foreground">Select a deployment to preview resolved storage.</div>;
   }
 
   if (isLoading) {
     return (
       <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading deployment volumes...
+        Loading deployment storage...
       </div>
     );
   }
 
   if (!preview) return null;
 
+  const includedVolumes = preview.volumes.filter((volume) => isWorkloadBackupVolume('Deployment', volume));
+  const excludedCount = preview.volumes.filter((volume) => !isWorkloadBackupVolume('Deployment', volume)).length;
+
   return (
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          <Box className="size-3.5 text-muted-foreground" />
+          <Rocket className="size-3.5 text-muted-foreground" />
           <span className="font-medium">{'deploymentName' in preview ? preview.deploymentName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
 
-        {preview.volumes.length > 0 ? (
+        {includedVolumes.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {preview.volumes.map((volume) => (
+            {includedVolumes.map((volume) => (
               <div
                 key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
                 className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
-                <Database className="size-3 shrink-0 text-muted-foreground" />
+                {volume.kind === 'BindMount' ? (
+                  <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}
                 </span>
@@ -1031,8 +1182,8 @@ function DeploymentSourcePreview({
                   {volumeKindLabel(volume.kind)}
                 </Badge>
                 {volume.hasBackupCoverage && (
-                  <Badge className="h-5 rounded-sm bg-green-500/15 px-1.5 text-[10px] text-green-700 dark:text-green-300">
-                    Protected
+                  <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px]">
+                    {volume.kind === 'BindMount' ? 'Host-path policy configured' : 'Volume policy configured'}
                   </Badge>
                 )}
               </div>
@@ -1040,8 +1191,20 @@ function DeploymentSourcePreview({
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">
-            No named Docker volumes were resolved for this deployment.
+            No supported volumes or bind mounts were resolved for this deployment.
           </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Includes named volumes declared in the saved deployment configuration and supported bind mounts discovered
+          from its synchronized container on standalone Docker. Tmpfs mounts and the container writable layer are
+          excluded.
+        </p>
+        {excludedCount > 0 && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            {excludedCount} {excludedCount === 1 ? 'Docker volume is' : 'Docker volumes are'} not included in this
+            deployment backup. Configure a separate Docker volume policy to back them up.
+          </p>
         )}
 
         {preview.warnings.length > 0 && (
@@ -1069,19 +1232,20 @@ function SwarmServiceSourcePreview({
   hasSelection: boolean;
 }) {
   if (!hasSelection) {
-    return <div className="text-xs text-muted-foreground">Select a Swarm Service to preview its task Volumes.</div>;
+    return <div className="text-xs text-muted-foreground">Select a Swarm Service to preview its task storage.</div>;
   }
 
   if (isLoading) {
     return (
       <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading Swarm Service Volumes...
+        Loading Swarm Service storage...
       </div>
     );
   }
 
   if (!preview) return null;
+  const includedVolumes = preview.volumes.filter((volume) => isWorkloadBackupVolume('SwarmService', volume));
 
   return (
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
@@ -1093,13 +1257,17 @@ function SwarmServiceSourcePreview({
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
         </div>
 
-        {preview.volumes.length > 0 ? (
+        {includedVolumes.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {preview.volumes.map((volume) => (
+            {includedVolumes.map((volume) => (
               <div
                 key={`${volume.dockerNodeId ?? ''}:${volume.name}`}
                 className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
-                <Database className="size-3 shrink-0 text-muted-foreground" />
+                {volume.kind === 'BindMount' ? (
+                  <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}
                 </span>
@@ -1114,8 +1282,8 @@ function SwarmServiceSourcePreview({
                   </Badge>
                 )}
                 {volume.hasBackupCoverage && (
-                  <Badge className="h-5 rounded-sm bg-green-500/15 px-1.5 text-[10px] text-green-700 dark:text-green-300">
-                    Protected
+                  <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px]">
+                    {volume.kind === 'BindMount' ? 'Host-path policy configured' : 'Volume policy configured'}
                   </Badge>
                 )}
               </div>
@@ -1142,6 +1310,8 @@ function SwarmServiceSourcePreview({
 
 function volumeKindLabel(kind: string) {
   switch (kind) {
+    case 'BindMount':
+      return 'Bind mount';
     case 'DeclaredNamed':
       return 'Declared';
     case 'ExternalNamed':
@@ -1306,6 +1476,13 @@ function normalizeWebhook(webhook: WebhookConfig | null | undefined): WebhookCon
 }
 
 function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {
+  if (source.$type === 'BindMount')
+    return {
+      $type: 'BindMount',
+      platformId: source.platformId,
+      hostPath: source.hostPath,
+      dockerNodeId: source.dockerNodeId ?? null,
+    };
   if (source.$type === 'DockerVolume') {
     const dockerSource = source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>;
     return {

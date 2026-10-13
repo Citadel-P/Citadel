@@ -64,9 +64,11 @@ export function DetailSection({
 export function DetailFacts({
   items,
   resource,
+  layout = 'grid',
 }: {
   items: { label: string; value: ReactNode }[];
   resource?: { id: string; name: string };
+  layout?: 'grid' | 'stack';
 }) {
   const facts = [...items];
   if (resource?.id && resource.id !== resource.name) {
@@ -76,7 +78,7 @@ export function DetailFacts({
         <CopyToClipboard
           textToCopy={resource.id}
           transform={(id) => truncate(id, 16)}
-          textClassName="font-mono text-xs"
+          textClassName="font-mono"
           groupClassName="[&_button]:visible [&_button]:opacity-0 hover:[&_button]:opacity-100 focus-within:[&_button]:opacity-100 [&_svg]:text-muted-foreground"
         />
       ),
@@ -84,7 +86,10 @@ export function DetailFacts({
   }
 
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+    <dl
+      className={
+        layout === 'stack' ? 'min-w-0 space-y-5' : 'grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3'
+      }>
       {facts.map(({ label, value }) => (
         <div key={label} className="min-w-0">
           <dt className="mb-1.5 text-xs font-medium text-muted-foreground">{label}</dt>

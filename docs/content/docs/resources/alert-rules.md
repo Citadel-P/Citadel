@@ -438,12 +438,20 @@ Choose a type based on the condition you need to investigate:
 | Stack Git and configuration | `StackGitUpdateAvailable`, `StackGitAutoUpdated`, `StackGitAutoDeployFailed`, `StackConfigurationResolutionFailed` |
 | Webhook | `WebhookAuthenticationFailed`, `WebhookDispatchFailed`, `WebhookGitRepoSyncFailed`, `WebhookStackGitDeployFailed` |
 | Automation | `AutomationActionRunFailed` |
+| Backups | `BackupRunFailed` |
 | Builds | `BuildRunFailed`, `BuildAgentPoolUnavailable` |
 | License | `LicenseEnteredGracePeriod`, `LicenseExpired` |
 
 `BuildAgentPoolUnavailable` uses an **Unavailable grace period (seconds)** threshold,
 rather than a percentage. See [Build Pool availability](/docs/resources/build-pools#build-pool-connection-and-availability)
 for the built-in rule's grace period and recovery behavior.
+
+`BackupRunFailed` handles failed, timed-out, interrupted, and rejected runs when
+**Alert on failure** is enabled on the backup policy. Deliberate cancellation is
+excluded. Each failed run is a separate incident with a link to its logs;
+reprocessing the same result does not create another incident. Configure channels
+on the seeded **Backup Run Failed** rule as described above. See
+[backup alerts](/docs/resources/backups#alerts).
 
 ## Recommended Rules
 

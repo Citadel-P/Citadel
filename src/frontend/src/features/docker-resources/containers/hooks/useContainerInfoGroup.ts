@@ -46,6 +46,7 @@ export const mergeContainerRuntimeUpdate = (
   container: ContainerRuntimeView,
 ): Partial<ContainerRuntimeView> => ({
   ...current,
+  backupCoverage: container.backupCoverage ?? current?.backupCoverage,
   id: container.id,
   name: container.name,
   image: container.image,

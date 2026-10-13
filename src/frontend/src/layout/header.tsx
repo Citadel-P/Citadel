@@ -1,4 +1,3 @@
-import { AppearanceCustomizer } from '@/components/custom/appearance-customizer';
 import { AlertEventStatus, AlertResourceType, AlertSeverity, type AlertEventView } from '@/api/generated/api.types';
 import type { ResourceType } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -17,9 +16,8 @@ import { getInitials } from '@/features/profile/utils';
 import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { sourceAndLicenseLinks } from '@/lib/source-license';
 import { jwtDecode } from 'jwt-decode';
-import { ArrowRight, Bell, BellOff, Code2, LogOut, Scale, User } from 'lucide-react';
+import { ArrowRight, Bell, BellOff, LogOut, User } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { BreadcrumbTrail } from './breadcrumb';
@@ -29,6 +27,7 @@ import { CitadelIcons } from '@/lib/icons';
 import { fromNow } from '@/lib/dayjs.helper';
 import { cn, formatActivityEvent } from '@/lib/utils';
 import { LiveConnectionIndicator } from './live-connection-indicator';
+import { ThemeToggle } from './theme-toggle';
 
 export function Header() {
   return (
@@ -44,7 +43,7 @@ export function Header() {
       <div className="ml-auto flex items-center gap-1 sm:gap-2">
         <GlobalSearch />
         <AlertBell />
-        <AppearanceCustomizer />
+        <ThemeToggle />
         <HeaderAccountMenu />
       </div>
     </header>
@@ -54,10 +53,6 @@ export function Header() {
 function HeaderAccountMenu() {
   const navigate = useNavigate();
   const { logout, accessToken } = useAuthContext();
-  const { applicationInfo } = useAppContext();
-  const { sourceUrl, licenseUrl } = sourceAndLicenseLinks({
-    informationalVersion: applicationInfo?.informationalVersion,
-  });
   const { data: cachedProfileData } = useRead('getCurrentProfile', undefined, { enabled: false });
   const tokenProfile = useMemo(() => getTokenProfile(accessToken), [accessToken]);
   const profile = cachedProfileData?.data ?? tokenProfile;
@@ -83,29 +78,10 @@ function HeaderAccountMenu() {
             </div>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate('/profile')}>
           <User className="size-4" />
           My Profile
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
-            <Code2 className="size-4" />
-            Source code
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href={licenseUrl} target="_blank" rel="noopener noreferrer">
-            <Scale className="size-4" />
-            Elastic License 2.0
-          </a>
-        </DropdownMenuItem>
-        <p className="px-2 py-2 text-xs leading-relaxed text-muted-foreground">
-          © Citadel authors and contributors. Source-available under Elastic License 2.0.
-          Use, modification and redistribution are subject to the license terms. Provided without warranty.
-        </p>
-        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={logout}>
           <LogOut className="size-4" />
           Log out
@@ -249,6 +225,7 @@ const alertResourceIconStyles: Record<AlertResourceType, string> = {
   [AlertResourceType.GitRepository]: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
   [AlertResourceType.Webhook]: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
   [AlertResourceType.AutomationAction]: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  [AlertResourceType.BackupPolicy]: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   [AlertResourceType.Build]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   [AlertResourceType.BuildAgentPool]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   [AlertResourceType.License]: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',

@@ -1167,6 +1167,7 @@ CREATE TABLE stackwebhookdeployqueue (
 
 CREATE TABLE containers (
     id uuid NOT NULL,
+    mounts jsonb,
     containeroperationid uuid,
     controlstartedat bigint,
     controlstate text DEFAULT 'Idle',
@@ -1408,6 +1409,7 @@ CREATE TABLE backuprunitems (
     status text NOT NULL,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     volumename text NOT NULL,
+    hostpath text,
     CONSTRAINT pk_backuprunitems PRIMARY KEY (id),
     CONSTRAINT fk_backuprunitems_backupruns_backuprunid FOREIGN KEY (backuprunid) REFERENCES backupruns (id) ON DELETE CASCADE,
     CONSTRAINT fk_backuprunitems_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
@@ -1444,6 +1446,7 @@ CREATE TABLE backuprestoreruns (
     targetvolumename text NOT NULL,
     triggeredbyactorid uuid NOT NULL,
     warnings jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    targethostpath text,
     CONSTRAINT pk_backuprestoreruns PRIMARY KEY (id),
     CONSTRAINT fk_backuprestoreruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_backuprestoreruns_backuprepositories_backuprepositoryid FOREIGN KEY (backuprepositoryid) REFERENCES backuprepositories (id) ON DELETE RESTRICT,
@@ -1548,6 +1551,9 @@ INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, descri
 VALUES ('019d0000-0001-7000-8001-000000000023', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Disk > 70% - Platform', '[]', 3, 'Warning', 70.0, 'PlatformDiskHigh');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000024', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Disk > 90% - Platform', '[]', 3, 'Critical', 90.0, 'PlatformDiskHigh');
+
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000030', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Backup Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'BackupRunFailed');
 
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('00389706-8a88-9cfa-583a-1d4b7d2ce63a', 4, 20, '30000000-0000-0000-0000-000000000001', 39);
@@ -1791,11 +1797,15 @@ CREATE INDEX ix_backuprunitems_platform_volume ON backuprunitems (platformid, do
 
 CREATE INDEX ix_backuprunitems_resticsnapshotid ON backuprunitems (resticsnapshotid);
 
-CREATE UNIQUE INDEX ix_backuprunitems_run_standalonevolume ON backuprunitems (backuprunid, platformid, volumename) WHERE dockernodeid IS NULL;
+CREATE UNIQUE INDEX ix_backuprunitems_run_standalonebind ON backuprunitems (backuprunid, platformid, hostpath) WHERE dockernodeid IS NULL AND hostpath IS NOT NULL;
+
+CREATE UNIQUE INDEX ix_backuprunitems_run_standalonevolume ON backuprunitems (backuprunid, platformid, volumename) WHERE dockernodeid IS NULL AND hostpath IS NULL;
 
 CREATE INDEX ix_backuprunitems_run_status ON backuprunitems (backuprunid, status);
 
-CREATE UNIQUE INDEX ix_backuprunitems_run_swarmvolume ON backuprunitems (backuprunid, platformid, dockernodeid, volumename) WHERE dockernodeid IS NOT NULL;
+CREATE UNIQUE INDEX ix_backuprunitems_run_swarmbind ON backuprunitems (backuprunid, platformid, dockernodeid, hostpath) WHERE dockernodeid IS NOT NULL AND hostpath IS NOT NULL;
+
+CREATE UNIQUE INDEX ix_backuprunitems_run_swarmvolume ON backuprunitems (backuprunid, platformid, dockernodeid, volumename) WHERE dockernodeid IS NOT NULL AND hostpath IS NULL;
 
 CREATE INDEX ix_backuprunlogs_run_createdat ON backuprunlogs (backuprunid, createdat);
 

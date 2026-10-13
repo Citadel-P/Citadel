@@ -421,19 +421,17 @@ The same non-destructive rules used for expiration apply:
 Removing a license cannot be used to delete the license file from another
 installation or revoke a license remotely. Citadel licensing is offline.
 
-## Legacy Business Licenses
+## Business-format licenses
 
-Older Citadel licenses use the Business edition and numeric resource limits.
-
-During the licensing migration:
+Citadel recognizes the Business license format used during development. If you
+install one, the License page shows a legacy-license warning:
 
 - a valid or grace-period Business license is treated as Team
-- all shipped Team capabilities are enabled
-- the old numeric limits no longer restrict resource counts
-- the License page shows a legacy-license warning
-- the license should be replaced with a Team license at renewal
+- all implemented Team capabilities are enabled
+- numeric resource limits in that format are not enforced
+- request a Team-format replacement from the issuer at renewal
 
-An expired or invalid legacy license provides only Community capabilities.
+An expired or invalid Business-format license provides only Community capabilities.
 
 ## Moving Or Restoring Citadel
 
@@ -472,12 +470,14 @@ license request from the current installation and request a rehosted license.
 
 ### The license reports Unknown Signing Key
 
-The Citadel version is older than the key used by the issuer. Upgrade Citadel to
-a version that contains the matching public verification key.
+The signing key identified by the license is not in Core's trusted key set.
+Ask the issuer to verify that the license was issued for your Core build and
+provide a license signed with a trusted key.
 
 ### The license reports Unsupported Schema
 
-Upgrade Citadel Core to a version that supports the license format.
+The license uses a format this Core build does not support. Ask the issuer for
+a license in a supported format.
 
 ### Automated Operations Stopped
 

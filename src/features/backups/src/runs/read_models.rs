@@ -8,6 +8,7 @@ pub struct PlatformBackupSummary {
     pub policy_count: i32,
     pub enabled_policy_count: i32,
     pub docker_volume_policy_count: i32,
+    pub bind_mount_policy_count: i32,
     pub stack_policy_count: i32,
     pub deployment_policy_count: i32,
     pub swarm_service_policy_count: i32,
@@ -29,12 +30,13 @@ pub struct VolumeBackupCoverage {
     pub last_successful_run_at: Option<DateTime<Utc>>,
 }
 
-pub trait VolumeCoverageReader: Send + Sync {
+pub trait VolumeCoverageReader: crate::coverage::CoverageReader {
     fn volume_coverage<'a>(
         &'a self,
         actor: citadel_primitives::ActorId,
         administrator: bool,
         platform: Uuid,
         volumes: &'a [(String, Option<String>)],
+        scheduling_available: bool,
     ) -> futures_util::future::BoxFuture<'a, Result<Vec<VolumeBackupCoverage>, crate::BackupError>>;
 }

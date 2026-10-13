@@ -97,6 +97,7 @@ impl PostgresBackupPersistence {
                 .bind(id).bind(&input.description).bind(sqlx::types::Json(&input.spec)).bind(input.spec.kind())
                 .fetch_one(&mut *tx).await.map_err(storage)?;
             let repository = map_repository(row)?;
+            coverage::changes::publish(&mut tx, None, Some(id)).await?;
             tx.commit().await.map_err(storage)?;
             Ok(repository)
         })
@@ -176,6 +177,7 @@ impl PostgresBackupPersistence {
                 sqlx::query("INSERT INTO backuprepositoryvalidations(id,backuprepositoryid,location,platformid,status,lastvalidatedat,lasterrorcode,lasterrormessage) VALUES($1,$2,$3,$4,$5,$6,$7,$8)")
                     .bind(validation_id).bind(id).bind(location).bind(platform_id).bind(status.as_str()).bind(now).bind(error_code).bind(message).execute(&mut *tx).await.map_err(storage)?;
             }
+            coverage::changes::publish(&mut tx, None, Some(id)).await?;
             tx.commit().await.map_err(storage)?;
             if !succeeded {
                 tracing::warn!(%id, %operation, error=message.unwrap_or("unknown"), "Backup Repository operation failed");

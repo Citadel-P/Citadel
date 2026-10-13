@@ -1,3 +1,4 @@
+import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useMemo, useState } from 'react';
 import { Boxes, Container, Copy, Maximize2, RefreshCw, Workflow, type LucideIcon } from 'lucide-react';
@@ -73,6 +74,12 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
         <SwarmServiceFailureAlert resource={resource} />
         <SwarmServicePendingChangesAlert resource={resource} />
       </>
+    ),
+    TabActions: ({ resource }: { resource: ManagedSwarmServiceView }) => (
+      <ResourceBackupIndicator
+        source={{ $type: 'SwarmService', swarmServiceId: resource.id }}
+        coverage={resource.backupCoverage}
+      />
     ),
     Tabs: [
       {

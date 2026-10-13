@@ -14,6 +14,7 @@ pub struct ActivityFilter {
     pub resource_id: Option<Uuid>,
     pub resource_type: Option<ActivityResourceType>,
     pub event_type: Option<ActivityEventType>,
+    pub status: Option<ActivityStatus>,
     pub page: Option<i32>,
     pub page_size: Option<i32>,
 }
@@ -36,6 +37,7 @@ impl ActivityFilter {
             resource_id: self.resource_id,
             resource_type: self.resource_type,
             event_type: self.event_type,
+            status: self.status,
             page,
             page_size,
         })
@@ -47,6 +49,7 @@ pub struct ValidatedActivityFilter {
     pub resource_id: Option<Uuid>,
     pub resource_type: Option<ActivityResourceType>,
     pub event_type: Option<ActivityEventType>,
+    pub status: Option<ActivityStatus>,
     pub page: i32,
     pub page_size: i32,
 }

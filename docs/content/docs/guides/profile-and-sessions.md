@@ -47,9 +47,8 @@ session. Shared networks or proxies can make several sessions show the same IP.
 Revocation invalidates both the refresh session and its browser access tokens.
 Affected realtime connections close when the revocation commits; other active
 sessions can reconnect. Password changes and MFA resets apply the same revocation
-rules. Browser access tokens issued before session binding was introduced require
-a refresh or a new sign-in after upgrading. This does not sign you out of an upstream OIDC provider;
-manage that provider's sessions separately when needed.
+rules. Revoking a Citadel session does not sign you out of an upstream OIDC
+provider; manage that provider's sessions separately when needed.
 
 If **Sign Out Others** is unavailable, sign in again so Citadel can identify the
 current refresh session. If you cannot sign in at all, use an MFA recovery code

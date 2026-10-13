@@ -201,6 +201,9 @@ impl From<citadel_platforms::ContainerStatSnapshot> for ContainerStatView {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_coverage:
+        Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
     pub platform_id: Uuid,
     pub container_id: String,
@@ -248,6 +251,7 @@ pub struct ContainerView {
 impl From<citadel_platforms::ContainerDetails> for ContainerView {
     fn from(value: citadel_platforms::ContainerDetails) -> Self {
         Self {
+            backup_coverage: None,
             id: value.id,
             platform_id: value.platform_id,
             container_id: value.container_id,

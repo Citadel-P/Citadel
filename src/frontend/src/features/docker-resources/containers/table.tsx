@@ -1,3 +1,4 @@
+import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -58,7 +59,7 @@ export const ContainersTable = ({
   const [_, setSelectedResources] = useSelectedResources<ContainerActionResource>('Container');
   const lastSelectionKeyRef = useRef('');
   const platformLimits = useMemo(() => getPlatformResourceLimits(currentPlatform), [currentPlatform]);
-  const rows = useMemo(() => buildContainerRows(items ?? [], platformLimits), [items, platformLimits]);
+  const rows = useMemo(() => buildContainerRows(items, platformLimits), [items, platformLimits]);
   const cols = useMemo(() => columns(actions ?? {}, currentPlatform?.type), [actions, currentPlatform?.type]);
   const getSubRows = useCallback(
     (row: ContainerTableRow) => (isContainerStackGroup(row) ? row.containers : undefined),
@@ -154,7 +155,7 @@ const columns = (
       header: ({ column }) => <SortableCell cellName="Image" column={column} />,
       cell: ({ row }) => {
         if (isContainerStackGroup(row.original)) {
-          return <span className="text-xs text-muted-foreground">{countDistinctImages(row.original)} images</span>;
+          return <span className="text-sm text-muted-foreground">{countDistinctImages(row.original)} images</span>;
         }
 
         return <ImageName image={row.original.imageView ?? undefined} />;
@@ -165,12 +166,13 @@ const columns = (
       header: ({ column }) => <SortableCell cellName="ID" column={column} />,
       cell: ({ row }) =>
         isContainerStackGroup(row.original) ? (
-          <span className="text-xs text-muted-foreground">Stack</span>
+          <span className="text-sm text-muted-foreground">Stack</span>
         ) : (
           <CopyToClipboard
             textToCopy={row.original.containerId}
             transform={() => row.original.containerId?.slice(0, 12)}
             groupClassName="rowid"
+            textClassName="text-sm tabular-nums text-muted-foreground"
           />
         ),
     },
@@ -181,7 +183,7 @@ const columns = (
             header: ({ column }: any) => <SortableCell cellName="Node" column={column} />,
             cell: ({ row }: any) => {
               if (isContainerStackGroup(row.original))
-                return <span className="text-xs text-muted-foreground">Multiple nodes</span>;
+                return <span className="text-sm text-muted-foreground">Multiple nodes</span>;
               const nodeId = row.original.dockerNodeId;
               return nodeId ? (
                 <Link
@@ -191,7 +193,7 @@ const columns = (
                   {row.original.nodeHostname ?? formatId(nodeId)}
                 </Link>
               ) : (
-                <span className="text-xs text-muted-foreground">Manager</span>
+                <span className="text-sm text-muted-foreground">Manager</span>
               );
             },
           } as ColumnDef<ContainerTableRow>,
@@ -199,9 +201,10 @@ const columns = (
       : []),
     {
       accessorKey: 'CPU',
-      header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
+      header: ({ column }) => <SortableCell cellName="CPU" column={column} />,
       cell: ({ row }) => (
         <CPUCell
+          className="text-sm tabular-nums"
           state={row.original.state}
           stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
         />
@@ -215,6 +218,7 @@ const columns = (
       header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
       cell: ({ row }) => (
         <MemoryUsageCell
+          className="text-sm tabular-nums"
           state={row.original.state}
           stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
         />
@@ -231,11 +235,20 @@ const columns = (
       header: () => <span>Ports</span>,
       cell: ({ row }) =>
         isContainerStackGroup(row.original) ? (
-          <span className="text-xs text-muted-foreground">{countPublishedPorts(row.original)} ports</span>
+          <span className="text-sm text-muted-foreground">{countPublishedPorts(row.original)} ports</span>
         ) : (
-          <PortsDisplay ports={row.original.ports} compact maxVisible={1} />
+          <PortsDisplay ports={row.original.ports} compact maxVisible={1} className="text-sm tabular-nums" />
         ),
     },
+    backupColumn<ContainerTableRow>((row) =>
+      isContainerStackGroup(row)
+        ? undefined
+        : {
+            coverage: row.backupCoverage,
+            source: { $type: 'Container', containerId: row.containerId, platformId: row.platformId },
+            returnTo: `/platforms/${row.platformId}/containers/${row.id}`,
+          },
+    ),
     {
       id: 'actions',
       cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
@@ -272,7 +285,7 @@ const ContainerNameCell = ({
         <button
           type="button"
           onClick={tableRow.getToggleExpandedHandler()}
-          className="truncate cursor-pointer text-left text-sm text-foreground hover:underline"
+          className="truncate cursor-pointer text-left text-sm font-normal text-foreground hover:underline"
           title={row.name}>
           {truncate(row.name, 28)}
         </button>
@@ -299,7 +312,7 @@ const ContainerNameCell = ({
             : undefined
         }
       />
-      <Link to={`./${row.id}`} className="table-link truncate" title={row.name}>
+      <Link to={`./${row.id}`} className="table-link truncate font-normal" title={row.name}>
         {truncate(getDisplayName(row), 24)}
       </Link>
       {row.isSystem ? (

@@ -1,3 +1,4 @@
+import { BindMountBackupLinks, VolumeBackupLinks } from '@/features/backup-policies/volume-backup-links';
 import {
   ContainerSummaryView,
   ContainerStateStatus,
@@ -156,6 +157,11 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
   const [overviewOpen, setOverviewOpen] = useLocalStorage('container-overview-open', true);
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
+  const backupCoverage = container?.backupCoverage ?? containerInfo?.backupCoverage;
+  const volumeNames =
+    backupCoverage && !backupCoverage.unavailable
+      ? backupCoverage.volumes.filter((volume) => !volume.hostPath).map((volume) => volume.name)
+      : (containerInfo?.volumes ?? []);
   const state = container?.state ?? containerInfo?.state ?? ContainerStateStatus.Unknown;
   const stats = container?.containerStat;
   const running = state === ContainerStateStatus.Running;
@@ -177,69 +183,94 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
           <p className="text-sm text-muted-foreground">Container details are not available.</p>
         </>
       ) : (
-        <DetailFacts
-          resource={{ id: container?.id ?? containerInfo.containerId, name: container?.name ?? containerInfo.name }}
-          items={[
-            {
-              label: 'Platform',
-              value: <PlatformCell name={containerInfo.platformName} id={containerInfo.platformId} />,
-            },
-            { label: 'Image', value: <ImageName image={containerInfo.imageView ?? undefined} /> },
-            {
-              label: 'Networks',
-              value: Object.keys(containerInfo.networks ?? {}).length ? (
-                <DockerNetworksCell networks={containerInfo.networks} platformId={containerInfo.platformId} />
-              ) : (
-                'None'
-              ),
-            },
-            {
-              label: 'Volumes',
-              value: containerInfo.volumes?.length ? (
-                <DockerVolumesCell volumes={containerInfo.volumes} platformId={containerInfo.platformId} />
-              ) : (
-                'None'
-              ),
-            },
-            {
-              label: 'Ports',
-              value: Object.keys(containerInfo.ports ?? {}).length ? (
-                <PortsDisplay ports={containerInfo.ports} compact maxVisible={3} />
-              ) : (
-                'None published'
-              ),
-            },
-            {
-              label: 'CPU usage',
-              value: !running ? (
-                'Not running'
-              ) : stats?.cpuUsage == null ? (
-                'Waiting for sample'
-              ) : (
-                <CPUCell state={state} stats={stats} />
-              ),
-            },
-            {
-              label: 'Memory usage',
-              value: !running ? (
-                'Not running'
-              ) : stats?.memoryActive == null ? (
-                'Waiting for sample'
-              ) : (
-                <MemoryUsageCell state={state} stats={stats} />
-              ),
-            },
-            {
-              label: running ? 'Started' : 'Finished',
-              value:
-                state === ContainerStateStatus.Created ? (
-                  'Not started'
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+          <DetailFacts
+            layout="stack"
+            resource={{ id: container?.id ?? containerInfo.containerId, name: container?.name ?? containerInfo.name }}
+            items={[
+              {
+                label: 'Platform',
+                value: <PlatformCell name={containerInfo.platformName} id={containerInfo.platformId} />,
+              },
+              { label: 'Image', value: <ImageName image={containerInfo.imageView ?? undefined} /> },
+              {
+                label: running ? 'Started' : 'Finished',
+                value:
+                  state === ContainerStateStatus.Created ? (
+                    'Not started'
+                  ) : (
+                    <StatusCell
+                      state={state}
+                      startedAt={containerInfo.startedAt}
+                      finishedAt={containerInfo.finishedAt}
+                    />
+                  ),
+              },
+            ]}
+          />
+          <DetailFacts
+            layout="stack"
+            items={[
+              {
+                label: 'CPU usage',
+                value: !running ? (
+                  'Not running'
+                ) : stats?.cpuUsage == null ? (
+                  'Waiting for sample'
                 ) : (
-                  <StatusCell state={state} startedAt={containerInfo.startedAt} finishedAt={containerInfo.finishedAt} />
+                  <CPUCell state={state} stats={stats} />
                 ),
-            },
-          ]}
-        />
+              },
+              {
+                label: 'Memory usage',
+                value: !running ? (
+                  'Not running'
+                ) : stats?.memoryActive == null ? (
+                  'Waiting for sample'
+                ) : (
+                  <MemoryUsageCell state={state} stats={stats} />
+                ),
+              },
+              {
+                label: 'Networks',
+                value: Object.keys(containerInfo.networks ?? {}).length ? (
+                  <DockerNetworksCell networks={containerInfo.networks} platformId={containerInfo.platformId} />
+                ) : (
+                  'None'
+                ),
+              },
+              {
+                label: 'Ports',
+                value: Object.keys(containerInfo.ports ?? {}).length ? (
+                  <PortsDisplay ports={containerInfo.ports} compact maxVisible={3} />
+                ) : (
+                  'None published'
+                ),
+              },
+            ]}
+          />
+          <DetailFacts
+            layout="stack"
+            items={[
+              {
+                label: 'Volumes',
+                value: volumeNames.length ? (
+                  <VolumeBackupLinks
+                    volumes={volumeNames}
+                    coverage={backupCoverage}
+                    platformId={containerInfo.platformId}
+                    dockerNodeId={container?.dockerNodeId}
+                  />
+                ) : (
+                  'None'
+                ),
+              },
+              ...(backupCoverage?.volumes.some((volume) => volume.hostPath)
+                ? [{ label: 'Bind mounts', value: <BindMountBackupLinks coverage={backupCoverage} /> }]
+                : []),
+            ]}
+          />
+        </div>
       )}
     </DetailSection>
   );

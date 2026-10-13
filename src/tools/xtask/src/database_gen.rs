@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-const EXPECTED_SEED_INSERTS: usize = 93;
+const EXPECTED_SEED_INSERTS: usize = 94;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

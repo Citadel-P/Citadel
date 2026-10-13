@@ -366,6 +366,15 @@ pub(super) fn summary(
     let size_root_fs = model.size_root_fs.flatten().unwrap_or_default();
     let c = container_summary(model.try_into().map_err(docker_error)?);
     Ok(ContainerMessage {
+        mounts_observed: c.mounts.is_some(),
+        mounts: c
+            .mounts
+            .as_ref()
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(mapping::mount_point)
+            .collect(),
         id: c.id,
         image: c.image,
         image_id: c.image_id,
@@ -428,9 +437,13 @@ mod tests {
         let model = serde_json::from_value(serde_json::json!({
             "Id": "agent-container", "Names": ["/custom-agent-name"],
             "State": "exited", "Labels": labels,
+            "Mounts": [{"Type":"bind","Source":"/srv/app","Destination":"/data"},{"Type":"volume","Name":"anonymous-id","Destination":"/cache"}],
         }))
         .unwrap();
         let wire = super::summary(model).unwrap();
+        assert!(wire.mounts_observed);
+        assert_eq!(wire.mounts[0].source.as_deref(), Some("/srv/app"));
+        assert_eq!(wire.mounts[1].name.as_deref(), Some("anonymous-id"));
         assert_eq!(wire.labels, labels);
         assert_eq!(wire.stack.as_deref(), Some("monitoring"));
         assert_eq!(

@@ -3,6 +3,8 @@ import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
 import { statsAxis } from '@/lib/stats-range';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
+  CHART_ACTIVE_DOT,
+  CHART_HOVER_CURSOR,
   ChartConfig,
   ChartContainer,
   ChartLegend,
@@ -35,11 +37,11 @@ const MemoryUsage = ({
     () =>
       ({
         memoryActive: {
-          label: <span className="text-foreground">Usage</span>,
+          label: 'Usage',
           color: 'var(--chart-1)',
         },
         memoryCache: {
-          label: <span className="text-foreground">Cache</span>,
+          label: 'Cache',
           color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
@@ -80,31 +82,15 @@ const MemoryUsage = ({
           }
         />
         <ChartTooltip
-          cursor={false}
+          cursor={CHART_HOVER_CURSOR}
           content={
             <ChartTooltipContent
-              nameKey="stats"
               indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as ContainerStatView).created as number;
-                return <span className="text-foreground">{dayjs(created * 1000).format('MMM D, HH:mm:ss')}</span>;
+                return dayjs(created * 1000).format('MMM D, h:mm:ss A');
               }}
-              formatter={(value, name) => (
-                <>
-                  <div
-                    className="h-2.5 w-2.5 shrink-0 rounded-xs bg-(--color-bg)"
-                    style={
-                      {
-                        '--color-bg': `var(--color-${name})`,
-                      } as React.CSSProperties
-                    }
-                  />
-                  {chartConfig[name as keyof typeof chartConfig]?.label || name}
-                  <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                    {byteTransform(value as number, 2)}
-                  </div>
-                </>
-              )}
+              valueFormatter={(value) => byteTransform(Number(value), 2)}
             />
           }
         />
@@ -113,6 +99,7 @@ const MemoryUsage = ({
           type="linear"
           isAnimationActive={false}
           connectNulls={false}
+          activeDot={CHART_ACTIVE_DOT}
           fill="url(#fillmemoryActive)"
           stroke="var(--color-memoryActive)"
         />
@@ -121,13 +108,14 @@ const MemoryUsage = ({
           type="linear"
           isAnimationActive={false}
           connectNulls={false}
+          activeDot={CHART_ACTIVE_DOT}
           fill="url(#fillmemoryCache)"
           stroke="var(--color-memoryCache)"
         />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [stats, gradientDefs, chartConfig, bounds],
+    [stats, gradientDefs, bounds],
   );
 
   return isLoading ? (

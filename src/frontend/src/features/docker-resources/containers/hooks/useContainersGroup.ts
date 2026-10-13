@@ -36,7 +36,11 @@ export const useContainersGroup = (platformId?: string) => {
             return { ...currentInfo, containers: [containerEvent.container, ...updatedContainers] };
           }
           if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent.container)) {
-            updatedContainers[existingIndex] = containerEvent.container;
+            updatedContainers[existingIndex] = {
+              ...containerEvent.container,
+              backupCoverage:
+                containerEvent.container.backupCoverage ?? updatedContainers[existingIndex].backupCoverage,
+            };
             return { ...currentInfo, containers: updatedContainers };
           }
           break;
@@ -54,7 +58,11 @@ export const useContainersGroup = (platformId?: string) => {
             JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent?.container)
           ) {
             if (containerEvent?.container) {
-              updatedContainers[existingIndex] = containerEvent?.container;
+              updatedContainers[existingIndex] = {
+                ...containerEvent.container,
+                backupCoverage:
+                  containerEvent.container.backupCoverage ?? updatedContainers[existingIndex].backupCoverage,
+              };
             }
             return { ...currentInfo, containers: updatedContainers };
           }

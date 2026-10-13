@@ -3,6 +3,7 @@
 ), policies AS (
     SELECT p.id, p.enabled, p.source->>'$type' AS sourcetype,
         CASE p.source->>'$type'
+            WHEN 'BindMount' THEN NULLIF(COALESCE(p.source->>'PlatformId',p.source->>'platformId'),'')::uuid
             WHEN 'DockerVolume' THEN NULLIF(COALESCE(p.source->>'PlatformId',p.source->>'platformId'),'')::uuid
             WHEN 'Stack' THEN sr.platformid
             WHEN 'Deployment' THEN d.platformid
@@ -38,6 +39,7 @@ SELECT requested.platformid,
     count(p.id)::int AS policycount,
     count(p.id) FILTER (WHERE p.enabled)::int AS enabledpolicycount,
     count(p.id) FILTER (WHERE p.sourcetype='DockerVolume')::int AS dockervolumepolicycount,
+    count(p.id) FILTER (WHERE p.sourcetype='BindMount')::int AS bindmountpolicycount,
     count(p.id) FILTER (WHERE p.sourcetype='Stack')::int AS stackpolicycount,
     count(p.id) FILTER (WHERE p.sourcetype='Deployment')::int AS deploymentpolicycount,
     count(p.id) FILTER (WHERE p.sourcetype='SwarmService')::int AS swarmservicepolicycount,

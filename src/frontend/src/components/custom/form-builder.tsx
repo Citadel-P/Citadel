@@ -553,6 +553,8 @@ type ItemInfo =
   | {
       label: string;
       description?: string;
+      group?: string;
+      icon?: React.ComponentType<{ className?: string }>;
       disabled?: boolean;
       requiredLicense?: LicenseEdition;
     };
@@ -563,48 +565,111 @@ export function ItemSelector({
   disabled,
   collection,
   className,
+  descriptionPlacement = 'option',
 }: {
   value?: string;
   onChange: (v: any) => void;
   disabled?: boolean;
   collection: Record<string, ItemInfo>;
   className?: string;
+  descriptionPlacement?: 'option' | 'below';
 }) {
   const accessibility = useFormFieldAccessibility();
+  const descriptionId = React.useId();
   const normalized = Object.fromEntries(
     Object.entries(collection).map(([key, item]) => [key, typeof item === 'string' ? { label: item } : item]),
   );
 
   const finalValue = value && normalized[value] ? value : '';
   const selected = normalized[finalValue];
+  const SelectedIcon = selected?.icon;
+  const showDescriptionBelow = descriptionPlacement === 'below' && Boolean(selected?.description);
+  const groups = new Map<string, Array<[string, (typeof normalized)[string]]>>();
+  for (const entry of Object.entries(normalized)) {
+    const group = entry[1].group ?? '';
+    const items = groups.get(group) ?? [];
+    items.push(entry);
+    groups.set(group, items);
+  }
+  const hasGroups = [...groups.keys()].some(Boolean);
   return (
-    <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger
-        aria-label={accessibility?.label}
-        aria-describedby={accessibility?.describedBy}
-        aria-invalid={accessibility?.invalid || undefined}
-        className={cn('w-full max-w-100', className)}>
-        <SelectValue placeholder="Select a value...">
-          {selected && (
-            <LicensedFeatureLabel requiredLicense={selected.requiredLicense}>{selected.label}</LicensedFeatureLabel>
-          )}
-        </SelectValue>
-      </SelectTrigger>
+    <>
+      <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger
+          aria-label={accessibility?.label}
+          aria-describedby={
+            [accessibility?.describedBy, showDescriptionBelow ? descriptionId : undefined].filter(Boolean).join(' ') ||
+            undefined
+          }
+          aria-invalid={accessibility?.invalid || undefined}
+          className={cn(
+            'w-full max-w-100',
+            hasGroups &&
+              'bg-background hover:border-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring/20 data-[state=open]:border-ring/50',
+            className,
+          )}>
+          <SelectValue placeholder="Select a value...">
+            {selected && (
+              <>
+                {SelectedIcon && <SelectedIcon className="size-4 shrink-0 text-muted-foreground" />}
+                <LicensedFeatureLabel requiredLicense={selected.requiredLicense}>{selected.label}</LicensedFeatureLabel>
+              </>
+            )}
+          </SelectValue>
+        </SelectTrigger>
 
-      <SelectContent className="bg-background">
-        {Object.entries(normalized).map(([key, info]) => (
-          <SelectItem key={key} value={key} disabled={info.disabled}>
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className={info.description ? 'font-medium' : ''}>{info.label}</span>
-                {info.description && <span className="text-xs text-muted-foreground">{info.description}</span>}
-              </div>
-              {info.requiredLicense && <LicenseFeatureIndicator edition={info.requiredLicense} />}
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <SelectContent
+          className={cn(
+            'bg-background',
+            hasGroups && 'w-(--radix-select-trigger-width) max-w-[calc(100vw-2rem)] rounded-lg shadow-lg',
+          )}>
+          {[...groups].map(([group, items], index) => (
+            <React.Fragment key={group}>
+              {hasGroups && index > 0 && <SelectSeparator className="mx-2 my-1" />}
+              <SelectGroup className={hasGroups ? 'px-1 py-1' : undefined}>
+                {group && (
+                  <SelectLabel className="px-2 pb-1.5 pt-1 text-[11px] font-medium tracking-wide text-muted-foreground">
+                    {group}
+                  </SelectLabel>
+                )}
+                {items.map(([key, info]) => {
+                  const Icon = info.icon;
+                  return (
+                    <SelectItem
+                      key={key}
+                      value={key}
+                      disabled={info.disabled}
+                      className={
+                        hasGroups
+                          ? 'my-0.5 rounded-md py-2 pr-9 data-[state=checked]:bg-accent/60 data-[state=checked]:font-medium'
+                          : undefined
+                      }>
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span className={descriptionPlacement === 'option' && info.description ? 'font-medium' : ''}>
+                            {info.label}
+                          </span>
+                          {descriptionPlacement === 'option' && info.description && (
+                            <span className="text-xs text-muted-foreground">{info.description}</span>
+                          )}
+                        </div>
+                        {info.requiredLicense && <LicenseFeatureIndicator edition={info.requiredLicense} />}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectGroup>
+            </React.Fragment>
+          ))}
+        </SelectContent>
+      </Select>
+      {showDescriptionBelow && (
+        <p id={descriptionId} className="max-w-100 text-xs leading-relaxed text-muted-foreground">
+          {selected.description}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -978,7 +1043,7 @@ export function FormShell<T>({
   );
   const formRef = useRef<HTMLDivElement>(null);
   const [selectedNavigationId, setSelectedNavigationId] = useState<string | undefined>(
-    () => window.location.hash.slice(1) || undefined,
+    () => new URLSearchParams(window.location.search).get('section') || window.location.hash.slice(1) || undefined,
   );
   const selectedNavigationValue = useMemo(
     () =>
@@ -1042,6 +1107,16 @@ export function FormShell<T>({
       scrollTarget.removeEventListener('scroll', onScroll);
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
+  }, [navigationTargetKey]);
+
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    if (!section) return;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(section);
+      if (target && formRef.current?.contains(target)) target.scrollIntoView?.({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [navigationTargetKey]);
 
   const hasChanges = useMemo(() => !areValuesEqual(effectiveOriginal, merged), [effectiveOriginal, merged]);

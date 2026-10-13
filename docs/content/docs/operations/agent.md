@@ -293,7 +293,7 @@ services:
 The read-only `/host` bind lets the Agent report the capacity of the filesystem
 containing Docker's configured data root. It exposes host paths to the trusted
 Agent process but does not allow writes through the mount. Removing it disables
-only disk metrics. Upgrade and recreate older Agent containers to add the mount.
+only disk metrics. Include this mount when configuring the Agent container.
 For ZFS, the metric represents the mounted dataset or filesystem, not total pool
 allocation.
 
@@ -306,8 +306,8 @@ docker compose up -d
 Citadel displays the Agent container as **System** on the remote Platform. It
 remains available for inspection, logs, terminal access, and resource
 statistics, but Citadel blocks lifecycle and delete actions that could sever
-the Platform connection. Manage the Agent from its Docker host and recreate
-older Agent containers once to apply the labels.
+the Platform connection. Manage the Agent from its Docker host and include
+the system labels in custom installation commands.
 
 Then configure the address that Citadel Core can use to reach it:
 

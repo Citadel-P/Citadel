@@ -12,6 +12,12 @@ describe('platform backup summary', () => {
     });
   });
 
+  it('counts bind policies separately from Docker volumes', () => {
+    const summary = createSummary({ policyCount: 2, enabledPolicyCount: 2, bindMountPolicyCount: 2 });
+    expect(getBackupMetric(summary, false).detailTitle).toBe('0 volume, 2 bind mount, 0 stack, 0 deployment');
+    expect(getBackupSourceStates(summary)[0]).toMatchObject({ label: 'Bind mount policies', value: 2 });
+  });
+
   it('reports policy health and source types without treating backups as volume-only', () => {
     const summary = createSummary({
       policyCount: 4,

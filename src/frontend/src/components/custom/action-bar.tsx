@@ -6,8 +6,15 @@ import { ButtonActionComponent, ButtonGroupComponent } from '@/pages/types';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { LucideIcon } from 'lucide-react';
 
-const RESPONSIVE_BUTTON_GROUP_CLASS =
-  'grid w-full grid-cols-2 gap-2 [&>*]:w-full [&>*]:max-w-none [&>*]:rounded-sm! [&>*]:border-l! sm:flex sm:w-fit sm:gap-0 sm:[&>*]:w-auto sm:[&>*]:max-w-47.5 sm:[&>*:not(:first-child)]:rounded-l-none! sm:[&>*:not(:first-child)]:border-l-0! sm:[&>*:not(:last-child)]:rounded-r-none!';
+// Disabled actions wrap their button in a tooltip trigger.
+const RESPONSIVE_BUTTON_GROUP_CLASS = [
+  'grid w-full grid-cols-2 gap-2 [&>*]:w-full [&>*]:max-w-none [&>*]:rounded-sm! [&>*]:border-l!',
+  '[&>*>button]:w-full [&>*>button]:max-w-none [&>*>button]:rounded-sm! [&>*>button]:border-l!',
+  'sm:flex sm:w-fit sm:gap-0 sm:[&>*]:w-auto sm:[&>*]:max-w-47.5',
+  'sm:[&>*:not(:first-child)]:rounded-l-none! sm:[&>*:not(:first-child)]:border-l-0! sm:[&>*:not(:last-child)]:rounded-r-none!',
+  'sm:[&>*>button]:w-auto sm:[&>*>button]:max-w-47.5',
+  'sm:[&>*:not(:first-child)>button]:rounded-l-none! sm:[&>*:not(:first-child)>button]:border-l-0! sm:[&>*:not(:last-child)>button]:rounded-r-none!',
+].join(' ');
 
 export interface ActionButtonConfig {
   id: string;

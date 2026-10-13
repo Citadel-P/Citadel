@@ -36,6 +36,44 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if matches!(event.resource_type, "BackupCoverage" | "License") {
+            let contains = |key: &str, id: Option<Uuid>| {
+                (event.resource_type == "License" || event.payload["resync"] == true)
+                    || id.is_some_and(|id| {
+                        event.payload[key].as_array().is_some_and(|ids| {
+                            ids.iter().any(|v| {
+                                v.as_str().and_then(|s| Uuid::parse_str(s).ok()) == Some(id)
+                            })
+                        })
+                    })
+            };
+            return match self.topic() {
+                Topic::Deployment(..) => contains("deploymentIds", self.id()),
+                Topic::Stack(..) => contains("stackIds", self.id()),
+                Topic::SwarmService(..) => contains("serviceIds", self.id()),
+                Topic::ContainerInfo(reference) => {
+                    contains("containerIds", Uuid::parse_str(reference).ok())
+                }
+                Topic::Containers(..) | Topic::SwarmServices(..) => {
+                    (event.resource_type == "License" || event.payload["resync"] == true)
+                        || self.id() == event.platform_id
+                }
+                Topic::Deployments => {
+                    (event.resource_type == "License" || event.payload["resync"] == true)
+                        || event.payload["deploymentIds"]
+                            .as_array()
+                            .is_some_and(|v| !v.is_empty())
+                }
+                Topic::Stacks => {
+                    (event.resource_type == "License" || event.payload["resync"] == true)
+                        || event.payload["stackIds"]
+                            .as_array()
+                            .is_some_and(|v| !v.is_empty())
+                }
+                _ => false,
+            };
+        }
+
         if let Some(patches) = event
             .payload
             .get("containerPatches")
@@ -509,6 +547,53 @@ fn docker_tombstone(row: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn backup_changes_refresh_only_affected_platforms_and_resources() {
+        let hub = crate::realtime::RealtimeHub::new(
+            8,
+            std::sync::Arc::new(crate::metrics::Metrics::default()),
+        );
+        let mut receiver = hub.subscribe();
+        let platform = Uuid::now_v7();
+        let deployment = Uuid::now_v7();
+        let container = Uuid::now_v7();
+        hub.publish_backup_coverage(Some(&citadel_backups::coverage::CoverageInvalidation {
+            platform_id: platform,
+            deployment_ids: vec![deployment],
+            container_ids: vec![container],
+            ..Default::default()
+        }));
+        let event = receiver.try_recv().unwrap();
+        for topic in [
+            format!("containers:{platform}"),
+            format!("deployment:{deployment}"),
+            format!("container-info:{container}"),
+            "deployments".into(),
+        ] {
+            assert!(Group::parse(&topic).unwrap().affected_by(&event));
+        }
+        for topic in [
+            format!("containers:{}", Uuid::now_v7()),
+            format!("deployment:{}", Uuid::now_v7()),
+            format!("container-info:{}", Uuid::now_v7()),
+            "stacks".into(),
+            "platforms".into(),
+        ] {
+            assert!(!Group::parse(&topic).unwrap().affected_by(&event));
+        }
+        hub.publish_resource_change("BackupPolicy", Uuid::nil(), "updated");
+        assert!(
+            !Group::parse("deployments")
+                .unwrap()
+                .affected_by(&receiver.try_recv().unwrap())
+        );
+        hub.publish_backup_coverage(None);
+        assert!(
+            Group::parse("deployments")
+                .unwrap()
+                .affected_by(&receiver.try_recv().unwrap())
+        );
+    }
     #[test]
     fn workload_changes_only_refresh_matching_details_and_the_list() {
         let hub = crate::realtime::RealtimeHub::new(

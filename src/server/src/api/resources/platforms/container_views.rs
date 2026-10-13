@@ -36,6 +36,9 @@ impl ContainerSystemRole {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerRuntimeView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_coverage:
+        Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     /// Docker container ID; the statistics containerId is Citadel's database UUID.
     pub id: String,
     pub name: String,
@@ -70,6 +73,7 @@ pub struct ContainerRuntimeView {
 impl ContainerView {
     pub fn runtime_data(&self) -> Result<ContainerRuntimeView, serde_json::Error> {
         Ok(ContainerRuntimeView {
+            backup_coverage: self.backup_coverage.clone(),
             id: self.container_id.clone(),
             name: self.name.clone(),
             platform_id: self.platform_id,
@@ -109,6 +113,9 @@ pub struct ContainerRuntimeListView {
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerSummaryView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_coverage:
+        Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub name: String,
     pub container_id: String,
     pub platform_id: Uuid,
@@ -154,6 +161,7 @@ impl ContainerSummaryView {
             })
             .collect();
         Ok(Self {
+            backup_coverage: None,
             name: inspection["name"].as_str().unwrap_or_default().into(),
             container_id: container.container_id.clone(),
             platform_id: container.platform_id,
@@ -229,6 +237,7 @@ mod tests {
             image_view: None,
             deployment_view: None,
             capabilities: None,
+            backup_coverage: None,
         }
     }
 

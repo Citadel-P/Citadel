@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod coverage;
 mod error;
 pub mod policies;
 pub mod repositories;

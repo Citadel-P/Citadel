@@ -1,3 +1,4 @@
+import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { SwarmServiceHealth, type ManagedSwarmServiceView } from '@/api/generated/api.types';
 import { Boxes, CircleCheck, TriangleAlert, RefreshCw, CircleStop } from 'lucide-react';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -19,6 +20,8 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
+    Extra: BackupStatusFilter,
+    activeFilterParams: ['backupStatus'],
   },
   overview: {
     label: 'Swarm service overview',
@@ -71,7 +74,8 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
   ),
   useData: (): ResourceDataHookResult<any> => {
     const { services, capabilities, isLoading, error, refetch, isFetching } = useSwarmServicesGroup();
-    return { error, refetch, isFetching, items: services ?? EMPTY, capabilities, isLoading };
+    const items = useBackupStatusFilter(services ?? EMPTY);
+    return { error, refetch, isFetching, items, capabilities, isLoading };
   },
   filterItems: (items, search) => {
     const value = search.trim().toLowerCase();

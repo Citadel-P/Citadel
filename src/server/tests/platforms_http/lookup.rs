@@ -236,6 +236,82 @@ async fn registry(f: &Fixture) -> Uuid {
     sqlx::query("INSERT INTO registries(id,name,registryhost,status,configuration,createdbyactorid) VALUES($1,$2,$2,'Active','{\"password\":\"must-not-leak\"}',$3)").bind(id).bind(format!("lookup-registry-{id}")).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     id
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn alert_backup_policy_lookup_supports_filters_and_editing_with_scoped_access() {
+    let f = fixture().await;
+    let reader = subject(&f).await;
+    let rule = Uuid::parse_str("019d0000-0001-7000-8001-000000000030").unwrap();
+    let secret = Uuid::now_v7();
+    let repository = Uuid::now_v7();
+    sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,'lookup-backup-password','InternalEncrypted')")
+        .bind(secret).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,passwordsecretid,spec,status,type,createdbyactorid) VALUES($1,'lookup-backups','lookup-backups',$2,'{}','Ready','FileSystem',$3)")
+        .bind(repository).bind(secret).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let visible = Uuid::now_v7();
+    let hidden = Uuid::now_v7();
+    let archived = Uuid::now_v7();
+    for (id, name, is_archived) in [
+        (visible, "Visible backup", false),
+        (hidden, "Hidden backup", false),
+        (archived, "Archived backup", true),
+    ] {
+        sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,backuprepositoryid,createdbyactorid,runasactorid,source,archivedat) VALUES($1,$2,lower($2),$3,$4,$4,'{\"$type\":\"CitadelSystem\"}',CASE WHEN $5 THEN CURRENT_TIMESTAMP END)")
+            .bind(id).bind(name).bind(repository).bind(SYSTEM_ACTOR_ID).bind(is_archived)
+            .execute(&f.pool).await.unwrap();
+    }
+    let filter_query = "TargetResourceType=BackupPolicy&SourceResourceType=Alert";
+    let edit_query = format!("{filter_query}&SourceResourceId={rule}");
+    assert!(ids(&lookup(&f, &reader, filter_query).await).is_empty());
+    grant(
+        &f,
+        reader.actor_id.value(),
+        ResourceType::BackupPolicy,
+        visible,
+        0,
+    )
+    .await;
+    grant(
+        &f,
+        reader.actor_id.value(),
+        ResourceType::BackupPolicy,
+        archived,
+        0,
+    )
+    .await;
+    // Read access to the target does not grant access to the source rule.
+    assert_eq!(
+        send(
+            &f,
+            &format!("/api/v1/lookup?{edit_query}"),
+            Some(reader.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    grant(&f, reader.actor_id.value(), ResourceType::Alert, rule, 0).await;
+    for query in [filter_query, edit_query.as_str()] {
+        let rows = lookup(&f, &reader, query).await;
+        assert_eq!(ids(&rows), vec![visible]);
+        assert_eq!(rows[0]["name"], "Visible backup");
+        let admin_rows = lookup(&f, &f.administrator, query).await;
+        assert_eq!(ids(&admin_rows), vec![hidden, visible]);
+    }
+    let missing_query = format!("{filter_query}&SourceResourceId={}", Uuid::now_v7());
+    assert_eq!(
+        send(
+            &f,
+            &format!("/api/v1/lookup?{missing_query}"),
+            Some(f.administrator.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    close(f).await;
+}
 async fn deployment(f: &Fixture, registry_id: Uuid) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,$2,$3,$4,'Created',$5)").bind(id).bind(format!("lookup-deployment-{id}")).bind(f.platform_id).bind(json!({"image":{"$type":"External","registryId":registry_id,"image":"nginx"}})).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();

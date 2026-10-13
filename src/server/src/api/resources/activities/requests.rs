@@ -1,4 +1,4 @@
-use citadel_activities::{ActivityEventType, ActivityFilter, ActivityResourceType};
+use citadel_activities::{ActivityEventType, ActivityFilter, ActivityResourceType, ActivityStatus};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -11,6 +11,8 @@ pub(crate) struct ActivityFilterQuery {
     pub(crate) resource_type: Option<ActivityResourceType>,
     #[serde(alias = "EventType")]
     pub(crate) event_type: Option<ActivityEventType>,
+    #[serde(alias = "Status")]
+    pub(crate) status: Option<ActivityStatus>,
     #[serde(alias = "Page")]
     pub(crate) page: Option<i32>,
     #[serde(alias = "PageSize")]
@@ -23,6 +25,7 @@ impl From<ActivityFilterQuery> for ActivityFilter {
             resource_id: value.resource_id,
             resource_type: value.resource_type,
             event_type: value.event_type,
+            status: value.status,
             page: value.page,
             page_size: value.page_size,
         }

@@ -136,7 +136,9 @@ pub(crate) struct RepositoryLocationInput {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RestoreInput {
     pub(crate) target_platform_id: Uuid,
+    #[serde(default)]
     pub(crate) target_volume_name: String,
+    pub(crate) target_host_path: Option<String>,
     pub(crate) overwrite_existing: bool,
     pub(crate) target_docker_node_id: Option<String>,
     pub(crate) source_backup_run_item_id: Option<Uuid>,

@@ -65,6 +65,11 @@ impl TryFrom<wire::ContainerSummary> for ContainerSummary {
     type Error = DockerError;
     fn try_from(v: wire::ContainerSummary) -> Result<Self, Self::Error> {
         Ok(Self {
+            mounts: v
+                .mounts
+                .map(serde_json::to_value)
+                .transpose()
+                .map_err(DockerError::from)?,
             id: v.id.unwrap_or_default(),
             names: v.names.unwrap_or_default(),
             image: v.image.unwrap_or_default(),

@@ -46,6 +46,25 @@ may still provide access because permissions are additive.
 Custom Roles require Team's **Custom access control** capability. Built-in System
 Roles can be inspected but cannot be edited.
 
+### Roles and resource overrides have different scopes
+
+A Role grants permissions for a **resource type**, such as Backup Policies.
+A resource override grants permissions for **one existing resource**, such as
+the `Forgejo daily` Backup Policy. Roles can be assigned directly or inherited
+through an enabled Team.
+
+Creating a resource requires **Write** permission for its resource type through
+a Role. A Write override lets the user edit that existing resource; it does not
+grant permission to create another one.
+
+For example, a user with Write overrides on the `Forgejo daily` policy and the
+`daily` repository can edit those resources while **Add Policy** remains disabled.
+To let the user create policies, assign a Role with **Backup Policy → Write**.
+Creating repositories separately requires **Backup Repository → Write**.
+These Role permissions apply across the resource type, so review the intended
+scope before granting them. Access to dependencies, such as the selected backup
+repository and source, is also required.
+
 ## Grant Access to One Resource
 
 This example lets a teammate read the `Storefront` Stack and its logs while
@@ -93,6 +112,10 @@ If the user has more access than expected, inspect every assigned Role, Team,
 and direct grant. Setting one entry to **None** removes that entry's grant;
 it does not override access from another source. If access is missing, check
 the account is enabled and that both the dialog and User form were saved.
+
+If an **Add** button is disabled even though the user can edit an existing
+resource, check their assigned Roles and Team Roles for Write permission on
+that resource type. A resource override alone does not enable creation.
 
 General permission levels and additional capabilities serve different purposes.
 For example, Stack logs require **Read + Logs**, while deployment and rollback

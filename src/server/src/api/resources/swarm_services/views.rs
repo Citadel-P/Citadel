@@ -70,6 +70,9 @@ impl TryFrom<citadel_swarm_services::SwarmServiceOperation> for SwarmServiceOper
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedSwarmServiceView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_coverage:
+        Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
     pub platform_id: Uuid,
     pub name: String,
@@ -124,6 +127,7 @@ impl TryFrom<AuthorizedResource<citadel_swarm_services::SwarmService>> for Manag
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            backup_coverage: None,
             id: value.id,
             platform_id: value.platform_id,
             name: value.name,

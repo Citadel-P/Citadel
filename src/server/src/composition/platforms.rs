@@ -131,6 +131,7 @@ pub(super) fn build(
     }
     let volume_content = Arc::new(volume_content.with_runtime_router(container_runtime.clone()));
     let platform_state = platforms_http::PlatformsHttpState {
+        backup_coverage: None,
         node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), config.node_agent_policy.clone())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:container_runtime.runtime_router(),edge:edge_registry.clone()}),
     node_agent_coverage: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::coverage::PostgresNodeAgentCoverageReader{pool:pool.clone(),sessions:edge_registry.clone()}),

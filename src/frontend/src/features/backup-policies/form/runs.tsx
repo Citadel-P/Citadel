@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router';
 import {
   BackupSourceSpec,
   BackupRunItemView,
@@ -22,7 +23,6 @@ import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -38,6 +38,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }) {
+  const [search] = useSearchParams();
+  const linkedRunId = search.get('runId');
+  const linkedRun = useRead('getBackupRun', { id: linkedRunId ?? undefined });
+  const openedLinkedRun = useRef<string | undefined>(undefined);
   const [restoreRun, setRestoreRun] = useState<BackupRunView | undefined>();
   const queryClient = useQueryClient();
   const formatDateTime = useProfileDateTimeFormatter();
@@ -198,13 +202,21 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
     [openSheet],
   );
 
+  useEffect(() => {
+    const run = linkedRun.data?.data;
+    if (run && run.backupPolicyId === resource.id && run.id === linkedRunId && openedLinkedRun.current !== run.id) {
+      openedLinkedRun.current = run.id;
+      handleOpenLogs(run);
+    }
+  }, [linkedRun.data, linkedRunId, resource.id, handleOpenLogs]);
+
   const handleOpenRestoreLogs = useCallback(
     (run: BackupRestoreRunView) => {
       openSheet({
         kind: 'backupRestoreRunLogs',
         payload: {
           id: run.id,
-          name: run.targetVolumeName,
+          name: run.targetHostPath ?? run.targetVolumeName,
           status: run.status,
         },
       });
@@ -261,7 +273,7 @@ const runColumns = (
   },
   {
     accessorKey: 'items',
-    header: ({ column }) => <SortableCell cellName="Volumes" column={column} />,
+    header: ({ column }) => <SortableCell cellName="Sources" column={column} />,
     cell: ({ row }) => <BackupRunItemsSummary items={row.original.items} />,
     sortingFn: (rowA, rowB) => Number(rowA.original.items?.length ?? 0) - Number(rowB.original.items?.length ?? 0),
   },
@@ -300,7 +312,7 @@ const runColumns = (
             <FileText className="size-3.5" />
           </Button>
           {restorable && (
-            <Button type="button" size="icon-sm" variant="ghost" onClick={() => onRestore(run)} title="Restore volume">
+            <Button type="button" size="icon-sm" variant="ghost" onClick={() => onRestore(run)} title="Restore backup">
               <RotateCcw className="size-3.5" />
             </Button>
           )}
@@ -329,9 +341,12 @@ const restoreRunColumns = (
 ): ColumnDef<BackupRestoreRunView>[] => [
   {
     accessorKey: 'targetVolumeName',
-    header: ({ column }) => <SortableCell cellName="Target Volume" column={column} />,
-    cell: ({ row }) => <span className="text-sm">{row.original.targetVolumeName}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.targetVolumeName.localeCompare(rowB.original.targetVolumeName),
+    header: ({ column }) => <SortableCell cellName="Target" column={column} />,
+    cell: ({ row }) => <span className="text-sm">{row.original.targetHostPath ?? row.original.targetVolumeName}</span>,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.targetHostPath ?? rowA.original.targetVolumeName).localeCompare(
+        rowB.original.targetHostPath ?? rowB.original.targetVolumeName,
+      ),
   },
   {
     accessorKey: 'status',
@@ -344,7 +359,11 @@ const restoreRunColumns = (
     header: ({ column }) => <SortableCell cellName="Mode" column={column} />,
     cell: ({ row }) => (
       <span className="text-sm text-muted-foreground">
-        {row.original.overwriteExisting ? 'Overwrite' : 'New volume'}
+        {row.original.overwriteExisting
+          ? 'Overwrite'
+          : row.original.targetHostPath
+            ? 'Empty host directory'
+            : 'New volume'}
       </span>
     ),
     sortingFn: (rowA, rowB) => Number(rowA.original.overwriteExisting) - Number(rowB.original.overwriteExisting),
@@ -395,8 +414,9 @@ const restoreRunColumns = (
   },
 ];
 
-function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: () => void }) {
+export function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: () => void }) {
   const source = run.sourceSnapshot;
+  const directBindSource = source.$type === 'BindMount' ? source : undefined;
   const successfulItems = useMemo(
     () => run.items.filter((item) => item.status === BackupRunItemStatus.Succeeded && Boolean(item.resticSnapshotId)),
     [run.items],
@@ -406,14 +426,21 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
   const initialSourceItem = !directSource && successfulItems.length === 1 ? successfulItems[0] : undefined;
   const [sourceBackupRunItemId, setSourceBackupRunItemId] = useState(initialSourceItem?.id ?? '');
   const [targetPlatformId, setTargetPlatformId] = useState(
-    initialSourceItem?.platformId ?? directSource?.platformId ?? '',
+    initialSourceItem?.platformId ?? directSource?.platformId ?? directBindSource?.platformId ?? '',
   );
   const [targetDockerNodeId, setTargetDockerNodeId] = useState(
-    initialSourceItem?.dockerNodeId ?? directSource?.dockerNodeId ?? '',
+    initialSourceItem?.dockerNodeId ?? directSource?.dockerNodeId ?? directBindSource?.dockerNodeId ?? '',
   );
   const [targetVolumeName, setTargetVolumeName] = useState(
-    initialSourceItem?.volumeName ?? directSource?.volumeName ?? '',
+    initialSourceItem?.hostPath ??
+      directBindSource?.hostPath ??
+      initialSourceItem?.volumeName ??
+      directSource?.volumeName ??
+      '',
   );
+  const selectedSourceItem = successfulItems.find((item) => item.id === sourceBackupRunItemId);
+  const bindSource = Boolean(selectedSourceItem?.hostPath ?? directBindSource?.hostPath);
+  const hasBindSnapshots = successfulItems.some((item) => item.hostPath);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [overwriteConfirmation, setOverwriteConfirmation] = useState('');
   const { open: openSheet } = useTaskSheet('BackupPolicy');
@@ -424,6 +451,8 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
   const targetNodes = useRead('listSwarmNodes', targetNodesArgs, {
     enabled: Boolean(targetPlatformId) && isTargetSwarm,
   });
+  const nodes = targetNodes.data?.data.items ?? [];
+  const selectedNode = nodes.find((node) => node.id === targetDockerNodeId);
 
   const targetName = targetVolumeName.trim();
   const overwriteConfirmed = !overwriteExisting || overwriteConfirmation === targetName;
@@ -447,7 +476,8 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
         id: run.id,
         name: targetName,
         targetPlatformId,
-        targetVolumeName: targetName,
+        targetVolumeName: bindSource ? '' : targetName,
+        targetHostPath: bindSource ? targetName : null,
         overwriteExisting,
         targetDockerNodeId: isTargetSwarm ? targetDockerNodeId : null,
         sourceBackupRunItemId: sourceBackupRunItemId || null,
@@ -460,42 +490,38 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Restore Volume</DialogTitle>
+          <DialogTitle>{bindSource ? 'Restore bind mount' : 'Restore Volume'}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           {!directSource && successfulItems.length > 1 && (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="backup-restore-source-item">Snapshot Volume</Label>
-              <Select
-                value={sourceBackupRunItemId}
-                onValueChange={(itemId) => {
-                  const item = successfulItems.find((candidate) => candidate.id === itemId);
-                  setSourceBackupRunItemId(itemId);
+              <Label htmlFor="backup-restore-source-item">
+                {hasBindSnapshots ? 'Snapshot source' : 'Snapshot Volume'}
+              </Label>
+              <ResourceSelectorField
+                id="backup-restore-source-item"
+                items={successfulItems.map((item) => ({ ...item, name: formatBackupRunItem(item) }))}
+                selected={sourceBackupRunItemId}
+                allowClear={false}
+                placeholder="Select a successful snapshot"
+                searchPlaceholder="Search snapshots..."
+                onSelect={(item) => {
                   if (!item) return;
-
+                  setSourceBackupRunItemId(item.id);
                   setTargetPlatformId(item.platformId);
                   setTargetDockerNodeId(item.dockerNodeId ?? '');
-                  setTargetVolumeName(item.volumeName);
+                  setTargetVolumeName(item.hostPath ?? item.volumeName);
                   setOverwriteExisting(false);
                   setOverwriteConfirmation('');
-                }}>
-                <SelectTrigger id="backup-restore-source-item" className="w-full">
-                  <SelectValue placeholder="Select a successful Volume snapshot" />
-                </SelectTrigger>
-                <SelectContent>
-                  {successfulItems.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {formatBackupRunItem(item)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                }}
+              />
             </div>
           )}
           <div className="flex flex-col gap-2">
             <Label>Target Platform</Label>
             <ResourceSelectorField
+              aria-label="Target Platform"
               targetType={LookupResourceType.Platform}
               selected={targetPlatformId}
               onSelect={(platform: PlatformView | undefined) => {
@@ -510,35 +536,46 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
           {isTargetSwarm && (
             <div className="flex flex-col gap-2">
               <Label htmlFor="backup-restore-target-node">Target Node</Label>
-              <Select value={targetDockerNodeId} onValueChange={setTargetDockerNodeId}>
-                <SelectTrigger id="backup-restore-target-node" className="w-full">
-                  <SelectValue placeholder={targetNodes.isLoading ? 'Loading Nodes...' : 'Select a Node'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(targetNodes.data?.data.items ?? [])
-                    .filter((node) => !node.isStale && node.status.toLowerCase() === 'ready')
-                    .map((node) => (
-                      <SelectItem key={node.id} value={node.id}>
-                        {node.hostname || node.id}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <ResourceSelectorField
+                id="backup-restore-target-node"
+                items={nodes
+                  .filter((node) => !node.isStale && node.status.toLowerCase() === 'ready')
+                  .map((node) => ({ id: node.id, name: node.hostname || node.id }))}
+                selected={
+                  targetDockerNodeId
+                    ? { id: targetDockerNodeId, name: selectedNode?.hostname || targetDockerNodeId }
+                    : undefined
+                }
+                allowClear={false}
+                disabled={targetNodes.isLoading}
+                placeholder={targetNodes.isLoading ? 'Loading Nodes...' : 'Select a Node'}
+                searchPlaceholder="Search Nodes..."
+                onSelect={(node) => setTargetDockerNodeId(node?.id ?? '')}
+              />
               <p className="text-xs text-muted-foreground">
-                The restored local Volume is created only on this Swarm Node. Citadel does not reattach Services.
+                {bindSource
+                  ? 'The host path must exist on this Node. Citadel does not reattach Services.'
+                  : 'The restored local Volume is created only on this Swarm Node. Citadel does not reattach Services.'}
               </p>
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="backup-restore-volume-name">Target Volume</Label>
+            <Label htmlFor="backup-restore-volume-name">{bindSource ? 'Target host path' : 'Target Volume'}</Label>
             <Input
               id="backup-restore-volume-name"
               value={targetVolumeName}
               onChange={(event) => setTargetVolumeName(event.target.value)}
-              placeholder="restored_volume"
+              placeholder={bindSource ? '/srv/app/recovered-data' : 'restored_volume'}
             />
           </div>
-          {!isTargetSwarm && (
+          {bindSource && (
+            <p className="text-xs text-muted-foreground">
+              Prepare an existing empty directory, or an existing file with overwrite enabled, on the target host. Its
+              type must match the snapshot. Stop writers before restoring. Directory restores merge files; unrelated
+              files remain.
+            </p>
+          )}
+          {(!isTargetSwarm || bindSource) && (
             <div className="flex items-center gap-2">
               <Switch
                 id="backup-restore-overwrite"
@@ -551,17 +588,21 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
                 }}
               />
               <Label htmlFor="backup-restore-overwrite" className="font-normal">
-                Overwrite existing target volume
+                {bindSource ? 'Allow overwriting existing host files' : 'Overwrite existing target volume'}
               </Label>
             </div>
           )}
           {overwriteExisting && (
             <div className="flex flex-col gap-3">
               <AlertMessage type="warning" title="Overwrite restore">
-                The target volume will be deleted and recreated before the snapshot is restored. This cannot be undone.
+                {bindSource
+                  ? 'Files at the target host path may be replaced. This cannot be undone.'
+                  : 'Existing files in the target volume will be replaced by the snapshot. This cannot be undone.'}
               </AlertMessage>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="backup-restore-confirmation">Type the target volume name to confirm</Label>
+                <Label htmlFor="backup-restore-confirmation">
+                  {bindSource ? 'Type the target host path to confirm' : 'Type the target volume name to confirm'}
+                </Label>
                 <Input
                   id="backup-restore-confirmation"
                   value={overwriteConfirmation}
@@ -590,7 +631,7 @@ function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onClose: ()
 function BackupRunItemsSummary({ items }: { items: BackupRunItemView[] }) {
   if (!items.length) return <span className="text-muted-foreground text-sm">-</span>;
 
-  const label = items.length === 1 ? formatBackupRunItem(items[0]) : `${items.length} volumes`;
+  const label = items.length === 1 ? formatBackupRunItem(items[0]) : `${items.length} sources`;
 
   return <span className="block min-w-0 truncate text-sm">{label}</span>;
 }
@@ -621,7 +662,8 @@ function canRestore(run: BackupRunView) {
 
 function formatBackupRunItem(item: BackupRunItemView) {
   const node = item.nodeHostname ?? item.dockerNodeId;
-  return node ? `${item.volumeName} on ${node}` : item.volumeName;
+  const name = item.hostPath ?? item.volumeName;
+  return node ? `${name} on ${node}` : name;
 }
 
 function sortRuns(runs: BackupRunView[]) {

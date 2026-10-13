@@ -3,6 +3,8 @@ import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
 import { statsAxis } from '@/lib/stats-range';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
+  CHART_ACTIVE_DOT,
+  CHART_HOVER_CURSOR,
   ChartConfig,
   ChartContainer,
   ChartLegend,
@@ -66,11 +68,11 @@ const NetworkUsage = ({
     () =>
       ({
         rxBytes: {
-          label: <span className="text-foreground">Data received</span>,
+          label: 'Data received',
           theme: NETWORK_CHART_COLORS.rxBytes,
         },
         txBytes: {
-          label: <span className="text-foreground">Data sent</span>,
+          label: 'Data sent',
           theme: NETWORK_CHART_COLORS.txBytes,
         },
       }) satisfies ChartConfig,
@@ -111,30 +113,14 @@ const NetworkUsage = ({
           }
         />
         <ChartTooltip
-          cursor={false}
+          cursor={CHART_HOVER_CURSOR}
           content={
             <ChartTooltipContent
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as ContainerStatView).created as number;
-                return <span className="text-foreground">{dayjs(created * 1000).format('MMM D, HH:mm:ss')}</span>;
+                return dayjs(created * 1000).format('MMM D, h:mm:ss A');
               }}
-              formatter={(value, name) => (
-                <>
-                  <div
-                    className="h-2.5 w-2.5 shrink-0 rounded-xs bg-(--color-bg)"
-                    style={
-                      {
-                        '--color-bg': `var(--color-${name})`,
-                      } as React.CSSProperties
-                    }
-                  />
-                  {chartConfig[name as keyof typeof chartConfig]?.label || name}
-                  <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                    {((value as number) / 1024 / 1024).toFixed(2)}
-                    <span className="font-normal text-muted-foreground">MB</span>
-                  </div>
-                </>
-              )}
+              valueFormatter={(value) => `${(Number(value) / 1024 / 1024).toFixed(2)} MB`}
             />
           }
         />
@@ -143,6 +129,7 @@ const NetworkUsage = ({
           type="linear"
           isAnimationActive={false}
           connectNulls={false}
+          activeDot={CHART_ACTIVE_DOT}
           fill="url(#fillrxBytes)"
           stroke="var(--color-rxBytes)"
         />
@@ -151,13 +138,14 @@ const NetworkUsage = ({
           type="linear"
           isAnimationActive={false}
           connectNulls={false}
+          activeDot={CHART_ACTIVE_DOT}
           fill="url(#filltxBytes)"
           stroke="var(--color-txBytes)"
         />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [stats, gradientDefs, chartConfig, bounds],
+    [stats, gradientDefs, bounds],
   );
 
   return isLoading ? (

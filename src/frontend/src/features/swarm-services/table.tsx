@@ -1,3 +1,4 @@
+import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import { ColumnDef, Row } from '@tanstack/react-table';
@@ -187,6 +188,15 @@ const createColumns = (actions: SwarmServiceActions): ColumnDef<ManagedServiceTa
     cell: ({ row }) => (isServiceRow(row.original) ? <TagChips tags={row.original.service.tags} /> : null),
     enableSorting: false,
   },
+  backupColumn<ManagedServiceTableRow>((row) =>
+    isServiceRow(row)
+      ? {
+          coverage: row.service.backupCoverage,
+          source: { $type: 'SwarmService', swarmServiceId: row.service.id },
+          returnTo: `/swarm-services/edit/${row.service.id}/`,
+        }
+      : undefined,
+  ),
   {
     id: 'actions',
     cell: ({ row }) =>

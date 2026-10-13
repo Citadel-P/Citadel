@@ -80,6 +80,7 @@ mod tests {
             Box::pin(async {
                 Ok(vec![
                     RuntimeContainerSummary {
+                        mounts: None,
                         id: "running".into(),
                         state: "running".into(),
                         name: String::new(),
@@ -96,6 +97,7 @@ mod tests {
                         is_swarm_task: false,
                     },
                     RuntimeContainerSummary {
+                        mounts: None,
                         id: "stopped".into(),
                         state: "exited".into(),
                         name: String::new(),
@@ -198,6 +200,7 @@ mod tests {
         let source = Fixture::default();
         let containers = (0..1_025)
             .map(|i| RuntimeContainerSummary {
+                mounts: None,
                 id: i.to_string(),
                 state: "running".into(),
                 ..Default::default()

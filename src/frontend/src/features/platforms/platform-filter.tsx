@@ -1,11 +1,10 @@
 import { PlatformView } from '@/api/generated/api.types';
-import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
+import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useRead } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { Check, Minus, Server } from 'lucide-react';
+import { Check, Server } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
@@ -49,50 +48,35 @@ export const ResourcePlatformFilter = () => {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       {selectedPlatform && (
-        <button
-          type="button"
-          className="inline-flex h-(--control-height) max-w-48 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
-          title={`Clear ${selectedPlatform.name} platform filter`}
+        <ResourceFilterChip
+          label={`Clear ${selectedPlatform.name} platform filter`}
           onClick={() => setSelectedPlatformId(undefined)}>
-          <Minus className="size-3 shrink-0" />
-          <span className="truncate">{selectedPlatform.name}</span>
-        </button>
+          {selectedPlatform.name}
+        </ResourceFilterChip>
       )}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-(--control-height) shrink-0 rounded-sm px-2.5"
-            disabled={isLoading}>
-            <Server className="size-3.5" />
-            Platform Filter
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0 bg-background">
-          <Command>
-            <CommandInput placeholder="Search platforms..." />
-            <CommandList className="max-h-72 overscroll-contain" onWheel={(event) => event.stopPropagation()}>
-              <CommandEmpty>No platforms found.</CommandEmpty>
-              <CommandGroup>
-                {platforms.map((platform) => (
-                  <CommandItem
-                    key={platform.id}
-                    value={`${platform.name} ${platform.id}`}
-                    onSelect={() => selectPlatform(platform)}
-                    className="cursor-pointer">
-                    <StateIndicator value={platform.status} kind="platform" />
-                    <span className="min-w-0 flex-1 truncate">{platform.name}</span>
-                    <Check
-                      className={cn('size-3.5', selectedPlatformId === platform.id ? 'opacity-100' : 'opacity-0')}
-                    />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <ResourceFilterDropdown
+        label="Platform Filter"
+        icon={Server}
+        disabled={isLoading}
+        open={open}
+        onOpenChange={setOpen}
+        contentClassName="w-80"
+        searchPlaceholder="Search platforms..."
+        emptyMessage="No platforms found.">
+        <CommandGroup>
+          {platforms.map((platform) => (
+            <CommandItem
+              key={platform.id}
+              value={`${platform.name} ${platform.id}`}
+              onSelect={() => selectPlatform(platform)}
+              className="cursor-pointer">
+              <StateIndicator value={platform.status} kind="platform" />
+              <span className="min-w-0 flex-1 truncate">{platform.name}</span>
+              <Check className={cn('size-3.5', selectedPlatformId === platform.id ? 'opacity-100' : 'opacity-0')} />
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </ResourceFilterDropdown>
     </div>
   );
 };

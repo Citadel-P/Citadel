@@ -13,7 +13,6 @@ mod workloads;
 use citadel_activities::ActivityService;
 use citadel_adapters::{
     connectors::{agent::client::AgentClient, docker::DockerClient},
-    external::alerts::shoutrrr::ShoutrrrAlertDelivery,
     persistence::postgres::{
         activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
         connection as postgres_runtime, deployments::PostgresDeploymentRepository,
@@ -86,7 +85,7 @@ pub struct ServerComponents {
     pub edge_context: citadel_server::api::resources::platforms::edge::EdgeHttpContext,
     pub edge_registry: citadel_adapters::connectors::edge::EdgeRegistry,
     pub alert_store: Arc<PostgresAlertRepository>,
-    pub alert_delivery: Arc<ShoutrrrAlertDelivery>,
+    pub alert_delivery: Arc<dyn citadel_alerts::AlertDelivery>,
     pub automation: Arc<AutomationService>,
     pub backups: Arc<BackupService>,
     pub users: Arc<UserReadService>,
@@ -246,6 +245,13 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    backup_coverage: Some(Arc::new(
+                        citadel_server::api::resources::backups::coverage::BackupCoverageService {
+                            backups: backups.clone(),
+                            identity: identity.clone(),
+                            volume_coverage: platform_state.volume_coverage.clone(),
+                        },
+                    )),
                     git_repositories: Arc::new(PostgresGitRepositoryPersistence::new(pool.clone())),
                     identity: Arc::clone(&identity),
                     platforms: Arc::clone(&platform_reads),

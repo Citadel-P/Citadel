@@ -18,6 +18,7 @@ pub struct BackupService {
     repository_operation_lease: chrono::Duration,
     authorizer: Arc<dyn BackupRunAuthorizer>,
     entitlements: Option<Arc<dyn BackupEntitlements>>,
+    scheduling_enabled: bool,
 }
 
 fn rejected_backup(message: String) -> BackupExecutionResult {
@@ -101,6 +102,7 @@ impl BackupService {
             repository_operation_lease: chrono::Duration::minutes(16),
             authorizer,
             entitlements: None,
+            scheduling_enabled: true,
         }
     }
 
@@ -147,6 +149,22 @@ impl BackupService {
     pub fn with_entitlements(mut self, entitlements: Arc<dyn BackupEntitlements>) -> Self {
         self.entitlements = Some(entitlements);
         self
+    }
+
+    pub fn with_scheduling_enabled(mut self, enabled: bool) -> Self {
+        self.scheduling_enabled = enabled;
+        self
+    }
+
+    pub async fn scheduling_available(&self) -> Result<bool, BackupError> {
+        if !self.scheduling_enabled {
+            return Ok(false);
+        }
+        match self.ensure_automated_operations().await {
+            Ok(()) => Ok(true),
+            Err(BackupError::LicenseRequired) => Ok(false),
+            Err(error) => Err(error),
+        }
     }
 
     pub async fn ensure_automated_operations(&self) -> Result<(), BackupError> {

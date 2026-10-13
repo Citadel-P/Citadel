@@ -190,7 +190,7 @@ export type PagingState = {
 
 export type ActivityFiltersState = {
   resourceType: ActivityResourceType | 'All';
-  eventType: ActivityEventType | 'All';
+  eventType: ActivityEventType | 'BackupRunFailed' | 'All';
   resourceId: string | undefined;
 };
 

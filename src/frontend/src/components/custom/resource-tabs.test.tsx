@@ -34,6 +34,22 @@ const tabs: ResourceTabElement<TestResource>[] = [
 ];
 
 describe('ResourceTabs', () => {
+  it('keeps resource actions outside the tab list and available after switching tabs', async () => {
+    const { user } = renderCitadel(
+      <ResourceTabs
+        localKey="resource-actions-tab"
+        resource={resource}
+        tabs={tabs}
+        actions={<button>Backups</button>}
+      />,
+    );
+    const action = screen.getByRole('button', { name: 'Backups' });
+    expect(screen.getByRole('tablist')).not.toContainElement(action);
+    await user.click(screen.getByRole('tab', { name: 'Logs' }));
+    expect(action).toBeVisible();
+    expect(screen.getByText('log output')).toBeVisible();
+  });
+
   it('switches tabs, updates the URL hash, and restores the selected tab', async () => {
     const firstRender = renderCitadel(<ResourceTabs localKey="resource-tab" resource={resource} tabs={tabs} />, {
       route: '/containers/1',

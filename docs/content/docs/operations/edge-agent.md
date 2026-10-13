@@ -116,16 +116,16 @@ The generated Platform Edge Agent command also includes:
 These labels make the Edge Agent a **System** container on the Platform it
 manages. Citadel keeps its diagnostics visible but blocks lifecycle and delete
 actions that could disconnect the Platform. Manage the container from its
-Docker host and recreate older Platform Edge Agent containers once to apply
-the labels. Build-pool-only Edge Agents are not Platform system containers and
-do not receive these labels.
+Docker host and include these labels in custom installation commands.
+Build-pool-only Edge Agents are not Platform system containers and do not
+receive these labels.
 
 The Docker socket lets the agent inspect and manage local Docker resources. The
 read-only `/host` bind lets a Platform Edge Agent report the capacity of the
 filesystem containing Docker's configured data root. It exposes host paths to
 the trusted Agent process but does not allow writes through the mount. Removing
-it disables only disk metrics. Upgrade and recreate older Platform Edge Agent
-containers to add the mount. For ZFS, the metric represents the mounted dataset
+it disables only disk metrics. Include this mount when configuring a Platform
+Edge Agent container. For ZFS, the metric represents the mounted dataset
 or filesystem, not total pool allocation. Build-pool-only Edge Agents do not
 receive this mount.
 
@@ -179,7 +179,7 @@ The agent sends regular heartbeats with:
 
 If the agent stops, loses network access, or cannot reach Citadel Core, the platform becomes unavailable for operations that need the agent.
 
-Citadel also validates the agent protocol version and advertised capabilities during enrollment and reconnect. If the agent image is too old for the Core version, reconnect is rejected with a clear session rejection message.
+Citadel also validates the agent protocol version and advertised capabilities during enrollment and reconnect. If the protocol or required capabilities are incompatible with Core, the connection is rejected with a session rejection message.
 
 ## Docker Swarm Node Coverage
 

@@ -63,6 +63,7 @@ export const mergeDeploymentInfo = (current: DeploymentView, update: DeploymentV
 
   return {
     ...update,
+    backupCoverage: update.backupCoverage ?? current.backupCoverage,
     capabilities: update.capabilities ?? current.capabilities,
     spec,
     latestActivityView: update.latestActivityView ? { ...update.latestActivityView, info } : null,

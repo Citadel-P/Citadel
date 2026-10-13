@@ -1,3 +1,4 @@
+import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
 import { ResourcesTagsTagSummary, TagView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -59,52 +60,36 @@ export const ResourceTagFilter = () => {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       {selectedTags.map((tag) => (
-        <button
+        <ResourceFilterChip
           key={tag.id}
-          type="button"
-          className="inline-flex h-(--control-height) max-w-40 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
+          className="max-w-40"
           style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
-          title={`Remove ${tag.name} tag filter`}
+          label={`Remove ${tag.name} tag filter`}
           onClick={() => removeTag(tag.name)}>
-          <Minus className="size-3 shrink-0" />
-          <span className="truncate">{tag.name}</span>
-        </button>
+          {tag.name}
+        </ResourceFilterChip>
       ))}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-(--control-height) shrink-0 rounded-sm px-2.5"
-            disabled={isLoading}>
-            <Tag className="size-3.5" />
-            Tag Filter
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-0 bg-background">
-          <Command filter={tagSearchFilter}>
-            <CommandInput placeholder="Search tags..." />
-            <CommandList className="max-h-72 overscroll-contain" onWheel={(event) => event.stopPropagation()}>
-              <CommandEmpty>{availableTags.length === 0 ? 'No more tags.' : 'No tags found.'}</CommandEmpty>
-              <CommandGroup>
-                {availableTags.map((tag) => (
-                  <CommandItem
-                    key={tag.id}
-                    value={tag.name}
-                    onSelect={() => selectTag(tag.name)}
-                    className="cursor-pointer">
-                    <span
-                      className="size-3 shrink-0 rounded-full border border-border"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="truncate">{tag.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <ResourceFilterDropdown
+        label="Tag Filter"
+        icon={Tag}
+        disabled={isLoading}
+        open={open}
+        onOpenChange={setOpen}
+        searchPlaceholder="Search tags..."
+        emptyMessage={availableTags.length === 0 ? 'No more tags.' : 'No tags found.'}
+        filter={tagSearchFilter}>
+        <CommandGroup>
+          {availableTags.map((tag) => (
+            <CommandItem key={tag.id} value={tag.name} onSelect={() => selectTag(tag.name)} className="cursor-pointer">
+              <span
+                className="size-3 shrink-0 rounded-full border border-border"
+                style={{ backgroundColor: tag.color }}
+              />
+              <span className="truncate">{tag.name}</span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </ResourceFilterDropdown>
     </div>
   );
 };

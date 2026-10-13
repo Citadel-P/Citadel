@@ -4,7 +4,7 @@ import { TabsWithActions as Tabs, TabActionsSlot } from './tab-actions';
 import { cn } from '@/lib/utils';
 import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
-import { useEffect, useMemo } from 'react';
+import { ReactNode, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
 const getTabHash = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
@@ -14,11 +14,13 @@ export const ResourceTabs = <T extends RequiredFormFields>({
   resource,
   tabs,
   metadataChanged,
+  actions,
 }: {
   localKey: string;
   resource: T;
   tabs: ResourceTabElement<T>[];
   metadataChanged?: boolean;
+  actions?: ReactNode;
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
   const location = useLocation();
@@ -76,7 +78,8 @@ export const ResourceTabs = <T extends RequiredFormFields>({
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabActionsSlot className="pr-2" />
+        <TabActionsSlot className={actions ? undefined : 'pr-2'} />
+        {actions && <div className="flex shrink-0 items-center pr-2">{actions}</div>}
       </div>
 
       {tabs

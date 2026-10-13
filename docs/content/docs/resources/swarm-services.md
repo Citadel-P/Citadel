@@ -30,8 +30,8 @@ secret values are never displayed.
 
 Do not add Docker's reserved `ingress` Network to a Service. Swarm manages it
 automatically for ports published in Ingress mode. Citadel excludes it from
-new Network selections; if an older saved Service contains it, remove it from
-the configuration before applying.
+Network selections. If a saved Service configuration contains it, remove it
+before applying.
 
 After the first Apply, use:
 
@@ -51,7 +51,21 @@ Global Services cannot be scaled by replica count. Scheduling mode cannot be
 changed after the first successful Apply; create another Service when you
 need to change between replicated and global mode.
 
-### Scale A Replicated Service To Zero
+### Backup storage
+
+Swarm service storage policies include supported local Docker volumes and bind
+mounts discovered from current Tasks on their exact owning Nodes. Host paths
+require Platform write access for both configuration and execution. Review the
+source preview and discovery warnings. Tmpfs, nested mounts, system/runtime paths,
+and writable layers remain excluded. See [Backups](/docs/resources/backups).
+
+Use **Backup Filter** at the right of the resource header to filter by backup status.
+The resource table displays a **Backup** column. Hover over its shield to see
+the same coverage card as on the resource page. Manual-only or disabled policies
+show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
+all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+
+## Scale A Replicated Service To Zero
 
 Docker Swarm Services do not have a container-style **Stop** operation. Swarm
 continuously tries to maintain each Service's desired state. To intentionally

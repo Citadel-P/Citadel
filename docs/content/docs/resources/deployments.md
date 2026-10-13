@@ -103,7 +103,7 @@ Use Docker named volumes for application data you want Citadel to track for back
 
 See [Volumes](/docs/resources/docker/volumes) to create storage or browse its contents.
 
-Bind mounts are valid Docker mounts, but Citadel deployment backups only include Docker named volumes. Host paths such as `/srv/app/config:/etc/app` are not included in deployment volume backups.
+Deployment storage policies include explicitly named volume sources and supported bind mounts discovered from the synchronized container, such as `/srv/app/config:/etc/app`. Host-path backups require Platform write access.
 
 ## Container Variables
 
@@ -260,11 +260,37 @@ handling, unsupported runtime settings, and first Redeploy guidance.
 
 ## Backups
 
-Deployment backup policies back up Docker named volumes used by the deployment.
+Deployment backup policies cover explicitly named volume sources in the saved
+configuration, such as `app-data:/app/data`, and supported bind mounts discovered
+from the synchronized container on standalone Docker.
 
-Only named volumes are included. Bind mounts are not included because they are host filesystem paths, not Docker volumes.
+The backup shield at the far right of the main tab bar is available from every
+tab. Hover, focus, or click it to see each volume's coverage and the most recent
+successful volume backup when available.
+Use **Configure backup** to open a prefilled policy form, or follow an existing
+policy link to manage its schedule, retention, repository, and runs centrally.
+
+Runtime-only anonymous volumes, such as those created from an image's `VOLUME`
+instruction or a destination-only mount, are not included in deployment policies.
+The card marks them **Not included in deployment backups**. Use the individual
+volume's **Configure backup** link to create a separate Docker volume policy using
+its generated name. That policy targets the exact volume, so it does not follow
+a replacement anonymous volume after container recreation.
+
+Supported bind mounts discovered from the synchronized deployment container
+are included alongside declared named volumes. Review host paths in the source
+preview. The policy creator and run-as identity need Platform write access for
+host data. A direct **Host file or directory** policy can also protect a single
+path. Tmpfs, nested mounts, system/runtime paths, and writable layers remain excluded.
+The protected count covers listed storage targets, not all application state.
 
 For backup setup and restore behavior, see [Backups](/docs/resources/backups).
+
+Use **Backup Filter** at the right of the resource header to filter by backup status.
+The resource table displays a **Backup** column. Hover over its shield to see
+the same coverage card as on the resource page. Manual-only or disabled policies
+show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
+all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
 
 ## Diagnose a Failed Deployment
 

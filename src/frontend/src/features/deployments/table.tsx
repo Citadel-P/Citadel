@@ -1,3 +1,4 @@
+import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import { AutoUpdateStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -126,6 +127,11 @@ const columns = (
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),
   },
+  backupColumn<DeploymentView>((row) => ({
+    coverage: row.backupCoverage,
+    source: { $type: 'Deployment', deploymentId: row.id },
+    returnTo: `/deployments/edit/${row.id}/`,
+  })),
   {
     id: 'actions',
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,

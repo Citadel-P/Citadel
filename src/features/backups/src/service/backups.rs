@@ -14,7 +14,7 @@ impl BackupService {
         self.progress(
             claim.run.id,
             "Running",
-            "Checking Backup permissions and resolving source volumes...",
+            "Checking Backup permissions and resolving source storage...",
         );
         self.active_backups
             .lock()
@@ -31,12 +31,23 @@ impl BackupService {
         };
         let result = match authorization {
             Ok(()) => match self.planner.plan(&claim, &token).await {
-                Ok(plan) => match self.store.prepare_backup_items(&claim, &plan).await {
+                Ok(plan) => match async {
+                    self.authorizer
+                        .authorize_plan(&claim, &plan)
+                        .await
+                        .map_err(|error| ("AuthorizationRevoked", error))?;
+                    self.store
+                        .prepare_backup_items(&claim, &plan)
+                        .await
+                        .map_err(|error| ("SourceBusy", error))
+                }
+                .await
+                {
                     Ok(()) => {
                         self.progress(
                             claim.run.id,
                             "Running",
-                            "Source volumes reserved. Running Backup and retention...",
+                            "Source storage reserved. Running Backup and retention...",
                         );
                         self.executor
                             .backup_with_progress(
@@ -47,14 +58,14 @@ impl BackupService {
                             )
                             .await
                     }
-                    Err(error) => {
+                    Err((code, error)) => {
                         let mut message = error.to_string();
                         if let Err(cleanup) = self.planner.cleanup_staging(&plan).await {
                             message.push_str(&format!(
                                 "; recovery staging cleanup also failed: {cleanup}"
                             ));
                         }
-                        failed_before_execution("SourceBusy", message)
+                        failed_before_execution(code, message)
                     }
                 },
                 Err(error) => failed_before_execution("SourceUnavailable", error.to_string()),

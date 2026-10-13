@@ -1,3 +1,4 @@
+use super::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
 use citadel_platforms::PlatformInfoPort;
 use std::ffi::OsString;
@@ -247,7 +248,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
                     let status = match retention {
                         Ok(retention_logs) => {
                             logs.extend(retention_logs);
-                            if warnings.is_empty() {
+                            if warnings.is_empty() && plan.warnings.is_empty() {
                                 citadel_backups::BackupRunStatus::Succeeded
                             } else {
                                 citadel_backups::BackupRunStatus::SucceededWithWarnings
@@ -562,19 +563,28 @@ impl DockerResticBackupExecutor {
         cancellation: &CancellationToken,
     ) -> Result<(String, Vec<BackupLog>, ResticSummary), (String, Vec<BackupLog>)> {
         let volume = &item.volume_name;
-        let inspect = self
-            .execute(
-                vec!["volume".into(), "inspect".into(), volume.into()],
-                vec![],
-                Duration::from_secs(30),
-                cancellation,
-            )
-            .await;
-        if let Err(error) = inspect {
-            return Err((
-                format!("Docker Volume '{volume}' is unavailable: {error}"),
-                vec![],
-            ));
+        if let Some(path) = &item.host_path {
+            citadel_backups::spec::validate_bind_path(path)
+                .map_err(|error| (error.to_string(), vec![]))?;
+            validate_bind_repository(&claim.repository, path).map_err(|error| (error, vec![]))?;
+            self.validate_local_bind_path(path, cancellation)
+                .await
+                .map_err(|error| (error, vec![]))?;
+        } else {
+            let inspect = self
+                .execute(
+                    vec!["volume".into(), "inspect".into(), volume.into()],
+                    vec![],
+                    Duration::from_secs(30),
+                    cancellation,
+                )
+                .await;
+            if let Err(error) = inspect {
+                return Err((
+                    format!("Docker Volume '{volume}' is unavailable: {error}"),
+                    vec![],
+                ));
+            }
         }
         let name = format!(
             "citadel-backup-{}-{}",
@@ -585,10 +595,28 @@ impl DockerResticBackupExecutor {
             .base_args(&name, &claim.repository)
             .await
             .map_err(|error| (error, vec![]))?;
+        if let Some(path) = &item.host_path {
+            args.extend([
+                "--mount".into(),
+                self.bind_mount_argument(path, "/data", true, cancellation)
+                    .await
+                    .map_err(|error| (error, vec![]))?
+                    .into(),
+                "--entrypoint".into(),
+                "/bin/sh".into(),
+                self.image.clone().into(),
+                "-c".into(),
+                BIND_BACKUP_SCRIPT.into(),
+                "sh".into(),
+            ]);
+        } else {
+            args.extend([
+                "--volume".into(),
+                format!("{volume}:/data:ro").into(),
+                self.image.clone().into(),
+            ]);
+        }
         args.extend([
-            "--volume".into(),
-            format!("{volume}:/data:ro").into(),
-            self.image.clone().into(),
             "backup".into(),
             "--json".into(),
             "--tag".into(),
@@ -598,7 +626,10 @@ impl DockerResticBackupExecutor {
             "--tag".into(),
             format!("backup-item:{}", item.id).into(),
             "--tag".into(),
-            format!("volume:{volume}").into(),
+            item.host_path
+                .as_ref()
+                .map_or_else(|| format!("volume:{volume}"), |path| format!("bind:{path}"))
+                .into(),
             "/data".into(),
         ]);
         let output = self
@@ -639,11 +670,20 @@ impl DockerResticBackupExecutor {
     ) -> Result<(String, Vec<BackupLog>, ResticSummary), (String, Vec<BackupLog>)> {
         let timeout =
             Duration::from_secs(u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400));
+        if let Some(path) = &item.host_path {
+            self.validate_agent_bind_path(agent, item.platform_id, path, cancellation)
+                .await
+                .map_err(|error| (error, vec![]))?;
+        }
         let container_id = self
             .create_agent_helper(
                 agent,
                 item.platform_id,
-                Some((&item.volume_name, true)),
+                Some((
+                    item.host_path.as_deref().unwrap_or(&item.volume_name),
+                    true,
+                    item.host_path.is_some(),
+                )),
                 timeout,
                 cancellation,
             )
@@ -662,7 +702,7 @@ impl DockerResticBackupExecutor {
                 .agent_repository_environment(&claim.repository)
                 .await
                 .map_err(|error| (error, Vec::new()))?;
-            let command = vec![
+            let mut command = vec![
                 "restic".to_owned(),
                 "backup".to_owned(),
                 "--json".to_owned(),
@@ -673,9 +713,26 @@ impl DockerResticBackupExecutor {
                 "--tag".to_owned(),
                 format!("backup-item:{}", item.id),
                 "--tag".to_owned(),
-                format!("volume:{}", item.volume_name),
+                item.host_path.as_ref().map_or_else(
+                    || format!("volume:{}", item.volume_name),
+                    |path| format!("bind:{path}"),
+                ),
                 "/source".to_owned(),
             ];
+            if let Some(path) = &item.host_path {
+                citadel_backups::spec::validate_bind_path(path)
+                    .map_err(|error| (error.to_string(), Vec::new()))?;
+                command.remove(0);
+                command.splice(
+                    0..0,
+                    [
+                        "/bin/sh".into(),
+                        "-c".into(),
+                        BIND_BACKUP_SCRIPT.replace("/data", "/source"),
+                        "sh".into(),
+                    ],
+                );
+            }
             let output = self
                 .exec_agent(
                     agent,
@@ -906,6 +963,13 @@ impl DockerResticBackupExecutor {
                 cancellation,
             )
             .await?;
+        if let Some(path) = &claim.run.target_host_path {
+            citadel_backups::spec::validate_bind_path(path).map_err(|error| error.to_string())?;
+            validate_bind_repository(&claim.repository, path)?;
+            return self
+                .run_bind_restore(target, claim, path, cancellation)
+                .await;
+        }
         if let BackupExecutionTarget::Agent(agent) = target {
             return self.run_agent_restore(&agent, claim, cancellation).await;
         }
@@ -1003,6 +1067,275 @@ impl DockerResticBackupExecutor {
         output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
     }
 
+    // A separate credential-free probe checks the daemon host, not Core's
+    // filesystem. This also avoids Desktop silently creating missing bind paths.
+    async fn validate_local_bind_path(
+        &self,
+        path: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), String> {
+        citadel_backups::spec::validate_bind_path(path).map_err(|error| error.to_string())?;
+        let name = format!("citadel-bind-probe-{}", Uuid::now_v7().simple());
+        let output = self
+            .execute(
+                vec![
+                    "run".into(),
+                    "--rm".into(),
+                    "--name".into(),
+                    name.clone().into(),
+                    "--label".into(),
+                    "com.citadel.system=true".into(),
+                    "--label".into(),
+                    "com.citadel.system-role=backup-helper".into(),
+                    "--mount".into(),
+                    "type=bind,source=/,target=/source,readonly".into(),
+                    "--network".into(),
+                    "none".into(),
+                    "--read-only".into(),
+                    "--cap-drop".into(),
+                    "ALL".into(),
+                    "--cap-add".into(),
+                    "DAC_READ_SEARCH".into(),
+                    "--security-opt".into(),
+                    "no-new-privileges".into(),
+                    "--entrypoint".into(),
+                    "/bin/sh".into(),
+                    self.image.clone().into(),
+                    "-c".into(),
+                    BIND_PATH_PROBE.into(),
+                    "sh".into(),
+                    path.into(),
+                ],
+                vec![],
+                Duration::from_secs(30),
+                cancellation,
+            )
+            .await;
+        self.cleanup(&name).await;
+        output.map(|_| ())
+    }
+
+    async fn validate_agent_bind_path(
+        &self,
+        agent: &AgentExecutionClient,
+        platform: Uuid,
+        path: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), String> {
+        citadel_backups::spec::validate_bind_path(path).map_err(|error| error.to_string())?;
+        let id = self
+            .create_agent_helper(
+                agent,
+                platform,
+                Some(("/", true, true)),
+                Duration::from_secs(30),
+                cancellation,
+            )
+            .await?;
+        let result = async {
+            agent
+                .change_containers_state(
+                    std::slice::from_ref(&id),
+                    AgentContainerAction::Start,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let output = self
+                .exec_agent(
+                    agent,
+                    ExecBinaryRequest {
+                        container_id: id.clone(),
+                        cmd: vec![
+                            "/bin/sh".into(),
+                            "-c".into(),
+                            BIND_PATH_PROBE.into(),
+                            "sh".into(),
+                            path.into(),
+                        ],
+                        env: Default::default(),
+                        attach_stdout: Some(true),
+                        attach_stderr: Some(true),
+                        tty: false,
+                    },
+                    Duration::from_secs(30),
+                    self.maximum_output,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            if output.exit_code == 0 {
+                Ok(())
+            } else {
+                Err(redact(&String::from_utf8_lossy(&output.stderr)))
+            }
+        }
+        .await;
+        let _ = agent.delete_container(&id, &CancellationToken::new()).await;
+        result
+    }
+
+    async fn bind_mount_argument(
+        &self,
+        path: &str,
+        target: &str,
+        read_only: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<String, String> {
+        let output = self
+            .execute(
+                vec![
+                    "version".into(),
+                    "--format".into(),
+                    "{{.Client.Version}}".into(),
+                ],
+                vec![],
+                Duration::from_secs(30),
+                cancellation,
+            )
+            .await?;
+        let version = String::from_utf8_lossy(&output.stdout);
+        let major = version
+            .trim()
+            .split('.')
+            .next()
+            .and_then(|value| value.parse::<u32>().ok())
+            .ok_or("Could not determine Docker CLI version for nonrecursive bind mounts.")?;
+        let recursive = if major >= 25 {
+            "bind-recursive=disabled"
+        } else {
+            "bind-nonrecursive=true"
+        };
+        Ok(format!(
+            "type=bind,source={path},target={target},{recursive}{}",
+            if read_only { ",readonly" } else { "" }
+        ))
+    }
+
+    async fn run_bind_restore(
+        &self,
+        target: BackupExecutionTarget,
+        claim: &RestoreClaim,
+        path: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BackupLog>, String> {
+        if !claim.source_item.as_ref().map_or_else(
+            || {
+                matches!(
+                    claim.source.source_snapshot,
+                    citadel_backups::spec::BackupSourceSpec::BindMount { .. }
+                )
+            },
+            |item| item.host_path.is_some(),
+        ) {
+            return Err("A host-path restore requires a bind-mount snapshot.".into());
+        }
+        let snapshot = claim
+            .source_item
+            .as_ref()
+            .and_then(|item| item.restic_snapshot_id.as_deref())
+            .or(claim.source.restic_snapshot_id.as_deref())
+            .ok_or("Backup has no snapshot ID.")?;
+        let overwrite = if claim.run.overwrite_existing {
+            "true"
+        } else {
+            "false"
+        };
+        match target {
+            BackupExecutionTarget::Local => {
+                self.validate_local_bind_path(path, cancellation).await?;
+                let name = format!("citadel-restore-{}", claim.run.id.simple());
+                let (mut args, env) = self.base_args(&name, &claim.repository).await?;
+                args.extend([
+                    "--mount".into(),
+                    self.bind_mount_argument(path, "/target", false, cancellation)
+                        .await?
+                        .into(),
+                    "--entrypoint".into(),
+                    "/bin/sh".into(),
+                    self.image.clone().into(),
+                    "-c".into(),
+                    BIND_RESTORE_SCRIPT.into(),
+                    "sh".into(),
+                    snapshot.into(),
+                    overwrite.into(),
+                ]);
+                let output = self
+                    .execute(args, env, self.restore_timeout(), cancellation)
+                    .await;
+                self.cleanup(&name).await;
+                output
+                    .map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+            }
+            BackupExecutionTarget::Agent(agent) => {
+                self.validate_agent_bind_path(
+                    &agent,
+                    claim.run.target_platform_id,
+                    path,
+                    cancellation,
+                )
+                .await?;
+                let timeout = self.restore_timeout();
+                let id = self
+                    .create_agent_helper(
+                        &agent,
+                        claim.run.target_platform_id,
+                        Some((path, false, true)),
+                        timeout,
+                        cancellation,
+                    )
+                    .await?;
+                let result = async {
+                    agent
+                        .change_containers_state(
+                            std::slice::from_ref(&id),
+                            AgentContainerAction::Start,
+                            cancellation,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let env = self.agent_repository_environment(&claim.repository).await?;
+                    let output = self
+                        .exec_agent(
+                            &agent,
+                            ExecBinaryRequest {
+                                container_id: id.clone(),
+                                cmd: vec![
+                                    "/bin/sh".into(),
+                                    "-c".into(),
+                                    BIND_RESTORE_SCRIPT.into(),
+                                    "sh".into(),
+                                    snapshot.into(),
+                                    overwrite.into(),
+                                ],
+                                env,
+                                attach_stdout: Some(true),
+                                attach_stderr: Some(true),
+                                tty: false,
+                            },
+                            timeout,
+                            self.maximum_output,
+                            cancellation,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    if output.exit_code != 0 {
+                        return Err(redact(&String::from_utf8_lossy(&output.stderr)));
+                    }
+                    Ok(agent_output_logs(
+                        &output.stdout,
+                        &output.stderr,
+                        self.log_line_limit(),
+                        self.maximum_output,
+                    ))
+                }
+                .await;
+                let _ = agent.delete_container(&id, &CancellationToken::new()).await;
+                result
+            }
+        }
+    }
+
     async fn run_agent_restore(
         &self,
         agent: &AgentExecutionClient,
@@ -1027,7 +1360,7 @@ impl DockerResticBackupExecutor {
             .create_agent_helper(
                 agent,
                 claim.run.target_platform_id,
-                Some((&claim.run.target_volume_name, false)),
+                Some((&claim.run.target_volume_name, false, false)),
                 timeout,
                 cancellation,
             )
@@ -1212,7 +1545,7 @@ impl DockerResticBackupExecutor {
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
-        volume: Option<(&str, bool)>,
+        volume: Option<(&str, bool, bool)>,
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<String, String> {
@@ -1229,7 +1562,7 @@ impl DockerResticBackupExecutor {
         };
         let lifetime = timeout.as_secs().saturating_add(300).clamp(300, 86_700);
         let mut capabilities = vec!["DAC_READ_SEARCH".to_owned(), "FOWNER".to_owned()];
-        if volume.is_some_and(|(_, read_only)| !read_only) {
+        if volume.is_some_and(|(_, read_only, _)| !read_only) {
             // Restic restores the snapshot's numeric file and symlink owners.
             capabilities.push("CHOWN".to_owned());
         }
@@ -1267,20 +1600,22 @@ impl DockerResticBackupExecutor {
                     memory_swap: Some(512 * 1024 * 1024),
                     pids_limit: Some(128),
                     privileged: Some(false),
-                    readonly_rootfs: Some(false),
-                    mounts: volume.into_iter().map(|(name, read_only)| Mount {
+                    readonly_rootfs: Some(volume.is_some_and(|(name, _, bind)| bind && name == "/")),
+                    mounts: volume.into_iter().map(|(name, read_only, bind)| Mount {
                         target: Some(if read_only { "/source" } else { "/target" }.to_owned()),
                         source: Some(name.to_owned()),
-                        r#type: Some("volume".to_owned()),
+                        r#type: Some(if bind { "bind" } else { "volume" }.to_owned()),
                         read_only: Some(read_only),
                         consistency: None,
-                        bind_options: None,
+                        bind_options: bind.then_some(citadel_contracts::citadel::shared_models::v1::BindOptions {
+                            propagation: Some("rprivate".into()), non_recursive: Some(name != "/"), create_mountpoint: Some(false), ..Default::default()
+                        }),
                         volume_options: None,
                     }).collect(),
                     cap_add: capabilities,
                     cap_drop: vec!["ALL".to_owned()],
                     security_opt: vec!["no-new-privileges".to_owned()],
-                    network_mode: None,
+                    network_mode: volume.filter(|(name, _, bind)| *bind && *name == "/").map(|_| "none".into()),
                 },
                 cancellation,
             )
@@ -2051,4 +2386,27 @@ mod tests {
     fn redaction_preserves_lines_and_removes_credentials() {
         assert_eq!(redact("ok\npassword=abc\ndone"), "ok\n[redacted]\ndone");
     }
+}
+
+// Arguments are passed separately; neither host paths nor snapshot IDs are shell source.
+
+// Stage the snapshot before touching the destination. Existing destinations are
+// required: Docker must never silently create a mistyped host path. Directory
+// restores merge; overwrite explicitly permits replacing existing files.
+
+fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result<(), String> {
+    if let BackupRepositorySpec::FileSystem {
+        path: repository_path,
+        ..
+    } = &repository.spec
+    {
+        let source = std::path::Path::new(path);
+        let repository = std::path::Path::new(repository_path);
+        if repository.is_absolute()
+            && (source.starts_with(repository) || repository.starts_with(source))
+        {
+            return Err("Bind path and filesystem backup repository must not overlap.".into());
+        }
+    }
+    Ok(())
 }

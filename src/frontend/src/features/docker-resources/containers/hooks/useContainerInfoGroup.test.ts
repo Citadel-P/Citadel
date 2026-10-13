@@ -82,6 +82,23 @@ describe('mergeContainerRuntimeUpdate', () => {
     expect(result.systemRole).toBe(ContainerSystemRole.Agent);
     expect(result).not.toHaveProperty('deploymentId');
   });
+  it('replaces backup coverage from realtime and keeps it through partial runtime updates', () => {
+    const before = {
+      platformId: 'p',
+      volumes: [],
+      policies: [],
+      warnings: [],
+      reasons: [],
+      unavailable: false,
+      canConfigure: false,
+      hasResourcePolicy: false,
+    };
+    const after = { ...before, unavailable: true };
+    const current = { backupCoverage: before };
+    const next = mergeContainerRuntimeUpdate(current, { ...runtimeUpdate, backupCoverage: after });
+    expect(next.backupCoverage).toEqual(after);
+    expect(mergeContainerRuntimeUpdate(next, runtimeUpdate).backupCoverage).toEqual(after);
+  });
 });
 
 describe('toContainerDetailsView', () => {

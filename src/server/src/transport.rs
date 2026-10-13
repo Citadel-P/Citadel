@@ -9,8 +9,9 @@ use axum::{
     http::{
         HeaderMap, Method, Request, StatusCode,
         header::{
-            ACCEPT, AUTHORIZATION, CONTENT_TYPE, HOST, HeaderName, HeaderValue,
-            STRICT_TRANSPORT_SECURITY,
+            ACCEPT, AUTHORIZATION, CONTENT_SECURITY_POLICY_REPORT_ONLY, CONTENT_TYPE, HOST,
+            HeaderName, HeaderValue, REFERRER_POLICY, STRICT_TRANSPORT_SECURITY,
+            X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
         },
         uri::Authority,
     },
@@ -69,9 +70,29 @@ pub fn secure_router(
     transport: &TransportConfig,
     readiness: Arc<Readiness>,
 ) -> Result<Router, Box<dyn std::error::Error>> {
-    secure_router_with_grpc(router, transport, readiness, None)
+    let router = secure_router_with_grpc(router, transport, readiness, None)?;
+    // Headers only: do not buffer streaming responses or change WebSocket upgrades.
+    // Keep script/connection restrictions observational until browser validation is complete.
+    Ok(router
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            CONTENT_SECURITY_POLICY_REPORT_ONLY,
+            browser_csp(transport)?,
+        )))
 }
 
+// Shared transport protections; browser headers are added by secure_router.
 pub fn secure_router_with_grpc(
     mut router: Router,
     transport: &TransportConfig,
@@ -147,6 +168,21 @@ pub fn secure_router_with_grpc(
         ));
     }
     Ok(router)
+}
+
+fn browser_csp(
+    transport: &TransportConfig,
+) -> Result<HeaderValue, axum::http::header::InvalidHeaderValue> {
+    let origin = transport.public_url.origin().ascii_serialization();
+    // PublicUrl is a validated HTTP(S) origin. Explicit WS(S) covers browsers that
+    // do not match WebSockets against connect-src 'self'. Never trust the Host header.
+    let websocket = origin.replacen("http", "ws", 1);
+    HeaderValue::from_str(&format!(
+        "default-src 'self'; script-src 'self'; script-src-attr 'none'; \
+         style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; \
+         worker-src 'self' blob:; connect-src 'self' {origin} {websocket}; \
+         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    ))
 }
 
 async fn api_not_found(headers: HeaderMap) -> Response {
@@ -712,6 +748,7 @@ mod tests {
             setup_required.headers()[axum::http::header::CACHE_CONTROL],
             "no-store"
         );
+        assert_browser_headers(&setup_required);
         let correlation = setup_required.headers()[&REQUEST_ID]
             .to_str()
             .unwrap()
@@ -736,6 +773,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(too_large.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert_browser_headers(&too_large);
         assert_eq!(
             too_large
                 .headers()
@@ -756,12 +794,155 @@ mod tests {
         assert_eq!(health.status(), StatusCode::OK);
     }
 
+    #[test]
+    fn browser_policy_allows_local_workers_and_explicit_public_websockets() {
+        for (origin, websocket) in [
+            ("https://citadel.example:8443", "wss://citadel.example:8443"),
+            ("http://[::1]:8000", "ws://[::1]:8000"),
+        ] {
+            let mut transport = fixture_transport();
+            transport.public_url = origin.parse().unwrap();
+            let policy = browser_csp(&transport).unwrap();
+            let policy = policy.to_str().unwrap();
+            assert!(policy.contains("worker-src 'self' blob:"));
+            assert!(policy.contains(&format!("connect-src 'self' {origin} {websocket};")));
+            assert!(policy.contains("script-src 'self';"));
+            assert!(!policy.contains("'unsafe-eval'"));
+        }
+    }
+
+    fn assert_browser_headers(response: &Response) {
+        let headers = response.headers();
+        assert_eq!(headers[X_CONTENT_TYPE_OPTIONS], "nosniff");
+        assert_eq!(headers[X_FRAME_OPTIONS], "DENY");
+        assert_eq!(headers[REFERRER_POLICY], "strict-origin-when-cross-origin");
+        assert!(headers.contains_key(CONTENT_SECURITY_POLICY_REPORT_ONLY));
+        assert!(!headers.contains_key(axum::http::header::CONTENT_SECURITY_POLICY));
+    }
+
+    #[tokio::test]
+    async fn browser_headers_are_scoped_to_http_while_hsts_is_shared() {
+        for mode in [
+            TransportMode::Disabled,
+            TransportMode::ReverseProxy,
+            TransportMode::Direct,
+        ] {
+            let readiness = Arc::new(Readiness::default());
+            readiness.set(true, true);
+            readiness.set_setup(true);
+            let mut transport = fixture_transport();
+            transport.mode = mode;
+            transport.allowed_hosts = vec!["localhost".to_owned()];
+            let routes = Router::new().route("/test", get(|| async { "ok" }));
+            let http = secure_router(routes.clone(), &transport, Arc::clone(&readiness)).unwrap();
+            let edge = secure_router_with_grpc(Router::new(), &transport, readiness, Some(routes))
+                .unwrap();
+            for (app, browser) in [(http, true), (edge, false)] {
+                let response = app
+                    .oneshot(
+                        Request::builder()
+                            .uri("/test")
+                            .header(HOST, "localhost")
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::OK);
+                assert!(response.headers().contains_key(&REQUEST_ID));
+                if browser {
+                    assert_browser_headers(&response);
+                } else {
+                    for header in [
+                        X_CONTENT_TYPE_OPTIONS,
+                        X_FRAME_OPTIONS,
+                        REFERRER_POLICY,
+                        CONTENT_SECURITY_POLICY_REPORT_ONLY,
+                    ] {
+                        assert!(!response.headers().contains_key(header));
+                    }
+                }
+                assert_eq!(
+                    response.headers().get(STRICT_TRANSPORT_SECURITY),
+                    (mode == TransportMode::Direct)
+                        .then_some(&HeaderValue::from_static("max-age=31536000")),
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn browser_headers_preserve_streaming_and_upgrade_responses() {
+        use futures_util::{StreamExt, stream};
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let routes = Router::new()
+            .route(
+                "/stream",
+                get(|| async {
+                    Body::from_stream(
+                        stream::iter([Ok::<_, std::io::Error>("first log line")])
+                            .chain(stream::pending()),
+                    )
+                }),
+            )
+            .route(
+                "/upgrade",
+                get(|| async {
+                    (
+                        StatusCode::SWITCHING_PROTOCOLS,
+                        [("upgrade", "websocket"), ("connection", "upgrade")],
+                    )
+                }),
+            );
+        let app = secure_router(routes, &fixture_transport(), readiness).unwrap();
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            app.clone().oneshot(
+                Request::builder()
+                    .uri("/stream")
+                    .body(Body::empty())
+                    .unwrap(),
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_browser_headers(&response);
+        let mut stream = response.into_body().into_data_stream();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(1), stream.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            "first log line"
+        );
+        // An open stream must not prevent the first chunk reaching its client.
+        drop(stream);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/upgrade")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+        assert_eq!(response.headers()["upgrade"], "websocket");
+        assert_eq!(response.headers()["connection"], "upgrade");
+        assert_browser_headers(&response);
+    }
+
     #[tokio::test]
     async fn spa_deep_links_return_the_index_document_with_success() {
         let root = std::env::temp_dir().join(format!("citadel-spa-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("index.html"), "<html>citadel</html>").unwrap();
 
+        std::fs::write(root.join("editor.worker.js"), "self.onmessage = () => {}; ").unwrap();
         let readiness = Arc::new(Readiness::default());
         readiness.set(true, true);
         readiness.set_setup(true);
@@ -770,6 +951,7 @@ mod tests {
         let app = secure_router(Router::new(), &transport, readiness).unwrap();
 
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/profile")
@@ -780,10 +962,31 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        assert_browser_headers(&response);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
         assert_eq!(body, "<html>citadel</html>");
+        let worker = app
+            .oneshot(
+                Request::builder()
+                    .uri("/editor.worker.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(worker.status(), StatusCode::OK);
+        assert_browser_headers(&worker);
+        // nosniff must not stop a correctly served Monaco worker from executing.
+        assert!(matches!(
+            worker.headers()[CONTENT_TYPE].to_str().unwrap(),
+            "text/javascript" | "application/javascript"
+        ));
+        let body = axum::body::to_bytes(worker.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(body, "self.onmessage = () => {}; ");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -811,6 +1014,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_browser_headers(&response);
         assert_eq!(
             response.headers().get(axum::http::header::CONTENT_TYPE),
             Some(&HeaderValue::from_static("application/problem+json"))

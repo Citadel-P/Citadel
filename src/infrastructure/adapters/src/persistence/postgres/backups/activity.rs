@@ -11,6 +11,34 @@ pub(super) async fn record_run_activity(
         .await
         .map_err(storage)?;
     let run = map_run(row)?;
+    coverage::changes::publish(tx, Some(run.backup_policy_id), None).await?;
+    if matches!(
+        run.status,
+        citadel_backups::BackupRunStatus::Failed
+            | citadel_backups::BackupRunStatus::TimedOut
+            | citadel_backups::BackupRunStatus::Interrupted
+            | citadel_backups::BackupRunStatus::Rejected
+    ) {
+        let enabled: bool =
+            sqlx::query_scalar("SELECT alertonfailure FROM backuppolicies WHERE id=$1")
+                .bind(run.backup_policy_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(storage)?;
+        if enabled {
+            let reason = run
+                .error_message
+                .as_deref()
+                .unwrap_or("Backup did not complete successfully.");
+            crate::persistence::postgres::alerts::observations::enqueue(tx, &citadel_alerts::AlertObservation {
+                alert_type: "BackupRunFailed".into(),
+                info: serde_json::json!({"RunId": run.id, "Status": run.status, "ErrorMessage": reason,
+                    "HumanMessage": format!("Backup '{}' {}: {}", run.policy_name_snapshot, run.status, reason)}),
+                resource_id: run.backup_policy_id, resource_name: run.policy_name_snapshot.clone(), resource_type: "BackupPolicy".into(),
+                deduplication_component: run.id.to_string(), observed_at: Utc::now(), value: None, matched: true,
+            }).await.map_err(storage)?;
+        }
+    }
     let info = match run.status {
         citadel_backups::BackupRunStatus::Queued => ActivityEventInfo::BackupRunQueued {
             run_id: id,

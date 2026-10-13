@@ -14,6 +14,8 @@ import {
 import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import {
+  CHART_ACTIVE_DOT,
+  CHART_HOVER_CURSOR,
   ChartConfig,
   ChartContainer,
   ChartLegend,
@@ -256,7 +258,7 @@ const CpuUsageChart = ({
     () =>
       ({
         cpuUsage: {
-          label: <span className="text-foreground">CPU Usage</span>,
+          label: 'CPU Usage',
           color: 'var(--chart-1)',
         },
       }) satisfies ChartConfig,
@@ -303,7 +305,7 @@ const MemoryUsageChart = ({
     () =>
       ({
         memoryUsage: {
-          label: <span className="text-foreground">Memory Usage</span>,
+          label: 'Memory Usage',
           color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
@@ -359,11 +361,11 @@ const NetworkUsageChart = ({
     () =>
       ({
         rxBytes: {
-          label: <span className="text-foreground">Data received</span>,
+          label: 'Data received',
           theme: NETWORK_CHART_COLORS.rxBytes,
         },
         txBytes: {
-          label: <span className="text-foreground">Data sent</span>,
+          label: 'Data sent',
           theme: NETWORK_CHART_COLORS.txBytes,
         },
       }) satisfies ChartConfig,
@@ -419,7 +421,7 @@ export const DiskUsageChart = ({
     () =>
       ({
         diskUsage: {
-          label: <span className="text-foreground">Disk Usage</span>,
+          label: 'Disk Usage',
           color: 'var(--chart-3)',
         },
       }) satisfies ChartConfig,
@@ -524,21 +526,15 @@ const StatsChartCard = ({
           }
         />
         <ChartTooltip
-          cursor={false}
+          cursor={CHART_HOVER_CURSOR}
           content={
             <ChartTooltipContent
               indicator="dot"
               labelFormatter={formatTooltipLabel}
-              formatter={(value, name) => {
+              valueFormatter={(value, name) => {
                 const key = name as StatsChartArea['key'];
                 const area = areas.find((item) => item.key === key);
-                return (
-                  <ChartValue
-                    colorName={name}
-                    label={chartConfig[key]?.label ?? name}
-                    value={area?.formatter(value) ?? value}
-                  />
-                );
+                return area?.formatter(value) ?? String(value);
               }}
             />
           }
@@ -550,6 +546,7 @@ const StatsChartCard = ({
             type="linear"
             isAnimationActive={false}
             connectNulls={false}
+            activeDot={CHART_ACTIVE_DOT}
             fill={`url(#${area.gradientId})`}
             stroke={`var(--color-${area.key})`}
           />
@@ -557,7 +554,7 @@ const StatsChartCard = ({
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [areas, chartConfig, gradientDefs, stats, bounds],
+    [areas, gradientDefs, stats, bounds],
   );
 
   return isLoading ? (
@@ -664,29 +661,6 @@ const SystemMetric = ({
     </div>
     <div className="text-sm font-medium tabular-nums text-foreground [overflow-wrap:anywhere]">{value}</div>
   </div>
-);
-
-const ChartValue = ({
-  colorName,
-  label,
-  value,
-}: {
-  colorName: unknown;
-  label: React.ReactNode;
-  value: React.ReactNode;
-}) => (
-  <>
-    <div
-      className="h-2.5 w-2.5 shrink-0 rounded-xs bg-(--color-bg)"
-      style={
-        {
-          '--color-bg': `var(--color-${colorName})`,
-        } as React.CSSProperties
-      }
-    />
-    {label}
-    <div className="ml-auto font-mono font-medium tabular-nums text-foreground">{value}</div>
-  </>
 );
 
 const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
@@ -799,5 +773,5 @@ const DiskChartState = ({ compact, title, children }: { compact: boolean; title:
 const formatPercent = (value: number) => `${toFixedNumber(value, undefined, 2)}%`;
 const formatTooltipLabel = (_: unknown, payload: any[]) => {
   const created = Number(payload.at(0)?.payload?.created ?? 0);
-  return <span className="text-foreground">{created ? dayjs(created * 1000).format('MMM D, HH:mm:ss') : '-'}</span>;
+  return created ? dayjs(created * 1000).format('MMM D, h:mm:ss A') : '-';
 };

@@ -28,7 +28,8 @@ node_modules/
 npm-debug.log*
 
 # Test and local review artifacts
-coverage/
+/coverage/
+/src/frontend/coverage/
 playwright-report/
 test-results/
 /.artifacts/

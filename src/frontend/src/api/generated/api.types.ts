@@ -734,6 +734,12 @@ export enum BackupCoverageStatus {
   Failed = "Failed",
 }
 
+export enum BackupCoverageReason {
+  InventoryUnavailable = "InventoryUnavailable",
+  InventoryIncomplete = "InventoryIncomplete",
+  SchedulingUnavailable = "SchedulingUnavailable",
+}
+
 export enum AutomationRunTrigger {
   Manual = "Manual",
   Test = "Test",
@@ -788,6 +794,7 @@ export enum AlertType {
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
   AutomationActionRunFailed = "AutomationActionRunFailed",
   BuildRunFailed = "BuildRunFailed",
+  BackupRunFailed = "BackupRunFailed",
   BuildAgentPoolUnavailable = "BuildAgentPoolUnavailable",
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
@@ -813,6 +820,7 @@ export enum AlertResourceType {
   AutomationAction = "AutomationAction",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
+  BackupPolicy = "BackupPolicy",
   License = "License",
   SwarmService = "SwarmService",
 }
@@ -1623,6 +1631,15 @@ export interface BackupPolicyInput {
   webhook?: null | WebhookConfig;
 }
 
+export interface BackupPolicyReference {
+  canWrite?: boolean | null;
+  enabled?: boolean | null;
+  /** @format uuid */
+  id: string;
+  name: string;
+  scheduleConfigured?: boolean | null;
+}
+
 export interface BackupPolicyView {
   alertOnFailure: boolean;
   /** @format date-time */
@@ -1794,6 +1811,7 @@ export interface BackupRestoreRunView {
   startedAt: string | null;
   status: BackupRestoreStatus;
   targetDockerNodeId: string | null;
+  targetHostPath?: string | null;
   /** @format uuid */
   targetPlatformId: string;
   targetVolumeName: string;
@@ -1817,6 +1835,7 @@ export interface BackupRunItemView {
   exitCode: number | null;
   /** @format int64 */
   filesProcessed: number | null;
+  hostPath?: string | null;
   /** @format uuid */
   id: string;
   nodeHostname: string | null;
@@ -1894,6 +1913,13 @@ export type BackupSourceSpec =
       /** @format uuid */
       platformId: string;
       volumeName: string;
+    }
+  | {
+      $type: "BindMount";
+      dockerNodeId?: string | null;
+      hostPath: string;
+      /** @format uuid */
+      platformId: string;
     }
   | {
       $type: "CitadelSystem";
@@ -2379,6 +2405,7 @@ export interface ContainerRuntimeListView {
 }
 
 export interface ContainerRuntimeView {
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | PlatformCapabilitiesView;
   containerStat: null | ContainerStatView;
   controlState: ResourceControlState;
@@ -2444,6 +2471,7 @@ export interface ContainerStatView {
 }
 
 export interface ContainerSummaryView {
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | PlatformCapabilitiesView;
   containerId: string;
   deploymentView: null | ContainerDeploymentView;
@@ -2461,6 +2489,7 @@ export interface ContainerSummaryView {
 }
 
 export interface ContainerView {
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | PlatformCapabilitiesView;
   containerId: string;
   controlState: ResourceControlState;
@@ -2864,6 +2893,7 @@ export interface DeploymentStreamItem {
 
 export interface DeploymentView {
   autoUpdateState?: null | AutoUpdateState;
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities?: null | DeploymentCapabilities;
   /** @format uuid */
   containerId?: string | null;
@@ -3710,6 +3740,7 @@ export interface LookupResourceInfo {
 export interface ManagedSwarmServiceView {
   appliedImageDigest: string | null;
   autoUpdateState: AutoUpdateState;
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | SwarmServiceCapabilities;
   controlState: ResourceControlState;
   /** @format date-time */
@@ -4283,6 +4314,8 @@ export interface PlatformBackupSummaries {
 export interface PlatformBackupSummary {
   /** @format int32 */
   attentionPolicyCount: number;
+  /** @format int32 */
+  bindMountPolicyCount?: number;
   /** @format int32 */
   deploymentPolicyCount: number;
   /** @format int32 */
@@ -5475,6 +5508,32 @@ export interface ResourceAccessView {
   specificPermissions: SpecificPermission[] | null;
 }
 
+export interface ResourceBackupSummaryView {
+  canConfigure: boolean;
+  canConfigureBindMount?: boolean | null;
+  hasResourcePolicy: boolean;
+  /** @format uuid */
+  platformId: string;
+  policies: BackupPolicyReference[];
+  reasons: BackupCoverageReason[];
+  status?: null | BackupCoverageStatus;
+  unavailable: boolean;
+  volumes: ResourceBackupVolumeView[];
+  warnings: string[];
+}
+
+export interface ResourceBackupVolumeView {
+  dockerNodeId?: string | null;
+  hostPath?: string | null;
+  includedInResourcePolicy: boolean;
+  /** @format date-time */
+  lastSuccessfulRunAt?: string | null;
+  name: string;
+  nodeHostname?: string | null;
+  policies: BackupPolicyReference[];
+  status?: null | BackupCoverageStatus;
+}
+
 export interface ResourceBindingInput {
   /** @format uuid */
   id: string;
@@ -5548,9 +5607,10 @@ export interface RestoreInput {
   /** @format uuid */
   sourceBackupRunItemId?: string | null;
   targetDockerNodeId?: string | null;
+  targetHostPath?: string | null;
   /** @format uuid */
   targetPlatformId: string;
-  targetVolumeName: string;
+  targetVolumeName?: string;
 }
 
 export interface Restores {
@@ -6146,6 +6206,7 @@ export type StackUpdateState =
     };
 
 export interface StackView {
+  backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | StackCapabilities;
   controlState: ResourceControlState;
   /** @format date-time */
@@ -7617,6 +7678,7 @@ export class Api<
         ResourceId?: string;
         ResourceType?: ActivityResourceType;
         EventType?: ActivityEventType;
+        Status?: ActivityStatus;
         /**
          * @format int32
          * @min 1

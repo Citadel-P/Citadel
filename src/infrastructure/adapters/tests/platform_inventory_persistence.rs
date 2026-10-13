@@ -463,6 +463,7 @@ fn snapshot(platform_id: Uuid, include_task: bool) -> RuntimeInventorySnapshot {
             }),
         },
         containers: vec![RuntimeContainerSummary {
+            mounts: None,
             id: "container-1".into(),
             name: "web".into(),
             image: "nginx:alpine".into(),
@@ -3201,6 +3202,73 @@ async fn configured_node_policy_is_preserved_by_initialization_and_http_refresh(
     assert!(
         revoked,
         "configured supported architecture participates in reconciliation"
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences() {
+    use citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader;
+    use citadel_backups::coverage::CoverageReader;
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let actor = Uuid::now_v7();
+    seed_platform(&pool, platform, actor, Uuid::now_v7()).await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut inventory = snapshot(platform, false);
+    inventory.swarm = None;
+    inventory.info.swarm = None;
+    inventory.containers[0].is_swarm_task = false;
+    inventory.containers[0].mounts = Some(
+        json!([{"Type":"volume","Name":"anonymous-id"},{"Type":"bind","Source":"/srv/app"},{"Type":"tmpfs","Destination":"/tmp"}]),
+    );
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    let reader = PostgresVolumeCoverageReader(pool.clone());
+    let read = reader
+        .snapshot(ActorId::new(actor), true, &[platform])
+        .await
+        .unwrap();
+    assert!(read.containers[0].complete);
+    assert_eq!(read.containers[0].volumes.len(), 2);
+    assert!(
+        read.containers[0]
+            .volumes
+            .iter()
+            .any(|v| v.target.host_path.as_deref() == Some("/srv/app"))
+    );
+    let old = inventory.clone();
+    inventory.observed_at += chrono::Duration::seconds(2);
+    inventory.containers[0].mounts = Some(json!([]));
+    store.persist(&inventory).await.unwrap();
+    store.persist(&old).await.unwrap();
+    let read = reader
+        .snapshot(ActorId::new(actor), true, &[platform])
+        .await
+        .unwrap();
+    assert!(read.containers[0].complete);
+    assert!(read.containers[0].volumes.is_empty());
+    inventory.observed_at += chrono::Duration::seconds(2);
+    inventory.containers[0].mounts = None;
+    store.persist(&inventory).await.unwrap();
+    assert!(
+        !reader
+            .snapshot(ActorId::new(actor), true, &[platform])
+            .await
+            .unwrap()
+            .containers[0]
+            .complete
     );
     pool.close().await;
 }

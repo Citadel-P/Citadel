@@ -74,6 +74,7 @@ impl LookupQuery {
                     | SwarmService
                     | AutomationAction
                     | Build
+                    | BackupPolicy
                     | AlertChannel
             ),
             Some(Image) => self.target == Registry && self.source_id.is_none(),

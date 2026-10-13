@@ -1,3 +1,4 @@
+import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { StackDropdownActions, StackGroupActions } from './actions';
@@ -19,8 +20,13 @@ export const StackComponents: RegularResourceComponents<StackView> = {
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
-    Extra: UpdatesAvailableFilter,
-    activeFilterParams: ['updates'],
+    Extra: () => (
+      <>
+        <UpdatesAvailableFilter />
+        <BackupStatusFilter />
+      </>
+    ),
+    activeFilterParams: ['updates', 'backupStatus'],
   },
   overview: {
     label: 'Stack overview',
@@ -81,7 +87,8 @@ export const StackComponents: RegularResourceComponents<StackView> = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { stacks, capabilities, isLoading, error, refetch, isFetching } = useStacksGroup();
-    return { error, refetch, isFetching, items: stacks ?? EMPTY_STACKS, isLoading, capabilities };
+    const items = useBackupStatusFilter(stacks ?? EMPTY_STACKS);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

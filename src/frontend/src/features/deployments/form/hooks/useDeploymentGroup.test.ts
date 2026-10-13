@@ -223,3 +223,21 @@ const withMessagePackImage = (deployment: DeploymentView): DeploymentView => {
     },
   };
 };
+
+it('accepts backup coverage snapshots and preserves coverage when an update omits it', () => {
+  const before = {
+    platformId: 'p',
+    volumes: [],
+    policies: [],
+    warnings: [],
+      reasons: [],
+    unavailable: false,
+    canConfigure: false,
+    hasResourcePolicy: false,
+  };
+  const after = { ...before, unavailable: true };
+  const current = { ...createExternalDeployment(null), backupCoverage: before };
+  const next = mergeDeploymentInfo(current, { ...current, backupCoverage: after });
+  expect(next.backupCoverage).toEqual(after);
+  expect(mergeDeploymentInfo(next, {} as DeploymentView).backupCoverage).toEqual(after);
+});

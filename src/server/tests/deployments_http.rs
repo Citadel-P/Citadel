@@ -172,6 +172,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .with_alerts(alerts.clone()),
     );
     let app = deployments::router(DeploymentsHttpState {
+        backup_coverage: None,
         identity: identity.clone(),
         deployments: service.clone(),
     });

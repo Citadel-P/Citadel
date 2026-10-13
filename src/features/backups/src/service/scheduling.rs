@@ -14,10 +14,8 @@ impl BackupService {
     }
 
     pub async fn queue_due_scheduled(&self, now: DateTime<Utc>) -> Result<usize, BackupError> {
-        match self.ensure_automated_operations().await {
-            Ok(()) => {}
-            Err(BackupError::LicenseRequired) => return Ok(0),
-            Err(error) => return Err(error),
+        if !self.scheduling_available().await? {
+            return Ok(0);
         }
         let minute = now
             .with_second(0)

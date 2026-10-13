@@ -113,6 +113,7 @@ export const AlertRuleForm = ({
     AlertType.SwarmServiceOperationFailed,
     AlertType.AutomationActionRunFailed,
     AlertType.BuildRunFailed,
+    AlertType.BackupRunFailed,
     AlertType.LicenseEnteredGracePeriod,
     AlertType.LicenseExpired,
   ];
@@ -124,6 +125,7 @@ export const AlertRuleForm = ({
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('License')) return 'License';
     if (merged.type === AlertType.BuildAgentPoolUnavailable) return 'BuildAgentPool';
+    if (merged.type.startsWith('Backup')) return 'BackupPolicy';
     if (merged.type.startsWith('Build')) return 'Build';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.startsWith('SwarmService')) return 'SwarmService';

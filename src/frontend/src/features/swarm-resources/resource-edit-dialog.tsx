@@ -3,6 +3,7 @@ import { Pencil, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProblemDetails, SwarmConfigView, SwarmSecretView } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { ActionButton } from '@/components/custom/action-with-dialog';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
 import { KeyValuePairInput, KVPair } from '@/components/custom/key-value-pair-input';
 import { Button } from '@/components/ui/button';
@@ -50,14 +51,14 @@ export const SwarmResourceEditInfoAction = ({
 
   return (
     <>
-      <Button
+      <ActionButton
+        title="Edit"
+        icon={<Pencil className="h-4 w-4" />}
+        iconPosition="left"
         variant="outline"
-        size="sm"
         disabled={resource.isStale || !hasCapability(resource, 'canWrite')}
-        className="min-h-9"
-        onClick={() => setEditing(resource)}>
-        <Pencil className="h-3.5 w-3.5" /> Edit
-      </Button>
+        onClick={() => setEditing(resource)}
+      />
       {editing && (
         <SwarmResourceEditDialog
           resource={editing}

@@ -9,6 +9,7 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { BackupPolicyInfoActions } from '../actions';
 import { BackupPolicyForm } from './form';
 import { BackupPolicyRunsTab } from './runs';
+import { BackToResource } from './back-to-resource';
 
 type BackupPolicyFormResource = BackupPolicyView & RequiredFormFields;
 
@@ -17,9 +18,11 @@ export const BackupPolicyFormComponents: RequiredFormComponents<BackupPolicyForm
     Header: {
       title: 'Backup Policy',
     },
+    Navigation: BackToResource,
     Content: () => <BackupPolicyForm mode="add" />,
   },
   EditForm: {
+    Navigation: BackToResource,
     Header: {
       Indicator: ({ resource }) => {
         const policy = resource as BackupPolicyView;

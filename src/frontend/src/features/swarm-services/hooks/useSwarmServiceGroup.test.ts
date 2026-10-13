@@ -1,3 +1,4 @@
+import { createManagedSwarmService } from '@/test/factories/resources';
 import { SwarmServiceSynchronizationState, type ManagedSwarmServiceView } from '@/api/generated/api.types';
 import { normalizeManagedSwarmService } from './useSwarmServiceGroup';
 
@@ -54,4 +55,22 @@ describe('normalizeManagedSwarmService', () => {
 
     expect(result.spec.image).toBe(image);
   });
+});
+
+it('accepts new backup coverage and preserves it when a list update omits the detail field', () => {
+  const before = {
+    platformId: 'p',
+    volumes: [],
+    policies: [],
+    warnings: [],
+      reasons: [],
+    unavailable: false,
+    canConfigure: false,
+    hasResourcePolicy: false,
+  };
+  const after = { ...before, unavailable: true };
+  const current = createManagedSwarmService({ backupCoverage: before });
+  const next = normalizeManagedSwarmService(current, { ...current, backupCoverage: after });
+  expect(next.backupCoverage).toEqual(after);
+  expect(normalizeManagedSwarmService(next, { ...current, backupCoverage: undefined }).backupCoverage).toEqual(after);
 });

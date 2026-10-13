@@ -4,7 +4,7 @@ export const NETWORK_CHART_COLORS = {
     dark: 'hsl(199 95% 64%)',
   },
   txBytes: {
-    light: 'hsl(38 92% 50%)',
+    light: 'hsl(38 92% 32%)',
     dark: 'hsl(43 96% 56%)',
   },
 } as const;

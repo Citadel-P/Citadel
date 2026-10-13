@@ -412,6 +412,13 @@ impl RealtimeHub {
         )
     }
 
+    pub fn publish_backup_coverage(
+        &self,
+        change: Option<&citadel_backups::coverage::CoverageInvalidation>,
+    ) -> u64 {
+        self.publish(change.map(|c|c.platform_id),"BackupCoverage",Uuid::nil(),"coverageChanged",change.map_or_else(||json!({"resync":true}),|c|json!({"deploymentIds":c.deployment_ids,"stackIds":c.stack_ids,"serviceIds":c.service_ids,"containerIds":c.container_ids})))
+    }
+
     pub fn publish_resource_change(
         &self,
         resource_type: &'static str,

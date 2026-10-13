@@ -68,6 +68,15 @@ pub async fn register(
 ) -> Result<crate::workers::statistics::StatsIngress, sqlx::Error> {
     // Subscribe before starting inventory/event producers, so committed changes
     // cannot race past the alert/drift/pruning consumers.
+    let coverage_listener=citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::connect(&dependencies.pool).await?;
+    supervisor.spawn(
+        "backup-coverage-realtime",
+        crate::workers::backup_coverage::realtime_updates(
+            Box::new(coverage_listener),
+            dependencies.realtime.clone(),
+            cancellation.child_token(),
+        ),
+    );
     let unmanaged_listener =
         PostgresNotifications::connect(&dependencies.pool, "citadel_container_created").await?;
     let drift_listener =

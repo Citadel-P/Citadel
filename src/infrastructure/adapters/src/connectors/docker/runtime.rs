@@ -209,6 +209,7 @@ pub fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
                 .is_some_and(|prefix| prefix.eq_ignore_ascii_case("x-citadel."))
     });
     RuntimeContainerSummary {
+        mounts: container.mounts,
         stack,
         is_system,
         system_role,
@@ -348,6 +349,23 @@ mod tests {
     }
 
     #[test]
+    fn inventory_mounts_preserve_empty_and_unobserved_states() {
+        for mounts in [
+            None,
+            Some(serde_json::json!([])),
+            Some(
+                serde_json::json!([{"Type":"volume","Name":"data"},{"Type":"bind","Source":"/srv/app"}]),
+            ),
+        ] {
+            let container = map_container(ContainerSummary {
+                mounts: mounts.clone(),
+                ..Default::default()
+            });
+            assert_eq!(container.mounts, mounts);
+        }
+    }
+
+    #[test]
     fn legacy_ownership_labels_remain_visible_during_migration() {
         let container = map_container(ContainerSummary {
             labels: HashMap::from([("X-Citadel.Owner".to_owned(), "legacy".to_owned())]),
@@ -366,8 +384,10 @@ pub fn container_observation(
         .pointer_mut("/NetworkSettings/Ports")
         .map(serde_json::Value::take)
         .unwrap_or_default();
+    let mounts = document.get_mut("Mounts").map(serde_json::Value::take);
     let inspected: super::projection::ContainerInspect = serde_json::from_value(document)?;
     Ok(map_container(ContainerSummary {
+        mounts,
         id: inspected.id,
         names: vec![inspected.name],
         image_id: if inspected.image.is_empty() {

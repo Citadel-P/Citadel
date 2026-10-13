@@ -187,6 +187,12 @@ impl PostgresBackupSourcePlanner {
                 };
                 warnings.extend(plan.warnings);
                 for volume in plan.items {
+                    let source_name = volume.host_path.as_deref().unwrap_or(&volume.volume_name);
+                    let source_kind = if volume.host_path.is_some() {
+                        "BindMount"
+                    } else {
+                        "DeclaredNamed"
+                    };
                     let shared = warnings.iter().any(|warning| {
                         warning.contains(&format!(
                             "Volume {} on Node {} ",
@@ -195,10 +201,10 @@ impl PostgresBackupSourcePlanner {
                         ))
                     });
                     volumes.insert(
-                        (volume.docker_node_id.clone(), volume.volume_name.clone()),
+                        (volume.docker_node_id.clone(), source_name.to_owned()),
                         item(
-                            &volume.volume_name,
-                            "DeclaredNamed",
+                            source_name,
+                            source_kind,
                             false,
                             shared,
                             volume.docker_node_id,
@@ -208,11 +214,36 @@ impl PostgresBackupSourcePlanner {
                 }
             }
         }
+        // Swarm plans already include exact-node bind mounts. Standalone previews
+        // retain their volume metadata and share bind discovery with execution.
+        if kind == BackupPreviewKind::Deployment || platform.kind != "DockerSwarm" {
+            let (binds, discovered_warnings) = self
+                .workload_bind_mounts(kind, id, platform.id, false, cancellation)
+                .await?;
+            warnings.extend(discovered_warnings);
+            for bind in binds {
+                let path = bind.host_path.expect("bind discovery produces host paths");
+                volumes.insert(
+                    (bind.docker_node_id.clone(), path.clone()),
+                    item(
+                        &path,
+                        "BindMount",
+                        false,
+                        false,
+                        bind.docker_node_id,
+                        bind.node_hostname,
+                    ),
+                );
+            }
+        }
         if platform.status != citadel_primitives::PlatformStatus::Online {
             warnings.push("The source Platform is offline or unavailable.".into());
         }
         if volumes.is_empty() {
-            warnings.push("No Docker named volumes were resolved for this resource.".into());
+            let warning = "No supported volumes or bind mounts were resolved for this resource.";
+            if !warnings.iter().any(|existing| existing == warning) {
+                warnings.push(warning.into());
+            }
         }
         let mut volumes = volumes.into_values().collect::<Vec<_>>();
         self.add_coverage(actor, administrator, platform.id, &mut volumes)
@@ -246,11 +277,11 @@ impl PostgresBackupSourcePlanner {
             crate::persistence::postgres::backups::AUTHORIZED_CTE,
             r#"
 , policies AS (
-SELECT p.id,COALESCE(p.source->>'VolumeName',p.source->>'volumeName') AS volumename,
+SELECT p.id,COALESCE(p.source->>'VolumeName',p.source->>'volumeName',p.source->>'HostPath',p.source->>'hostPath') AS volumename,
 COALESCE(p.source->>'DockerNodeId',p.source->>'dockerNodeId') AS dockernodeid
-FROM backuppolicies p WHERE p.archivedat IS NULL AND p.source->>'$type'='DockerVolume'
+FROM backuppolicies p WHERE p.archivedat IS NULL AND p.source->>'$type' IN ('DockerVolume','BindMount')
 AND COALESCE(p.source->>'PlatformId',p.source->>'platformId')=$5::text
-AND COALESCE(p.source->>'VolumeName',p.source->>'volumeName')=ANY($6)
+AND COALESCE(p.source->>'VolumeName',p.source->>'volumeName',p.source->>'HostPath',p.source->>'hostPath')=ANY($6)
 AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS(
  SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
  WHERE access.resourcetype=$2 AND access.resourceid=p.id AND access.permissionlevel = ANY($3)))

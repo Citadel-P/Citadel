@@ -11,7 +11,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
         ("data".into(), Some("other-node".into())),
     ];
     use citadel_adapters::persistence::postgres::backups::coverage::volume_coverage;
-    let visible = volume_coverage(pool, admin.actor_id, true, platform, &volumes)
+    let visible = volume_coverage(pool, admin.actor_id, true, platform, &volumes, true)
         .await
         .unwrap();
     let data = visible.iter().find(|v| v.docker_node_id.is_none()).unwrap();
@@ -26,7 +26,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
         citadel_backups::BackupCoverageStatus::Unprotected
     );
     assert!(
-        volume_coverage(pool, reader.actor_id, false, platform, &volumes)
+        volume_coverage(pool, reader.actor_id, false, platform, &volumes, true)
             .await
             .unwrap()
             .iter()
@@ -36,6 +36,8 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
     let run = Uuid::now_v7();
     sqlx::query("INSERT INTO backupruns(id,backuppolicyid,backuprepositoryid,policynamesnapshot,repositorytypesnapshot,snapshotavailability,sourcesnapshot,status,trigger,triggeredbyactorid,completedat) SELECT $1,id,backuprepositoryid,name,'FileSystem','Available',source,'Succeeded','Manual',createdbyactorid,CURRENT_TIMESTAMP FROM backuppolicies WHERE id=$2")
         .bind(run).bind(id).execute(pool).await.unwrap();
+    sqlx::query("INSERT INTO backuprunitems(id,backuprunid,platformid,volumename,status,resticsnapshotid,completedat) VALUES($1,$2,$3,'data','Succeeded','snapshot',CURRENT_TIMESTAMP)")
+        .bind(Uuid::now_v7()).bind(run).bind(platform).execute(pool).await.unwrap();
     let tag = Uuid::now_v7();
     sqlx::query("INSERT INTO tags(id,name,normalizedname,color,createdbyactorid) VALUES($1,$2,$2,'#112233',$3)")
         .bind(tag).bind(format!("contract-{tag}")).bind(admin.actor_id.value()).execute(pool).await.unwrap();
@@ -70,22 +72,45 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
         .unwrap();
     assert_eq!(renamed.latest_run.as_ref().unwrap().id, run);
     assert!(renamed.tags.iter().any(|v| v.id == tag));
-    let covered = volume_coverage(pool, admin.actor_id, true, platform, &volumes)
+    let covered = volume_coverage(pool, admin.actor_id, true, platform, &volumes, true)
         .await
         .unwrap();
     let covered = covered.iter().find(|v| v.docker_node_id.is_none()).unwrap();
     assert_eq!(
         covered.status,
-        citadel_backups::BackupCoverageStatus::Protected
+        citadel_backups::BackupCoverageStatus::Warning
     );
+    assert!(covered.last_successful_run_at.is_some());
     assert_eq!(covered.last_run_id, Some(run));
+    sqlx::query("UPDATE backuppolicies SET cron='0 0 * * *' WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .unwrap();
+    // Another visible policy for this volume remains manual-only and has no run.
+    // Its configuration warning must not be hidden by this scheduled success.
+    assert_eq!(
+        volume_coverage(pool, admin.actor_id, true, platform, &volumes, true)
+            .await
+            .unwrap()
+            .iter()
+            .find(|v| v.docker_node_id.is_none())
+            .unwrap()
+            .status,
+        citadel_backups::BackupCoverageStatus::Warning
+    );
+    sqlx::query("UPDATE backuppolicies SET cron=NULL WHERE id=$1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE backupruns SET status='Failed' WHERE id=$1")
         .bind(run)
         .execute(pool)
         .await
         .unwrap();
     assert_eq!(
-        volume_coverage(pool, admin.actor_id, true, platform, &volumes)
+        volume_coverage(pool, admin.actor_id, true, platform, &volumes, true)
             .await
             .unwrap()
             .iter()
@@ -104,4 +129,54 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
         .execute(pool)
         .await
         .unwrap();
+    verify_override_names(pool, &reader, id, policy["name"].as_str().unwrap()).await;
+}
+
+async fn verify_override_names(
+    pool: &sqlx::PgPool,
+    user: &ActorPrincipal,
+    policy_id: Uuid,
+    policy_name: &str,
+) {
+    use citadel_adapters::persistence::postgres::identity::teams::repository::PostgresTeamRepository;
+    use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
+    use citadel_identity::{TeamReader, UserReader};
+
+    let team_id = Uuid::now_v7();
+    let team_actor = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id, type) VALUES ($1, 'Team')")
+        .bind(team_actor)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO teams(id, actorid, name) VALUES ($1, $2, $3)")
+        .bind(team_id)
+        .bind(team_actor)
+        .bind(format!("backup-access-{team_id}"))
+        .execute(pool)
+        .await
+        .unwrap();
+    for actor in [user.actor_id.value(), team_actor] {
+        sqlx::query("INSERT INTO resourceaccesses(id, actorid, permissionlevel, resourceid, resourcetype, specificpermissions) VALUES ($1, $2, 1, $3, 16, 0)")
+            .bind(Uuid::now_v7()).bind(actor).bind(policy_id).execute(pool).await.unwrap();
+    }
+    let user_view = PostgresUserRepository::new(pool.clone())
+        .get(user.subject_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let team_view = PostgresTeamRepository::new(pool.clone())
+        .get(team_id)
+        .await
+        .unwrap()
+        .unwrap();
+    // Fresh reads must hydrate the name, without relying on the grant dialog's local state.
+    for accesses in [user_view.resource_accesses, team_view.resource_accesses] {
+        let accesses = accesses.unwrap();
+        let policy = accesses
+            .iter()
+            .find(|access| access.resource_id == policy_id)
+            .unwrap();
+        assert_eq!(policy.resource_name.as_deref(), Some(policy_name));
+    }
 }

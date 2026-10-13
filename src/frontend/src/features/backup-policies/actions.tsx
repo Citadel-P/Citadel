@@ -11,12 +11,14 @@ export const invalidateBackupPolicyQueries = async (queryClient: ReturnType<type
   await queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
   await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
   await queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
+  await queryClient.invalidateQueries({ queryKey: ['listVolumes'] });
+  await queryClient.invalidateQueries({ queryKey: ['getStackBackupSourcePreview'] });
+  await queryClient.invalidateQueries({ queryKey: ['getDeploymentBackupSourcePreview'] });
+  await queryClient.invalidateQueries({ queryKey: ['getSwarmServiceBackupSourcePreview'] });
 
   if (id) {
     await queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
     await queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
-  } else {
-    await queryClient.invalidateQueries({ queryKey: ['getBackupPolicy'] });
   }
 };
 
@@ -100,9 +102,7 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
           try {
             await Promise.all(selected.map((policy) => archive.mutateAsync({ id: policy.id } as any)));
             if (isCurrentResource) navigate('/backup-policies', { replace: true });
-            await queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-            await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
-            await queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
+            await invalidateBackupPolicyQueries(queryClient);
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
           } catch (_error) {

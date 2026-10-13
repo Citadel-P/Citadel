@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+pub mod alert_delivery;
 pub mod api;
 
 pub mod application_info_http;

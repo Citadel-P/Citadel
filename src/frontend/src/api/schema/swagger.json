@@ -1035,6 +1035,7 @@
           "AutomationAction",
           "Build",
           "BuildAgentPool",
+          "BackupPolicy",
           "License",
           "SwarmService"
         ],
@@ -1374,6 +1375,7 @@
           "WebhookStackGitDeployFailed",
           "AutomationActionRunFailed",
           "BuildRunFailed",
+          "BackupRunFailed",
           "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
           "LicenseExpired"
@@ -2253,6 +2255,14 @@
         },
         "type": "object"
       },
+      "BackupCoverageReason": {
+        "enum": [
+          "InventoryUnavailable",
+          "InventoryIncomplete",
+          "SchedulingUnavailable"
+        ],
+        "type": "string"
+      },
       "BackupCoverageStatus": {
         "enum": [
           "NotApplicable",
@@ -2490,6 +2500,40 @@
           "backupRepositoryId",
           "enabled",
           "alertOnFailure"
+        ],
+        "type": "object"
+      },
+      "BackupPolicyReference": {
+        "properties": {
+          "canWrite": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduleConfigured": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -3147,6 +3191,12 @@
               "null"
             ]
           },
+          "targetHostPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "targetPlatformId": {
             "format": "uuid",
             "type": "string"
@@ -3262,6 +3312,12 @@
             "format": "int64",
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "hostPath": {
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -3620,6 +3676,35 @@
             "required": [
               "platformId",
               "volumeName",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "BindMount"
+                ],
+                "type": "string"
+              },
+              "dockerNodeId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "hostPath": {
+                "type": "string"
+              },
+              "platformId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platformId",
+              "hostPath",
               "$type"
             ],
             "type": "object"
@@ -5522,6 +5607,16 @@
       },
       "ContainerRuntimeView": {
         "properties": {
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -5766,6 +5861,16 @@
       },
       "ContainerSummaryView": {
         "properties": {
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -5877,6 +5982,16 @@
       },
       "ContainerView": {
         "properties": {
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -7593,6 +7708,16 @@
               },
               {
                 "$ref": "#/components/schemas/AutoUpdateState"
+              }
+            ]
+          },
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               }
             ]
           },
@@ -10993,6 +11118,16 @@
           "autoUpdateState": {
             "$ref": "#/components/schemas/AutoUpdateState"
           },
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -13344,6 +13479,10 @@
       "PlatformBackupSummary": {
         "properties": {
           "attentionPolicyCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "bindMountPolicyCount": {
             "format": "int32",
             "type": "integer"
           },
@@ -18322,6 +18461,131 @@
         ],
         "type": "object"
       },
+      "ResourceBackupSummaryView": {
+        "properties": {
+          "canConfigure": {
+            "type": "boolean"
+          },
+          "canConfigureBindMount": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hasResourcePolicy": {
+            "type": "boolean"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BackupPolicyReference"
+            },
+            "type": "array"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/BackupCoverageReason"
+            },
+            "type": "array"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupCoverageStatus"
+              }
+            ]
+          },
+          "unavailable": {
+            "type": "boolean"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceBackupVolumeView"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "platformId",
+          "volumes",
+          "policies",
+          "hasResourcePolicy",
+          "canConfigure",
+          "unavailable",
+          "warnings",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "ResourceBackupVolumeView": {
+        "properties": {
+          "dockerNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hostPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "includedInResourcePolicy": {
+            "type": "boolean"
+          },
+          "lastSuccessfulRunAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeHostname": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BackupPolicyReference"
+            },
+            "type": "array"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupCoverageStatus"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "includedInResourcePolicy",
+          "policies"
+        ],
+        "type": "object"
+      },
       "ResourceBindingInput": {
         "properties": {
           "id": {
@@ -18659,6 +18923,12 @@
               "null"
             ]
           },
+          "targetHostPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "targetPlatformId": {
             "format": "uuid",
             "type": "string"
@@ -18669,7 +18939,6 @@
         },
         "required": [
           "targetPlatformId",
-          "targetVolumeName",
           "overwriteExisting"
         ],
         "type": "object"
@@ -21027,6 +21296,16 @@
       },
       "StackView": {
         "properties": {
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -25839,6 +26118,14 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ActivityEventType"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ActivityStatus"
             }
           },
           {

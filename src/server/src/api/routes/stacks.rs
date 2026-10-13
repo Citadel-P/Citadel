@@ -46,6 +46,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct StacksHttpState {
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub identity: Arc<IdentityService>,
     pub stacks: Arc<StackService>,
     pub platforms: Arc<citadel_platforms::PlatformReadService>,
@@ -1166,16 +1168,20 @@ async fn list(
             .map_err(stack_error),
         &headers,
     )?;
+    let mut views = api_result(
+        value
+            .into_iter()
+            .map(StackView::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ApiError::internal),
+        &headers,
+    )?;
+    if let Some(service) = &state.backup_coverage {
+        views = service.enrich_stacks(&principal, views).await;
+    }
     Ok(no_store(
         Json(StacksView {
-            stacks: api_result(
-                value
-                    .into_iter()
-                    .map(StackView::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(ApiError::internal),
-                &headers,
-            )?,
+            stacks: views,
             capabilities,
         })
         .into_response(),
@@ -1212,13 +1218,25 @@ async fn get(
             .map_err(stack_error),
         &headers,
     )?;
-    Ok(no_store(
-        Json(api_result(
-            StackView::try_from(value).map_err(ApiError::internal),
-            &headers,
-        )?)
-        .into_response(),
-    ))
+    let mut view = api_result(
+        StackView::try_from(value).map_err(ApiError::internal),
+        &headers,
+    )?;
+    if let Some(service) = &state.backup_coverage {
+        if let Some(platform) = view.platform_id {
+            view.backup_coverage = Some(
+                service
+                    .workload(
+                        &principal,
+                        citadel_backups::policies::read_models::BackupPreviewKind::Stack,
+                        id,
+                        platform,
+                    )
+                    .await,
+            );
+        }
+    }
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(

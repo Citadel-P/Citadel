@@ -731,6 +731,7 @@ impl RealtimeReadPort for FakeReader {
                 deployment_id: None,
                 stack_id: None,
                 capabilities: None,
+                backup_coverage: None,
             }])
         })
     }

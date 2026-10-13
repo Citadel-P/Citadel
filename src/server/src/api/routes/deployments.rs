@@ -44,6 +44,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DeploymentsHttpState {
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub identity: Arc<IdentityService>,
     pub deployments: Arc<DeploymentService>,
 }
@@ -234,15 +236,19 @@ async fn list_deployments(
         .list(principal.actor_id, principal.is_administrator(), &filter)
         .await
         .map_err(deployment_error);
+    let mut views = api_result(result, &headers)?
+        .into_iter()
+        .map(DeploymentView::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
+        })?;
+    if let Some(service) = &state.backup_coverage {
+        views = service.enrich_deployments(&principal, views).await;
+    }
     Ok(no_store(
         Json(DeploymentsView {
-            deployments: api_result(result, &headers)?
-                .into_iter()
-                .map(DeploymentView::try_from)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| {
-                    crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
-                })?,
+            deployments: views,
             capabilities,
         })
         .into_response(),
@@ -286,13 +292,24 @@ async fn get_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    Ok(no_store(
-        Json(api_result(
-            DeploymentView::try_from(deployment).map_err(ApiError::internal),
-            &headers,
-        )?)
-        .into_response(),
-    ))
+    let mut view = api_result(
+        DeploymentView::try_from(deployment).map_err(ApiError::internal),
+        &headers,
+    )?;
+    if let Some(service) = &state.backup_coverage {
+        let platform = view.platform_id;
+        view.backup_coverage = Some(
+            service
+                .workload(
+                    &principal,
+                    citadel_backups::policies::read_models::BackupPreviewKind::Deployment,
+                    id,
+                    platform,
+                )
+                .await,
+        );
+    }
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(

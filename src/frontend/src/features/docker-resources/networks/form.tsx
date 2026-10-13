@@ -5,13 +5,13 @@ import { useMutate } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
 import { Constants } from '@/lib/constants';
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   FormShell,
   defineSection,
   defineField,
   defineGroupField,
   FieldInput,
+  FieldSelect,
   FieldSwitch,
 } from '@/components/custom/form-builder';
 import { KeyValuePairInput, KVPair } from '@/components/custom/key-value-pair-input';
@@ -139,19 +139,17 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                 description: 'Swarm networks span the cluster; local networks exist only on the connected manager.',
                 required: true,
                 render: (value, set) => (
-                  <Select
-                    onValueChange={(scope: 'local' | 'swarm') =>
+                  <FieldSelect
+                    onChange={(scope: 'local' | 'swarm') =>
                       set({ scope, driver: scope === 'swarm' ? 'overlay' : 'bridge' })
                     }
-                    value={value}>
-                    <SelectTrigger aria-label="Scope" className="w-full max-w-100">
-                      <SelectValue placeholder="Select network scope" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background">
-                      <SelectItem value="swarm">Swarm</SelectItem>
-                      <SelectItem value="local">Local manager</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    value={value}
+                    placeholder="Select network scope"
+                    options={[
+                      { value: 'swarm', label: 'Swarm' },
+                      { value: 'local', label: 'Local manager' },
+                    ]}
+                  />
                 ),
               }),
             ]
@@ -162,18 +160,12 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
           description: 'Name of the network driver plugin to use.',
           required: true,
           render: (value, set) => (
-            <Select onValueChange={(v) => set({ driver: v })} value={value}>
-              <SelectTrigger aria-label="Driver" className="w-full max-w-100">
-                <SelectValue placeholder="Select driver" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                {DRIVER_OPTIONS[merged.scope].map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FieldSelect
+              onChange={(driver) => set({ driver })}
+              value={value}
+              placeholder="Select driver"
+              options={[...DRIVER_OPTIONS[merged.scope]]}
+            />
           ),
         }),
       ],

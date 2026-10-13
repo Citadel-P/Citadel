@@ -116,6 +116,8 @@ pub struct DockerClusterInfo {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ContainerSummary {
+    #[serde(rename = "Mounts", default)]
+    pub mounts: Option<Value>,
     #[serde(rename = "Id", default)]
     pub id: String,
     #[serde(rename = "Names", default)]

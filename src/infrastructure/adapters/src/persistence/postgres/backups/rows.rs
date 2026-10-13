@@ -255,6 +255,7 @@ pub(super) fn map_run_item(row: sqlx::postgres::PgRow) -> Result<BackupRunItem, 
         backup_run_id: row.try_get("backuprunid").map_err(storage)?,
         platform_id: row.try_get("platformid").map_err(storage)?,
         volume_name: row.try_get("volumename").map_err(storage)?,
+        host_path: row.try_get("hostpath").map_err(storage)?,
         docker_node_id: row.try_get("dockernodeid").map_err(storage)?,
         node_hostname: row.try_get("nodehostname").map_err(storage)?,
         status: row
@@ -284,6 +285,7 @@ pub(super) fn map_restore(r: sqlx::postgres::PgRow) -> Result<BackupRestoreRun, 
         target_platform_id: r.try_get("targetplatformid").map_err(storage)?,
         target_docker_node_id: r.try_get("targetdockernodeid").map_err(storage)?,
         target_volume_name: r.try_get("targetvolumename").map_err(storage)?,
+        target_host_path: r.try_get("targethostpath").map_err(storage)?,
         overwrite_existing: r.try_get("overwriteexisting").map_err(storage)?,
         status: r
             .try_get::<String, _>("status")

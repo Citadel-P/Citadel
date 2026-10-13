@@ -328,7 +328,7 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let completed=executor.backup(&claim,&plan,&cancel).await;store.finish_backup(&claim,&completed).await.unwrap();
         assert_eq!(completed.status,citadel_backups::BackupRunStatus::Succeeded,"error={:?}; warnings={:?}",completed.error_message,completed.warnings);
         let persisted=store.get_run(run.id).await.unwrap();assert_eq!(persisted.items[0].docker_node_id.as_deref(),Some(nodes[1].as_str()));
-        let queued=store.enqueue_restore(BackupRestoreRequest {actor,backup_run_id:run.id,target_platform_id:platform,target_volume_name:target.into(),overwrite_existing:false,target_docker_node_id:Some(nodes[2].clone()),source_backup_run_item_id:Some(persisted.items[0].id)}).await.unwrap();
+        let queued=store.enqueue_restore(BackupRestoreRequest {actor,backup_run_id:run.id,target_platform_id:platform,target_volume_name:target.into(), target_host_path: None,overwrite_existing:false,target_docker_node_id:Some(nodes[2].clone()),source_backup_run_item_id:Some(persisted.items[0].id)}).await.unwrap();
         let restore=store.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();assert_eq!(restore.run.id,queued.id);
         let restored=executor.restore(&restore,&cancel).await;store.finish_restore(&restore,&restored).await.unwrap();assert_eq!(restored.status,citadel_backups::BackupRestoreStatus::Succeeded,"{:?}",restored.error_message);
         assert_eq!(cluster.node(2,&["run","--rm","--volume",&format!("{target}:/fixture:ro"),"--entrypoint","cat",IMAGE,"/fixture/payload.txt"],None).await,PAYLOAD);

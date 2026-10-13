@@ -32,6 +32,7 @@ async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
     f.app = f
         .app
         .merge(swarm_services_http::router(SwarmServicesHttpState {
+            backup_coverage: None,
             identity: f.lookup_state.platforms.identity.clone(),
             services: Arc::new(services),
         }));

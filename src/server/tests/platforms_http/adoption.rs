@@ -96,6 +96,7 @@ async fn exercise_adoption(external: bool) {
         &[11; 32],
     )));
     f.app = f.app.merge(deployments::router(DeploymentsHttpState {
+        backup_coverage: None,
         identity: f.lookup_state.platforms.identity.clone(),
         deployments: Arc::new(service),
     }));

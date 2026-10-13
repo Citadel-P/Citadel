@@ -90,7 +90,6 @@ pub(super) async fn run_group_connection(
                 if !subscription.lease.tracked() { subscription.recheck(service).await?; }
                 if event.resource_type=="License" {
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("LicenseStateChanged",vec![])).await?;
-                    continue;
                 }
                 for joined in state.groups.values_mut().filter(|g|g.group.affected_by(&event)) {
                     // Inventory I/O must not pause this connection's active streams.

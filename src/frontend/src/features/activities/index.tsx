@@ -4,7 +4,7 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
 import { ActivitiesTable } from './table';
 import { ActivityEventType, ActivityResourceType, LookupResourceType } from '@/api/generated/api.types';
-import { useActivityQuery } from '@/lib/atoms';
+import { ActivityFiltersState, useActivityQuery } from '@/lib/atoms';
 import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
 import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
@@ -128,6 +128,24 @@ export const ActivityComponents: RequiredComponents = {
   },
 };
 
+export function getActivityEventOptions(resourceType: ActivityFiltersState['resourceType']) {
+  const all = Object.values(ActivityEventType);
+  const eventPrefix = resourceType === 'All' ? '' : activityEventPrefixes[resourceType];
+  const events =
+    resourceType === 'All'
+      ? all
+      : all.filter(
+          (e) =>
+            e.startsWith(eventPrefix) &&
+            (resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
+        );
+  return events.flatMap<string | { value: string; label: string }>((event) =>
+    event === ActivityEventType.BackupRunCompleted
+      ? [event, { value: 'BackupRunFailed', label: 'Backup run failed' }]
+      : [event],
+  );
+}
+
 function SearchSection() {
   const [query, setQuery] = useActivityQuery();
   const { data: profileResponse } = useRead('getCurrentProfile');
@@ -135,16 +153,7 @@ function SearchSection() {
 
   const resourceOptions = useMemo(() => getActivityResourceOptions(isAdministrator), [isAdministrator]);
 
-  const eventOptions = useMemo(() => {
-    const all = Object.values(ActivityEventType);
-    if (query.resourceType === 'All') return all;
-    const eventPrefix = activityEventPrefixes[query.resourceType];
-    return all.filter(
-      (e) =>
-        e.startsWith(eventPrefix) &&
-        (query.resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
-    );
-  }, [query.resourceType]);
+  const eventOptions = useMemo(() => getActivityEventOptions(query.resourceType), [query.resourceType]);
 
   const handleResourceTypeChange = (value: string) => {
     setQuery({
@@ -158,7 +167,7 @@ function SearchSection() {
 
   const handleEventChange = (value: string) => {
     setQuery({
-      eventType: value as ActivityEventType | 'All',
+      eventType: value as ActivityFiltersState['eventType'],
       page: 1,
     });
   };

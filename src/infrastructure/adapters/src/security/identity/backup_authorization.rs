@@ -47,7 +47,14 @@ impl IdentityBackupRunAuthorizer {
                 principal,
                 resource_type,
                 resource_id,
-                PermissionLevel::Read,
+                if matches!(
+                    source,
+                    citadel_backups::spec::BackupSourceSpec::BindMount { .. }
+                ) {
+                    PermissionLevel::Write
+                } else {
+                    PermissionLevel::Read
+                },
                 None,
             )
             .await?;
@@ -89,6 +96,44 @@ impl BackupRunAuthorizer for IdentityBackupRunAuthorizer {
             .await?;
             self.authorize_source(&principal, &claim.run.source_snapshot)
                 .await
+        })
+    }
+
+    fn authorize_plan<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+        plan: &'a citadel_backups::BackupSourcePlan,
+    ) -> BoxFuture<'a, Result<(), BackupError>> {
+        Box::pin(async move {
+            let platforms = plan
+                .items
+                .iter()
+                .filter(|item| item.host_path.is_some())
+                .map(|item| item.platform_id)
+                .collect::<std::collections::BTreeSet<_>>();
+            if platforms.is_empty() {
+                return Ok(());
+            }
+            let principal = self
+                .identity
+                .execution_principal(ActorId::new(claim.policy.run_as_actor_id))
+                .await
+                .map_err(|_| {
+                    BackupError::Validation(
+                        "The Backup run-as identity is unavailable or disabled.".into(),
+                    )
+                })?;
+            for platform in platforms {
+                self.authorize_resource(
+                    &principal,
+                    ResourceType::Platform,
+                    platform,
+                    PermissionLevel::Write,
+                    None,
+                )
+                .await?;
+            }
+            Ok(())
         })
     }
 

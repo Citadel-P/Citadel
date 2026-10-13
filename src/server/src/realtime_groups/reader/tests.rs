@@ -60,6 +60,7 @@ fn container(node: Option<&str>) -> ContainerView {
         deployment_id: None,
         stack_id: None,
         capabilities: None,
+        backup_coverage: None,
     }
 }
 

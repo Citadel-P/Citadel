@@ -3,7 +3,7 @@ title: "Backups"
 description: "Configure backup repositories, policies, runs, restores, and Swarm volume coverage."
 ---
 
-Citadel provides backup and recovery for its control plane and Docker named
+Citadel provides backup and recovery for its control plane, explicit host bind mounts, and Docker named
 volumes, with snapshots stored in restic-compatible repositories.
 
 ## Make your first backup
@@ -18,6 +18,10 @@ backup repositories and policies. Confirm the application's data actually lives
 in that volume: bind mounts and container writable layers are not included.
 
 ### 1. Prepare the repository
+
+**Add Repository** requires global **Write** permission for **Backup Repositories**
+through a Role assigned directly or through a Team. A Write override on an
+existing repository allows editing that repository, not creating another one.
 
 1. Open **Backups** and create a backup repository.
 2. Choose storage supported by the connection in the table below. For recovery
@@ -40,6 +44,18 @@ S3 credentials alone cannot decrypt the snapshots.
 
 ### 2. Create and run the policy
 
+**Add Policy** requires global **Write** permission for **Backup Policies**, granted
+through a role assigned directly or through a team. An override on an existing
+policy or repository only grants access to that resource; it does not allow creating
+new policies. You also need access to the selected repository and backup source.
+
+If **Add Policy** is disabled while an existing policy is editable, check the
+user's Role permissions under **Access → Roles** and their Role and Team
+assignments. Repository permissions do not grant Backup Policy permissions.
+See [Roles and resource overrides](/docs/guides/access-control#roles-and-resource-overrides-have-different-scopes)
+for the difference in scope, and [Backup API capabilities](/docs/reference/permissions#backup-api-capabilities)
+for interpreting list responses.
+
 1. Create a policy and choose **Docker volume** under **Source → Type**.
 2. Select the Platform and volume. For Swarm, select its Node and check
    [Swarm backup requirements](#docker-swarm) first.
@@ -52,11 +68,11 @@ S3 credentials alone cannot decrypt the snapshots.
    snapshot status and logs, including warnings.
 
 For a whole Stack or Deployment, select that source instead and review the
-resolved named volumes before saving. Each volume has its own snapshot and
+resolved volumes and bind mounts before saving. Each storage target has its own snapshot and
 result; the run is not an atomic snapshot of the entire application.
 
 Continue with a restore test below before relying on the policy. **Protected**
-means a volume has backup coverage; it does not prove a backup succeeded.
+requires an enabled schedule, a ready repository, and a successful available backup. It does not replace a restore test.
 
 ### Backup consistency
 
@@ -73,6 +89,11 @@ support Live consistency only; see [Swarm requirements](#docker-swarm).
 ## Restores
 
 Docker volume snapshots can be restored from a backup run into a Docker named volume.
+
+Runs marked **Succeeded with warnings** can also be restored when the selected
+snapshot succeeded and is still available. Review the warnings for excluded
+sources or retention problems; failed items and expired or missing snapshots
+cannot be restored.
 
 ### Restore a separate copy
 
@@ -149,7 +170,7 @@ When creating an S3-compatible repository, configure:
 
 The restic password is separate from the S3 credentials. Losing the password secret means existing snapshots in that repository cannot be restored.
 
-For Docker volume, stack, deployment, and Swarm Service backups, the S3 endpoint must be reachable from every helper container that executes the policy. For Citadel backups, the S3 endpoint must be reachable from Citadel Core.
+For Docker volume, bind mount, stack, deployment, and Swarm Service backups, the S3 endpoint must be reachable from every helper container that executes the policy. For Citadel backups, the S3 endpoint must be reachable from Citadel Core.
 
 Examples:
 
@@ -198,18 +219,98 @@ Service Account's persistent API token.
 
 Supported sources:
 
-- **Citadel backup**: creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
-- **Docker Volume**: backs up one selected Docker named volume.
-- **Stack**: backs up all resolved Docker named volumes used by a stack.
-- **Deployment**: backs up all resolved Docker named volumes used by a deployment.
-- **Swarm Service**: backs up the supported node-local named volumes mounted by the current Tasks of a managed Swarm Service.
+- **Citadel system**: creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
+- **Host file or directory**: backs up one explicitly selected existing host file or directory. Requires Platform write access. On Swarm, select the exact owning Node; policies do not follow a task to another Node.
+- **Docker Volume**: backs up one selected Docker-managed volume by its actual name, including an anonymous volume with a generated name.
+- **Stack storage**: on standalone Docker, backs up recorded applied volumes, including named, external, and anonymous volumes, plus supported bind mounts discovered from owned containers. On Swarm, resolves supported volumes and bind paths on the current Tasks’ Nodes.
+- **Deployment storage**: backs up declared named volumes and supported bind mounts discovered from the synchronized container on standalone Docker. Runtime-only anonymous volumes still need a direct Docker volume policy.
+- **Swarm service storage**: backs up supported local Docker volumes and bind mounts on the Nodes running the managed Service’s current Tasks.
 
 [![Backup policy selecting a Stack, previewing its named volume, and choosing a repository with retention of fourteen successful snapshots](/screenshots/backup-policy-source-destination.png)](/screenshots/backup-policy-source-destination.png)
 
 Example policy using demo resources. Review the resolved volume and Node under
 **Source**, then choose the repository and retention under **Destination**.
-The example keeps 14 successful snapshots. **Protected** indicates backup
-coverage for that volume; inspect completed runs to confirm successful backups.
+The example keeps 14 successful snapshots. **Volume policy configured** in the
+source preview means a direct volume policy exists; it does not confirm a
+successful backup. Inspect completed runs to verify snapshots.
+
+### Coverage on resource pages
+
+The **Container overview** shows a shield beside each Docker-managed volume. Hover over
+the shield or focus it with the keyboard to see its backup status and the last
+successful backup when available. An unprotected volume has no matching policy
+visible to you; unavailable coverage is shown separately.
+
+Deployment, stack, and managed Swarm Service pages show a backup shield at the
+far right of the main tab bar, available from every tab. Hover, focus, or click
+the shield to open a card with per-volume status, a protected-volume count, and
+the most recent successful volume backup when available. Press **Escape** to
+close the card; keyboard users can press **Tab** or **Down Arrow** from the shield
+to enter it.
+
+The shield is green when every eligible storage target has an enabled scheduled
+policy, a ready repository, and a successful available backup. It is amber for
+manual-only policies, disabled policies, no successful backup, partial coverage,
+or other warnings. A successful manual backup retains its last-success date but
+does not turn the shield green without a schedule. Failed, timed-out, interrupted,
+and rejected runs show red. Unavailable coverage and no eligible storage show gray. The card explains the status;
+color alone is not the only indication. When multiple policies cover the same
+storage, warnings and failures remain visible even if another policy has succeeded.
+
+Backup indicators use synchronized storage inventory. Apply the workload and
+synchronize its platform if coverage reports incomplete or unavailable inventory.
+A configured schedule is active only when Automated Operations is available and
+backup workers are enabled; otherwise the indicator reports that automatic
+backups are paused.
+
+Deployment, stack, Swarm Service, and container tables display a **Backup** column
+and a **Backup Filter** dropdown at the right of the resource header. Select multiple
+statuses to show resources matching any selected status. These combine with the
+platform, tag, search, and overview filters. Remove individual status chips or
+clear the selection to show all backup statuses.
+The column uses the same shield and card as the resource page. Resources without
+eligible storage show a dash. **Edit schedule** in the card opens the policy's
+Schedule section when you have write access.
+
+**Configure backup** opens
+the central policy form with the workload or individual volume already selected,
+including its Swarm Node when applicable. Existing policy links let you review
+coverage without creating a duplicate policy for a shared volume. Saving a policy
+opened from this card returns you to the resource. Coverage updates through
+the resource's live connection when policies, runs, repositories, or inventory
+change; opening the resource does not poll backup source previews.
+
+A Swarm Stack without applied service inventory shows an explanation to apply
+the Stack and synchronize inventory first. Existing deployed Stacks can resolve
+their namespace from Citadel-owned service inventory, including Stacks created
+before namespace reservations were recorded during Apply.
+
+Schedules, retention, repositories, and run history remain in **Backups**. A
+configured policy is not proof of a successful backup: disabled, failed, or
+never-run policies need attention. A newly added volume is not marked protected
+just because an earlier workload backup succeeded.
+
+A deployment preview may also discover runtime-only volumes. These are marked
+**Not included in deployment backups** in the resource summary and are excluded
+from the deployment policy's source preview. They can still have coverage from a
+separate **Docker volume** policy. Use the individual volume's **Configure backup**
+link even when the deployment already has a policy. Anonymous volumes are
+identified by Docker's generated name; if a container recreation replaces the
+volume, a direct policy targeting the old name does not follow the replacement.
+
+The protected count covers listed Docker volumes and discovered bind mounts.
+Supported bind mounts are included in workload policies; an individual
+**Host file or directory** policy can also protect one path. A policy for the same path
+on another Swarm Node does not provide coverage. Unsupported system paths show
+**Not covered**. Tmpfs, nested mounts, and container writable layers remain
+excluded; a green shield does not mean all application state is backed up.
+
+Workload backups include supported bind mounts discovered from synchronized, owned containers, using the actual absolute host path and exact Swarm Node. Citadel does not guess where a relative Compose path resolves. Creating or updating a workload policy with bind paths requires Platform write access, which is checked again for the run-as identity before execution. Discovery failures, stale owned containers or current Tasks, and missing container inventory block execution; previews report incomplete discovery while retaining known paths. Unsupported system paths are excluded with warnings. Tmpfs and the container writable layer remain excluded.
+
+Docker Desktop can report internal `/run/desktop/...` paths when inspecting
+containers with mixed volume and bind mounts. Those paths remain excluded by the
+system-path restrictions. Check the source preview; an explicit **Host file or
+directory** policy can use the original supported host path instead.
 
 ### Backup Counts
 
@@ -217,7 +318,7 @@ The main **Backups** page lists every backup policy in the Citadel instance.
 An individual platform's **Backups** summary only counts policies whose source
 belongs to that platform:
 
-- Docker volume policies created for the platform
+- Docker volume and bind-mount policies created for the platform
 - Stack policies whose stack runs on the platform
 - Deployment policies whose deployment runs on the platform
 - Swarm Service policies whose managed Service runs on the platform
@@ -227,8 +328,6 @@ platform. They appear on the main **Backups** page but are not included in any
 platform's backup count. For example, one Citadel backup and one volume backup
 produce a total of two policies on the main page and one policy on the volume's
 platform.
-
-Only Docker named volumes are backed up. Bind mounts such as `./data:/app/data` or `/host/path:/data` are host paths, not Docker volumes, and are not included in Docker volume, stack, or deployment backups.
 
 A Citadel backup does not archive all of `/app/data`. Git caches, stack
 workspaces, automation working directories, logs, and backup staging files are
@@ -248,7 +347,7 @@ on `PATH`.
 
 ## Docker Platform Backups
 
-Citadel reads named volumes through the target's Docker daemon using a backup
+Citadel reads Docker-managed volumes through the target's Docker daemon using a backup
 helper. S3 backups upload from that target directly to the bucket, so the S3
 address and credentials must work from the helper's network. Remote volume
 contents do not pass through Core. For supported repository locations, see
@@ -275,7 +374,7 @@ Swarm backup requires:
 - an S3-compatible backup repository reachable from every required Node
 - **Live** consistency
 
-Citadel rejects stale or incomplete placement, missing Node coverage, scaled-to-zero workloads, cluster volumes, volume-plugin storage, and `local` volumes configured with driver options. Bind mounts, `tmpfs`, container writable layers, Docker Secrets, and Docker Configs are not included.
+Citadel rejects stale or incomplete placement, missing Node coverage, scaled-to-zero workloads, cluster volumes, volume-plugin storage, and `local` volumes configured with driver options. These workload policies also include supported bind mounts discovered from current Tasks on their exact Nodes. A direct **Host file or directory** policy remains fixed to its selected path and Node. `tmpfs`, container writable layers, Docker Secrets, and Docker Configs are not included.
 
 For a Stack or Service, snapshots are created one volume at a time. They are
 crash-consistent at best and do not represent one atomic point in time across
@@ -285,6 +384,54 @@ already completed remain available for individual restore.
 Keep a Citadel control-plane backup alongside workload-volume policies. The
 control-plane backup protects Citadel configuration, bindings, encrypted
 secrets, and recovery assets; it does not replace an application-data backup.
+
+## Bind-mount backups and restores
+
+Use **Backups → Add policy → Source → Back up → Host file or directory**, or **Configure backup** beside
+a discovered bind mount in a workload's backup card or **Container overview**.
+
+1. Select the Platform and an existing absolute Linux host path, such as
+   `/srv/app/data` or `/srv/app/config.json`. Use the host path, not its destination
+   inside the application container. Resolve relative Compose paths first.
+2. On Swarm, select the exact Node containing the data. The same path on two
+   Nodes is two sources. A direct host-path policy stays on that Node; a workload policy resolves current Task placement for each run.
+3. Select a repository and run the policy. Regular and Edge Agents, including
+   Swarm Node Agents, require S3-compatible repositories. Local Docker supports
+   the existing filesystem and S3 repository options.
+
+Creating a bind policy and executing it both require **Write** permission on the
+Platform, in addition to normal policy/repository permissions. Host paths may
+contain data outside the workload, so Platform read access is insufficient.
+
+Only existing regular files and directories are supported. Citadel rejects `/`,
+relative paths, traversal, trailing slashes, mount-expression delimiters, and
+system/runtime paths under `/proc`, `/sys`, `/dev`, `/run`, `/var/run`, and
+`/var/lib/docker`. Use actual resolved host paths; symlink components in a source or destination
+path are rejected. Devices, sockets, and named pipes cannot be backup roots. Nested mounts
+are excluded. Filesystem repository paths must not overlap the bind path.
+
+Backups run **live** without stopping applications. Quiesce writers or create an
+application-native dump when consistency requires it. Snapshots contain files,
+not running process state.
+
+To restore, open a successful run and use its restore action. For a mixed workload backup, select the bind mount in **Snapshot source**; selecting a volume instead restores to a Docker volume. Select the target
+Platform, exact Swarm Node when applicable, and **Target host path**:
+
+- Prepare an existing empty directory for a directory snapshot. Missing host
+  paths are rejected, so a typo cannot silently create an unintended target.
+- For a file snapshot, prepare an existing regular file and enable overwrite.
+- Nonempty directories also require **Allow overwriting existing host files**
+  and typing the target path to confirm. Stop writers before restoring.
+- Snapshot and target must have the same type. Bind snapshots restore to host
+  paths; volume snapshots restore to Docker volumes.
+
+Restores stage the snapshot in the helper first, requiring additional disk
+space on the target host. Copying preserves numeric ownership, ordinary
+permissions, and directory symlinks. Directory restores merge files and leave
+unrelated destination files in place. Extended ACLs and extended attributes are
+outside the copy-based restore guarantee. Restore is not atomic: a copy failure
+can leave a partially restored target. Citadel never removes an existing host
+path during failure cleanup and does not reattach or restart workloads.
 
 ## Running A Backup
 
@@ -341,10 +488,17 @@ When retention is enabled, Citadel runs restic retention after the backup comple
 
 ## Alerts
 
-The policy form exposes **Alert on failure**, but the current backup execution
-path does not emit failure alerts from that setting. Review **Runs**, its logs,
-and **Activities** for failed or interrupted backups. Do not rely on the absence
-of a notification as evidence that a backup succeeded.
+Enable **Alert on failure** on a policy to record a **Backup Run Failed** alert
+when its run fails, times out, is interrupted, or is rejected. Deliberate
+cancellation and successful runs do not trigger it. Failure observations are
+saved with the terminal run result and processed durably without duplicate alerts
+for repeated processing of the same run.
+
+The built-in **Backup Run Failed** rule creates in-app alerts. Assign active
+channels to the enabled rule in **Alert Rules** to receive notifications. Alerts
+include the policy, failure reason, and a link to the run's logs. Rule filtering
+and quiet hours still apply. **Activities → Backup Run Failed** filters failed
+backup completion events independently of the policy's notification setting.
 
 ## Practical Recommendations
 
@@ -358,7 +512,7 @@ name: identical names on different Nodes can contain different data.
 | Symptom | Next step |
 | --- | --- |
 | Repository test fails | Verify the destination, restic password, storage credentials, and connectivity from the configured execution location. |
-| Policy has no eligible data | Preview coverage and confirm it contains the intended named volumes. Bind mounts are not included in workload-volume backups. |
+| Policy has no eligible data | Review the preview for the intended volumes and bind mounts, synchronize workload inventory, and check discovery warnings and host-path permissions. |
 | Remote filesystem repository is rejected | Use S3-compatible storage for Agent, Edge Agent, or Swarm Node execution. |
 | A run failed or its progress connection closed | Inspect its entry in Runs and the logs before retrying; check whether it already completed. |
 | Restore target is rejected | Check target Platform/Node access and existing-volume restrictions under [Restores](#restores). |

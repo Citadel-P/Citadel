@@ -231,6 +231,7 @@ pub struct BackupRunItemView {
     pub backup_run_id: Uuid,
     pub platform_id: Uuid,
     pub volume_name: String,
+    pub host_path: Option<String>,
     #[schema(required = true)]
     pub docker_node_id: Option<String>,
     #[schema(required = true)]
@@ -267,6 +268,7 @@ impl TryFrom<citadel_backups::BackupRunItem> for BackupRunItemView {
             backup_run_id: value.backup_run_id,
             platform_id: value.platform_id,
             volume_name: value.volume_name,
+            host_path: value.host_path,
             docker_node_id: value.docker_node_id,
             node_hostname: value.node_hostname,
             status: value.status,
@@ -296,6 +298,7 @@ pub struct BackupRestoreRunView {
     #[schema(required = true)]
     pub target_docker_node_id: Option<String>,
     pub target_volume_name: String,
+    pub target_host_path: Option<String>,
     pub overwrite_existing: bool,
     #[schema(value_type = crate::api::resources::schema_models::backups::BackupRestoreStatusSchema)]
     pub status: BackupRestoreStatus,
@@ -324,6 +327,7 @@ impl TryFrom<citadel_backups::BackupRestoreRun> for BackupRestoreRunView {
             target_platform_id: value.target_platform_id,
             target_docker_node_id: value.target_docker_node_id,
             target_volume_name: value.target_volume_name,
+            target_host_path: value.target_host_path,
             overwrite_existing: value.overwrite_existing,
             status: value.status,
             queued_at: value.queued_at,
@@ -494,6 +498,8 @@ pub struct PlatformBackupSummary {
     pub policy_count: i32,
     pub enabled_policy_count: i32,
     pub docker_volume_policy_count: i32,
+    #[schema(required = false)]
+    pub bind_mount_policy_count: i32,
     pub stack_policy_count: i32,
     pub deployment_policy_count: i32,
     pub swarm_service_policy_count: i32,
@@ -513,6 +519,7 @@ impl TryFrom<citadel_backups::runs::read_models::PlatformBackupSummary> for Plat
             policy_count: value.policy_count,
             enabled_policy_count: value.enabled_policy_count,
             docker_volume_policy_count: value.docker_volume_policy_count,
+            bind_mount_policy_count: value.bind_mount_policy_count,
             stack_policy_count: value.stack_policy_count,
             deployment_policy_count: value.deployment_policy_count,
             swarm_service_policy_count: value.swarm_service_policy_count,

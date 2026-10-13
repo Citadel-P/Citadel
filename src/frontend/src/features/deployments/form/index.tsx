@@ -1,3 +1,4 @@
+import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
@@ -76,6 +77,12 @@ export const DeploymentFormComponents: RequiredFormComponents = {
     SubHeader: ({ resource }: { resource: DeploymentView }) => {
       return <DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
     },
+    TabActions: ({ resource }: { resource: DeploymentView }) => (
+      <ResourceBackupIndicator
+        source={{ $type: 'Deployment', deploymentId: resource.id }}
+        coverage={resource.backupCoverage}
+      />
+    ),
     Tabs: [
       {
         label: 'Config',

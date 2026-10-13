@@ -13,13 +13,14 @@ import {
   defineGroupField,
   defineSection,
   FieldInput,
+  FieldSelect,
   FieldTextArea,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { ResourceTagSelector } from '@/features/tags/components';
@@ -43,31 +44,28 @@ const GitAccountSelector = ({
   };
 
   return (
-    <Select
-      value={value ?? '__none__'}
-      onValueChange={(v) => onChange(v === '__none__' ? null : v)}
-      disabled={disabled}>
-      <SelectTrigger className="w-full max-w-100">
-        <SelectValue placeholder="Select a Git account (optional)">
-          {value ? (accounts.find((a) => a.id === value)?.name ?? 'Unknown') : 'No account'}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent className="bg-background">
-        <SelectItem value="__none__">
-          <span className="text-muted-foreground">No account (public access)</span>
-        </SelectItem>
-        {accounts.map((account) => (
-          <SelectItem key={account.id} value={account.id}>
-            <div className="flex flex-col">
-              <span className="font-medium">{account.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {account.domain} &middot; {transportLabel[account.transport]} &middot; {account.authType}
-              </span>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <ResourceSelectorField<Pick<GitAccountView, 'id' | 'name'>>
+      items={accounts}
+      selected={
+        value ? { id: value, name: accounts.find((account) => account.id === value)?.name ?? 'Unknown' } : undefined
+      }
+      clearLabel="No account (public access)"
+      placeholder="No account"
+      searchPlaceholder="Search Git accounts..."
+      disabled={disabled}
+      onSelect={(account) => onChange(account?.id ?? null)}
+      renderItem={(item) => {
+        const account = accounts.find((account) => account.id === item.id)!;
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium">{account.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {account.domain} &middot; {transportLabel[account.transport]} &middot; {account.authType}
+            </span>
+          </div>
+        );
+      }}
+    />
   );
 };
 type GitRepositoryInput = NewGitRepository | GitRepositoryPatch;
@@ -219,9 +217,9 @@ export const GitRepoForm = ({
                 key: 'syncMode',
                 label: 'Sync mode',
                 render: (val, set) => (
-                  <Select
+                  <FieldSelect
                     value={val ?? GitRepositorySyncMode.PullInterval}
-                    onValueChange={(v) => {
+                    onChange={(v) => {
                       const syncMode = v as GitRepositorySyncMode;
                       set({
                         syncMode,
@@ -230,15 +228,13 @@ export const GitRepoForm = ({
                             ? (update.syncIntervalMinutes ?? original.syncIntervalMinutes ?? 5)
                             : null,
                       });
-                    }}>
-                    <SelectTrigger className="w-full max-w-100">
-                      <SelectValue placeholder="Select sync mode" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background">
-                      <SelectItem value={GitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
-                      <SelectItem value={GitRepositorySyncMode.Manual}>Manual only</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    }}
+                    placeholder="Select sync mode"
+                    options={[
+                      { value: GitRepositorySyncMode.PullInterval, label: 'Pull on interval' },
+                      { value: GitRepositorySyncMode.Manual, label: 'Manual only' },
+                    ]}
+                  />
                 ),
               }),
               ...(currentSyncMode === GitRepositorySyncMode.PullInterval

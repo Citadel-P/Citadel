@@ -44,6 +44,7 @@ const AddFormPage = ({ type, Components: form }: Omit<ResourceFormViewProps, 'mo
 
   return (
     <>
+      {Components.Navigation && <Components.Navigation />}
       <AddHeader type={type} title={Components.Header?.title} />
       <Components.Content />
     </>
@@ -189,6 +190,7 @@ const EditFormContent = ({
 
   return (
     <>
+      {Components.Navigation && <Components.Navigation />}
       <EditHeader
         type={type}
         canEditTitle={canWrite && Header.canEditTitle !== false}
@@ -201,7 +203,13 @@ const EditFormContent = ({
         onChangeDescription={updateMetadata ? (description) => handleUpdateMetadata({ description }) : undefined}
       />
       {Components.SubHeader && <Components.SubHeader resource={item} />}
-      <ResourceTabs localKey={localKey} resource={item} tabs={tabs} metadataChanged={metadatChanged} />
+      <ResourceTabs
+        localKey={localKey}
+        resource={item}
+        tabs={tabs}
+        metadataChanged={metadatChanged}
+        actions={Components.TabActions && <Components.TabActions resource={item} />}
+      />
       <TaskSheet type={type} />
     </>
   );

@@ -70,6 +70,7 @@ pub enum AlertResourceType {
     AutomationAction,
     Build,
     BuildAgentPool,
+    BackupPolicy,
     License,
     SwarmService,
 }
@@ -84,6 +85,7 @@ impl AlertResourceType {
             Self::AutomationAction => "AutomationAction",
             Self::Build => "Build",
             Self::BuildAgentPool => "BuildAgentPool",
+            Self::BackupPolicy => "BackupPolicy",
             Self::License => "License",
             Self::SwarmService => "SwarmService",
         }

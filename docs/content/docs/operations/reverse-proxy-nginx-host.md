@@ -100,6 +100,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/citadel.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/citadel.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
     client_max_body_size 0;
 
     location ^~ /citadel.edge.v1.EdgeAgentService/ {
@@ -138,6 +139,17 @@ to loopback. The proxy preserves API error responses, supports WebSockets, and
 uses long idle timeouts. Avoid an `error_page` maintenance fallback for these
 locations. This example assumes Nginx is the public-facing proxy; review
 forwarding trust if another proxy sits in front of it.
+
+Nginx supplies HSTS because it terminates TLS; Core does not emit HSTS in
+`ReverseProxy` mode. The HTTPS server's `add_header` applies to both locations,
+including error responses. If you add location-level `add_header` directives,
+repeat HSTS there because those directives override parent header inheritance
+by default. If a CDN already sets HSTS, configure it in one place to avoid duplicates.
+
+Nginx forwards Core's browser security headers by default. Preserve them without
+adding duplicate `add_header` directives or hiding them with `proxy_hide_header`.
+See [Browser security headers](/docs/operations/tls-and-secure-agent-transport#browser-security-headers)
+for the report-only CSP and public-response verification.
 
 ## 3. Validate and reload
 

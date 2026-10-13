@@ -9,6 +9,7 @@ pub struct BackupRestoreRun {
     pub target_platform_id: Uuid,
     pub target_docker_node_id: Option<String>,
     pub target_volume_name: String,
+    pub target_host_path: Option<String>,
     pub overwrite_existing: bool,
     pub status: BackupRestoreStatus,
     pub queued_at: DateTime<Utc>,

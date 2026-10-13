@@ -37,7 +37,7 @@ pub(super) async fn authorize(
         EdgeCommandKind::ContainerExecBinary => {
             let mut request: ExecBinaryRequest = decode(payload)?;
             let volume = policy::volume_exec(&request);
-            let backup = policy::backup_exec(&request);
+            let backup = policy::backup_exec(&request) || policy::bind_script_exec(&request);
             if !volume && !backup {
                 return Err(denied());
             }
@@ -47,7 +47,7 @@ pub(super) async fn authorize(
                 .map_err(|_| denied())?;
             let inspected = helper_configuration(&document)?;
             if !(volume && policy::volume_helper(&inspected, platform)
-                || backup && policy::backup_helper(&inspected, platform))
+                || backup && policy::backup_operation(&request, &inspected, platform))
             {
                 return Err(denied());
             }
@@ -133,7 +133,7 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
         .into_iter()
         .flatten()
         .map(|m| {
-            if !m["BindOptions"].is_null() || !m["VolumeOptions"].is_null() {
+            if !m["VolumeOptions"].is_null() {
                 return Err(denied());
             }
             Ok(Mount {
@@ -141,6 +141,32 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
                 source: text(&m["Source"]),
                 target: text(&m["Target"]),
                 read_only: m["ReadOnly"].as_bool(),
+                consistency: text(&m["Consistency"]),
+                bind_options: if m["BindOptions"].is_null() {
+                    None
+                } else {
+                    let options = m["BindOptions"].as_object().ok_or_else(denied)?;
+                    if !options.keys().all(|key| {
+                        matches!(
+                            key.as_str(),
+                            "Propagation"
+                                | "NonRecursive"
+                                | "CreateMountpoint"
+                                | "ReadOnlyNonRecursive"
+                                | "ReadOnlyForceRecursive"
+                        )
+                    }) {
+                        return Err(denied());
+                    }
+                    Some(citadel_contracts::citadel::shared_models::v1::BindOptions {
+                        propagation: text(&m["BindOptions"]["Propagation"]),
+                        non_recursive: m["BindOptions"]["NonRecursive"].as_bool(),
+                        create_mountpoint: m["BindOptions"]["CreateMountpoint"].as_bool(),
+                        read_only_non_recursive: m["BindOptions"]["ReadOnlyNonRecursive"].as_bool(),
+                        read_only_force_recursive: m["BindOptions"]["ReadOnlyForceRecursive"]
+                            .as_bool(),
+                    })
+                },
                 ..Default::default()
             })
         })
@@ -186,6 +212,48 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inspected_bind_mounts_preserve_bounds_and_probe_isolation() {
+        let platform = Uuid::now_v7();
+        let good = serde_json::json!({
+            "Image":"fixture:latest","Name":"/citadel-backup-helper-fixture",
+            "Config":{"Labels":{"citadel.backup-helper":"true","citadel.platform-id":platform.to_string()},
+                "User":"0","WorkingDir":"/tmp","Entrypoint":["/bin/sh"],"Cmd":["-c","trap 'exit 0' TERM INT; sleep 330"]},
+            "HostConfig":{"Privileged":false,"ReadonlyRootfs":false,"NetworkMode":"default",
+                "AutoRemove":true,"Memory":536870912,"MemorySwap":536870912,"PidsLimit":128,
+                "CapAdd":["DAC_READ_SEARCH","FOWNER"],"CapDrop":["ALL"],"SecurityOpt":["no-new-privileges"],
+                "Mounts":[{"Type":"bind","Source":"/srv/data","Target":"/source","ReadOnly":true,
+                    "BindOptions":{"Propagation":"rprivate","NonRecursive":true}}]}
+        });
+        assert!(policy::backup_helper(
+            &helper_configuration(&good).unwrap(),
+            platform
+        ));
+        let mut probe = good.clone();
+        probe["HostConfig"]["ReadonlyRootfs"] = true.into();
+        probe["HostConfig"]["NetworkMode"] = "none".into();
+        probe["HostConfig"]["Mounts"][0]["Source"] = "/".into();
+        // Docker omits false-valued options in inspection responses.
+        probe["HostConfig"]["Mounts"][0]["BindOptions"]
+            .as_object_mut()
+            .unwrap()
+            .remove("NonRecursive");
+        assert!(policy::backup_helper(
+            &helper_configuration(&probe).unwrap(),
+            platform
+        ));
+        for (key, value) in [
+            ("NonRecursive", false),
+            ("CreateMountpoint", true),
+            ("ReadOnlyNonRecursive", true),
+            ("Unexpected", true),
+        ] {
+            let mut bad = good.clone();
+            bad["HostConfig"]["Mounts"][0]["BindOptions"][key] = value.into();
+            assert!(!helper_configuration(&bad).is_ok_and(|r| policy::backup_helper(&r, platform)));
+        }
+    }
+
     #[test]
     fn inspected_labels_alone_never_authorize_a_privileged_or_reconfigured_helper() {
         let platform = Uuid::now_v7();

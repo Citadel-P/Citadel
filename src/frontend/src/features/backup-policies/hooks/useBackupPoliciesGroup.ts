@@ -1,4 +1,4 @@
-import { BackupPolicyView, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { BackupPolicyView } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
@@ -13,7 +13,7 @@ export const useBackupPoliciesGroup = () => {
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs);
   const [policies, setPolicies] = useState<BackupPolicyView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
+  const capabilities = data?.data.capabilities;
   const lastFetchedRef = useRef<BackupPolicyView[]>([]);
 
   useEffect(() => {
@@ -23,7 +23,6 @@ export const useBackupPoliciesGroup = () => {
     if (newBase !== lastFetchedRef.current) {
       lastFetchedRef.current = newBase;
       setPolicies(newBase);
-      setCapabilities(data.data.capabilities);
     }
   }, [data]);
 

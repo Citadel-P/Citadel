@@ -95,6 +95,8 @@ const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
 #[derive(Clone)]
 pub struct PlatformsHttpState {
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub node_agent_store: Arc<dyn citadel_platforms::node_agents::setup::NodeAgentSetupStore>,
     pub node_agent_runtime: Arc<dyn citadel_platforms::node_agents::setup::NodeAgentSetupRuntime>,
     pub node_agent_coverage: Arc<dyn citadel_platforms::node_agents::NodeAgentCoverageReader>,
@@ -559,6 +561,9 @@ async fn list_containers(
             .map_err(platform_error),
         &headers,
     )?;
+    if let Some(service) = &state.backup_coverage {
+        containers = service.enrich_containers(&principal, containers).await;
+    }
     for container in &mut containers {
         container.capabilities = Some(capabilities);
     }
@@ -2361,9 +2366,29 @@ async fn read_container(
         )?;
         data.capabilities = Some(capabilities);
         data.container_stat = None;
+        if let Some(service) = &state.backup_coverage {
+            data.backup_coverage = Some(
+                service
+                    .container(
+                        &principal,
+                        container.platform_id,
+                        container.docker_node_id.as_deref(),
+                        &container.container_id,
+                    )
+                    .await,
+            );
+        }
         return Ok(no_store(Json(data).into_response()));
     }
-    inspect_target(&state, container, &headers, kind, Some(capabilities)).await
+    inspect_target(
+        &state,
+        &principal,
+        container,
+        &headers,
+        kind,
+        Some(capabilities),
+    )
+    .await
 }
 
 macro_rules! deployment_reader {
@@ -2455,7 +2480,7 @@ async fn read_deployment(
             .map_err(platform_error),
         &headers,
     )?;
-    inspect_target(&state, container, &headers, kind, None).await
+    inspect_target(&state, &principal, container, &headers, kind, None).await
 }
 
 #[utoipa::path(
@@ -2504,11 +2529,20 @@ async fn inspect_stack(
             .map_err(platform_error),
         &headers,
     )?;
-    inspect_target(&state, container, &headers, ReadKind::Inspect, None).await
+    inspect_target(
+        &state,
+        &principal,
+        container,
+        &headers,
+        ReadKind::Inspect,
+        None,
+    )
+    .await
 }
 
 async fn inspect_target(
     state: &PlatformsHttpState,
+    principal: &ActorPrincipal,
     container: ContainerView,
     headers: &HeaderMap,
     kind: ReadKind,
@@ -2565,19 +2599,29 @@ async fn inspect_target(
     match result {
         Ok(inspection) => {
             if matches!(kind, ReadKind::Info) {
-                Ok(no_store(
-                    Json(api_result(
-                        ContainerSummaryView::from_inspection(
-                            &container,
-                            &platform.name,
-                            &inspection,
-                            capabilities,
-                        )
-                        .map_err(ApiError::internal),
-                        headers,
-                    )?)
-                    .into_response(),
-                ))
+                let mut view = api_result(
+                    ContainerSummaryView::from_inspection(
+                        &container,
+                        &platform.name,
+                        &inspection,
+                        capabilities,
+                    )
+                    .map_err(ApiError::internal),
+                    headers,
+                )?;
+                if let Some(service) = &state.backup_coverage {
+                    view.backup_coverage = Some(
+                        service
+                            .inspected(
+                                principal,
+                                container.platform_id,
+                                container.docker_node_id.as_deref(),
+                                &inspection,
+                            )
+                            .await,
+                    );
+                }
+                Ok(no_store(Json(view).into_response()))
             } else {
                 let inspection = api_result(
                     serde_json::from_value::<
@@ -6586,6 +6630,14 @@ async fn attach_volume_coverage(
                 principal.is_administrator(),
                 platform_id,
                 &keys,
+                match &state.backup_coverage {
+                    Some(service) => service
+                        .backups
+                        .scheduling_available()
+                        .await
+                        .unwrap_or(false),
+                    None => false,
+                },
             )
             .await
             .map_err(ApiError::internal),

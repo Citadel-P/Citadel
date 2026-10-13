@@ -144,6 +144,11 @@ impl PostgresStackRepository {
                     id,
                 )
             });
+            if platform_type == citadel_platforms::PlatformKind::DockerSwarm {
+                sqlx::query("INSERT INTO stackswarmnamespacereservations(stackid,platformid,namespace,createdat) VALUES($1,$2,$3,now()) ON CONFLICT(stackid) DO UPDATE SET platformid=EXCLUDED.platformid,namespace=EXCLUDED.namespace")
+                    .bind(id).bind(platform_id).bind(&project_name)
+                    .execute(&mut *tx).await.map_err(database_error)?;
+            }
             if !options.service_names.is_empty() {
                 if platform_type != citadel_platforms::PlatformKind::Docker
                     || rollback_release_id.is_some()

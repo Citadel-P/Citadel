@@ -7,7 +7,16 @@ import { NETWORK_CHART_COLORS, type ThemedChartColor } from '@/components/custom
 import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import { getContainerSeriesColor } from '@/components/custom/container-series-colors';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
+import {
+  CHART_ACTIVE_DOT,
+  CHART_HOVER_CURSOR,
+  ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -320,36 +329,18 @@ const StackMetricCard = ({
                 }
               />
               <ChartTooltip
-                cursor={false}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  return (
-                    <div className="border-border/50 bg-background grid min-w-48 gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-                      <div className="font-medium text-foreground">
-                        {dayjs(Number(label) * 1000).format('MMM D, HH:mm:ss')}
-                      </div>
-                      <div className="grid gap-1.5">
-                        {payload.map((item) => {
-                          const field = metric.fields.find((candidate) => candidate.key === item.dataKey);
-                          if (!field) return null;
-
-                          return (
-                            <div key={item.dataKey} className="flex items-center gap-2">
-                              <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-xs"
-                                style={{ backgroundColor: `var(--color-${field.key})` }}
-                              />
-                              <span className="text-muted-foreground">{field.label}</span>
-                              <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                                {field.formatter(Number(item.value ?? 0))}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                }}
+                cursor={CHART_HOVER_CURSOR}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, payload) =>
+                      dayjs(Number(payload[0]?.payload?.created) * 1000).format('MMM D, h:mm:ss A')
+                    }
+                    valueFormatter={(value, name) => {
+                      const field = metric.fields.find((candidate) => candidate.key === name);
+                      return field?.formatter(Number(value)) ?? String(value);
+                    }}
+                  />
+                }
               />
               {metric.fields.map((field) => (
                 <Area
@@ -358,6 +349,7 @@ const StackMetricCard = ({
                   type="linear"
                   isAnimationActive={false}
                   connectNulls={false}
+                  activeDot={CHART_ACTIVE_DOT}
                   fill={`url(#${getGradientId(metric.kind, field.key)})`}
                   stroke={`var(--color-${field.key})`}
                   stackId={metric.stacked ? metric.kind : undefined}

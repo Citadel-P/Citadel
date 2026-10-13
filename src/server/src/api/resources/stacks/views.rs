@@ -92,6 +92,9 @@ pub struct StackCapabilities {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_coverage:
+        Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
     pub name: String,
     #[schema(required = true)]
@@ -139,6 +142,7 @@ impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            backup_coverage: None,
             id: value.id,
             name: value.name,
             description: value.description,

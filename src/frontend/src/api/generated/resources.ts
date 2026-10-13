@@ -1,7 +1,7 @@
 // AUTO-GENERATED FILE. DO NOT EDIT.
 
 export const resources = {
-  listActivities: { method: "GET", key: "listActivities", path: "/api/v1/activities", tag: "Activities", group: "activities", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["ResourceId","ResourceType","EventType","Page","PageSize"], hasBody: false },
+  listActivities: { method: "GET", key: "listActivities", path: "/api/v1/activities", tag: "Activities", group: "activities", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["ResourceId","ResourceType","EventType","Status","Page","PageSize"], hasBody: false },
   getActivity: { method: "GET", key: "getActivity", path: "/api/v1/activities/{id}", tag: "Activities", group: "activities", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], hasBody: false },
   getActor: { method: "GET", key: "getActor", path: "/api/v1/actors/{id}", tag: "Actors", group: "actors", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], hasBody: false },
   patchActorEnabled: { method: "PATCH", key: "patchActorEnabled", path: "/api/v1/actors/{id}/enabled", tag: "Actors", group: "actors", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], hasBody: true },

@@ -7,6 +7,12 @@ These steps update Core in an existing installation using published Citadel
 images. Plan for a brief interruption to the UI, API, live updates, and Core
 jobs while the container is replaced. Running Docker workloads normally continue.
 
+Citadel is in pre-release development; in-place database upgrades between
+development builds are not guaranteed. Confirm database compatibility before
+using the image-replacement steps below. A changed development baseline may
+require a clean installation and a separately verified data import. Preserve
+the original database and recovery keys until that import is verified.
+
 ## Release notifications
 
 [Update checks](/docs/getting-started/configuration#allow-update-checks) are enabled

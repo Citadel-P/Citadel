@@ -19,6 +19,7 @@ use uuid::Uuid;
 #[derive(Default)]
 struct Store {
     scopes: Mutex<Vec<ActivityAccess>>,
+    filters: Mutex<Vec<ValidatedActivityFilter>>,
 }
 impl ActivityQueryStore for Store {
     fn get_authorized<'a>(
@@ -41,6 +42,7 @@ impl ActivityQueryStore for Store {
         filter: ValidatedActivityFilter,
     ) -> BoxFuture<'a, Result<PagedActivityRecords, ActivityError>> {
         Box::pin(async move {
+            self.filters.lock().unwrap().push(filter);
             self.scopes.lock().unwrap().push(*access);
             Ok(PagedActivityRecords {
                 items: vec![],
@@ -50,6 +52,30 @@ impl ActivityQueryStore for Store {
             })
         })
     }
+}
+
+#[tokio::test]
+async fn failed_backup_filter_preserves_event_type_and_failure_status() {
+    let (app, store, _) = app(AuthenticatedPrincipalType::User);
+    let (status, _) = get(
+        &app,
+        "/api/v1/activities?EventType=BackupRunCompleted&Status=Failure",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let filters = store.filters.lock().unwrap();
+    assert_eq!(
+        filters[0].event_type,
+        Some(citadel_activities::ActivityEventType::BackupRunCompleted)
+    );
+    assert_eq!(
+        filters[0].status,
+        Some(citadel_activities::ActivityStatus::Failure)
+    );
+    drop(filters);
+    let (status, _) = get(&app, "/api/v1/activities?Status=Invalid").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(store.filters.lock().unwrap().len(), 1);
 }
 fn app(principal_type: AuthenticatedPrincipalType) -> (Router, Arc<Store>, ActorId) {
     let store = Arc::new(Store::default());
