@@ -311,13 +311,28 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
                 )
                 .await;
             assert_eq!(inspected["config"]["image"], "alpine:3.24", "{inspected}");
-            for path in [
-                format!("/api/v1/volumes/{id}/acceptance-worker-volume?dockerNodeId={node}"),
-                format!("/api/v1/networks/{id}/{network}?dockerNodeId={node}"),
-            ] {
-                f.api(Method::GET, &path, None).await;
-            }
-            f.api(Method::GET, &format!("/api/v1/platforms/{id}/volumes/acceptance-worker-volume/files?dockerNodeId={node}"), None).await;
+            let volume = f
+                .api(
+                    Method::GET,
+                    &format!("/api/v1/volumes/{id}/acceptance-worker-volume?dockerNodeId={node}"),
+                    None,
+                )
+                .await;
+            f.api(
+                Method::GET,
+                &format!("/api/v1/networks/{id}/{network}?dockerNodeId={node}"),
+                None,
+            )
+            .await;
+            let (status, response) = f.request(Method::GET, &format!("/api/v1/platforms/{id}/volumes/acceptance-worker-volume/files?dockerNodeId={node}"), None).await;
+            assert_volume_browsing(
+                std::env::var("CITADEL_ACCEPTANCE_BASELINE_COMPONENT")
+                    .ok()
+                    .as_deref(),
+                &volume,
+                status,
+                &response,
+            );
         }
 
         docker(&["stop", "-t", "12", &f.container(role)]).await;
@@ -408,6 +423,69 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         }
         println!(
             "Swarm {connector}: Core install, pinned image, worker routing, volume browsing, manager/worker recovery, repair, upgrade and removal passed"
+        );
+    }
+}
+
+fn assert_volume_browsing(
+    baseline_component: Option<&str>,
+    volume: &Value,
+    status: StatusCode,
+    response: &Value,
+) {
+    assert!(matches!(baseline_component, None | Some("agent" | "core")));
+    if baseline_component != Some("core") {
+        let allowed = volume
+            .get("contentAccessAllowed")
+            .expect("candidate Core must expose storage protection");
+        if baseline_component == Some("agent") && allowed.is_null() {
+            // A baseline Agent may predate the safety metadata. Verify that the
+            // candidate Core refuses browsing, rather than weakening the guard.
+            assert_eq!(volume["capabilities"]["canBrowse"], false, "{volume}");
+            assert_eq!(volume["capabilities"]["canDownload"], false, "{volume}");
+            assert_eq!(status, StatusCode::CONFLICT, "{response}");
+            assert_eq!(
+                response["type"],
+                "https://citadel.dev/problems/platform_unavailable"
+            );
+            assert_eq!(
+                response["detail"],
+                "Volume storage protection could not be verified. Update the owning Agent before browsing files."
+            );
+            assert!(
+                response.get("entries").is_none(),
+                "unverified storage must not expose files"
+            );
+            return;
+        }
+        assert_eq!(
+            allowed, true,
+            "candidate Agent must verify the ordinary test volume"
+        );
+    }
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert!(response["entries"].is_array(), "{response}");
+}
+
+#[test]
+fn volume_browsing_requires_current_pair_metadata_and_checks_baseline_refusal() {
+    let verified = json!({"contentAccessAllowed": true});
+    let unverified = json!({"contentAccessAllowed": null, "capabilities": {"canBrowse": false, "canDownload": false}});
+    let files = json!({"entries": []});
+    let refused = json!({"type": "https://citadel.dev/problems/platform_unavailable", "detail": "Volume storage protection could not be verified. Update the owning Agent before browsing files."});
+    assert_volume_browsing(None, &verified, StatusCode::OK, &files);
+    assert_volume_browsing(Some("agent"), &verified, StatusCode::OK, &files);
+    assert_volume_browsing(Some("agent"), &unverified, StatusCode::CONFLICT, &refused);
+    assert_volume_browsing(Some("core"), &json!({}), StatusCode::OK, &files);
+    for (baseline, volume, status, response) in [
+        (None, &unverified, StatusCode::CONFLICT, &refused),
+        (Some("agent"), &unverified, StatusCode::OK, &files),
+        (Some("agent"), &verified, StatusCode::CONFLICT, &refused),
+        (Some("core"), &verified, StatusCode::CONFLICT, &refused),
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| assert_volume_browsing(baseline, volume, status, response))
+                .is_err()
         );
     }
 }

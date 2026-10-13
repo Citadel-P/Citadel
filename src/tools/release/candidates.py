@@ -2,6 +2,7 @@
 """Check each candidate's embedded versions and emit acceptance evidence."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,16 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).parent))
 import release
+
+
+def run_acceptance(core, agent, baseline_component=None):
+    if baseline_component not in (None, "agent", "core"):
+        raise ValueError("Unknown compatibility baseline component")
+    env = dict(os.environ)
+    env.pop("CITADEL_ACCEPTANCE_BASELINE_COMPONENT", None)
+    if baseline_component:
+        env["CITADEL_ACCEPTANCE_BASELINE_COMPONENT"] = baseline_component
+    subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True, env=env)
 
 
 def check_image(image, metadata, arch, config_digest):
@@ -53,7 +64,7 @@ def main():
     subprocess.run(["bash", "test/scripts/test-runtime-image.sh", images["core"]], check=True)
     subprocess.run(["bash", "test/scripts/test-agent-image.sh", images["agent"], metadata["informationalVersion"]], check=True)
     subprocess.run(["bash", "test/scripts/test-agent-compatibility.sh", images["agent"]], check=True)
-    subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", images["core"], images["agent"]], check=True)
+    run_acceptance(images["core"], images["agent"])
     for component in ["agent", "core"]:
         baseline = compatibility.get(component)
         if baseline:
@@ -72,7 +83,7 @@ def main():
             # Run the full acceptance suite in BOTH supported upgrade directions.
             core = baseline if component == "core" else images["core"]
             agent = baseline if component == "agent" else images["agent"]
-            subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True)
+            run_acceptance(core, agent, baseline_component=component)
     after = {c: release.version.sha256(directory / f"{c}-{arch}.oci.tar") for c in images}
     if after != before:
         raise ValueError("Candidate archive changed during acceptance")
