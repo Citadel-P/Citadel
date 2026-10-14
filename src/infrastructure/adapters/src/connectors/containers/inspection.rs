@@ -111,7 +111,10 @@ pub fn map_inspection(document: Value, expected_id: &str) -> Result<Value, Runti
             }));
         }
     }
-    for key in ["args", "execIDs", "mounts"] {
+    // Missing mount information is unknown, not proof that a container has no
+    // storage. Backup discovery must be able to reject incomplete inspection.
+    // Agent repeated fields already serialize a known empty mount list as [].
+    for key in ["args", "execIDs"] {
         if result[key].is_null() {
             result[key] = Value::Array(vec![]);
         }

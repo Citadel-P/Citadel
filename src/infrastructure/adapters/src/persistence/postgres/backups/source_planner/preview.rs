@@ -1,9 +1,7 @@
 use super::*;
-use crate::connectors::routing::containers::Runtime;
 use citadel_backups::policies::read_models::{
     BackupPreviewKind, BackupPreviewResource, BackupSourcePreview, BackupVolumePreview,
 };
-use citadel_platforms::containers::{ContainerInspectionPort, ContainerTarget};
 use citadel_primitives::{ActorId, ResourceType};
 use sqlx::AssertSqlSafe;
 
@@ -53,68 +51,32 @@ impl PostgresBackupSourcePlanner {
                     .iter()
                     .filter_map(|m| named_deployment_volume(m))
                     .collect::<BTreeSet<_>>();
-                let containers = sqlx::query(
-                    "SELECT id,dockercontainerid,dockernodeid FROM containers WHERE deploymentid=$1 LIMIT 2",
-                )
-                .bind(id)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?;
-                if containers.len() > 1 {
-                    return Err(BackupError::Conflict(
-                        "Deployment Container ownership is ambiguous.".into(),
-                    ));
-                }
-                let mut mounts = Vec::new();
-                if let (Some(runtime), Some(container)) = (&self.runtime, containers.first()) {
-                    let target = ContainerTarget {
-                        id: container.try_get("id").map_err(storage)?,
-                        platform_id: platform.id,
-                        docker_id: container.try_get("dockercontainerid").map_err(storage)?,
-                        node_id: container.try_get("dockernodeid").map_err(storage)?,
+                let discovery = self
+                    .workload_mounts(kind, id, platform.id, false, cancellation)
+                    .await?;
+                warnings.extend(discovery.warnings);
+                for storage in discovery.items {
+                    let name = storage.host_path.as_deref().unwrap_or(&storage.volume_name);
+                    let storage_kind = if storage.host_path.is_some() {
+                        "BindMount"
+                    } else if declared.contains(name) {
+                        "DeclaredNamed"
+                    } else {
+                        "AnonymousNamed"
                     };
-                    let inspected = async {
-                        match runtime.resolve(&target, cancellation).await? {
-                            Runtime::Local(r) => {
-                                r.inspection(&target.docker_id, cancellation).await
-                            }
-                            Runtime::Agent(r) => {
-                                r.inspection(&target.docker_id, cancellation).await
-                            }
-                            Runtime::Edge(r) => r.inspection(&target.docker_id, cancellation).await,
-                        }
-                    }
-                    .await;
-                    match inspected {
-                        Ok(mut document)=>{mounts=document.get_mut("mounts").and_then(Value::as_array_mut).map(std::mem::take).unwrap_or_default();
-                            for mount in &mut mounts {if let Some(node)=&target.node_id {mount["dockerNodeId"]=Value::String(node.clone());}}
-                        },
-                        Err(_)=>warnings.push("The synchronized Container could not be inspected. Saved volume settings are used as a fallback.".into()),
-                    }
+                    volumes.insert(
+                        (storage.docker_node_id.clone(), name.to_owned()),
+                        item(
+                            name,
+                            storage_kind,
+                            false,
+                            false,
+                            storage.docker_node_id,
+                            storage.node_hostname,
+                        ),
+                    );
                 }
-                for value in &mounts {
-                    if field(value, "Type").is_some_and(|v| v.eq_ignore_ascii_case("volume"))
-                        && let Some(name) = field(value, "Name").filter(|s| !s.is_empty())
-                    {
-                        let node = optional_string(value, "dockerNodeId");
-                        volumes.insert(
-                            (node.clone(), name.into()),
-                            item(
-                                name,
-                                if declared.contains(name) {
-                                    "DeclaredNamed"
-                                } else {
-                                    "AnonymousNamed"
-                                },
-                                false,
-                                false,
-                                node,
-                                None,
-                            ),
-                        );
-                    }
-                }
-                if volumes.is_empty() {
+                if !volumes.values().any(|v| v.kind != "BindMount") {
                     warnings.push("No synchronized volume mounts were found. Deployment volume settings are used as a fallback.".into());
                     for name in declared {
                         volumes.insert(
@@ -125,56 +87,28 @@ impl PostgresBackupSourcePlanner {
                 }
             }
             BackupPreviewKind::Stack if platform.kind != "DockerSwarm" => {
-                let release: Uuid = row.try_get("releaseid").map_err(storage)?;
-                let bindings=sqlx::query("SELECT volumename,isanonymous,isexternal FROM stackreleasevolumebindings WHERE stackreleaseid=$1 ORDER BY volumename").bind(release).fetch_all(&self.pool).await.map_err(storage)?;
-                for binding in bindings {
-                    let name: String = binding.try_get("volumename").map_err(storage)?;
-                    let anonymous: bool = binding.try_get("isanonymous").map_err(storage)?;
-                    let external: bool = binding.try_get("isexternal").map_err(storage)?;
+                let name: String = row.try_get("name").map_err(storage)?;
+                let plan = self
+                    .standalone_stack_storage(id, platform.id, &name, false, cancellation)
+                    .await?;
+                warnings.extend(plan.warnings);
+                for storage in plan.items {
+                    let name = storage.host_path.as_deref().unwrap_or(&storage.volume_name);
                     volumes.insert(
-                        (None, name.clone()),
+                        (storage.docker_node_id.clone(), name.to_owned()),
                         item(
-                            &name,
-                            if anonymous {
-                                "AnonymousNamed"
+                            name,
+                            if storage.host_path.is_some() {
+                                "BindMount"
                             } else {
-                                "DeclaredNamed"
+                                "DockerVolume"
                             },
-                            external,
                             false,
-                            None,
-                            None,
+                            false,
+                            storage.docker_node_id,
+                            storage.node_hostname,
                         ),
                     );
-                }
-                if volumes.is_empty() {
-                    let spec = StackSpec::from_storage_value(row.try_get("spec").map_err(storage)?)
-                        .map_err(|e| BackupError::Storage(e.to_string()))?;
-                    let compose = self.stack_compose_files(&spec, cancellation).await?;
-                    let model = parse_compose(&compose)
-                        .map_err(|e| BackupError::Validation(e.to_string()))?;
-                    warnings.push("No applied volume bindings were found. Compose declarations are used as a fallback.".into());
-                    for service in model.service_volumes.values() {
-                        for reference in service {
-                            let name = model.volume_names.get(reference).unwrap_or(reference);
-                            let key = (None, name.clone());
-                            if let Some(existing) = volumes.get_mut(&key) {
-                                existing.is_shared = true;
-                            } else {
-                                volumes.insert(
-                                    key,
-                                    item(
-                                        name,
-                                        "DeclaredNamed",
-                                        model.external_volumes.contains(reference),
-                                        false,
-                                        None,
-                                        None,
-                                    ),
-                                );
-                            }
-                        }
-                    }
                 }
             }
             kind => {
@@ -212,28 +146,6 @@ impl PostgresBackupSourcePlanner {
                         ),
                     );
                 }
-            }
-        }
-        // Swarm plans already include exact-node bind mounts. Standalone previews
-        // retain their volume metadata and share bind discovery with execution.
-        if kind == BackupPreviewKind::Deployment || platform.kind != "DockerSwarm" {
-            let (binds, discovered_warnings) = self
-                .workload_bind_mounts(kind, id, platform.id, false, cancellation)
-                .await?;
-            warnings.extend(discovered_warnings);
-            for bind in binds {
-                let path = bind.host_path.expect("bind discovery produces host paths");
-                volumes.insert(
-                    (bind.docker_node_id.clone(), path.clone()),
-                    item(
-                        &path,
-                        "BindMount",
-                        false,
-                        false,
-                        bind.docker_node_id,
-                        bind.node_hostname,
-                    ),
-                );
             }
         }
         if platform.status != citadel_primitives::PlatformStatus::Online {
@@ -333,10 +245,4 @@ fn item(
         docker_node_id,
         node_hostname,
     }
-}
-fn field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
-    value
-        .get(key)
-        .or_else(|| value.get(format!("{}{}", key[..1].to_lowercase(), &key[1..])))
-        .and_then(Value::as_str)
 }

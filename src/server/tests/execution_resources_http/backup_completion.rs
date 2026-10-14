@@ -190,8 +190,15 @@ pub(super) async fn verify_previews(
     let stack_preview = response_json(response).await;
     assert_eq!(status, StatusCode::OK, "{stack_preview}");
     assert_eq!(stack_preview["stackId"], stack.id.to_string());
-    assert_eq!(stack_preview["volumes"][0]["name"], "stack-data");
-    assert_eq!(stack_preview["volumes"][0]["isExternal"], true);
+    // Compose declarations are not evidence of physical Docker volume names.
+    assert!(stack_preview["volumes"].as_array().unwrap().is_empty());
+    assert!(
+        stack_preview["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w.as_str().unwrap().contains("No synchronized containers"))
+    );
     let swarm = Uuid::now_v7();
     let service = Uuid::now_v7();
     let docker_service = format!("service-{service}");

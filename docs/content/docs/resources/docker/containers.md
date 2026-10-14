@@ -33,7 +33,7 @@ attention, or has unavailable coverage. See
 
 Deployment policies include declared named volumes and supported bind mounts.
 Runtime-only anonymous volumes need a direct volume policy or coverage through
-an applied standalone Stack's volume bindings. **Bind mounts** appear below
+their owning standalone Stack's policy. **Bind mounts** appear below
 **Volumes**, with at most two paths inline. Select **View all** to open the full
 list, coverage indicators, and policy links. Workload policies can cover these
 paths together; individual host-path policies are also available. Host-path

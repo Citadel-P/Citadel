@@ -150,30 +150,6 @@ pub(super) async fn read(
             }
         }
     }
-    // Applied standalone bindings preserve volume identity when containers are temporarily absent.
-    let bindings=sqlx::query("SELECT s.id,b.platformid,b.volumename FROM stacks s JOIN stackreleasevolumebindings b ON b.stackreleaseid=s.currentstackreleaseid WHERE b.platformid=ANY($1)")
-        .bind(platforms).fetch_all(pool).await.map_err(storage)?;
-    for row in bindings {
-        let id: Uuid = row.try_get("id").map_err(storage)?;
-        if let Some(w) = snapshot
-            .workloads
-            .iter_mut()
-            .find(|w| w.kind == Kind::Stack && w.id == id)
-        {
-            let target = StorageTarget {
-                platform_id: w.platform_id,
-                name: row.try_get("volumename").map_err(storage)?,
-                host_path: None,
-                docker_node_id: None,
-            };
-            if !w.volumes.iter().any(|v| v.target == target) {
-                w.volumes.push(ObservedStorage {
-                    target,
-                    included: true,
-                });
-            }
-        }
-    }
     let offline: Vec<Uuid> =
         sqlx::query_scalar("SELECT id FROM platforms WHERE id=ANY($1) AND status<>'Online'")
             .bind(platforms)

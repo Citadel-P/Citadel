@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
 import { ActorCell, LogViewer, TargetCell } from '@/components/custom/common';
-import { StateBadge } from '@/components/custom/state-badge';
+import { StateBadge, isFailedRunStatus } from '@/components/custom/state-badge';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
   ActivityView,
@@ -1189,7 +1189,12 @@ function BackupRunTaskRenderer({ payload }: { payload: BackupRunParams; type: Re
 }
 
 function BackupRunLogsTaskRenderer({ payload }: { payload: BackupRunLogsParams; type: ResourceType }) {
-  const { data, isLoading } = useRead('getBackupRunLogs', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const run = useRead('getBackupRun', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const { data, isLoading, isError } = useRead(
+    'getBackupRunLogs',
+    { id: payload.id },
+    { enabled: Boolean(payload.id) },
+  );
   const logs = data?.data.logs ?? '';
 
   return (
@@ -1200,8 +1205,15 @@ function BackupRunLogsTaskRenderer({ payload }: { payload: BackupRunLogsParams; 
       </SheetHeader>
 
       <div className="p-4 pt-0 pb-2">
-        {payload.items.length > 0 && <BackupRunItemsList items={payload.items} />}
-        <LogViewer logs={isLoading ? '' : logs} autoScroll={false} />
+        <BackupRunLogOutput
+          loading={isLoading || run.isLoading}
+          unavailable={isError || run.isError}
+          logs={logs}
+          status={run.data?.data.status}
+          errorMessage={run.data?.data.errorMessage}
+          errorCode={run.data?.data.errorCode}
+          items={run.data?.data.items ?? payload.items}
+        />
       </div>
     </div>
   );
@@ -1213,7 +1225,12 @@ function BackupRestoreRunTaskRenderer({ payload }: { payload: BackupRestoreRunPa
 }
 
 function BackupRestoreRunLogsTaskRenderer({ payload }: { payload: BackupRestoreRunLogsParams; type: ResourceType }) {
-  const { data, isLoading } = useRead('getBackupRestoreRunLogs', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const run = useRead('getBackupRestoreRun', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const { data, isLoading, isError } = useRead(
+    'getBackupRestoreRunLogs',
+    { id: payload.id },
+    { enabled: Boolean(payload.id) },
+  );
   const logs = data?.data.logs ?? '';
 
   return (
@@ -1224,9 +1241,62 @@ function BackupRestoreRunLogsTaskRenderer({ payload }: { payload: BackupRestoreR
       </SheetHeader>
 
       <div className="p-4 pt-0 pb-2">
-        <LogViewer logs={isLoading ? '' : logs} autoScroll={false} />
+        <BackupRunLogOutput
+          loading={isLoading || run.isLoading}
+          unavailable={isError || run.isError}
+          logs={logs}
+          status={run.data?.data.status ?? payload.status}
+          errorMessage={run.data?.data.errorMessage}
+          errorCode={run.data?.data.errorCode}
+        />
       </div>
     </div>
+  );
+}
+
+function BackupRunLogOutput({
+  loading,
+  unavailable,
+  logs,
+  status,
+  errorMessage,
+  errorCode,
+  items = [],
+}: {
+  loading: boolean;
+  unavailable: boolean;
+  logs: string;
+  status?: string;
+  errorMessage?: string | null;
+  errorCode?: string | null;
+  items?: BackupRunItemView[];
+}) {
+  const failed = isFailedRunStatus(status);
+  const failure =
+    errorMessage || errorCode || (failed ? 'The run failed without a recorded error message.' : undefined);
+  return (
+    <>
+      {failure && (
+        <AlertMessage
+          type={failed ? 'error' : 'warning'}
+          title={status === 'Cancelled' ? 'Run cancelled' : failed ? 'Run failed' : 'Run warning'}>
+          {failure}
+        </AlertMessage>
+      )}
+      {unavailable && (
+        <AlertMessage type="error">
+          Unable to load complete run details and logs. Close and reopen this sheet to retry.
+        </AlertMessage>
+      )}
+      {items.length > 0 && <BackupRunItemsList items={items} />}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading run details and logs...</p>
+      ) : logs ? (
+        logs.trim() !== failure?.trim() && <LogViewer logs={logs} autoScroll={false} />
+      ) : (
+        !unavailable && <p className="text-sm text-muted-foreground">No execution logs were recorded for this run.</p>
+      )}
+    </>
   );
 }
 

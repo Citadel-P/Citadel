@@ -50,7 +50,7 @@ export function backupReturnPath(search: URLSearchParams) {
   return path &&
     !path.includes('\\') &&
     !/[\r\n]/.test(path) &&
-    /^\/(?:deployments\/edit\/|stacks\/edit\/|swarm-services\/edit\/|platforms\/[^/?#]+\/containers\/)[^/?#]+\/?(?:[?#].*)?$/.test(
+    /^\/(?:deployments\/edit\/[^/?#]+|stacks\/edit\/[^/?#]+|swarm-services\/edit\/[^/?#]+|platforms\/[^/?#]+\/(?:containers\/[^/?#]+|volumes(?:\/[^/?#]+)?))\/?(?:[?#].*)?$/.test(
       path,
     )
     ? path

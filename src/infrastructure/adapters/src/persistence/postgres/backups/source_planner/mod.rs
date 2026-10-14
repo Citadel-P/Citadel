@@ -14,8 +14,8 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
-mod bind_mounts;
 mod preview;
+mod workload_mounts;
 use citadel_backups::policies::read_models::BackupPreviewKind;
 
 #[derive(Clone)]
@@ -216,33 +216,12 @@ impl PostgresBackupSourcePlanner {
             validate_repository(&platform.kind, repository)?;
         }
         let name: String = row.try_get("name").map_err(storage)?;
-        let release_id: Uuid = row.try_get("releaseid").map_err(storage)?;
         if platform.kind != "DockerSwarm" {
-            let volumes = sqlx::query_scalar::<_, String>(
-                "SELECT volumename FROM stackreleasevolumebindings WHERE stackreleaseid=$1 ORDER BY volumename",
-            )
-            .bind(release_id)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(storage)?;
             return self
-                .include_bind_mounts(
-                    BackupSourcePlan {
-                        display_name: format!(
-                            "Stack {name} ({} volume{})",
-                            volumes.len(),
-                            plural(volumes.len())
-                        ),
-                        items: volumes
-                            .into_iter()
-                            .map(|volume| BackupSourceItem::new(platform.id, volume, None, None))
-                            .collect(),
-                        warnings: vec![],
-                        local_directory: None,
-                    },
-                    BackupPreviewKind::Stack,
+                .standalone_stack_storage(
                     stack_id,
                     platform.id,
+                    &name,
                     repository_type.is_some(),
                     cancellation,
                 )
@@ -297,6 +276,8 @@ impl PostgresBackupSourcePlanner {
         }
         let mut items = BTreeMap::<(String, String), BackupSourceItem>::new();
         let mut counts = BTreeMap::<(String, String), usize>::new();
+        let mut binds = BTreeMap::new();
+        let mut warnings = BTreeSet::new();
         for service in services {
             let docker_name: String = service.try_get("name").map_err(storage)?;
             let compose_name = docker_name
@@ -321,8 +302,28 @@ impl PostgresBackupSourcePlanner {
             }
             for task in tasks {
                 if self.runtime.is_some() {
-                    for volume in self.task_volumes(platform.id, &task, cancellation).await? {
-                        insert_task_volume(&mut items, &mut counts, platform.id, &task, volume)?;
+                    let (storage, discovered_warnings) =
+                        self.task_storage(platform.id, &task, cancellation).await?;
+                    warnings.extend(discovered_warnings);
+                    for item in storage {
+                        if let Some(path) = &item.host_path {
+                            binds
+                                .entry((item.docker_node_id.clone(), path.clone()))
+                                .or_insert(item);
+                        } else {
+                            insert_task_volume(
+                                &mut items,
+                                &mut counts,
+                                platform.id,
+                                &task,
+                                item.volume_name,
+                            )?;
+                        }
+                        if items.len() + binds.len() > 1000 {
+                            return Err(BackupError::Validation(
+                                "Backup source exceeds the 1000 storage target limit.".into(),
+                            ));
+                        }
                     }
                     continue;
                 }
@@ -333,6 +334,14 @@ impl PostgresBackupSourcePlanner {
             }
         }
         let plan = finish_swarm_plan(format!("Stack {name}"), items, counts)?;
+        if self.runtime.is_some() {
+            return workload_mounts::finish_storage_plan(
+                plan,
+                binds.into_values().collect(),
+                warnings.into_iter().collect(),
+                repository_type.is_some(),
+            );
+        }
         self.include_bind_mounts(
             plan,
             BackupPreviewKind::Stack,
@@ -392,10 +401,32 @@ impl PostgresBackupSourcePlanner {
         }
         let mut items = BTreeMap::<(String, String), BackupSourceItem>::new();
         let mut counts = BTreeMap::<(String, String), usize>::new();
+        let mut binds = BTreeMap::new();
+        let mut warnings = BTreeSet::new();
         for task in tasks {
             if self.runtime.is_some() {
-                for volume in self.task_volumes(platform.id, &task, cancellation).await? {
-                    insert_task_volume(&mut items, &mut counts, platform.id, &task, volume)?;
+                let (storage, discovered_warnings) =
+                    self.task_storage(platform.id, &task, cancellation).await?;
+                warnings.extend(discovered_warnings);
+                for item in storage {
+                    if let Some(path) = &item.host_path {
+                        binds
+                            .entry((item.docker_node_id.clone(), path.clone()))
+                            .or_insert(item);
+                    } else {
+                        insert_task_volume(
+                            &mut items,
+                            &mut counts,
+                            platform.id,
+                            &task,
+                            item.volume_name,
+                        )?;
+                    }
+                    if items.len() + binds.len() > 1000 {
+                        return Err(BackupError::Validation(
+                            "Backup source exceeds the 1000 storage target limit.".into(),
+                        ));
+                    }
                 }
                 continue;
             }
@@ -404,6 +435,14 @@ impl PostgresBackupSourcePlanner {
             }
         }
         let plan = finish_swarm_plan(format!("Swarm Service {name}"), items, counts)?;
+        if self.runtime.is_some() {
+            return workload_mounts::finish_storage_plan(
+                plan,
+                binds.into_values().collect(),
+                warnings.into_iter().collect(),
+                repository_type.is_some(),
+            );
+        }
         self.include_bind_mounts(
             plan,
             BackupPreviewKind::SwarmService,
@@ -415,12 +454,12 @@ impl PostgresBackupSourcePlanner {
         .await
     }
 
-    async fn task_volumes(
+    async fn task_storage(
         &self,
         platform_id: Uuid,
         task: &TaskPlacement,
         cancel: &tokio_util::sync::CancellationToken,
-    ) -> Result<BTreeSet<String>, BackupError> {
+    ) -> Result<(Vec<BackupSourceItem>, Vec<String>), BackupError> {
         use crate::connectors::routing::containers::Runtime;
         use citadel_platforms::containers::{ContainerInspectionPort, ContainerTarget};
         let router = self
@@ -450,16 +489,12 @@ impl PostgresBackupSourcePlanner {
             Runtime::Edge(r) => r.inspection(docker_id, cancel).await,
         }
         .map_err(|e| BackupError::Validation(e.message))?;
-        Ok(inspected
-            .get("mounts")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter(|m| m.get("type").and_then(Value::as_str) == Some("volume"))
-            .filter_map(|m| m.get("name").and_then(Value::as_str))
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
-            .collect())
+        let (mut items, warnings) =
+            workload_mounts::supported_mounts(&inspected, platform_id, Some(&task.docker_node_id))?;
+        for item in &mut items {
+            item.node_hostname = Some(task.node_hostname.clone());
+        }
+        Ok((items, warnings))
     }
 
     async fn platform(&self, id: Uuid) -> Result<Platform, BackupError> {

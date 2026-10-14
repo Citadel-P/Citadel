@@ -13,7 +13,9 @@ export function BackToResource() {
       ? 'Stack'
       : returnTo.startsWith('/swarm-services/')
         ? 'Swarm Service'
-        : 'Container';
+        : /^\/platforms\/[^/]+\/volumes(?:[/?#]|$)/.test(returnTo)
+          ? 'Volumes'
+          : 'Container';
 
   return (
     <Link

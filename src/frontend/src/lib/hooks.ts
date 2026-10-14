@@ -1041,6 +1041,7 @@ export function useSaveResource<TInput = any, TResponse = unknown>({
   onRefresh,
   entityName = 'Resource',
   extractName,
+  getCreatedPath,
 }: {
   mode: 'add' | 'edit';
   basePath: string;
@@ -1049,6 +1050,7 @@ export function useSaveResource<TInput = any, TResponse = unknown>({
   onRefresh?: () => void;
   entityName?: string;
   extractName?: (payload: TInput, response?: TResponse) => string;
+  getCreatedPath?: (id: string) => string;
 }) {
   const [isPending, setIsPending] = useState(false);
   const navigate = useNavigate();
@@ -1073,7 +1075,7 @@ export function useSaveResource<TInput = any, TResponse = unknown>({
         savedName = getName(response);
 
         if (resourceId) {
-          navigate(`/${basePath}/edit/${resourceId}`);
+          navigate(getCreatedPath?.(resourceId) ?? `/${basePath}/edit/${resourceId}`);
         }
       }
 

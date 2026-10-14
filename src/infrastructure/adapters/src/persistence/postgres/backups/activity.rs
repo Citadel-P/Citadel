@@ -12,13 +12,15 @@ pub(super) async fn record_run_activity(
         .map_err(storage)?;
     let run = map_run(row)?;
     coverage::changes::publish(tx, Some(run.backup_policy_id), None).await?;
-    if matches!(
-        run.status,
-        citadel_backups::BackupRunStatus::Failed
-            | citadel_backups::BackupRunStatus::TimedOut
-            | citadel_backups::BackupRunStatus::Interrupted
-            | citadel_backups::BackupRunStatus::Rejected
-    ) {
+    if matches!(run.trigger.as_str(), "Schedule" | "Webhook")
+        && matches!(
+            run.status,
+            citadel_backups::BackupRunStatus::Failed
+                | citadel_backups::BackupRunStatus::TimedOut
+                | citadel_backups::BackupRunStatus::Interrupted
+                | citadel_backups::BackupRunStatus::Rejected
+        )
+    {
         let enabled: bool =
             sqlx::query_scalar("SELECT alertonfailure FROM backuppolicies WHERE id=$1")
                 .bind(run.backup_policy_id)

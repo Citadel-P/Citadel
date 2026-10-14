@@ -38,9 +38,10 @@ uncovered storage target selected. Existing policy links also show coverage from
 shared-volume policies. See [Backups](/docs/resources/backups#coverage-on-resource-pages)
 for status meanings and configuration.
 
-On standalone Docker, Stack policies include the volume bindings recorded for the
-applied release: declared named volumes, external volumes, and anonymous volumes
-with generated names. On Swarm, coverage is limited to supported local volumes
+On standalone Docker, Stack policies discover actual volume names from owned,
+synchronized containers: named volumes, external volumes, and anonymous volumes
+with generated names. Shared volumes are backed up once; stale inventory or an
+unavailable container inspection blocks execution rather than omitting storage. On Swarm, coverage is limited to supported local volumes
 on their owning Nodes. Supported bind mounts discovered from owned containers
 are included in the same policy using actual host paths and exact Nodes.
 Host data requires Platform write access for both configuration and execution. Tmpfs, nested mounts, and

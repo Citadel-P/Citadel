@@ -136,15 +136,25 @@ pub async fn volume_coverage(
             included: false,
         })
         .collect::<Vec<_>>();
-    let summary = snapshot.evaluate(platform, &targets, None, true, scheduling_available);
-    Ok(summary
-        .volumes
-        .into_iter()
-        .map(|v| {
-            let latest = snapshot
+    Ok(targets
+        .iter()
+        .map(|target| {
+            let mut summary = snapshot.evaluate(
+                platform,
+                std::slice::from_ref(target),
+                None,
+                true,
+                scheduling_available,
+            );
+            let v = summary.volumes.remove(0);
+            let policies = snapshot
                 .policies
                 .iter()
                 .filter(|p| v.policy_ids.contains(&p.id))
+                .collect::<Vec<_>>();
+            let latest = policies
+                .iter()
+                .copied()
                 .filter_map(|p| p.latest_run.as_ref())
                 .max_by_key(|r| (r.queued_at, r.id));
             summaries::VolumeBackupCoverage {
@@ -153,6 +163,16 @@ pub async fn volume_coverage(
                 docker_node_id: v.target.docker_node_id,
                 status: v.status.unwrap_or(BackupCoverageStatus::Warning),
                 policy_count: v.policy_ids.len() as i32,
+                policies: policies
+                    .into_iter()
+                    .map(|p| summaries::VolumeCoveragePolicy {
+                        id: p.id,
+                        name: p.name.clone(),
+                        enabled: p.enabled,
+                        schedule_configured: p.scheduled(),
+                    })
+                    .collect(),
+                reasons: summary.reasons,
                 last_run_id: latest.map(|r| r.id),
                 last_run_status: latest.map(|r| r.status),
                 last_run_at: latest.map(|r| r.completed_at.unwrap_or(r.queued_at)),

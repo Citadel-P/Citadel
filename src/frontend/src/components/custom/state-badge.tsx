@@ -28,10 +28,13 @@ const normalize = (value: StateBadgeValue) =>
     .toLowerCase()
     .replace(/[\s_-]/g, '');
 
+export const isFailedRunStatus = (value?: string) =>
+  ['failed', 'timedout', 'interrupted', 'rejected'].includes(normalize(value));
+
 const getRunStyle = (value: string) => {
   if (value === 'succeeded') return styles.success;
   if (value === 'succeededwithwarnings' || value === 'queued') return styles.warning;
-  if (['failed', 'timedout', 'interrupted', 'rejected'].includes(value)) return styles.danger;
+  if (isFailedRunStatus(value)) return styles.danger;
   if (value === 'cancelled' || value === 'canceled') return styles.muted;
   if (['preparing', 'running', 'applyingretention'].includes(value)) return styles.info;
   return styles.muted;

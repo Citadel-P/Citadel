@@ -1571,6 +1571,7 @@ export interface AwsEc2BuildAgentPoolProviderSpec {
 }
 
 export interface BackupCoverageView {
+  canConfigure: boolean;
   /** @format date-time */
   lastRunAt?: string | null;
   /** @format uuid */
@@ -1580,8 +1581,10 @@ export interface BackupCoverageView {
   lastSuccessfulRunAt?: string | null;
   /** @format date-time */
   nextRunAt?: string | null;
+  policies: BackupPolicyReference[];
   /** @format int32 */
   policyCount: number;
+  reasons: BackupCoverageReason[];
   status: BackupCoverageStatus;
 }
 

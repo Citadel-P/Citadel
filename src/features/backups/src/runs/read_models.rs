@@ -18,12 +18,22 @@ pub struct PlatformBackupSummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct VolumeCoveragePolicy {
+    pub id: Uuid,
+    pub name: String,
+    pub enabled: bool,
+    pub schedule_configured: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct VolumeBackupCoverage {
     pub platform_id: Uuid,
     pub volume_name: String,
     pub docker_node_id: Option<String>,
     pub status: crate::BackupCoverageStatus,
     pub policy_count: i32,
+    pub policies: Vec<VolumeCoveragePolicy>,
+    pub reasons: Vec<crate::coverage::CoverageReason>,
     pub last_run_id: Option<Uuid>,
     pub last_run_status: Option<crate::BackupRunStatus>,
     pub last_run_at: Option<DateTime<Utc>>,

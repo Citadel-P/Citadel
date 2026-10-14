@@ -5,6 +5,8 @@ mod cancellation;
 mod repositories;
 mod restores;
 mod scheduling;
+#[cfg(test)]
+mod tests;
 
 pub struct BackupService {
     progress: tokio::sync::broadcast::Sender<Arc<progress::BackupProgressItem>>,
@@ -22,21 +24,7 @@ pub struct BackupService {
 }
 
 fn rejected_backup(message: String) -> BackupExecutionResult {
-    BackupExecutionResult {
-        status: crate::BackupRunStatus::Failed,
-        snapshot_availability: crate::BackupSnapshotAvailability::NotCreated,
-        restic_snapshot_id: None,
-        parent_snapshot_id: None,
-        files_processed: None,
-        bytes_processed: None,
-        bytes_added: None,
-        exit_code: None,
-        error_code: Some("AuthorizationRevoked".to_owned()),
-        error_message: Some(message),
-        warnings: vec![],
-        logs: vec![],
-        items: vec![],
-    }
+    failed_before_execution("AuthorizationRevoked", message)
 }
 
 fn failed_before_execution(code: &str, message: String) -> BackupExecutionResult {
@@ -50,9 +38,12 @@ fn failed_before_execution(code: &str, message: String) -> BackupExecutionResult
         bytes_added: None,
         exit_code: None,
         error_code: Some(code.to_owned()),
-        error_message: Some(message),
+        error_message: Some(message.clone()),
         warnings: vec![],
-        logs: vec![],
+        logs: vec![BackupLog {
+            stream: "stderr".into(),
+            message,
+        }],
         items: vec![],
     }
 }
@@ -62,8 +53,11 @@ fn rejected_restore(message: String) -> RestoreExecutionResult {
         status: crate::BackupRestoreStatus::Failed,
         exit_code: None,
         error_code: Some("AuthorizationRevoked".to_owned()),
-        error_message: Some(message),
-        logs: vec![],
+        error_message: Some(message.clone()),
+        logs: vec![BackupLog {
+            stream: "stderr".into(),
+            message,
+        }],
     }
 }
 

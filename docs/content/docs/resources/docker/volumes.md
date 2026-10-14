@@ -52,6 +52,10 @@ stopped containers, and rejects volumes overlapping system bind mounts. Custom
 volume names do not bypass this protection. This check
 runs again before every content request; UI capabilities alone never authorize it.
 
+Read-only host telemetry mounts at `/host`, including mirrored Docker data-root
+mounts used by rootless installations, do not make application volumes system
+storage. Core and database data volumes remain protected.
+
 The generic browser supports plain **local** volumes without driver options.
 Volumes with custom drivers or options are excluded because they can alias host
 paths or backing storage that Citadel cannot safely verify. Metadata inspection
@@ -74,6 +78,22 @@ volumes can also contain application credentials. Container terminals, arbitrary
 mounts, Docker socket access, deployments and backup exports require their own
 trusted permissions. This browser restriction does not turn Docker administration
 into an isolated tenant security boundary.
+
+## Backup status
+
+The **Backup** column shows coverage from policies you can access and updates
+when backup configuration or runs change. If the manager daemon is unavailable,
+the table retains its last inventory while coverage for persisted worker volumes
+can still update. **Protected** requires an enabled
+schedule and an available successful backup; a policy with no schedule needs
+attention. **Unavailable** means coverage could not be determined. See
+[backup coverage](/docs/resources/backups) for configuration and status details.
+
+Hover or focus the shield to open the same backup card used on workload and
+container pages. It shows accessible policies, schedule warnings, and the last
+successful backup. When permitted, use **Configure backup** or open an existing
+policy. The form preserves the volume's platform and Swarm Node; **Back to Volumes**
+returns you to the list after configuration.
 
 ## Inspect and remove a volume
 

@@ -49,7 +49,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { backupReturnPath, backupSourceFromSearch } from '../navigation';
 import { isWorkloadBackupVolume, sourceKey } from '../coverage';
 import { invalidateBackupPolicyQueries } from '../actions';
@@ -151,7 +151,6 @@ export function BackupPolicyForm({
 }) {
   const { id } = useParams();
   const [search] = useSearchParams();
-  const navigate = useNavigate();
   const returnTo = backupReturnPath(search);
   const initialSource = useMemo(() => (mode === 'add' ? backupSourceFromSearch(search) : undefined), [mode, search]);
   const draftId = id ?? (initialSource ? `new:${sourceKey(initialSource)}` : 'new');
@@ -250,6 +249,8 @@ export function BackupPolicyForm({
     mode,
     basePath: 'backup-policies',
     entityName: 'Backup policy',
+    getCreatedPath: (policyId) =>
+      `/backup-policies/edit/${policyId}${returnTo ? `?${new URLSearchParams({ returnTo })}` : ''}`,
     onCreate: (payload) => createPolicy.mutateAsync({ data: toCreateInput(payload) } as any),
     onUpdate: (payload) => updatePolicy.mutateAsync({ id: id!, data: toUpdateInput(payload, update) } as any),
     onRefresh: refreshData,
@@ -761,7 +762,8 @@ export function BackupPolicyForm({
               defineField<BackupPolicyFormValue, 'alertOnFailure'>({
                 key: 'alertOnFailure',
                 label: 'Alert On Failure',
-                description: 'Raise an alert-worthy event when the backup fails or times out.',
+                description:
+                  'Alert when a scheduled or webhook backup fails, times out, is interrupted, or is rejected. Manual runs do not send failure alerts.',
                 render: (value, set) => (
                   <FieldSwitch
                     checked={value ?? true}
@@ -899,7 +901,6 @@ export function BackupPolicyForm({
       onSave={async (payload) => {
         await handleSave(payload);
         if (mode === 'add') refreshData();
-        if (returnTo) navigate(returnTo);
       }}
       disabled={disabled}
       mode={mode}
@@ -1310,6 +1311,8 @@ function SwarmServiceSourcePreview({
 
 function volumeKindLabel(kind: string) {
   switch (kind) {
+    case 'DockerVolume':
+      return 'Volume';
     case 'BindMount':
       return 'Bind mount';
     case 'DeclaredNamed':

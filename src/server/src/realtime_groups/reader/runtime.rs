@@ -17,12 +17,17 @@ pub(crate) async fn realtime_resource_snapshot(
         realtime_groups::{ClientEvent, GroupRows, GroupSnapshot, RowStyle},
     };
     use citadel_platforms::jobs::ResourceDelta;
-    if event.platform_id != Some(id) {
+    let coverage_changed = matches!(event.resource_type, "BackupCoverage" | "License");
+    if event.platform_id != Some(id) && !(coverage_changed && event.platform_id.is_none()) {
         return Ok(Some(GroupSnapshot::default()));
     }
-    let kind = event.payload["dockerResourceType"]
-        .as_str()
-        .unwrap_or_default();
+    let kind = if coverage_changed {
+        "volume"
+    } else {
+        event.payload["dockerResourceType"]
+            .as_str()
+            .unwrap_or_default()
+    };
     if !matches!(kind, "image" | "network" | "volume") {
         return Ok(None);
     }
@@ -73,15 +78,16 @@ pub(crate) async fn realtime_resource_snapshot(
         // publish a worker's change, and never replace a sibling resource list.
         let mut payload = serde_json::json!({"platformId":id,"nodeOnly":true});
         if kind == "volume" {
-            payload["volumes"] = serde_json::to_value(
+            let volumes =
                 crate::realtime::shared_reads::node_volumes(&state.platforms, id, Some(event))
                     .await?
                     .into_iter()
                     .map(|v| map_node_volume(v, volume_cap))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(failure)?,
-            )
-            .map_err(failure)?;
+                    .map_err(failure)?;
+            payload["volumes"] =
+                serde_json::to_value(enrich_volumes(state, principal, id, volumes).await?)
+                    .map_err(failure)?;
             let manager_count =
                 crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
                     .await?
@@ -114,83 +120,117 @@ pub(crate) async fn realtime_resource_snapshot(
         .map(|v| serde_json::from_value::<ResourceDelta>(v.clone()))
         .transpose()
         .map_err(failure)?;
-    let (style, networks, volumes) =
-        match delta {
-            Some(ResourceDelta::Network { id, value }) => (
-                RowStyle::DaemonPatch(id),
-                value.into_iter().collect(),
-                vec![],
-            ),
-            Some(ResourceDelta::Volume { id, value }) => (
-                RowStyle::DaemonPatch(id),
-                vec![],
-                value.into_iter().collect(),
-            ),
-            _ if event.payload.get("resourceSnapshot").is_some() => (
-                RowStyle::Daemon,
-                serde_json::from_value(
-                    event.payload["resourceSnapshot"]
-                        .get("networks")
-                        .cloned()
-                        .unwrap_or_else(|| serde_json::json!([])),
-                )
-                .map_err(failure)?,
-                serde_json::from_value(
-                    event.payload["resourceSnapshot"]
-                        .get("volumes")
-                        .cloned()
-                        .unwrap_or_else(|| serde_json::json!([])),
-                )
-                .map_err(failure)?,
-            ),
-            _ => {
-                // Coarse API mutation notifications have no observation. Share only
-                // the relevant live read across authorized subscribers of this event.
-                let networks =
-                    if kind == "network" {
-                        event
-                            .reads
-                            .networks
-                            .get_or_try_init(|| async {
-                                let cancel = CancellationToken::new();
-                                let _guard = cancel.clone().drop_guard();
-                                let runtime = state.runtime.inventory(id, &cancel).await.map_err(
-                                    |error| RealtimeReadError::Storage(error.to_string()),
-                                )?;
-                                runtime
-                                    .list_networks(&cancel)
-                                    .await
-                                    .map_err(|e| RealtimeReadError::Storage(e.to_string()))
-                            })
-                            .await?
-                            .clone()
+    let mut manager_available = true;
+    let (style, networks, volumes) = match delta {
+        Some(ResourceDelta::Network { id, value }) => (
+            RowStyle::DaemonPatch(id),
+            value.into_iter().collect(),
+            vec![],
+        ),
+        Some(ResourceDelta::Volume { id, value }) => (
+            RowStyle::DaemonPatch(id),
+            vec![],
+            value.into_iter().collect(),
+        ),
+        _ if event.payload.get("resourceSnapshot").is_some() => (
+            RowStyle::Daemon,
+            serde_json::from_value(
+                event.payload["resourceSnapshot"]
+                    .get("networks")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+            )
+            .map_err(failure)?,
+            serde_json::from_value(
+                event.payload["resourceSnapshot"]
+                    .get("volumes")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+            )
+            .map_err(failure)?,
+        ),
+        _ => {
+            // Coarse API mutation notifications have no observation. Share only
+            // the relevant live read across authorized subscribers of this event.
+            let networks = if kind == "network" {
+                event
+                    .reads
+                    .networks
+                    .get_or_try_init(|| async {
+                        let cancel = CancellationToken::new();
+                        let _guard = cancel.clone().drop_guard();
+                        let runtime = state
+                            .runtime
+                            .inventory(id, &cancel)
+                            .await
+                            .map_err(|error| RealtimeReadError::Storage(error.to_string()))?;
+                        runtime
+                            .list_networks(&cancel)
+                            .await
+                            .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+                    })
+                    .await?
+                    .clone()
+            } else {
+                vec![]
+            };
+            let volumes = if kind == "volume" {
+                let read = || async {
+                    let cancel = CancellationToken::new();
+                    let _guard = cancel.clone().drop_guard();
+                    let runtime = state
+                        .runtime
+                        .inventory(id, &cancel)
+                        .await
+                        .map_err(|e| RealtimeReadError::Storage(e.to_string()))?;
+                    runtime
+                        .list_volumes(&cancel)
+                        .await
+                        .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+                };
+                let scoped_read = || async {
+                    // Global resyncs must never share one platform's inventory with another.
+                    if event.platform_id == Some(id) {
+                        event.reads.volumes.get_or_try_init(read).await.cloned()
                     } else {
-                        vec![]
-                    };
-                let volumes =
-                    if kind == "volume" {
-                        event
-                            .reads
-                            .volumes
-                            .get_or_try_init(|| async {
-                                let cancel = CancellationToken::new();
-                                let _guard = cancel.clone().drop_guard();
-                                let runtime = state.runtime.inventory(id, &cancel).await.map_err(
-                                    |error| RealtimeReadError::Storage(error.to_string()),
-                                )?;
-                                runtime
-                                    .list_volumes(&cancel)
-                                    .await
-                                    .map_err(|e| RealtimeReadError::Storage(e.to_string()))
-                            })
+                        read().await
+                    }
+                };
+                if coverage_changed {
+                    // Coverage is persisted independently of Docker. A disconnected daemon
+                    // must not tear down the socket or erase the client's last inventory.
+                    let online =
+                        crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
                             .await?
-                            .clone()
+                            .is_some_and(|p| {
+                                p.status == citadel_primitives::PlatformStatus::Online
+                            });
+                    let refreshed = if online {
+                        // This optional metadata refresh must finish before the subscription
+                        // deadline; dropping it cancels the runtime read through its guard.
+                        tokio::time::timeout(std::time::Duration::from_secs(2), scoped_read())
+                            .await
+                            .ok()
+                            .and_then(Result::ok)
                     } else {
-                        vec![]
+                        None
                     };
-                (RowStyle::Daemon, networks, volumes)
-            }
-        };
+                    match refreshed {
+                        Some(volumes) => volumes,
+                        None => {
+                            manager_available = false;
+                            vec![]
+                        }
+                    }
+                } else {
+                    scoped_read().await?
+                }
+            } else {
+                vec![]
+            };
+            (RowStyle::Daemon, networks, volumes)
+        }
+    };
     let (target, rows) = if kind == "network" {
         (
             "NetworkEventReceived",
@@ -205,20 +245,49 @@ pub(crate) async fn realtime_resource_snapshot(
     } else {
         (
             "VolumeEventReceived",
-            volumes
-                .into_iter()
-                .map(|v| map_volume(v, volume_cap).and_then(serde_json::to_value))
-                .collect::<Result<_, _>>()
-                .map_err(failure)?,
+            enrich_volumes(
+                state,
+                principal,
+                id,
+                volumes
+                    .into_iter()
+                    .map(|v| map_volume(v, volume_cap))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
+            )
+            .await?
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<Result<_, _>>()
+            .map_err(failure)?,
         )
     };
+    let mut events = vec![];
+    if coverage_changed {
+        let volumes =
+            crate::realtime::shared_reads::node_volumes(&state.platforms, id, Some(event))
+                .await?
+                .into_iter()
+                .map(|v| map_node_volume(v, volume_cap))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(failure)?;
+        let volumes = enrich_volumes(state, principal, id, volumes).await?;
+        events.push(ClientEvent::new(
+            "SwarmNodeLocalResourcesUpdated",
+            vec![serde_json::json!({"platformId":id, "nodeOnly":true, "volumes":volumes})],
+        ));
+    }
     Ok(Some(GroupSnapshot {
-        events: vec![],
-        rows: vec![GroupRows {
-            target,
-            style,
-            rows,
-        }],
+        events,
+        rows: if manager_available {
+            vec![GroupRows {
+                target,
+                style,
+                rows,
+            }]
+        } else {
+            vec![]
+        },
     }))
 }
 
@@ -253,6 +322,17 @@ pub(crate) async fn realtime_daemon_snapshot(
         .map_err(failure)?;
     let volumes = runtime.list_volumes(&cancellation).await.map_err(failure)?;
     let serialize = |error: serde_json::Error| RealtimeReadError::Storage(error.to_string());
+    let volumes = enrich_volumes(
+        state,
+        principal,
+        id,
+        volumes
+            .into_iter()
+            .map(|v| map_volume(v, volume_cap))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(serialize)?,
+    )
+    .await?;
     let mut events = vec![];
     if state
         .platforms
@@ -278,23 +358,17 @@ pub(crate) async fn realtime_daemon_snapshot(
         for image in &mut images {
             image.capabilities = Some(image_capabilities(platform));
         }
-        let mut all_volumes: Vec<_> = volumes
-            .iter()
-            .cloned()
-            .map(|volume| map_volume(volume, volume_cap))
-            .collect::<Result<_, _>>()
+        let mut all_volumes = volumes.clone();
+        let node_volumes = state
+            .platforms
+            .list_node_volumes(id)
+            .await
+            .map_err(failure)?
+            .into_iter()
+            .map(|v| map_node_volume(v, volume_cap))
+            .collect::<Result<Vec<_>, _>>()
             .map_err(serialize)?;
-        all_volumes.extend(
-            state
-                .platforms
-                .list_node_volumes(id)
-                .await
-                .map_err(failure)?
-                .into_iter()
-                .map(|volume| map_node_volume(volume, volume_cap))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(serialize)?,
-        );
+        all_volumes.extend(enrich_volumes(state, principal, id, node_volumes).await?);
         let node_networks: Vec<_> = state
             .platforms
             .list_node_networks(id)
@@ -328,7 +402,7 @@ pub(crate) async fn realtime_daemon_snapshot(
                 style: RowStyle::Daemon,
                 rows: volumes
                     .into_iter()
-                    .map(|v| map_volume(v, volume_cap).and_then(serde_json::to_value))
+                    .map(serde_json::to_value)
                     .collect::<Result<_, _>>()
                     .map_err(serialize)?,
             },
@@ -393,4 +467,29 @@ async fn daemon_capabilities(
             can_download: allowed(SpecificPermission::Download),
         },
     ))
+}
+
+async fn enrich_volumes(
+    state: &ApplicationGroupReader,
+    principal: &ActorPrincipal,
+    platform: Uuid,
+    mut volumes: Vec<crate::api::resources::platforms::views::VolumeView>,
+) -> Result<Vec<crate::api::resources::platforms::views::VolumeView>, RealtimeReadError> {
+    if let Some(service) = &state.backup_coverage {
+        crate::api::resources::backups::coverage::attach_volume_coverage(
+            service.volume_coverage.as_ref(),
+            service.identity.as_ref(),
+            principal,
+            platform,
+            &mut volumes,
+            service
+                .backups
+                .scheduling_available()
+                .await
+                .unwrap_or(false),
+        )
+        .await
+        .map_err(failure)?;
+    }
+    Ok(volumes)
 }
