@@ -6618,49 +6618,24 @@ async fn attach_volume_coverage(
     volumes: &mut [VolumeView],
     headers: &HeaderMap,
 ) -> HttpResult<()> {
-    let keys = volumes
-        .iter()
-        .map(|v| (v.name.clone(), v.docker_node_id.clone()))
-        .collect::<Vec<_>>();
-    let coverage = api_result(
-        state
-            .volume_coverage
-            .volume_coverage(
-                principal.actor_id,
-                principal.is_administrator(),
-                platform_id,
-                &keys,
-                match &state.backup_coverage {
-                    Some(service) => service
-                        .backups
-                        .scheduling_available()
-                        .await
-                        .unwrap_or(false),
-                    None => false,
-                },
-            )
-            .await
-            .map_err(ApiError::internal),
+    api_result(
+        crate::api::resources::backups::coverage::attach_volume_coverage(
+            state.volume_coverage.as_ref(),
+            state.identity.as_ref(),
+            principal,
+            platform_id,
+            volumes,
+            match &state.backup_coverage {
+                Some(service) => service
+                    .backups
+                    .scheduling_available()
+                    .await
+                    .unwrap_or(false),
+                None => false,
+            },
+        )
+        .await
+        .map_err(ApiError::internal),
         headers,
-    )?;
-    let mut coverage = coverage
-        .into_iter()
-        .map(|c| ((c.volume_name.clone(), c.docker_node_id.clone()), c))
-        .collect::<std::collections::HashMap<_, _>>();
-    for volume in volumes {
-        if let Some(c) = coverage.remove(&(volume.name.clone(), volume.docker_node_id.clone())) {
-            volume.backup_coverage = Some(
-                crate::api::resources::platforms::views::BackupCoverageView {
-                    status: c.status,
-                    policy_count: c.policy_count,
-                    last_run_id: c.last_run_id,
-                    last_run_status: c.last_run_status,
-                    last_run_at: c.last_run_at,
-                    last_successful_run_at: c.last_successful_run_at,
-                    next_run_at: None,
-                },
-            );
-        }
-    }
-    Ok(())
+    )
 }

@@ -54,7 +54,7 @@ impl Group {
                 Topic::ContainerInfo(reference) => {
                     contains("containerIds", Uuid::parse_str(reference).ok())
                 }
-                Topic::Containers(..) | Topic::SwarmServices(..) => {
+                Topic::Containers(..) | Topic::SwarmServices(..) | Topic::DockerDaemon(..) => {
                     (event.resource_type == "License" || event.payload["resync"] == true)
                         || self.id() == event.platform_id
                 }
@@ -566,6 +566,7 @@ mod tests {
         let event = receiver.try_recv().unwrap();
         for topic in [
             format!("containers:{platform}"),
+            format!("docker-daemon:{platform}"),
             format!("deployment:{deployment}"),
             format!("container-info:{container}"),
             "deployments".into(),
@@ -574,6 +575,7 @@ mod tests {
         }
         for topic in [
             format!("containers:{}", Uuid::now_v7()),
+            format!("docker-daemon:{}", Uuid::now_v7()),
             format!("deployment:{}", Uuid::now_v7()),
             format!("container-info:{}", Uuid::now_v7()),
             "stacks".into(),

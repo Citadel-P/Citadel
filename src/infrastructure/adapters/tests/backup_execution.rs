@@ -389,6 +389,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         citadel_backups::BackupCoverageStatus::Warning
     );
     assert!(coverage[0].last_successful_run_at.is_some());
+    assert_eq!(coverage[0].policies[0].id, first_claim.policy.id);
+    assert_eq!(coverage[0].policies[0].name, first_claim.policy.name);
+    assert!(!coverage[0].policies[0].schedule_configured);
     assert!(
         !coverage_reader
             .snapshot(actor, true, &[platform])
@@ -415,6 +418,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .volume_coverage(actor, true, platform, &keys, false)
         .await
         .unwrap();
+    assert!(paused[0].policies[0].schedule_configured);
+    assert_eq!(
+        paused[0].reasons,
+        vec![citadel_backups::coverage::CoverageReason::SchedulingUnavailable]
+    );
     assert_eq!(
         paused[0].status,
         citadel_backups::BackupCoverageStatus::Warning
@@ -490,7 +498,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
     assert_run_activities(&pool, &late_claim.run, "Interrupted", "Failure", true).await;
-    assert_backup_alert_count(&pool, late_claim.run.id, 1).await;
+    assert_eq!(late_claim.run.trigger, "Manual");
+    assert_backup_alert_count(&pool, late_claim.run.id, 0).await;
 
     // The Activities tab reads this authorized, resource-scoped query.
     use citadel_activities::{
@@ -686,48 +695,89 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     edge_failure_cleans_helper_on_the_exact_node(executor, &guarded_claim, platform).await;
     edge_restore_uses_the_saved_snapshot_root(&pool, &guarded_claim, platform).await;
 
-    // Finish the queued scheduled run, then cover the remaining executor outcomes.
-    for (outcome, activity_status) in [
+    // The first scheduled run is already queued. Exercise real enqueue paths
+    // for every trigger: manual failures must not create observations.
+    let webhook = json!({"enabled": true, "provider":"Generic", "authScheme":"BearerToken", "secret":"fixture-key"});
+    sqlx::query("UPDATE backuppolicies SET webhook=$2 WHERE id=$1")
+        .bind(policies[0].id)
+        .bind(&webhook)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let webhook_config = serde_json::from_value(webhook).unwrap();
+    let outcomes = [
         ("Failed", "Failure"),
         ("TimedOut", "Failure"),
+        ("Interrupted", "Failure"),
         ("Rejected", "Failure"),
+        ("Cancelled", "Warning"),
         ("SucceededWithWarnings", "Warning"),
-    ] {
+        ("Succeeded", "Success"),
+    ];
+    let cases = ["Schedule", "Manual", "Webhook"]
+        .into_iter()
+        .flat_map(|trigger| outcomes.map(|(outcome, status)| (trigger, outcome, status, true)))
+        .chain([
+            ("Schedule", "Failed", "Failure", false),
+            ("Webhook", "Failed", "Failure", false),
+        ]);
+    for (index, (trigger, outcome, activity_status, notify)) in cases.enumerate() {
+        if index > 0 {
+            match trigger {
+                "Schedule" => assert!(
+                    store
+                        .enqueue_scheduled_backup(
+                            policies[0].id,
+                            scheduled_minute + Duration::minutes(index as i64 + 2)
+                        )
+                        .await
+                        .unwrap()
+                ),
+                "Webhook" => {
+                    store
+                        .enqueue_webhook(policies[0].id, &webhook_config)
+                        .await
+                        .unwrap();
+                }
+                _ => {
+                    store
+                        .enqueue_backup(actor, policies[0].id, trigger)
+                        .await
+                        .unwrap();
+                }
+            }
+        }
         let claim = store
             .claim_backup(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(claim.run.trigger, trigger);
+        sqlx::query("UPDATE backuppolicies SET alertonfailure=$2 WHERE id=$1")
+            .bind(claim.policy.id)
+            .bind(notify)
+            .execute(&pool)
+            .await
+            .unwrap();
         let mut result = success_result("outcome", None);
         result.status = outcome.parse().unwrap();
         result.snapshot_availability = citadel_backups::BackupSnapshotAvailability::Missing;
         result.error_message = Some("Test outcome".into());
-        // A disabled policy notification must not enqueue a failed-run alert.
-        sqlx::query("UPDATE backuppolicies SET alertonfailure=$2 WHERE id=$1")
-            .bind(claim.policy.id)
-            .bind(outcome != "Rejected")
-            .execute(&pool)
-            .await
-            .unwrap();
-        store.finish_backup(&claim, &result).await.unwrap();
-        store.finish_backup(&claim, &result).await.unwrap();
-        assert_run_activities(&pool, &claim.run, outcome, activity_status, true).await;
-        assert_backup_alert_count(
-            &pool,
-            claim.run.id,
-            if matches!(outcome, "Failed" | "TimedOut") {
-                1
-            } else {
-                0
-            },
-        )
-        .await;
-        if outcome != "SucceededWithWarnings" {
-            store
-                .enqueue_backup(actor, claim.policy.id, "Manual")
+        if outcome == "Interrupted" {
+            citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
+                .await
+                .unwrap();
+            citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
                 .await
                 .unwrap();
         }
+        store.finish_backup(&claim, &result).await.unwrap();
+        store.finish_backup(&claim, &result).await.unwrap();
+        assert_run_activities(&pool, &claim.run, outcome, activity_status, true).await;
+        let expected = i64::from(
+            matches!(trigger, "Schedule" | "Webhook") && notify && activity_status == "Failure",
+        );
+        assert_backup_alert_count(&pool, claim.run.id, expected).await;
     }
 
     let alerts =
@@ -743,22 +793,12 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .await
     .unwrap();
     assert_eq!(
-        count, 3,
-        "interruption, failure and timeout each produce one alert"
+        count, 8,
+        "only scheduled and webhook failures, timeouts, interruptions and rejections produce alerts"
     );
 
-    let webhook = json!({"enabled": true, "provider":"Generic", "authScheme":"BearerToken", "secret":"fixture-key"});
-    sqlx::query("UPDATE backuppolicies SET webhook=$2 WHERE id=$1")
-        .bind(policies[0].id)
-        .bind(&webhook)
-        .execute(&pool)
-        .await
-        .unwrap();
     let webhook_run = store
-        .enqueue_webhook(
-            policies[0].id,
-            &serde_json::from_value(webhook.clone()).unwrap(),
-        )
+        .enqueue_webhook(policies[0].id, &webhook_config)
         .await
         .unwrap();
     assert_eq!(webhook_run.triggered_by_actor_id, SYSTEM_ACTOR_ID);

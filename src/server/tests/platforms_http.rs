@@ -109,6 +109,8 @@ mod statistics;
 mod tags;
 #[path = "platforms_http/volume_content.rs"]
 mod volume_content;
+#[path = "platforms_http/volume_coverage.rs"]
+mod volume_coverage;
 
 struct Fixture {
     docker: DockerClient,

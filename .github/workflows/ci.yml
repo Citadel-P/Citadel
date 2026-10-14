@@ -277,6 +277,7 @@ jobs:
           cargo test --locked --workspace --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
           cargo test --locked --workspace --test platforms_http -- --ignored --test-threads=1
           cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
+          cargo test --locked --workspace --test backup_source_discovery -- --ignored --test-threads=1
 
   # Preserve the existing required-check name while covering both parallel jobs.
   rust-openapi:

@@ -61,6 +61,7 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
         // Keep it detached here: Docker Desktop can expose internal /run paths
         // when inspecting a container with both named volumes and bind mounts.
         let container_id = String::from_utf8(docker(&["create", "--name", &workload_container,
+            "--label", "com.docker.compose.service=app",
             "--volume", &format!("{}:/bind", root.join("source").display()),
             "--volume", &format!("{}:/config.txt", root.join("source/private/payload.txt").display()),
             "--volume", &format!("{}:/excluded:ro", root.join("excluded,path").display()),

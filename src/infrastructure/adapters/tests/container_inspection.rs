@@ -89,6 +89,20 @@ fn inspection_without_configuration_preserves_other_fields() {
 }
 
 #[test]
+fn inspection_distinguishes_unknown_storage_from_an_empty_mount_list() {
+    for original in [
+        json!({"Id":"container"}),
+        json!({"Id":"container","Mounts":null}),
+    ] {
+        assert!(map_inspection(original, "container").unwrap()["mounts"].is_null());
+    }
+    assert_eq!(
+        map_inspection(json!({"Id":"container","Mounts":[]}), "container").unwrap()["mounts"],
+        json!([])
+    );
+}
+
+#[test]
 fn inspection_preserves_dictionary_keys_and_the_existing_ui_shape() {
     let result = map_inspection(json!({"Id":"container", "State":{"Status":"running", "OOMKilled":false},
         "Config":{"Labels":{"MixedCase_Label":"Value"}, "ExposedPorts":{"80/tcp":{}}, "Volumes":{"/Data_Path":{}}},

@@ -1142,7 +1142,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             &app,
             Method::POST,
             &format!("/api/v1/backupPolicies/{policy_id}/runs"),
-            Some(principal),
+            Some(principal.clone()),
             Some(json!({"trigger":"Manual"})),
         )
         .await,
@@ -1162,6 +1162,19 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .await
         .unwrap();
     assert_eq!(status, "Failed");
+    let logs_response = request(
+        &app,
+        Method::GET,
+        &format!("/api/v1/backupRuns/{}/logs", run["id"].as_str().unwrap()),
+        Some(principal),
+        None,
+    )
+    .await;
+    assert_eq!(logs_response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(logs_response).await["logs"],
+        "fixture source unavailable"
+    );
     cancellation.cancel();
     build_tasks
         .drain(std::time::Duration::from_secs(5))

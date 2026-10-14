@@ -228,7 +228,7 @@ Supported sources:
 - **Citadel system** (administrators only): creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
 - **Host file or directory**: backs up one explicitly selected existing host file or directory. Requires Platform write access. On Swarm, select the exact owning Node; policies do not follow a task to another Node.
 - **Docker volume**: backs up one selected Docker-managed volume by its actual name, including an anonymous volume with a generated name.
-- **Stack storage**: on standalone Docker, backs up recorded applied volumes, including named, external, and anonymous volumes, plus supported bind mounts discovered from owned containers. On Swarm, resolves supported volumes and bind paths on the current Tasks’ Nodes.
+- **Stack storage**: on standalone Docker, discovers actual Docker volume names and supported bind mounts from its owned, synchronized containers. This includes named, external, and anonymous volumes; shared volumes are backed up once. Preview and execution use the same discovery, and missing services, incomplete inventory, or unavailable inspection blocks execution. Git stacks use the recorded applied commit to check the service list. On Swarm, resolves supported volumes and bind paths on the current Tasks’ Nodes.
 - **Deployment storage**: backs up declared named volumes and supported bind mounts discovered from the synchronized container on standalone Docker. Runtime-only anonymous volumes still need a direct Docker volume policy.
 - **Swarm service storage**: backs up supported local Docker volumes and bind mounts on the Nodes running the managed Service’s current Tasks.
 
@@ -281,8 +281,11 @@ Schedule section when you have write access.
 **Configure backup** opens
 the central policy form with the workload or individual volume already selected,
 including its Swarm Node when applicable. Existing policy links let you review
-coverage without creating a duplicate policy for a shared volume. Saving a policy
-opened from this card returns you to the resource. Coverage updates through
+coverage without creating a duplicate policy for a shared volume. Creating a policy
+opens its edit page, where you can run the backup immediately. Saving later changes
+keeps you on that page. Use the **Back to Deployment**, **Back to Stack**,
+**Back to Swarm Service**, **Back to Container**, or **Back to Volumes** link to return when ready.
+Coverage updates through
 the resource's live connection when policies, runs, repositories, or inventory
 change; opening the resource does not poll backup source previews.
 
@@ -500,8 +503,9 @@ When retention is enabled, Citadel runs restic retention after the backup comple
 ## Alerts
 
 Enable **Alert on failure** on a policy to record a **Backup Run Failed** alert
-when its run fails, times out, is interrupted, or is rejected. Deliberate
-cancellation and successful runs do not trigger it. Failure observations are
+when a **scheduled or webhook run** fails, times out, is interrupted, or is
+rejected. Manual runs do not trigger failure alerts. Deliberate cancellation and
+successful runs do not trigger them either. Failure observations are
 saved with the terminal run result and processed durably without duplicate alerts
 for repeated processing of the same run.
 
@@ -509,7 +513,9 @@ The built-in **Backup Run Failed** rule creates in-app alerts. Assign active
 channels to the enabled rule in **Alert Rules** to receive notifications. Alerts
 include the policy, failure reason, and a link to the run's logs. Rule filtering
 and quiet hours still apply. **Activities → Backup run failed** filters failed
-backup completion events independently of the policy's notification setting.
+backup completion events for all triggers, including manual and webhook runs,
+independently of the policy's notification setting. Run logs and backup coverage
+also continue to reflect these failures.
 
 ## Practical Recommendations
 

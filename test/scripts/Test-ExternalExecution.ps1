@@ -98,7 +98,7 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'docker_transport')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_build_pool')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_sessions')
-    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'backup_source_discovery', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'execution_resources_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_transport', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'stack_webhooks', '--', '--ignored', '--test-threads=1')

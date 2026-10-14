@@ -73,9 +73,16 @@ impl StorageProtection {
                 if mount.r#type == Some(citadel_docker_api::models::mount_point::Type::Bind) {
                     // Core's documented read-only host telemetry mount does not
                     // make every workload volume system storage.
-                    if mount.source.as_deref() == Some("/")
-                        && mount.destination.as_deref() == Some("/host")
-                        && mount.rw == Some(false)
+                    // Rootless installations can expose just the daemon data
+                    // root at /host/<absolute source>, rather than all of '/'.
+                    if mount.rw == Some(false)
+                        && mount
+                            .source
+                            .as_deref()
+                            .zip(mount.destination.as_deref())
+                            .is_some_and(|(source, destination)| {
+                                telemetry_mount(source, destination)
+                            })
                     {
                         continue;
                     }
@@ -114,6 +121,17 @@ impl StorageProtection {
                         location.starts_with(source) || source.starts_with(location)
                     })))
     }
+}
+
+fn telemetry_mount(source: &str, destination: &str) -> bool {
+    let path = std::path::Path::new(source);
+    path.is_absolute()
+        && !path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        && path.strip_prefix("/").is_ok_and(|relative| {
+            std::path::Path::new(destination) == std::path::Path::new("/host").join(relative)
+        })
 }
 
 #[cfg(test)]
@@ -214,5 +232,47 @@ mod tests {
             .unwrap();
             assert!(!StorageProtection::from_containers(&[container]).allows(&volume("workload")));
         }
+    }
+
+    #[test]
+    fn rootless_read_only_telemetry_does_not_protect_every_workload_volume() {
+        let root = "/home/citadel-demo/.local/share/docker";
+        let container = serde_json::from_value(json!({
+            "Labels":{"com.citadel.system-role":"core"},
+            "Mounts":[
+                {"Type":"bind", "Source":root, "Destination":format!("/host{root}"), "RW":false},
+                {"Type":"volume", "Name":"core-data", "Destination":"/app/data"},
+                {"Type":"bind", "Source":format!("{root}/volumes/private/_data"), "Destination":"/app/keys", "RW":false}
+            ]
+        })).unwrap();
+        let policy = StorageProtection::from_containers(&[container]);
+        for (name, allowed) in [
+            ("example-rustfs_data", true),
+            ("core-data", false),
+            ("private", false),
+        ] {
+            let mut v = volume(name);
+            v.mountpoint = format!("{root}/volumes/{name}/_data");
+            assert_eq!(policy.allows(&v), allowed, "{name}");
+        }
+        for (destination, rw) in [
+            (format!("/host{root}"), true),
+            ("/host/data".into(), false),
+            ("/app/data".into(), false),
+        ] {
+            let container = serde_json::from_value(json!({
+                "Labels":{"com.citadel.system-role":"core"},
+                "Mounts":[{"Type":"bind", "Source":root, "Destination":destination, "RW":rw}]
+            }))
+            .unwrap();
+            let mut v = volume("workload");
+            v.mountpoint = format!("{root}/volumes/workload/_data");
+            assert!(!StorageProtection::from_containers(&[container]).allows(&v));
+        }
+        assert!(!telemetry_mount("relative", "/host/relative"));
+        assert!(!telemetry_mount(
+            "/data/../private",
+            "/host/data/../private"
+        ));
     }
 }

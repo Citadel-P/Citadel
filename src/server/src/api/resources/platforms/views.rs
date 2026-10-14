@@ -1112,6 +1112,9 @@ pub struct BackupCoverageView {
     #[schema(value_type = crate::api::resources::schema_models::backups::BackupCoverageStatusSchema)]
     pub status: citadel_backups::BackupCoverageStatus,
     pub policy_count: i32,
+    pub policies: Vec<super::super::backups::coverage::BackupPolicyReference>,
+    pub can_configure: bool,
+    pub reasons: Vec<super::super::backups::coverage::BackupCoverageReason>,
     pub last_run_id: Option<Uuid>,
     #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRunStatusSchema>)]
     pub last_run_status: Option<citadel_backups::BackupRunStatus>,

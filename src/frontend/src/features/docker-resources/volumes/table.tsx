@@ -6,14 +6,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo, useState } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { truncate } from '@/lib/truncate';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { useAppContext } from '@/lib/context/app-context';
 import { VolumeBrowserSheet } from './volume-browser-sheet';
 import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
@@ -149,53 +148,49 @@ const backupCoverageRank = (volume: VolumeView) => {
 };
 
 const BackupCoverageBadge = ({ volume }: { volume: VolumeView }) => {
+  const { platformId } = useParams<{ platformId: string }>();
+  const { currentPlatform } = useAppContext();
+  const location = useLocation();
+  const platform = platformId ?? currentPlatform?.id;
   const coverage = volume.backupCoverage;
-  if (!coverage) {
-    return <span className="text-muted-foreground text-xs">-</span>;
-  }
-
-  const policyCount = Number(coverage.policyCount ?? 0);
-  const status = coverage.status;
-  const title = [
-    `${status}${policyCount > 0 ? `, ${policyCount} policy${policyCount === 1 ? '' : 'ies'}` : ''}`,
-    coverage.lastSuccessfulRunAt ? `Last successful: ${coverage.lastSuccessfulRunAt}` : null,
-    coverage.lastRunStatus ? `Last run: ${coverage.lastRunStatus}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n');
-
+  if (!platform) return null;
   return (
-    <Badge
-      variant="outline"
-      title={title}
-      className={cn(
-        'rounded-sm',
-        status === BackupCoverageStatus.Protected &&
-          'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300',
-        status === BackupCoverageStatus.Warning &&
-          'border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-        status === BackupCoverageStatus.Failed && 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
-        status === BackupCoverageStatus.Unprotected && 'border-muted-foreground/30 bg-muted/50 text-muted-foreground',
-      )}>
-      {coverageLabel(status)}
-      {policyCount > 0 && <span className="text-muted-foreground ml-1">({policyCount})</span>}
-    </Badge>
+    <ResourceBackupIndicator
+      compact
+      source={{
+        $type: 'DockerVolume',
+        platformId: platform,
+        volumeName: volume.name,
+        dockerNodeId: volume.dockerNodeId,
+      }}
+      returnTo={`${location.pathname}${location.search}${location.hash}`}
+      coverage={
+        coverage
+          ? {
+              status: coverage.status,
+              platformId: platform,
+              volumes: [
+                {
+                  name: volume.name,
+                  dockerNodeId: volume.dockerNodeId,
+                  nodeHostname: volume.nodeHostname,
+                  includedInResourcePolicy: false,
+                  status: coverage.status,
+                  policies: coverage.policies ?? [],
+                  lastSuccessfulRunAt: coverage.lastSuccessfulRunAt,
+                },
+              ],
+              policies: coverage.policies ?? [],
+              canConfigure: coverage.canConfigure ?? false,
+              hasResourcePolicy: false,
+              unavailable: false,
+              warnings: [],
+              reasons: coverage.reasons ?? [],
+            }
+          : undefined
+      }
+    />
   );
-};
-
-const coverageLabel = (status: BackupCoverageStatus) => {
-  switch (status) {
-    case BackupCoverageStatus.NotApplicable:
-      return 'N/A';
-    case BackupCoverageStatus.Unprotected:
-      return 'Unprotected';
-    case BackupCoverageStatus.Protected:
-      return 'Protected';
-    case BackupCoverageStatus.Warning:
-      return 'Warning';
-    case BackupCoverageStatus.Failed:
-      return 'Failed';
-  }
 };
 
 const VolumeNameRow = ({ volume }: { volume: VolumeView }) => {

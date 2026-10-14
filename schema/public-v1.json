@@ -2081,6 +2081,9 @@
       },
       "BackupCoverageView": {
         "properties": {
+          "canConfigure": {
+            "type": "boolean"
+          },
           "lastRunAt": {
             "format": "date-time",
             "type": [
@@ -2119,9 +2122,21 @@
               "null"
             ]
           },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BackupPolicyReference"
+            },
+            "type": "array"
+          },
           "policyCount": {
             "format": "int32",
             "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/BackupCoverageReason"
+            },
+            "type": "array"
           },
           "status": {
             "$ref": "#/components/schemas/BackupCoverageStatus"
@@ -2129,7 +2144,10 @@
         },
         "required": [
           "status",
-          "policyCount"
+          "policyCount",
+          "policies",
+          "canConfigure",
+          "reasons"
         ],
         "type": "object"
       },

@@ -28,7 +28,7 @@ impl From<CoverageReason> for BackupCoverageReason {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPolicyReference {
     pub id: Uuid,
@@ -427,4 +427,86 @@ fn unavailable(platform_id: Uuid) -> ResourceBackupSummaryView {
         warnings: vec![],
         reasons: vec![BackupCoverageReason::InventoryUnavailable],
     }
+}
+
+/// Shared HTTP/realtime projection; policy visibility is evaluated for each actor.
+pub(crate) async fn attach_volume_coverage(
+    reader: &dyn VolumeCoverageReader,
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    platform_id: Uuid,
+    volumes: &mut [crate::api::resources::platforms::views::VolumeView],
+    scheduling_available: bool,
+) -> Result<(), citadel_backups::BackupError> {
+    if volumes.is_empty() {
+        return Ok(());
+    }
+    let keys = volumes
+        .iter()
+        .map(|v| (v.name.clone(), v.docker_node_id.clone()))
+        .collect::<Vec<_>>();
+    let coverage = reader
+        .volume_coverage(
+            principal.actor_id,
+            principal.is_administrator(),
+            platform_id,
+            &keys,
+            scheduling_available,
+        )
+        .await?;
+    let ids = coverage
+        .iter()
+        .flat_map(|c| c.policies.iter().map(|p| p.id))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let permissions = identity
+        .permissions_for_resources(principal, ResourceType::BackupPolicy, &ids)
+        .await
+        .map_err(|e| citadel_backups::BackupError::Storage(e.to_string()))?;
+    let can_configure = principal.is_administrator()
+        || identity
+            .global_permission(principal, ResourceType::BackupPolicy)
+            .await
+            .map_err(|e| citadel_backups::BackupError::Storage(e.to_string()))?
+            .is_some_and(|p| p.level.grants(PermissionLevel::Write));
+    let coverage = coverage
+        .into_iter()
+        .map(|c| ((c.volume_name.clone(), c.docker_node_id.clone()), c))
+        .collect::<BTreeMap<_, _>>();
+    for volume in volumes {
+        volume.backup_coverage = coverage
+            .get(&(volume.name.clone(), volume.docker_node_id.clone()))
+            .map(
+                |c| crate::api::resources::platforms::views::BackupCoverageView {
+                    status: c.status,
+                    policy_count: c.policy_count,
+                    policies: c
+                        .policies
+                        .iter()
+                        .map(|p| BackupPolicyReference {
+                            id: p.id,
+                            name: p.name.clone(),
+                            enabled: Some(p.enabled),
+                            schedule_configured: Some(p.schedule_configured),
+                            can_write: Some(
+                                principal.is_administrator()
+                                    || permissions
+                                        .get(&p.id)
+                                        .and_then(|p| p.as_ref())
+                                        .is_some_and(|p| p.level.grants(PermissionLevel::Write)),
+                            ),
+                        })
+                        .collect(),
+                    can_configure,
+                    reasons: c.reasons.iter().copied().map(Into::into).collect(),
+                    last_run_id: c.last_run_id,
+                    last_run_status: c.last_run_status,
+                    last_run_at: c.last_run_at,
+                    last_successful_run_at: c.last_successful_run_at,
+                    next_run_at: None,
+                },
+            );
+    }
+    Ok(())
 }
