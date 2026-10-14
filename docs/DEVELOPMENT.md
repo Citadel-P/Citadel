@@ -200,8 +200,10 @@ cargo run --locked -p xtask -- database refresh-baseline
 cargo run --locked -p xtask -- database verify
 ```
 
-Until the first release, Citadel keeps a single generated `0001_initial.sql`
+The initial database schema is captured in the generated `0001_initial.sql`
 baseline. The generator also updates its manifest and embedded catalog.
+Refreshing this baseline prepares new databases; it is not a migration procedure
+for released installations.
 
 Regenerating the baseline does **not** upgrade an existing database. An
 `AppliedChecksum` failure means the applied baseline differs. Back up the data,

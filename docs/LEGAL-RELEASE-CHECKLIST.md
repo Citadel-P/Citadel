@@ -44,9 +44,8 @@ copies. The scope and effect of any previous grants require legal review.
   modifications. Apply the ELv2 license-key and protected-functionality terms.
 - [ ] Describe the product as source-available, not OSI-approved open source.
   Distinguish the source license from signed Team product entitlements.
-- [ ] Verify the sign-in/setup and account-menu license and source links.
-  Commit-specific source links are retained for transparency and provenance;
-  ELv2 itself does not impose AGPL's network-source-disclosure obligation.
+- [ ] Verify the sign-in/setup footer identifies authorship and Elastic License
+  2.0, the README links the full terms, and both images include `/app/LICENSE`.
   Third-party source-disclosure obligations, where applicable, still apply.
 - [ ] Inventory licenses and required notices for Rust/npm dependencies,
   generated code, fonts, assets, Docker tools, Deno and OS/runtime packages.

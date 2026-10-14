@@ -4,7 +4,7 @@ import { appName, docsAssetUrl, gitConfig } from './shared';
 
 export function baseOptions(
   links: NonNullable<BaseLayoutProps['links']> = [
-    { text: 'API Preview', url: '/docs/reference/api' },
+    { text: 'API Reference', url: '/docs/reference/api' },
     {
       text: 'Report an issue',
       url: `https://github.com/${gitConfig.user}/${gitConfig.repo}/issues/new`,

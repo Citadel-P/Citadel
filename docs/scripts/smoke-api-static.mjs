@@ -4,7 +4,7 @@ import path from 'node:path';
 const html = await readFile(path.resolve('api-out/index.html'), 'utf8');
 const schema = JSON.parse(await readFile(path.resolve('api-out/public-openapi.json'), 'utf8'));
 
-if (!html.includes('Citadel API Preview') || !html.includes('<div id="redoc"')) {
+if (!html.includes('Citadel API Reference') || !html.includes('<div id="redoc"')) {
   throw new Error('The standalone ReDoc document was not generated correctly.');
 }
 if (/>\s*Try it\s*</i.test(html) || /id="(?:try-it|execute-request)"/i.test(html)) {

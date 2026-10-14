@@ -42,15 +42,15 @@ class LicensingDistributionChecks(unittest.TestCase):
         )
 
     def test_ui_notices_match_the_source_license(self):
-        # The login shell owns these notices; the account menu stays focused on
-        # profile and session actions.
+        # The compact login footer identifies authorship and the source license.
+        # Full terms ship in LICENSE and both images; the README links them.
         text = self.read("src/frontend/src/features/auth/auth-shell.tsx")
-        self.assertIn("sourceAndLicenseLinks", text)
-        self.assertIn("Source code", text)
+        self.assertIn("© Citadel authors and contributors.", text)
         self.assertIn("Elastic License 2.0", text)
-        self.assertIn("source-available", text.lower())
-        self.assertRegex(text.lower(), r"(?:no|without) warranty")
         self.assertNotIn("AGPL-3.0", text)
+        readme = self.read("README.md")
+        self.assertIn("source-available", readme)
+        self.assertIn("[Elastic License 2.0](LICENSE)", readme)
         helper = self.read("src/frontend/src/lib/source-license.ts")
         self.assertIn("VITE_CITADEL_BUILD_SHA", helper)
         self.assertIn("VITE_CITADEL_SOURCE_REPOSITORY_URL", helper)

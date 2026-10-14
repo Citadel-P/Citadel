@@ -11,7 +11,8 @@ description: "Plain-language meanings for the names you see in the interface."
 | Image | The packaged application Docker uses to create a container |
 | Container | A running or stopped instance of an image |
 | Registry | A service that stores images, such as Docker Hub |
-| Volume | Persistent application storage that survives container replacement |
+| Volume | Docker-managed persistent storage with a chosen or automatically generated name |
+| Bind mount | A host file or directory mounted inside a container |
 | Binding | A named variable or secret available to an application |
 | Agent | The Citadel program that connects a remote Docker host |
 | Edge Agent | An Agent that connects out to Core instead of accepting an inbound connection |
@@ -23,10 +24,13 @@ description: "Plain-language meanings for the names you see in the interface."
 | Adopt | Bring an existing Docker workload under Citadel management |
 | Build Project | Instructions for turning source files into an image |
 | Build Pool | Dedicated builder infrastructure selected by a Build Project |
-| Release | A recorded Stack deployment and its configuration snapshot |
+| Stack release | A recorded Stack deployment and its configuration snapshot |
+| Citadel release | A published version of Core and Agent with release notes and container images |
 | Image digest | Identifier for specific image content, unlike a tag that can move |
 | Service Account | A machine identity with scoped Citadel permissions |
 | Run as | The identity whose permissions an operation uses during execution |
-| Control-plane backup | A matched backup of Citadel's database and local data needed to recover the installation |
+| Backup repository | The encrypted storage destination for backup snapshots |
+| Backup policy | The source, destination, retention, and optional schedule for backups |
+| Control-plane backup | A Citadel system backup containing the database and recovery keys; application data needs separate backups |
 
 See [choose a task](/docs/guides) when you are ready to use these features.

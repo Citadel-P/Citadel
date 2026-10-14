@@ -111,7 +111,8 @@ the original external systems.
 2. Store its restic password, repository location, and any storage credentials
    outside Citadel as part of the recovery plan. A repository on the same host
    needs an independently recoverable copy if that host is lost.
-3. Create a backup policy with **Citadel backup** as its source.
+3. As an administrator, create a backup policy and select **Citadel system**
+   under **Source → Back up**.
 4. Select **Run** and wait for the run to succeed.
 5. Record the backup run ID, snapshot ID, and Core image reference. Export the
    bundle below to verify that you can retrieve it without signing into Citadel.

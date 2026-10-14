@@ -3,7 +3,7 @@
 This directory owns both documentation builds:
 
 - `docs/out`: the static Fumadocs product and user documentation, including the embedded ReDoc API reference at `/docs/reference/api/`;
-- `docs/api-out`: the independently deployable, read-only ReDoc API Preview.
+- `docs/api-out`: the independently deployable, read-only ReDoc API Reference.
 
 They share one npm package and lockfile, but remain separate static outputs and
 can be hosted on different domains.
@@ -33,7 +33,7 @@ npm run build --prefix docs
 npm run test:static --prefix docs
 ```
 
-Build and validate the API Preview:
+Build and validate the API Reference:
 
 ```bash
 npm run build:api --prefix docs
@@ -72,7 +72,7 @@ both channels; see [Continuous integration](CI.md#release-documentation-publicat
 for publication and retry behavior.
 
 The standalone API output uses relative asset paths. The product site's
-**API Preview** navigation link opens its embedded reference.
+**API Reference** navigation link opens its embedded reference.
 Run `npm run start:api --prefix docs -- --listen 3001` to serve the API export
 at the example address above. See [Continuous integration](CI.md) for checks.
 

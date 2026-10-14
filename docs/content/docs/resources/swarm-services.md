@@ -62,8 +62,10 @@ and writable layers remain excluded. See [Backups](/docs/resources/backups).
 Use **Backup Filter** at the right of the resource header to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
 the same coverage card as on the resource page. Manual-only or disabled policies
-show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
-all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+show amber, even after a successful manual run. Green requires an active schedule,
+a ready repository, and a successful available backup for all eligible storage.
+See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+status meanings and scheduling requirements.
 
 ## Scale A Replicated Service To Zero
 

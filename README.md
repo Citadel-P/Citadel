@@ -16,7 +16,8 @@ Build images from Git, deploy containers and Compose stacks, and manage Docker S
 
 - **Deploy applications** — build images from Git, publish to registries, deploy containers and Compose stacks, and roll back releases.
 - **Manage hosts and Swarm** — connect local Docker, remote Agents, and outbound Edge Agents; manage nodes, services, tasks, configs, and secrets.
-- **Inspect and recover** — follow logs, open terminals, track resource usage, and back up and restore the control plane and Docker volumes.
+- **Inspect workloads** — follow logs, open terminals, and track resource usage.
+- **Back up and restore** — protect the control plane, Docker volumes, and supported bind mounts with scheduled backups, retention policies, and restore workflows.
 - **Automate operations** — run TypeScript actions, schedule work, respond to webhooks, and check configuration drift.
 - **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.
 
@@ -44,10 +45,6 @@ Capabilities vary by edition; see the [Community and Team comparison](docs/conte
 Explore the [stable demo](https://demo.citadelplane.com/) with **read-only access**:
 username `demo` · password `citadel-demo-2026`.
 
-Browse the hosts, stacks, and resource details without installing anything.
-The [demo guide](docs/content/docs/guides/demo.mdx) covers the example applications,
-Git repositories, and secondary development preview, which has separate credentials.
-
 ## Install Citadel
 
 Follow the [installation guide](https://docs.citadelplane.com/docs/getting-started/install/)
@@ -56,9 +53,9 @@ to run Citadel with Docker Compose using published images.
 ## Documentation and contributing
 
 Start with the [quick start](https://docs.citadelplane.com/docs/getting-started/quick-start/)
-for first-run setup and connecting a host. The [public API reference](https://docs.citadelplane.com/docs/reference/api/)
-is currently **API Preview**. Shared documentation can be ahead of the stable
-release; use [documentation and API schemas matching your installed version](https://docs.citadelplane.com/docs/reference/releases/#documentation-and-api).
+for first-run setup and connecting a host. Use the [public API reference](https://docs.citadelplane.com/docs/reference/api/)
+to integrate Citadel with scripts and developer tools. Choose
+[documentation and API schemas matching your installed version](https://docs.citadelplane.com/docs/reference/releases/#documentation-and-api).
 
 For development and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

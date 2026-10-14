@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import LogoIcon from '@/assets/logo.svg?react';
 import { cn } from '@/lib/utils';
-import { sourceAndLicenseLinks } from '@/lib/source-license';
 
 export function AuthShell({
   title,
@@ -14,10 +13,9 @@ export function AuthShell({
   children: ReactNode;
   panelClassName?: string;
 }) {
-  const { sourceUrl, licenseUrl } = sourceAndLicenseLinks();
   return (
     <main className="flex min-h-svh w-full items-center justify-center bg-muted/20 px-4 py-10 sm:px-6">
-      <div className={cn('w-full max-w-[26rem]', panelClassName)}>
+      <div className={cn('w-full max-w-104', panelClassName)}>
         <div className="mb-8 flex items-center justify-center gap-2.5">
           <LogoIcon aria-hidden="true" className="size-8 shrink-0" />
           <span className="text-xl font-semibold tracking-tight">Citadel</span>
@@ -32,16 +30,7 @@ export function AuthShell({
           <div className="space-y-5">{children}</div>
         </section>
         <footer className="mt-4 space-y-1 text-center text-xs leading-relaxed text-muted-foreground">
-          <p>© Citadel authors and contributors. Elastic License 2.0; no warranty.</p>
-          <p>Source-available. Use, modification and redistribution are subject to the license terms.</p>
-          <nav aria-label="Source and license" className="flex justify-center gap-4">
-            <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">
-              Source code
-            </a>
-            <a href={licenseUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">
-              License terms
-            </a>
-          </nav>
+          <p>© Citadel authors and contributors. Elastic License 2.0.</p>
         </footer>
       </div>
     </main>

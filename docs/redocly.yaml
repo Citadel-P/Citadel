@@ -2,7 +2,7 @@ extends:
   - recommended
 
 apis:
-  citadel@preview:
+  citadel@v1:
     root: ../schema/public-v1.json
 
 rules:

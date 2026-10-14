@@ -265,8 +265,8 @@ configuration, such as `app-data:/app/data`, and supported bind mounts discovere
 from the synchronized container on standalone Docker.
 
 The backup shield at the far right of the main tab bar is available from every
-tab. Hover, focus, or click it to see each volume's coverage and the most recent
-successful volume backup when available.
+tab. Hover, focus, or click it to see coverage for each volume and bind mount,
+including the most recent successful backup when available.
 Use **Configure backup** to open a prefilled policy form, or follow an existing
 policy link to manage its schedule, retention, repository, and runs centrally.
 
@@ -289,8 +289,10 @@ For backup setup and restore behavior, see [Backups](/docs/resources/backups).
 Use **Backup Filter** at the right of the resource header to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
 the same coverage card as on the resource page. Manual-only or disabled policies
-show amber, even after a successful manual run. Green requires an enabled schedule and a successful available backup for
-all eligible storage. See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+show amber, even after a successful manual run. Green requires an active schedule,
+a ready repository, and a successful available backup for all eligible storage.
+See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+status meanings and scheduling requirements.
 
 ## Diagnose a Failed Deployment
 

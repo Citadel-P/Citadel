@@ -1,21 +1,24 @@
 ---
 title: "Backups"
-description: "Configure backup repositories, policies, runs, restores, and Swarm volume coverage."
+description: "Back up and restore Citadel, Docker volumes, and supported host paths with policies and repositories."
 ---
 
-Citadel provides backup and recovery for its control plane, explicit host bind mounts, and Docker named
-volumes, with snapshots stored in restic-compatible repositories.
+Citadel backs up its control plane, Docker volumes (named or anonymous), and
+supported host files and directories. Snapshots are stored in encrypted
+restic-compatible repositories.
 
 ## Make your first backup
 
 A backup needs a **repository** (where it is stored) and a **policy** (what it saves).
 This workflow backs up application data and restores a separate copy for testing.
-For Citadel's database and security keys, use a separate **Citadel backup** policy
+For Citadel's database and security keys, use a separate **Citadel system** policy
 and follow [control-plane recovery](/docs/operations/control-plane-recovery).
 
-You need an online Platform, a Docker named volume, and permission to manage
-backup repositories and policies. Confirm the application's data actually lives
-in that volume: bind mounts and container writable layers are not included.
+For this example, you need an online Platform, a Docker volume, and permission
+to manage backup repositories and policies. Confirm the application's data lives
+in the selected volume. To protect host paths, use a workload policy or
+[Host file or directory](#bind-mount-backups-and-restores). Container writable
+layers are excluded from backups.
 
 ### 1. Prepare the repository
 
@@ -56,7 +59,7 @@ See [Roles and resource overrides](/docs/guides/access-control#roles-and-resourc
 for the difference in scope, and [Backup API capabilities](/docs/reference/permissions#backup-api-capabilities)
 for interpreting list responses.
 
-1. Create a policy and choose **Docker volume** under **Source → Type**.
+1. Create a policy and choose **Docker volume** under **Source → Back up**.
 2. Select the Platform and volume. For Swarm, select its Node and check
    [Swarm backup requirements](#docker-swarm) first.
 3. On Standalone, keep **Consistency → Live**. Prepare an application-specific
@@ -88,7 +91,10 @@ support Live consistency only; see [Swarm requirements](#docker-swarm).
 
 ## Restores
 
-Docker volume snapshots can be restored from a backup run into a Docker named volume.
+Docker volume snapshots restore into Docker named volumes. Bind-mount snapshots
+restore into host paths; see [bind-mount restores](#bind-mount-backups-and-restores).
+Citadel system snapshots use the offline
+[control-plane recovery procedure](/docs/operations/control-plane-recovery).
 
 Runs marked **Succeeded with warnings** can also be restored when the selected
 snapshot succeeded and is still available. Review the warnings for excluded
@@ -97,7 +103,7 @@ cannot be restored.
 
 ### Restore a separate copy
 
-1. Open the policy's **Runs** tab and select **Restore volume** on an available
+1. Open the policy's **Runs** tab and select **Restore backup** on an available
    backup run. For a run containing several volumes, select the successful
    **Snapshot Volume** you want to recover.
 2. Choose **Target Platform**. Check the repository rules below; on Swarm, also
@@ -131,7 +137,7 @@ Repository and platform rules for restore:
 - A Core filesystem repository can restore to the local platform only.
 - A Platform filesystem repository restores on the same local platform that owns that repository path. Agent-based filesystem restore is not supported.
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
-- A Swarm child snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
+- A Swarm volume snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
 - Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
 
 For the PostgreSQL dump, security assets, clean-environment restore sequence,
@@ -219,9 +225,9 @@ Service Account's persistent API token.
 
 Supported sources:
 
-- **Citadel system**: creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
+- **Citadel system** (administrators only): creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
 - **Host file or directory**: backs up one explicitly selected existing host file or directory. Requires Platform write access. On Swarm, select the exact owning Node; policies do not follow a task to another Node.
-- **Docker Volume**: backs up one selected Docker-managed volume by its actual name, including an anonymous volume with a generated name.
+- **Docker volume**: backs up one selected Docker-managed volume by its actual name, including an anonymous volume with a generated name.
 - **Stack storage**: on standalone Docker, backs up recorded applied volumes, including named, external, and anonymous volumes, plus supported bind mounts discovered from owned containers. On Swarm, resolves supported volumes and bind paths on the current Tasks’ Nodes.
 - **Deployment storage**: backs up declared named volumes and supported bind mounts discovered from the synchronized container on standalone Docker. Runtime-only anonymous volumes still need a direct Docker volume policy.
 - **Swarm service storage**: backs up supported local Docker volumes and bind mounts on the Nodes running the managed Service’s current Tasks.
@@ -236,15 +242,15 @@ successful backup. Inspect completed runs to verify snapshots.
 
 ### Coverage on resource pages
 
-The **Container overview** shows a shield beside each Docker-managed volume. Hover over
-the shield or focus it with the keyboard to see its backup status and the last
-successful backup when available. An unprotected volume has no matching policy
-visible to you; unavailable coverage is shown separately.
+The **Container overview** shows a shield beside each Docker-managed volume and
+bind mount. Hover over the shield or focus it with the keyboard to see backup
+status and the last successful backup when available. An unprotected storage
+target has no matching policy visible to you; unsupported paths and unavailable
+coverage are shown separately.
 
 Deployment, stack, and managed Swarm Service pages show a backup shield at the
 far right of the main tab bar, available from every tab. Hover, focus, or click
-the shield to open a card with per-volume status, a protected-volume count, and
-the most recent successful volume backup when available. Press **Escape** to
+the shield to open a card with status for each storage target, a count of protected targets, and the most recent successful backup when available. Press **Escape** to
 close the card; keyboard users can press **Tab** or **Down Arrow** from the shield
 to enter it.
 
@@ -281,9 +287,8 @@ the resource's live connection when policies, runs, repositories, or inventory
 change; opening the resource does not poll backup source previews.
 
 A Swarm Stack without applied service inventory shows an explanation to apply
-the Stack and synchronize inventory first. Existing deployed Stacks can resolve
-their namespace from Citadel-owned service inventory, including Stacks created
-before namespace reservations were recorded during Apply.
+the Stack and synchronize inventory first. Coverage uses the applied namespace
+or synchronized Citadel-owned service inventory to identify its storage.
 
 Schedules, retention, repositories, and run history remain in **Backups**. A
 configured policy is not proof of a successful backup: disabled, failed, or
@@ -312,9 +317,9 @@ containers with mixed volume and bind mounts. Those paths remain excluded by the
 system-path restrictions. Check the source preview; an explicit **Host file or
 directory** policy can use the original supported host path instead.
 
-### Backup Counts
+### Backup counts
 
-The main **Backups** page lists every backup policy in the Citadel instance.
+The main **Backups** page lists the backup policies you have permission to view.
 An individual platform's **Backups** summary only counts policies whose source
 belongs to that platform:
 
@@ -329,7 +334,11 @@ platform's backup count. For example, one Citadel backup and one volume backup
 produce a total of two policies on the main page and one policy on the volume's
 platform.
 
-A Citadel backup does not archive all of `/app/data`. Git caches, stack
+## Citadel system backups
+
+A Citadel system backup protects Citadel configuration and recovery keys; use
+[control-plane recovery](/docs/operations/control-plane-recovery) for the full
+backup and restore procedure. It does not archive all of `/app/data`. Git caches, stack
 workspaces, automation working directories, logs, and backup staging files are
 recreated from database state or external systems and are deliberately
 excluded.
@@ -376,7 +385,7 @@ Swarm backup requires:
 
 Citadel rejects stale or incomplete placement, missing Node coverage, scaled-to-zero workloads, cluster volumes, volume-plugin storage, and `local` volumes configured with driver options. These workload policies also include supported bind mounts discovered from current Tasks on their exact Nodes. A direct **Host file or directory** policy remains fixed to its selected path and Node. `tmpfs`, container writable layers, Docker Secrets, and Docker Configs are not included.
 
-For a Stack or Service, snapshots are created one volume at a time. They are
+For a Stack or Service, each volume or bind mount has its own snapshot. They are
 crash-consistent at best and do not represent one atomic point in time across
 all Nodes. A failed child marks the workload run as failed, while snapshots
 already completed remain available for individual restore.
@@ -444,11 +453,13 @@ Successful runs show:
 - Bytes scanned and added
 - Any warnings
 
-If a policy contains multiple volumes, Citadel creates one backup item per volume so each volume has its own status and snapshot metadata.
+If a policy contains multiple volumes or bind mounts, Citadel creates one backup
+item per storage target, each with its own status and snapshot metadata.
 
 The policy **Runs** tab contains backup and restore execution history and logs.
 The **Activities** tab records policy creation, configuration changes, renames,
-and archival actions.
+archival actions, and backup runs being queued, started, and completed. Use
+**Backup run failed** in the event filter to find failed completions.
 
 ## Scheduled Backups
 
@@ -497,7 +508,7 @@ for repeated processing of the same run.
 The built-in **Backup Run Failed** rule creates in-app alerts. Assign active
 channels to the enabled rule in **Alert Rules** to receive notifications. Alerts
 include the policy, failure reason, and a link to the run's logs. Rule filtering
-and quiet hours still apply. **Activities → Backup Run Failed** filters failed
+and quiet hours still apply. **Activities → Backup run failed** filters failed
 backup completion events independently of the policy's notification setting.
 
 ## Practical Recommendations

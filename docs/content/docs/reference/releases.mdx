@@ -3,8 +3,9 @@ title: "Releases"
 description: "Find published versions and choose a repeatable installation."
 ---
 
-Citadel is in pre-release development. Development builds and demo deployments
-do not establish a supported public upgrade path.
+Use a stable release for your installation. Development builds (`-dev.N`) are
+for testing upcoming changes; demo deployments let you explore Citadel before
+installing it.
 
 Use the [Citadel releases page](https://github.com/Citadel-P/Citadel/releases)
 to check which versions and images are available. Read the notes for the version
@@ -23,8 +24,8 @@ Internal build archives and recovery journals are not installation downloads.
 
 ## Choose an image version
 
-Published images have aliases for the full version, the minor version, and the
-major version.
+Stable images are published under their full version, with moving aliases for
+the latest release in each minor and major version.
 
 For a release numbered `0.1.2`, its version aliases are `0.1.2`, `0.1`, and `0`.
 Minor and major aliases can later move. Use an exact patch version or digest
@@ -32,10 +33,18 @@ when you need a repeatable installation. Core releases also publish `latest`,
 the default for new installations. Pulling a newer image does not update a
 running container until you recreate it with `docker compose up -d`.
 
+Development images use exact tags such as `0.1.3-dev.1` and the moving `dev`
+alias. They do not update stable aliases or `latest`.
+
 ## Documentation and API
 
-Use documentation and the public API schema that match your installed version.
-See [API Preview](/docs/reference/api) for reference options, including Swagger UI
+The hosted documentation follows the newest published version, including
+development releases, so it can describe features ahead of the stable channel.
+For version-specific instructions, read `docs/content/docs` at your release tag
+in the source repository. Use your installation's `/openapi/public/v1.json`
+when building integrations; enable Swagger as described in the API reference.
+
+See [API Reference](/docs/reference/api) for reference options, including Swagger UI
 on your own installation.
 
 For installation steps, see [install Citadel](/docs/getting-started/install).

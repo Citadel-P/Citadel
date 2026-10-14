@@ -63,10 +63,10 @@ and [MIT](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab
 Official Core and Agent images carry the root license and these known notices;
 they are not a complete inventory of third-party obligations.
 
-Source and license links remain available on the sign-in/setup screens and
-in the account menu. Commit-specific source links are retained for transparency,
-not as a network-source-disclosure requirement imposed by ELv2. Third-party
-license obligations still apply. This update does not revoke rights already
+The sign-in/setup screens identify Citadel's authors and source license. The
+source repository and README provide the full license terms, and both Core and
+Agent images include them at `/app/LICENSE`. Third-party license obligations
+still apply. This update does not revoke rights already
 granted for earlier copies; see the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/docs/LEGAL-RELEASE-CHECKLIST.md)
 for ownership, earlier public snapshots and release review.
 

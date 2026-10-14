@@ -7,11 +7,11 @@ These steps update Core in an existing installation using published Citadel
 images. Plan for a brief interruption to the UI, API, live updates, and Core
 jobs while the container is replaced. Running Docker workloads normally continue.
 
-Citadel is in pre-release development; in-place database upgrades between
-development builds are not guaranteed. Confirm database compatibility before
-using the image-replacement steps below. A changed development baseline may
-require a clean installation and a separately verified data import. Preserve
-the original database and recovery keys until that import is verified.
+Follow the target release notes for database compatibility and any required
+migration steps before replacing images. Development builds can change the
+database baseline and may require a clean installation with a separately
+verified data import. Preserve the original database and recovery keys until
+recovery is verified.
 
 ## Release notifications
 
@@ -32,7 +32,7 @@ Updates remain manual. With checks disabled, follow the
 2. Confirm that sign-in, PostgreSQL, Platform connections, and important
    applications are healthy. Wait for active deployments, builds, backups, and
    restores to finish; arrange a maintenance window for scheduled operations.
-3. Run a **Citadel backup** policy and wait for success. Record its snapshot ID
+3. Run a **Citadel system** policy and wait for success. Record its snapshot ID
    and verify that you can export it using credentials stored outside Citadel.
    Follow [control-plane recovery](/docs/operations/control-plane-recovery#create-a-backup).
 4. Keep the current Compose files, overlays, private `.env`, external recovery

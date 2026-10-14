@@ -69,7 +69,7 @@ const resources = [
     icon: HardDrive,
     title: "Plan for recovery",
     description:
-      "Back up the Citadel control plane and Docker volumes, with policies for retention and restore.",
+      "Back up the Citadel control plane, Docker volumes, and supported bind mounts, with policies for retention and restore.",
     href: "/docs/resources/backups",
     link: "Backups",
   },
