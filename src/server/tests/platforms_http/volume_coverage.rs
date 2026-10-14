@@ -213,7 +213,7 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
 
     hub.publish_resource_observation(
         f.platform_id,
-        Some("node-1".into()),
+        Some("node-1"),
         "create",
         &citadel_platforms::jobs::ResourceDelta::Volume {
             id: "data".into(),
