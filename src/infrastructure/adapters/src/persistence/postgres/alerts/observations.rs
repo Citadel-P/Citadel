@@ -1,4 +1,4 @@
-//! Durable job failure snapshots. Per-rule receipts make interrupted evaluation retryable.
+//! Durable alert observations. Per-rule receipts make interrupted evaluation retryable.
 use super::*;
 
 pub async fn enqueue(

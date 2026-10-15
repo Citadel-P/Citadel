@@ -43,16 +43,35 @@ pub(super) async fn finish(
     claim: &DeploymentUpdateCheck,
     update: Option<&AutoUpdateState>,
 ) -> Result<(), DeploymentError> {
+    let mut tx = store.pool.begin().await.map_err(storage)?;
     let changed = sqlx::query("UPDATE deployments SET updatecheckid=NULL,controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1,autoupdatestate_lastcheckedat=COALESCE($3,autoupdatestate_lastcheckedat),autoupdatestate_status=COALESCE($4,autoupdatestate_status),autoupdatestate_currentdigest=CASE WHEN $4::text IS NULL THEN autoupdatestate_currentdigest ELSE $5 END,autoupdatestate_remotedigest=CASE WHEN $4::text IS NULL THEN autoupdatestate_remotedigest ELSE $6 END,autoupdatestate_lasterror=CASE WHEN $4::text IS NULL THEN autoupdatestate_lasterror ELSE $7 END WHERE id=$1 AND updatecheckid=$2 AND controlstate='Processing'")
         .bind(claim.deployment.id).bind(claim.lease_id).bind(update.map(|v|v.last_checked_at)).bind(update.map(|v|v.status.as_str()))
         .bind(update.and_then(|v|v.current_digest.as_deref())).bind(update.and_then(|v|v.remote_digest.as_deref())).bind(update.and_then(|v|v.last_error.as_deref()))
-        .execute(&store.pool).await.map_err(storage)?.rows_affected();
+        .execute(&mut *tx).await.map_err(storage)?.rows_affected();
     if changed != 1 {
         return Err(DeploymentError::Conflict(
             "The Deployment update check lease changed.".into(),
         ));
     }
-    Ok(())
+    if let Some(digest) = update
+        .filter(|state| {
+            matches!(
+                state.status,
+                citadel_primitives::AutoUpdateStatus::UpToDate
+                    | citadel_primitives::AutoUpdateStatus::UpdateAvailable
+            )
+        })
+        .and_then(|state| state.current_digest.as_ref())
+    {
+        crate::persistence::postgres::alerts::update_resolution::enqueue(
+            &mut tx,
+            claim.deployment.id,
+            &citadel_alerts::update_resolution::VerifiedUpdate::DeploymentImage(digest.clone()),
+        )
+        .await
+        .map_err(storage)?;
+    }
+    tx.commit().await.map_err(storage)
 }
 
 pub(super) async fn recover(

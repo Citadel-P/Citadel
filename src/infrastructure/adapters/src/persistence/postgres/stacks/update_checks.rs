@@ -21,6 +21,31 @@ pub(super) async fn save(
         .execute(&mut *tx).await.map_err(storage)?.rows_affected()!=1 {
         return Err(StackError::Conflict("The Stack changed during the update check. Check again.".into()));
     }
+    let resolution = &crate::persistence::postgres::alerts::update_resolution::stack_images(state);
+    crate::persistence::postgres::alerts::update_resolution::enqueue(
+        &mut tx,
+        expected.id,
+        resolution,
+    )
+    .await
+    .map_err(storage)?;
+    if let StackUpdateState::Git {
+        recreate_stack_on_new_commit_state,
+        ..
+    } = state
+    {
+        crate::persistence::postgres::alerts::update_resolution::enqueue(
+            &mut tx,
+            expected.id,
+            &citadel_alerts::update_resolution::VerifiedUpdate::StackGit(
+                recreate_stack_on_new_commit_state
+                    .current_commit_sha
+                    .clone(),
+            ),
+        )
+        .await
+        .map_err(storage)?;
+    }
     tx.commit().await.map_err(storage)
 }
 pub(super) async fn candidates(

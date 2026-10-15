@@ -31,5 +31,6 @@ pub use vocabulary::{AlertSeverity, AlertType};
 mod tests;
 
 pub mod platform_metrics;
+pub mod update_resolution;
 
 pub use runtime::PendingAlertObservations;

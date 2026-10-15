@@ -383,6 +383,19 @@ impl PostgresDeploymentRepository {
                     "The Deployment changed while Apply was completing.".to_owned(),
                 ));
             }
+            if let Some(digest) =
+                digest.filter(|_| matches!(spec.image, DeploymentImageInfo::External { .. }))
+            {
+                crate::persistence::postgres::alerts::update_resolution::enqueue(
+                    &mut tx,
+                    claim.id,
+                    &citadel_alerts::update_resolution::VerifiedUpdate::DeploymentImage(
+                        digest.into(),
+                    ),
+                )
+                .await
+                .map_err(storage)?;
+            }
             insert_apply_activity(
                 &mut tx,
                 actor_id,

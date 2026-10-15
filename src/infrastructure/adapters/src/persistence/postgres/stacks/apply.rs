@@ -254,6 +254,17 @@ impl PostgresStackRepository {
                 let mut state = StackUpdateState::from_storage_value(
                     row.try_get("stackupdatestate").map_err(storage)?,
                 )?;
+                if result.status == StackReleaseStatus::Healthy {
+                    crate::persistence::postgres::alerts::update_resolution::enqueue(
+                        &mut tx,
+                        claim.stack_id,
+                        &citadel_alerts::update_resolution::VerifiedUpdate::StackGit(
+                            source.resolved_commit_sha.clone(),
+                        ),
+                    )
+                    .await
+                    .map_err(storage)?;
+                }
                 state
                     .record_applied_commit(&source.resolved_commit_sha, Utc::now())
                     .then(|| state.to_storage_value())

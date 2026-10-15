@@ -55,6 +55,9 @@ mod releases;
 #[path = "stacks_http/updates.rs"]
 mod updates;
 
+#[path = "stacks_http/applied_images.rs"]
+mod applied_images;
+
 #[derive(Debug, Clone)]
 struct ApplyCall {
     platform_type: String,

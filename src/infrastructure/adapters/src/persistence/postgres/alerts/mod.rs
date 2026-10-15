@@ -40,5 +40,6 @@ use validation::*;
 mod configuration;
 
 pub mod observations;
+pub(crate) mod update_resolution;
 
 pub mod platform_metrics;

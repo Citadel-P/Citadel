@@ -24,6 +24,13 @@ impl Scanner {
     }
 }
 impl StackUpdateScanner for Scanner {
+    fn scan_images<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_images_cached(stack, cancel)
+    }
     fn scan_cached<'a>(
         &'a self,
         stack: &'a citadel_stacks::Stack,
@@ -231,7 +238,7 @@ async fn verify_single_flight(stacks: &StackService, actor: ActorId, id: Uuid, s
         .unwrap();
 }
 
-struct GitSource;
+pub(super) struct GitSource;
 impl citadel_stacks::StackSourceMaterializerPort for GitSource {
     fn materialize<'a>(
         &'a self,

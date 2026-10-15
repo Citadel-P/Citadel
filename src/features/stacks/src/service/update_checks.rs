@@ -12,6 +12,12 @@ enum CheckMode {
 }
 
 pub trait StackUpdateScanner: Send + Sync {
+    /// Read deployed images and current registry digests without checking Git.
+    fn scan_images<'a>(
+        &'a self,
+        stack: &'a crate::Stack,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>>;
     fn scan_cached<'a>(
         &'a self,
         stack: &'a crate::Stack,
@@ -273,11 +279,6 @@ impl StackService {
                     self.report_update(&checked, kind, applied_commit.as_deref())
                         .await;
                     applied?;
-                    if success && !git {
-                        // Observe the images actually pulled, which may differ from
-                        // the digest seen before Apply; never invent a new baseline.
-                        self.check_updates_mode(actor, true, id, CheckMode::Images, cancellation).await?;
-                    }
                     Ok::<_, StackError>(())
                 }
                 .await;
@@ -367,5 +368,53 @@ impl StackService {
         if let Err(error) = alerts.observe(&observation).await {
             tracing::warn!(%error,stack_id=%stack.id,"Stack update Alert evaluation failed");
         }
+    }
+}
+
+/// Refresh an observation only after the durable Apply outcome has committed.
+/// A failed scan must not turn a successful deployment into a failed operation.
+pub(super) async fn refresh_applied_images(
+    store: &dyn StackRepository,
+    scanner: Option<&dyn StackUpdateScanner>,
+    actor: ActorId,
+    administrator: bool,
+    claim: &StackOperationClaim,
+    cancellation: &CancellationToken,
+) -> Result<(), StackError> {
+    let Some(scanner) = scanner else {
+        return Ok(());
+    };
+    let cancel = cancellation.child_token();
+    let _guard = cancel.clone().drop_guard();
+    let refresh = async {
+        let snapshot = store
+            .get_authorized(actor, administrator, claim.stack_id)
+            .await?;
+        if snapshot.current_stack_release_id != claim.release_id
+            || snapshot.row_version != claim.row_version + 1
+            || snapshot.control_state != citadel_primitives::ResourceControlState::Idle
+        {
+            return Err(StackError::Conflict(
+                "The Stack changed after Apply.".into(),
+            ));
+        }
+        if !snapshot
+            .spec
+            .as_ref()
+            .is_some_and(|spec| spec.common().registry_id.is_some_and(|id| !id.is_nil()))
+        {
+            return Ok(());
+        }
+        // Compare against observed runtime digests, never assume the previously
+        // advertised remote digest is what Docker actually deployed.
+        let next = scanner.scan_images(&snapshot, &cancel).await?;
+        store
+            .save_update_check(actor, administrator, &snapshot, &next)
+            .await
+    };
+    tokio::select! {
+        () = cancel.cancelled() => Err(StackError::Cancelled),
+        result = tokio::time::timeout(Duration::from_secs(60), refresh) =>
+            result.map_err(|_| StackError::Runtime("Post-Apply image update check timed out.".into()))?,
     }
 }
