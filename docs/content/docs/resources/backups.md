@@ -79,9 +79,11 @@ requires an enabled schedule, a ready repository, and a successful available bac
 
 ### Backup consistency
 
-The form offers **Stop attached containers**, but the current backup execution
-path does not stop or restart workload containers. Use **Live** and arrange
-application consistency separately. Do not rely on that setting to pause writes.
+Volume backups use **Live** consistency. **Stop attached containers** is unavailable
+for new policies and execution; Citadel does not stop or restart applications for a backup.
+An existing policy with that setting can be disabled without changing its source.
+Select **Live** before enabling or running it again. Arrange
+application consistency separately, for example with an application-native dump.
 
 For Standalone workloads that require downtime, stop the relevant application
 through its normal controls before starting the backup and restart it afterward.
@@ -101,7 +103,132 @@ snapshot succeeded and is still available. Review the warnings for excluded
 sources or retention problems; failed items and expired or missing snapshots
 cannot be restored.
 
+### Copy a workload with data
+
+On a Deployment, Stack or managed Swarm Service page, open **Duplicate**. Citadel
+includes copy availability in the resource details and refreshes it through realtime
+updates when configuration, backup availability or access changes. Opening the menu
+does not request a copy preview. **Configuration + data** is disabled when copying
+is unavailable, with the reason shown under the option. A backup policy is not
+required to copy current data. **Configuration only** remains available.
+
+Choose **Configuration + data** to open the three-step wizard:
+
+1. **Configure:** name the new resource, select a compatible destination Platform
+   (and node for Swarm), and choose **Copy current data** or **Use an existing backup**.
+2. **Select data:** review the named volumes and confirm source consistency for
+   current data, or choose an available successful backup for each volume.
+3. **Review:** check the destination volumes and shared references, then confirm.
+
+The wizard checks again before creating a copy. If storage changes after opening
+the menu and no supported named volumes remain, it offers **Configuration only**
+instead. A workload without volume mappings has no volume snapshots to select;
+data in memory or the container writable layer is not copied.
+
+**Copy current data** takes a temporary, encrypted Restic snapshot of each source
+volume and restores it into a new volume. It requires no backup policy, schedule,
+or backup repository. The temporary repository lives in an isolated helper
+container and is removed with the helper; it does not appear in backup history or
+provide ongoing backup protection. Allow free disk space on the source host for
+both the temporary snapshot and the new volume. Each volume job has a four-hour
+time limit. Jobs run one at a time.
+
+Current-data copying is a file-level operation, not an atomic application snapshot.
+Stop or quiesce databases and related writers before confirming, and keep them
+quiesced until the operation finishes. Citadel mounts the source read-only and
+does not stop or restart workloads automatically. Use application-consistent
+existing backups when interrupting the live workload is unsuitable.
+
+Choose the **Destination platform** in the first step. Only compatible Platforms
+with write access appear: Standalone to Standalone, or Swarm to Swarm. Copying to
+another Platform or Swarm node uses existing backups from an S3-compatible
+repository reachable from the destination. Host-local filesystem repositories
+are not offered for these transfers. **Copy current data** remains on the source
+Platform and exact node.
+
+For Swarm Services, select a Ready, Active destination node. Citadel pins the
+copied Service and its restored volumes to that node. Referenced Swarm networks,
+secrets and configs must already exist with matching names on the destination;
+missing, stale or ambiguous matches block the copy. Their contents are not copied.
+Other placement constraints remain unchanged and should be reviewed before Apply.
+Standalone network names and image references are retained; ensure they are
+available on the destination. A local image ID is not transferred with the data.
+
+Citadel restores each distinct volume into a fresh volume, then creates an
+undeployed resource after every restore succeeds. A volume shared by multiple
+Stack services is restored once. The source workload and storage are unchanged.
+Automatic updates, webhooks, deployment hooks and build-triggered redeployment
+are disabled on the copy. Review ports, credentials, networks and external
+services before choosing **Apply**; these references may still be shared.
+
+Supported storage is plain local Docker named volumes without custom driver
+options. Standalone Deployments and Web Editor Stacks are supported. Swarm
+Services must have one replica and be pinned to an exact `node.id`; their copies
+can restore to a selected Ready, Active node on a compatible Swarm. Git Stacks, Swarm Stacks, bind mounts, anonymous mount
+mappings and unresolved Compose indirection are blocked. This restriction is
+specific to coordinated copying; ordinary backup and restore support is
+unchanged. Snapshots are selected by their source Platform, node, volume and
+run item. The selector searches the most recent 1,000 authorized backup runs.
+
+You need read access to the source, permission to create its resource type,
+write access to both source and destination Platforms, and permission for the selected data source:
+**Copy current data** requires the Platform **Download** capability;
+**Use an existing backup** requires **Restore** execution permission on each
+selected backup policy. Copying scoped bindings also requires binding read and write
+permissions. Source configuration, bindings and permissions are checked again
+when starting and before creating the copy. Destination identity, placement and
+referenced Swarm resources are also revalidated; changes block completion. A completed review expires after
+30 minutes if it has not been started.
+
+Once started, the operation continues if you close the dialog or disconnect.
+Progress updates arrive through the realtime connection, including per-volume
+status. Queued and active stages show a spinner. Reconnecting reloads the
+persisted operation state without restarting the copy.
+Keep its page URL to reopen progress after a refresh. Opening the finished
+destination clears the progress link from the source page, so its next
+**Duplicate with data** action starts a new review. Retrying Start uses the
+same operation and restore records. The copy appears only after all restores
+succeed, with an **Open** link; it is never applied automatically. Apply checks
+that the restored volumes still exist, belong to this operation, and remain on
+the reviewed destination Platform and exact Swarm node. A copied Stack locks its
+Platform selector because its copied volumes belong to that Platform; create another
+copy to choose a different destination. Ordinary configuration-only drafts remain
+movable. Changing Platform or node placement
+does not move storage and blocks Apply.
+
+Current-data volume jobs run one at a time. Other copies can still finalize or clean
+up while a current-data copy is running. If recording a completed job fails
+because the database is temporarily unavailable, Citadel retries the result write
+without copying the data again. A claim whose database acknowledgement was lost
+is marked interrupted before another job starts.
+
+If Core exits before an active restore or current-data job records its result,
+startup recovery marks that job interrupted and fails the copy without creating a destination
+resource. Citadel does not replay the interrupted restore automatically. Inspect
+and clean up retained volumes, then start a new reviewed copy. Unclaimed queued
+restores can still run after startup.
+
+If a restore fails or the copy is cancelled, no destination resource is created.
+Completed destination volumes are retained; failed restores may remove their own
+partial volumes. The progress card lists every destination name. **Clean up volumes**
+is an explicit, name-confirmed action that removes only unused volumes whose
+ownership matches this operation; it never removes the source volumes or a
+replacement volume created by someone else. In-use volumes are retained.
+For current-data copies, failures retain partial destination volumes. Helper
+cleanup is attempted on completion, cancellation and errors. If the host is
+unreachable or Core exits, a helper may remain until its bounded lifetime ends
+or **Clean up volumes** can reach it. Cleanup verifies helper and volume ownership.
+When using existing backups, selected repositories cannot run backups or pruning
+while the copy is active, so retention cannot remove its selected snapshots mid-copy.
+
+Backups taken at different times are not a coordinated application snapshot.
+Use application-consistent backups for databases and related services; see
+[Backup consistency](#backup-consistency).
+
 ### Restore a separate copy
+
+Named-volume restores preserve numeric ownership and permissions of both the
+volume root directory and its contents.
 
 1. Open the policy's **Runs** tab and select **Restore backup** on an available
    backup run. For a run containing several volumes, select the successful
@@ -128,7 +255,23 @@ one to restore; **Target Platform** and **Target Volume** specify where it goes.
 The example restores `application_data` as `application_data_recovered`. Review
 all three before selecting **Restore**.
 
-Overwrite restore is destructive. When **Overwrite existing target volume** is enabled, Citadel deletes and recreates the target volume before restoring the snapshot. The UI requires you to type the exact target volume name before the restore can start. Citadel rejects overwrite when the target volume is currently in use.
+Overwrite restore is destructive. When **Overwrite existing target volume** is enabled,
+Restic restores into that volume and removes files absent from the snapshot. It
+does not delete and recreate the Docker volume. The UI requires you to type the
+exact target volume name before the restore can start. Citadel rejects overwrite
+when the target volume is currently in use.
+
+For a new destination, Citadel creates a plain local volume with restore ownership
+labels and verifies them again after attaching the restore helper. A conflicting
+volume is never overwritten or removed. Failed or cancelled restores retain their
+destination volume for inspection, including any partially restored files. Choose
+a different new name for a retry, or inspect and explicitly remove the unused
+destination before retrying.
+
+If restore-helper creation is interrupted, Citadel attempts cleanup using the
+helper's unique ownership label and container ID. It leaves unrelated containers
+untouched and reports when cleanup cannot be verified, so you can inspect the
+destination before retrying.
 
 Restore history is shown in the same **Runs** tab under **Restore runs**. Use the log action on a restore run to inspect the restore output after the progress sheet is closed.
 

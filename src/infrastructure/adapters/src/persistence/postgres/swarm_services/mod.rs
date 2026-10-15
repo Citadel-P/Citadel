@@ -52,3 +52,5 @@ pub(crate) use activity::{activity_snapshot, insert_swarm_activity};
 pub mod bindings;
 
 pub(crate) mod runtime_observation;
+
+pub(crate) use mutations::create_in_transaction;

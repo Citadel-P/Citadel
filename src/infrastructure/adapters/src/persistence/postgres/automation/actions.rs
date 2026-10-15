@@ -34,6 +34,22 @@ impl PostgresAutomationRepository {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let source = if let Some(source_id) = input.duplicate_source_id {
+                let name: Option<String> =
+                    sqlx::query_scalar("SELECT name FROM actions WHERE id=$1 FOR SHARE")
+                        .bind(source_id)
+                        .fetch_optional(&mut *tx)
+                        .await
+                        .map_err(storage)?;
+                Some(citadel_activities::ActivitySourceResource {
+                    resource_id: source_id,
+                    resource_name: name.ok_or(AutomationError::NotFound)?,
+                    resource_type: citadel_activities::ActivityResourceType::AutomationAction,
+                })
+            } else {
+                None
+            };
+
             sqlx::query("INSERT INTO actions(id,alertonfailure,code,createdbyactorid,defaultargsjson,description,enabled,name,runasactorid,schedulecron,scheduleenabled,scheduletimezone,timeoutseconds,webhook) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)")
                 .bind(id).bind(input.alert_on_failure).bind(&input.code).bind(actor.value())
                 .bind(parse_args(input.default_args_json.as_deref().unwrap_or("{}"))?)
@@ -65,6 +81,7 @@ impl PostgresAutomationRepository {
                 &action,
                 actor,
                 ActivityEventInfo::ActionCreated {
+                    source,
                     action: action.snapshot(),
                 },
             )

@@ -49,6 +49,7 @@ pub(super) fn map_stack(
             )
             .map_err(storage)?,
             platform_id: Some(row.try_get("platformid").map_err(storage)?),
+            has_copied_storage: row.try_get("has_copied_storage").map_err(storage)?,
             version: Some(row.try_get("version").map_err(storage)?),
             spec: Some(StackSpec::from_storage_value(
                 row.try_get("spec").map_err(storage)?,

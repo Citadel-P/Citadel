@@ -1,3 +1,5 @@
+import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
+import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
@@ -34,9 +36,6 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
-import { Button } from '@/components/ui/button';
-import { Copy } from 'lucide-react';
-import { useNavigate } from 'react-router';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -132,20 +131,15 @@ export const DeploymentFormComponents: RequiredFormComponents = {
 };
 
 const DuplicateDeploymentConfigButton = ({ deployment }: { deployment: DeploymentView }) => {
-  const navigate = useNavigate();
-  const disabled = !hasCapability(deployment, 'canRead') || !hasCapability(deployment, 'canWrite');
-
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 rounded-sm text-xs"
-      disabled={disabled}
-      onClick={() => navigate(`/deployments/add?duplicateFrom=${deployment.id}`)}>
-      <Copy className="size-3.5" />
-      Duplicate Config
-    </Button>
+    <DuplicateWorkload
+      kind={ResourceCopyKind.Deployment}
+      sourceId={deployment.id}
+      sourceName={deployment.name}
+      copyEligibility={deployment.copyEligibility}
+      configurationHref={`/deployments/add?duplicateFrom=${deployment.id}`}
+      disabled={!hasCapability(deployment, 'canRead') || !hasCapability(deployment, 'canWrite')}
+    />
   );
 };
 

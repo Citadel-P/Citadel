@@ -1,3 +1,4 @@
+import { ResourceCopyEligibilityStatus } from '@/api/generated/api.types';
 import { createManagedSwarmService } from '@/test/factories/resources';
 import { SwarmServiceSynchronizationState, type ManagedSwarmServiceView } from '@/api/generated/api.types';
 import { normalizeManagedSwarmService } from './useSwarmServiceGroup';
@@ -63,7 +64,7 @@ it('accepts new backup coverage and preserves it when a list update omits the de
     volumes: [],
     policies: [],
     warnings: [],
-      reasons: [],
+    reasons: [],
     unavailable: false,
     canConfigure: false,
     hasResourcePolicy: false,
@@ -73,4 +74,17 @@ it('accepts new backup coverage and preserves it when a list update omits the de
   const next = normalizeManagedSwarmService(current, { ...current, backupCoverage: after });
   expect(next.backupCoverage).toEqual(after);
   expect(normalizeManagedSwarmService(next, { ...current, backupCoverage: undefined }).backupCoverage).toEqual(after);
+});
+
+it('refreshes copy eligibility and preserves it across list-only updates', () => {
+  const current = {
+    ...createManagedSwarmService(),
+    copyEligibility: { status: ResourceCopyEligibilityStatus.Available, reason: null },
+  };
+  const unavailable = { status: ResourceCopyEligibilityStatus.Unavailable, reason: 'A backup is no longer available.' };
+  const next = normalizeManagedSwarmService(current, { ...current, copyEligibility: unavailable });
+  expect(next.copyEligibility).toEqual(unavailable);
+  expect(normalizeManagedSwarmService(next, { ...current, copyEligibility: undefined }).copyEligibility).toEqual(
+    unavailable,
+  );
 });

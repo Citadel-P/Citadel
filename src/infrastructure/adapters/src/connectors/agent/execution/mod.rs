@@ -310,6 +310,42 @@ impl AgentExecutionClient {
         }
     }
 
+    pub async fn create_volume(
+        &self,
+        input: &citadel_platforms::CreateRuntimeVolume,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_platforms::RuntimeVolumeSummary, RuntimeCapabilityError> {
+        use citadel_platforms::VolumeMutationPort;
+        match self {
+            Self::Direct(client) => client.create_volume(input, cancellation).await,
+            Self::Edge(session) => {
+                crate::connectors::edge::EdgeRuntime {
+                    session: session.clone(),
+                }
+                .create_volume(input, cancellation)
+                .await
+            }
+        }
+    }
+
+    pub async fn inspect_volume(
+        &self,
+        name: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_platforms::RuntimeVolumeSummary, RuntimeCapabilityError> {
+        use citadel_platforms::VolumeObservationPort;
+        match self {
+            Self::Direct(client) => client.inspect_volume(name, cancellation).await,
+            Self::Edge(session) => {
+                crate::connectors::edge::EdgeRuntime {
+                    session: session.clone(),
+                }
+                .inspect_volume(name, cancellation)
+                .await
+            }
+        }
+    }
+
     pub async fn volume_exists(
         &self,
         name: &str,

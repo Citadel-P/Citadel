@@ -352,6 +352,16 @@ impl DeploymentRuntime for DeploymentRuntimeRouter {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeDeploymentResult, DeploymentError>> {
         async move {
+            crate::connectors::routing::resource_copies::verify_destination(
+                &self.pool,
+                &self.runtime,
+                command.deployment_id,
+                platform_id,
+                None,
+                cancellation,
+            )
+            .await
+            .map_err(DeploymentError::Runtime)?;
             let target = self.platform(platform_id).await?;
             if target.connector == citadel_platforms::ConnectorKind::Local {
                 return self.apply_local(command, cancellation).await;

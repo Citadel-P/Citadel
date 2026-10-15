@@ -1,4 +1,5 @@
 use super::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
+use super::restore_storage::RestoreVolumeOwner;
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
 use citadel_platforms::PlatformInfoPort;
 use std::ffi::OsString;
@@ -683,6 +684,7 @@ impl DockerResticBackupExecutor {
                     item.host_path.as_deref().unwrap_or(&item.volume_name),
                     true,
                     item.host_path.is_some(),
+                    "/source",
                 )),
                 timeout,
                 cancellation,
@@ -1023,48 +1025,165 @@ impl DockerResticBackupExecutor {
             )
             .await;
         self.cleanup(&metadata_name).await;
-        let subtree = snapshot_subtree(&metadata?.stdout, snapshot)?;
-        let created = !existing;
-        if created {
+        let (snapshot, root) = snapshot_root(&metadata?.stdout, snapshot)?;
+        let owner = RestoreVolumeOwner::new(claim.run.target_platform_id, claim.run.id);
+        if !existing {
+            let request = owner.request(volume);
+            let mut args = vec![
+                "volume".into(),
+                "create".into(),
+                "--driver".into(),
+                "local".into(),
+            ];
+            for (key, value) in request.labels {
+                args.extend(["--label".into(), format!("{key}={value}").into()]);
+            }
+            args.push(volume.into());
+            self.execute(args, vec![], Duration::from_secs(30), cancellation)
+                .await?;
+            // A concurrent creator may have won the name. Docker returns that
+            // existing volume without applying our ownership labels.
+            self.verify_local_restore_owner(&owner, volume, cancellation)
+                .await?;
+        }
+        let (mut args, env) = self.base_args(&name, &claim.repository).await?;
+        // A created (even stopped) helper holds a reference to the volume.
+        // Recheck ownership after attaching it, before any restore can start.
+        args[0] = "create".into();
+        // Each attempt has its own identity, so recovery cannot delete an older
+        // helper or an unrelated container that won the same name.
+        let helper_attempt = Uuid::now_v7();
+        args.extend([
+            "--label".into(),
+            format!("citadel.backup.restoreHelperId={helper_attempt}").into(),
+        ]);
+        args.extend([
+            "--volume".into(),
+            format!("{volume}:/restore{root}").into(),
+            self.image.clone().into(),
+            "restore".into(),
+            snapshot.into(),
+            "--target".into(),
+            "/restore".into(),
+            "--delete".into(),
+        ]);
+        let created = self
+            .execute(args, env, Duration::from_secs(60), cancellation)
+            .await
+            .and_then(|output| restore_helper_identity(&output));
+        let container_id = match created {
+            Ok(id) => id,
+            Err(mut error) => {
+                // Docker may have committed the create before the CLI lost its
+                // response. Recover with a fresh token even during cancellation.
+                if self
+                    .cleanup_ambiguous_restore_helper(&name, helper_attempt)
+                    .await
+                    .is_err()
+                {
+                    error.push_str(" Restore helper cleanup could not be verified; inspect the destination before retrying.");
+                }
+                return Err(error);
+            }
+        };
+        let output = async {
+            if !existing {
+                self.verify_local_restore_owner(&owner, volume, cancellation)
+                    .await?;
+            }
+            let usage = self.execute(
+                vec![
+                    "ps".into(), "--all".into(), "--quiet".into(),
+                    "--no-trunc".into(), "--filter".into(), format!("volume={volume}").into(),
+                ],
+                vec![], Duration::from_secs(30), cancellation,
+            ).await?;
+            let ids = String::from_utf8_lossy(&usage.stdout);
+            if usage.stdout_truncated
+                || ids.lines().any(|id| id.trim() != container_id)
+                || !ids.lines().any(|id| id.trim() == container_id)
+            {
+                return Err("Target Volume usage could not be verified or it is in use by another container.".into());
+            }
             self.execute(
-                vec!["volume".into(), "create".into(), volume.into()],
+                vec![
+                    "start".into(),
+                    "--attach".into(),
+                    container_id.clone().into(),
+                ],
+                vec![],
+                self.restore_timeout(),
+                cancellation,
+            )
+            .await
+        }
+        .await;
+        self.cleanup(&container_id).await;
+        // Preserve partial data for inspection. Never remove a volume based on
+        // a pre-create existence check or a remembered name after cancellation.
+        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+    }
+
+    async fn verify_local_restore_owner(
+        &self,
+        owner: &RestoreVolumeOwner,
+        volume: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), String> {
+        let output = self
+            .execute(
+                vec![
+                    "volume".into(),
+                    "inspect".into(),
+                    "--format".into(),
+                    owner.local_probe(volume).into(),
+                    volume.into(),
+                ],
                 vec![],
                 Duration::from_secs(30),
                 cancellation,
             )
             .await?;
+        if output.stdout_truncated || String::from_utf8_lossy(&output.stdout).trim() != "true" {
+            return Err(RestoreVolumeOwner::conflict());
         }
-        let (mut args, env) = self.base_args(&name, &claim.repository).await?;
-        args.extend([
-            "--volume".into(),
-            format!("{volume}:/restore/data").into(),
-            self.image.clone().into(),
-            "restore".into(),
-            subtree.into(),
-            "--target".into(),
-            "/restore/data".into(),
-            "--delete".into(),
-        ]);
+        Ok(())
+    }
+
+    async fn cleanup_ambiguous_restore_helper(
+        &self,
+        name: &str,
+        attempt: Uuid,
+    ) -> Result<(), String> {
+        let cancellation = CancellationToken::new();
+        // Only emit an immutable ID, never the inspect document containing the
+        // helper's repository credentials. A name alone is not ownership proof.
+        let probe = format!(
+            "{{{{if and (eq (index .Config.Labels \"citadel.backup.restoreHelperId\") \"{attempt}\") (eq (index .Config.Labels \"com.citadel.system-role\") \"backup-helper\")}}}}{{{{.Id}}}}{{{{end}}}}"
+        );
         let output = self
-            .execute(args, env, self.restore_timeout(), cancellation)
-            .await;
-        self.cleanup(&name).await;
-        if output.is_err() && created {
-            let _ = self
-                .execute(
-                    vec![
-                        "volume".into(),
-                        "rm".into(),
-                        "--force".into(),
-                        volume.into(),
-                    ],
-                    vec![],
-                    Duration::from_secs(30),
-                    &CancellationToken::new(),
-                )
-                .await;
-        }
-        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+            .execute(
+                vec![
+                    "container".into(),
+                    "inspect".into(),
+                    "--format".into(),
+                    probe.into(),
+                    name.into(),
+                ],
+                vec![],
+                Duration::from_secs(30),
+                &cancellation,
+            )
+            .await?;
+        let id = restore_helper_identity(&output)?;
+        self.execute(
+            vec!["rm".into(), "--force".into(), id.into()],
+            vec![],
+            Duration::from_secs(30),
+            &cancellation,
+        )
+        .await?;
+        Ok(())
     }
 
     // A separate credential-free probe checks the daemon host, not Core's
@@ -1127,7 +1246,7 @@ impl DockerResticBackupExecutor {
             .create_agent_helper(
                 agent,
                 platform,
-                Some(("/", true, true)),
+                Some(("/", true, true, "/source")),
                 Duration::from_secs(30),
                 cancellation,
             )
@@ -1280,7 +1399,7 @@ impl DockerResticBackupExecutor {
                     .create_agent_helper(
                         &agent,
                         claim.run.target_platform_id,
-                        Some((path, false, true)),
+                        Some((path, false, true, "/target")),
                         timeout,
                         cancellation,
                     )
@@ -1336,34 +1455,16 @@ impl DockerResticBackupExecutor {
         }
     }
 
-    async fn run_agent_restore(
+    async fn agent_snapshot_root(
         &self,
         agent: &AgentExecutionClient,
-        claim: &RestoreClaim,
+        platform: Uuid,
+        snapshot: &str,
+        environment: &std::collections::HashMap<String, String>,
         cancellation: &CancellationToken,
-    ) -> Result<Vec<BackupLog>, String> {
-        let snapshot = claim
-            .source_item
-            .as_ref()
-            .and_then(|item| item.restic_snapshot_id.as_deref())
-            .or(claim.source.restic_snapshot_id.as_deref())
-            .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
-        let existing = agent
-            .volume_exists(&claim.run.target_volume_name, cancellation)
-            .await
-            .map_err(|error| error.to_string())?;
-        if existing && !claim.run.overwrite_existing {
-            return Err("Target Volume already exists.".to_owned());
-        }
-        let timeout = self.restore_timeout();
+    ) -> Result<(String, String), String> {
         let container_id = self
-            .create_agent_helper(
-                agent,
-                claim.run.target_platform_id,
-                Some((&claim.run.target_volume_name, false, false)),
-                timeout,
-                cancellation,
-            )
+            .create_agent_helper(agent, platform, None, Duration::from_secs(60), cancellation)
             .await?;
         let result = async {
             agent
@@ -1374,7 +1475,6 @@ impl DockerResticBackupExecutor {
                 )
                 .await
                 .map_err(|error| error.to_string())?;
-            let environment = self.agent_repository_environment(&claim.repository).await?;
             let metadata = self
                 .exec_agent(
                     agent,
@@ -1400,7 +1500,90 @@ impl DockerResticBackupExecutor {
             if metadata.exit_code != 0 {
                 return Err(redact(&String::from_utf8_lossy(&metadata.stderr)));
             }
-            let subtree = snapshot_subtree(&metadata.stdout, snapshot)?;
+            snapshot_root(&metadata.stdout, snapshot)
+        }
+        .await;
+        let _ = agent
+            .delete_container(&container_id, &CancellationToken::new())
+            .await;
+        result
+    }
+
+    async fn run_agent_restore(
+        &self,
+        agent: &AgentExecutionClient,
+        claim: &RestoreClaim,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BackupLog>, String> {
+        let snapshot = claim
+            .source_item
+            .as_ref()
+            .and_then(|item| item.restic_snapshot_id.as_deref())
+            .or(claim.source.restic_snapshot_id.as_deref())
+            .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
+        let environment = self.agent_repository_environment(&claim.repository).await?;
+        let (snapshot, root) = self
+            .agent_snapshot_root(
+                agent,
+                claim.run.target_platform_id,
+                snapshot,
+                &environment,
+                cancellation,
+            )
+            .await?;
+        let mount_target = format!("/target{root}");
+        let existing = agent
+            .volume_exists(&claim.run.target_volume_name, cancellation)
+            .await
+            .map_err(|error| error.to_string())?;
+        if existing && !claim.run.overwrite_existing {
+            return Err("Target Volume already exists.".to_owned());
+        }
+        let owner = RestoreVolumeOwner::new(claim.run.target_platform_id, claim.run.id);
+        if !existing {
+            let volume = agent
+                .create_volume(&owner.request(&claim.run.target_volume_name), cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+            owner.verify(&claim.run.target_volume_name, &volume)?;
+        }
+        let timeout = self.restore_timeout();
+        let container_id = self
+            .create_agent_helper(
+                agent,
+                claim.run.target_platform_id,
+                Some((&claim.run.target_volume_name, false, false, &mount_target)),
+                timeout,
+                cancellation,
+            )
+            .await?;
+        let result = async {
+            if !existing {
+                let volume = agent
+                    .inspect_volume(&claim.run.target_volume_name, cancellation)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                owner.verify(&claim.run.target_volume_name, &volume)?;
+            }
+
+            let containers = agent
+                .list_containers(cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+            super::restore_storage::ensure_unused(
+                &claim.run.target_volume_name,
+                &container_id,
+                &containers,
+            )?;
+
+            agent
+                .change_containers_state(
+                    std::slice::from_ref(&container_id),
+                    AgentContainerAction::Start,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
             let output = self
                 .exec_agent(
                     agent,
@@ -1409,7 +1592,7 @@ impl DockerResticBackupExecutor {
                         cmd: vec![
                             "restic".to_owned(),
                             "restore".to_owned(),
-                            subtree,
+                            snapshot,
                             "--target".to_owned(),
                             "/target".to_owned(),
                             "--delete".to_owned(),
@@ -1545,7 +1728,7 @@ impl DockerResticBackupExecutor {
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
-        volume: Option<(&str, bool, bool)>,
+        volume: Option<(&str, bool, bool, &str)>,
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<String, String> {
@@ -1562,7 +1745,7 @@ impl DockerResticBackupExecutor {
         };
         let lifetime = timeout.as_secs().saturating_add(300).clamp(300, 86_700);
         let mut capabilities = vec!["DAC_READ_SEARCH".to_owned(), "FOWNER".to_owned()];
-        if volume.is_some_and(|(_, read_only, _)| !read_only) {
+        if volume.is_some_and(|(_, read_only, _, _)| !read_only) {
             // Restic restores the snapshot's numeric file and symlink owners.
             capabilities.push("CHOWN".to_owned());
         }
@@ -1600,9 +1783,9 @@ impl DockerResticBackupExecutor {
                     memory_swap: Some(512 * 1024 * 1024),
                     pids_limit: Some(128),
                     privileged: Some(false),
-                    readonly_rootfs: Some(volume.is_some_and(|(name, _, bind)| bind && name == "/")),
-                    mounts: volume.into_iter().map(|(name, read_only, bind)| Mount {
-                        target: Some(if read_only { "/source" } else { "/target" }.to_owned()),
+                    readonly_rootfs: Some(volume.is_some_and(|(name, _, bind, _)| bind && name == "/")),
+                    mounts: volume.into_iter().map(|(name, read_only, bind, target)| Mount {
+                        target: Some(target.to_owned()),
                         source: Some(name.to_owned()),
                         r#type: Some(if bind { "bind" } else { "volume" }.to_owned()),
                         read_only: Some(read_only),
@@ -1615,7 +1798,7 @@ impl DockerResticBackupExecutor {
                     cap_add: capabilities,
                     cap_drop: vec!["ALL".to_owned()],
                     security_opt: vec!["no-new-privileges".to_owned()],
-                    network_mode: volume.filter(|(name, _, bind)| *bind && *name == "/").map(|_| "none".into()),
+                    network_mode: volume.filter(|(name, _, bind, _)| *bind && *name == "/").map(|_| "none".into()),
                 },
                 cancellation,
             )
@@ -1963,6 +2146,14 @@ impl DockerResticBackupExecutor {
     }
 }
 
+fn restore_helper_identity(output: &citadel_execution::ProcessOutput) -> Result<String, String> {
+    let id = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if output.stdout_truncated || id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Restore helper creation returned no valid container identity.".into());
+    }
+    Ok(id)
+}
+
 // Frame stdout/stderr independently before redaction: a split credential keyword
 // must never bypass the same redaction used by persisted logs. Oversized lines
 // are discarded rather than retained without a bound or partially disclosed.
@@ -2035,7 +2226,7 @@ fn listed_volume_exists(
 
 /// Local and remote historical backups used different helper mount paths.
 /// Read the snapshot's actual path, rather than guessing from the restore Node.
-fn snapshot_subtree(metadata: &[u8], expected_id: &str) -> Result<String, String> {
+fn snapshot_root(metadata: &[u8], expected_id: &str) -> Result<(String, String), String> {
     let invalid = || "Backup snapshot has an invalid or unsupported Volume root.".to_owned();
     let snapshots: Vec<Value> = serde_json::from_slice(metadata).map_err(|_| invalid())?;
     let [snapshot] = snapshots.as_slice() else {
@@ -2064,7 +2255,7 @@ fn snapshot_subtree(metadata: &[u8], expected_id: &str) -> Result<String, String
         .as_str()
         .filter(|path| matches!(*path, "/source" | "/data"))
         .ok_or_else(invalid)?;
-    Ok(format!("{id}:{path}"))
+    Ok((id.to_owned(), path.to_owned()))
 }
 
 fn sum_item_metric(
@@ -2351,12 +2542,12 @@ mod tests {
             let metadata =
                 serde_json::to_vec(&serde_json::json!([{"id": id, "paths": [root]}])).unwrap();
             assert_eq!(
-                snapshot_subtree(&metadata, &id).unwrap(),
-                format!("{id}:{root}")
+                snapshot_root(&metadata, &id).unwrap(),
+                (id.clone(), root.to_owned())
             );
             assert_eq!(
-                snapshot_subtree(&metadata, &id[..8]).unwrap(),
-                format!("{id}:{root}")
+                snapshot_root(&metadata, &id[..8]).unwrap(),
+                (id.clone(), root.to_owned())
             );
         }
     }
@@ -2394,9 +2585,9 @@ mod tests {
             serde_json::json!([{"id": "b".repeat(64), "paths": ["/data"]}]),
             serde_json::json!([{"id": id, "paths": ["/data"]}, {"id": id, "paths": ["/data"]}]),
         ] {
-            assert!(snapshot_subtree(&serde_json::to_vec(&metadata).unwrap(), &id).is_err());
+            assert!(snapshot_root(&serde_json::to_vec(&metadata).unwrap(), &id).is_err());
         }
-        assert!(snapshot_subtree(b"truncated JSON", &id).is_err());
+        assert!(snapshot_root(b"truncated JSON", &id).is_err());
     }
 
     #[test]

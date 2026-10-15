@@ -1,0 +1,25 @@
+[package]
+name = "citadel-resource-copies"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+citadel-backups = { path = "../backups" }
+citadel-primitives = { path = "../primitives" }
+citadel-deployments = { path = "../deployments" }
+citadel-stacks = { path = "../stacks" }
+citadel-swarm-services = { path = "../swarm-services" }
+chrono.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

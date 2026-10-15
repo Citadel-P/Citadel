@@ -112,6 +112,17 @@ impl Default for StackDriftPolicy {
 
 impl StackDriftPolicy {
     #[must_use]
+    pub fn for_duplicate(mut self) -> Self {
+        if self.mode == StackDriftMode::AutoFix {
+            self.mode = StackDriftMode::DetectOnly;
+        }
+        self.auto_start_stopped_containers = false;
+        self.auto_resume_paused_containers = false;
+        self.remove_extra_containers = false;
+        self.normalized()
+    }
+
+    #[must_use]
     pub fn normalized(mut self) -> Self {
         if self.mode == StackDriftMode::Disabled {
             self.alert_on_drift = false;
@@ -419,6 +430,67 @@ impl StackSpec {
             .map(StackBuildImageBinding::without_provenance)
             .collect();
         self
+    }
+
+    /// Copy saved configuration without activation hooks or inherited provenance.
+    #[must_use]
+    pub fn for_duplicate(self) -> Self {
+        let mut copy = self.for_create();
+        match &mut copy {
+            Self::WebEditor {
+                update_behavior, ..
+            } => *update_behavior = StackUpdateBehavior::Disabled,
+            Self::Git {
+                update_behavior,
+                webhook,
+                ..
+            } => {
+                *update_behavior = StackUpdateBehavior::Disabled;
+                *webhook = None;
+            }
+        }
+        let common = copy.common_mut();
+        common.project_name = None;
+        common.pre_deploy = None;
+        common.post_deploy = None;
+        for binding in &mut common.build_image_bindings {
+            binding.redeploy_on_build = false;
+        }
+        copy
+    }
+
+    pub fn validate_duplicate(&self, drift: &StackDriftPolicy) -> Result<(), StackError> {
+        let (Self::WebEditor {
+            update_behavior, ..
+        }
+        | Self::Git {
+            update_behavior, ..
+        }) = self;
+        let common = self.common();
+        if *update_behavior != StackUpdateBehavior::Disabled
+            || matches!(
+                self,
+                Self::Git {
+                    webhook: Some(_),
+                    ..
+                }
+            )
+            || common.pre_deploy.is_some()
+            || common.post_deploy.is_some()
+            || common
+                .build_image_bindings
+                .iter()
+                .any(|binding| binding.redeploy_on_build)
+            || drift.mode == StackDriftMode::AutoFix
+            || drift.auto_start_stopped_containers
+            || drift.auto_resume_paused_containers
+            || drift.remove_extra_containers
+        {
+            return Err(validation(
+                "Configuration copies must have automatic updates, webhooks, deploy hooks, build redeployment and drift automation disabled. Enable them on the new resource after review.",
+            ));
+        }
+        Ok(())
     }
 
     pub fn to_storage_value(&self) -> Result<Value, StackError> {
@@ -776,6 +848,59 @@ pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_disables_all_activation_and_preserves_source() {
+        for kind in ["Git", "WebEditor"] {
+            let mut json = serde_json::json!({
+                "$type": kind, "updateBehavior": "StackAutoDeploy",
+                "projectName": "production", "preDeploy": {"commands": ["before"]},
+                "postDeploy": {"commands": ["after"]},
+                "buildImageBindings": [{"serviceName": "api", "buildProjectId": Uuid::from_u128(123),
+                    "redeployOnBuild": true, "appliedDigest": "sha256:old"}]
+            });
+            if kind == "Git" {
+                json["gitRepoId"] = serde_json::json!(Uuid::from_u128(456));
+                json["branch"] = serde_json::json!("main");
+                json["webhook"] = serde_json::json!({"enabled": true, "secret": "never-copy"});
+            } else {
+                json["composeFile"] = serde_json::json!("services:\n  api:\n    image: nginx");
+            }
+            let source: StackSpec = serde_json::from_value(json).unwrap();
+            let drift = StackDriftPolicy {
+                mode: StackDriftMode::Disabled,
+                ..Default::default()
+            }
+            .normalized();
+            let copy = source.clone().for_duplicate();
+            assert!(copy.validate_duplicate(&drift).is_ok());
+            assert!(source.validate_duplicate(&drift).is_err());
+            assert!(copy.common().project_name.is_none());
+            assert!(copy.common().pre_deploy.is_none());
+            assert!(copy.common().post_deploy.is_none());
+            assert!(
+                copy.common().build_image_bindings[0]
+                    .applied_digest
+                    .is_none()
+            );
+            assert!(!copy.common().build_image_bindings[0].redeploy_on_build);
+            assert!(source.common().pre_deploy.is_some());
+            let source_drift = StackDriftPolicy {
+                mode: StackDriftMode::AutoFix,
+                auto_start_stopped_containers: true,
+                auto_resume_paused_containers: true,
+                remove_extra_containers: true,
+                ..Default::default()
+            };
+            assert!(copy.validate_duplicate(&source_drift).is_err());
+            let copy_drift = source_drift.for_duplicate();
+            assert_eq!(copy_drift.mode, StackDriftMode::DetectOnly);
+            assert!(copy.validate_duplicate(&copy_drift).is_ok());
+            let mut forged = copy.clone();
+            forged.common_mut().post_deploy = source.common().post_deploy.clone();
+            assert!(forged.validate_duplicate(&drift).is_err());
+        }
+    }
 
     #[test]
     fn metadata_normalization_retains_stack_specific_limits() {

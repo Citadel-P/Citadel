@@ -29,6 +29,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .unwrap();
     let store = PostgresAutomationRepository::new(pool.clone());
     let mut input = AutomationActionConfiguration {
+        duplicate_source_id: None,
         name: format!("execution-{}", Uuid::now_v7().simple()),
         description: None,
         code: "console.log('ok')".to_owned(),

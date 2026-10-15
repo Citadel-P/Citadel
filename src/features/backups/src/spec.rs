@@ -220,6 +220,25 @@ impl BackupSourceSpec {
         Ok(())
     }
 
+    /// Stored history and source leases still need a readable identity for
+    /// unsupported historical settings. Enforce execution capabilities when
+    /// configuring a policy and again before running it, not while reading it.
+    pub fn validate_execution(&self) -> Result<(), crate::BackupError> {
+        self.validate()?;
+        if matches!(
+            self,
+            Self::DockerVolume {
+                consistency: VolumeBackupConsistency::StopAttachedContainers,
+                ..
+            }
+        ) {
+            return Err(crate::BackupError::Validation(
+                "Stopping attached containers for backup is not supported. Select Live and arrange application consistency separately.".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn resource(&self) -> Option<(citadel_primitives::ResourceType, Uuid)> {
         use citadel_primitives::ResourceType;
         match self {

@@ -63,6 +63,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHt
         .normalized_routes(utoipa_axum::routes!(list_projects))
         .normalized_routes(utoipa_axum::routes!(create_project))
         .normalized_routes(utoipa_axum::routes!(get_project))
+        .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(update_project))
         .normalized_routes(utoipa_axum::routes!(rename_project))
         .normalized_routes(utoipa_axum::routes!(update_project_metadata))
@@ -910,6 +911,16 @@ async fn create_project(
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let mut input: citadel_builds::BuildProjectConfiguration = input.into();
+    if let Some(source_id) = input.duplicate_source_id {
+        authorize(
+            &state,
+            &principal,
+            source_id,
+            PermissionLevel::Read,
+            &headers,
+        )
+        .await?;
+    }
     api_result(input.validate().map_err(map_error), &headers)?;
     authorize_build_dependencies(&state, &principal, &input, &headers).await?;
     validate_configuration_entitlements(&state, None, &input, true, &headers).await?;
@@ -1491,4 +1502,38 @@ async fn cancel_run(
     )?;
     api_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+#[utoipa::path(
+    get, path = "/api/v1/buildProjects/{id}/duplicate-draft", operation_id = "getBuildProjectDuplicateDraft",
+    tag = "BuildProjects", summary = "Prepare a disabled configuration copy",
+    responses((status = 200, description = "Editable configuration without activation or runtime state", body = BuildProjectDuplicateDraftView), crate::openapi::errors::ResourceErrors),
+    params(("id" = uuid::Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn duplicate_draft(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
+    authorize(&state, &principal, id, PermissionLevel::Read, &headers).await?;
+    let source = api_result(
+        state.builds.store().get(id).await.map_err(map_error),
+        &headers,
+    )?;
+    let draft = api_result(
+        BuildProjectInput::try_from(source.duplicate_configuration())
+            .map_err(|e| map_error(BuildError::Storage(e.to_string()))),
+        &headers,
+    )?;
+    Ok(no_store(
+        Json(BuildProjectDuplicateDraftView {
+            source_name: source.name,
+            draft,
+        })
+        .into_response(),
+    ))
 }

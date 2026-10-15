@@ -105,56 +105,8 @@ impl PostgresStackRepository {
     ) -> BoxFuture<'a, Result<AuthorizedResource<citadel_stacks::Stack>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let platform_kind =
-                ensure_platform(&mut tx, actor, administrator, input.platform_id).await?;
-            input.spec.validate_update_behavior(platform_kind)?;
-            validate_references(&mut tx, &input.spec).await?;
-            lock_name(&mut tx, &input.name).await?;
-            ensure_name_available(&mut tx, &input.name, None).await?;
-            validate_tags(&mut tx, &input.tag_ids).await?;
             let id = Uuid::now_v7();
-            let release_id = Uuid::now_v7();
-            let now = Utc::now();
-            let spec = input.spec.to_storage_value()?;
-            let drift = input
-                .drift_policy
-                .clone()
-                .unwrap_or_default()
-                .to_storage_value()?;
-            let update = StackUpdateState::new(&input.spec).to_storage_value()?;
-            sqlx::query("INSERT INTO stacks(id,currentstackreleaseid,name,description,stacksource,stackupdatestate,driftpolicy,createdat,createdbyactorid,controlstate,rowversion) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'Idle',0)")
-                .bind(id).bind(release_id).bind(&input.name).bind(&input.description)
-                .bind(input.stack_source.as_str()).bind(update).bind(drift).bind(now).bind(actor.value())
-                .execute(&mut *tx).await.map_err(database_error)?;
-            sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,createdat,createdbyactorid) VALUES($1,$2,$3,'Created','1',$4,$5,$6)")
-                .bind(release_id).bind(id).bind(input.platform_id).bind(&spec).bind(now).bind(actor.value())
-                .execute(&mut *tx).await.map_err(database_error)?;
-            insert_tags(&mut tx, id, actor, &input.tag_ids).await?;
-            if let Some(source) = input.duplicate_source.as_ref() {
-                copy_duplicate(&mut tx, actor, administrator, id, source).await?;
-            }
-            let snapshot = stack_snapshot(
-                id,
-                &input.name,
-                input.description.clone(),
-                input.stack_source,
-                input.drift_policy.clone().unwrap_or_default(),
-                input.platform_id,
-                &input.spec,
-                actor,
-                "1",
-            );
-            let info = duplicate_activity_info(input, snapshot)?;
-            insert_stack_activity(
-                &mut tx,
-                id,
-                &input.name,
-                input.platform_id,
-                actor,
-                info,
-                ActivityStatus::Information,
-            )
-            .await?;
+            create_in_transaction(&mut tx, actor, administrator, id, input).await?;
             tx.commit().await.map_err(storage)?;
             get_authorized(&self.pool, actor, administrator, id).await
         })
@@ -190,6 +142,20 @@ impl PostgresStackRepository {
             }
             let old_platform: Uuid = row.try_get("platformid").map_err(storage)?;
             let new_platform = input.platform_id.unwrap_or(old_platform);
+            if new_platform != old_platform {
+                let has_copied_storage: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM resourcecopies WHERE destinationid=$1 AND status='Succeeded')",
+                )
+                .bind(id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(storage)?;
+                if has_copied_storage {
+                    return Err(StackError::Validation(
+                        "This Stack's copied volumes are tied to its destination Platform. Create another copy to use a different Platform.".to_owned(),
+                    ));
+                }
+            }
             let old_status = row
                 .try_get::<&str, _>("release_status")
                 .map_err(storage)?
@@ -739,5 +705,64 @@ pub(super) async fn copy_duplicate(
         return Err(StackError::NotFound);
     }
     sqlx::query("INSERT INTO resourcebindings(id,name,kind,scope,value,secretid,secretdeliverymode,targetpath,resourceid,createdat,updatedat) SELECT gen_random_uuid(),name,kind,scope,value,secretid,secretdeliverymode,targetpath,$2,$3,$3 FROM resourcebindings WHERE resourceid=$1").bind(id).bind(target).bind(Utc::now()).execute(&mut **tx).await.map_err(storage)?;
+    Ok(())
+}
+
+/// Shared atomic creation used by ordinary creates and copy finalization.
+pub(crate) async fn create_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: ActorId,
+    administrator: bool,
+    id: Uuid,
+    input: &CreateStack,
+) -> Result<(), StackError> {
+    let platform_kind = ensure_platform(tx, actor, administrator, input.platform_id).await?;
+    input.spec.validate_update_behavior(platform_kind)?;
+    validate_references(tx, &input.spec).await?;
+    lock_name(tx, &input.name).await?;
+    ensure_name_available(tx, &input.name, None).await?;
+    validate_tags(tx, &input.tag_ids).await?;
+    let release_id = Uuid::now_v7();
+    let now = Utc::now();
+    let spec = input.spec.to_storage_value()?;
+    let drift = input
+        .drift_policy
+        .clone()
+        .unwrap_or_default()
+        .to_storage_value()?;
+    let update = StackUpdateState::new(&input.spec).to_storage_value()?;
+    sqlx::query("INSERT INTO stacks(id,currentstackreleaseid,name,description,stacksource,stackupdatestate,driftpolicy,createdat,createdbyactorid,controlstate,rowversion) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'Idle',0)")
+        .bind(id).bind(release_id).bind(&input.name).bind(&input.description)
+        .bind(input.stack_source.as_str()).bind(update).bind(drift).bind(now).bind(actor.value())
+        .execute(&mut **tx).await.map_err(database_error)?;
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,createdat,createdbyactorid) VALUES($1,$2,$3,'Created','1',$4,$5,$6)")
+        .bind(release_id).bind(id).bind(input.platform_id).bind(&spec).bind(now).bind(actor.value())
+        .execute(&mut **tx).await.map_err(database_error)?;
+    insert_tags(tx, id, actor, &input.tag_ids).await?;
+    if let Some(source) = input.duplicate_source.as_ref() {
+        copy_duplicate(tx, actor, administrator, id, source).await?;
+    }
+    let snapshot = stack_snapshot(
+        id,
+        &input.name,
+        input.description.clone(),
+        input.stack_source,
+        input.drift_policy.clone().unwrap_or_default(),
+        input.platform_id,
+        &input.spec,
+        actor,
+        "1",
+    );
+    let info = duplicate_activity_info(input, snapshot)?;
+    insert_stack_activity(
+        tx,
+        id,
+        &input.name,
+        input.platform_id,
+        actor,
+        info,
+        ActivityStatus::Information,
+    )
+    .await?;
     Ok(())
 }

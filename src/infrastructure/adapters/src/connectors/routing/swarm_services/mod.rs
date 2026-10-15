@@ -342,6 +342,16 @@ impl SwarmServiceRuntime for SwarmServiceRuntimeRouter {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeServiceResult, SwarmServiceError>> {
         Box::pin(async move {
+            crate::connectors::routing::resource_copies::verify_destination(
+                &self.pool,
+                &self.runtime,
+                claim.id,
+                claim.platform_id,
+                citadel_resource_copies::planning::pinned_node(&claim.spec),
+                cancellation,
+            )
+            .await
+            .map_err(SwarmServiceError::Runtime)?;
             match self.connector(claim.platform_id).await? {
                 citadel_platforms::ConnectorKind::Local => {
                     self.mutate_local(claim, ServiceOperationKind::Apply, 0, cancellation)
@@ -361,6 +371,16 @@ impl SwarmServiceRuntime for SwarmServiceRuntimeRouter {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeServiceResult, SwarmServiceError>> {
         Box::pin(async move {
+            crate::connectors::routing::resource_copies::verify_destination(
+                &self.pool,
+                &self.runtime,
+                claim.id,
+                claim.platform_id,
+                citadel_resource_copies::planning::pinned_node(&claim.spec),
+                cancellation,
+            )
+            .await
+            .map_err(SwarmServiceError::Runtime)?;
             match self.connector(claim.platform_id).await? {
                 citadel_platforms::ConnectorKind::Local => {
                     self.mutate_local(claim, ServiceOperationKind::Scale, 0, cancellation)
@@ -379,6 +399,16 @@ impl SwarmServiceRuntime for SwarmServiceRuntimeRouter {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeServiceResult, SwarmServiceError>> {
         Box::pin(async move {
+            crate::connectors::routing::resource_copies::verify_destination(
+                &self.pool,
+                &self.runtime,
+                claim.id,
+                claim.platform_id,
+                citadel_resource_copies::planning::pinned_node(&claim.spec),
+                cancellation,
+            )
+            .await
+            .map_err(SwarmServiceError::Runtime)?;
             match self.connector(claim.platform_id).await? {
                 citadel_platforms::ConnectorKind::Local => {
                     self.mutate_local(claim, ServiceOperationKind::ForceUpdate, 1, cancellation)

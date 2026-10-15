@@ -202,3 +202,10 @@ pub(crate) struct AutomationActionRunLogsView {
     pub(crate) run_id: Uuid,
     pub(crate) logs: String,
 }
+
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationActionDuplicateDraftView {
+    pub source_name: String,
+    pub draft: super::requests::AutomationActionInput,
+}

@@ -28,6 +28,7 @@ export const useStackGroup = (stackId: string) => {
                 ...current.data,
                 name: stack.name,
                 backupCoverage: stack.backupCoverage ?? current.data.backupCoverage,
+                copyEligibility: stack.copyEligibility ?? current.data.copyEligibility,
                 status: stack.status,
                 description: stack.description,
                 controlState: stack.controlState,

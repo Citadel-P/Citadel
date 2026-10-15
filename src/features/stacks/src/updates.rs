@@ -487,6 +487,7 @@ mod tests {
             status: StackReleaseStatus::Healthy,
             platform_type: citadel_platforms::PlatformKind::Docker,
             platform_id: Some(Uuid::now_v7()),
+            has_copied_storage: false,
             version: Some("1".to_owned()),
             spec: Some(spec),
             source: None,

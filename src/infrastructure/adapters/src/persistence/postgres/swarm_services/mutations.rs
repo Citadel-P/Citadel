@@ -52,93 +52,8 @@ impl PostgresSwarmServiceRepository {
     > {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            ensure_platform(&mut tx, actor_id, administrator, input.platform_id, false).await?;
-            validate_references(&mut tx, actor_id, administrator, input).await?;
-            validate_tags(&mut tx, &input.tag_ids).await?;
-            let duplicate = if let Some(source) = &input.duplicate_source {
-                ensure_access(
-                    &mut tx,
-                    actor_id,
-                    administrator,
-                    source.resource_id,
-                    policy::ReadSwarmService::REQUIREMENT,
-                )
-                .await?;
-                let name: String =
-                    sqlx::query_scalar("SELECT name FROM swarmservices WHERE id=$1 FOR SHARE")
-                        .bind(source.resource_id)
-                        .fetch_optional(&mut *tx)
-                        .await
-                        .map_err(storage)?
-                        .ok_or(SwarmServiceError::NotFound)?;
-                let has_bindings: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM resourcebindings WHERE scope='SwarmService' AND resourceid=$1)")
-                    .bind(source.resource_id).fetch_one(&mut *tx).await.map_err(storage)?;
-                if has_bindings && !administrator {
-                    ensure_access(
-                        &mut tx,
-                        actor_id,
-                        false,
-                        source.resource_id,
-                        policy::ReadSwarmServiceBindings::REQUIREMENT,
-                    )
-                    .await?;
-                    if !has_access(
-                        &mut tx,
-                        actor_id,
-                        Uuid::nil(),
-                        policy::WriteSwarmServiceBindings::REQUIREMENT,
-                    )
-                    .await?
-                    {
-                        return Err(SwarmServiceError::Forbidden);
-                    }
-                }
-                Some(citadel_activities::ActivitySourceResource {
-                    resource_type: citadel_activities::ActivityResourceType::SwarmService,
-                    resource_id: source.resource_id,
-                    resource_name: name,
-                })
-            } else {
-                None
-            };
             let id = Uuid::now_v7();
-            let now = Utc::now();
-            let docker_name = docker_name(&input.name, id);
-            let spec = input.spec.to_storage_value()?;
-            let desired = input.spec.desired_hash();
-            sqlx::query(r#"INSERT INTO swarmservices(
-                id,platformid,name,description,dockername,spec,desiredspechash,health,synchronizationstate,
-                controlstate,rowversion,createdbyactorid,createdat,updatedat,
-                autoupdatestate_lastcheckedat,autoupdatestate_status)
-                VALUES($1,$2,$3,$4,$5,$6,$7,'Created','NeverApplied','Idle',0,$8,$9,$9,'-infinity','Unknown')"#)
-                .bind(id).bind(input.platform_id).bind(&input.name).bind(&input.description).bind(&docker_name)
-                .bind(spec).bind(desired).bind(actor_id.value()).bind(now).execute(&mut *tx).await.map_err(database_error)?;
-            replace_tags(&mut tx, id, actor_id, &input.tag_ids).await?;
-            if let Some(source) = &duplicate {
-                sqlx::query("INSERT INTO resourcebindings(id,createdat,kind,name,resourceid,scope,secretdeliverymode,secretid,targetpath,updatedat,value) SELECT gen_random_uuid(),CURRENT_TIMESTAMP,kind,name,$2,'SwarmService',secretdeliverymode,secretid,targetpath,CURRENT_TIMESTAMP,value FROM resourcebindings WHERE scope='SwarmService' AND resourceid=$1")
-                    .bind(source.resource_id).bind(id).execute(&mut *tx).await.map_err(database_error)?;
-            }
-            insert_swarm_activity(
-                &mut tx,
-                id,
-                &input.name,
-                input.platform_id,
-                actor_id,
-                service_creation_activity(
-                    SwarmServiceActivitySnapshot {
-                        id,
-                        platform_id: input.platform_id,
-                        name: input.name.clone(),
-                        description: input.description.clone(),
-                        docker_name: docker_name.clone(),
-                        docker_service_id: None,
-                        spec: input.spec.to_storage_value()?,
-                    },
-                    duplicate,
-                ),
-                ActivityStatus::Information,
-            )
-            .await?;
+            create_in_transaction(&mut tx, actor_id, administrator, id, input).await?;
             tx.commit().await.map_err(storage)?;
             get_authorized(&self.pool, actor_id, administrator, id).await
         })
@@ -363,7 +278,7 @@ pub(super) async fn validate_references(
         }
     }
     for id in &input.spec.network_ids {
-        let row=sqlx::query("SELECT ingress,scope FROM swarmnetworkprojections WHERE platformid=$1 AND dockernetworkid=$2").bind(input.platform_id).bind(id).fetch_optional(&mut **tx).await.map_err(storage)?.ok_or_else(||SwarmServiceError::Validation("One or more selected overlay Networks do not exist on this Swarm.".to_owned()))?;
+        let row=sqlx::query("SELECT isingress AS ingress,scope FROM swarmnetworkprojections WHERE platformid=$1 AND dockernetworkid=$2").bind(input.platform_id).bind(id).fetch_optional(&mut **tx).await.map_err(storage)?.ok_or_else(||SwarmServiceError::Validation("One or more selected overlay Networks do not exist on this Swarm.".to_owned()))?;
         if row.try_get::<bool, _>("ingress").map_err(storage)?
             || row.try_get::<String, _>("scope").map_err(storage)? != "swarm"
         {
@@ -444,5 +359,102 @@ pub(super) async fn replace_tags(
     for tag in tags {
         sqlx::query("INSERT INTO resourcetags(resourcetype,resourceid,tagid,createdbyactorid) VALUES('SwarmService',$1,$2,$3)").bind(id).bind(tag).bind(actor.value()).execute(&mut **tx).await.map_err(database_error)?;
     }
+    Ok(())
+}
+
+/// Shared atomic creation used by ordinary creates and copy finalization.
+pub(crate) async fn create_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_id: ActorId,
+    administrator: bool,
+    id: Uuid,
+    input: &CreateSwarmService,
+) -> Result<(), SwarmServiceError> {
+    ensure_platform(tx, actor_id, administrator, input.platform_id, false).await?;
+    validate_references(tx, actor_id, administrator, input).await?;
+    validate_tags(tx, &input.tag_ids).await?;
+    let duplicate = if let Some(source) = &input.duplicate_source {
+        ensure_access(
+            tx,
+            actor_id,
+            administrator,
+            source.resource_id,
+            policy::ReadSwarmService::REQUIREMENT,
+        )
+        .await?;
+        let name: String =
+            sqlx::query_scalar("SELECT name FROM swarmservices WHERE id=$1 FOR SHARE")
+                .bind(source.resource_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(storage)?
+                .ok_or(SwarmServiceError::NotFound)?;
+        let has_bindings: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM resourcebindings WHERE scope='SwarmService' AND resourceid=$1)")
+            .bind(source.resource_id).fetch_one(&mut **tx).await.map_err(storage)?;
+        if has_bindings && !administrator {
+            ensure_access(
+                tx,
+                actor_id,
+                false,
+                source.resource_id,
+                policy::ReadSwarmServiceBindings::REQUIREMENT,
+            )
+            .await?;
+            if !has_access(
+                tx,
+                actor_id,
+                Uuid::nil(),
+                policy::WriteSwarmServiceBindings::REQUIREMENT,
+            )
+            .await?
+            {
+                return Err(SwarmServiceError::Forbidden);
+            }
+        }
+        Some(citadel_activities::ActivitySourceResource {
+            resource_type: citadel_activities::ActivityResourceType::SwarmService,
+            resource_id: source.resource_id,
+            resource_name: name,
+        })
+    } else {
+        None
+    };
+    let now = Utc::now();
+    let docker_name = docker_name(&input.name, id);
+    let spec = input.spec.to_storage_value()?;
+    let desired = input.spec.desired_hash();
+    sqlx::query(r#"INSERT INTO swarmservices(
+        id,platformid,name,description,dockername,spec,desiredspechash,health,synchronizationstate,
+        controlstate,rowversion,createdbyactorid,createdat,updatedat,
+        autoupdatestate_lastcheckedat,autoupdatestate_status)
+        VALUES($1,$2,$3,$4,$5,$6,$7,'Created','NeverApplied','Idle',0,$8,$9,$9,'-infinity','Unknown')"#)
+        .bind(id).bind(input.platform_id).bind(&input.name).bind(&input.description).bind(&docker_name)
+        .bind(spec).bind(desired).bind(actor_id.value()).bind(now).execute(&mut **tx).await.map_err(database_error)?;
+    replace_tags(tx, id, actor_id, &input.tag_ids).await?;
+    if let Some(source) = &duplicate {
+        sqlx::query("INSERT INTO resourcebindings(id,createdat,kind,name,resourceid,scope,secretdeliverymode,secretid,targetpath,updatedat,value) SELECT gen_random_uuid(),CURRENT_TIMESTAMP,kind,name,$2,'SwarmService',secretdeliverymode,secretid,targetpath,CURRENT_TIMESTAMP,value FROM resourcebindings WHERE scope='SwarmService' AND resourceid=$1")
+            .bind(source.resource_id).bind(id).execute(&mut **tx).await.map_err(database_error)?;
+    }
+    insert_swarm_activity(
+        tx,
+        id,
+        &input.name,
+        input.platform_id,
+        actor_id,
+        service_creation_activity(
+            SwarmServiceActivitySnapshot {
+                id,
+                platform_id: input.platform_id,
+                name: input.name.clone(),
+                description: input.description.clone(),
+                docker_name: docker_name.clone(),
+                docker_service_id: None,
+                spec: input.spec.to_storage_value()?,
+            },
+            duplicate,
+        ),
+        ActivityStatus::Information,
+    )
+    .await?;
     Ok(())
 }

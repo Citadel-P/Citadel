@@ -18,6 +18,7 @@ members = [
     "src/features/platforms",
     "src/features/primitives",
     "src/features/registries",
+    "src/features/resource-copies",
     "src/features/stacks",
     "src/features/swarm-services",
     "src/features/tags",

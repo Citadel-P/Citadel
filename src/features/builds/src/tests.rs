@@ -2,6 +2,7 @@ use crate::*;
 
 fn input() -> BuildProjectConfiguration {
     BuildProjectConfiguration {
+        duplicate_source_id: None,
         name: " demo ".into(),
         description: None,
         enabled: true,
@@ -118,4 +119,18 @@ fn pushing_defaults_to_enabled_when_omitted() {
     let mut value: BuildProjectConfiguration = serde_json::from_value(json).unwrap();
     assert!(value.push_to_registry);
     value.validate().unwrap();
+}
+
+#[test]
+fn configuration_copy_rejects_activation_even_with_a_forged_request() {
+    let mut copy = input();
+    copy.duplicate_source_id = Some(Uuid::now_v7());
+    assert!(copy.validate().is_err());
+    copy.enabled = false;
+    copy.validate().unwrap();
+    copy.webhook = Some(serde_json::from_value(serde_json::json!({"enabled": false})).unwrap());
+    assert!(copy.validate().is_err());
+    copy.duplicate_source_id = None;
+    copy.enabled = true;
+    copy.validate().unwrap();
 }

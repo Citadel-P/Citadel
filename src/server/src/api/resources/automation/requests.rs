@@ -3,9 +3,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationActionInput {
+    #[serde(default)]
+    pub duplicate_source_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub code: String,
@@ -26,6 +28,7 @@ pub struct AutomationActionInput {
 impl From<AutomationActionInput> for citadel_automation::AutomationActionConfiguration {
     fn from(value: AutomationActionInput) -> Self {
         Self {
+            duplicate_source_id: value.duplicate_source_id,
             name: value.name,
             description: value.description,
             code: value.code,
@@ -46,6 +49,7 @@ impl From<AutomationActionInput> for citadel_automation::AutomationActionConfigu
 impl From<citadel_automation::AutomationActionConfiguration> for AutomationActionInput {
     fn from(value: citadel_automation::AutomationActionConfiguration) -> Self {
         Self {
+            duplicate_source_id: value.duplicate_source_id,
             name: value.name,
             description: value.description,
             code: value.code,

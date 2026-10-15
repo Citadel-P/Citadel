@@ -24,6 +24,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        copy_eligibility: None,
         backup_coverage: None,
         git_repositories: Arc::new(
             citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(

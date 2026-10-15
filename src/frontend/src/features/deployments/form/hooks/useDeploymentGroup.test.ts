@@ -1,3 +1,4 @@
+import { ResourceCopyEligibilityStatus } from '@/api/generated/api.types';
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -230,7 +231,7 @@ it('accepts backup coverage snapshots and preserves coverage when an update omit
     volumes: [],
     policies: [],
     warnings: [],
-      reasons: [],
+    reasons: [],
     unavailable: false,
     canConfigure: false,
     hasResourcePolicy: false,
@@ -240,4 +241,15 @@ it('accepts backup coverage snapshots and preserves coverage when an update omit
   const next = mergeDeploymentInfo(current, { ...current, backupCoverage: after });
   expect(next.backupCoverage).toEqual(after);
   expect(mergeDeploymentInfo(next, {} as DeploymentView).backupCoverage).toEqual(after);
+});
+
+it('refreshes copy eligibility and preserves it across list-only updates', () => {
+  const current = {
+    ...createExternalDeployment(null),
+    copyEligibility: { status: ResourceCopyEligibilityStatus.Available, reason: null },
+  };
+  const unavailable = { status: ResourceCopyEligibilityStatus.Unavailable, reason: 'A backup is no longer available.' };
+  const next = mergeDeploymentInfo(current, { ...current, copyEligibility: unavailable });
+  expect(next.copyEligibility).toEqual(unavailable);
+  expect(mergeDeploymentInfo(next, { ...current, copyEligibility: undefined }).copyEligibility).toEqual(unavailable);
 });

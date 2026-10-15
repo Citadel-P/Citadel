@@ -31,7 +31,15 @@ function isSensitiveKey(key: string): boolean {
 }
 
 function isReference(value: unknown): boolean {
-  return typeof value === 'string' && /^\$\{[A-Za-z_][A-Za-z0-9_.-]*\}$/.test(value.trim());
+  // Required-value messages are not defaults; ${PASSWORD:-literal} remains excluded.
+  return typeof value === 'string' && /^\$\{[A-Za-z_][A-Za-z0-9_.-]*(?::?\?[^{}\r\n]*)?\}$/.test(value.trim());
+}
+
+function isSafeCredentialValue(key: string, value: unknown): boolean {
+  if (isReference(value)) return true;
+  // These image options generate a password rather than supplying one. Keep the
+  // exception narrow: an ordinary PASSWORD=yes is still a literal credential.
+  return /^(?:MARIADB|MYSQL)_RANDOM_ROOT_PASSWORD$/.test(key) && /^(?:yes|no|true|false|1|0)$/i.test(String(value));
 }
 
 // Editors remain draftable. Detect common embedded credentials without attempting
@@ -39,8 +47,14 @@ function isReference(value: unknown): boolean {
 function containsCredential(value: string): boolean {
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value)) return true;
   if (/[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@/i.test(value)) return true;
-  for (const match of value.matchAll(/(?=(?:^|[\s{,;?&])['"]?([\w.-]+)['"]?\s*[:=]\s*['"]?([^\s'",;&]+))/g)) {
-    if (isSensitiveKey(match[1]) && !isReference(match[2])) return true;
+  // Scan required references as plain references so spaces and colons in their
+  // error messages are not mistaken for credential assignments. This does not
+  // change the saved content, literal defaults, or text appended to a reference.
+  const assignments = value.replace(/\$\{[^{}\r\n]*\}/g, (reference) =>
+    isReference(reference) ? reference.replace(/:?\?[^}]*\}/, '}') : reference,
+  );
+  for (const match of assignments.matchAll(/(?=(?:^|[\s{,;?&])['"]?([\w.-]+)['"]?\s*[:=]\s*['"]?([^\s'",;&]+))/g)) {
+    if (isSensitiveKey(match[1]) && !isSafeCredentialValue(match[1], match[2])) return true;
   }
   return false;
 }
@@ -63,8 +77,8 @@ export function sanitizeDraft<T>(update: Partial<T>, excludedPaths: readonly str
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(record)) {
       if (['__proto__', 'prototype', 'constructor'].includes(key)) continue;
-      if (isSensitiveKey(key) && typeof entry !== 'boolean' && !isReference(entry)) continue;
-      if (key === 'value' && sensitiveEntry && !isReference(entry)) continue;
+      if (isSensitiveKey(key) && typeof entry !== 'boolean' && !isSafeCredentialValue(key, entry)) continue;
+      if (key === 'value' && sensitiveEntry && !isSafeCredentialValue(entryKey, entry)) continue;
       const sanitized = visit(entry, path ? `${path}.${key}` : key);
       if (sanitized !== undefined) result[key] = sanitized;
     }

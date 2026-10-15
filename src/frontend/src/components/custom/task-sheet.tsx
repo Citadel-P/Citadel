@@ -571,11 +571,14 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
 
   BuildCreated: (info, activity) => (
-    <SpecViewer
-      spec={stripBuildProjectSecrets(info.build)}
-      resourceId={activity.resourceId}
-      title="Initial configuration"
-    />
+    <>
+      {info.source && <DuplicateSource source={info.source} />}
+      <SpecViewer
+        spec={stripBuildProjectSecrets(info.build)}
+        resourceId={activity.resourceId}
+        title="Initial configuration"
+      />
+    </>
   ),
 
   BuildUpdated: (info) => (
@@ -769,7 +772,10 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
 
   ActionCreated: (info, activity) => (
-    <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Initial configuration" />
+    <>
+      {info.source && <DuplicateSource source={info.source} />}
+      <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Initial configuration" />
+    </>
   ),
 
   ActionUpdated: (info) => (

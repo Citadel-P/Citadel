@@ -52,6 +52,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Automati
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(create))
         .normalized_routes(utoipa_axum::routes!(get_one))
+        .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(rename))
         .normalized_routes(utoipa_axum::routes!(update))
         .normalized_routes(utoipa_axum::routes!(update_metadata))
@@ -253,6 +254,16 @@ async fn create(
     let mut input: citadel_automation::AutomationActionConfiguration = input.into();
     let principal = actor(principal, &headers)?;
     authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
+    if let Some(source_id) = input.duplicate_source_id {
+        authorize(
+            &state,
+            &principal,
+            source_id,
+            PermissionLevel::Read,
+            &headers,
+        )
+        .await?;
+    }
     api_result(
         state
             .automation
@@ -825,4 +836,34 @@ async fn cancel_run(
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+#[utoipa::path(
+    get, path = "/api/v1/automation/actions/{id}/duplicate-draft", operation_id = "getAutomationActionDuplicateDraft",
+    tag = "AutomationActions", summary = "Prepare a disabled configuration copy",
+    responses((status = 200, description = "Editable configuration without activation or runtime state", body = AutomationActionDuplicateDraftView), crate::openapi::errors::ResourceErrors),
+    params(("id" = uuid::Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn duplicate_draft(
+    State(state): State<AutomationHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_global(&state, &principal, PermissionLevel::Write, &headers).await?;
+    authorize(&state, &principal, id, PermissionLevel::Read, &headers).await?;
+    let source = api_result(
+        state.automation.store().get(id).await.map_err(map_error),
+        &headers,
+    )?;
+    let draft = AutomationActionInput::from(source.duplicate_configuration());
+    Ok(no_store(
+        Json(AutomationActionDuplicateDraftView {
+            source_name: source.name,
+            draft,
+        })
+        .into_response(),
+    ))
 }

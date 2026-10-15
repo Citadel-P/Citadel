@@ -106,8 +106,7 @@ impl PostgresSwarmServiceRepository {
                 .resource;
             let name =
                 available_service_name(&self.pool, source.platform_id, &source.name, true).await?;
-            let mut spec = source.spec.for_create();
-            spec.webhook = None;
+            let spec = source.spec.for_duplicate();
             Ok(citadel_swarm_services::SwarmServiceDuplicateDraft {
                 name,
                 source_name: source.name,

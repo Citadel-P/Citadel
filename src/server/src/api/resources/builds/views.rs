@@ -363,3 +363,10 @@ impl TryFrom<citadel_builds::BuildPlatformSnapshot> for BuildPlatformSnapshot {
         })
     }
 }
+
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildProjectDuplicateDraftView {
+    pub source_name: String,
+    pub draft: super::requests::BuildProjectInput,
+}

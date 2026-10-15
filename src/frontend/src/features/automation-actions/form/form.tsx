@@ -24,12 +24,14 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { configureAutomationActionEditor, MonacoEditor } from '@/lib/monaco';
-import { useMutate, useSaveResource } from '@/lib/hooks';
+import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useTaskSheet } from '@/lib/atoms';
 import { useQueryClient } from '@tanstack/react-query';
 import { TestTube2 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router';
+import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
@@ -74,11 +76,40 @@ export function AutomationActionForm({
   disabled?: boolean;
 }) {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const loadedDuplicate = useRef<string | null>(null);
+  const { data: duplicateData, isFetching: duplicateLoading } = useRead(
+    'getAutomationActionDuplicateDraft',
+    { id: duplicateFrom ?? '' },
+    { enabled: !!duplicateFrom },
+  );
+  const duplicate = duplicateData?.data;
   const queryClient = useQueryClient();
   const { open: openSheet } = useTaskSheet('AutomationAction');
   const createAction = useMutate('createAutomationAction');
   const updateAction = useMutate('updateAutomationAction');
   const [update, setUpdate] = useState<Partial<AutomationActionFormValue>>({});
+  useEffect(() => {
+    if (!duplicateFrom || !duplicate || loadedDuplicate.current === duplicateFrom) return;
+    loadedDuplicate.current = duplicateFrom;
+    setUpdate({ ...duplicate.draft, runAsActorId: '', webhook: null });
+  }, [duplicateFrom, duplicate]);
+  const copyReview = useConfigurationCopyReview<AutomationActionFormValue>({
+    sourceName: duplicate?.sourceName ?? '',
+    describe: (payload) => (
+      <>
+        <p>
+          Create <strong>{payload.name}</strong> as a disabled Automation Action, with its schedule and webhook off.
+        </p>
+        <p>The new Action runs as you when enabled. No run history, access grants or webhook credentials are copied.</p>
+        <p>
+          Review the script and arguments for resource IDs, production endpoints and credentials. These values are
+          copied as written and may still target the original resources.
+        </p>
+      </>
+    ),
+  });
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
@@ -193,7 +224,7 @@ export function AutomationActionForm({
                           checked={value ?? false}
                           id="automation-action-enabled"
                           onChange={(enabled) => set({ enabled })}
-                          disabled={disabled}
+                          disabled={disabled || !!duplicateFrom}
                         />
                       ),
                     }),
@@ -214,7 +245,7 @@ export function AutomationActionForm({
                           checked={value ?? false}
                           id="automation-action-enabled"
                           onChange={(enabled) => set({ enabled })}
-                          disabled={disabled}
+                          disabled={disabled || !!duplicateFrom}
                         />
                       ),
                     }),
@@ -283,7 +314,7 @@ export function AutomationActionForm({
                     targetType={LookupResourceType.RunAsActor}
                     selected={value ?? undefined}
                     placeholder="Current user"
-                    disabled={disabled}
+                    disabled={disabled || !!duplicateFrom}
                     onSelect={(actor) => set({ runAsActorId: actor?.id ?? '' })}
                   />
                 ),
@@ -342,7 +373,7 @@ export function AutomationActionForm({
                     checked={value ?? false}
                     id="automation-action-schedule-enabled"
                     onChange={(scheduleEnabled) => set({ scheduleEnabled })}
-                    disabled={disabled || !automatedOperationsEnabled}
+                    disabled={disabled || !!duplicateFrom || !automatedOperationsEnabled}
                   />
                 ),
               }),
@@ -396,7 +427,7 @@ export function AutomationActionForm({
                     execution="run"
                     value={value ?? { enabled: false }}
                     disabled={disabled}
-                    enableDisabled={!automatedOperationsEnabled}
+                    enableDisabled={!!duplicateFrom || !automatedOperationsEnabled}
                     onChange={(webhook) => set({ webhook: webhook as WebhookConfig })}
                   />
                 ),
@@ -406,22 +437,42 @@ export function AutomationActionForm({
         ],
       }),
     }),
-    [automatedOperationsEnabled, currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabledReason],
+    [
+      automatedOperationsEnabled,
+      currentScheduleEnabled,
+      duplicateFrom,
+      disabled,
+      handleTestDraft,
+      id,
+      mode,
+      testDisabledReason,
+    ],
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={original}
-      update={update}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`automation-action:${id ?? 'new'}`}
-      draftVersion={metadataChanged ? 2 : 1}
-    />
+    <>
+      {duplicateFrom && (
+        <AlertMessage type="info" title="Configuration copy">
+          Review the script and target references. The Action is created disabled, with its schedule and webhook off.
+        </AlertMessage>
+      )}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={original}
+        update={update}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={disabled}
+        saveDisabled={!!duplicateFrom && (duplicateLoading || !duplicate)}
+        saveLabel={duplicateFrom ? 'Review copy' : 'Save'}
+        confirmSave={duplicateFrom ? copyReview.confirmSave : undefined}
+        draftKey={duplicateFrom ? undefined : `automation-action:${id ?? 'new'}`}
+        draftVersion={metadataChanged ? 2 : 1}
+      />
+      {copyReview.review}
+    </>
   );
 }
 
@@ -468,15 +519,16 @@ function toFormValue(action?: AuthorizedAction): AutomationActionFormValue {
 
 function toCreateInput(value: AutomationActionFormValue): AutomationActionInput {
   return {
+    duplicateSourceId: value.duplicateSourceId,
     name: value.name.trim(),
     description: value.description?.trim() || null,
     code: value.code,
     defaultArgsJson: normalizeJsonObject(value.defaultArgsJson),
     enabled: value.enabled,
     scheduleEnabled: value.scheduleEnabled,
-    scheduleCron: value.scheduleEnabled ? value.scheduleCron?.trim() || null : null,
-    scheduleTimeZone: value.scheduleEnabled ? value.scheduleTimeZone?.trim() || 'UTC' : 'UTC',
-    webhook: normalizeWebhook(value.webhook),
+    scheduleCron: value.scheduleEnabled || value.duplicateSourceId ? value.scheduleCron?.trim() || null : null,
+    scheduleTimeZone: value.scheduleEnabled || value.duplicateSourceId ? value.scheduleTimeZone?.trim() || 'UTC' : 'UTC',
+    webhook: value.duplicateSourceId ? null : normalizeWebhook(value.webhook),
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,

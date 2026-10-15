@@ -8,7 +8,7 @@ const e2eRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const composeFile = path.join(e2eRoot, 'compose.yml');
 const dockerExecutable = process.platform === 'win32' ? 'docker.exe' : 'docker';
 
-const runInDockerDaemon = async (...args: string[]) => {
+export const runInDockerDaemon = async (...args: string[]) => {
   const result = await execFileAsync(
     dockerExecutable,
     ['compose', '-f', composeFile, 'exec', '-T', 'docker', 'docker', ...args],
@@ -80,4 +80,30 @@ export const emitRuntimeContainerLog = async (containerId: string, marker: strin
     '-c',
     `echo ${marker} > /proc/1/fd/1`,
   );
+};
+
+// Lifecycle operations are scoped to the selected disposable Compose project.
+export const controlRuntimeService = async (action: 'pause' | 'unpause' | 'kill' | 'start', service: 'docker' | 'citadel') => {
+  await execFileAsync(dockerExecutable, [
+    'compose', '-f', composeFile, action,
+    ...(action === 'kill' ? ['--signal', 'SIGKILL'] : []), service,
+  ], { cwd: e2eRoot, env: process.env });
+};
+
+export const clearCopyFixtureHistory = async (stackId: string, policyId: string) => {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuid.test(stackId) || !uuid.test(policyId)) throw new Error('Invalid fixture identifier');
+  // Only test-owned history is removed, after API behavior has been asserted.
+  // Otherwise restrictive history FKs retain the Local Platform and prevent
+  // the next browser test from registering this same disposable Docker daemon.
+  const sql = `BEGIN;
+    DELETE FROM resourcecopyrestores WHERE copyid IN (SELECT id FROM resourcecopies WHERE sourceid='${stackId}');
+    DELETE FROM resourcecopies WHERE sourceid='${stackId}';
+    DELETE FROM backuprestoreruns WHERE backuprunid IN (SELECT id FROM backupruns WHERE backuppolicyid='${policyId}');
+    DELETE FROM backupruns WHERE backuppolicyid='${policyId}';
+    COMMIT;`;
+  await execFileAsync(dockerExecutable, [
+    'compose', '-f', composeFile, 'exec', '-T', 'postgres',
+    'psql', '-U', 'citadel', '-d', 'citadel', '-v', 'ON_ERROR_STOP=1', '-c', sql,
+  ], { cwd: e2eRoot, env: process.env });
 };

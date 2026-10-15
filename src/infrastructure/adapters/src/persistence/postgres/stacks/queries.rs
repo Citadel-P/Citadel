@@ -26,6 +26,7 @@ WITH actor_scope AS (
 pub(super) const PROJECTION: &str = r#"
 SELECT s.id,s.name,s.description,s.stacksource,s.stackupdatestate,s.driftpolicy,
        s.createdat,s.createdbyactorid,s.controlstate,s.currentstackreleaseid,s.rowversion,
+       EXISTS(SELECT 1 FROM resourcecopies c WHERE c.destinationid=s.id AND c.status='Succeeded') has_copied_storage,
        r.platformid,r.status release_status,r.version,r.spec,r.source,r.resourcebindings,
        p.status platform_status,p.name platform_name,p.platformdescriptor,
        COALESCE(tags.value,'[]'::jsonb) tags,

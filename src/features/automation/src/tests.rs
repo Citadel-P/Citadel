@@ -7,6 +7,7 @@ use citadel_primitives::schedule::schedule_is_due;
 use uuid::Uuid;
 fn input() -> AutomationActionConfiguration {
     AutomationActionConfiguration {
+        duplicate_source_id: None,
         name: "prune-images".to_owned(),
         description: None,
         code: "console.log('ok')".to_owned(),
@@ -201,4 +202,24 @@ fn generated_script_exposes_typed_clients_without_persisting_the_token() {
     assert!(source.contains("listPlatforms"));
     assert!(source.contains("temporary-token"));
     assert!(source.ends_with("console.log(args.value);\n"));
+}
+
+#[test]
+fn configuration_copy_requires_disabled_triggers_and_current_actor() {
+    let actor = ActorId::new(Uuid::now_v7());
+    let mut copy = input();
+    copy.duplicate_source_id = Some(Uuid::now_v7());
+    assert!(copy.validate(actor).is_err());
+    copy.enabled = false;
+    copy.validate(actor).unwrap();
+    assert_eq!(copy.run_as_actor_id, Some(actor.value()));
+    let mut forged = copy.clone();
+    forged.run_as_actor_id = Some(Uuid::now_v7());
+    assert!(forged.validate(actor).is_err());
+    let mut forged = copy.clone();
+    forged.schedule_enabled = true;
+    forged.schedule_cron = Some("0 * * * *".into());
+    assert!(forged.validate(actor).is_err());
+    copy.webhook = Some(serde_json::from_value(serde_json::json!({"enabled": false})).unwrap());
+    assert!(copy.validate(actor).is_err());
 }

@@ -93,6 +93,9 @@ pub struct StackCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct StackView {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<crate::api::resources::resource_copies::ResourceCopyEligibility>)]
+    pub copy_eligibility: Option<citadel_resource_copies::CopyEligibility>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_coverage:
         Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
@@ -115,6 +118,8 @@ pub struct StackView {
     pub platform_type: PlatformType,
     #[schema(required = true)]
     pub platform_id: Option<Uuid>,
+    /// Copied storage fixes this Stack to its destination Platform.
+    pub has_copied_storage: bool,
     #[schema(required = true)]
     pub version: Option<String>,
     #[schema(required = true, value_type = Option<crate::api::resources::schema_models::stacks::StackSpecSchema>)]
@@ -142,6 +147,7 @@ impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            copy_eligibility: None,
             backup_coverage: None,
             id: value.id,
             name: value.name,
@@ -155,6 +161,7 @@ impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
             control_state: value.control_state,
             current_stack_release_id: value.current_stack_release_id,
             platform_type: value.platform_type.into(),
+            has_copied_storage: value.has_copied_storage,
             platform_id: value.platform_id,
             version: value.version,
             spec: value.spec,

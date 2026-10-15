@@ -73,6 +73,7 @@ fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> crate::Stack {
         status,
         platform_type: citadel_platforms::PlatformKind::Docker,
         platform_id: Some(Uuid::now_v7()),
+        has_copied_storage: false,
         version: Some("1".to_owned()),
         spec: Some(StackSpec::WebEditor {
             compose_file: "services:\n  api:\n    image: nginx\n".to_owned(),

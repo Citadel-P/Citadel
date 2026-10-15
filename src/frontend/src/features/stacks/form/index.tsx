@@ -1,3 +1,5 @@
+import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
+import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { requestErrorMessage } from '@/lib/request-error';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -56,7 +58,6 @@ import {
   ArrowRight,
   Calendar,
   Check,
-  Copy,
   Eye,
   FileText,
   Folder,
@@ -80,7 +81,6 @@ import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
-import { useNavigate } from 'react-router';
 import { SwarmServiceListView, useServicesGroup } from '@/features/swarm-resources/services/hooks/useServicesGroup';
 import { ServicesTable } from '@/features/swarm-resources/services/table';
 import { ServiceInspect } from '@/features/swarm-resources/services/service-info/inspect';
@@ -179,20 +179,15 @@ const StackConfigTab = ({ stack, metadataChanged }: { stack: StackView; metadata
 };
 
 const DuplicateStackConfigButton = ({ stack }: { stack: StackView }) => {
-  const navigate = useNavigate();
-  const disabled = !hasCapability(stack, 'canRead') || !hasCapability(stack, 'canWrite');
-
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 rounded-sm text-xs"
-      disabled={disabled}
-      onClick={() => navigate(`/stacks/add?duplicateFrom=${stack.id}`)}>
-      <Copy className="size-3.5" />
-      Duplicate Config
-    </Button>
+    <DuplicateWorkload
+      kind={ResourceCopyKind.Stack}
+      sourceId={stack.id}
+      sourceName={stack.name}
+      copyEligibility={stack.copyEligibility}
+      configurationHref={`/stacks/add?duplicateFrom=${stack.id}`}
+      disabled={!hasCapability(stack, 'canRead') || !hasCapability(stack, 'canWrite')}
+    />
   );
 };
 

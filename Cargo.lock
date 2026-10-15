@@ -502,6 +502,7 @@ dependencies = [
  "citadel-primitives",
  "citadel-processes",
  "citadel-registries",
+ "citadel-resource-copies",
  "citadel-runtime",
  "citadel-stacks",
  "citadel-swarm-services",
@@ -877,6 +878,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-resource-copies"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-backups",
+ "citadel-deployments",
+ "citadel-primitives",
+ "citadel-stacks",
+ "citadel-swarm-services",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "citadel-runtime"
 version = "0.0.0"
 dependencies = [
@@ -917,6 +938,7 @@ dependencies = [
  "citadel-primitives",
  "citadel-processes",
  "citadel-registries",
+ "citadel-resource-copies",
  "citadel-runtime",
  "citadel-stacks",
  "citadel-swarm-services",

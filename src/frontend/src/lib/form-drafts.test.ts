@@ -70,9 +70,44 @@ describe('safe form drafts', () => {
         callback: 'https://example.com?api_key=raw-value',
         composeFile: 'environment:\n  DB_PASSWORD: "raw-value"',
         privateKeyFile: '-----BEGIN OPENSSH PRIVATE KEY-----\nkey',
+        script: 'echo ${API_KEY=embedded-secret}',
       }),
     ).toEqual({ environmentVariables: ['PORT=8080', 'DB_PASSWORD=${DATABASE_PASSWORD}'] });
   });
+
+  it.each(['${DB_PASSWORD}', '${DB_PASSWORD:?Set a database password}', '${DB_PASSWORD?Set a database password}'])(
+    'retains secret references with required-value messages: %s',
+    (reference) => {
+      const settings = {
+        password: reference,
+        environment: [{ key: 'DB_PASSWORD', value: reference }],
+        composeFile: `environment:\n  DB_PASSWORD: "${reference}"`,
+        script: `DB_PASSWORD='${reference}'`,
+      };
+      expect(sanitizeDraft(settings)).toEqual(settings);
+    },
+  );
+
+  it.each(['MARIADB_RANDOM_ROOT_PASSWORD', 'MYSQL_RANDOM_ROOT_PASSWORD'])(
+    'retains the password-generation flag %s without treating ordinary passwords as flags',
+    (flag) => {
+      const settings = {
+        environment: { [flag]: 'yes' },
+        entries: [{ key: flag, value: '1' }],
+        composeFile: `environment:\n  ${flag}: yes`,
+      };
+      expect(sanitizeDraft(settings)).toEqual(settings);
+      expect(sanitizeDraft({ composeFile: `environment:\n  ${flag}: literal-secret` })).toEqual({});
+      expect(sanitizeDraft({ composeFile: 'environment:\n  DB_PASSWORD: yes' })).toEqual({});
+    },
+  );
+
+  it.each(['literal-secret', '${PASSWORD:-literal-secret}', '${PASSWORD}literal-secret', 'prefix${PASSWORD}'])(
+    'still excludes literal credential values and reference defaults/suffixes: %s',
+    (password) => {
+      expect(sanitizeDraft({ password, composeFile: `environment:\n  DB_PASSWORD: "${password}"` })).toEqual({});
+    },
+  );
 
   it('does not restore prototype keys or create empty drafts for credential-only changes', () => {
     const draft = JSON.parse(

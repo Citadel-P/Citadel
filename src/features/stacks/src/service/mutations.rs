@@ -49,6 +49,11 @@ impl StackService {
         input.spec = input.spec.for_create();
         input.spec.validate()?;
         input.drift_policy = Some(input.drift_policy.unwrap_or_default().normalized());
+        if input.duplicate_source.is_some() {
+            input
+                .spec
+                .validate_duplicate(input.drift_policy.as_ref().expect("normalized above"))?;
+        }
         input.tag_ids = normalize_tags(&input.tag_ids);
         if input.tag_ids.len() > 100 {
             return Err(validation("A Stack cannot contain more than 100 Tags."));

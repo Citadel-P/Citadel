@@ -32,3 +32,5 @@ pub mod webhooks;
 pub mod resource_access;
 
 pub mod schema_models;
+
+pub mod resource_copies;

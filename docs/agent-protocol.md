@@ -135,6 +135,12 @@ Docker calls. The operation table below distinguishes:
 Helper requests validate ownership, image, mounts, privileges and exact commands.
 Binary exec inspects the helper and executes by immutable container ID. Restore
 volume deletion checks for container references, including stopped containers.
+Inspection checks normalize Docker's default bridge network and omitted false
+mount flags; they still require read-only backup sources and isolated host-path
+probes. Named-volume restores mount the destination at `/target/source` or
+`/target/data`, matching the validated snapshot root, and restore the complete
+snapshot into `/target`. This preserves the volume root's numeric ownership and
+permissions. These child mount paths are not allowed for bind-mount helpers.
 
 Bind-mount backups use separately validated helper mounts and exact shared shell
 templates for path probes, backup and restore. Host-root probes have no repository
@@ -143,6 +149,15 @@ existing paths without symlink components. They cannot execute Restic. Data
 helpers mount only the selected validated host path with nested mounts disabled.
 Arbitrary shell commands, script changes, unsafe paths, credential-environment
 injection and mismatched backup/restore mount directions are rejected.
+
+Current-data workload copying uses a separate exact helper shape: two distinct
+plain local named volumes, read-only `/source` and an owned writable `/target/source`,
+network mode `none`, bounded lifetime and resource limits. Binary exec accepts
+only the shared temporary-snapshot/restore script and its two fixed-purpose
+Restic environment entries. The repository stays inside the helper. The guard
+rechecks source content access and matches the destination restore-owner receipt
+to the helper's copy-job ID before creation and execution. No general shell or
+volume-management permissions are added to the restricted profile.
 
 Capability advertisements are discovery hints, not authorization. Ordinary Edge
 and Edge Build Pool advertise the same capabilities. Swarm-node advertises a

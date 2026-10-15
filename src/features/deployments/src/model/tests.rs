@@ -109,3 +109,40 @@ fn lifecycle_contract_defaults_an_omitted_restart_policy_to_no() {
         ContainerRestartPolicy::No
     );
 }
+
+#[test]
+fn duplicate_disables_activation_without_changing_normal_create_or_source() {
+    let mut source = external_spec();
+    source.update_behavior = UpdateBehavior::AutoDeploy;
+    source.volumes = Some(vec!["prod_data:/data:ro".into()]);
+    let copy = source.clone().for_duplicate();
+    assert_eq!(copy.update_behavior, UpdateBehavior::Disabled);
+    assert_eq!(copy.volumes, source.volumes);
+    assert!(copy.validate_duplicate().is_ok());
+    assert!(source.validate_duplicate().is_err());
+    assert_eq!(
+        source.clone().for_create().update_behavior,
+        UpdateBehavior::AutoDeploy
+    );
+    assert_eq!(source.update_behavior, UpdateBehavior::AutoDeploy);
+}
+
+#[test]
+fn duplicate_disables_build_redeployment_and_removes_provenance() {
+    let spec: DeploymentSpec = serde_json::from_value(serde_json::json!({
+        "image": {"$type": "Build", "buildProjectId": Uuid::from_u128(123),
+            "redeployOnBuild": true, "appliedDigest": "sha256:old"}
+    }))
+    .unwrap();
+    assert!(spec.validate_duplicate().is_err());
+    let copy = spec.for_duplicate();
+    assert!(copy.validate_duplicate().is_ok());
+    assert!(matches!(
+        copy.image,
+        DeploymentImageInfo::Build {
+            redeploy_on_build: false,
+            applied_digest: None,
+            ..
+        }
+    ));
+}

@@ -23,7 +23,7 @@ impl SwarmServiceService {
         input.tag_ids = unique_ids(&input.tag_ids);
         input.spec = input.spec.for_create();
         if input.duplicate_source.is_some() {
-            input.spec.webhook = None;
+            input.spec.validate_duplicate()?;
         }
         input.spec.validate()?;
         let created = self.store.create(actor_id, administrator, &input).await?;

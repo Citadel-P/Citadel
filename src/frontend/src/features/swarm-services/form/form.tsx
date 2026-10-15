@@ -1,3 +1,4 @@
+import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import {
@@ -204,6 +205,31 @@ export const SwarmServiceForm = ({
   const duplicateDraft = duplicateDraftData?.data;
   const adoptionDraft = adoptionDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const copyReview = useConfigurationCopyReview<FormValue>({
+    sourceName: duplicateDraft?.draft.duplicateSource?.resourceName ?? '',
+    describe: (payload) => (
+      <>
+        <p>
+          Create <strong>{payload.name}</strong> without starting it. Automatic activation is disabled.
+        </p>
+        <ul className="space-y-1 break-all">
+          {payload.spec?.mounts?.map((mount) => (
+            <li key={mount.target} className="font-mono text-xs">
+              {mount.source || 'Anonymous storage'} → {mount.target}
+            </li>
+          ))}
+        </ul>
+        <p>
+          Volume data belongs to individual Swarm nodes. Existing storage paths remain references; no data is copied or
+          moved between nodes.
+        </p>
+        <p>
+          Networks, published ports, bindings and credentials may still connect to the same external systems. No running
+          state, history or access grants are copied.
+        </p>
+      </>
+    ),
+  });
   const adoptionIssues = adoptionDraft?.issues ?? [];
   const original = useMemo<FormValue>(
     () => ({
@@ -405,10 +431,7 @@ export const SwarmServiceForm = ({
                         spec: {
                           ...previous.spec!,
                           schedulingMode,
-                          replicas:
-                            schedulingMode === SchedulingMode.Global
-                              ? null
-                              : (previous.spec?.replicas ?? 1),
+                          replicas: schedulingMode === SchedulingMode.Global ? null : (previous.spec?.replicas ?? 1),
                         },
                       }))
                     }
@@ -573,7 +596,7 @@ export const SwarmServiceForm = ({
                   <div className="flex flex-col gap-2">
                     <ItemSelector
                       value={value}
-                      disabled={updateBehaviorUnavailable}
+                      disabled={!!duplicateFrom || updateBehaviorUnavailable}
                       collection={licensedUpdateBehaviors}
                       onChange={(updateBehavior: UpdateBehavior) =>
                         set((previous) => ({
@@ -807,7 +830,7 @@ export const SwarmServiceForm = ({
                           showBranchFilter={false}
                           value={value ?? { enabled: false }}
                           disabled={disabled}
-                          enableDisabled={!automatedOperationsEnabled}
+                          enableDisabled={!!duplicateFrom || !automatedOperationsEnabled}
                           onChange={(webhook) =>
                             set((previous) => ({
                               spec: {
@@ -1260,6 +1283,7 @@ export const SwarmServiceForm = ({
       }),
     }),
     [
+      duplicateFrom,
       builds,
       adoptFrom,
       automatedOperationsEnabled,
@@ -1326,12 +1350,16 @@ export const SwarmServiceForm = ({
         pending={isPending}
         disabled={disabled}
         mode={mode}
-        saveDisabled={!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft)}
-        saveLabel={adoptFrom ? 'Adopt Service' : 'Save'}
-        confirmSave={adoptFrom ? confirmAdoption : undefined}
-        draftKey={formDraftKey}
+        saveDisabled={
+          (!!duplicateFrom && (isDuplicateDraftLoading || !duplicateDraft)) ||
+          (!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft))
+        }
+        saveLabel={adoptFrom ? 'Adopt Service' : duplicateFrom ? 'Review copy' : 'Save'}
+        confirmSave={adoptFrom ? confirmAdoption : duplicateFrom ? copyReview.confirmSave : undefined}
+        draftKey={duplicateFrom ? undefined : formDraftKey}
         draftVersion={resource?.rowVersion}
       />
+      {copyReview.review}
       <ActionWithDialog
         renderTrigger={false}
         open={adoptionConfirmationOpen}

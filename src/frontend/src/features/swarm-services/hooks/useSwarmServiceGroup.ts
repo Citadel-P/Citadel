@@ -16,6 +16,7 @@ export const normalizeManagedSwarmService = (
   return {
     ...update,
     backupCoverage: update.backupCoverage ?? current?.backupCoverage,
+    copyEligibility: update.copyEligibility ?? current?.copyEligibility,
     capabilities: update.capabilities ?? current?.capabilities ?? null,
     tasks:
       update.tasks ??

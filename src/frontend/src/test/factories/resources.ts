@@ -26,6 +26,7 @@ export const createResourceCapabilities = (overrides: Partial<ResourceCapabiliti
 
 export const createStack = (overrides: Partial<StackView> = {}): StackView => ({
   capabilities: null,
+  hasCopiedStorage: false,
   id: '00000000-0000-0000-0000-000000000001',
   name: 'api',
   latestActivityView: null,

@@ -46,23 +46,19 @@ impl StackService {
         id: Uuid,
     ) -> Result<crate::StackDuplicateDraft, StackError> {
         let stack = self.store.get_authorized(actor, administrator, id).await?;
-        let mut spec = stack.spec.clone().ok_or(StackError::NotFound)?.for_create();
-        if let StackSpec::Git {
-            webhook: Some(webhook),
-            ..
-        } = &mut spec
-        {
-            webhook.config.secret = None;
-        }
-        spec.common_mut().project_name = None;
+        let spec = stack
+            .spec
+            .clone()
+            .ok_or(StackError::NotFound)?
+            .for_duplicate();
         Ok(crate::StackDuplicateDraft {
             draft: crate::StackDraft {
-                name: format!("{} Copy", stack.name),
+                name: format!("{} Copy", stack.name.chars().take(95).collect::<String>()),
                 platform_id: stack.platform_id.ok_or(StackError::NotFound)?,
                 description: stack.description.clone(),
                 stack_source: stack.stack_source,
                 spec,
-                drift_policy: stack.drift_policy.clone(),
+                drift_policy: stack.drift_policy.clone().for_duplicate(),
                 tag_ids: stack.tags.iter().map(|tag| tag.id).collect(),
                 source_id: stack.id,
                 source_name: stack.name.clone(),

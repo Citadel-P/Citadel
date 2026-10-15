@@ -766,6 +766,9 @@ pub enum ActivityEventInfoSchema {
     },
 
     ActionCreated {
+        #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
+        #[schema(value_type = Option<crate::api::resources::schema_models::activities::ActivitySourceResourceSchema>)]
+        source: Option<citadel_activities::ActivitySourceResource>,
         #[serde(rename = "Action")]
         #[schema(value_type = crate::api::resources::schema_models::activities::AutomationActionActivitySnapshotSchema)]
         action: citadel_activities::AutomationActionActivitySnapshot,
@@ -919,6 +922,9 @@ pub enum ActivityEventInfoSchema {
     },
 
     BuildCreated {
+        #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
+        #[schema(value_type = Option<crate::api::resources::schema_models::activities::ActivitySourceResourceSchema>)]
+        source: Option<citadel_activities::ActivitySourceResource>,
         #[serde(rename = "Build")]
         #[schema(value_type = crate::api::resources::schema_models::activities::BuildProjectActivitySnapshotSchema)]
         build: citadel_activities::BuildProjectActivitySnapshot,
@@ -1469,8 +1475,8 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::GitRepoCloned { git_repo, result } => {
                 Self::GitRepoCloned { git_repo, result }
             }
-            citadel_activities::ActivityEventInfo::ActionCreated { action } => {
-                Self::ActionCreated { action }
+            citadel_activities::ActivityEventInfo::ActionCreated { action, source } => {
+                Self::ActionCreated { action, source }
             }
             citadel_activities::ActivityEventInfo::ActionUpdated {
                 old_action,
@@ -1586,8 +1592,8 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::BuildRunCancelled { run_id, trigger } => {
                 Self::BuildRunCancelled { run_id, trigger }
             }
-            citadel_activities::ActivityEventInfo::BuildCreated { build } => {
-                Self::BuildCreated { build }
+            citadel_activities::ActivityEventInfo::BuildCreated { build, source } => {
+                Self::BuildCreated { build, source }
             }
             citadel_activities::ActivityEventInfo::BuildUpdated {
                 old_build,

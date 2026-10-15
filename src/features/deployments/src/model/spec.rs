@@ -277,6 +277,37 @@ impl DeploymentSpec {
         self
     }
 
+    /// Prepare an inactive configuration copy without changing ordinary create behavior.
+    #[must_use]
+    pub fn for_duplicate(self) -> Self {
+        let mut copy = self.for_create();
+        copy.update_behavior = UpdateBehavior::Disabled;
+        if let DeploymentImageInfo::Build {
+            redeploy_on_build, ..
+        } = &mut copy.image
+        {
+            *redeploy_on_build = false;
+        }
+        copy
+    }
+
+    pub fn validate_duplicate(&self) -> Result<(), DeploymentError> {
+        if self.update_behavior != UpdateBehavior::Disabled
+            || matches!(
+                self.image,
+                DeploymentImageInfo::Build {
+                    redeploy_on_build: true,
+                    ..
+                }
+            )
+        {
+            return Err(DeploymentError::Validation(
+                "Configuration copies must have automatic updates and build redeployment disabled. Enable them on the new resource after review.".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub fn for_update(mut self, current: &Self) -> Self {
         self.image = self.image.preserving_build_provenance_from(&current.image);

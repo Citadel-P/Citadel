@@ -319,6 +319,34 @@ export enum ResourceType {
   ServiceAccount = "ServiceAccount",
 }
 
+export enum ResourceCopyStatus {
+  Review = "Review",
+  Restoring = "Restoring",
+  Cancelling = "Cancelling",
+  Cleaning = "Cleaning",
+  Cleaned = "Cleaned",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  Cancelled = "Cancelled",
+}
+
+export enum ResourceCopyKind {
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+}
+
+export enum ResourceCopyEligibilityStatus {
+  Available = "Available",
+  Unavailable = "Unavailable",
+  Unknown = "Unknown",
+}
+
+export enum ResourceCopyDataMode {
+  CurrentData = "CurrentData",
+  ExistingBackup = "ExistingBackup",
+}
+
 export enum ResourceControlState {
   Idle = "Idle",
   Queued = "Queued",
@@ -1425,11 +1453,18 @@ export interface AutomationActionActivitySnapshot {
   webhook?: null | WebhookConfig;
 }
 
+export interface AutomationActionDuplicateDraftView {
+  draft: AutomationActionInput;
+  sourceName: string;
+}
+
 export interface AutomationActionInput {
   alertOnFailure: boolean;
   code: string;
   defaultArgsJson?: string | null;
   description?: string | null;
+  /** @format uuid */
+  duplicateSourceId?: string | null;
   enabled: boolean;
   name: string;
   /** @format uuid */
@@ -2127,6 +2162,11 @@ export interface BuildProjectActivitySnapshot {
   webhook?: null | WebhookConfig;
 }
 
+export interface BuildProjectDuplicateDraftView {
+  draft: BuildProjectInput;
+  sourceName: string;
+}
+
 export interface BuildProjectInput {
   branch?: string | null;
   /** @format uuid */
@@ -2137,6 +2177,8 @@ export interface BuildProjectInput {
   contextPath?: string | null;
   description?: string | null;
   dockerfilePath?: string | null;
+  /** @format uuid */
+  duplicateSourceId?: string | null;
   enabled: boolean;
   /** @format uuid */
   gitRepositoryId: string;
@@ -2901,6 +2943,7 @@ export interface DeploymentView {
   /** @format uuid */
   containerId?: string | null;
   controlState: ResourceControlState;
+  copyEligibility?: null | ResourceCopyEligibility;
   /** @format date-time */
   createdAt: string;
   /** @format uuid */
@@ -3746,6 +3789,7 @@ export interface ManagedSwarmServiceView {
   backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | SwarmServiceCapabilities;
   controlState: ResourceControlState;
+  copyEligibility?: null | ResourceCopyEligibility;
   /** @format date-time */
   createdAt: string;
   currentOperation: null | SwarmServiceOperationView;
@@ -5020,6 +5064,7 @@ export type PublicActivityEventInfo =
   | {
       $type: "ActionCreated";
       action: AutomationActionActivitySnapshot;
+      source?: null | ActivitySourceResource;
     }
   | {
       $type: "ActionUpdated";
@@ -5143,6 +5188,7 @@ export type PublicActivityEventInfo =
   | {
       $type: "BuildCreated";
       build: BuildProjectActivitySnapshot;
+      source?: null | ActivitySourceResource;
     }
   | {
       $type: "BuildUpdated";
@@ -5585,6 +5631,115 @@ export interface ResourceCapabilitiesView {
   canExecute: boolean;
   canRead: boolean;
   canWrite: boolean;
+}
+
+/**
+ * Actor-specific configuration-plus-data eligibility, included in detail reads
+ * and realtime detail snapshots. Preview and submission revalidate this hint.
+ */
+export interface ResourceCopyEligibility {
+  reason?: string | null;
+  status: ResourceCopyEligibilityStatus;
+}
+
+export interface ResourceCopyPreview {
+  blockers: string[];
+  destinationNodeId?: string | null;
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  sourceName: string;
+  volumes: ResourceCopyVolume[];
+  warnings: string[];
+}
+
+export interface ResourceCopyProgress {
+  dataMode: ResourceCopyDataMode;
+  /** @format uuid */
+  destinationId?: string | null;
+  /** @format uuid */
+  id: string;
+  kind: ResourceCopyKind;
+  message?: string | null;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  restores: ResourceCopyRestore[];
+  /** @format uuid */
+  sourceId: string;
+  status: ResourceCopyStatus;
+}
+
+export interface ResourceCopyRequest {
+  consistencyAcknowledged?: boolean | null;
+  dataMode?: null | ResourceCopyDataMode;
+  destinationNodeId?: string | null;
+  /** @format uuid */
+  destinationPlatformId?: string | null;
+  kind: ResourceCopyKind;
+  name: string;
+  selections: ResourceCopySelection[];
+  /** @format uuid */
+  sourceId: string;
+}
+
+export interface ResourceCopyRestore {
+  /** @format uuid */
+  id: string;
+  message?: string | null;
+  source: string;
+  status: string;
+  target: string;
+}
+
+export interface ResourceCopySelection {
+  /** @format uuid */
+  backupRunId: string;
+  /** @format uuid */
+  backupRunItemId: string;
+  volume: string;
+}
+
+export interface ResourceCopySnapshot {
+  /** @format uuid */
+  backupRunId: string;
+  /** @format uuid */
+  backupRunItemId: string;
+  /** @format date-time */
+  completedAt?: string | null;
+  dockerNodeId?: string | null;
+  /** @format uuid */
+  policyId: string;
+  policyName: string;
+  /** @format uuid */
+  repositoryId: string;
+  supportsCrossPlatformRestore: boolean;
+  volume: string;
+}
+
+export interface ResourceCopyTarget {
+  /** @format uuid */
+  id: string;
+  name: string;
+}
+
+export interface ResourceCopyTargets {
+  platforms: ResourceCopyTarget[];
+  sourceNodeId?: string | null;
+  /** @format uuid */
+  sourcePlatformId: string;
+  sourcePlatformName: string;
+  swarm: boolean;
+}
+
+export interface ResourceCopyVolume {
+  dockerNodeId?: string | null;
+  snapshots: ResourceCopySnapshot[];
+  source: string;
+  target: string;
 }
 
 export interface ResourceInfo {
@@ -6212,6 +6367,7 @@ export interface StackView {
   backupCoverage?: null | ResourceBackupSummaryView;
   capabilities: null | StackCapabilities;
   controlState: ResourceControlState;
+  copyEligibility?: null | ResourceCopyEligibility;
   /** @format date-time */
   createdAt: string;
   /** @format uuid */
@@ -6220,6 +6376,8 @@ export interface StackView {
   currentStackReleaseId: string;
   description: string | null;
   driftPolicy: StackDriftPolicy;
+  /** Copied storage fixes this Stack to its destination Platform. */
+  hasCopiedStorage: boolean;
   /** @format uuid */
   id: string;
   latestActivityView: null | LatestActivityView;
@@ -8805,6 +8963,35 @@ export class Api<
      * No description
      *
      * @tags AutomationActions
+     * @name GetAutomationActionDuplicateDraft
+     * @summary Prepare a disabled configuration copy
+     * @request GET:/api/v1/automation/actions/{id}/duplicate-draft
+     * @secure
+     * @response `200` `AutomationActionDuplicateDraftView` Editable configuration without activation or runtime state
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getAutomationActionDuplicateDraft: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<AutomationActionDuplicateDraftView, ProblemDetails>({
+        path: `/api/v1/automation/actions/${id}/duplicate-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
      * @name RunAutomationAction
      * @summary Queue an Automation Action run
      * @request POST:/api/v1/automation/actions/{id}/run
@@ -10628,6 +10815,32 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name GetBuildProjectDuplicateDraft
+     * @summary Prepare a disabled configuration copy
+     * @request GET:/api/v1/buildProjects/{id}/duplicate-draft
+     * @secure
+     * @response `200` `BuildProjectDuplicateDraftView` Editable configuration without activation or runtime state
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getBuildProjectDuplicateDraft: (id: string, params: RequestParams = {}) =>
+      this.request<BuildProjectDuplicateDraftView, ProblemDetails>({
+        path: `/api/v1/buildProjects/${id}/duplicate-draft`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -16053,6 +16266,127 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name PreviewResourceCopy
+     * @request POST:/api/v1/resource-copies/preview
+     * @secure
+     * @response `200` `ResourceCopyPreview`
+     */
+    previewResourceCopy: (
+      data: ResourceCopyRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceCopyPreview, any>({
+        path: `/api/v1/resource-copies/preview`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name GetResourceCopyTargets
+     * @request GET:/api/v1/resource-copies/targets
+     * @secure
+     * @response `200` `ResourceCopyTargets`
+     */
+    getResourceCopyTargets: (
+      query: {
+        kind: ResourceCopyKind;
+        /** @format uuid */
+        sourceId: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceCopyTargets, any>({
+        path: `/api/v1/resource-copies/targets`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name GetResourceCopy
+     * @request GET:/api/v1/resource-copies/{id}
+     * @secure
+     * @response `200` `ResourceCopyProgress`
+     */
+    getResourceCopy: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceCopyProgress, any>({
+        path: `/api/v1/resource-copies/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name CancelResourceCopy
+     * @request POST:/api/v1/resource-copies/{id}/cancel
+     * @secure
+     * @response `200` `ResourceCopyProgress`
+     */
+    cancelResourceCopy: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceCopyProgress, any>({
+        path: `/api/v1/resource-copies/${id}/cancel`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name CleanupResourceCopy
+     * @request POST:/api/v1/resource-copies/{id}/cleanup
+     * @secure
+     * @response `200` `ResourceCopyProgress`
+     */
+    cleanupResourceCopy: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceCopyProgress, any>({
+        path: `/api/v1/resource-copies/${id}/cleanup`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceCopies
+     * @name StartResourceCopy
+     * @request POST:/api/v1/resource-copies/{id}/start
+     * @secure
+     * @response `200` `ResourceCopyProgress`
+     */
+    startResourceCopy: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceCopyProgress, any>({
+        path: `/api/v1/resource-copies/${id}/start`,
+        method: "POST",
+        secure: true,
         format: "json",
         ...params,
       }),

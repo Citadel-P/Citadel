@@ -44,3 +44,5 @@ pub mod statistics;
 
 #[cfg(test)]
 pub(crate) mod test_support;
+
+pub mod resource_copies;

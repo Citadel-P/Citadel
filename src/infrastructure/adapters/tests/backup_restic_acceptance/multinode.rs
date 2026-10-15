@@ -11,6 +11,9 @@ use citadel_platforms::PlatformInfoPort;
 
 const DIND: &str = "docker:27.5.1-dind";
 
+#[path = "swarm_copy.rs"]
+mod swarm_copy;
+
 #[path = "interactive.rs"]
 mod interactive;
 #[path = "node_setup.rs"]
@@ -308,14 +311,14 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let source="citadel-source";let target="citadel-restored";
         for i in 0..3 {
             cluster.node(i,&["volume","create",source],None).await;
-            cluster.node(i,&["run","--rm","-i","--volume",&format!("{source}:/fixture"),"--entrypoint","sh",IMAGE,"-c","cat > /fixture/payload.txt"],Some(if i==1 {PAYLOAD} else {b"wrong-node"})).await;
+            cluster.node(i,&["run","--rm","-i","--volume",&format!("{source}:/fixture"),"--entrypoint","sh",IMAGE,"-c","cat > /fixture/payload.txt; chown 1123:2211 /fixture; chmod 751 /fixture"],Some(if i==1 {PAYLOAD} else {b"wrong-node"})).await;
         }
         volume_content::verify(&cluster,&pool,&agent,platform,&nodes,&registry,source).await;
         let secret=Uuid::now_v7();
         for id in [secret,ACCESS_KEY_ID,SECRET_KEY_ID] {sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')").bind(id).bind(format!("secret-{id}")).execute(&pool).await.unwrap();}
         let actor=ActorId::new(SYSTEM_ACTOR_ID);let store=PostgresBackupPersistence::new(pool.clone());
         let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),description:None,password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
-        let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent)).with_edge(registry.clone());
+        let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent.clone())).with_edge(registry.clone());
         let cancel=CancellationToken::new();
         executor.repository(&repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();
         let mut input=BackupPolicyConfiguration {name:format!("policy-{platform}"),description:None,source:serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"dockerNodeId":nodes[1],"volumeName":source})).unwrap(),backup_repository_id:repository.id,enabled:true,cron:None,time_zone:None,webhook:None,keep_last_successful:Some(2),timeout_seconds:Some(120),alert_on_failure:false,run_as_actor_id:None,tag_ids:vec![]};input.validate(actor).unwrap();
@@ -333,6 +336,7 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let restored=executor.restore(&restore,&cancel).await;store.finish_restore(&restore,&restored).await.unwrap();assert_eq!(restored.status,citadel_backups::BackupRestoreStatus::Succeeded,"{:?}",restored.error_message);
         assert_eq!(cluster.node(2,&["run","--rm","--volume",&format!("{target}:/fixture:ro"),"--entrypoint","cat",IMAGE,"/fixture/payload.txt"],None).await,PAYLOAD);
         assert_eq!(store.get_restore(queued.id).await.unwrap().status,citadel_backups::BackupRestoreStatus::Succeeded);
+        swarm_copy::verify(&cluster, &pool, &store, &executor, &persisted, &agent, &registry).await;
         for i in 0..3 {
             let helpers=cluster.node(i,&["ps","--all","--filter","label=com.citadel.system-role=backup-helper","--quiet"],None).await;
             assert!(helpers.is_empty(),"Backup helper leaked on node {i}");

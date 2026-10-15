@@ -38,6 +38,31 @@ registry tag changes again during deployment.
 If the status refresh fails, the deployment remains successful and its progress
 shows a warning. Use **Check for updates** to retry the check without redeploying.
 
+## Duplicate
+
+Choose **Duplicate → Configuration only** to open a new Stack form from the saved configuration.
+**Review copy** reviews the edited draft before saving; creating it does not
+Apply the Stack. The Compose project name is reset, and automatic updates,
+webhooks, deployment hooks and build-triggered redeployment are disabled. Drift
+auto-fix becomes detection only, with automatic start, resume and removal off.
+Enable integrations on the new Stack after reviewing their targets.
+
+Configuration only copies settings, **not volume contents**. A different Compose project
+name does not isolate external volumes, explicit volume names or bind paths.
+Review the Compose configuration, bindings, networks and published ports before
+Apply. Git references and external dependencies remain references; duplication
+does not create another Git repository. History and access grants are not copied.
+
+**Duplicate → Configuration + data** opens a three-step wizard: configure the
+name and destination Platform, choose current data or existing backups, and review the copy. Current data
+needs no backup policy; confirm source consistency first. For standalone Web Editor Stacks,
+Citadel restores declared named volumes into fresh volumes and rewrites their
+Compose declarations. Shared volumes are restored once. Copying to another
+Standalone Platform requires existing backups in a reachable S3-compatible
+repository. Current-data copies stay on the source Platform. Git sources, Swarm
+Stacks, bind mounts and storage indirection that cannot be resolved safely are
+blocked. See [Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data).
+
 ## Backup coverage
 
 The backup shield at the far right of the main tab bar is available from every

@@ -125,12 +125,19 @@ pub(super) async fn verify(
     entitlements.automated.store(true, Ordering::Relaxed);
     let (_, body) = send(&app, id, "disposable-service-webhook").await;
     assert_eq!(body["status"], "noop", "equal image is not redeployed");
+    assert_eq!(body["reason"], "Service image is up to date.");
+    let unchanged_events: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceWebhookReceived'")
+        .bind(id).fetch_one(pool).await.unwrap();
+    assert_eq!(
+        unchanged_events, 2,
+        "an authenticated no-change webhook must not add routine activity noise"
+    );
     digests.changed.store(true, Ordering::Relaxed);
     let (_, body) = send(&app, id, "disposable-service-webhook").await;
     assert_eq!(body["status"], "queued");
     let severities: Vec<String> = sqlx::query_scalar("SELECT status FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceWebhookReceived' ORDER BY id")
         .bind(id).fetch_all(pool).await.unwrap();
-    assert_eq!(severities, ["Failure", "Warning", "Information", "Success"]);
+    assert_eq!(severities, ["Failure", "Warning", "Success"]);
     let current = services.get(admin.actor_id, true, id).await.unwrap();
     assert_eq!(
         current.auto_update_state.status,
@@ -236,7 +243,7 @@ pub(super) async fn verify(
         StatusCode::UNAUTHORIZED
     );
     let events: Vec<Value> = sqlx::query_scalar("SELECT info::jsonb FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceWebhookReceived'").bind(id).fetch_all(pool).await.unwrap();
-    assert_eq!(events.len(), 7);
+    assert_eq!(events.len(), 6);
     assert!(
         events
             .iter()

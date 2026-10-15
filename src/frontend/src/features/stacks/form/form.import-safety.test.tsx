@@ -3,6 +3,7 @@ import {
   StackDriftMode,
   StackImportKind,
   StackSource,
+  StackReleaseStatus,
   StackUpdateBehavior,
 } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
@@ -83,7 +84,8 @@ vi.mock('@/lib/hooks', async (importOriginal) => {
       isPending: false,
     }),
     useRead: (key: string, ...args: unknown[]) => {
-      useReadMock(key, ...args);
+      const result = useReadMock(key, ...args);
+      if (result) return result;
       switch (key) {
         case 'getComposeProjectImportDraft':
           return { data: { data: importDraft }, isFetching: false };
@@ -218,6 +220,7 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
             Submit import
           </button>
           <span>{autoUpdate?.description}</span>
+          <span>{platform?.description}</span>
         </div>
       );
     },
@@ -227,7 +230,7 @@ vi.mock('@/components/custom/form-builder', async (importOriginal) => {
 describe('Stack Compose import configuration', () => {
   beforeEach(() => {
     importComposeProjectMock.mockReset().mockResolvedValue({ data: {} });
-    useReadMock.mockClear();
+    useReadMock.mockReset();
   });
 
   it('sends the selected import kind as an API query parameter', async () => {
@@ -316,5 +319,28 @@ describe('Stack Compose import configuration', () => {
         }),
       ),
     );
+  });
+});
+
+describe('Stack copied storage placement', () => {
+  afterEach(() => useReadMock.mockReset());
+
+  it.each([true, false])('locks the platform only when the draft has copied storage (%s)', async (hasCopiedStorage) => {
+    useReadMock.mockImplementation((key: string) => {
+      if (key === 'getStack')
+        return { data: { data: { status: StackReleaseStatus.Created, source: null, hasCopiedStorage } } };
+      if (key === 'getStackConfig') return { data: { data: importDraft.draft } };
+      return undefined;
+    });
+    renderCitadel(<StackForm mode="edit" />);
+    const platform = await screen.findByRole('button', { name: 'Platform selection' });
+    if (hasCopiedStorage) {
+      expect(platform).toBeDisabled();
+      expect(
+        screen.getByText('Copied volumes belong to this platform. Create another copy to use a different platform.'),
+      ).toBeInTheDocument();
+    } else {
+      expect(platform).toBeEnabled();
+    }
   });
 });

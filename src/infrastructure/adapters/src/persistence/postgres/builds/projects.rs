@@ -31,6 +31,23 @@ impl PostgresBuildRepository {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            let source = if let Some(source_id) = input.duplicate_source_id {
+                let name: Option<String> = sqlx::query_scalar(
+                    "SELECT name FROM buildprojects WHERE id=$1 AND archivedat IS NULL FOR SHARE",
+                )
+                .bind(source_id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(storage)?;
+                Some(citadel_activities::ActivitySourceResource {
+                    resource_id: source_id,
+                    resource_name: name.ok_or(BuildError::NotFound)?,
+                    resource_type: citadel_activities::ActivityResourceType::Build,
+                })
+            } else {
+                None
+            };
+
             sqlx::query("INSERT INTO buildprojects(id,name,normalizedname,description,enabled,gitrepositoryid,branch,contextpath,dockerfilepath,target,buildargs,buildsecrets,builderkind,platformid,buildagentpoolid,registryid,imagerepository,tagtemplates,webhook,timeoutseconds,retentionruncount,createdbyactorid,pushtoregistry) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)")
                 .bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(input.description.as_deref()).bind(input.enabled)
                 .bind(input.git_repository_id).bind(input.branch.as_deref().unwrap_or("main")).bind(input.context_path.as_deref().unwrap_or("."))
@@ -55,6 +72,7 @@ impl PostgresBuildRepository {
                 &project,
                 actor,
                 citadel_activities::ActivityEventInfo::BuildCreated {
+                    source,
                     build: project.snapshot(),
                 },
             )

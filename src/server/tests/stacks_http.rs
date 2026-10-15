@@ -351,6 +351,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         .with_entitlements(Arc::new(drift::Entitlements(true))),
     );
     let app = stacks_http::router(StacksHttpState {
+        copy_eligibility: None,
         backup_coverage: None,
         platforms: Arc::new(citadel_platforms::PlatformReadService::new(Arc::new(
             citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(

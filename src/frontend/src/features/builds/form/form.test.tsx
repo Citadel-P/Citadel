@@ -94,3 +94,54 @@ it('saves a local-only build without registry or image repository', async () => 
   await user.click(screen.getAllByRole('button', { name: /^Save$/ })[0]);
   await waitFor(() => expect(saved).toMatchObject({ pushToRegistry: false, registryId: null, imageRepository: '' }));
 });
+
+it('reviews a disabled configuration copy before creating it', async () => {
+  const draft = {
+    name: 'app-image Copy',
+    duplicateSourceId: project.id,
+    enabled: false,
+    gitRepositoryId: project.gitRepositoryId,
+    branch: 'main',
+    contextPath: '.',
+    dockerfilePath: 'Dockerfile',
+    builderKind: BuildProjectBuilderKind.Platform,
+    platformId: project.platformId,
+    pushToRegistry: false,
+    imageRepository: '',
+    tagTemplates: ['latest'],
+    webhook: null,
+    timeoutSeconds: 1800,
+    retentionRunCount: 20,
+    buildSecrets: [],
+    buildArgs: [],
+  };
+  let saved: unknown;
+  server.use(
+    http.get(`http://localhost/api/v1/buildProjects/${project.id}/duplicate-draft`, () =>
+      HttpResponse.json({ sourceName: project.name, draft }),
+    ),
+    http.post('http://localhost/api/v1/buildProjects', async ({ request }) => {
+      saved = await request.json();
+      return HttpResponse.json({ ...project, id: 'copy-id', enabled: false });
+    }),
+  );
+  const { user } = renderCitadel(<BuildForm mode="add" />, { route: `/builds/add?duplicateFrom=${project.id}` });
+  await waitFor(() => expect(screen.getByDisplayValue('app-image Copy')).toBeVisible());
+  await user.clear(screen.getByDisplayValue('app-image Copy'));
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'staging-image');
+  for (const control of screen.getAllByRole('switch', { name: 'Enabled', checked: false }))
+    expect(control).toBeDisabled();
+  await user.click(screen.getAllByRole('button', { name: 'Review copy' })[0]);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('staging-image');
+  expect(saved).toBeUndefined();
+  await user.click(screen.getByRole('button', { name: 'Create configuration copy' }));
+  await waitFor(() =>
+    expect(saved).toMatchObject({
+      name: 'staging-image',
+      duplicateSourceId: project.id,
+      enabled: false,
+      webhook: null,
+    }),
+  );
+  expect(Object.keys(localStorage).some((key) => key.includes(project.id))).toBe(false);
+});

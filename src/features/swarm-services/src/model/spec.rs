@@ -253,6 +253,23 @@ impl SwarmServiceSpec {
         self
     }
 
+    #[must_use]
+    pub fn for_duplicate(self) -> Self {
+        let mut copy = self.for_create();
+        copy.update_behavior = UpdateBehavior::Disabled;
+        copy.webhook = None;
+        copy
+    }
+
+    pub fn validate_duplicate(&self) -> Result<(), SwarmServiceError> {
+        if self.update_behavior != UpdateBehavior::Disabled || self.webhook.is_some() {
+            return Err(validation(
+                "Configuration copies must have automatic updates and webhooks disabled. Enable them on the new resource after review.",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), SwarmServiceError> {
         if let Some(webhook) = &self.webhook {
             webhook.validate().map_err(validation)?;

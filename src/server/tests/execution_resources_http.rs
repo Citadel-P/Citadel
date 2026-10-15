@@ -87,6 +87,9 @@ mod validation;
 #[path = "execution_resources_http/backup_contract.rs"]
 mod backup_contract;
 
+#[path = "execution_resources_http/resource_copies.rs"]
+mod resource_copies;
+
 // These fixtures share a global work queue in their disposable database.
 static FIXTURE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 

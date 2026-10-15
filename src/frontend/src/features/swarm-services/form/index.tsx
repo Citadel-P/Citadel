@@ -1,8 +1,9 @@
+import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
+import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useMemo, useState } from 'react';
-import { Boxes, Container, Copy, Maximize2, RefreshCw, Workflow, type LucideIcon } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { Boxes, Container, Maximize2, RefreshCw, Workflow, type LucideIcon } from 'lucide-react';
 import {
   ManagedSwarmServiceView,
   ResourceBindingScope,
@@ -171,20 +172,15 @@ const SwarmServicePendingChangesAlert = ({ resource }: { resource: ManagedSwarmS
 };
 
 const DuplicateSwarmServiceConfigButton = ({ resource }: { resource: ManagedSwarmServiceView }) => {
-  const navigate = useNavigate();
-  const disabled = !hasCapability(resource, 'canRead') || !hasCapability(resource, 'canWrite');
-
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 rounded-sm text-xs"
-      disabled={disabled}
-      onClick={() => navigate(`/platforms/${resource.platformId}/services/add?duplicateFrom=${resource.id}`)}>
-      <Copy className="size-3.5" />
-      Duplicate Config
-    </Button>
+    <DuplicateWorkload
+      kind={ResourceCopyKind.SwarmService}
+      sourceId={resource.id}
+      sourceName={resource.name}
+      copyEligibility={resource.copyEligibility}
+      configurationHref={`/platforms/${resource.platformId}/services/add?duplicateFrom=${resource.id}`}
+      disabled={!hasCapability(resource, 'canRead') || !hasCapability(resource, 'canWrite')}
+    />
   );
 };
 

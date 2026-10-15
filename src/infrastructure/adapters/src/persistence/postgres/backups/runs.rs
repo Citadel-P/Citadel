@@ -198,7 +198,7 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             recover_stale(&mut tx, stale_before).await?;
-            let row=sqlx::query("SELECT r.id,r.backuppolicyid,r.backuprepositoryid,p.timeoutseconds,p.source FROM backupruns r JOIN backuppolicies p ON p.id=r.backuppolicyid JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND p.archivedat IS NULL AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid AND l.expiresat>CURRENT_TIMESTAMP) ORDER BY r.queuedat,r.id FOR UPDATE OF r,p,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
+            let row=sqlx::query("SELECT r.id,r.backuppolicyid,r.backuprepositoryid,p.timeoutseconds,p.source FROM backupruns r JOIN backuppolicies p ON p.id=r.backuppolicyid JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND NOT EXISTS(SELECT 1 FROM resourcecopyrestores cr JOIN resourcecopies cp ON cp.id=cr.copyid JOIN backuprestoreruns rr ON rr.id=cr.restoreid WHERE rr.backuprepositoryid=r.backuprepositoryid AND cp.status IN ('Restoring','Cancelling')) AND p.archivedat IS NULL AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid AND l.expiresat>CURRENT_TIMESTAMP) ORDER BY r.queuedat,r.id FOR UPDATE OF r,p,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
             let Some(row) = row else {
                 tx.commit().await.map_err(storage)?;
                 return Ok(None);
@@ -206,6 +206,13 @@ impl PostgresBackupPersistence {
             let id: Uuid = row.try_get("id").map_err(storage)?;
             let policy_id: Uuid = row.try_get("backuppolicyid").map_err(storage)?;
             let repo_id: Uuid = row.try_get("backuprepositoryid").map_err(storage)?;
+            // Recheck after obtaining the repository lock: the SELECT snapshot
+            // may predate a copy pin committed by a concurrent transaction.
+            let copy_pinned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM resourcecopyrestores cr JOIN resourcecopies cp ON cp.id=cr.copyid JOIN backuprestoreruns rr ON rr.id=cr.restoreid WHERE rr.backuprepositoryid=$1 AND cp.status IN ('Restoring','Cancelling'))")
+                .bind(repo_id).fetch_one(&mut *tx).await.map_err(storage)?;
+            if copy_pinned {
+                return Ok(None);
+            }
             let timeout: i32 = row.try_get("timeoutseconds").map_err(storage)?;
             let source: Value = row.try_get("source").map_err(storage)?;
             let source_key = backup_source_key(&source)?;

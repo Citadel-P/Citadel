@@ -74,7 +74,7 @@ pub fn merge(
             "Cron and time zone must both be set or both be empty.".into(),
         ));
     }
-    input.validate(ActorId::new(current.run_as_actor_id))?;
+    input.validate_update(ActorId::new(current.run_as_actor_id), current)?;
     // Creation's legacy default must not turn an explicitly cleared schedule back on.
     if input.cron.is_none() {
         input.time_zone = None;
@@ -94,8 +94,14 @@ pub fn guard(current: &BackupPolicy, input: &BackupPolicyConfiguration) -> Resul
             "Backup Policy cannot be changed while a run is active.".into(),
         ));
     }
+    let mut current_source = current.source.clone();
+    if let crate::spec::BackupSourceSpec::DockerVolume { consistency, .. } = &mut current_source {
+        // Correcting the unsupported legacy mode does not move the backup's
+        // physical source or history. New non-Live values fail validation.
+        *consistency = crate::spec::VolumeBackupConsistency::Live;
+    }
     if current.first_successful_run_at.is_some()
-        && (current.source != input.source
+        && ((current.source != input.source && current_source != input.source)
             || current.backup_repository_id != input.backup_repository_id)
     {
         return Err(BackupError::Validation(
@@ -136,6 +142,61 @@ pub fn changes_execution(patch: &Value) -> bool {
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    #[test]
+    fn unsupported_consistency_can_be_disabled_but_not_created_or_reenabled() {
+        for successful in [false, true] {
+            let mut current = policy();
+            current.first_successful_run_at = successful.then(chrono::Utc::now);
+            current.source = serde_json::from_value(json!({
+                "$type": "DockerVolume", "platformId": Uuid::now_v7(),
+                "volumeName": "production", "consistency": "StopAttachedContainers"
+            }))
+            .unwrap();
+
+            let mut disabled = merge(&current, &json!({"enabled": false})).unwrap();
+            assert!(!disabled.enabled);
+            assert_eq!(disabled.source, current.source);
+            assert_eq!(disabled.backup_repository_id, current.backup_repository_id);
+            assert!(
+                disabled
+                    .validate(ActorId::new(current.run_as_actor_id))
+                    .is_err()
+            );
+
+            current.enabled = false;
+            let metadata = merge(
+                &current,
+                &json!({"description": "Waiting for consistency review"}),
+            )
+            .unwrap();
+            assert_eq!(metadata.source, current.source);
+            assert!(!metadata.enabled);
+            assert!(merge(&current, &json!({"enabled": true})).is_err());
+            let mut changed = serde_json::to_value(&current.source).unwrap();
+            changed["volumeName"] = json!("other");
+            assert!(merge(&current, &json!({"source": changed})).is_err());
+
+            let mut corrected = serde_json::to_value(&current.source).unwrap();
+            corrected["consistency"] = json!("Live");
+            assert!(merge(&current, &json!({"source": corrected, "enabled": true})).is_ok());
+        }
+    }
+    #[test]
+    fn legacy_consistency_can_be_corrected_without_moving_successful_source() {
+        let mut current = policy();
+        current.first_successful_run_at = Some(chrono::Utc::now());
+        current.source = serde_json::from_value(json!({
+            "$type": "DockerVolume", "platformId": Uuid::now_v7(),
+            "volumeName": "production", "consistency": "StopAttachedContainers"
+        }))
+        .unwrap();
+        let mut source = serde_json::to_value(&current.source).unwrap();
+        source["consistency"] = json!("Live");
+        assert!(merge(&current, &json!({"source": source})).is_ok());
+        source["volumeName"] = json!("different-data");
+        assert!(merge(&current, &json!({"source": source})).is_err());
+    }
     fn policy() -> BackupPolicy {
         let now = chrono::Utc::now();
         BackupPolicy {

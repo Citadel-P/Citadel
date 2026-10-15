@@ -8,6 +8,9 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationActionConfiguration {
+    /// Provenance for an explicitly reviewed configuration copy; never runtime state.
+    #[serde(default)]
+    pub duplicate_source_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub code: String,
@@ -26,6 +29,16 @@ pub struct AutomationActionConfiguration {
 
 impl AutomationActionConfiguration {
     pub fn validate(&mut self, default_actor: ActorId) -> Result<(), AutomationError> {
+        if self.duplicate_source_id.is_some()
+            && (self.enabled
+                || self.webhook.is_some()
+                || self.schedule_enabled
+                || self
+                    .run_as_actor_id
+                    .is_some_and(|id| id != default_actor.value()))
+        {
+            return Err(AutomationError::Validation("Configuration copies must be disabled, have their schedule and webhook off, and run as the creating actor. Configure these on the new Action after review.".into()));
+        }
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(AutomationError::Validation(

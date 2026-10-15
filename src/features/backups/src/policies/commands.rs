@@ -21,6 +21,24 @@ pub struct BackupPolicyConfiguration {
 
 impl BackupPolicyConfiguration {
     pub fn validate(&mut self, actor: ActorId) -> Result<(), BackupError> {
+        self.source.validate_execution()?;
+        self.validate_fields(actor)
+    }
+
+    pub(super) fn validate_update(
+        &mut self,
+        actor: ActorId,
+        current: &BackupPolicy,
+    ) -> Result<(), BackupError> {
+        // An unsupported stored source may remain on a disabled policy. This
+        // allows deactivation without silently changing its consistency contract.
+        if self.enabled || self.source != current.source {
+            self.source.validate_execution()?;
+        }
+        self.validate_fields(actor)
+    }
+
+    fn validate_fields(&mut self, actor: ActorId) -> Result<(), BackupError> {
         validate_name(&mut self.name, "Backup Policy")?;
         if self.backup_repository_id.is_nil() {
             return Err(BackupError::Validation(

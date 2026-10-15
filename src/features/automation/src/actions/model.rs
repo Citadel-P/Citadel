@@ -29,6 +29,25 @@ pub struct AutomationAction {
 }
 
 impl AutomationAction {
+    pub fn duplicate_configuration(&self) -> AutomationActionConfiguration {
+        AutomationActionConfiguration {
+            duplicate_source_id: Some(self.id),
+            name: format!("{} Copy", self.name.chars().take(123).collect::<String>()),
+            description: self.description.clone(),
+            code: self.code.clone(),
+            default_args_json: Some(self.default_args_json.clone()),
+            enabled: false,
+            schedule_enabled: false,
+            schedule_cron: self.schedule_cron.clone(),
+            schedule_time_zone: Some(self.schedule_time_zone.clone()),
+            webhook: None,
+            timeout_seconds: Some(self.timeout_seconds),
+            alert_on_failure: self.alert_on_failure,
+            run_as_actor_id: None,
+            tag_ids: self.tags.iter().map(|tag| tag.id).collect(),
+        }
+    }
+
     pub fn snapshot(&self) -> citadel_activities::AutomationActionActivitySnapshot {
         citadel_activities::AutomationActionActivitySnapshot {
             id: self.id,

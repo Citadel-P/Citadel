@@ -22,6 +22,21 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, id: Uuid) {
     let draft = body["draft"].clone();
     assert_eq!(draft["duplicateSource"]["resourceId"], id.to_string());
     assert_eq!(draft["duplicateSource"]["resourceType"], "SwarmService");
+    assert_eq!(draft["spec"]["updateBehavior"], "Disabled");
+    let mut forged = draft.clone();
+    forged["spec"]["updateBehavior"] = json!("AutoDeploy");
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/swarmServices",
+            Some(admin.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
     let typed: citadel_server::api::resources::swarm_services::requests::CreateSwarmServiceInput =
         serde_json::from_value(draft.clone()).unwrap();
     let domain: citadel_swarm_services::CreateSwarmService = typed.into();
