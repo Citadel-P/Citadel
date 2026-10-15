@@ -233,6 +233,7 @@ impl StackRuntime for StackRuntimeRouter {
         progress: Option<&'a citadel_stacks::StackProgress>,
     ) -> BoxFuture<'a, Result<StackRuntimeResult, StackError>> {
         async move {
+            crate::connectors::routing::resource_copies::verify_destination(&self.pool, &self.runtime, claim.stack_id, claim.platform_id, None, cancellation).await.map_err(StackError::Runtime)?;
             validate_stack_execution(claim)?;
             let target = self.platform(claim.platform_id).await?;
             let registry = self.stack_registry(claim.spec.common().registry_id).await?;

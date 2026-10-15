@@ -53,6 +53,39 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, id: Uuid) {
     let mut draft = body["draft"].clone();
     assert_eq!(draft["duplicateSource"]["resourceType"], "Stack");
     assert_eq!(draft["duplicateSource"]["resourceId"], id.to_string());
+    assert_eq!(draft["spec"]["updateBehavior"], "Disabled");
+    let mut forged = draft.clone();
+    forged["spec"]["updateBehavior"] = json!("StackAutoDeploy");
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/stacks",
+            Some(admin.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(draft["driftPolicy"]["mode"], "DetectOnly");
+    assert_eq!(draft["driftPolicy"]["autoStartStoppedContainers"], false);
+    assert_eq!(draft["driftPolicy"]["autoResumePausedContainers"], false);
+    assert_eq!(draft["driftPolicy"]["removeExtraContainers"], false);
+    let mut forged = draft.clone();
+    forged["spec"]["postDeploy"] = json!({"commands": ["touch /production"]});
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/stacks",
+            Some(admin.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
     let typed: citadel_server::api::resources::stacks::requests::CreateStackInput =
         serde_json::from_value(draft.clone()).unwrap();
     assert!(citadel_stacks::CreateStack::try_from(typed).is_ok());

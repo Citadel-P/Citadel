@@ -143,6 +143,19 @@ Set:
 
 Save the build before queueing a run.
 
+## Duplicate configuration
+
+Choose **Duplicate configuration** to open a prefilled Build Project form, edit
+it, then select **Review copy**. Creating the copy leaves it disabled with no
+webhook and does not start a build. You need permission to read the source and
+create Build Projects, plus access to the selected dependencies.
+
+The copy keeps Git, registry, execution-target and secret references. Review
+image repository names and tag templates before enabling it: unchanged output
+settings can publish over the source project's tags. Runs, artifacts, webhook
+credentials and access grants are not copied. The creation activity identifies
+the source project.
+
 ## Source And Branches
 
 The build source is an existing Citadel Git repository.

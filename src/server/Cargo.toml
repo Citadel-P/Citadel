@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-resource-copies = { path = "../features/resource-copies" }
 getrandom.workspace = true
 citadel-runtime = { path = "../infrastructure/runtime" }
 citadel-processes = { path = "../infrastructure/processes" }

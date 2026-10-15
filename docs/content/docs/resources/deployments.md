@@ -231,18 +231,38 @@ If a platform is disconnected, deploy and runtime actions can fail because Citad
 
 ## Duplicate
 
-Use **Duplicate** to create a new deployment draft from an existing deployment.
+The **Duplicate** menu on the detail page offers **Configuration only** and
+**Configuration + data**. Configuration only opens a prefilled add form from
+the saved configuration.
 
 The duplicate flow:
 
 1. opens the normal add form
 2. copies editable configuration into a draft
 3. shows warnings for platform-specific values such as host bind mounts
-4. waits for you to save before creating anything
+4. lets you edit the draft, then select **Review copy** before creating anything
 
-Runtime state, container IDs, history, generated credentials, and resolved secret values are not copied.
+The new Deployment stays undeployed. Automatic updates and build-triggered
+redeployment are disabled; configure these on the new Deployment after reviewing
+its targets. The source Deployment is unchanged.
+
+**Configuration only** copies settings, **not data**. Named volumes, bind paths,
+networks, ports and binding references can still point to the original storage
+or external systems. Review these before Apply.
+
+Runtime state, container IDs, history, generated credentials, resolved secret
+values and access grants are not copied.
 
 Deployment-scoped variables and secret references are copied when you save the duplicate. Global bindings continue to be inherited. You need permission to view and manage resource bindings to copy them.
+
+**Configuration + data** uses a three-step wizard to name the copy, choose
+current data or existing backups, and review the new storage. Copying current
+data does not require a backup policy; confirm source consistency first. It restores
+into fresh volumes before creating an undeployed Deployment. Existing backups in a
+reachable S3-compatible repository can be restored on another Standalone Platform;
+current-data copies stay on the source Platform. Bind mounts and anonymous mappings must be handled separately;
+see [Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data)
+for requirements and recovery.
 
 ## Adopt An Existing Container
 

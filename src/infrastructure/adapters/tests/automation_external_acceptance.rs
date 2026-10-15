@@ -196,6 +196,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         ("await fetch('http://denied.example.test');", "Failed", 10),
     ] {
         let mut input = AutomationActionConfiguration {
+            duplicate_source_id: None,
             name: format!("real-deno-{}", Uuid::now_v7()),
             description: None,
             code: code.into(),

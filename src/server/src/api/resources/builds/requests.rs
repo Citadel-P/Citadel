@@ -6,6 +6,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectInput {
+    #[serde(default)]
+    pub duplicate_source_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
@@ -38,6 +40,7 @@ impl TryFrom<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
     type Error = serde_json::Error;
     fn try_from(value: citadel_builds::BuildProjectConfiguration) -> Result<Self, Self::Error> {
         Ok(Self {
+            duplicate_source_id: value.duplicate_source_id,
             name: value.name,
             description: value.description,
             enabled: value.enabled,
@@ -70,6 +73,7 @@ impl TryFrom<citadel_builds::BuildProjectConfiguration> for BuildProjectInput {
 impl From<BuildProjectInput> for citadel_builds::BuildProjectConfiguration {
     fn from(value: BuildProjectInput) -> Self {
         Self {
+            duplicate_source_id: value.duplicate_source_id,
             name: value.name,
             description: value.description,
             enabled: value.enabled,

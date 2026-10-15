@@ -1,5 +1,28 @@
+use crate::spec::{BackupSourceSpec, VolumeBackupConsistency};
 use crate::*;
 use serde_json::json;
+
+#[test]
+fn unsupported_container_stopping_is_rejected_instead_of_silently_running_live() {
+    let mut source: BackupSourceSpec = serde_json::from_value(json!({
+        "$type": "DockerVolume", "platformId": Uuid::now_v7(), "volumeName": "data",
+        "consistency": "StopAttachedContainers"
+    }))
+    .unwrap();
+    source.validate().unwrap(); // Historical source identities remain readable.
+    assert!(
+        source
+            .validate_execution()
+            .unwrap_err()
+            .to_string()
+            .contains("not supported")
+    );
+    let BackupSourceSpec::DockerVolume { consistency, .. } = &mut source else {
+        unreachable!()
+    };
+    *consistency = VolumeBackupConsistency::Live;
+    source.validate_execution().unwrap();
+}
 #[test]
 fn repository_requires_polymorphic_type() {
     assert!(

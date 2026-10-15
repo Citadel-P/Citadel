@@ -1535,6 +1535,21 @@
         ],
         "type": "object"
       },
+      "AutomationActionDuplicateDraftView": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/AutomationActionInput"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceName",
+          "draft"
+        ],
+        "type": "object"
+      },
       "AutomationActionInput": {
         "properties": {
           "alertOnFailure": {
@@ -1550,6 +1565,13 @@
             ]
           },
           "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duplicateSourceId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -4293,6 +4315,21 @@
         ],
         "type": "string"
       },
+      "BuildProjectDuplicateDraftView": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/BuildProjectInput"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceName",
+          "draft"
+        ],
+        "type": "object"
+      },
       "BuildProjectInput": {
         "properties": {
           "branch": {
@@ -4342,6 +4379,13 @@
             ]
           },
           "dockerfilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duplicateSourceId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -7096,6 +7140,16 @@
           "controlState": {
             "$ref": "#/components/schemas/ResourceControlState"
           },
+          "copyEligibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
+              }
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -9770,6 +9824,16 @@
           },
           "controlState": {
             "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "copyEligibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
+              }
+            ]
           },
           "createdAt": {
             "format": "date-time",
@@ -14112,6 +14176,16 @@
               },
               "action": {
                 "$ref": "#/components/schemas/AutomationActionActivitySnapshot"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActivitySourceResource"
+                  }
+                ]
               }
             },
             "required": [
@@ -14599,6 +14673,16 @@
               },
               "build": {
                 "$ref": "#/components/schemas/BuildProjectActivitySnapshot"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActivitySourceResource"
+                  }
+                ]
               }
             },
             "required": [
@@ -16190,6 +16274,32 @@
           "Idle",
           "Queued",
           "Processing"
+        ],
+        "type": "string"
+      },
+      "ResourceCopyEligibility": {
+        "description": "Actor-specific configuration-plus-data eligibility, included in detail reads\nand realtime detail snapshots. Preview and submission revalidate this hint.",
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResourceCopyEligibilityStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ResourceCopyEligibilityStatus": {
+        "enum": [
+          "Available",
+          "Unavailable",
+          "Unknown"
         ],
         "type": "string"
       },
@@ -18206,6 +18316,16 @@
           "controlState": {
             "$ref": "#/components/schemas/ResourceControlState"
           },
+          "copyEligibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
+              }
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -18226,6 +18346,10 @@
           },
           "driftPolicy": {
             "$ref": "#/components/schemas/StackDriftPolicy"
+          },
+          "hasCopiedStorage": {
+            "description": "Copied storage fixes this Stack to its destination Platform.",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -18332,6 +18456,7 @@
           "currentStackReleaseId",
           "platformType",
           "platformId",
+          "hasCopiedStorage",
           "version",
           "spec",
           "source",
@@ -25687,6 +25812,116 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/automation/actions/{id}/duplicate-draft": {
+      "get": {
+        "operationId": "getAutomationActionDuplicateDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionDuplicateDraftView"
+                }
+              }
+            },
+            "description": "Editable configuration without activation or runtime state"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Prepare a disabled configuration copy",
+        "tags": [
+          "AutomationActions"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/automation/actions/{id}/run": {
       "post": {
         "operationId": "runAutomationAction",
@@ -32920,6 +33155,116 @@
           }
         ],
         "summary": "Update Build Project",
+        "tags": [
+          "BuildProjects"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/buildProjects/{id}/duplicate-draft": {
+      "get": {
+        "operationId": "getBuildProjectDuplicateDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildProjectDuplicateDraftView"
+                }
+              }
+            },
+            "description": "Editable configuration without activation or runtime state"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Prepare a disabled configuration copy",
         "tags": [
           "BuildProjects"
         ],

@@ -3,6 +3,9 @@ use crate::*;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildProjectConfiguration {
+    /// Provenance for an explicitly reviewed configuration copy; never runtime state.
+    #[serde(default)]
+    pub duplicate_source_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
@@ -40,6 +43,9 @@ impl BuildProjectConfiguration {
             webhook
                 .validate()
                 .map_err(|error| BuildError::Validation(error.into()))?;
+        }
+        if self.duplicate_source_id.is_some() && (self.enabled || self.webhook.is_some()) {
+            return Err(BuildError::Validation("Configuration copies must be disabled and have no webhook; enable them after reviewing the new resource.".into()));
         }
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
@@ -211,6 +217,7 @@ impl BuildProjectConfiguration {
 impl From<&BuildProject> for BuildProjectConfiguration {
     fn from(value: &BuildProject) -> Self {
         Self {
+            duplicate_source_id: None,
             name: value.name.clone(),
             description: value.description.clone(),
             enabled: value.enabled,

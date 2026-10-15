@@ -59,3 +59,5 @@ pub mod release_resources;
 pub mod build_images;
 
 pub(crate) mod runtime_inventory;
+
+pub(crate) use mutations::create_in_transaction;

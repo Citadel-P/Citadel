@@ -36,7 +36,8 @@ const getRunStyle = (value: string) => {
   if (value === 'succeededwithwarnings' || value === 'queued') return styles.warning;
   if (isFailedRunStatus(value)) return styles.danger;
   if (value === 'cancelled' || value === 'canceled') return styles.muted;
-  if (['preparing', 'running', 'applyingretention'].includes(value)) return styles.info;
+  if (['preparing', 'running', 'applyingretention', 'restoring', 'cancelling', 'cleaning'].includes(value))
+    return styles.info;
   return styles.muted;
 };
 

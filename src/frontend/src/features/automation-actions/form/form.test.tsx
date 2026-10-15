@@ -4,7 +4,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { AutomationActionForm } from './form';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn(), read: vi.fn() }));
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
   useLicenseEntitlements: () => ({
@@ -13,6 +13,7 @@ vi.mock('@/features/license/use-license-entitlements', () => ({
 }));
 
 vi.mock('@/lib/hooks', () => ({
+  useRead: (...args: unknown[]) => mocks.read(...args) ?? { data: undefined, isFetching: false },
   useMutate: () => ({ mutateAsync: mocks.mutate }),
   useSaveResource: () => ({
     save: mocks.save,
@@ -84,6 +85,7 @@ describe('AutomationActionForm licensing', () => {
     mocks.open.mockClear();
     mocks.save.mockClear();
     mocks.mutate.mockClear();
+    mocks.read.mockReset();
   });
 
   it('tests edited code and arguments without saving the action', async () => {
@@ -164,4 +166,55 @@ describe('AutomationActionForm licensing', () => {
 
     expect(screen.getByRole('button', { name: 'Test Draft' })).toBeDisabled();
   });
+});
+
+it('keeps copied actions inactive and reviews the edited name before saving', async () => {
+  mocks.save.mockClear();
+  mocks.read.mockReturnValue({
+    data: {
+      data: {
+        sourceName: action.name,
+        draft: {
+          name: 'Prune images Copy',
+          description: null,
+          code: action.code,
+          defaultArgsJson: '{}',
+          duplicateSourceId: action.id,
+          enabled: false,
+          scheduleEnabled: false,
+          scheduleCron: '0 12 * * *',
+          scheduleTimeZone: 'UTC',
+          webhook: null,
+          timeoutSeconds: 300,
+          alertOnFailure: true,
+          runAsActorId: null,
+          tagIds: [],
+        },
+      },
+    },
+    isFetching: false,
+  });
+  const { user } = renderCitadel(<AutomationActionForm mode="add" />, {
+    route: `/automation/add?duplicateFrom=${action.id}`,
+  });
+  const name = await screen.findByDisplayValue('Prune images Copy');
+  await user.clear(name);
+  await user.type(name, 'Prune staging');
+  for (const control of screen.getAllByRole('switch', { name: 'Enabled', checked: false }))
+    expect(control).toBeDisabled();
+  await user.click(screen.getAllByRole('button', { name: 'Review copy' })[0]);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Prune staging');
+  expect(mocks.save).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Create configuration copy' }));
+  expect(mocks.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: 'Prune staging',
+      duplicateSourceId: action.id,
+      enabled: false,
+      scheduleEnabled: false,
+      runAsActorId: '',
+      webhook: null,
+    }),
+  );
+  expect(Object.keys(localStorage).some((key) => key.includes(action.id))).toBe(false);
 });

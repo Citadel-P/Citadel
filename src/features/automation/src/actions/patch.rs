@@ -96,6 +96,7 @@ impl From<UpdateAutomationActionMetadata> for UpdateAutomationActionInput {
 impl UpdateAutomationActionInput {
     pub fn apply(self, current: AutomationAction) -> AutomationActionConfiguration {
         AutomationActionConfiguration {
+            duplicate_source_id: None,
             name: current.name,
             description: self.description.apply(current.description),
             code: self.code.apply(current.code),

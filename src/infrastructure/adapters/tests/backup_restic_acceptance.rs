@@ -22,8 +22,14 @@ const ACCESS_KEY_ID: Uuid = Uuid::from_u128(710001);
 const SECRET_KEY_ID: Uuid = Uuid::from_u128(710002);
 #[path = "backup_restic_acceptance/bind_mount.rs"]
 mod bind_mount;
+#[path = "backup_restic_acceptance/cross_platform_copy.rs"]
+mod cross_platform_copy;
 #[path = "backup_restic_acceptance/multinode.rs"]
 mod multinode;
+#[path = "backup_restic_acceptance/resource_copy.rs"]
+mod resource_copy;
+#[path = "backup_restic_acceptance/restore_ownership.rs"]
+mod restore_ownership;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Transport {
     Local,
@@ -139,9 +145,9 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let mut edge_server = None;
     let result = AssertUnwindSafe(async {
         for name in [&source, &repository_volume] { docker(&["volume", "create", name], None).await; }
-        docker(&["run", "--rm", "-i", "--volume", &format!("{source}:/fixture"), "--entrypoint", "sh", &fixture_image, "-ec", "cat > /fixture/payload.txt; mkdir -p /fixture/private/nested; cp /fixture/payload.txt /fixture/private/nested/item; ln -s payload.txt /fixture/link; chown -hR 1000:1001 /fixture; chmod 750 /fixture/private /fixture/private/nested; chmod 640 /fixture/payload.txt /fixture/private/nested/item"], Some(PAYLOAD)).await;
+        docker(&["run", "--rm", "-i", "--volume", &format!("{source}:/fixture"), "--entrypoint", "sh", &fixture_image, "-ec", "cat > /fixture/payload.txt; mkdir -p /fixture/private/nested; cp /fixture/payload.txt /fixture/private/nested/item; ln -s payload.txt /fixture/link; chown -hR 1000:1001 /fixture; chmod 751 /fixture; chmod 750 /fixture/private /fixture/private/nested; chmod 640 /fixture/payload.txt /fixture/private/nested/item"], Some(PAYLOAD)).await;
         let platform = Uuid::now_v7(); let secret = Uuid::now_v7();
-        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
             .bind(platform).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
         let agent = if transport == Transport::Edge {
             use citadel_adapters::connectors::edge::EdgeIntake;
@@ -227,6 +233,11 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         }
         input.validate().unwrap();
         let repository = store.create_repository(actor, &input).await.unwrap();
+        let copy_runtime = Arc::new(citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(
+            pool.clone(),
+            citadel_adapters::connectors::docker::DockerClient::new(if use_agent { "/no-core-docker-allowed.sock" } else { "/var/run/docker.sock" }, Duration::from_secs(30)).unwrap(),
+            agent.clone(), edge_registry.clone(),
+        ));
         let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
         executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
@@ -263,10 +274,17 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         assert_eq!(store.get_restore(queued.id).await.unwrap().status, citadel_backups::BackupRestoreStatus::Succeeded);
         let bytes = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "cat", &fixture_image, "/fixture/payload.txt"], None).await;
         assert_eq!(bytes, PAYLOAD);
-        let metadata = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "sh", &fixture_image, "-ec", "stat -c '%u:%g:%a' /fixture/payload.txt /fixture/private /fixture/private/nested /fixture/private/nested/item /fixture/link; readlink /fixture/link; cmp /fixture/payload.txt /fixture/private/nested/item"], None).await;
-        assert_eq!(String::from_utf8(metadata).unwrap(), "1000:1001:640\n1000:1001:750\n1000:1001:750\n1000:1001:640\n1000:1001:777\npayload.txt\n", "Restores must preserve ownership, permissions and symlinks");
+        let metadata = docker(&["run", "--rm", "--volume", &format!("{target}:/fixture:ro"), "--entrypoint", "sh", &fixture_image, "-ec", "stat -c '%u:%g:%a' /fixture /fixture/payload.txt /fixture/private /fixture/private/nested /fixture/private/nested/item /fixture/link; readlink /fixture/link; cmp /fixture/payload.txt /fixture/private/nested/item"], None).await;
+        assert_eq!(String::from_utf8(metadata).unwrap(), "1000:1001:751\n1000:1001:640\n1000:1001:750\n1000:1001:750\n1000:1001:640\n1000:1001:777\npayload.txt\n", "Restores must preserve ownership, permissions and symlinks");
         // A second restore cannot overwrite an existing volume without consent.
         assert_eq!(executor.restore(&restore, &cancellation).await.status, citadel_backups::BackupRestoreStatus::Failed);
+        resource_copy::verify_copy_lifecycle(&pool, &store, &executor, &persisted, &source, copy_runtime).await;
+        if transport == Transport::Local && s3_endpoint.is_some() && std::env::var("CITADEL_TEST_CROSS_PLATFORM_COPY").as_deref() == Ok("1") {
+            cross_platform_copy::verify(&pool, &store, &persisted).await;
+        }
+        if transport == Transport::Local {
+            restore_ownership::reject_raced_destinations(&pool, &store, &restore).await;
+        }
     }).catch_unwind().await;
     if use_agent {
         if result.is_err()

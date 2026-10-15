@@ -268,9 +268,45 @@ volumes, backs up a file, restores it at the volume root, verifies persisted
 results and rejects an unapproved overwrite. It uses the existing development
 compiler cache and does not build a Citadel image or touch the development DB.
 The test removes its fixture volumes; the script removes its fixture database.
-This does not replace the Agent/Edge, RustFS or multi-node acceptance gates.
+The round trip also verifies Deployment and Stack copies from existing backups
+and current data, shared-volume mapping, numeric ownership and permissions of
+the volume root and contents, source preservation,
+cancellation, stale reviews and owned-volume cleanup. Current-data copies do not
+enqueue backup-policy restore runs. The HTTP/database tests also cover durable
+claims, idempotent start, interruption recovery and permission revocation. They
+also verify committed copy-progress notifications and initiating-actor isolation.
+The copy wizard tests cover empty-ID request prevention, realtime updates and
+reconnects, active-state spinners, and returning from a completed copy.
+The `resource_copies::recovery` regression injects lost claim acknowledgements
+and completion-write failures against disposable PostgreSQL; it also verifies
+finalization and cleanup during a paused copy, cancellation and worker shutdown.
+`-UseRustFs -AgentImage <candidate>` and `-UseEdgeAgent` run those same
+copy checks through real authenticated Agents with Core's Docker connection
+unavailable. `-MultiNode` additionally copies a pinned managed Swarm Service,
+applies it on its original worker, and checks that no destination volume appears
+on the manager or another worker. These are opt-in acceptance gates; normal
+unit-test runs do not execute them.
+
+For the browser workflow and actual Core process crash recovery, run the
+[core-runtime Playwright suite](e2e/README.md) against its disposable environment.
 
 Normal browser development (`dev.sh compose-up`) builds and mounts release Core
 by default. Use `CITADEL_COMPOSE_PROFILE=dev` for faster unoptimized builds; use
 the default release profile for comparable CPU/I/O measurements.
 Native debugger tasks retain their development profile.
+
+Cross-platform copy regression tests live in
+`src/server/tests/execution_resources_http/resource_copies/destinations.rs`.
+Run the `resource_copies::` filter with a disposable
+`CITADEL_EXECUTION_DATABASE_URL`. They verify compatible destination catalogs,
+SQL authorization filtering and revocation, source snapshot versus destination
+restore routing, repository portability, stale destination fencing, and Swarm
+reference remapping/node placement. These persistence tests simulate completed
+restores; real data and owner-label checks belong to the Restic acceptance fixture.
+
+Set `CITADEL_TEST_CROSS_PLATFORM_COPY=1` for the RustFS local-volume acceptance
+fixture, with `CITADEL_TEST_AGENT_IMAGE` and `CITADEL_TEST_AGENT_NETWORK` configured,
+to also exercise Deployment and Web Editor Stack copying to a second disposable
+Docker daemon through a signed Direct Agent. Its S3 endpoint must be reachable
+from nested Docker helpers. The fixture checks payload/ownership/symlinks,
+source isolation, destination receipts and cleanup, and removes its nested daemon.

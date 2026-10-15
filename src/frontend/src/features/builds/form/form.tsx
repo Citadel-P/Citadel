@@ -35,8 +35,10 @@ import { MonacoEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { GitBranch, Plus, Trash2 } from 'lucide-react';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router';
+import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
@@ -424,8 +426,45 @@ export const BuildForm = ({
   metadataChanged?: boolean;
 }) => {
   const id = useParams().id;
+  const [searchParams] = useSearchParams();
+  const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const loadedDuplicate = useRef<string | null>(null);
+  const { data: duplicateData, isFetching: duplicateLoading } = useRead(
+    'getBuildProjectDuplicateDraft',
+    { id: duplicateFrom ?? '' },
+    { enabled: !!duplicateFrom },
+  );
+  const duplicate = duplicateData?.data;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildInput>>({});
+  useEffect(() => {
+    if (!duplicateFrom || !duplicate || loadedDuplicate.current === duplicateFrom) return;
+    loadedDuplicate.current = duplicateFrom;
+    setUpdate(duplicate.draft);
+  }, [duplicateFrom, duplicate]);
+  const copyReview = useConfigurationCopyReview<BuildInput>({
+    sourceName: duplicate?.sourceName ?? '',
+    describe: (payload) => (
+      <>
+        <p>
+          Create <strong>{'name' in payload ? payload.name : ''}</strong> as a disabled Build Project.
+        </p>
+        <p>
+          Git repository, registry, execution target and secret references remain shared. No build runs, artifacts or
+          access grants are copied.
+        </p>
+        <p>
+          Output:{' '}
+          <strong>
+            {payload.pushToRegistry === false
+              ? 'Local image only'
+              : payload.imageRepository || 'No image repository selected'}
+          </strong>
+          . Review image names and tag templates before enabling this project to avoid replacing existing tags.
+        </p>
+      </>
+    ),
+  });
   const { runId: urlRunId, hash: urlHash, clearRunId } = useBuildRunQuery();
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
@@ -830,7 +869,7 @@ export const BuildForm = ({
                     value={value ?? { enabled: false }}
                     defaultBranch={(update.branch ?? original.branch) as string | null | undefined}
                     disabled={disabled}
-                    enableDisabled={!automatedOperationsEnabled}
+                    enableDisabled={!!duplicateFrom || !automatedOperationsEnabled}
                     onChange={(webhook) => set({ webhook: webhook as WebhookConfig })}
                   />
                 ),
@@ -851,7 +890,12 @@ export const BuildForm = ({
                 label: 'Enabled',
                 description: 'Disabled builds cannot be queued manually or by future webhook automation.',
                 render: (value, set) => (
-                  <FieldSwitch id="build-enabled" checked={value !== false} onChange={(enabled) => set({ enabled })} />
+                  <FieldSwitch
+                    disabled={!!duplicateFrom}
+                    id="build-enabled"
+                    checked={value !== false}
+                    onChange={(enabled) => set({ enabled })}
+                  />
                 ),
               }),
               defineRowField<BuildInput>({
@@ -937,26 +981,38 @@ export const BuildForm = ({
       secrets,
       selectedPlatform?.connectorType,
       resource?.buildAgentPoolId,
+      duplicateFrom,
       update.branch,
       update.buildAgentPoolId,
     ],
   );
 
   return (
-    <FormShell<BuildInput>
-      key={`${resource?.id ?? 'new'}:${metadataChanged ? 'metadata' : 'base'}`}
-      title=""
-      schema={schema}
-      original={original}
-      update={update}
-      setUpdate={setUpdate}
-      onSave={handleConfigSave}
-      disabled={disabled}
-      pending={isPending}
-      mode={mode}
-      draftKey={`Build:${id ?? 'new'}`}
-      draftVersion={resource?.rowVersion ?? 'new'}
-    />
+    <>
+      {duplicateFrom && (
+        <AlertMessage type="info" title="Configuration copy">
+          Review the copied configuration. The project is created disabled, with no webhook. No build will run.
+        </AlertMessage>
+      )}
+      <FormShell<BuildInput>
+        key={`${resource?.id ?? 'new'}:${metadataChanged ? 'metadata' : 'base'}`}
+        title=""
+        schema={schema}
+        original={original}
+        update={update}
+        setUpdate={setUpdate}
+        onSave={handleConfigSave}
+        disabled={disabled}
+        pending={isPending}
+        mode={mode}
+        saveDisabled={!!duplicateFrom && (duplicateLoading || !duplicate)}
+        saveLabel={duplicateFrom ? 'Review copy' : 'Save'}
+        confirmSave={duplicateFrom ? copyReview.confirmSave : undefined}
+        draftKey={duplicateFrom ? undefined : `Build:${id ?? 'new'}`}
+        draftVersion={resource?.rowVersion ?? 'new'}
+      />
+      {copyReview.review}
+    </>
   );
 };
 
@@ -984,7 +1040,7 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
         }))
         .filter((secret) => secret.id || secret.secretId) ?? [],
     tagTemplates: payload.tagTemplates?.filter(Boolean) ?? ['{branch}-{shortSha}'],
-    webhook: normalizeWebhook(payload.webhook),
+    webhook: 'duplicateSourceId' in payload && payload.duplicateSourceId ? null : normalizeWebhook(payload.webhook),
     timeoutSeconds: Number(payload.timeoutSeconds ?? 1800),
     retentionRunCount: Number(payload.retentionRunCount ?? 20),
   };

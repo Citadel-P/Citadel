@@ -30,7 +30,14 @@ impl BackupService {
             Err(error) => Err(error),
         };
         let result = match authorization {
-            Ok(()) => match self.planner.plan(&claim, &token).await {
+            Ok(()) => match async {
+                // Persisted policies must obey the same safety contract as new
+                // requests; an obsolete consistency option cannot silently run live.
+                claim.policy.source.validate_execution()?;
+                self.planner.plan(&claim, &token).await
+            }
+            .await
+            {
                 Ok(plan) => match async {
                     self.authorizer
                         .authorize_plan(&claim, &plan)

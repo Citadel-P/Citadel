@@ -58,6 +58,7 @@ pub fn router(
         alert_delivery,
         automation,
         backups,
+        copies,
         users,
         user_mutations,
         teams,
@@ -183,24 +184,28 @@ pub fn router(
             cancellation: cancellation.clone(),
         },
     ))
+    .merge(citadel_server::api::routes::resource_copies::router(citadel_server::api::routes::resource_copies::ResourceCopiesHttpState { copies: copies.clone() }))
     .merge(alerts::router(alerts::AlertsHttpState {
         identity: Arc::clone(&identity),
         store: alert_store,
         delivery: alert_delivery,
     }))
     .merge(deployments::router(deployments::DeploymentsHttpState {
+        copy_eligibility: Some(copies.clone()),
         backup_coverage: Some(backup_coverage.clone()),
         identity: Arc::clone(&identity),
         deployments: Arc::clone(&deployments),
     }))
     .merge(swarm_services_http::router(
         swarm_services_http::SwarmServicesHttpState {
+        copy_eligibility: Some(copies.clone()),
         backup_coverage: Some(backup_coverage.clone()),
             identity: Arc::clone(&identity),
             services: Arc::clone(&swarm_services),
         },
     ))
     .merge(stacks_http::router(stacks_http::StacksHttpState {
+        copy_eligibility: Some(copies.clone()),
         backup_coverage: Some(backup_coverage.clone()),
         platforms: Arc::clone(&platform_state.platforms),
         identity: Arc::clone(&identity),

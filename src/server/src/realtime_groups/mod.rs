@@ -36,6 +36,9 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if matches!(self.topic(), Topic::ResourceCopy(..)) {
+            return event.resource_type == "ResourceCopy" && event.affects_resource(self.id());
+        }
         if matches!(event.resource_type, "BackupCoverage" | "License") {
             let contains = |key: &str, id: Option<Uuid>| {
                 (event.resource_type == "License" || event.payload["resync"] == true)

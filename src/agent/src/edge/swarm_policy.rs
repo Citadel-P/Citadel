@@ -140,6 +140,14 @@ pub(super) fn volume_helper(r: &CreateContainerRequest, platform: Uuid) -> bool 
         && r.mounts.len() == 1
         && mount(&r.mounts[0], "/data", true)
 }
+// Full-volume snapshots record /source or /data. Mount the destination at
+// that child of /target so Restic restores the root directory metadata too.
+// Bind-mount helpers retain their existing exact /target restriction.
+fn restore_mount(m: &Mount) -> bool {
+    backup_mount(m, "/target", false)
+        || mount(m, "/target/source", false)
+        || mount(m, "/target/data", false)
+}
 pub(super) fn backup_helper(r: &CreateContainerRequest, platform: Uuid) -> bool {
     base(r)
         && label(&r.labels, "citadel.backup-helper")
@@ -165,14 +173,13 @@ pub(super) fn backup_helper(r: &CreateContainerRequest, platform: Uuid) -> bool 
             || (r.cap_add.len() == 3
                 && r.cap_add.iter().any(|v| v == "CHOWN")
                 && r.mounts.len() == 1
-                && backup_mount(&r.mounts[0], "/target", false)))
+                && restore_mount(&r.mounts[0])))
         && r.cap_add.iter().any(|v| v == "DAC_READ_SEARCH")
         && r.cap_add.iter().any(|v| v == "FOWNER")
         && (host_probe(r)
             || r.mounts.is_empty()
             || (r.mounts.len() == 1
-                && (backup_mount(&r.mounts[0], "/source", true)
-                    || backup_mount(&r.mounts[0], "/target", false))))
+                && (backup_mount(&r.mounts[0], "/source", true) || restore_mount(&r.mounts[0]))))
 }
 pub(super) fn volume_exec(r: &ExecBinaryRequest) -> bool {
     let c = &r.cmd;
@@ -466,6 +473,26 @@ mod tests {
         restore.mounts[0].read_only = Some(false);
         restore.cap_add.push("CHOWN".into());
         assert!(backup_helper(&restore, platform));
+        for root in ["/target/source", "/target/data"] {
+            let mut rooted = restore.clone();
+            rooted.mounts[0].target = Some(root.into());
+            assert!(backup_helper(&rooted, platform));
+            rooted.mounts[0].read_only = Some(true);
+            assert!(!backup_helper(&rooted, platform));
+            rooted.mounts[0].read_only = Some(false);
+            rooted.mounts[0].r#type = Some("bind".into());
+            assert!(!backup_helper(&rooted, platform));
+        }
+        for target in [
+            "/target/other",
+            "/target/source/child",
+            "/target/../source",
+            "/",
+        ] {
+            let mut bad = restore.clone();
+            bad.mounts[0].target = Some(target.into());
+            assert!(!backup_helper(&bad, platform));
+        }
         let mut bad = restore.clone();
         bad.mounts.clear();
         assert!(!backup_helper(&bad, platform));
@@ -716,5 +743,123 @@ mod bind_tests {
             .unwrap()
             .create_mountpoint = Some(true);
         assert!(!backup_helper(&bad, platform));
+    }
+}
+
+// Current-data copying has a separate exact helper shape. Ordinary backup
+// helpers keep their existing single-mount and remote-repository restrictions.
+pub(super) fn current_copy_helper(r: &CreateContainerRequest, platform: Uuid) -> bool {
+    use citadel_adapters::external::backups::current_copy::COPY_JOB_LABEL;
+    let Some(job) = r
+        .labels
+        .get(COPY_JOB_LABEL)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    else {
+        return false;
+    };
+    base(r)
+        && owner(&r.labels, platform, "citadel.platform-id")
+        && label(&r.labels, "citadel.backup-helper")
+        && !label(&r.labels, "citadel.volume-browser")
+        && r.name == format!("citadel-backup-helper-copy-{}", job.simple())
+        && r.working_dir.as_deref() == Some("/tmp")
+        && r.auto_remove == Some(true)
+        && r.memory_limit == Some(512 * 1024 * 1024)
+        && r.memory_swap == r.memory_limit
+        && r.pids_limit == Some(128)
+        && r.readonly_rootfs != Some(true)
+        && r.network_mode.as_deref() == Some("none")
+        && r.entry_point == ["/bin/sh"]
+        && r.command == ["-c", "trap 'exit 0' TERM INT; sleep 14700"]
+        && r.cap_add.len() == 3
+        && ["DAC_READ_SEARCH", "FOWNER", "CHOWN"]
+            .iter()
+            .all(|c| r.cap_add.iter().any(|v| v == c))
+        && r.mounts.len() == 2
+        && mount(&r.mounts[0], "/source", true)
+        && mount(&r.mounts[1], "/target/source", false)
+        && r.mounts[0].source != r.mounts[1].source
+}
+pub(super) fn current_copy_exec(r: &ExecBinaryRequest) -> bool {
+    use citadel_adapters::external::backups::current_copy::CURRENT_COPY_SCRIPT;
+    !r.tty
+        && r.cmd == ["/bin/sh", "-ec", CURRENT_COPY_SCRIPT]
+        && r.env.len() == 2
+        && r.env.get("RESTIC_REPOSITORY").map(String::as_str) == Some("/tmp/citadel-copy")
+        && r.env
+            .get("RESTIC_PASSWORD")
+            .is_some_and(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+#[cfg(test)]
+mod current_copy_tests {
+    use super::*;
+    use citadel_adapters::external::backups::current_copy::{COPY_JOB_LABEL, CURRENT_COPY_SCRIPT};
+
+    #[test]
+    fn current_copy_requires_isolated_read_only_source_and_exact_script() {
+        let platform = Uuid::now_v7();
+        let job = Uuid::now_v7();
+        let mut helper = volume_request(platform);
+        helper.name = format!("citadel-backup-helper-copy-{}", job.simple());
+        helper.labels = HashMap::from([
+            ("citadel.backup-helper".into(), "true".into()),
+            ("citadel.platform-id".into(), platform.to_string()),
+            (COPY_JOB_LABEL.into(), job.to_string()),
+        ]);
+        helper.working_dir = Some("/tmp".into());
+        helper.memory_limit = Some(512 * 1024 * 1024);
+        helper.memory_swap = helper.memory_limit;
+        helper.pids_limit = Some(128);
+        helper.readonly_rootfs = Some(false);
+        helper.entry_point = vec!["/bin/sh".into()];
+        helper.command = vec!["-c".into(), "trap 'exit 0' TERM INT; sleep 14700".into()];
+        helper.cap_add = vec!["DAC_READ_SEARCH".into(), "FOWNER".into(), "CHOWN".into()];
+        helper.mounts[0].target = Some("/source".into());
+        let mut target = helper.mounts[0].clone();
+        target.target = Some("/target/source".into());
+        target.source = Some("new-owned-volume".into());
+        target.read_only = Some(false);
+        helper.mounts.push(target);
+        assert!(current_copy_helper(&helper, platform));
+        assert!(!current_copy_helper(&helper, Uuid::now_v7()));
+        for mutation in 0..8 {
+            let mut bad = helper.clone();
+            match mutation {
+                0 => bad.mounts[0].read_only = Some(false),
+                1 => bad.mounts[1].source = bad.mounts[0].source.clone(),
+                2 => bad.mounts[0].r#type = Some("bind".into()),
+                3 => bad.network_mode = Some("host".into()),
+                4 => bad.cap_add.push("SYS_ADMIN".into()),
+                5 => bad.command[1] = "sleep infinity".into(),
+                6 => bad
+                    .labels
+                    .insert(COPY_JOB_LABEL.into(), Uuid::now_v7().to_string())
+                    .map(|_| ())
+                    .unwrap(),
+                7 => bad.mounts[1].target = Some("/source".into()),
+                _ => unreachable!(),
+            }
+            assert!(!current_copy_helper(&bad, platform), "mutation {mutation}");
+        }
+        let exec = ExecBinaryRequest {
+            cmd: vec!["/bin/sh".into(), "-ec".into(), CURRENT_COPY_SCRIPT.into()],
+            env: HashMap::from([
+                ("RESTIC_REPOSITORY".into(), "/tmp/citadel-copy".into()),
+                ("RESTIC_PASSWORD".into(), "a1".repeat(32)),
+            ]),
+            ..Default::default()
+        };
+        assert!(current_copy_exec(&exec));
+        assert!(!backup_exec(&exec));
+        let mut bad = exec.clone();
+        bad.cmd[2].push_str("; rm -rf /source");
+        assert!(!current_copy_exec(&bad));
+        let mut bad = exec.clone();
+        bad.env.insert("RESTIC_REPOSITORY".into(), "/target".into());
+        assert!(!current_copy_exec(&bad));
+        let mut bad = exec;
+        bad.env.insert("BASH_ENV".into(), "/source/script".into());
+        assert!(!current_copy_exec(&bad));
     }
 }

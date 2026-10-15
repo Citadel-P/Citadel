@@ -144,6 +144,9 @@ impl PostgresBackupPersistence {
                 ));
             }
             sqlx::query("UPDATE backuprepositories SET controlstate='Processing',currentrunid=$2,controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1").bind(repo_id).bind(id).execute(&mut *tx).await.map_err(storage)?;
+            super::super::resource_copies::changes::restore_changed(&mut tx, id)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             let source = self.get_run(source_id).await?;
             let source_item = source_item_id
@@ -192,6 +195,9 @@ impl PostgresBackupPersistence {
             )
             .await?;
             release(&mut tx, claim.repository.id, claim.run.id, None, false).await?;
+            super::super::resource_copies::changes::restore_changed(&mut tx, claim.run.id)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(())
         })
@@ -269,7 +275,14 @@ impl PostgresBackupPersistence {
 impl PostgresBackupPersistence {
     pub(super) fn cancel_restore_impl(&self, id: Uuid) -> BoxFuture<'_, Result<bool, BackupError>> {
         Box::pin(async move {
-            let row=sqlx::query("UPDATE backuprestoreruns SET status='Cancelled',completedat=CURRENT_TIMESTAMP,errorcode='Cancelled',errormessage='Restore cancelled.' WHERE id=$1 AND status='Queued' RETURNING backuprepositoryid").bind(id).fetch_optional(&self.pool).await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row=sqlx::query("UPDATE backuprestoreruns SET status='Cancelled',completedat=CURRENT_TIMESTAMP,errorcode='Cancelled',errormessage='Restore cancelled.' WHERE id=$1 AND status='Queued' RETURNING backuprepositoryid").bind(id).fetch_optional(&mut *tx).await.map_err(storage)?;
+            if row.is_some() {
+                super::super::resource_copies::changes::restore_changed(&mut tx, id)
+                    .await
+                    .map_err(storage)?;
+            }
+            tx.commit().await.map_err(storage)?;
             Ok(row.is_some())
         })
     }

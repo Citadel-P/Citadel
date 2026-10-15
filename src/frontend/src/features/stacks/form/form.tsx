@@ -1,3 +1,4 @@
+import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
 import { useFormDraftKey } from '@/lib/form-drafts';
 import {
   PlatformView,
@@ -813,6 +814,24 @@ export const StackForm = ({
     ? (importDraft?.source.platformId ?? importPlatform ?? undefined)
     : undefined;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const copyReview = useConfigurationCopyReview<StackInput>({
+    sourceName: duplicateDraft?.draft.duplicateSource?.resourceName ?? '',
+    describe: (payload) => (
+      <>
+        <p>
+          Create <strong>{payload.name}</strong> without starting it. Automatic activation is disabled.
+        </p>
+        <p>
+          Storage references in the Compose configuration remain references. External volumes, explicit volume names and
+          bind paths can reuse existing data. Inspect the final Compose configuration before creating this Stack.
+        </p>
+        <p>
+          Networks, published ports, bindings and credentials may still connect to the same external systems. No running
+          state, history or access grants are copied.
+        </p>
+      </>
+    ),
+  });
   const importIssues = [...(importDraft?.issues ?? []), ...(importValidation?.issues ?? [])];
   const hasRuntimeImportBlocker = (importDraft?.issues ?? []).some(
     (issue) => issue.severity === AdoptionIssueSeverity.Blocker,
@@ -873,8 +892,9 @@ export const StackForm = ({
       ).map((binding) => binding.serviceName),
     [formOriginal.spec, formUpdate.spec],
   );
+  const hasCopiedStorage = mode === 'edit' && stackView?.hasCopiedStorage === true;
   const canMoveDraftPlatform =
-    mode === 'add' || (stackView?.status === StackReleaseStatus.Created && !stackView.source);
+    mode === 'add' || (stackView?.status === StackReleaseStatus.Created && !stackView.source && !hasCopiedStorage);
   const currentGitRepoId = (update as any)?.spec?.gitRepoId ?? (original.spec as any)?.gitRepoId ?? null;
   const currentGitBranch = (update as any)?.spec?.branch ?? (original.spec as any)?.branch ?? null;
   const currentPinnedCommit = (update as any)?.spec?.commitSha ?? (original.spec as any)?.commitSha ?? null;
@@ -1216,11 +1236,13 @@ export const StackForm = ({
             label: 'Platform',
             required: true,
             disabled: !canMoveDraftPlatform || isComposeImport,
-            description: !canMoveDraftPlatform
-              ? 'Applied Stacks cannot move platforms in this release.'
-              : lockedPlatformType
-                ? `Select another ${lockedPlatformType === PlatformType.DockerSwarm ? 'Docker Swarm' : 'Docker Standalone'} platform.`
-                : 'Select a Docker Standalone or Docker Swarm platform. The selected type is locked after creation.',
+            description: hasCopiedStorage
+              ? 'Copied volumes belong to this platform. Create another copy to use a different platform.'
+              : !canMoveDraftPlatform
+                ? 'Applied Stacks cannot move platforms in this release.'
+                : lockedPlatformType
+                  ? `Select another ${lockedPlatformType === PlatformType.DockerSwarm ? 'Docker Swarm' : 'Docker Standalone'} platform.`
+                  : 'Select a Docker Standalone or Docker Swarm platform. The selected type is locked after creation.',
             render: (value, set) => {
               return (
                 <ResourceSelectorField<PlatformView>
@@ -1615,7 +1637,7 @@ export const StackForm = ({
                         <ItemSelector
                           collection={licensedUpdateBehaviors}
                           value={value}
-                          disabled={disabled}
+                          disabled={disabled || !!duplicateFrom}
                           onChange={(updateBehavior: StackUpdateBehavior) => {
                             set((prev) => ({
                               spec: {
@@ -1647,7 +1669,7 @@ export const StackForm = ({
                           projects={buildProjects}
                           isLoading={buildProjectsLoading}
                           disabled={disabled}
-                          redeployEnabled={automatedOperationsEnabled}
+                          redeployEnabled={!duplicateFrom && automatedOperationsEnabled}
                           onChange={(buildImageBindings) =>
                             set((prev) => ({
                               spec: {
@@ -1766,7 +1788,7 @@ export const StackForm = ({
                                 execution="deploy"
                                 value={value ?? null}
                                 defaultBranch={currentGitBranch}
-                                disabled={disabled}
+                                disabled={disabled || !!duplicateFrom}
                                 onChange={(webhook) =>
                                   set((prev) => ({
                                     spec: {
@@ -1799,12 +1821,12 @@ export const StackForm = ({
                             label: 'Mode',
                             description:
                               'Detect only reports drift for manual reconciliation. Auto-fix also applies the configured repairs automatically.',
-                            disabled: isComposeImport,
+                            disabled: isComposeImport || !!duplicateFrom,
                             render: (value, set) => (
                               <ItemSelector
                                 collection={licensedDriftModes}
                                 value={value ?? currentDriftPolicy.mode}
-                                disabled={disabled}
+                                disabled={disabled || !!duplicateFrom}
                                 onChange={(mode: StackDriftMode) =>
                                   set((prev) => patchDriftPolicy(prev, getDriftModePreset(mode)))
                                 }
@@ -1909,6 +1931,7 @@ export const StackForm = ({
                         items: [
                           defineField<StackInput, 'spec.preDeploy.path'>({
                             key: 'spec.preDeploy.path',
+                            disabled: !!duplicateFrom,
                             label: 'Path',
                             render: (val, set) => (
                               <FieldInput
@@ -1931,6 +1954,7 @@ export const StackForm = ({
                           }),
                           defineField<StackInput, 'spec.preDeploy.commands'>({
                             key: 'spec.preDeploy.commands',
+                            disabled: !!duplicateFrom,
                             label: 'Commands',
                             required: false,
                             render: (value, set) => (
@@ -1963,6 +1987,7 @@ export const StackForm = ({
                         items: [
                           defineField<StackInput, 'spec.postDeploy.path'>({
                             key: 'spec.postDeploy.path',
+                            disabled: !!duplicateFrom,
                             label: 'Path',
                             render: (val, set) => (
                               <FieldInput
@@ -1985,6 +2010,7 @@ export const StackForm = ({
                           }),
                           defineField<StackInput, 'spec.postDeploy.commands'>({
                             key: 'spec.postDeploy.commands',
+                            disabled: !!duplicateFrom,
                             label: 'Commands',
                             required: false,
                             render: (value, set) => (
@@ -2038,6 +2064,7 @@ export const StackForm = ({
         : {}),
     }),
     [
+      duplicateFrom,
       disabled,
       mode,
       id,
@@ -2070,6 +2097,7 @@ export const StackForm = ({
       isComposeImport,
       isSwarmStack,
       canMoveDraftPlatform,
+      hasCopiedStorage,
       lockedPlatformType,
       selectablePlatforms,
       importedPlatformSelection,
@@ -2175,14 +2203,30 @@ export const StackForm = ({
         pending={isPending || isSwarmPreflightPending}
         disabled={disabled}
         saveDisabled={
-          isComposeImport &&
-          (isImportDraftLoading || isImportValidationPending || !importDraft || hasRuntimeImportBlocker)
+          (!!duplicateFrom && (isDuplicateDraftLoading || !duplicateDraft)) ||
+          (isComposeImport &&
+            (isImportDraftLoading || isImportValidationPending || !importDraft || hasRuntimeImportBlocker))
         }
-        saveLabel={isComposeImport ? (isNativeSwarmImport ? 'Import Stack' : 'Import Project') : 'Save'}
-        confirmSave={isComposeImport || isSwarmStack ? confirmSave : undefined}
-        draftKey={formDraftKey}
+        saveLabel={
+          isComposeImport
+            ? isNativeSwarmImport
+              ? 'Import Stack'
+              : 'Import Project'
+            : duplicateFrom
+              ? 'Review copy'
+              : 'Save'
+        }
+        confirmSave={
+          duplicateFrom
+            ? async (payload) => (await confirmSave(payload)) && copyReview.confirmSave(payload)
+            : isComposeImport || isSwarmStack
+              ? confirmSave
+              : undefined
+        }
+        draftKey={duplicateFrom ? undefined : formDraftKey}
         draftVersion={1}
       />
+      {copyReview.review}
       <ActionWithDialog
         renderTrigger={false}
         open={importConfirmationOpen}

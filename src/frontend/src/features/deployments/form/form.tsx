@@ -1,3 +1,4 @@
+import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
 import type { DeploymentImageInfo } from '@/api/generated/api.types';
 import { useFormDraftKey } from '@/lib/form-drafts';
 import {
@@ -182,6 +183,31 @@ export const DeploymentForm = ({
   const duplicateDraft = duplicateDraftData?.data;
   const adoptionDraft = adoptionDraftData?.data;
   const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const copyReview = useConfigurationCopyReview<DeploymentInput>({
+    sourceName: duplicateDraft?.draft.duplicateSource?.resourceName ?? '',
+    describe: (payload) => (
+      <>
+        <p>
+          Create <strong>{payload.name}</strong> without starting it. Automatic activation is disabled.
+        </p>
+        <ul className="space-y-1 break-all">
+          {payload.spec?.volumes?.map((mount: string) => (
+            <li key={mount} className="font-mono text-xs">
+              {mount}
+            </li>
+          ))}
+        </ul>
+        <p>
+          Named volumes and host paths may reuse existing data on the destination Platform. These references are not
+          data copies.
+        </p>
+        <p>
+          Networks, published ports, bindings and credentials may still connect to the same external systems. No running
+          state, history or access grants are copied.
+        </p>
+      </>
+    ),
+  });
   const adoptionIssues = adoptionDraft?.issues ?? EMPTY_ADOPTION_ISSUES;
   const sourceImageUnavailable = adoptionIssues.some((issue) => issue.code === 'SOURCE_IMAGE_UNAVAILABLE');
   const availableImageSources = useMemo(
@@ -628,7 +654,7 @@ export const DeploymentForm = ({
                           <FieldSwitch
                             id="deployment-redeploy-on-build"
                             checked={val ?? false}
-                            disabled={disabled || (!val && !automatedOperationsEnabled)}
+                            disabled={disabled || !!duplicateFrom || (!val && !automatedOperationsEnabled)}
                             onChange={(redeployOnBuild) =>
                               set((prev) => ({
                                 spec: {
@@ -807,7 +833,7 @@ export const DeploymentForm = ({
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
             render: (value, set) => {
-              let disabled = provider !== ImageSource.external;
+              let disabled = !!duplicateFrom || provider !== ImageSource.external;
               let warningMsg = 'Auto update requires an external image source.';
 
               if (provider === ImageSource.build) {
@@ -1014,6 +1040,7 @@ export const DeploymentForm = ({
       validateDeploymentEnvironmentVariable,
       disabled,
       adoptFrom,
+      duplicateFrom,
       buildProjects,
       buildProjectOptions,
       buildProjectsLoading,
@@ -1082,12 +1109,16 @@ export const DeploymentForm = ({
         onSave={handleSave}
         pending={isPending}
         disabled={disabled}
-        saveDisabled={!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft || hasAdoptionBlocker)}
-        saveLabel={adoptFrom ? 'Adopt Container' : 'Save'}
-        confirmSave={adoptFrom ? confirmAdoption : undefined}
-        draftKey={formDraftKey}
+        saveDisabled={
+          (!!duplicateFrom && (isDuplicateDraftLoading || !duplicateDraft)) ||
+          (!!adoptFrom && (isAdoptionDraftLoading || !adoptionDraft || hasAdoptionBlocker))
+        }
+        saveLabel={adoptFrom ? 'Adopt Container' : duplicateFrom ? 'Review copy' : 'Save'}
+        confirmSave={adoptFrom ? confirmAdoption : duplicateFrom ? copyReview.confirmSave : undefined}
+        draftKey={duplicateFrom ? undefined : formDraftKey}
         draftVersion={1}
       />
+      {copyReview.review}
       <ActionWithDialog
         renderTrigger={false}
         open={adoptionConfirmationOpen}

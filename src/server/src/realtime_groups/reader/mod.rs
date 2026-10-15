@@ -23,6 +23,7 @@ mod tests;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub copy_eligibility: Option<Arc<citadel_resource_copies::CopyService>>,
     pub backup_coverage:
         Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
@@ -268,6 +269,19 @@ impl ApplicationGroupReader {
             | Topic::BuildRun(..) => Build,
             Topic::BuildAgentPool(..) | Topic::BuildAgentPools => BuildAgentPool,
             Topic::ContainerInfo(..) => Platform, // resolved through its actual owner below
+            Topic::ResourceCopy(id) => {
+                let copies = self
+                    .copy_eligibility
+                    .as_ref()
+                    .ok_or(RealtimeReadError::Authorization)?;
+                let progress = copies.get(actor, *id).await.map_err(|error| match error {
+                    citadel_resource_copies::CopyError::NotFound => {
+                        RealtimeReadError::Authorization
+                    }
+                    error => failure(error),
+                })?;
+                return event("ResourceCopyInfoUpdated", progress);
+            }
             Topic::Activity { .. } => return self.activities(p, g, lease).await,
             Topic::AlertEvents => {
                 let filter = citadel_alerts::AlertEventFilter {
@@ -647,6 +661,11 @@ impl ApplicationGroupReader {
                     view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::Deployment, id.unwrap(), platform).await);
 
                 }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(crate::api::resources::resource_copies::eligibility(
+                        service, actor, citadel_resource_copies::CopyKind::Deployment, id.unwrap(),
+                    ).await);
+                }
                 rows("DeploymentInfoUpdated", vec![view], RowStyle::Update)
             },
             Topic::Stacks => {
@@ -666,6 +685,11 @@ impl ApplicationGroupReader {
                 if let Some(service) = &self.backup_coverage
                     && let Some(platform) = view.platform_id {
                     view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::Stack, id.unwrap(), platform).await);
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(crate::api::resources::resource_copies::eligibility(
+                        service, actor, citadel_resource_copies::CopyKind::Stack, id.unwrap(),
+                    ).await);
                 }
                 rows("StackInfoUpdated", vec![view], RowStyle::Update)
             },
@@ -704,6 +728,11 @@ impl ApplicationGroupReader {
                     let platform = view.platform_id;
                     view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::SwarmService, id.unwrap(), platform).await);
 
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(crate::api::resources::resource_copies::eligibility(
+                        service, actor, citadel_resource_copies::CopyKind::SwarmService, id.unwrap(),
+                    ).await);
                 }
                 rows("SwarmServiceInfoUpdated", vec![view], RowStyle::Update)
             },

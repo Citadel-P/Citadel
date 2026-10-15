@@ -219,6 +219,13 @@ impl PostgresBackupPersistence {
             .await
             .map_err(storage)?
             .ok_or(BackupError::NotFound)?;
+            if operation == "Prune" {
+                let pinned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM resourcecopyrestores cr JOIN resourcecopies cp ON cp.id=cr.copyid JOIN backuprestoreruns rr ON rr.id=cr.restoreid WHERE rr.backuprepositoryid=$1 AND cp.status IN ('Restoring','Cancelling'))")
+                    .bind(repository_id).fetch_one(&mut *tx).await.map_err(storage)?;
+                if pinned {
+                    return Ok(false);
+                }
+            }
             let affected = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,$3,CURRENT_TIMESTAMP,$4) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype=EXCLUDED.operationtype,createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP")
                 .bind(repository_id)
                 .bind(operation_id)

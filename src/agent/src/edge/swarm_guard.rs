@@ -28,6 +28,10 @@ pub(super) async fn authorize(
     match kind {
         EdgeCommandKind::ContainerCreate => {
             let request: CreateContainerRequest = decode(payload)?;
+            if policy::current_copy_helper(&request, platform) {
+                verify_copy_mounts(docker, &request, platform).await?;
+                return Ok(());
+            }
             if !policy::volume_helper(&request, platform)
                 && !policy::backup_helper(&request, platform)
             {
@@ -38,7 +42,8 @@ pub(super) async fn authorize(
             let mut request: ExecBinaryRequest = decode(payload)?;
             let volume = policy::volume_exec(&request);
             let backup = policy::backup_exec(&request) || policy::bind_script_exec(&request);
-            if !volume && !backup {
+            let current_copy = policy::current_copy_exec(&request);
+            if !volume && !backup && !current_copy {
                 return Err(denied());
             }
             let document = docker
@@ -46,7 +51,12 @@ pub(super) async fn authorize(
                 .await
                 .map_err(|_| denied())?;
             let inspected = helper_configuration(&document)?;
-            if !(volume && policy::volume_helper(&inspected, platform)
+            let current_allowed = current_copy && policy::current_copy_helper(&inspected, platform);
+            if current_allowed {
+                verify_copy_mounts(docker, &inspected, platform).await?;
+            }
+            if !(current_allowed
+                || volume && policy::volume_helper(&inspected, platform)
                 || backup && policy::backup_operation(&request, &inspected, platform))
             {
                 return Err(denied());
@@ -140,7 +150,8 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
                 r#type: text(&m["Type"]),
                 source: text(&m["Source"]),
                 target: text(&m["Target"]),
-                read_only: m["ReadOnly"].as_bool(),
+                // Docker omits ReadOnly when false in inspected mount options.
+                read_only: Some(m["ReadOnly"].as_bool().unwrap_or(false)),
                 consistency: text(&m["Consistency"]),
                 bind_options: if m["BindOptions"].is_null() {
                     None
@@ -171,8 +182,8 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
             })
         })
         .collect::<Result<Vec<_>, Status>>()?;
-    // Docker defaults may add "default" networking for a helper without an explicit mode.
-    let network = text(&h["NetworkMode"]).filter(|v| v != "default");
+    // An unspecified Docker network is inspected as "default" or "bridge".
+    let network = text(&h["NetworkMode"]).filter(|v| !matches!(v.as_str(), "default" | "bridge"));
     let restart = match h["RestartPolicy"]["Name"].as_str() {
         None | Some("" | "no") => 0,
         _ => return Err(denied()),
@@ -209,9 +220,83 @@ fn helper_configuration(v: &Value) -> Result<CreateContainerRequest, Status> {
     })
 }
 
+async fn verify_copy_mounts(
+    docker: &DockerClient,
+    helper: &CreateContainerRequest,
+    platform: Uuid,
+) -> Result<(), Status> {
+    use citadel_adapters::external::backups::current_copy::COPY_JOB_LABEL;
+    let source = docker
+        .inspect_volume(helper.mounts[0].source.as_deref().ok_or_else(denied)?)
+        .await
+        .map_err(|_| denied())?;
+    let target = docker
+        .inspect_volume(helper.mounts[1].source.as_deref().ok_or_else(denied)?)
+        .await
+        .map_err(|_| denied())?;
+    if source.content_access_allowed != Some(true)
+        || source.driver != "local"
+        || !source.options.is_empty()
+        || target.driver != "local"
+        || !target.options.is_empty()
+        || !policy::restore_owner(&target.labels, platform)
+        || target.labels.get("citadel.backup.restoreRunId") != helper.labels.get(COPY_JOB_LABEL)
+    {
+        return Err(denied());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inspected_backup_helpers_accept_docker_defaults_without_relaxing_isolation() {
+        let platform = Uuid::now_v7();
+        let good = serde_json::json!({
+            "Image":"fixture:latest","Name":"/citadel-backup-helper-fixture",
+            "Config":{"Labels":{"citadel.backup-helper":"true","citadel.platform-id":platform.to_string()},
+                "User":"0","WorkingDir":"/tmp","Entrypoint":["/bin/sh"],"Cmd":["-c","trap 'exit 0' TERM INT; sleep 330"]},
+            "HostConfig":{"Privileged":false,"ReadonlyRootfs":false,"NetworkMode":"bridge",
+                "AutoRemove":true,"Memory":536870912,"MemorySwap":536870912,"PidsLimit":128,
+                "CapAdd":["DAC_READ_SEARCH","FOWNER"],"CapDrop":["ALL"],"SecurityOpt":["no-new-privileges"],
+                "Mounts":[{"Type":"volume","Source":"fixture","Target":"/source","ReadOnly":true}]}
+        });
+        assert!(policy::backup_helper(
+            &helper_configuration(&good).unwrap(),
+            platform
+        ));
+        let mut restore = good.clone();
+        restore["HostConfig"]["Mounts"][0]["Target"] = "/target".into();
+        restore["HostConfig"]["Mounts"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("ReadOnly");
+        restore["HostConfig"]["CapAdd"] = serde_json::json!(["DAC_READ_SEARCH", "FOWNER", "CHOWN"]);
+        assert!(policy::backup_helper(
+            &helper_configuration(&restore).unwrap(),
+            platform
+        ));
+        for network in ["host", "container:other", "custom-network"] {
+            let mut bad = good.clone();
+            bad["HostConfig"]["NetworkMode"] = network.into();
+            assert!(!policy::backup_helper(
+                &helper_configuration(&bad).unwrap(),
+                platform
+            ));
+        }
+        // An omitted ReadOnly must never authorize a writable backup source.
+        let mut bad = good;
+        bad["HostConfig"]["Mounts"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("ReadOnly");
+        assert!(!policy::backup_helper(
+            &helper_configuration(&bad).unwrap(),
+            platform
+        ));
+    }
+
     #[test]
     fn inspected_bind_mounts_preserve_bounds_and_probe_isolation() {
         let platform = Uuid::now_v7();

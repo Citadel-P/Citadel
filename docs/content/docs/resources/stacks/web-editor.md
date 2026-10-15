@@ -22,6 +22,13 @@ again during onboarding, see [Adopt existing workloads](/docs/guides/adopting-ex
 4. Add referenced variables and secrets on the **Bindings** tab.
 5. Select **Save**, then **Deploy**. Check the result on the **Services** tab.
 
+Unsaved settings and Compose content are restored after a reload in the same
+browser and account. Use secret bindings such as
+`${WORDPRESS_DB_PASSWORD}`
+instead of embedding credentials. Compose content containing literal credentials
+is excluded from the browser draft; required secret references and MariaDB/MySQL
+random-root-password flags can be restored.
+
 Try [your first Stack](/docs/getting-started/first-stack) if you do not have a Compose file yet.
 On Swarm, Citadel checks whether the Compose fields can be represented by native Swarm services.
 

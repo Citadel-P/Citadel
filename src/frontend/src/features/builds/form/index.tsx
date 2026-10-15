@@ -31,7 +31,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
         return <BuildHeaderIndicator build={build} />;
       },
       ActionButtons: ({ resource }) => {
-        const { edit: _edit, ...actions } = BuildInfoActions;
+        const { edit: _edit, duplicate: _duplicate, ...actions } = BuildInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
       },
       Tags: ({ resource }) => (
@@ -42,6 +42,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
             tags={(resource as AuthorizedProject).tags}
             disabled={!hasCapability(resource, 'canWrite')}
           />
+          <BuildInfoActions.duplicate resource={resource} />
         </div>
       ),
     },

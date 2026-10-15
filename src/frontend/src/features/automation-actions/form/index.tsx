@@ -45,16 +45,19 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
         );
       },
       ActionButtons: ({ resource }) => {
-        const { edit: _edit, ...actions } = AutomationActionInfoActions;
+        const { edit: _edit, duplicate: _duplicate, ...actions } = AutomationActionInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
       },
       Tags: ({ resource }) => (
-        <ResourceHeaderTagsEditor
-          resourceType="AutomationAction"
-          resourceId={resource.id}
-          tags={(resource as AuthorizedAction).tags}
-          disabled={!hasCapability(resource, 'canWrite')}
-        />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ResourceHeaderTagsEditor
+            resourceType="AutomationAction"
+            resourceId={resource.id}
+            tags={(resource as AuthorizedAction).tags}
+            disabled={!hasCapability(resource, 'canWrite')}
+          />
+          <AutomationActionInfoActions.duplicate resource={resource} />
+        </div>
       ),
     },
     Tabs: [

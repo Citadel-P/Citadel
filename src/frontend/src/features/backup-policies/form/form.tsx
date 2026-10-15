@@ -116,8 +116,9 @@ const consistencyTypes = {
     description: 'Run Restic without stopping containers that use the volume.',
   },
   StopAttachedContainers: {
-    label: 'Stop attached containers',
-    description: 'Stop affected containers during the volume snapshot and restart them afterward.',
+    label: 'Stop attached containers (unavailable)',
+    description: 'Not supported. Use Live and prepare application consistency separately.',
+    disabled: true,
   },
 } as const;
 
@@ -510,13 +511,12 @@ export function BackupPolicyForm({
                             key: 'source.consistency',
                             label: 'Consistency',
                             required: true,
-                            disabled: isSourceLocked(resource),
                             description: 'How Citadel handles containers that use the selected volume.',
                             render: (value, set) => (
                               <ItemSelector
                                 value={value ?? VolumeBackupConsistency.Live}
                                 collection={consistencyTypes}
-                                disabled={disabled || isSourceLocked(resource)}
+                                disabled={disabled}
                                 onChange={(consistency: VolumeBackupConsistency) =>
                                   set({ source: { consistency } as any })
                                 }

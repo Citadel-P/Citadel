@@ -238,3 +238,30 @@ fn platform_stats_use_current_samples_and_preserve_normalization() {
     assert_eq!(value["containersRunning"], 3);
     assert!(live_platform_stats(Uuid::nil(), &context, &Value::Null).is_none());
 }
+
+#[test]
+fn copy_progress_only_invalidates_its_operation_and_resynchronizes_on_reconnect() {
+    let id = Uuid::now_v7();
+    let group = Group::parse(&format!("resource-copy:{id}")).unwrap();
+    let mut event = PublishedRuntimeEvent {
+        platform_id: None,
+        resource_type: "ResourceCopy",
+        resource_id: id,
+        event_kind: "progressChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({}),
+    };
+    assert!(group.affected_by(&event));
+    assert!(
+        !Group::parse(&format!("resource-copy:{}", Uuid::now_v7()))
+            .unwrap()
+            .affected_by(&event)
+    );
+    assert!(!Group::parse("stacks").unwrap().affected_by(&event));
+    event.resource_id = Uuid::nil();
+    assert!(group.affected_by(&event));
+    event.resource_type = "BackupPolicy";
+    assert!(!group.affected_by(&event));
+}

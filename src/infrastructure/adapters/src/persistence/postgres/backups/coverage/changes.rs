@@ -17,6 +17,10 @@ pub(crate) async fn publish(
         LEFT JOIN stackreleases r ON r.id=st.currentstackreleaseid
         LEFT JOIN swarmservices s ON s.id::text=COALESCE(p.source->>'swarmServiceId',p.source->>'SwarmServiceId')
         WHERE p.id=$1 OR p.backuprepositoryid=$2
+        UNION
+        SELECT item.platformid FROM backuprunitems item
+        JOIN backupruns run ON run.id=item.backuprunid
+        WHERE run.backuppolicyid=$1 OR run.backuprepositoryid=$2
     ) affected WHERE platform IS NOT NULL"#).bind(policy).bind(repository).execute(&mut **tx).await.map_err(storage)?;
     Ok(())
 }

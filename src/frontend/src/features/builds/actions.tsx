@@ -1,12 +1,9 @@
-import {
-  AuthorizedProject,
-  QueueBuildTrigger,
-} from '@/api/generated/api.types';
+import { AuthorizedProject, QueueBuildTrigger } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
-import { useMutate } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil, Play, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Play, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -45,6 +42,26 @@ const { dropdown, group, info } = createActionsBuilder<AuthorizedProject>()
         run: () => {
           if (!selected || multiSelect) return;
           navigate(`/builds/edit/${selected.id}`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'duplicate',
+    title: 'Duplicate configuration',
+    type: 'command',
+    icon: Copy,
+    requiredCapabilities: ['canRead'],
+    useHandler: ({ resources }) => {
+      const { selected, multiSelect } = singleSelection(resources);
+      const navigate = useNavigate();
+      const { data } = useRead('listBuildProjects');
+      const canCreate = data?.data.capabilities.canWrite === true;
+      return {
+        canExecute: !!selected && !multiSelect && canCreate,
+        disabledReason: !canCreate ? 'Create permission is required to duplicate this resource.' : undefined,
+        run: () => {
+          if (selected && !multiSelect && canCreate) navigate(`/builds/add?duplicateFrom=${selected.id}`);
         },
       };
     },

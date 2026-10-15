@@ -32,6 +32,9 @@ pub struct DeploymentCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentView {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<crate::api::resources::resource_copies::ResourceCopyEligibility>)]
+    pub copy_eligibility: Option<citadel_resource_copies::CopyEligibility>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_coverage:
         Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
@@ -159,6 +162,7 @@ impl TryFrom<AuthorizedResource<citadel_deployments::Deployment>> for Deployment
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            copy_eligibility: None,
             backup_coverage: None,
             id: value.id,
             name: value.name,
@@ -268,6 +272,7 @@ mod tests {
     #[test]
     fn api_serialization_omits_null_properties_like_the_dotnet_contract() {
         let view = DeploymentView {
+            copy_eligibility: None,
             backup_coverage: None,
             id: Uuid::now_v7(),
             name: "web".to_owned(),

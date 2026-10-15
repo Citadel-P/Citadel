@@ -164,3 +164,29 @@ it('updates backup coverage from the stack snapshot without a preview request', 
   });
   expect(preview).not.toHaveBeenCalled();
 });
+
+it('refreshes copy eligibility through the resource group and preserves it in partial updates', async () => {
+  const fake = new FakeRealtimeConnection();
+  server.use(http.get('http://localhost/api/v1/stacks/:id', () => HttpResponse.json(initial)));
+  const { queryClient } = renderCitadel(<Probe />, {
+    groups: {
+      connectionFactory: () => fake.asRealtimeConnection(),
+      startConnection: (connection) => connection.start(),
+    },
+  });
+  await waitFor(() => expect(fake.listenerCount('StackInfoUpdated')).toBe(1));
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent(initial.status));
+  for (const eligibility of [
+    { status: 'Available', reason: null },
+    { status: 'Unavailable', reason: 'Each volume needs an available backup.' },
+  ]) {
+    act(() => fake.emit('StackInfoUpdated', { ...initial, copyEligibility: eligibility }, 'update'));
+    expect(queryClient.getQueryData(['getStack', { stackId: initial.id }])).toMatchObject({
+      data: { copyEligibility: eligibility },
+    });
+    act(() => fake.emit('StackInfoUpdated', initial, 'update'));
+    expect(queryClient.getQueryData(['getStack', { stackId: initial.id }])).toMatchObject({
+      data: { copyEligibility: eligibility },
+    });
+  }
+});

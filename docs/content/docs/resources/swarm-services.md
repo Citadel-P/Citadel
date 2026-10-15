@@ -35,10 +35,8 @@ before applying.
 
 After the first Apply, use:
 
-- **Duplicate** to open a new Service form prefilled from the current
-  configuration; review and save it as a separate Service. Service-scoped
-  variables and secret references are copied when it is saved, while global
-  bindings remain inherited;
+- **Duplicate** to choose **Configuration only** or **Configuration + data**,
+  then review and create a separate, undeployed Service;
 - **Apply** to send the complete saved configuration to Docker;
 - **Scale** to change the replica count of a replicated Service;
 - **Restart Tasks** to recreate the Service's Tasks without changing its image
@@ -50,6 +48,29 @@ After the first Apply, use:
 Global Services cannot be scaled by replica count. Scheduling mode cannot be
 changed after the first successful Apply; create another Service when you
 need to change between replicated and global mode.
+
+### Duplicate
+
+**Duplicate → Configuration only** opens a prefilled form and **Review copy** reviews the
+edited values before creating an undeployed Service. Automatic updates and
+webhooks are disabled. The source Service is unchanged.
+
+Configuration only does not copy volume contents. Mounts, networks, secrets, configs and placement
+constraints remain references that need review before Apply. A local volume
+name identifies different storage on different Swarm nodes; duplication does
+not move that data or change placement to follow it. No tasks, history or access
+grants are copied.
+
+**Duplicate → Configuration + data** guides you through naming the copy,
+choosing current data or existing backups, and reviewing the new volumes. Current
+data needs no backup policy; confirm source consistency first. This requires one replica
+pinned to one exact `node.id`. Current-data copies stay on that node and Platform.
+Existing S3-compatible backups can restore to another Swarm Platform and a selected
+Ready, Active node. The copied Service is pinned to the destination node; networks,
+secrets and configs are matched by name and must already exist there. Global,
+multi-replica and unpinned Services are blocked because a local volume name does
+not identify one storage location across nodes. See
+[Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data).
 
 ### Backup storage
 

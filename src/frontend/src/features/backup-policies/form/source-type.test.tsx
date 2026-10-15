@@ -97,3 +97,21 @@ it('keeps the source locked after a successful backup with its scope visible', (
     'Back up declared named volumes and supported bind mounts discovered from this deployment. Host paths require platform write access.',
   );
 });
+
+it('lets a legacy policy switch to Live without unlocking its storage source', async () => {
+  const { user } = renderCitadel(
+    <BackupPolicyForm mode="edit" resource={{
+      id: 'policy',
+      source: { $type: 'DockerVolume', platformId: 'platform', volumeName: 'data', consistency: 'StopAttachedContainers' },
+      firstSuccessfulRunAt: '2026-10-13T12:00:00Z',
+      capabilities: { canRead: true, canWrite: true },
+    } as BackupPolicyView} />,
+  );
+  expect(screen.getByRole('combobox', { name: 'Back up' })).toBeDisabled();
+  const consistency = screen.getByRole('combobox', { name: 'Consistency' });
+  expect(consistency).toBeEnabled();
+  await user.click(consistency);
+  expect(screen.getByRole('option', { name: /Stop attached containers/ })).toHaveAttribute('aria-disabled', 'true');
+  await user.click(screen.getByRole('option', { name: /^Live/ }));
+  expect(consistency).toHaveTextContent('Live');
+});

@@ -120,6 +120,7 @@ async fn fixture() -> (
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repo.git','Idle')").bind(repository).bind(actor.value()).bind(format!("build-repo-{}",repository.simple())).execute(&pool).await.unwrap();
     let store = Arc::new(PostgresBuildRepository::new(pool.clone()));
     let input = BuildProjectConfiguration {
+        duplicate_source_id: None,
         name: format!("build-{}", Uuid::now_v7().simple()),
         description: None,
         enabled: true,

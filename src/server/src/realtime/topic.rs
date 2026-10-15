@@ -30,6 +30,7 @@ pub enum Topic {
     BackupRun(Uuid),
     BackupRestoreRuns(Uuid),
     BackupRestoreRun(Uuid),
+    ResourceCopy(Uuid),
     BuildProject(Uuid),
     BuildAgentPool(Uuid),
     BuildRuns(Uuid),
@@ -88,6 +89,7 @@ impl Topic {
             ["backup-runs", id] => Self::BackupRuns(non_nil(id)?),
             ["backup-run", id] => Self::BackupRun(non_nil(id)?),
             ["backup-restore-runs", id] => Self::BackupRestoreRuns(non_nil(id)?),
+            ["resource-copy", id] => Self::ResourceCopy(non_nil(id)?),
             ["backup-restore-run", id] => Self::BackupRestoreRun(non_nil(id)?),
             ["build-project", id] => Self::BuildProject(non_nil(id)?),
             ["build-agent-pool", id] => Self::BuildAgentPool(non_nil(id)?),
@@ -151,6 +153,7 @@ impl Topic {
             Self::BackupRuns(_) => "backup-runs",
             Self::BackupRun(_) => "backup-run",
             Self::BackupRestoreRuns(_) => "backup-restore-runs",
+            Self::ResourceCopy(_) => "resource-copy",
             Self::BackupRestoreRun(_) => "backup-restore-run",
             Self::BuildProject(_) => "build-project",
             Self::BuildAgentPool(_) => "build-agent-pool",
@@ -181,6 +184,7 @@ impl Topic {
             | Self::BackupRuns(id)
             | Self::BackupRun(id)
             | Self::BackupRestoreRuns(id)
+            | Self::ResourceCopy(id)
             | Self::BackupRestoreRun(id)
             | Self::BuildProject(id)
             | Self::BuildAgentPool(id)
@@ -278,6 +282,7 @@ mod tests {
             "backup-run",
             "backup-restore-runs",
             "backup-restore-run",
+            "resource-copy",
             "build-project",
             "build-agent-pool",
             "build-runs",

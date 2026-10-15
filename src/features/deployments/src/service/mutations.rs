@@ -27,6 +27,9 @@ impl DeploymentService {
                 "Duplicate source must identify a Deployment.".to_owned(),
             ));
         }
+        if input.duplicate_source.is_some() {
+            input.spec.validate_duplicate()?;
+        }
         input.spec = input.spec.for_create();
         input.spec.validate()?;
         self.ensure_expansion_entitlements(None, &input.spec)

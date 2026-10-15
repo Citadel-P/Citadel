@@ -22,6 +22,7 @@ pub(crate) fn visit_documents(mut visit: impl FnMut(OpenApi)) {
     visit(crate::application_info_http::documented_routes().into_openapi());
     visit(crate::api::routes::actors::documented_routes().into_openapi());
     visit(crate::api::routes::backups::documented_routes().into_openapi());
+    visit(crate::api::routes::resource_copies::documented_routes().into_openapi());
     visit(crate::api::routes::mfa::documented_routes().into_openapi());
     visit(crate::api::routes::swarm_services::documented_routes().into_openapi());
     visit(crate::api::routes::lookup::documented_routes().into_openapi());

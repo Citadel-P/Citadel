@@ -542,6 +542,8 @@ pub enum ActivityEventInfo {
         result: GitRepositorySyncActivitySnapshot,
     },
     ActionCreated {
+        #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
+        source: Option<ActivitySourceResource>,
         #[serde(rename = "Action")]
         action: AutomationActionActivitySnapshot,
     },
@@ -674,6 +676,8 @@ pub enum ActivityEventInfo {
         trigger: String,
     },
     BuildCreated {
+        #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
+        source: Option<ActivitySourceResource>,
         #[serde(rename = "Build")]
         build: BuildProjectActivitySnapshot,
     },

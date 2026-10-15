@@ -40,6 +40,8 @@ pub struct Stack {
     pub status: StackReleaseStatus,
     pub platform_type: citadel_platforms::PlatformKind,
     pub platform_id: Option<Uuid>,
+    /// Data copied for this Stack is tied to its destination Platform.
+    pub has_copied_storage: bool,
     pub version: Option<String>,
     pub spec: Option<StackSpec>,
     pub source: Option<StackReleaseSource>,

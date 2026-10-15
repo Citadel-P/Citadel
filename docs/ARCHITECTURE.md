@@ -138,6 +138,42 @@ Infrastructure routers may compose persistence helpers from the same adapter cra
 but those helpers return typed data rather than SQLx rows. Do not add a feature port
 solely to wrap a private query shared by infrastructure implementations.
 
+The Resource Copies feature coordinates snapshot-backed workload duplication.
+Its repository atomically records the reviewed plan and child restores, then
+creates the undeployed destination through the existing transactional workload
+creation helpers only after every restore succeeds. Backup workers own existing-
+backup restore execution. For policy-independent current data, the copy plan stores
+per-volume jobs, which the copy worker claims atomically before execution through
+its storage port. The runtime adapter takes an encrypted temporary Restic snapshot
+and restores an owned fresh volume using a bounded, network-isolated helper.
+Current-data jobs require Platform Download authorization and an explicit source
+consistency acknowledgement. Cancellation and permission changes cancel the owned
+execution token. The worker owns separate reconciliation and execution futures
+under the same shutdown token. Current-data execution is bounded to one helper globally, so
+long copies do not block other parents' finalization, cancellation or cleanup.
+The execution lane retains completed results until their idempotent database
+write succeeds. Before claiming new work it fails abandoned claims, including
+ambiguous claim commits, without replay; queued jobs remain claimable. Both paths
+share finalization and volume ownership receipts.
+Copy plans retain separate source and destination identities. The authorized
+SQL catalog limits destinations to the source platform type. Existing-backup
+copies may restore to another platform or Swarm node using S3-compatible storage;
+current-data copies remain on the original daemon/node. Destination authorization,
+routing identity and remapped Swarm references are fenced at review, start and
+finalization. Snapshot selection always uses source identity; restore children,
+volume ownership receipts and cleanup use destination identity. Swarm references
+are resolved by name in destination inventory without copying secret/config values.
+Optional destination fields preserve older same-platform durable plans.
+The copy worker reconciles durable parent state. Runtime storage
+checks and ownership-verified cleanup use the Platform runtime router, outside
+database transactions. Destination creation commits before resource invalidation.
+
+Copy progress uses an actor-owned `resource-copy:<id>` realtime group.
+Persistence publishes operation IDs on `citadel_resource_copies` inside the
+transaction that changes a parent or child restore. A supervised listener
+invalidates only the affected group; reconnects request a resync. Group reads
+reuse the copy service's initiating-actor authorization and persisted progress.
+
 ### HTTP and realtime presentation
 
 `src/server/src/api/routes/` owns endpoint registration, extraction and HTTP responses.

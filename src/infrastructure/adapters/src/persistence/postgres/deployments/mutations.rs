@@ -10,100 +10,8 @@ impl PostgresDeploymentRepository {
     {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            ensure_platform(&mut tx, actor_id, administrator, input.platform_id).await?;
-            validate_image_references(&mut tx, &input.spec.image).await?;
-            validate_tags(&mut tx, &input.tag_ids).await?;
-
-            let duplicate = if let Some(source) = &input.duplicate_source {
-                ensure_access(
-                    &mut tx,
-                    actor_id,
-                    administrator,
-                    source.resource_id,
-                    ReadDeployment::REQUIREMENT,
-                )
-                .await?;
-                let row = sqlx::query(
-                    "SELECT d.name, p.platformdescriptor FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=$1",
-                )
-                .bind(source.resource_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(storage)?
-                .ok_or(DeploymentError::NotFound)?;
-                let source_descriptor: Value =
-                    row.try_get("platformdescriptor").map_err(storage)?;
-                if platform_kind(&source_descriptor) != "Docker" {
-                    return Err(DeploymentError::Validation(
-                        "A Deployment duplicate must use a Docker Standalone source.".to_owned(),
-                    ));
-                }
-                require_duplicate_binding_access(
-                    &mut tx,
-                    actor_id,
-                    administrator,
-                    source.resource_id,
-                )
-                .await?;
-                Some((
-                    source.resource_id,
-                    row.try_get::<String, _>("name").map_err(storage)?,
-                ))
-            } else {
-                None
-            };
-
             let id = Uuid::now_v7();
-            let now = Utc::now();
-            let spec = input.spec.to_storage_value()?;
-            sqlx::query(
-                r#"INSERT INTO deployments (
-                    id,name,description,platformid,status,createdat,createdbyactorid,spec,
-                    autoupdatestate_lastcheckedat,autoupdatestate_status,controlstate,rowversion)
-                   VALUES ($1,$2,$3,$4,'Created',$5,$6,$7,'-infinity','Unknown','Idle',0)"#,
-            )
-            .bind(id)
-            .bind(&input.name)
-            .bind(&input.description)
-            .bind(input.platform_id)
-            .bind(now)
-            .bind(actor_id.value())
-            .bind(spec.clone())
-            .execute(&mut *tx)
-            .await
-            .map_err(database_error)?;
-            insert_tags(&mut tx, id, actor_id, &input.tag_ids).await?;
-            if let Some((source_id, _)) = duplicate.as_ref() {
-                copy_bindings(&mut tx, *source_id, id).await?;
-            }
-            let snapshot = snapshot(
-                id,
-                &input.name,
-                input.platform_id,
-                input.description.clone(),
-                spec,
-            );
-            let info = match duplicate {
-                Some((source_id, source_name)) => ActivityEventInfo::deployment_duplicated(
-                    snapshot,
-                    ActivitySourceResource {
-                        resource_type: ActivityResourceType::Deployment,
-                        resource_id: source_id,
-                        resource_name: source_name,
-                    },
-                ),
-                None => ActivityEventInfo::deployment_created(snapshot),
-            };
-            insert_deployment_activity(
-                &mut tx,
-                id,
-                &input.name,
-                input.platform_id,
-                actor_id,
-                info,
-                now,
-            )
-            .await?;
+            create_in_transaction(&mut tx, actor_id, administrator, id, input).await?;
             tx.commit().await.map_err(storage)?;
             get_authorized(&self.pool, actor_id, administrator, id).await
         })
@@ -418,5 +326,93 @@ pub(super) async fn copy_bindings(
     .execute(&mut **tx)
     .await
     .map_err(database_error)?;
+    Ok(())
+}
+
+/// Shared atomic creation used by ordinary creates and copy finalization.
+pub(crate) async fn create_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_id: ActorId,
+    administrator: bool,
+    id: Uuid,
+    input: &CreateDeployment,
+) -> Result<(), DeploymentError> {
+    ensure_platform(tx, actor_id, administrator, input.platform_id).await?;
+    validate_image_references(tx, &input.spec.image).await?;
+    validate_tags(tx, &input.tag_ids).await?;
+
+    let duplicate = if let Some(source) = &input.duplicate_source {
+        ensure_access(
+            tx,
+            actor_id,
+            administrator,
+            source.resource_id,
+            ReadDeployment::REQUIREMENT,
+        )
+        .await?;
+        let row = sqlx::query(
+            "SELECT d.name, p.platformdescriptor FROM deployments d JOIN platforms p ON p.id=d.platformid WHERE d.id=$1",
+        )
+        .bind(source.resource_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(storage)?
+        .ok_or(DeploymentError::NotFound)?;
+        let source_descriptor: Value = row.try_get("platformdescriptor").map_err(storage)?;
+        if platform_kind(&source_descriptor) != "Docker" {
+            return Err(DeploymentError::Validation(
+                "A Deployment duplicate must use a Docker Standalone source.".to_owned(),
+            ));
+        }
+        require_duplicate_binding_access(tx, actor_id, administrator, source.resource_id).await?;
+        Some((
+            source.resource_id,
+            row.try_get::<String, _>("name").map_err(storage)?,
+        ))
+    } else {
+        None
+    };
+
+    let now = Utc::now();
+    let spec = input.spec.to_storage_value()?;
+    sqlx::query(
+        r#"INSERT INTO deployments (
+            id,name,description,platformid,status,createdat,createdbyactorid,spec,
+            autoupdatestate_lastcheckedat,autoupdatestate_status,controlstate,rowversion)
+           VALUES ($1,$2,$3,$4,'Created',$5,$6,$7,'-infinity','Unknown','Idle',0)"#,
+    )
+    .bind(id)
+    .bind(&input.name)
+    .bind(&input.description)
+    .bind(input.platform_id)
+    .bind(now)
+    .bind(actor_id.value())
+    .bind(spec.clone())
+    .execute(&mut **tx)
+    .await
+    .map_err(database_error)?;
+    insert_tags(tx, id, actor_id, &input.tag_ids).await?;
+    if let Some((source_id, _)) = duplicate.as_ref() {
+        copy_bindings(tx, *source_id, id).await?;
+    }
+    let snapshot = snapshot(
+        id,
+        &input.name,
+        input.platform_id,
+        input.description.clone(),
+        spec,
+    );
+    let info = match duplicate {
+        Some((source_id, source_name)) => ActivityEventInfo::deployment_duplicated(
+            snapshot,
+            ActivitySourceResource {
+                resource_type: ActivityResourceType::Deployment,
+                resource_id: source_id,
+                resource_name: source_name,
+            },
+        ),
+        None => ActivityEventInfo::deployment_created(snapshot),
+    };
+    insert_deployment_activity(tx, id, &input.name, input.platform_id, actor_id, info, now).await?;
     Ok(())
 }

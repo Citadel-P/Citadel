@@ -108,6 +108,19 @@ Set:
 
 Save the action before using manual, scheduled, or webhook triggers.
 
+## Duplicate configuration
+
+Choose **Duplicate configuration**, edit the prefilled form, then select
+**Review copy**. The new Action is disabled with its schedule and webhook off;
+its run-as identity defaults to you. Enable and configure its triggers only
+after reviewing the script and arguments.
+
+Code and arguments are copied as written. Resource IDs, URLs and credentials
+inside them are not remapped, so the copy may still target the original
+resources. Runs, access grants and webhook credentials are not copied. The
+creation activity identifies the source Action. You need permission to read
+the source and create Actions.
+
 ## Script Globals
 
 Action code can use these globals:

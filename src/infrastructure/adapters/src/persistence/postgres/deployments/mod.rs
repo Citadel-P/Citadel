@@ -49,3 +49,5 @@ const DEPLOYMENT_RESOURCE_TYPE: i32 = 1;
 const PLATFORM_RESOURCE_TYPE: i32 = 0;
 
 pub(crate) mod runtime_images;
+
+pub(crate) use mutations::create_in_transaction;

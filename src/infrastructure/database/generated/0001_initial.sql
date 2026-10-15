@@ -2170,3 +2170,27 @@ CREATE TABLE alertobservationreceipts (
     ruleid uuid NOT NULL,
     PRIMARY KEY (observationid, ruleid)
 );
+-- Durable snapshot-backed workload copies.
+CREATE TABLE resourcecopies (
+    id uuid PRIMARY KEY,
+    actorid uuid NOT NULL REFERENCES actors(id) ON DELETE RESTRICT,
+    kind text NOT NULL CHECK (kind IN ('Deployment','Stack','SwarmService')),
+    sourceid uuid NOT NULL,
+    name text NOT NULL,
+    platformid uuid NOT NULL REFERENCES platforms(id) ON DELETE RESTRICT,
+    plan jsonb NOT NULL,
+    status text NOT NULL DEFAULT 'Review' CHECK (status IN ('Review','Restoring','Cancelling','Succeeded','Failed','Cancelled','Cleaning','Cleaned')),
+    destinationid uuid,
+    message text,
+    createdat timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedat timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ix_resourcecopies_pending ON resourcecopies(updatedat,id) WHERE status IN ('Restoring','Cancelling','Cleaning');
+CREATE UNIQUE INDEX ux_resourcecopies_name ON resourcecopies(kind,lower(name)) WHERE status IN ('Restoring','Cancelling');
+CREATE TABLE resourcecopyrestores (
+    copyid uuid NOT NULL REFERENCES resourcecopies(id) ON DELETE RESTRICT,
+    restoreid uuid PRIMARY KEY REFERENCES backuprestoreruns(id) ON DELETE RESTRICT,
+    sourcevolume text NOT NULL,
+    targetvolume text NOT NULL,
+    UNIQUE(copyid,sourcevolume)
+);

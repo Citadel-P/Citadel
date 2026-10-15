@@ -50,3 +50,15 @@ pub struct BuildProject {
     pub tags: Vec<citadel_tags::TagSummary>,
     pub latest_run: Option<crate::BuildRun>,
 }
+
+impl BuildProject {
+    pub fn duplicate_configuration(&self) -> crate::BuildProjectConfiguration {
+        let mut draft = crate::BuildProjectConfiguration::from(self);
+        draft.duplicate_source_id = Some(self.id);
+        draft.name = format!("{} Copy", self.name.chars().take(123).collect::<String>());
+        draft.enabled = false;
+        draft.webhook = None;
+        draft.tag_ids = self.tags.iter().map(|tag| tag.id).collect();
+        draft
+    }
+}

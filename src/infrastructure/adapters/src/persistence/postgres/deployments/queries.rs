@@ -76,7 +76,7 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                     name,
                     platform_id: source.platform_id,
                     description: source.description,
-                    spec: source.spec.for_create(),
+                    spec: source.spec.for_duplicate(),
                     tag_ids: source.tags.iter().map(|tag| tag.id).collect(),
                     duplicate_source: DuplicateSource {
                         resource_type: "Deployment".to_owned(),

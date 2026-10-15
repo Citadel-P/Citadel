@@ -38,7 +38,7 @@ test administrator with `CITADEL_E2E_ADMIN_NAME`,
 
 ```powershell
 npm run test:smoke            # Fast authentication, authorization, licensing, navigation, and tag checks
-npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
+npm run test:core-runtime     # Deploy, rollback, snapshot copies, and Core crash recovery
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
 npm run test:visual           # Chromium desktop and mobile visual regression coverage
 npm run test:accessibility    # Focused WCAG A/AA checks for login and representative application surfaces
@@ -53,6 +53,16 @@ and accessibility checks when reviewing browser behavior. The runtime lifecycle
 suite deliberately exercises a real network interruption. Both runtime suites
 create disposable resources whose names start with `e2e-runtime-` and remove them
 after each test.
+
+The resource-copy test uses the real three-step wizard, restores a selected
+snapshot, applies the resulting Stack, and verifies independent volume contents.
+It also pauses the isolated Docker daemon and kills the fixture Core after a
+restore is claimed. After restart it checks that the copy fails safely, keeps the
+same restore IDs, and never creates a partially restored workload. This test
+requires control of the disposable Compose project; never point it at a shared
+or production server. Its resource names start with `e2e-copy-`. Cleanup removes
+only this fixture's operation history from the disposable database, allowing
+subsequent tests to register the same Docker daemon.
 
 The visual suite covers the authenticated shell and resource table, collapsed
 desktop sidebar, Stack FormBuilder, global search results, and a completed task

@@ -88,6 +88,7 @@ pub struct ServerComponents {
     pub alert_delivery: Arc<dyn citadel_alerts::AlertDelivery>,
     pub automation: Arc<AutomationService>,
     pub backups: Arc<BackupService>,
+    pub copies: Arc<citadel_resource_copies::CopyService>,
     pub users: Arc<UserReadService>,
     pub user_mutations: Arc<citadel_identity::UserMutationService>,
     pub teams: Arc<TeamReadService>,
@@ -204,6 +205,13 @@ impl ServerComponents {
             &git_execution,
             &entitlements,
         )?;
+        let copy_hub = realtime_hub.clone();
+        let copies = Arc::new(citadel_resource_copies::CopyService::new(
+            Arc::new(citadel_adapters::persistence::postgres::resource_copies::PostgresCopyRepository::new(pool.clone())),
+            Arc::new(citadel_adapters::connectors::routing::resource_copies::CopyStorageRuntime { image: config.execution.restic_image.clone(), runtime: Arc::new(runtime.container_runtime.runtime_router()) }),
+            backups.clone(),
+            Arc::new(move |kind,id| { if let Some(hub)=&copy_hub { hub.publish_resource_change(kind.as_str(),id,"created"); } }),
+        ));
         let builds = builds::build(
             config,
             &runtime,
@@ -245,6 +253,7 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    copy_eligibility: Some(copies.clone()),
                     backup_coverage: Some(Arc::new(
                         citadel_server::api::resources::backups::coverage::BackupCoverageService {
                             backups: backups.clone(),
@@ -320,6 +329,7 @@ impl ServerComponents {
                 alert_delivery,
                 automation,
                 backups,
+                copies,
                 users,
                 user_mutations,
                 teams,

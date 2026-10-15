@@ -27,6 +27,68 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
             StatusCode::BAD_REQUEST
         );
     }
+    let duplicate_path = format!("/api/v1/buildProjects/{project}/duplicate-draft");
+    assert_eq!(
+        request(app, Method::GET, &duplicate_path, None, None)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = request(app, Method::GET, &duplicate_path, Some(admin.clone()), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("no-store")
+    );
+    let draft_response = response_json(response).await;
+    let mut draft = draft_response["draft"].clone();
+    assert_eq!(draft["duplicateSourceId"], project);
+    assert_eq!(draft["enabled"], false);
+    assert!(draft["webhook"].is_null());
+    assert!(draft.get("currentRunId").is_none());
+    let mut forged = draft.clone();
+    forged["enabled"] = json!(true);
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/buildProjects",
+            Some(admin.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    draft["name"] = json!(format!("copy-{}", Uuid::now_v7()));
+    let response = request(
+        app,
+        Method::POST,
+        "/api/v1/buildProjects",
+        Some(admin.clone()),
+        Some(draft),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let copied = response_json(response).await;
+    assert_ne!(copied["id"], project);
+    assert_eq!(copied["enabled"], false);
+    assert!(copied["webhook"].is_null());
+    assert!(copied["latestRun"].is_null());
+    assert_eq!(
+        request(
+            app,
+            Method::DELETE,
+            &format!("/api/v1/buildProjects/{}", copied["id"].as_str().unwrap()),
+            Some(admin.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
     let path = format!("/api/v1/buildProjects/{project}");
     for input in [
         json!({"builderKind":"Invalid"}),

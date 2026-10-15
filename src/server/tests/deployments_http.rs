@@ -172,6 +172,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .with_alerts(alerts.clone()),
     );
     let app = deployments::router(DeploymentsHttpState {
+        copy_eligibility: None,
         backup_coverage: None,
         identity: identity.clone(),
         deployments: service.clone(),
@@ -572,6 +573,21 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         draft["draft"]["spec"]["image"]
             .get("resolvedDigest")
             .is_none()
+    );
+    assert_eq!(draft["draft"]["spec"]["updateBehavior"], "Disabled");
+    let mut forged = draft["draft"].clone();
+    forged["spec"]["updateBehavior"] = json!("AutoDeploy");
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/deployments",
+            Some(admin.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
     );
     assert_eq!(
         request(

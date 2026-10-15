@@ -283,6 +283,79 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(automation_action["tags"][0]["id"], action_tags[0]["id"]);
     assert_eq!(automation_action["capabilities"]["canExecute"], true);
     assert!(automation_action["latestRun"].is_null());
+    let duplicate_path = format!("/api/v1/automation/actions/{automation_id}/duplicate-draft");
+    assert_eq!(
+        request(&app, Method::GET, &duplicate_path, None, None)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = request(
+        &app,
+        Method::GET,
+        &duplicate_path,
+        Some(administrator.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("no-store")
+    );
+    let draft_response = response_json(response).await;
+    let mut draft = draft_response["draft"].clone();
+    assert_eq!(draft["duplicateSourceId"], automation_id);
+    assert_eq!(draft["enabled"], false);
+    assert_eq!(draft["scheduleEnabled"], false);
+    assert!(draft["webhook"].is_null());
+    assert!(draft["runAsActorId"].is_null());
+    let mut forged = draft.clone();
+    forged["enabled"] = json!(true);
+    assert_eq!(
+        request(
+            &app,
+            Method::POST,
+            "/api/v1/automation/actions",
+            Some(administrator.clone()),
+            Some(forged)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    draft["name"] = json!(format!("copy-{suffix}"));
+    let response = request(
+        &app,
+        Method::POST,
+        "/api/v1/automation/actions",
+        Some(administrator.clone()),
+        Some(draft),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let copied = response_json(response).await;
+    assert_eq!(copied["enabled"], false);
+    assert_eq!(copied["runAsActorId"], administrator_actor_id.to_string());
+    assert!(copied["latestRun"].is_null());
+    assert_ne!(copied["id"], automation_id);
+    assert_eq!(
+        request(
+            &app,
+            Method::DELETE,
+            &format!(
+                "/api/v1/automation/actions/{}",
+                copied["id"].as_str().unwrap()
+            ),
+            Some(administrator.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
     // Paid triggers cannot be enabled by an
     // unlicensed administrator; ordinary manual Actions remain available.
     assert_eq!(

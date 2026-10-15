@@ -468,4 +468,70 @@ pub(super) async fn verify_streams(
         values.as_array().unwrap().last().unwrap()["status"],
         "Cancelled"
     );
+
+    // A persisted legacy mode must fail before a planner or executor can
+    // silently take a live snapshot. New policy validation already rejects it.
+    assert_eq!(policy["source"]["$type"], "DockerVolume");
+    sqlx::query("UPDATE backuppolicies SET source=jsonb_set(source, '{consistency}', '\"StopAttachedContainers\"') WHERE id=$1")
+        .bind(policy_uuid).execute(pool).await.unwrap();
+    let legacy = backups
+        .store()
+        .enqueue_backup(admin.actor_id, policy_uuid, "Manual")
+        .await
+        .unwrap();
+    backups
+        .process_backup(&CancellationToken::new())
+        .await
+        .unwrap();
+    let failed = backups.store().get_run(legacy.id).await.unwrap();
+    assert_eq!(failed.status, citadel_backups::BackupRunStatus::Failed);
+    assert!(
+        failed
+            .error_message
+            .as_deref()
+            .unwrap()
+            .contains("not supported")
+    );
+    assert!(
+        failed.items.is_empty(),
+        "Unsupported consistency must not prepare storage"
+    );
+    let policy_path = format!("/api/v1/backupPolicies/{policy_uuid}");
+    let response = request(
+        app,
+        Method::PATCH,
+        &policy_path,
+        Some(admin.clone()),
+        Some(json!({"enabled": false})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let disabled = response_json(response).await;
+    assert_eq!(disabled["enabled"], false);
+    assert_eq!(disabled["source"]["consistency"], "StopAttachedContainers");
+    assert_eq!(
+        disabled["source"]["volumeName"],
+        policy["source"]["volumeName"]
+    );
+    let response = request(
+        app,
+        Method::PATCH,
+        &policy_path,
+        Some(admin.clone()),
+        Some(json!({"enabled": true})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response = request(
+        app,
+        Method::PATCH,
+        &policy_path,
+        Some(admin.clone()),
+        Some(json!({"source": policy["source"], "enabled": true})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let corrected = response_json(response).await;
+    assert_eq!(corrected["enabled"], true);
+    assert_eq!(corrected["source"]["consistency"], "Live");
 }

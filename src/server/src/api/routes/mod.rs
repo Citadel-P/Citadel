@@ -25,3 +25,5 @@ pub mod tags;
 pub mod teams;
 pub mod users;
 pub mod webhooks;
+
+pub mod resource_copies;

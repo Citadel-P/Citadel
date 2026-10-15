@@ -165,7 +165,22 @@ pub async fn verify(
         .await
         .unwrap();
     assert!(
-        matches!(&duplicate.draft.spec, citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. } if webhook.config.secret.is_none()),
-        "duplicate config must not copy authentication credentials"
+        matches!(
+            &duplicate.draft.spec,
+            citadel_stacks::StackSpec::Git {
+                webhook: None,
+                update_behavior: citadel_stacks::StackUpdateBehavior::Disabled,
+                ..
+            }
+        ),
+        "configuration copies must not retain a webhook or automatic updates"
+    );
+    let unchanged = stacks
+        .get(ActorId::new(SYSTEM_ACTOR_ID), true, stack.id)
+        .await
+        .unwrap();
+    assert!(
+        matches!(&unchanged.spec, Some(citadel_stacks::StackSpec::Git { webhook: Some(webhook), .. }) if webhook.config.secret.is_some()),
+        "copy preparation must leave the source webhook unchanged"
     );
 }

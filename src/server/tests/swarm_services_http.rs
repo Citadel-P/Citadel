@@ -145,6 +145,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
         .with_image_digests(digests.clone()),
     );
     let app = swarm_services_http::router(SwarmServicesHttpState {
+        copy_eligibility: None,
         backup_coverage: None,
         identity: identity.clone(),
         services: services.clone(),

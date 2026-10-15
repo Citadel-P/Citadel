@@ -44,6 +44,7 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DeploymentsHttpState {
+    pub copy_eligibility: Option<Arc<citadel_resource_copies::CopyService>>,
     pub backup_coverage:
         Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub identity: Arc<IdentityService>,
@@ -307,6 +308,17 @@ async fn get_deployment(
                     platform,
                 )
                 .await,
+        );
+    }
+    if let Some(service) = &state.copy_eligibility {
+        view.copy_eligibility = Some(
+            crate::api::resources::resource_copies::eligibility(
+                service,
+                principal.actor_id,
+                citadel_resource_copies::CopyKind::Deployment,
+                id,
+            )
+            .await,
         );
     }
     Ok(no_store(Json(view).into_response()))

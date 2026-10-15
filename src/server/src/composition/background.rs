@@ -41,6 +41,7 @@ pub async fn spawn_all(
         automation,
         builds,
         backups,
+        copies,
         ..
     } = state;
     let BackgroundServices {
@@ -74,6 +75,19 @@ pub async fn spawn_all(
             license_realtime_hub,
             alert_store.clone(),
         ),
+    );
+    let copy_changes = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::connect(pool).await?;
+    supervisor.spawn(
+        "resource-copy-realtime",
+        workers::resource_copies::realtime_updates(
+            Box::new(copy_changes),
+            realtime_hub.clone(),
+            cancellation.child_token(),
+        ),
+    );
+    supervisor.spawn(
+        "resource-copies",
+        workers::resource_copies::run(cancellation.child_token(), copies.clone()),
     );
     let stats = workers::register(
         &mut supervisor,
