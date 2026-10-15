@@ -203,6 +203,12 @@ impl PostgresAlertRepository {
         receipt: Option<Uuid>,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
+            if !observation.matched
+                && citadel_alerts::update_resolution::is_update_available(&observation.alert_type)
+            {
+                self.resolve_applied_update(observation).await?;
+                return Ok(None);
+            }
             let rules = self.configured_rules(&observation.alert_type).await?;
             let advanced_alerting = !rules
                 .iter()

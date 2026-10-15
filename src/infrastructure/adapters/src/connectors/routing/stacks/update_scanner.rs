@@ -22,6 +22,13 @@ impl StackUpdateRuntime {
     }
 }
 impl StackUpdateScanner for StackUpdateRuntime {
+    fn scan_images<'a>(
+        &'a self,
+        stack: &'a citadel_stacks::Stack,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<StackUpdateState, StackError>> {
+        self.scan_images(stack, false, cancel)
+    }
     fn scan<'a>(
         &'a self,
         stack: &'a citadel_stacks::Stack,

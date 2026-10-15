@@ -179,6 +179,7 @@ impl StackService {
         let build_images = self.build_images.clone();
         let notifier = Arc::clone(&self.notifier);
         let alerts = self.alerts.clone();
+        let update_scanner = self.update_scanner.clone();
         let cancellation = self.shutdown.child_token();
         let timeout = self.timeout;
         let (sender, receiver) = mpsc::channel(32);
@@ -195,7 +196,9 @@ impl StackService {
                     build_images,
                     notifier,
                     alerts,
+                    update_scanner,
                     actor,
+                    administrator,
                     claim,
                     image_update_commit,
                     cancellation,
@@ -255,6 +258,18 @@ impl StackService {
                     self.store
                         .complete_apply(actor, &claim, &result, &[], None, container_ids.as_deref())
                         .await?;
+                    if let Err(error) = super::update_checks::refresh_applied_images(
+                        self.store.as_ref(),
+                        self.update_scanner.as_deref(),
+                        actor,
+                        true,
+                        &claim,
+                        &self.shutdown,
+                    )
+                    .await
+                    {
+                        tracing::warn!(stack_id=%claim.stack_id, %error, "Recovered Stack image update status could not be refreshed");
+                    }
                     self.notifier.changed(claim.stack_id, "reconciled");
                     count += 1;
                 }
@@ -354,7 +369,9 @@ pub(super) async fn execute_apply(
     build_images: Option<Arc<dyn StackBuildImageResolverPort>>,
     notifier: Arc<dyn StackChangeNotifier>,
     alerts: Option<Arc<dyn AlertEventSink>>,
+    update_scanner: Option<Arc<dyn StackUpdateScanner>>,
     actor: ActorId,
+    administrator: bool,
     mut claim: StackOperationClaim,
     image_update_commit: Option<String>,
     cancellation: CancellationToken,
@@ -694,6 +711,21 @@ pub(super) async fn execute_apply(
                             return Err(error);
                         }
                     }
+                }
+                if let Err(error) = super::update_checks::refresh_applied_images(
+                    store.as_ref(),
+                    update_scanner.as_deref(),
+                    actor,
+                    administrator,
+                    &claim,
+                    &cancellation,
+                )
+                .await
+                {
+                    tracing::warn!(stack_id=%claim.stack_id, %error, "Stack deployed, but image update status could not be refreshed");
+                    let _ = sender.send(StackProgressItem::system(
+                        "Stack deployed, but image update status could not be refreshed. Run Check for updates to retry.",
+                    )).await;
                 }
                 notifier.changed(claim.stack_id, "applied");
                 Ok(())

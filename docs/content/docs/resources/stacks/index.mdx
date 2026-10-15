@@ -28,6 +28,16 @@ Use [Deployments](/docs/resources/deployments) for individual Standalone contain
 or [Swarm Services](/docs/resources/swarm-services) for independently managed
 Swarm Services.
 
+## Image updates
+
+**Redeploy** pulls the service images and, when a Registry is configured, refreshes
+the image-update status against the deployed images. This also applies when
+scheduled update checks are disabled. A newer image can still be reported if the
+registry tag changes again during deployment.
+
+If the status refresh fails, the deployment remains successful and its progress
+shows a warning. Use **Check for updates** to retry the check without redeploying.
+
 ## Backup coverage
 
 The backup shield at the far right of the main tab bar is available from every

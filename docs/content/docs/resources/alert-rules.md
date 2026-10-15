@@ -52,6 +52,14 @@ availability, resource pressure, and Build Pool availability, Citadel can resolv
 the incident when it observes recovery. A historical failed operation can still
 need manual resolution after a successful retry.
 
+For Stack and Deployment **update available** alerts, Citadel resolves the matching
+event automatically after it verifies that the advertised image digest or Git
+commit is applied. Stack image alerts require every service listed in that event
+to match. Failed updates, incomplete image updates, and alerts for a newer pending
+target remain open. The resolver is **System**, with the note “Update applied successfully.”;
+the workload activity retains the user who performed the update. Resolved events
+remain in history, and manual resolution is still available.
+
 Use [Platform monitoring](/docs/operations/platform-monitoring) to investigate
 capacity alerts and [Troubleshooting](/docs/operations/troubleshooting) for
 connection or application failures. Alert details describe the condition; they

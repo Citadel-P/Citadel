@@ -8,6 +8,10 @@ impl PostgresAlertRepository {
         receipt: Option<Uuid>,
     ) -> Result<Option<AlertEvent>, AlertError> {
         let mut transaction = self.pool.begin().await.map_err(storage)?;
+        if super::update_resolution::already_applied(&mut transaction, observation).await? {
+            transaction.commit().await.map_err(storage)?;
+            return Ok(None);
+        }
         if let Some(id) = receipt {
             let inserted = sqlx::query("INSERT INTO alertobservationreceipts(observationid,ruleid) VALUES($1,$2) ON CONFLICT DO NOTHING")
                 .bind(id).bind(rule.id).execute(&mut *transaction).await.map_err(storage)?;
