@@ -89,7 +89,7 @@ export const SwarmServicesTable = ({
         isFiltered
           ? {
               title: 'No services match the current filters.',
-              description: 'Select another overview card or adjust the search and filters.',
+              description: 'Adjust the search and filters.',
             }
           : { title: 'No managed Services found.' }
       }

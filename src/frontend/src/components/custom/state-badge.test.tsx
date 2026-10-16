@@ -2,6 +2,20 @@ import { render, screen } from '@testing-library/react';
 import { StateBadge } from './state-badge';
 
 describe('StateBadge', () => {
+  it.each([
+    ['Healthy', 'text-green-700'],
+    ['Starting', 'text-orange-700'],
+    ['Unhealthy', 'text-red-700'],
+    ['NoCheck', 'text-muted-foreground'],
+    ['Disabled', 'text-muted-foreground'],
+    ['NotRunning', 'text-muted-foreground'],
+    ['Unknown', 'text-muted-foreground'],
+  ])('uses health semantics for %s', (value, color) => {
+    render(<StateBadge kind="health" value={value} label={value} />);
+    const label = screen.getByText(value);
+    expect(label).toHaveClass('text-foreground');
+    expect(label.closest('[data-slot="badge"]')).toHaveClass(color);
+  });
   it('uses resource-specific state semantics', () => {
     const { rerender } = render(<StateBadge value="Running" kind="swarmTask" />);
     expect(screen.getByText('Running')).toHaveClass('text-green-700');

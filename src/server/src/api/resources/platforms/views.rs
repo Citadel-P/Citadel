@@ -202,6 +202,12 @@ impl From<citadel_platforms::ContainerStatSnapshot> for ContainerStatView {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerView {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<super::health_views::ContainerHealthView>,
+    /// Names of owning workloads this actor may read. Never derived from Docker labels.
+    #[serde(default)]
+    #[schema(required = false)]
+    pub owner_names: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_coverage:
         Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
     pub id: Uuid,
@@ -251,6 +257,12 @@ pub struct ContainerView {
 impl From<citadel_platforms::ContainerDetails> for ContainerView {
     fn from(value: citadel_platforms::ContainerDetails) -> Self {
         Self {
+            health: Some(super::health_views::ContainerHealthView::from_observation(
+                value.health.as_ref(),
+                &value.state,
+                value.projection_stale_since.is_none() && value.state != "Offline",
+            )),
+            owner_names: Vec::new(),
             backup_coverage: None,
             id: value.id,
             platform_id: value.platform_id,

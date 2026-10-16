@@ -12,10 +12,12 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Clock, Server, Info } from 'lucide-react';
 import { DetailFacts, DetailSection } from '@/components/custom/resource-detail';
 import Loader from '@/components/ui/loader';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { useLocalStorage, useRead } from '@/lib/hooks';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
+import { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
+import { ContainerOverviewHealth } from './container-overview-health';
 import { ImageName } from '.';
 import {
   CPUCell,
@@ -153,8 +155,12 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
   return [...cols, ...coreCols];
 };
 
-export const ContainerOverview = ({ container }: { container?: ContainerRuntimeView | undefined }) => {
+export const ContainerOverview = ({ container }: { container?: ContainerDetailsView }) => {
   const [overviewOpen, setOverviewOpen] = useLocalStorage('container-overview-open', true);
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === '#health') setOverviewOpen(true);
+  }, [hash, setOverviewOpen]);
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
   const backupCoverage = container?.backupCoverage ?? containerInfo?.backupCoverage;
@@ -268,6 +274,15 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
               ...(backupCoverage?.volumes.some((volume) => volume.hostPath)
                 ? [{ label: 'Bind mounts', value: <BindMountBackupLinks coverage={backupCoverage} /> }]
                 : []),
+
+              ...(container
+                ? [
+                    {
+                      label: 'Health',
+                      value: <ContainerOverviewHealth key={container.resourceId} resource={container} />,
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>
@@ -277,16 +292,18 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
 };
 
 export const DeploymentContainerInfoTable = ({
+  summary,
   deploymentId,
   container,
   displayOptions,
 }: {
   deploymentId: string;
+  summary?: ContainerSummaryView;
   container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
 }) => {
-  const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId });
-  const containerInfo = data?.data;
+  const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId }, { enabled: !summary });
+  const containerInfo = summary ?? data?.data;
 
   return (
     <ContainerInfoTableRenderer
@@ -323,7 +340,7 @@ const ContainerInfoTableRenderer = ({
       ]
     : [];
 
-  const finalIsLoading = !container?.id || Boolean(isLoading);
+  const finalIsLoading = !containerInfo && Boolean(isLoading);
 
   return <DataTable columns={columns} data={tableData} isLoading={finalIsLoading} />;
 };

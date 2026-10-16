@@ -38,9 +38,9 @@ export const ImageComponents: RegularResourceComponents<ImageView> = {
     activeFilterParams: ['updates'],
     Extra: () => (
       <>
-        <ImageColumnsButton />
         <UpdatesAvailableFilter />
         <PullButton />
+        <ImageColumnsButton />
       </>
     ),
   },

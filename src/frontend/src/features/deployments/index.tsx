@@ -1,13 +1,13 @@
+import { useMemo } from 'react';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
-import { DeploymentStatus, type DeploymentView } from '@/api/generated/api.types';
-import { Rocket, CircleCheck, TriangleAlert, CircleStop, ArrowUpCircle } from 'lucide-react';
+import { type DeploymentView } from '@/api/generated/api.types';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
 import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 import { CitadelIcons } from '@/lib/icons';
-import { UpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
+import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
 import { hasDeploymentUpdateAvailable } from './update-status';
 
 const EMPTY_DEPLOYMENTS: never[] = [];
@@ -28,42 +28,7 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
     ),
     activeFilterParams: ['updates', 'backupStatus'],
   },
-  overview: {
-    label: 'Deployment overview',
-    filters: [
-      { id: 'all', label: 'All deployments', description: 'All matching deployments', icon: Rocket },
-      {
-        id: 'healthy',
-        label: 'Healthy',
-        description: 'Workloads running normally',
-        icon: CircleCheck,
-        tone: 'success',
-        matches: (item) => item.status === DeploymentStatus.Healthy,
-      },
-      {
-        id: 'attention',
-        label: 'Needs attention',
-        description: 'Degraded or failed deployments',
-        icon: TriangleAlert,
-        tone: 'warning',
-        matches: (item) => [DeploymentStatus.Degraded, DeploymentStatus.Failed].includes(item.status),
-      },
-      {
-        id: 'stopped',
-        label: 'Stopped',
-        description: 'Stopped deployments',
-        icon: CircleStop,
-        matches: (item) => item.status === DeploymentStatus.Stopped,
-      },
-      {
-        id: 'updates',
-        label: 'Updates available',
-        description: 'Detected image updates',
-        icon: ArrowUpCircle,
-        matches: hasDeploymentUpdateAvailable,
-      },
-    ],
-  },
+
   Content: ({ items, actions, isLoading, isFiltered }) => (
     <DeploymentsTable
       items={items}
@@ -73,7 +38,7 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
         isFiltered
           ? {
               title: 'No deployments match the current filters.',
-              description: 'Select another overview card or adjust the search and filters.',
+              description: 'Adjust the search and filters.',
             }
           : undefined
       }
@@ -86,7 +51,12 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { deployments, capabilities, isLoading, error, refetch, isFetching } = useDeploymentsGroup();
-    const items = useBackupStatusFilter(deployments ?? EMPTY_DEPLOYMENTS);
+    const { updatesAvailableOnly } = useUpdatesAvailableFilter();
+    const coveredItems = useBackupStatusFilter(deployments ?? EMPTY_DEPLOYMENTS);
+    const items = useMemo(
+      () => (updatesAvailableOnly ? coveredItems.filter(hasDeploymentUpdateAvailable) : coveredItems),
+      [coveredItems, updatesAvailableOnly],
+    );
     return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {

@@ -158,6 +158,12 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
         })
         .transpose()?;
     Ok(ContainerDetails {
+        health: row
+            .try_get::<Option<serde_json::Value>, _>("health")
+            .map_err(storage)?
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(storage)?,
         id: row.try_get("id").map_err(storage)?,
         platform_id: row.try_get("platformid").map_err(storage)?,
         container_id: row.try_get("dockercontainerid").map_err(storage)?,

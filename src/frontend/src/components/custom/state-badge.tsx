@@ -9,6 +9,7 @@ export type StateBadgeKind =
   | 'alertSeverity'
   | 'default'
   | 'container'
+  | 'health'
   | 'run'
   | 'swarmNode'
   | 'swarmTask';
@@ -104,6 +105,12 @@ const getStateStyle = (value: StateBadgeValue, kind: StateBadgeKind) => {
   if (value === null || value === undefined || value === '') return styles.muted;
   if (kind === 'default' && typeof value === 'boolean') return value ? styles.success : styles.muted;
   const normalized = normalize(value);
+  if (kind === 'health') {
+    if (normalized === 'healthy') return styles.success;
+    if (normalized === 'starting') return styles.warning;
+    if (normalized === 'unhealthy') return styles.danger;
+    return styles.muted;
+  }
   if (kind === 'container' && normalized === 'running') return styles.success;
   if (kind === 'activity') return getActivityStyle(normalized);
   if (kind === 'alertEvent') return getAlertEventStyle(normalized);
@@ -132,13 +139,20 @@ export const StateBadge = ({
 }: StateBadgeProps) => {
   const displayValue = value === null || value === undefined || value === '' ? 'Unknown' : String(value);
   const displayLabel = kind === 'activity' && normalize(value) === 'information' ? 'Info' : displayValue;
+  const content = isProcessing ? 'Processing' : (label ?? displayLabel.replace(/([a-z])([A-Z])/g, '$1 $2'));
   return (
     <Badge
       variant="outline"
       title={title}
-      className={cn('min-h-6 gap-1.5 leading-4', isProcessing ? styles.info : getStateStyle(value, kind), className)}>
+      className={cn(
+        'min-h-6 gap-1.5 leading-4',
+        isProcessing ? styles.info : getStateStyle(value, kind),
+        kind === 'health' &&
+          'min-h-5 gap-1 border-transparent bg-transparent px-1.5 py-0 font-normal dark:border-transparent dark:bg-transparent',
+        className,
+      )}>
       {isProcessing ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : indicator}
-      {isProcessing ? 'Processing' : (label ?? displayLabel.replace(/([a-z])([A-Z])/g, '$1 $2'))}
+      {kind === 'health' ? <span className="text-foreground">{content}</span> : content}
     </Badge>
   );
 };

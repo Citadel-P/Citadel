@@ -71,6 +71,7 @@ pub struct RuntimeSwarmPeer {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeContainerSummary {
+    pub health: Option<crate::container_health::ContainerHealthObservation>,
     /// Mounts observed by the owning daemon; None means not yet observed.
     pub mounts: Option<serde_json::Value>,
     pub id: String,

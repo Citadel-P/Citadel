@@ -21,11 +21,12 @@ export const applyContainerStatePatches = (
     if (!patch) return container;
     const next = {
       ...container,
-      ...(patch.state !== undefined ? { state: patch.state } : {}),
+      ...(patch.state !== undefined ? { state: patch.state, health: null } : {}),
       ...(patch.controlState !== undefined ? { controlState: patch.controlState } : {}),
       ...(patch.updated !== undefined ? { updated: patch.updated } : {}),
     };
     if (
+      next.health !== container.health ||
       next.state !== container.state ||
       next.controlState !== container.controlState ||
       next.updated !== container.updated

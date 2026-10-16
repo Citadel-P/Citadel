@@ -23,10 +23,13 @@ describe('contextual backup navigation', () => {
     expect(backupSourceFromSearch(new URLSearchParams('sourceType=unsupported'))).toBeUndefined();
   });
   it.each([
+    '/platforms/p/containers',
+    '/platforms/p/containers/?search=wordpress',
+    '/platforms/p/containers/container-id',
     '/platforms/p/volumes',
     '/platforms/p/volumes/?search=data',
     '/platforms/p/volumes/data?dockerNodeId=node-a',
-  ])('accepts volume return destinations: %s', (returnTo) => {
+  ])('accepts container and volume return destinations: %s', (returnTo) => {
     expect(backupReturnPath(new URLSearchParams({ returnTo }))).toBe(returnTo);
   });
   it.each(['https://evil.example', '//evil.example', '/\\evil.example', '/backup-policies', '/stacks/edit/ok\n'])(

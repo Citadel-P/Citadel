@@ -26,6 +26,9 @@ impl ContainerInspectionPort for DockerClient {
                 () = cancel.cancelled() => return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "operation cancelled", false)),
                 result = self.inspect_container_document(id) => result.map_err(crate::connectors::docker::runtime::normalize_docker_error)?,
             };
+            let mut document = document;
+            document["HealthMetadataObserved"] =
+                Value::Bool(document.get("Config").is_some_and(Value::is_object));
             map_inspection(document, id)
         })
     }
@@ -76,6 +79,38 @@ fn invalid(message: &str) -> RuntimeCapabilityError {
 /// Docker responses have the same information but different collection wrappers.
 pub fn map_inspection(document: Value, expected_id: &str) -> Result<Value, RuntimeCapabilityError> {
     let mut result = normalize(document, "");
+    let secrets = result
+        .pointer("/config/env")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str()?.split_once('='))
+        .filter(|(name, value)| {
+            !value.is_empty() && citadel_primitives::is_sensitive_environment_name(name)
+        })
+        .map(|(_, value)| value.to_owned())
+        .collect::<Vec<_>>();
+    if let Some(logs) = result
+        .pointer_mut("/state/health/log")
+        .and_then(Value::as_array_mut)
+    {
+        if logs.len() > 5 {
+            logs.drain(..logs.len() - 5);
+        }
+        for log in logs {
+            if let Some(output) = log.get_mut("output") {
+                redact_health_text(output, &secrets);
+            }
+        }
+    }
+    if let Some(command) = result
+        .pointer_mut("/config/healthcheck/test")
+        .and_then(Value::as_array_mut)
+    {
+        for argument in command {
+            redact_health_text(argument, &secrets);
+        }
+    }
     if result["id"].as_str() != Some(expected_id) {
         return Err(invalid(
             "Container identity changed. Refresh inventory before inspecting.",
@@ -120,6 +155,16 @@ pub fn map_inspection(document: Value, expected_id: &str) -> Result<Value, Runti
         }
     }
     Ok(result)
+}
+
+fn redact_health_text(value: &mut Value, secrets: &[String]) {
+    if let Some(text) = value.as_str() {
+        let mut text = text.to_owned();
+        for secret in secrets {
+            text = text.replace(secret, "********");
+        }
+        *value = Value::String(text.chars().take(4096).collect());
+    }
 }
 
 fn normalize(value: Value, context: &str) -> Value {

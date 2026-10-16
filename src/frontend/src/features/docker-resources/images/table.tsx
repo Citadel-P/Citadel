@@ -5,7 +5,7 @@ import { DeleteImageDialog } from './delete-image-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { ImageView, PlatformType, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { ColumnDef, type CellContext } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { useMemo, useState } from 'react';
@@ -24,7 +24,7 @@ import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useAppContext } from '@/lib/context/app-context';
 import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
 import { useAtomValue } from 'jotai';
-import { imageShowRegistryAtom, imageShowCreatedAtom } from './table-columns';
+import { imageShowRegistryAtom, imageShowCreatedAtom, imageShowIdAtom } from './table-columns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -50,13 +50,25 @@ export const ImagesTable = ({
   const [referenceAction, setReferenceAction] = useState<{ image: ImageView; kind: ImageReferenceAction } | null>(null);
   const showRegistry = useAtomValue(imageShowRegistryAtom);
   const showCreated = useAtomValue(imageShowCreatedAtom);
+  const showId = useAtomValue(imageShowIdAtom);
   const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
-  const cols = useMemo(
+  // Visibility changes must retain cell component identities and their mounted query observers.
+  const allColumns = useMemo(
     () =>
       columns(actions ?? {}, formatDateTime, showNode, setDeleting, (image, kind) =>
         setReferenceAction({ image, kind }),
-      ).filter((column) => (column.id !== 'registry' || showRegistry) && (column.id !== 'created' || showCreated)),
-    [actions, formatDateTime, showNode, showRegistry, showCreated],
+      ),
+    [actions, formatDateTime, showNode],
+  );
+  const cols = useMemo(
+    () =>
+      allColumns.filter(
+        (column) =>
+          (column.id !== 'registry' || showRegistry) &&
+          (column.id !== 'created' || showCreated) &&
+          (column.id !== 'dockerImageId' || showId),
+      ),
+    [allColumns, showRegistry, showCreated, showId],
   );
 
   return (
@@ -86,6 +98,10 @@ export const ImagesTable = ({
     </>
   );
 };
+
+const ImageUpdateStatusCell = ({ row }: CellContext<ImageView, unknown>) => (
+  <ImageUpdateStatus updates={row.original.updates} />
+);
 
 const columns = (
   actions: Record<
@@ -124,9 +140,22 @@ const columns = (
   },
   ...(showNode ? [createNodeResourceColumn<ImageView>()] : []),
   {
+    id: 'dockerImageId',
+    accessorKey: 'dockerImageId',
+    header: ({ column }) => <SortableCell cellName="ID" column={column} />,
+    cell: ({ row }) => (
+      <CopyToClipboard
+        textToCopy={row.original.dockerImageId}
+        transform={formatId}
+        groupClassName="rowid"
+        textClassName="text-sm text-muted-foreground font-mono"
+      />
+    ),
+  },
+  {
     id: 'updateStatus',
     header: () => <span>Update status</span>,
-    cell: ({ row }) => <ImageUpdateStatus updates={row.original.updates} />,
+    cell: ImageUpdateStatusCell,
   },
   {
     id: 'usedBy',
@@ -191,18 +220,21 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
           {name}
         </Link>
         {tag && (
-          <Badge variant="secondary" title={tag}>
+          <Badge
+            variant="outline"
+            className="border-transparent bg-muted/50 px-1.5 py-0 font-normal text-muted-foreground"
+            title={tag}>
             {truncate(tag, 20)}
           </Badge>
         )}
-        {!reference && <Badge variant="outline">Untagged</Badge>}
+        {!reference && <span className="text-xs text-muted-foreground">Untagged</span>}
         {tags.length > 1 && (
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-1.5 text-xs"
+                className="h-6 px-1.5 text-xs font-normal text-muted-foreground"
                 aria-label={`Show all ${tags.length} image tags`}>
                 +{tags.length - 1}
               </Button>
@@ -220,12 +252,6 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
           </Popover>
         )}
       </div>
-      <CopyToClipboard
-        textToCopy={image.dockerImageId}
-        transform={formatId}
-        groupClassName="ml-4"
-        textClassName="text-xs text-muted-foreground font-mono"
-      />
     </div>
   );
 };

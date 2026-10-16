@@ -290,6 +290,43 @@ impl ApplicationGroupReader {
             self.log_targets(p, g).await?;
             return Ok(GroupSnapshot::default());
         }
+        if let Topic::ContainerHealth(id) = g.topic() {
+            let container = self
+                .platforms
+                .get_container(*id)
+                .await
+                .map_err(failure)?
+                .ok_or(RealtimeReadError::Authorization)?;
+            // Match the HTTP history permission; workload-only access to
+            // container-info must not grant Platform history access.
+            self.permission_with_lease(
+                p,
+                ResourceType::Platform,
+                Some(container.platform_id),
+                None,
+                lease,
+            )
+            .await?;
+            if let Some(change) = e {
+                if change
+                    .platform_id
+                    .is_some_and(|platform| platform != container.platform_id)
+                    || (change.platform_id.is_none() && change.resource_id != container.platform_id)
+                    || change
+                        .container_ids()
+                        .is_some_and(|ids| !ids.iter().any(|id| id == &container.container_id))
+                {
+                    return Ok(GroupSnapshot::default());
+                }
+            }
+            let entries = self.platforms.container_health_history(*id).await.map_err(failure)?
+                .into_iter().map(crate::api::resources::platforms::health_views::ContainerHealthTransitionView::from)
+                .collect::<Vec<_>>();
+            return event(
+                "ReceiveContainerHealthHistory",
+                json!({"resourceId": id, "entries": entries}),
+            );
+        }
         use ResourceType::*;
         let id = g.id();
         let actor = p.actor_id;
@@ -561,6 +598,7 @@ impl ApplicationGroupReader {
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
                     if let Some(service) = &self.backup_coverage { containers = service.enrich_containers(p, containers).await; }
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut result = GroupSnapshot::default();
                     for reference in references {
                         result.events.extend(event(
@@ -580,7 +618,8 @@ impl ApplicationGroupReader {
                                 .collect::<Vec<_>>()
                         })
                         .map_err(failure)?;
-                let containers = if let Some(service) = &self.backup_coverage { service.enrich_containers(p, containers).await } else { containers };
+                let mut containers = if let Some(service) = &self.backup_coverage { service.enrich_containers(p, containers).await } else { containers };
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                 event("ContainersInfoUpdated", json!({"containers":containers}))
             }
             Topic::Images(..) => {
@@ -605,9 +644,10 @@ impl ApplicationGroupReader {
                     return Ok(GroupSnapshot::default());
                 }
                 if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
-                    let containers = self
+                    let mut containers = self
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut result = GroupSnapshot::default();
                     for reference in references {
                         result.rows.extend(
@@ -644,18 +684,14 @@ impl ApplicationGroupReader {
                     lease,
                 )
                 .await?;
+                let mut containers = crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
+                    .await.map_err(failure)?.into_iter()
+                    .map(crate::api::resources::platforms::views::ContainerView::from).collect::<Vec<_>>();
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                 result.rows.extend(
                     rows(
                         "ContainerEventReceived",
-                        crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
-                            .await
-                            .map(|value| {
-                                value
-                                    .into_iter()
-                                    .map(crate::api::resources::platforms::views::ContainerView::from)
-                                    .collect::<Vec<_>>()
-                            })
-                            .map_err(failure)?,
+                        containers,
                         RowStyle::DockerResource,
                     )?
                     .rows,

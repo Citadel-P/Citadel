@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "7364082e83350010a3e9b25bb4439c775607c7506555fe4474367186960790d2"
+    "sha256": "bd28c75d231c26f6680665a2313c6037d923b3ac8a07b47b395f9e54dcd8995e"
   },
   "migrations": [
     {
@@ -10,6 +10,22 @@
       "name": "initial",
       "file": "0001_initial.sql",
       "sha256": "4eca956cb2a5a20b03c3b0e409931c4323a212f22996d00868079f0ecb3b5a6b",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0002",
+      "name": "container_health",
+      "file": "0002_container_health.sql",
+      "sha256": "1aac850e8994f9a11230f60274bc925609a983a2311818c1d9b90cc1855c0704",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0003",
+      "name": "container_health_samples",
+      "file": "0003_container_health_samples.sql",
+      "sha256": "93f9e4457e65656a4aef8ece96bce2bff43f94a85a04d87fda7caae801a13d04",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

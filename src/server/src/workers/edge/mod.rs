@@ -90,6 +90,18 @@ async fn monitor(
     stats: super::statistics::StatsIngress,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let ids = stores
+        .projections
+        .invalidate_container_health(
+            session.target.platform_id,
+            session.target.node_id.as_deref(),
+        )
+        .await?;
+    if let Some(hub) = &realtime {
+        for id in ids {
+            hub.publish_container_observation(session.target.platform_id, "healthGap", id);
+        }
+    }
     let interval = settings.monitoring_interval;
     tokio::try_join!(
         observe(
@@ -191,6 +203,8 @@ async fn observe_events(
     {
         return Ok(());
     }
+    let mut health_tick = tokio::time::interval(Duration::from_secs(60));
+    health_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let safety = Duration::from_secs(6 * 3600);
     let mut timer = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -221,6 +235,10 @@ async fn observe_events(
             tokio::select! {
                 ()=cancellation.cancelled()=>return Ok(()),
                 ()=session.closed()=>return Ok(()),
+                _ = health_tick.tick() => {
+                    if refreshes.send(request(EventRefresh::Resource(citadel_platforms::jobs::ReconciliationScope::Containers)), cancellation).await.is_err() { return Ok(()); }
+                    continue;
+                }
                 _ = timer.tick() => {
                     let _ = refreshes.send(request(EventRefresh::Platform), cancellation).await;
                     continue;

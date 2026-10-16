@@ -12,6 +12,23 @@ pub struct PlatformReadService {
 }
 
 impl PlatformReadService {
+    pub async fn container_health_history(
+        &self,
+        container: Uuid,
+    ) -> Result<Vec<crate::container_health::ContainerHealthTransition>, AuthorizedReadError> {
+        self.store.container_health_history(container).await
+    }
+    pub async fn container_owner_names(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        containers: &[Uuid],
+    ) -> Result<BTreeMap<Uuid, Vec<String>>, AuthorizedReadError> {
+        self.store
+            .container_owner_names(actor, administrator, containers)
+            .await
+    }
+
     pub async fn container_identities(
         &self,
         platform: Uuid,

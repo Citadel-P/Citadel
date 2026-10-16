@@ -649,6 +649,16 @@ export enum ContainerRestartPolicy {
   UnlessStopped = "UnlessStopped",
 }
 
+export enum ContainerHealthStatus {
+  Healthy = "Healthy",
+  Unhealthy = "Unhealthy",
+  Starting = "Starting",
+  NoCheck = "NoCheck",
+  Disabled = "Disabled",
+  NotRunning = "NotRunning",
+  Unknown = "Unknown",
+}
+
 export enum BuildRunTrigger {
   Manual = "Manual",
   Automation = "Automation",
@@ -2439,6 +2449,40 @@ export interface ContainerDeploymentView {
   status: DeploymentStatus;
 }
 
+export interface ContainerHealthTransitionView {
+  /** @format int64 */
+  exitCode?: number | null;
+  /**
+   * First actual observation in this group, in Unix seconds. Not a coverage start.
+   * @format int64
+   */
+  firstObservedAt: number;
+  health: ContainerHealthView;
+  /** @format int64 */
+  observedAt: number;
+  oomKilled?: boolean | null;
+  origin: string;
+  /**
+   * Number of retained observations represented; transitions always have one.
+   * @format int64
+   */
+  sampleCount: number;
+  state: string;
+}
+
+export interface ContainerHealthView {
+  /** @format int64 */
+  failingStreak?: number | null;
+  lastCheckAt?: string | null;
+  /**
+   * Unix milliseconds of inspection, not the last lifecycle event or heartbeat.
+   * @format int64
+   */
+  observedAt?: number | null;
+  reason: string;
+  status: ContainerHealthStatus;
+}
+
 export interface ContainerHistory {
   containerId: string;
   containerName: string;
@@ -2492,6 +2536,7 @@ export interface ContainerRuntimeView {
   deploymentId: string | null;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
+  health?: null | ContainerHealthView;
   /** Docker container ID; the statistics containerId is Citadel's database UUID. */
   id: string;
   image: string;
@@ -2578,6 +2623,7 @@ export interface ContainerView {
   dockerImageId: string;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
+  health?: null | ContainerHealthView;
   /** @format uuid */
   id: string;
   imageView?: null | ImageView;
@@ -2586,6 +2632,8 @@ export interface ContainerView {
   lastStats: null | ContainerStatView;
   name: string;
   nodeHostname: string | null;
+  /** Names of owning workloads this actor may read. Never derived from Docker labels. */
+  ownerNames?: string[];
   /** @format uuid */
   platformId: string;
   ports: Record<string, HostPortBinding[]>;
@@ -11465,6 +11513,32 @@ export class Api<
     getContainerData: (id: string, params: RequestParams = {}) =>
       this.request<ContainerRuntimeView, ProblemDetails>({
         path: `/api/v1/containers/${id}/data`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name GetContainerHealthHistory
+     * @summary Get bounded Container health and lifecycle transitions
+     * @request GET:/api/v1/containers/{id}/health-history
+     * @secure
+     * @response `200` `(ContainerHealthTransitionView)[]` Up to 200 transitions within seven days; history may have gaps
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getContainerHealthHistory: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerHealthTransitionView[], ProblemDetails>({
+        path: `/api/v1/containers/${id}/health-history`,
         method: "GET",
         secure: true,
         format: "json",

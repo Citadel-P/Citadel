@@ -332,6 +332,17 @@ have **Failure** status; its name alone does not indicate success.
 Container logs describe the application's output after a container starts. A
 failure while pulling an image can occur before there is a container to inspect.
 
+The **Container** tab remains available when a Deployment is degraded or stopped.
+Use **Logs** and **Inspect** while its container still exists and the Platform is
+reachable. Each tool requires its own permission. **Terminal** additionally
+requires a running container and no Deployment operation in progress.
+
+If the Platform is offline, live tools are unavailable. Previously loaded
+container details are marked as last known; retained statistics and **Activities**
+can still help explain the failure. Deleted containers may no longer have logs or
+inspection data. A Deployment that has never created a container shows **Not
+deployed** instead.
+
 ## When To Use Deployments
 
 Use deployments for:

@@ -5,7 +5,7 @@ use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, RuntimeStatsSt
 use citadel_platforms::{
     RuntimeContainerSummary, RuntimePlatformInfo, RuntimeSwarmInfo, RuntimeSwarmPeer,
 };
-use futures_util::{FutureExt, future::BoxFuture};
+use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use reqwest::StatusCode;
 use tokio_util::sync::CancellationToken;
 
@@ -108,6 +108,38 @@ impl DockerClient {
 }
 
 impl citadel_platforms::ContainerInventoryPort for DockerClient {
+    fn observe_containers<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let containers =
+                citadel_platforms::ContainerInventoryPort::list_containers(self, cancellation)
+                    .await?;
+            let mut containers = futures_util::stream::iter(containers.into_iter().map(
+                |mut container| async move {
+                    let document = tokio::select! {
+                        biased; () = cancellation.cancelled() => return Err(cancelled_error()),
+                        result = self.inspect_container_document(&container.id) => result.ok()
+                            .filter(|doc| doc["Id"].as_str() == Some(container.id.as_str())),
+                    };
+                    if let Some(doc) = document {
+                        container.state =
+                            doc["State"]["Status"].as_str().unwrap_or("unknown").into();
+                        container.health = Some(super::container_health::observation(&doc));
+                    }
+                    Ok(container)
+                },
+            ))
+            .buffer_unordered(8)
+            .collect::<Vec<Result<_, RuntimeCapabilityError>>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+            containers.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+            Ok(containers)
+        })
+    }
     fn list_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -209,6 +241,7 @@ pub fn map_container(container: ContainerSummary) -> RuntimeContainerSummary {
                 .is_some_and(|prefix| prefix.eq_ignore_ascii_case("x-citadel."))
     });
     RuntimeContainerSummary {
+        health: None,
         mounts: container.mounts,
         stack,
         is_system,
@@ -380,13 +413,14 @@ mod tests {
 pub fn container_observation(
     mut document: serde_json::Value,
 ) -> Result<RuntimeContainerSummary, serde_json::Error> {
+    let health = super::container_health::observation(&document);
     let ports = document
         .pointer_mut("/NetworkSettings/Ports")
         .map(serde_json::Value::take)
         .unwrap_or_default();
     let mounts = document.get_mut("Mounts").map(serde_json::Value::take);
     let inspected: super::projection::ContainerInspect = serde_json::from_value(document)?;
-    Ok(map_container(ContainerSummary {
+    let mut observation = map_container(ContainerSummary {
         mounts,
         id: inspected.id,
         names: vec![inspected.name],
@@ -402,7 +436,9 @@ pub fn container_observation(
         state: inspected.state.status,
         status: String::new(),
         ports,
-    }))
+    });
+    observation.health = Some(health);
+    Ok(observation)
 }
 
 /// Count the containers exposed by

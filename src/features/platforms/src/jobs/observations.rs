@@ -19,6 +19,13 @@ pub struct ContainerEvent<'a> {
 }
 
 pub trait RuntimeProjectionStore: Send + Sync {
+    /// Fence observations collected before a stream gap; statistics cannot restore health.
+    fn invalidate_container_health<'a>(
+        &'a self,
+        platform: Uuid,
+        node: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>>;
+
     fn mark_swarm_stale<'a>(
         &'a self,
         platform: Uuid,

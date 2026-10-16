@@ -669,7 +669,7 @@ pub(super) async fn persist_container_set(
 WITH incoming AS (
     SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
         id text, name text, image text, "imageId" text, created bigint, state text,
-        status text, labels jsonb, ports jsonb, mounts jsonb, stack text,
+        status text, labels jsonb, ports jsonb, mounts jsonb, health jsonb, stack text,
         "systemRole" text, "hasCitadelOwnershipLabels" boolean, "isSwarmTask" boolean,
         "isSystem" boolean)
 ), upserted AS (
@@ -677,7 +677,7 @@ WITH incoming AS (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, mounts, rowversion,
-        projectionobservedat, dockernodeid, stackid, deploymentid, imageid)
+        projectionobservedat, dockernodeid, stackid, deploymentid, imageid, health)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name,
            CASE WHEN NOT $5::boolean AND incoming."imageId" = ''
                 THEN incoming.image ELSE incoming."imageId" END,
@@ -685,7 +685,7 @@ WITH incoming AS (
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
            COALESCE(incoming.ports, '[]'::jsonb)::json, incoming.mounts, 0, $3, $4,
-           release.stackid, deployment.id, image.id
+           release.stackid, deployment.id, image.id, NULLIF(incoming.health, 'null'::jsonb)
     FROM incoming
     LEFT JOIN images image
       ON image.platformid=$1 AND image.dockerimageid=CASE WHEN NOT $5::boolean AND incoming."imageId"='' THEN incoming.image ELSE incoming."imageId" END
@@ -717,6 +717,7 @@ WITH incoming AS (
         isswarmtask = EXCLUDED.isswarmtask,
         ports = EXCLUDED.ports,
         mounts = EXCLUDED.mounts,
+        health = EXCLUDED.health,
         stackid = CASE WHEN containers.deploymentid IS NULL
             THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
         deploymentid = CASE WHEN containers.stackid IS NULL
@@ -729,14 +730,14 @@ WITH incoming AS (
       AND (containers.name, containers.dockerimageid, containers.state, containers.stack,
            containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
            containers.isswarmtask, containers.mounts, containers.ports::jsonb, containers.stackid, containers.deploymentid,
-           containers.projectionstalesince, containers.projectionstalereason, containers.imageid)
+           containers.projectionstalesince, containers.projectionstalereason, containers.imageid, containers.health)
           IS DISTINCT FROM
           (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
            EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
            EXCLUDED.isswarmtask, EXCLUDED.mounts, EXCLUDED.ports::jsonb,
            CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
            CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
-           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid))
+           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid), EXCLUDED.health)
     RETURNING dockercontainerid
 ), deleted AS (
 DELETE FROM containers container

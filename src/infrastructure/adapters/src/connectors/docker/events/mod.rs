@@ -22,10 +22,10 @@ pub fn classify(resource: &str, action: &str, scope: &str) -> Option<RuntimeEven
     Some(match resource {
         "container" => Event::Container(match action {
             a if a.starts_with("exec_") => return None,
-            // Health details, OOM flags, terminal geometry and resource limits are
-            // not fields in the persisted container projection. Exit is owned by die.
-            a if a.starts_with("health_status") => return None,
-            "attach" | "top" | "kill" | "stop" | "oom" | "resize" | "update" => return None,
+            a if a.starts_with("health_status:") => ContainerChange::HealthObserved,
+            "oom" => ContainerChange::HealthObserved,
+            "update" => ContainerChange::Observe,
+            "attach" | "top" | "kill" | "stop" | "resize" => return None,
             // Docker restart emits die + start, then this completion marker. Retain
             // the real transitions (including a failed restart's die), not a third
             // observation. FIFO processing makes the final start win.

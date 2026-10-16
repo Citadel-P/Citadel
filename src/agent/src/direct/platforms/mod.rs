@@ -182,7 +182,7 @@ impl platform_service_server::PlatformService for Runtime {
                 let id = e.actor.id;
                 let kind = match normalized {
                     RuntimeEventKind::Container(change) => {
-                        samples.invalidate();
+                        if change != ContainerChange::HealthObserved { samples.invalidate(); }
                         let mut container = if change == ContainerChange::Tombstone || change.state_delta().is_some() { None } else {
                             let filter=serde_json::json!({"id":[id]}).to_string();
                             let observed = async {
@@ -202,6 +202,14 @@ impl platform_service_server::PlatformService for Runtime {
                             }
                         };
                         if let Some(container) = &mut container {
+                          if change == ContainerChange::HealthObserved {
+                            let document = docker.inspect_container_document(&id).await.ok()
+                                .filter(|doc| doc["Id"].as_str() == Some(id.as_str()));
+                            if let Some(doc) = document {
+                                container.state = super::container_mapping::state(doc["State"]["Status"].as_str().unwrap_or("unknown"));
+                                container.health_observation = Some(citadel_adapters::connectors::agent::container_health::to_wire(citadel_adapters::connectors::docker::container_health::observation(&doc)));
+                            }
+                          }
                             if let Some(state) = change.state() { container.state = super::container_mapping::state(state); }
                             container.is_swarm_task |= e.actor.attributes.contains_key("com.docker.swarm.task.id");
                         }

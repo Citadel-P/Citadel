@@ -78,6 +78,7 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
                         "Id":"fixture", "Names":["/web"], "Image":"alpine", "ImageID":"sha256:image",
                         "State":"running", "Created":123, "Labels":{}, "Ports":[]
                     }])).into_response(),
+                    "/v1.49/containers/fixture/json" => Json(serde_json::json!({"Id":"fixture","State":{"Status":"running","Health":{"Status":"healthy"}},"Config":{"Healthcheck":{"Test":["CMD","probe"]}}})).into_response(),
                     _ => panic!("unexpected observation: {}", request.uri()),
                 }
             }
@@ -114,12 +115,29 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
         assert_eq!(decoded.action, raw.action);
         if let RuntimeEventKind::Container(change) = expected {
             assert_eq!(decoded.container_id.as_deref(), Some("fixture"));
-            assert_eq!(decoded.container_state.as_deref(), change.state());
+            let expected_state = if change == ContainerChange::Observe
+                || change == ContainerChange::HealthObserved
+            {
+                Some("running")
+            } else {
+                change.state()
+            };
+            assert_eq!(decoded.container_state.as_deref(), expected_state);
             if change == ContainerChange::Tombstone || change.state_delta().is_some() {
                 assert!(decoded.container.is_none());
             } else {
                 let container = decoded.container.unwrap();
-                assert_eq!(container.state, change.state().unwrap());
+                assert_eq!(container.state, expected_state.unwrap());
+                assert_eq!(
+                    container.health.is_some(),
+                    change == ContainerChange::HealthObserved
+                );
+                if let Some(health) = &container.health {
+                    assert_eq!(
+                        health.result,
+                        Some(citadel_platforms::container_health::HealthStatus::Healthy)
+                    );
+                }
                 assert_eq!(container.name, "web");
                 assert_eq!(container.image_id, "sha256:image");
                 assert!(container.is_swarm_task);
@@ -132,7 +150,19 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
         .iter()
         .filter(|url| url.starts_with("/v1.49/containers/json"))
         .collect();
-    assert_eq!(observations.len(), 1, "{calls:?}");
+    assert_eq!(
+        observations.len(),
+        4,
+        "Only create, update, health and OOM read metadata: {calls:?}"
+    );
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|p| p.as_str() == "/v1.49/containers/fixture/json")
+            .count(),
+        2,
+        "Only health and OOM inspect the exact container"
+    );
     for request in observations {
         let url = reqwest::Url::parse(&format!("http://fixture{request}")).unwrap();
         let filters = url
@@ -148,7 +178,7 @@ async fn daemon_stream_matches_local_semantics_and_ignored_events_do_no_io() {
     }
     assert_eq!(
         calls.len(),
-        3,
+        8,
         "state-only events, ignored events and tombstones must not observe Docker: {calls:?}"
     );
     stop.cancel();

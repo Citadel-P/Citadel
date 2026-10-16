@@ -36,6 +36,21 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Topic::ContainerHealth(id) = self.topic() {
+            // Persisted history only: telemetry and unrelated resource changes
+            // must not reload it. The reader checks the owning platform/runtime ID.
+            if let Some(patches) = event.payload["containerPatches"].as_array() {
+                return patches.iter().any(|patch| {
+                    patch["id"]
+                        .as_str()
+                        .and_then(|value| Uuid::parse_str(value).ok())
+                        == Some(*id)
+                        && (patch.get("state").is_some() || patch.get("health").is_some())
+                });
+            }
+            return event.payload["dockerResourceType"] == "container"
+                || (event.resource_type == "Platform" && event.event_kind == "connectionChanged");
+        }
         if matches!(self.topic(), Topic::ResourceCopy(..)) {
             return event.resource_type == "ResourceCopy" && event.affects_resource(self.id());
         }
@@ -133,6 +148,12 @@ impl Group {
                 event.resource_type,
                 "Deployment" | "Stack" | "SwarmService" | "Registry"
             )
+        {
+            return event.platform_id.is_none() || self.id() == event.platform_id;
+        }
+        // Searchable owner names change independently of Docker inventory.
+        if matches!(self.topic(), Topic::Containers(..))
+            && matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService")
         {
             return event.platform_id.is_none() || self.id() == event.platform_id;
         }
@@ -560,6 +581,30 @@ fn docker_tombstone(row: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn container_search_follows_owner_changes_on_the_affected_platform() {
+        let platform = Uuid::now_v7();
+        let group = Group::parse(&format!("containers:{platform}")).unwrap();
+        let mut event = PublishedRuntimeEvent {
+            platform_id: Some(platform),
+            resource_type: "Deployment",
+            resource_id: Uuid::now_v7(),
+            event_kind: "updated",
+            resource_revision: 1,
+            reads: Default::default(),
+            containers: Default::default(),
+            payload: json!({}),
+        };
+        for kind in ["Deployment", "Stack", "SwarmService"] {
+            event.resource_type = kind;
+            event.platform_id = Some(platform);
+            assert!(group.affected_by(&event));
+            event.platform_id = Some(Uuid::now_v7());
+            assert!(!group.affected_by(&event));
+            event.platform_id = None;
+            assert!(group.affected_by(&event));
+        }
+    }
     #[test]
     fn image_snapshots_follow_saved_references_and_registry_changes() {
         let platform = Uuid::now_v7();

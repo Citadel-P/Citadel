@@ -79,7 +79,10 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
 
 pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result<u64, sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Retention.start();
-    let mut deleted = 0;
+    // Retention must run even when every runtime is offline; it is not inventory work.
+    let mut deleted = sqlx::query("DELETE FROM containerhealthtransitions WHERE id IN (SELECT id FROM containerhealthtransitions WHERE recordedat < now() - interval '7 days' ORDER BY recordedat LIMIT 1000 FOR UPDATE SKIP LOCKED)")
+        .execute(pool).await?.rows_affected();
+    citadel_runtime::runtime_metrics::RuntimeWork::ContainerHealthRetention.units(deleted);
     // Bound each transaction. Repeated scheduled batches drain backlogs while keeping
     // locks short and retaining every active run and referenced build artifact.
     for sql in [

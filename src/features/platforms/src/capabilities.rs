@@ -44,6 +44,13 @@ pub trait PlatformInfoPort: Send + Sync {
 /// }
 /// ```
 pub trait ContainerInventoryPort: Send + Sync {
+    /// Background reconciliation only; interactive lists read the persisted projection.
+    fn observe_containers<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        self.list_containers(cancellation)
+    }
     fn list_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,

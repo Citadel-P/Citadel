@@ -11,6 +11,17 @@ To create an application, use a [Deployment](/docs/resources/deployments) for on
 container or a [Stack](/docs/resources/stacks) for Compose. To manage an existing
 application's configuration, use [adoption](/docs/guides/adopting-existing-workloads).
 
+Search the container table by name, full or partial container ID, image ID,
+image name or tag, or the name of an owning Deployment, Stack, or Service you
+can access. Search matches the loaded container list.
+
+Use search, **Health Filter**, **Backup Filter**, and **Unmanaged only** to refine
+the list. Active health and backup filters appear as removable chips.
+**Columns** lets you show IDs or hide Image, Health, CPU, Memory, and Ports, and
+remembers your choices in this browser. Image and Health are visible by default.
+Hiding Health also hides and pauses its filter; showing the column restores your
+filter selection. Expand a stack row to see its containers.
+
 ## Inspect a container
 
 Open the container's detail page and choose the information you need:
@@ -41,13 +52,81 @@ backups require Platform write access and exact Node targeting on Swarm.
 Tmpfs, nested mounts, system/runtime paths, and writable layers remain excluded. See
 [Bind-mount backups and restores](/docs/resources/backups#bind-mount-backups-and-restores).
 
-Use **Backup Filter** at the right of the resource header to filter by backup status.
+Use **Backup Filter** to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
-the same coverage card as on the resource page. Manual-only or disabled policies
+the same coverage card as on the resource page. Managed stack rows show the full
+stack's coverage, matching the Stacks page, and update through realtime.
+Unmanaged groups summarize storage used by the containers shown in the group,
+counting shared storage once. Their card lets you configure backups for individual
+volumes or bind mounts. Missing or stale container coverage is shown as unavailable.
+Manual-only or disabled policies
 show amber, even after a successful manual run. Green requires an active schedule,
 a ready repository, and a successful available backup for all eligible storage.
 See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
 status meanings and scheduling requirements.
+
+## Container health
+
+The **Health** column and **Health Filter** distinguish **Healthy**, **Unhealthy**,
+**Starting**, **No check**, **Disabled**, **Not running**, and **Unknown**. Running
+means the container process is active; it does not mean its health check passes.
+The table shows a compact health icon: green for Healthy, a warning color for
+Starting, and red for Unhealthy. No check, Disabled, Not running, and Unknown use
+neutral icons; they do not indicate successful checks. The Health column is
+visible by default and can be hidden through **Columns**.
+
+Stack rows summarize their accessible, current containers before search and table
+filters. Any failing check makes the summary **Unhealthy**; otherwise, checks
+still starting show **Starting**. **Healthy** requires every container to have a
+fresh passing check. Mixed checked, unchecked, inactive, or unavailable results
+show **Partial health**. Groups with no active checks, all inactive containers,
+or entirely unavailable evidence show **No checks**, **Not running**, or
+**Unknown**, respectively. Hover over or focus the stack's health icon for counts
+by status. This summarizes container checks, not the saved Stack's deployment
+state, and does not include containers you cannot access.
+
+Hover over or focus the **Health** icon in the table or the labeled health status
+in **Container overview** for the same card with status, check times, and
+consecutive failures. Click to keep the card open. Select **View details** to open a dialog with a
+chart of health observations, including repeated Healthy results. The chart opens
+on the last hour and uses the same time-range picker as Stats: **15 minutes**,
+**1 hour**, **6 hours**, **24 hours**, **48 hours**, **7 days**, **Today**, and
+**Yesterday**. Calendar ranges use local time. Each dot
+shows an observation by time and health state. Older periodic observations are
+grouped by time and state, with failures kept separate from healthy results.
+Hover over a dot for the same tooltip card used by Stats, showing its time, state,
+group count, and available diagnostic details, including OOM and exit information.
+Select a dot or focus it with the keyboard to open its details below the chart.
+Use **Clear observation selection** to dismiss them. Nearby observations with the
+same health and container state share a marker when space is limited; its hover
+card shows their count and time span. Failures and different exit or OOM results
+remain separate. Choose a shorter range to see more detail, and use arrow keys to
+navigate markers. Changing the range uses the existing realtime snapshot without
+extra HTTP requests.
+Chart and detail timestamps use local time. Gaps and grouped results do not
+establish continuous health or uptime.
+
+Current health and saved history update automatically through Citadel's realtime
+connection while the details are open. Expand **Probe details** to fetch Docker's
+recent results and effective check configuration on demand, with Inspect permission.
+This section starts collapsed; opening it loads a snapshot that is not continuously refreshed.
+Viewing health never runs a
+probe or restarts a container. Docker and
+Swarm continue to apply their own configured behavior.
+
+Citadel refreshes health in the background. Disconnected, stale, or unsupported
+observations show **Unknown**; evidence older than three minutes is not current.
+Stopping or pausing a container makes its current health **Not running**, shown as
+**—** in the overview and a neutral icon in the table. Open the health popup for
+an explanation.
+
+Citadel saves an unchanged observation at most once per minute and records state
+changes as they arrive. History retains up to 10,080 periodic samples and 200
+changes per container for seven days, subject to a shared limit of 100,000 records
+across the installation. Busy installations can therefore retain less than seven
+days. Collection outages and retention can leave gaps. Periodic history starts
+when this version of Core is running; earlier samples cannot be reconstructed.
+Recent probe output comes from Docker on demand and is not stored in this history.
 
 ## Read logs
 

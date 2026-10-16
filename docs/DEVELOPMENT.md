@@ -193,21 +193,21 @@ commands are in [docs/README.md](README.md).
 
 ## Database schema changes
 
-During unreleased development, keep a single `0001_initial.sql` baseline. Add
-schema changes to `src/infrastructure/database/src/schema/schema.sql`, then
-regenerate the baseline and verify the catalog:
+Preserve published migrations, including `0001_initial.sql`. Add each schema
+change as the next numbered SQL migration under `src/infrastructure/database/generated/`.
+Append the same upgrade SQL to `src/infrastructure/database/src/schema/schema.sql`;
+the verifier compares this schema authority with the ordered migration sequence.
+Then refresh the catalog and verify it:
 
 ```bash
-cargo run --locked -p xtask -- database refresh-baseline
+cargo run --locked -p xtask -- database refresh-catalog
 cargo run --locked -p xtask -- database verify
 ```
 
-This updates the baseline SQL, migration metadata and embedded catalog. Verify
-fresh installation and restart against disposable databases. Refreshing the
-baseline is not an upgrade path for existing databases: their recorded checksum
-will no longer match. Do not rewrite migration journals or checksums to suppress
-an `AppliedChecksum` error. Once released, preserve applied migrations and add
-numbered upgrade migrations for subsequent schema changes.
+Test both fresh installation and upgrade from the previous schema against
+separate disposable databases. `refresh-baseline` is only for an unpublished
+baseline; it is not an upgrade path. Never rewrite applied migration journals or
+checksums to suppress an `AppliedChecksum` error.
 
 ## Agent development
 

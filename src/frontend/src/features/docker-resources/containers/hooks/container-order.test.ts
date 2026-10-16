@@ -31,6 +31,7 @@ it('applies state patches without replacing other fields or touching unrelated r
 
   expect(result[0]).toEqual({
     ...a,
+    health: null,
     state: ContainerStateStatus.Exited,
     controlState: ResourceControlState.Processing,
   });

@@ -1,5 +1,6 @@
 pub mod container_views;
 pub mod descriptor_views;
+pub mod health_views;
 pub(crate) mod image_management;
 pub(crate) mod image_views;
 pub mod inventory_views;

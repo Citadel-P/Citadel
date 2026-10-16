@@ -1,5 +1,4 @@
 import type { ResourceReadState } from '@/components/custom/resource-read-error';
-import type { OverviewFilter } from '@/components/custom/resource-overview';
 import { ResourceCapabilitiesView } from '@/api/generated/api.types';
 
 type ResourceContentProps<T = any> = {
@@ -38,7 +37,6 @@ interface BaseResourceComponents<T = any> {
  * Defines the components needed to render a regular resource page.
  */
 export interface RegularResourceComponents<T = any> extends BaseResourceComponents<T> {
-  overview?: { label: string; filters: OverviewFilter<T>[] };
   /** The main content component */
   Content: React.FC<ResourceContentProps<T>>;
   Tabs?: never;

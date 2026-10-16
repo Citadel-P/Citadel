@@ -5239,6 +5239,103 @@
         ],
         "type": "object"
       },
+      "ContainerHealthStatus": {
+        "enum": [
+          "Healthy",
+          "Unhealthy",
+          "Starting",
+          "NoCheck",
+          "Disabled",
+          "NotRunning",
+          "Unknown"
+        ],
+        "type": "string"
+      },
+      "ContainerHealthTransitionView": {
+        "properties": {
+          "exitCode": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "firstObservedAt": {
+            "description": "First actual observation in this group, in Unix seconds. Not a coverage start.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "health": {
+            "$ref": "#/components/schemas/ContainerHealthView"
+          },
+          "observedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "oomKilled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "origin": {
+            "type": "string"
+          },
+          "sampleCount": {
+            "description": "Number of retained observations represented; transitions always have one.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "observedAt",
+          "firstObservedAt",
+          "sampleCount",
+          "state",
+          "health",
+          "origin"
+        ],
+        "type": "object"
+      },
+      "ContainerHealthView": {
+        "properties": {
+          "failingStreak": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastCheckAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "description": "Unix milliseconds of inspection, not the last lifecycle event or heartbeat.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContainerHealthStatus"
+          }
+        },
+        "required": [
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
       "ContainerHistory": {
         "properties": {
           "containerId": {
@@ -5519,6 +5616,16 @@
           },
           "hasCitadelOwnershipLabels": {
             "type": "boolean"
+          },
+          "health": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerHealthView"
+              }
+            ]
           },
           "id": {
             "description": "Docker container ID; the statistics containerId is Citadel's database UUID.",
@@ -5901,6 +6008,16 @@
           "hasCitadelOwnershipLabels": {
             "type": "boolean"
           },
+          "health": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerHealthView"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -5939,6 +6056,13 @@
               "string",
               "null"
             ]
+          },
+          "ownerNames": {
+            "description": "Names of owning workloads this actor may read. Never derived from Docker labels.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "platformId": {
             "format": "uuid",
@@ -35728,6 +35852,119 @@
           }
         ],
         "summary": "getContainerData",
+        "tags": [
+          "Containers"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/containers/{id}/health-history": {
+      "get": {
+        "operationId": "getContainerHealthHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContainerHealthTransitionView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Up to 200 transitions within seven days; history may have gaps"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get bounded Container health and lifecycle transitions",
         "tags": [
           "Containers"
         ],

@@ -37,6 +37,7 @@ pub enum Topic {
     BuildRun(Uuid),
     StackLog(Uuid),
     ContainerInfo(String),
+    ContainerHealth(Uuid),
     ContainerLog(String),
     ContainerExec {
         reference: String,
@@ -75,6 +76,7 @@ impl Topic {
             ["build-agent-pools"] => Self::BuildAgentPools,
             ["alert-events"] => Self::AlertEvents,
             ["containers", id] => Self::Containers(non_nil(id)?),
+            ["container-health", id] => Self::ContainerHealth(non_nil(id)?),
             ["images", id] => Self::Images(non_nil(id)?),
             ["docker-daemon", id] => Self::DockerDaemon(non_nil(id)?),
             ["deployment", id] => Self::Deployment(non_nil(id)?),
@@ -161,6 +163,7 @@ impl Topic {
             Self::BuildRun(_) => "build-run",
             Self::StackLog(_) => "stack-log",
             Self::ContainerInfo(_) => "container-info",
+            Self::ContainerHealth(_) => "container-health",
             Self::ContainerLog(_) => "container-log",
             Self::ContainerExec { .. } => "container-exec",
             Self::SwarmTaskExec { .. } => "swarm-task-exec",
@@ -170,6 +173,7 @@ impl Topic {
     pub fn id(&self) -> Option<Uuid> {
         match self {
             Self::Containers(id)
+            | Self::ContainerHealth(id)
             | Self::Images(id)
             | Self::DockerDaemon(id)
             | Self::Deployment(id)
@@ -288,6 +292,7 @@ mod tests {
             "build-runs",
             "build-run",
             "stack-log",
+            "container-health",
         ] {
             let name = format!("{key}:{id}");
             assert_eq!(Topic::parse(&name).unwrap().to_string(), name);

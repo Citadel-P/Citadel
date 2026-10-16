@@ -1,6 +1,10 @@
-import { backupColumn } from '@/features/backup-policies/table-coverage';
+import type { ContainerGroupHealth, ContainerHealthItem } from './group-health';
+import { ContainerGroupHealthCell } from './group-health-cell';
+import { currentHealth } from './health';
+import { ContainerTableHealth } from './container-info/container-health-card';
+import { backupColumn, ResourceBackupCell } from '@/features/backup-policies/table-coverage';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { ColumnDef, Row, flexRender } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   ContainerView,
@@ -20,6 +24,8 @@ import { PortsDisplay } from '@/components/custom/ports-display';
 import { ImageName } from './container-info/';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useCallback, useMemo, useRef } from 'react';
+import { useAtomValue } from 'jotai';
+import { containerColumnsAtom } from './table-columns';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -34,8 +40,10 @@ import {
 import { useAppContext } from '@/lib/context/app-context';
 import { SystemContainerBadge } from './system-container-badge';
 import { isVisibleContainer, normalizeContainerSelection } from './selection';
+import { StackBackupCell } from '@/features/stacks/backup-cell';
+import { groupBackupCoverage } from './group-backup-coverage';
 
-type ContainerTableRow = ContainerActionResource;
+type ContainerTableRow = ContainerView | (ContainerStackGroupResource & { healthSummary?: ContainerGroupHealth });
 type PlatformResourceLimits = {
   memoryTotal: number;
   cpuCount: number;
@@ -47,7 +55,7 @@ export const ContainersTable = ({
   isFiltered,
   actions,
 }: {
-  items: ContainerView[];
+  items: ContainerHealthItem[];
   isLoading: boolean;
   isFiltered?: boolean;
   actions: Record<
@@ -60,7 +68,17 @@ export const ContainersTable = ({
   const lastSelectionKeyRef = useRef('');
   const platformLimits = useMemo(() => getPlatformResourceLimits(currentPlatform), [currentPlatform]);
   const rows = useMemo(() => buildContainerRows(items, platformLimits), [items, platformLimits]);
-  const cols = useMemo(() => columns(actions ?? {}, currentPlatform?.type), [actions, currentPlatform?.type]);
+  const visibleColumns = useAtomValue(containerColumnsAtom);
+  const cols = useMemo(
+    () =>
+      columns(actions ?? {}, currentPlatform?.type).filter((column) => {
+        const id = column.id ?? ('accessorKey' in column ? String(column.accessorKey) : '');
+        return (
+          !['containerId', 'image', 'health', 'CPU', 'memory', 'ports'].includes(id) || visibleColumns[id] !== false
+        );
+      }),
+    [actions, currentPlatform?.type, visibleColumns],
+  );
   const getSubRows = useCallback(
     (row: ContainerTableRow) => (isContainerStackGroup(row) ? row.containers : undefined),
     [],
@@ -87,7 +105,7 @@ export const ContainersTable = ({
         isFiltered
           ? {
               title: 'No containers match the current filters.',
-              description: 'Select another overview card or adjust the search and filters.',
+              description: 'Adjust the search and filters.',
             }
           : undefined
       }
@@ -120,6 +138,15 @@ const columns = (
   >,
   platformType?: PlatformType,
 ): ColumnDef<ContainerTableRow>[] => {
+  const containerBackupColumn = backupColumn<ContainerTableRow>((row) =>
+    isContainerStackGroup(row)
+      ? undefined
+      : {
+          coverage: row.backupCoverage,
+          source: { $type: 'Container', containerId: row.containerId, platformId: row.platformId },
+          returnTo: `/platforms/${row.platformId}/containers/${row.id}`,
+        },
+  );
   const result: ColumnDef<ContainerTableRow>[] = [
     {
       id: 'select',
@@ -151,22 +178,33 @@ const columns = (
       },
     },
     {
-      accessorKey: 'image',
+      id: 'image',
+      accessorFn: (row) => (isContainerStackGroup(row) ? '' : (row.imageView?.name ?? '')),
       header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-      cell: ({ row }) => {
-        if (isContainerStackGroup(row.original)) {
-          return <span className="text-sm text-muted-foreground">{countDistinctImages(row.original)} images</span>;
-        }
-
-        return <ImageName image={row.original.imageView ?? undefined} />;
-      },
+      cell: ({ row }) =>
+        isContainerStackGroup(row.original) || !row.original.imageView ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <ImageName image={row.original.imageView} />
+        ),
+    },
+    {
+      id: 'health',
+      accessorFn: (row) => (isContainerStackGroup(row) ? (row.healthSummary?.status ?? 'Unknown') : currentHealth(row)),
+      header: ({ column }) => <SortableCell cellName="Health" column={column} />,
+      cell: ({ row }) =>
+        isContainerStackGroup(row.original) ? (
+          <ContainerGroupHealthCell name={row.original.name} summary={row.original.healthSummary} />
+        ) : (
+          <ContainerTableHealth container={row.original} />
+        ),
     },
     {
       accessorKey: 'containerId',
       header: ({ column }) => <SortableCell cellName="ID" column={column} />,
       cell: ({ row }) =>
         isContainerStackGroup(row.original) ? (
-          <span className="text-sm text-muted-foreground">Stack</span>
+          <span className="text-muted-foreground">—</span>
         ) : (
           <CopyToClipboard
             textToCopy={row.original.containerId}
@@ -240,15 +278,22 @@ const columns = (
           <PortsDisplay ports={row.original.ports} compact maxVisible={1} className="text-sm tabular-nums" />
         ),
     },
-    backupColumn<ContainerTableRow>((row) =>
-      isContainerStackGroup(row)
-        ? undefined
-        : {
-            coverage: row.backupCoverage,
-            source: { $type: 'Container', containerId: row.containerId, platformId: row.platformId },
-            returnTo: `/platforms/${row.platformId}/containers/${row.id}`,
-          },
-    ),
+    {
+      ...containerBackupColumn,
+      cell: (props) => {
+        const row = props.row.original;
+        if (!isContainerStackGroup(row)) return flexRender(containerBackupColumn.cell, props);
+        return row.stackId ? (
+          <StackBackupCell stackId={row.stackId} />
+        ) : (
+          <ResourceBackupCell
+            coverage={groupBackupCoverage(row.containers)}
+            source={{ $type: 'ContainerGroup', platformId: row.platformId }}
+            returnTo={`/platforms/${row.platformId}/containers`}
+          />
+        );
+      },
+    },
     {
       id: 'actions',
       cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
@@ -281,14 +326,26 @@ const ContainerNameCell = ({
           aria-label={expanded ? 'Collapse stack' : 'Expand stack'}>
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
-        <StateIndicator value={row.displayStatus} isProcessing={row.controlState === ResourceControlState.Processing} />
+        <StateIndicator
+          value={row.displayStatus === StackReleaseStatus.Healthy ? ContainerStateStatus.Running : row.displayStatus}
+          kind={row.displayStatus === StackReleaseStatus.Healthy ? 'container' : undefined}
+          tooltip={
+            row.displayStatus === StackReleaseStatus.Healthy
+              ? 'All containers are running. Health is shown on each container.'
+              : undefined
+          }
+          isProcessing={row.controlState === ResourceControlState.Processing}
+        />
         <button
           type="button"
           onClick={tableRow.getToggleExpandedHandler()}
-          className="truncate cursor-pointer text-left text-sm font-normal text-foreground hover:underline"
+          className="truncate cursor-pointer text-left text-sm font-medium text-foreground hover:underline"
           title={row.name}>
           {truncate(row.name, 28)}
         </button>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {row.containers.length} {row.containers.length === 1 ? 'container' : 'containers'}
+        </span>
         {row.isSystem ? (
           <SystemContainerBadge stack />
         ) : (
@@ -312,8 +369,8 @@ const ContainerNameCell = ({
             : undefined
         }
       />
-      <Link to={`./${row.id}`} className="table-link truncate font-normal" title={row.name}>
-        {truncate(getDisplayName(row), 24)}
+      <Link to={`./${row.id}`} className="table-link block truncate font-normal" title={row.name}>
+        {truncate(getDisplayName(row), 32)}
       </Link>
       {row.isSystem ? (
         <SystemContainerBadge role={row.systemRole} />
@@ -325,10 +382,10 @@ const ContainerNameCell = ({
 };
 
 export const buildContainerRows = (
-  containers: ContainerView[],
+  containers: ContainerHealthItem[],
   platformLimits: PlatformResourceLimits,
 ): ContainerTableRow[] => {
-  const stackGroups = new Map<string, ContainerView[]>();
+  const stackGroups = new Map<string, ContainerHealthItem[]>();
   const orderedRows: Array<{ type: 'stack'; stackName: string } | { type: 'container'; container: ContainerView }> = [];
 
   for (const container of containers) {
@@ -349,7 +406,7 @@ export const buildContainerRows = (
     stackGroups.get(stackName)?.push(container);
   }
 
-  return orderedRows.flatMap<ContainerActionResource>((row) => {
+  return orderedRows.flatMap<ContainerTableRow>((row) => {
     if (row.type === 'container') return [row.container];
 
     const groupContainers = stackGroups.get(row.stackName) ?? [];
@@ -361,9 +418,9 @@ export const buildContainerRows = (
 
 const createStackGroup = (
   stackName: string,
-  containers: ContainerView[],
+  containers: ContainerHealthItem[],
   platformLimits: PlatformResourceLimits,
-): ContainerStackGroupResource => {
+): ContainerStackGroupResource & { healthSummary?: ContainerGroupHealth } => {
   const firstContainer = containers[0];
   const stackIds = Array.from(new Set(containers.map((container) => container.stackId).filter(Boolean)));
   const stackId = stackIds.length === 1 ? stackIds[0] : null;
@@ -387,6 +444,7 @@ const createStackGroup = (
     systemRole: null,
     imageView: null,
     displayStatus: getStackDisplayStatus(containers),
+    healthSummary: firstContainer.stackHealth,
     capabilities: firstContainer.capabilities,
     projectionStaleSince: containers.some((container) => container.projectionStaleSince)
       ? (containers.find((container) => container.projectionStaleSince)?.projectionStaleSince ?? null)
@@ -452,7 +510,7 @@ const getStackState = (containers: ContainerView[]) => {
 };
 
 const aggregateStats = (
-  containers: ContainerView[],
+  containers: ContainerHealthItem[],
   platformLimits: PlatformResourceLimits,
 ): Omit<ContainerStatView, 'containerId' | 'created'> => {
   containers = containers.filter((container) => !container.projectionStaleSince);
@@ -508,9 +566,6 @@ const toNumber = (value: number | string | null | undefined) => {
 
 const getDisplayName = (row: ContainerTableRow) =>
   isContainerStackGroup(row) ? row.name : (row.name?.replace(/^\//, '') ?? '');
-
-const countDistinctImages = (row: ContainerStackGroupResource) =>
-  new Set(row.containers.map((container) => container.imageView?.name ?? container.dockerImageId).filter(Boolean)).size;
 
 const countPublishedPorts = (row: ContainerStackGroupResource) =>
   row.containers.reduce((count, container) => count + Object.keys(container.ports ?? {}).length, 0);

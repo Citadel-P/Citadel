@@ -1501,3 +1501,69 @@ async fn edge_container_replay_is_a_committed_noop_and_remains_session_fenced() 
     );
     pool.close().await;
 }
+
+#[tokio::test]
+async fn health_collection_stays_on_the_exact_edge_node_and_rejects_replaced_sessions() {
+    use citadel_adapters::connectors::edge::EdgeRuntime;
+    use citadel_contracts::citadel::containers::v1::{
+        ListContainersRequest, ListContainersResponse,
+    };
+    use citadel_contracts::citadel::shared_models::v1::ContainerMessage;
+    use citadel_platforms::ContainerInventoryPort;
+    use prost::Message;
+    let registry = EdgeRegistry::default();
+    let target = EdgeTarget::node(Uuid::now_v7(), "worker-exact".into());
+    let agent = Uuid::now_v7();
+    let (session, mut receiver) = registry.register(target.clone(), agent).unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    let (result, ()) = tokio::join!(runtime.observe_containers(&cancel), async {
+        let envelope = receiver.recv().await.unwrap();
+        let id = Uuid::parse_str(&envelope.command_id).unwrap();
+        let Some(core_envelope::Body::Command(command)) = envelope.body else {
+            panic!("expected command")
+        };
+        assert_eq!(command.kind, EdgeCommandKind::ContainerList as i32);
+        assert_eq!(command.node_id, "worker-exact");
+        assert_eq!(command.platform_id, target.platform_id.to_string());
+        let request = ListContainersRequest::decode(command.payload.as_slice()).unwrap();
+        assert!(request.observe_health && request.metadata_only);
+        let health = citadel_adapters::connectors::docker::container_health::observation(
+            &serde_json::json!({"Config":{"Healthcheck":{"Test":["CMD","probe"]}},"State":{"Health":{"Status":"healthy"}}}),
+        );
+        session.output(
+            id,
+            ListContainersResponse {
+                containers: [(
+                    "exact-container".into(),
+                    ContainerMessage {
+                        id: "exact-container".into(),
+                        state: 2,
+                        health_observation: Some(
+                            citadel_adapters::connectors::agent::container_health::to_wire(health),
+                        ),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+                ..Default::default()
+            }
+            .encode_to_vec(),
+        );
+        session.complete(id, true);
+    });
+    let observed = result.unwrap();
+    assert_eq!(observed[0].id, "exact-container");
+    assert_eq!(
+        observed[0]
+            .health
+            .as_ref()
+            .unwrap()
+            .status(&observed[0].state, true),
+        citadel_platforms::container_health::HealthStatus::Healthy
+    );
+    registry.register(target, agent).unwrap();
+    assert!(runtime.observe_containers(&cancel).await.is_err());
+}

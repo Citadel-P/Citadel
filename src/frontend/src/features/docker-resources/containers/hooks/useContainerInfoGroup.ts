@@ -15,6 +15,9 @@ import { useRead } from '@/lib/hooks';
 
 export type ContainerDetailsView = ContainerRuntimeView & {
   resourceId: string;
+  projectionObservedAt?: number | null;
+  projectionStaleSince?: number | null;
+  projectionStaleReason?: string | null;
   platformId: string;
 };
 
@@ -23,6 +26,7 @@ export const toContainerDetailsView = (container: ContainerView): ContainerDetai
   image: container.imageView?.name ?? '',
   id: container.containerId,
   imageId: container.dockerImageId,
+  health: container.health,
   state: container.state,
   controlState: container.controlState,
   isSystem: container.isSystem,
@@ -38,13 +42,16 @@ export const toContainerDetailsView = (container: ContainerView): ContainerDetai
   stackId: container.stackId,
   capabilities: container.capabilities,
   resourceId: container.id,
+  projectionObservedAt: container.projectionObservedAt,
+  projectionStaleSince: container.projectionStaleSince,
+  projectionStaleReason: container.projectionStaleReason,
   platformId: container.platformId,
 });
 
 export const mergeContainerRuntimeUpdate = (
-  current: Partial<ContainerRuntimeView> | undefined,
+  current: Partial<ContainerDetailsView> | undefined,
   container: ContainerRuntimeView,
-): Partial<ContainerRuntimeView> => ({
+): Partial<ContainerDetailsView> => ({
   ...current,
   backupCoverage: container.backupCoverage ?? current?.backupCoverage,
   id: container.id,
@@ -52,6 +59,11 @@ export const mergeContainerRuntimeUpdate = (
   image: container.image,
   imageId: container.imageId,
   state: container.state,
+  health:
+    container.health === undefined ? (current?.state === container.state ? current?.health : null) : container.health,
+  // A full health projection already applies the server's availability checks.
+  // Do not keep an old HTTP snapshot's stale flag after realtime recovery.
+  ...(container.health !== undefined ? { projectionStaleSince: null, projectionStaleReason: null } : {}),
   dockerNodeId: container.dockerNodeId ?? current?.dockerNodeId,
   created: container.created,
   stack: container.stack,
@@ -84,14 +96,14 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   useLayoutEffect(() => {
     currentIdentity.current = identity;
   }, [identity]);
-  const [live, setLive] = useState<{ identity: string; value: Partial<ContainerRuntimeView> | undefined }>();
+  const [live, setLive] = useState<{ identity: string; value: Partial<ContainerDetailsView> | undefined }>();
   const liveContainerInfo = live?.identity === identity ? live.value : undefined;
   const setLiveContainerInfo = useCallback(
     (
       update:
-        | Partial<ContainerRuntimeView>
+        | Partial<ContainerDetailsView>
         | undefined
-        | ((current: Partial<ContainerRuntimeView> | undefined) => Partial<ContainerRuntimeView>),
+        | ((current: Partial<ContainerDetailsView> | undefined) => Partial<ContainerDetailsView>),
     ) => {
       if (currentIdentity.current !== identity) return;
       setLive((previous) => ({
@@ -118,7 +130,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   );
 
   const error = useMemo(() => {
-    if (currentPlatform?.status === PlatformStatus.Offline) {
+    if (currentPlatform?.id === platformId && currentPlatform?.status === PlatformStatus.Offline) {
       return {
         error: {
           detail: 'Platform is disconnected or unavailable.',
@@ -129,7 +141,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     }
 
     return undefined;
-  }, [currentPlatform?.status]);
+  }, [currentPlatform?.id, currentPlatform?.status, platformId]);
 
   const onContainerEvent = useCallback(
     (event: ContainerEvent) => {
@@ -153,6 +165,10 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         ...current,
         id: container.containerId,
         name: container.name,
+        health: container.health,
+        projectionObservedAt: container.projectionObservedAt,
+        projectionStaleSince: container.projectionStaleSince,
+        projectionStaleReason: container.projectionStaleReason,
         state: container.state,
         created: container.created as number,
         stack: container.stack,
@@ -182,7 +198,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
       if (!patch) return;
       setLiveContainerInfo((current) => ({
         ...current,
-        ...(patch.state !== undefined ? { state: patch.state } : {}),
+        ...(patch.state !== undefined ? { state: patch.state, health: null } : {}),
         ...(patch.controlState !== undefined ? { controlState: patch.controlState } : {}),
         ...(patch.updated !== undefined ? { updated: patch.updated } : {}),
       }));
@@ -207,7 +223,13 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   const handleContainerInfoPatch = useCallback(
     (patch: Partial<ContainerRuntimeView> & { resourceId: string }) => {
       if (patch.resourceId !== containerData?.resourceId) return;
-      setLiveContainerInfo((current) => ({ ...current, ...patch }));
+      setLiveContainerInfo((current) => ({
+        ...current,
+        ...patch,
+        // A lifecycle patch invalidates the prior check, including restart events
+        // that leave the visible state Running. Statistics never renew health.
+        ...(patch.state !== undefined && patch.health === undefined ? { health: null } : {}),
+      }));
     },
     [containerData?.resourceId, setLiveContainerInfo],
   );

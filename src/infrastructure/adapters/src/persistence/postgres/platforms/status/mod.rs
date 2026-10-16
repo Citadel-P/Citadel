@@ -767,6 +767,12 @@ pub(crate) async fn container_observation_in(
     container: &citadel_platforms::RuntimeContainerSummary,
     observed: i64,
 ) -> Result<ContainerEventChange> {
+    // A delayed Agent event cannot renew an older inspection just because it
+    // arrived after a newer lifecycle event or inventory observation.
+    let observed = container
+        .health
+        .as_ref()
+        .map_or(observed, |health| observed.min(health.observed_at / 1000));
     let changed =
         crate::persistence::postgres::platforms::inventory::store::persist_container_observation(
             tx, platform, node, container, observed,

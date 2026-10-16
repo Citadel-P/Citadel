@@ -84,7 +84,7 @@ async fn failed_baseline_rolls_back_schema_preserves_data_and_can_retry() {
             .await
             .unwrap()
             .applied,
-        1
+        3
     );
     let (completed, failed): (bool, bool) = sqlx::query_as(
         "SELECT completed_at IS NOT NULL, failure IS NOT NULL FROM citadel_schema_migrations WHERE id='0001'",
@@ -204,7 +204,7 @@ async fn initial_baseline_includes_job_state_and_restart_preserves_git_refs() {
     let database = Database::create().await;
     let mut connection = PgConnection::connect(&database.url).await.unwrap();
     let first = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!(first.applied, 1);
+    assert_eq!(first.applied, 3);
     assert_eq!(first.already_applied, 0);
     let pending_column: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='platformstats' AND column_name='alertpending' AND column_default='false')")
         .fetch_one(&mut connection).await.unwrap();
@@ -215,7 +215,7 @@ async fn initial_baseline_includes_job_state_and_restart_preserves_git_refs() {
     sqlx::query("INSERT INTO gitrepositoryrefs(id,gitrepositoryid,branch,resolvedcommitsha,status,lastsyncedat) VALUES($1,$2,'main','retained-commit','Healthy',now())").bind(reference).bind(repository).execute(&mut connection).await.unwrap();
     let result = MigrationRunner::migrate(&database.url).await.unwrap();
     assert_eq!(result.applied, 0);
-    assert_eq!(result.already_applied, 1);
+    assert_eq!(result.already_applied, 3);
     let result: (String, String) =
         sqlx::query_as("SELECT synctrigger,resolvedcommitsha FROM gitrepositoryrefs WHERE id=$1")
             .bind(reference)
@@ -233,14 +233,14 @@ async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_pre
     let database = Database::create().await;
     let mut connection = PgConnection::connect(&database.url).await.unwrap();
     let installed = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!(installed.applied, 1);
+    assert_eq!(installed.applied, 3);
     assert_eq!(installed.already_applied, 0);
     let user = Uuid::now_v7();
     sqlx::query("INSERT INTO users(id,actorid,createdbyactorid,name,email) VALUES ($1,$2,$2,'existing-user','existing@example.test')").bind(user).bind(Uuid::from_u128(1)).execute(&mut connection).await.unwrap();
     sqlx::query("INSERT INTO userpreferences(userid,timezone,datetimeformat,theme,updatedat) VALUES ($1,'Europe/Paris','TwentyFourHour','Dark','2026-01-01T00:00:00Z')").bind(user).execute(&mut connection).await.unwrap();
     let outcome = MigrationRunner::migrate(&database.url).await.unwrap();
     assert_eq!(outcome.applied, 0);
-    assert_eq!(outcome.already_applied, 1);
+    assert_eq!(outcome.already_applied, 3);
     let row: (String,String,String,String,String,String,String,String) = sqlx::query_as("SELECT timezone,datetimeformat,theme,themecolor,font,radius,contentlayout,density FROM userpreferences WHERE userid=$1").bind(user).fetch_one(&mut connection).await.unwrap();
     assert_eq!(
         row,
@@ -292,7 +292,7 @@ async fn initial_baseline_includes_image_updates_and_restart_preserves_observati
     sqlx::query("INSERT INTO imageupdateobservations(imageid,reference,registrykey,registryrevision,attemptedat,result) VALUES($1,'app:latest',$2,'anonymous',now(),'{\"status\":\"UpToDate\"}')")
         .bind(image).bind(Uuid::nil()).execute(&mut connection).await.unwrap();
     let restarted = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!((restarted.applied, restarted.already_applied), (0, 1));
+    assert_eq!((restarted.applied, restarted.already_applied), (0, 3));
     let status: String = sqlx::query_scalar(
         "SELECT result->>'status' FROM imageupdateobservations WHERE imageid=$1",
     )
@@ -318,8 +318,123 @@ async fn initial_baseline_includes_image_updates_and_restart_preserves_observati
             .await
             .unwrap()
             .already_applied,
-        1
+        3
     );
+    connection.close().await.unwrap();
+    database.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn health_upgrade_preserves_existing_containers_and_baseline_checksum() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    // Stop immediately after the real published baseline has committed, without editing its SQL.
+    sqlx::raw_sql("CREATE TABLE containerhealthtransitions(blocker bool)")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    assert!(
+        matches!(MigrationRunner::migrate(&database.url).await, Err(MigrationError::Apply {id, ..}) if id == "0002")
+    );
+    let checksum: String = sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0001' AND completed_at IS NOT NULL").fetch_one(&mut connection).await.unwrap();
+    let platform = Uuid::now_v7();
+    let container = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///fixture.sock','Local',0,0,0,'health-upgrade',0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,'upgrade-id','image','preserved',1,1,'Running','[]')").bind(container).bind(platform).execute(&mut connection).await.unwrap();
+    sqlx::raw_sql("DROP TABLE containerhealthtransitions")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    let result = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(result.applied, 2);
+    assert_eq!(result.already_applied, 1);
+    let row: (String, String, Option<serde_json::Value>) =
+        sqlx::query_as("SELECT name,state,health FROM containers WHERE id=$1")
+            .bind(container)
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(row, ("preserved".into(), "Running".into(), None));
+    let after: String =
+        sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0001'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(checksum, after);
+    assert_eq!(
+        MigrationRunner::migrate(&database.url)
+            .await
+            .unwrap()
+            .applied,
+        0
+    );
+    // Exercise the installation cap in this isolated database, including concurrent-safe admission.
+    sqlx::query("INSERT INTO containerhealthtransitions(containerid,platformid,dockercontainerid,observedat,state,origin) SELECT gen_random_uuid(),$1,'retained',1,'Running','Lifecycle' FROM generate_series(1,100005)")
+        .bind(platform).execute(&mut connection).await.unwrap();
+    sqlx::query("UPDATE containers SET state='Exited' WHERE id=$1")
+        .bind(container)
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM containerhealthtransitions")
+        .fetch_one(&mut connection)
+        .await
+        .unwrap();
+    assert_eq!(count, 100000);
+    drop(connection);
+    database.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn periodic_health_upgrade_preserves_transition_history() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    // Stop at the real 0002 schema by blocking only the next migration's index.
+    sqlx::raw_sql("CREATE TABLE ix_containerhealthtransitions_samples(blocker bool)")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    assert!(
+        matches!(MigrationRunner::migrate(&database.url).await, Err(MigrationError::Apply {id, ..}) if id == "0003")
+    );
+    let checksum: String =
+        sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0002'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    let platform = Uuid::now_v7();
+    let container = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///fixture.sock','Local',0,0,0,'sample-upgrade',0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports) VALUES($1,$2,'upgrade-id','image','preserved',1,1,'Running','[]')").bind(container).bind(platform).execute(&mut connection).await.unwrap();
+    let before: serde_json::Value = sqlx::query_scalar(
+        "SELECT to_jsonb(h) FROM containerhealthtransitions h WHERE containerid=$1",
+    )
+    .bind(container)
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    sqlx::raw_sql("DROP TABLE ix_containerhealthtransitions_samples")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    let result = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!((result.applied, result.already_applied), (1, 2));
+    let after: serde_json::Value = sqlx::query_scalar(
+        "SELECT to_jsonb(h) FROM containerhealthtransitions h WHERE containerid=$1",
+    )
+    .bind(container)
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(before, after);
+    let after_checksum: String =
+        sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0002'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(checksum, after_checksum);
     connection.close().await.unwrap();
     database.close().await;
 }

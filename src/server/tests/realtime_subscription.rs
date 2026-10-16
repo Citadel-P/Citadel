@@ -705,6 +705,8 @@ impl RealtimeReadPort for FakeReader {
     ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
         Box::pin(async move {
             Ok(vec![ContainerView {
+                health: None,
+                owner_names: Vec::new(),
                 image_view: None,
                 deployment_view: None,
                 id: Uuid::now_v7(),

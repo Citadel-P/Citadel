@@ -52,6 +52,7 @@ async fn fixture_with_metadata_delay(
             "/v1.49/volumes"=>serde_json::json!({"Volumes":[]}),
             "/v1.49/system/df"=>serde_json::json!({"LayersSize":0,"Volumes":[]}),
             "/v1.49/images/json"|"/v1.49/networks"=>serde_json::json!([]),
+            p if p.starts_with("/v1.49/containers/c") && p.ends_with("/json") => serde_json::json!({"Id":p.split('/').nth(3).unwrap(),"State":{"Status":"running","Health":{"Status":"healthy"}},"Config":{"Healthcheck":{"Test":["CMD","probe"]}}}),
             p if p.ends_with("/stats")=>serde_json::json!({"read":"2026-09-27T00:00:00Z"}),
             _=>panic!("unexpected request {}",req.uri()),
         };
@@ -391,6 +392,51 @@ async fn agent_mutations_share_daemon_permits_and_do_not_block_health() {
     drop(permits);
     task.await.unwrap().unwrap();
     assert_eq!(runtime.mutations.available_permits(), 8);
+    runtime.shutdown.cancel();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn health_collection_is_explicit_read_only_and_does_not_sample_stats() {
+    use citadel_contracts::citadel::containers::v1::ListContainersRequest;
+    let (runtime, calls, server) =
+        fixture(Arc::new(std::sync::atomic::AtomicBool::new(false))).await;
+    let response = runtime
+        .list(Request::new(ListContainersRequest {
+            all: Some(true),
+            metadata_only: true,
+            observe_health: true,
+            ..Default::default()
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.containers.len(), 6);
+    for container in response.containers.values() {
+        assert_eq!(
+            container
+                .health_observation
+                .as_ref()
+                .unwrap()
+                .result
+                .as_deref(),
+            Some("Healthy")
+        );
+        assert!(container.container_stat_message.is_none());
+    }
+    let requests = calls.lock().unwrap().clone();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|p| p.starts_with("/v1.49/containers/c") && p.ends_with("/json"))
+            .count(),
+        6
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|p| p.contains("/stats") || p.contains("/exec") || p.contains("/restart"))
+    );
     runtime.shutdown.cancel();
     server.await.unwrap();
 }

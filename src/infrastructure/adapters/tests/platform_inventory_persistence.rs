@@ -22,6 +22,12 @@ mod initial_inventory;
 #[path = "platform_inventory_persistence/state_delta.rs"]
 mod state_delta;
 
+#[path = "platform_inventory_persistence/container_search.rs"]
+mod container_search;
+
+#[path = "platform_inventory_persistence/health.rs"]
+mod health;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn inventory_commits_while_a_deployment_is_locked_and_reconciliation_catches_up() {
@@ -463,6 +469,7 @@ fn snapshot(platform_id: Uuid, include_task: bool) -> RuntimeInventorySnapshot {
             }),
         },
         containers: vec![RuntimeContainerSummary {
+            health: None,
             mounts: None,
             id: "container-1".into(),
             name: "web".into(),

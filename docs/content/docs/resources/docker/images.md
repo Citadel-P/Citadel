@@ -7,12 +7,13 @@ Open a **Platform**, then **Images** to view images available on its Docker host
 A [Registry](/docs/resources/registries) supplies images; this page shows the
 copies stored on the host.
 
-The compact table groups the image name, primary tag, and copyable image ID in
-the **Image** column, keeping the usage/processing indicator beside the name.
+The compact table groups the image name and primary tag in the **Image** column,
+keeping the usage/processing indicator beside the name.
 Select **+N** to see additional tags. **Update status**, **Used by**, and **Size**
 remain visible; Swarm platforms also show **Node**. Use **Columns** beside
 **Pull Image** in the page toolbar to show the
-sortable **Registry** and **Created** columns. These choices are remembered in
+optional **ID**, **Registry**, and **Created** columns. The copyable image ID is
+hidden by default. These choices are remembered in
 your browser.
 
 ## Pull an image
